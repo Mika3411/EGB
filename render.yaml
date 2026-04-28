@@ -9,24 +9,24 @@ services:
       - key: NODE_VERSION
         value: 20
       - key: VITE_SUPABASE_URL
-        value: https://jylbhoshvtaboewehsej.supabase.co
+        sync: false
       - key: VITE_SUPABASE_PUBLISHABLE_KEY
-        value: sb_publishable_m0IFj1xlM7QQH9ZVpKTU0Q_ItthDzWX
+        sync: false
       - key: VITE_SUPABASE_STORAGE_BUCKET
-        value: escape-game-assets
+        sync: false
       - key: SUPABASE_URL
-        value: https://jylbhoshvtaboewehsej.supabase.co
+        sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
       - key: AI_CREDIT_ADMIN_KEY
         sync: false
       - key: OPENAI_TEXT_MODEL
-        value: gpt-5.2
+        sync: false
       - key: OPENAI_IMAGE_MODEL
-        value: gpt-image-1
+        sync: false
       - key: OPENAI_IMAGE_SIZE
-        value: 1536x1024
+        sync: false
       - key: OPENAI_IMAGE_QUALITY
-        value: medium
+        sync: false
       - key: OPENAI_API_KEY
         sync: false
