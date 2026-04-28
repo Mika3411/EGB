@@ -1,0 +1,181 @@
+﻿/* === Help tooltips: compact inspector notes === */
+.label-with-help {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 3px;
+  color: #ccdaef;
+  font-size: 11px;
+  font-weight: 700;
+  overflow: visible !important;
+}
+
+.help-dot {
+  position: relative;
+  width: 15px;
+  height: 15px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 900;
+  color: #9fb0cc;
+  border: 1px solid rgba(148, 163, 184, .30);
+  background: rgba(148, 163, 184, .08);
+  cursor: help;
+  line-height: 1;
+  z-index: 2010;
+}
+
+.help-inline-note {
+  margin: 4px 0 2px !important;
+  font-size: 11px !important;
+  line-height: 1.25 !important;
+  opacity: .8;
+}
+
+.compact-divider {
+  margin: 10px 0;
+  opacity: .18;
+  border: 0;
+  border-top: 1px solid rgba(148, 163, 184, .45);
+}
+
+.compact-section-title {
+  margin: 0 0 6px;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+/* === Tooltip v3: fix overlap/behind center column ===
+   Keep help bubbles inside the inspector column and put the right panel
+   above the central editor in the stacking order. */
+.three-cols {
+  isolation: isolate;
+}
+
+.three-cols > .panel,
+.three-cols > .panel-main-pro,
+.three-cols > .panel-nav-pro,
+.three-cols > .panel-context-pro {
+  overflow-x: clip !important;
+  position: relative;
+  overflow: visible !important;
+}
+
+.panel-nav-pro {
+  z-index: 5;
+}
+
+.panel-main-pro {
+  z-index: 10;
+}
+
+.panel-context-pro {
+  overflow-x: clip !important;
+  z-index: 2000;
+}
+
+.panel-context-pro .subpanel,
+.panel-context-pro .side-editor-pro,
+.panel-context-pro .label-with-help {
+  position: relative;
+  overflow: visible !important;
+  z-index: 2001;
+}
+
+/* The bubble opens to the right of the help dot so it stays in the inspector column. */
+.help-dot::after {
+  content: attr(data-help);
+  position: fixed;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: rgba(2, 6, 23, .98);
+  border: 1px solid rgba(148, 163, 184, .28);
+  color: #eaf2ff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: left;
+  white-space: normal;
+  box-shadow: 0 18px 40px rgba(0,0,0,.38);
+  right: auto !important;
+  left: var(--help-left, 12px) !important;
+  top: var(--help-top, 12px) !important;
+  width: var(--help-width, min(280px, calc(100vw - 24px))) !important;
+  max-width: min(280px, calc(100vw - 24px)) !important;
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  transform: none !important;
+  z-index: 99999 !important;
+}
+
+.help-dot:hover::after,
+.help-dot:focus::after {
+  opacity: 1;
+  visibility: visible;
+  transform: none !important;
+}
+
+/* If a help icon is too close to the right edge, this optional class can be
+   added manually to flip the bubble left: className="help-dot help-left". */
+.help-dot.help-left::after {
+  left: var(--help-left, 12px) !important;
+  right: auto !important;
+}
+
+.grid-two > .checkbox-row:last-child .help-dot::after,
+.grid-two > div + .checkbox-row .help-dot::after,
+.logic-rule-body .checkbox-row:last-child .help-dot::after,
+.side-editor-pro .help-dot::after,
+.side-editor .help-dot::after {
+  left: var(--help-left, 12px) !important;
+  right: auto !important;
+  max-width: min(280px, calc(100vw - 24px)) !important;
+}
+
+@media (max-width: 720px) {
+  .help-dot::after,
+  .grid-two > .checkbox-row:last-child .help-dot::after,
+  .grid-two > div + .checkbox-row .help-dot::after,
+  .logic-rule-body .checkbox-row:last-child .help-dot::after,
+  .side-editor-pro .help-dot::after,
+  .side-editor .help-dot::after {
+    left: var(--help-left, 12px) !important;
+    right: auto !important;
+    top: var(--help-top, 12px) !important;
+    width: var(--help-width, min(280px, calc(100vw - 24px))) !important;
+    max-width: min(280px, calc(100vw - 24px)) !important;
+    transform: none !important;
+  }
+
+  .help-dot:hover::after,
+  .help-dot:focus::after {
+    transform: none !important;
+  }
+}
+
+
+/* === Scene navigation: collapsible sub-scenes === */
+.scene-tree-node { margin-bottom: 4px; }
+.scene-tree-node summary { list-style: none; }
+.scene-tree-node summary::-webkit-details-marker,
+.act-group summary::-webkit-details-marker { display: none; }
+.scene-summary { display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: center; gap: 3px; padding-left: calc(var(--scene-depth, 0) * 7px); border: 1px solid var(--line); border-radius: 10px; background: rgba(12,21,39,0.9); }
+.scene-summary.selected { border-color: #60a5fa; background: rgba(37,99,235,0.16); }
+.scene-collapse-button, .scene-collapse-spacer { width: 18px; height: 18px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.scene-collapse-button { padding: 0 !important; background: rgba(148, 163, 184, 0.08) !important; border: 1px solid rgba(148, 163, 184, 0.16) !important; color: #bcd0ee !important; box-shadow: none !important; font-size: 12px; line-height: 1; }
+.scene-collapse-button:hover { transform: none; background: rgba(79, 140, 255, 0.16) !important; border-color: rgba(96, 165, 250, 0.35) !important; }
+.scene-select-button { width: 100%; min-width: 0; padding: 0 !important; border: none !important; background: transparent !important; color: #fff; box-shadow: none !important; text-align: left; }
+.scene-title-line { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 7px 9px; min-height: 34px; }
+.scene-title-line strong, .scene-title-line small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scene-title-line small { color: #74839c; font-size: 10px; font-weight: 500; }
+.scene-children { margin-top: 4px; margin-left: 8px; padding-left: 8px; border-left: 1px dashed rgba(148, 163, 184, 0.18); }
+.scene-children-list { display: grid; gap: 4px; }
+

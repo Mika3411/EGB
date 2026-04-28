@@ -1,0 +1,62 @@
+import PreviewTab from './PreviewTab';
+
+export default function PreviewPlayerPanel({ editor, preview, sharedPlayerMode = false }) {
+  return (
+    <PreviewTab
+      playScene={preview.playScene}
+      viewerImage={preview.viewerImage}
+      setViewerImage={preview.setViewerImage}
+      playingCinematic={preview.playingCinematic}
+      currentSlide={preview.currentSlide}
+      setPlayingCinematic={preview.setPlayingCinematic}
+      setPlayingSlideIndex={preview.setPlayingSlideIndex}
+      closeCinematic={preview.closeCinematic}
+      advanceCinematic={preview.advanceCinematic}
+      audioRef={preview.audioRef}
+      onSceneTimerEnd={preview.applySceneTimerEnd}
+      triggerHotspot={preview.triggerHotspot}
+      resetPreview={preview.resetPreview}
+      saveGameState={preview.saveGameState}
+      loadGameState={preview.loadGameState}
+      getSceneLabel={editor.getSceneLabel}
+      dialogue={preview.dialogue}
+      inventory={preview.inventory}
+      playerLives={preview.playerLives}
+      sceneTimerResetKey={preview.sceneTimerResetKey}
+      setInventory={preview.setInventory}
+      setSelectedInventoryIds={preview.setSelectedInventoryIds}
+      usedSceneObjectIds={preview.usedSceneObjectIds}
+      markSceneObjectUsed={preview.markSceneObjectUsed}
+      project={editor.project}
+      selectedInventoryIds={preview.selectedInventoryIds}
+      openInventoryItem={preview.openInventoryItem}
+      setDraggedInventoryId={preview.setDraggedInventoryId}
+      draggedInventoryId={preview.draggedInventoryId}
+      combineInventoryItems={preview.combineInventoryItems}
+      setDialogue={preview.setDialogue}
+      activeEnigma={preview.activeEnigma}
+      enigmaCodeInput={preview.enigmaCodeInput}
+      setEnigmaCodeInput={preview.setEnigmaCodeInput}
+      enigmaColorAttempt={preview.enigmaColorAttempt}
+      setEnigmaColorAttempt={preview.setEnigmaColorAttempt}
+      pushEnigmaColor={preview.pushEnigmaColor}
+      closeEnigma={preview.closeEnigma}
+      submitEnigma={preview.submitEnigma}
+      enigmaPuzzleOrder={preview.enigmaPuzzleOrder}
+      enigmaPuzzleSelectedIndex={preview.enigmaPuzzleSelectedIndex}
+      clickPuzzlePiece={preview.clickPuzzlePiece}
+      enigmaDragBank={preview.enigmaDragBank}
+      enigmaDragSlots={preview.enigmaDragSlots}
+      enigmaDraggedPiece={preview.enigmaDraggedPiece}
+      setEnigmaDraggedPiece={preview.setEnigmaDraggedPiece}
+      moveDragPieceToSlot={preview.moveDragPieceToSlot}
+      returnDragPieceToBank={preview.returnDragPieceToBank}
+      enigmaRotationAngles={preview.enigmaRotationAngles}
+      rotatePuzzlePiece={preview.rotatePuzzlePiece}
+      simonPlaybackIndex={preview.simonPlaybackIndex}
+      simonPlayerTurn={preview.simonPlayerTurn}
+      startSimonPlayback={preview.startSimonPlayback}
+      sharedPlayerMode={sharedPlayerMode}
+    />
+  );
+}
