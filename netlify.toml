@@ -1,0 +1,24 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/api/admin/users"
+  to = "/.netlify/functions/admin-users"
+  status = 200
+
+[[redirects]]
+  from = "/api/ai-credits/admin"
+  to = "/.netlify/functions/ai-credits-admin"
+  status = 200
+
+[[redirects]]
+  from = "/api/ai-credits"
+  to = "/.netlify/functions/ai-credits"
+  status = 200
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
