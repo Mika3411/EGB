@@ -279,6 +279,28 @@ label { display: block; font-size: 13px; color: #ccdaef; margin: 10px 0 8px; fon
 .admin-ban-grid button {
   min-width: 0;
   padding-inline: 10px;
+  color: #eaf2ff !important;
+  background: rgba(18, 31, 56, .95) !important;
+  border-color: rgba(148, 163, 184, .24) !important;
+  box-shadow: none !important;
+}
+.admin-account-actions > button,
+.admin-account-actions .danger-button {
+  width: 100%;
+  justify-content: center;
+}
+.admin-account-actions button:disabled {
+  opacity: .48;
+  color: #8fa3c0 !important;
+  background: rgba(15, 23, 42, .82) !important;
+  border-color: rgba(148, 163, 184, .18) !important;
+  cursor: not-allowed;
+  transform: none;
+}
+.admin-account-actions .danger-button:not(:disabled) {
+  color: #fff !important;
+  background: linear-gradient(180deg, #ef4444 0%, #b91c1c 100%) !important;
+  border-color: rgba(248, 113, 113, .48) !important;
 }
 .admin-transaction-row {
   display: grid;
