@@ -289,6 +289,12 @@ label { display: block; font-size: 13px; color: #ccdaef; margin: 10px 0 8px; fon
   width: 100%;
   justify-content: center;
 }
+.admin-account-actions button.secondary-action:not(:disabled) {
+  color: #eaf2ff !important;
+  background: rgba(18, 31, 56, .95) !important;
+  border-color: rgba(148, 163, 184, .24) !important;
+  box-shadow: none !important;
+}
 .admin-account-actions button:disabled {
   opacity: .48;
   color: #8fa3c0 !important;
