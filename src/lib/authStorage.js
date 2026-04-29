@@ -58,6 +58,7 @@ const randomSalt = () => {
 
 const getProjectStoragePath = (userId) => buildStoragePath('users', userId, 'project.json');
 const getProjectsStoragePath = (userId) => buildStoragePath('users', userId, 'projects.json');
+const getPublicProjectsStoragePath = () => buildStoragePath('public', 'projects.json');
 
 const getLocalProjects = () => readJson(PROJECTS_KEY, {});
 
@@ -101,6 +102,23 @@ export function saveAllAccounts(accounts = []) {
   return safeAccounts;
 }
 
+function rememberAccount(account) {
+  if (!account?.id) return account;
+  const accounts = getAllAccounts();
+  const existing = accounts.find((entry) => entry.id === account.id || normalizeEmail(entry.email || '') === normalizeEmail(account.email || ''));
+  const nextAccount = {
+    ...(existing || {}),
+    ...account,
+    updatedAt: new Date().toISOString(),
+  };
+  const nextAccounts = [
+    nextAccount,
+    ...accounts.filter((entry) => entry.id !== nextAccount.id && normalizeEmail(entry.email || '') !== normalizeEmail(nextAccount.email || '')),
+  ];
+  saveAllAccounts(nextAccounts);
+  return nextAccount;
+}
+
 export function updateStoredAccount(accountId, patch = {}) {
   if (!accountId) return null;
   const accounts = getAllAccounts();
@@ -137,7 +155,8 @@ export async function getSessionUser() {
     const client = getSupabaseClient();
     const { data, error } = await client.auth.getSession();
     if (error) return null;
-    return supabaseUserToAccount(data.session?.user);
+    const account = supabaseUserToAccount(data.session?.user);
+    return account ? rememberAccount(account) : null;
   }
 
   const userId = getSessionUserId();
@@ -186,10 +205,10 @@ export async function registerUser({
     rememberSignupAttempt(normalizedEmail);
     const account = supabaseUserToAccount(data.user);
     if (!account) throw new Error('Inscription impossible.');
-    return {
+    return rememberAccount({
       ...account,
       needsEmailConfirmation: !data.session,
-    };
+    });
   }
 
   const accounts = getAllAccounts();
@@ -239,7 +258,7 @@ export async function loginUser({ email, password }) {
     }
     const account = supabaseUserToAccount(data.user);
     if (!account) throw new Error('Connexion impossible.');
-    return account;
+    return rememberAccount(account);
   }
 
   const normalizedEmail = normalizeEmail(email);
@@ -308,7 +327,7 @@ export async function logoutUser() {
   window.localStorage.removeItem(SESSION_KEY);
 }
 
-export async function saveProjectRecordsForUser(userId, projects = []) {
+export async function saveProjectRecordsForUser(userId, projects = [], options = {}) {
   if (!userId) return [];
   const normalizedProjects = Array.isArray(projects) ? projects : [];
 
@@ -322,7 +341,56 @@ export async function saveProjectRecordsForUser(userId, projects = []) {
     cacheControl: '0',
   });
 
+  if (options.requirePublicIndex) {
+    await updatePublicProjectIndexForUser(userId, normalizedProjects);
+  } else {
+    await updatePublicProjectIndexForUser(userId, normalizedProjects).catch((error) => {
+      console.warn('Index public impossible a mettre a jour', error);
+    });
+  }
+
   return normalizedProjects;
+}
+
+export async function loadPublicProjectIndex() {
+  if (!hasSupabaseConfig()) return [];
+
+  try {
+    const text = await downloadTextFile(getPublicProjectsStoragePath());
+    const projects = JSON.parse(text);
+    return Array.isArray(projects) ? projects : [];
+  } catch (error) {
+    const message = String(error?.message || '');
+    const isMissingFile = /not found|object not found|status code 400|status code 404/i.test(message);
+    if (isMissingFile) return [];
+    throw error;
+  }
+}
+
+async function savePublicProjectIndex(projects = []) {
+  if (!hasSupabaseConfig()) return projects;
+  const blob = new Blob([JSON.stringify(projects, null, 2)], { type: 'application/json' });
+  await uploadToStorage(getPublicProjectsStoragePath(), blob, {
+    contentType: 'application/json',
+    cacheControl: '0',
+  });
+  return projects;
+}
+
+async function updatePublicProjectIndexForUser(userId, projects = []) {
+  if (!userId || !hasSupabaseConfig()) return [];
+
+  const publicRecords = projects
+    .filter((project) => project?.id && project.shareState?.isPublic)
+    .map((project) => ({
+      ...project,
+      userId,
+      publicKey: `${userId}:${project.id}`,
+    }));
+
+  const existingIndex = await loadPublicProjectIndex();
+  const withoutUser = existingIndex.filter((project) => project.userId !== userId);
+  return savePublicProjectIndex([...withoutUser, ...publicRecords]);
 }
 
 export async function loadProjectRecordsForUser(userId) {

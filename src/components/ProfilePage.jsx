@@ -28,6 +28,16 @@ const CREATION_TEMPLATES = [
 
 const PUBLIC_CATEGORIES = ['Horreur', 'Enquete', 'Aventure', 'Science-fiction', 'Fantastique', 'Historique', 'Autre'];
 const AGE_RATINGS = ['Tout public', '+18 ans'];
+const PROFILE_TUTORIAL_OPTIONS = [
+  ['scenes', 'Scenes'],
+  ['editor', 'Editeur'],
+  ['map', 'Plan'],
+  ['cinematics', 'Cinematiques'],
+  ['combinations', 'Combinaisons'],
+  ['enigmas', 'Enigmes'],
+  ['logic', 'Logique'],
+  ['ai', 'IA'],
+];
 const THUMBNAIL_CROPS = {
   wide: { label: '16:9', aspect: 16 / 9, width: 1280, height: 720 },
   square: { label: 'Carré', aspect: 1, width: 900, height: 900 },
@@ -484,6 +494,7 @@ export default function ProfilePage({
   onUploadGalleryThumbnail,
   onOpenPublicGallery,
   onOpenAdmin,
+  onStartTutorial,
   onRenameProject,
   onDuplicateProject,
   onDeleteProject,
@@ -554,6 +565,16 @@ export default function ProfilePage({
             <button type="button" className="secondary-action" onClick={onOpenPublicGallery}>
               Galerie publique
             </button>
+            <details className="profile-tutorial-menu">
+              <summary className="profile-action-button profile-tutorial-button">Didacticiel</summary>
+              <div className="profile-tutorial-popover">
+                {PROFILE_TUTORIAL_OPTIONS.map(([value, label]) => (
+                  <button key={value} type="button" onClick={() => onStartTutorial?.(value)} disabled={isBusy}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </details>
             <button type="button" className="secondary-action" onClick={onLogout}>
               Déconnexion
             </button>

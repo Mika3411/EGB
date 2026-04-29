@@ -1,7 +1,8 @@
-function MenuItem({ children, shortcut = '', onClick, disabled = false, active = false, danger = false }) {
+function MenuItem({ children, shortcut = '', onClick, disabled = false, active = false, danger = false, tour }) {
   return (
     <button
       type="button"
+      data-tour={tour}
       className={`editor-menu-item ${active ? 'active' : ''} ${danger ? 'danger' : ''}`}
       disabled={disabled}
       onClick={(event) => {
@@ -52,7 +53,7 @@ export function EditorToolbarMenus({
 }) {
   return (
     <nav className="editor-menu-bar" aria-label="Menus de l'éditeur de scène">
-      <details className="editor-menu">
+      <details className="editor-menu" data-tour="scene-toolbar-add">
         <summary>Fichier</summary>
         <div className="editor-menu-popover">
           <MenuItem onClick={() => previewScene?.(selectedSceneId)}>Prévisualiser</MenuItem>
@@ -79,7 +80,7 @@ export function EditorToolbarMenus({
 
       {!fullscreen ? (
         <button type="button" className="editor-menu-button" onClick={enterEditorFullscreen}>
-          Mode édition
+          Plein écran
         </button>
       ) : (
         <details className="editor-menu">
@@ -94,12 +95,12 @@ export function EditorToolbarMenus({
       )}
 
 
-      <details className="editor-menu">
+      <details className="editor-menu" data-tour="scene-add-menu">
         <summary>Ajouter</summary>
         <div className="editor-menu-popover">
-          <MenuItem onClick={addHotspot}>Zone d'action</MenuItem>
-          <MenuItem onClick={addSceneObject}>Objet visible</MenuItem>
-          <MenuItem onClick={addVisualEffectZone}>Zone visuelle</MenuItem>
+          <MenuItem tour="scene-add-hotspot" onClick={addHotspot}>Zone d'action</MenuItem>
+          <MenuItem tour="scene-add-visible-object" onClick={addSceneObject}>Objet visible</MenuItem>
+          <MenuItem tour="scene-add-visual-zone" onClick={addVisualEffectZone}>Zone visuelle</MenuItem>
         </div>
       </details>
     </nav>

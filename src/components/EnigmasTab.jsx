@@ -62,12 +62,14 @@ export default function EnigmasTab({
 
   return (
     <div className="layout two-cols-wide">
+      <div data-tour="enigma-list">
       <EnigmaList
         enigmas={project.enigmas || []}
         selectedEnigmaId={selectedEnigmaId}
         setSelectedEnigmaId={setSelectedEnigmaId}
         addEnigma={addEnigma}
       />
+      </div>
 
       <section className="panel main">
         <div className="panel-head">
@@ -88,7 +90,7 @@ export default function EnigmasTab({
           <div className="combo-card">
             <div className={`enigma-editor-grid${hasRightPreview ? ' has-preview' : ''}`}>
               <div>
-            <div className="grid-two">
+            <div className="grid-two" data-tour="enigma-identity">
               <div>
                 <HelpLabel help={FIELD_HELP.name}>Nom</HelpLabel>
                 <input value={selectedEnigma.name} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
@@ -107,14 +109,14 @@ export default function EnigmasTab({
             </div>
 
             <HelpLabel help={FIELD_HELP.question}>Question / consigne</HelpLabel>
-            <textarea value={selectedEnigma.question} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
+            <textarea data-tour="enigma-question" value={selectedEnigma.question} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
               enigma.question = e.target.value;
             })} />
 
             {selectedEnigma.type === 'code' ? (
               <>
                 <HelpLabel help={FIELD_HELP.solution}>Solution</HelpLabel>
-                <input value={selectedEnigma.solutionText || ''} placeholder="Ex : 1234 ou LUNE" onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
+                <input data-tour="enigma-solution" value={selectedEnigma.solutionText || ''} placeholder="Ex : 1234 ou LUNE" onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                   enigma.solutionText = e.target.value;
                 })} />
               </>
@@ -437,7 +439,7 @@ export default function EnigmasTab({
               </>
             ) : null}
 
-            <div className="grid-two">
+            <div className="grid-two" data-tour="enigma-unlock">
               <div>
                 <HelpLabel help={FIELD_HELP.successMessage}>Message de réussite</HelpLabel>
                 <textarea value={selectedEnigma.successMessage} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {

@@ -101,6 +101,7 @@ async function uploadFileToSupabase(file, {
   folder = 'uploads',
   optimizeImage = true,
   imageOptions,
+  cacheControl = '31536000',
 } = {}) {
   if (!file) {
     throw new Error('Aucun fichier à envoyer.');
@@ -129,6 +130,7 @@ async function uploadFileToSupabase(file, {
 
   return uploadToStorage(path, uploadFile, {
     contentType: uploadFile.type || file.type || 'application/octet-stream',
+    cacheControl,
   });
 }
 

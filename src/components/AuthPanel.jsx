@@ -27,11 +27,13 @@ export default function AuthPanel({
   onRegister,
   onRequestPasswordReset,
   onUpdatePassword,
+  onBack,
+  initialMode = 'login',
   isPasswordRecovery = false,
   isBusy,
   errorMessage,
 }) {
-  const [mode, setMode] = useState(isPasswordRecovery ? 'reset' : 'login');
+  const [mode, setMode] = useState(isPasswordRecovery ? 'reset' : initialMode);
   const [form, setForm] = useState(emptyForm);
   const [localError, setLocalError] = useState('');
   const [notice, setNotice] = useState('');
@@ -42,8 +44,10 @@ export default function AuthPanel({
     if (isPasswordRecovery) {
       setMode('reset');
       setNotice('Choisis un nouveau mot de passe pour finaliser la réinitialisation.');
+      return;
     }
-  }, [isPasswordRecovery]);
+    setMode(initialMode);
+  }, [initialMode, isPasswordRecovery]);
 
   const clearMessages = () => {
     setLocalError('');
@@ -151,11 +155,18 @@ export default function AuthPanel({
     ? 'Mot de passe oublié'
     : mode === 'reset'
       ? 'Nouveau mot de passe'
-      : 'Connexion au builder';
+      : mode === 'register'
+        ? 'Créer un compte'
+        : 'Connexion au builder';
 
   return (
     <div className="auth-shell">
       <div className="auth-card panel">
+        {onBack && !isPasswordRecovery ? (
+          <button type="button" className="auth-back-button secondary-action" onClick={onBack}>
+            Retour accueil
+          </button>
+        ) : null}
         <div className="auth-hero">
           <span className="auth-badge">Sauvegarde par compte</span>
           <h2>{title}</h2>

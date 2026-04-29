@@ -23,6 +23,27 @@ const formatTimerSeconds = (seconds = 0) => {
   return `${String(minutes).padStart(2, '0')}:${String(remaining).padStart(2, '0')}`;
 };
 
+const isPreloadableUrl = (value) => typeof value === 'string' && /^https?:\/\//i.test(value);
+
+const addUrl = (set, value) => {
+  if (isPreloadableUrl(value)) set.add(value);
+};
+
+const collectSceneMediaUrls = (scene, imageUrls, audioUrls) => {
+  if (!scene) return;
+  addUrl(imageUrls, scene.backgroundData);
+  addUrl(audioUrls, scene.musicData);
+  (scene.sceneObjects || []).forEach((object) => {
+    addUrl(imageUrls, object.imageData);
+    addUrl(imageUrls, object.popupImageData || object.popupImage);
+  });
+  (scene.hotspots || []).forEach((spot) => {
+    addUrl(imageUrls, spot.objectImageData);
+    addUrl(imageUrls, spot.secondObjectImageData);
+    addUrl(audioUrls, spot.soundData);
+  });
+};
+
 export default function PreviewTab(props) {
   const {
     playScene,
@@ -91,6 +112,7 @@ export default function PreviewTab(props) {
   const sceneTimerIntervalRef = useRef(null);
   const expiredSceneTimerKeyRef = useRef('');
   const onSceneTimerEndRef = useRef(onSceneTimerEnd);
+  const mediaPreloadRef = useRef({ images: [], audios: [] });
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [loadedSceneAspectRatio, setLoadedSceneAspectRatio] = useState(0);
@@ -112,6 +134,57 @@ export default function PreviewTab(props) {
   useEffect(() => {
     setLoadedSceneAspectRatio(0);
   }, [playScene?.id, playScene?.backgroundData]);
+
+  useEffect(() => {
+    mediaPreloadRef.current.audios.forEach((audio) => {
+      audio.removeAttribute('src');
+      audio.load();
+    });
+
+    if (!playScene) {
+      mediaPreloadRef.current = { images: [], audios: [] };
+      return undefined;
+    }
+
+    const scenesById = new Map((project.scenes || []).map((scene) => [scene.id, scene]));
+    const nearbySceneIds = new Set([
+      playScene.id,
+      playScene.timerTargetSceneId,
+      ...(playScene.hotspots || []).flatMap((spot) => [
+        spot.targetSceneId,
+        spot.secondTargetSceneId,
+      ]),
+    ].filter(Boolean));
+
+    const imageUrls = new Set();
+    const audioUrls = new Set();
+    nearbySceneIds.forEach((sceneId) => collectSceneMediaUrls(scenesById.get(sceneId), imageUrls, audioUrls));
+    collectSceneMediaUrls(playScene, imageUrls, audioUrls);
+
+    const images = Array.from(imageUrls).slice(0, 16).map((url) => {
+      const image = new Image();
+      image.decoding = 'async';
+      image.src = url;
+      return image;
+    });
+
+    const audios = Array.from(audioUrls).slice(0, 5).map((url) => {
+      const audio = new Audio();
+      audio.preload = 'auto';
+      audio.src = url;
+      audio.load();
+      return audio;
+    });
+
+    mediaPreloadRef.current = { images, audios };
+
+    return () => {
+      audios.forEach((audio) => {
+        audio.removeAttribute('src');
+        audio.load();
+      });
+    };
+  }, [playScene, project.scenes]);
 
   useEffect(() => {
     if (sceneTimerIntervalRef.current) {
@@ -249,7 +322,9 @@ export default function PreviewTab(props) {
       sceneAudioRef.current = null;
     }
 
-    const audio = new Audio(nextMusicData);
+    const audio = new Audio();
+    audio.preload = 'auto';
+    audio.src = nextMusicData;
     audio.loop = nextLoop;
     audio.volume = nextVolume;
     audio.play().catch(() => {});
@@ -377,7 +452,9 @@ export default function PreviewTab(props) {
         hotspotAudioRef.current.currentTime = 0;
       }
 
-      const audio = new Audio(spot.soundData);
+      const audio = new Audio();
+      audio.preload = 'auto';
+      audio.src = spot.soundData;
       audio.volume = typeof spot.soundVolume === 'number' ? spot.soundVolume : 0.8;
       audio.play().catch(() => {});
       hotspotAudioRef.current = audio;
@@ -477,6 +554,7 @@ export default function PreviewTab(props) {
   return (
     <div
       ref={playerShellRef}
+      data-tour="preview-player"
       className={`player-shell ${isFullscreen ? 'is-fullscreen' : ''} ${sharedPlayerMode ? 'is-shared-player' : ''} ${showInteractionHints ? 'show-hints' : 'hide-hints'} ${!areControlsVisible ? 'controls-hidden' : ''}`}
       onMouseMove={handleShellMouseMove}
       onFocus={() => {
@@ -507,6 +585,9 @@ export default function PreviewTab(props) {
               className="scene-background"
               src={playScene.backgroundData}
               alt={playScene.name}
+              loading="eager"
+              decoding="async"
+              fetchPriority="high"
               onLoad={(event) => {
                 const image = event.currentTarget;
                 if (image.naturalWidth && image.naturalHeight) {
@@ -795,6 +876,7 @@ export default function PreviewTab(props) {
                     src={playingCinematic.videoData}
                     controls={playingCinematic.videoControls !== false}
                     autoPlay={playingCinematic.videoAutoplay !== false}
+                    preload="auto"
                     onEnded={closeCinematic}
                   />
                 ) : <p className="small-note">Ajoute une vidéo dans l’éditeur de cinématique.</p>}
@@ -805,7 +887,7 @@ export default function PreviewTab(props) {
               </>
             ) : currentSlide && (
               <>
-                {currentSlide.imageData ? <img className="overlay-media" src={currentSlide.imageData} alt={currentSlide.imageName || currentSlide.narration || 'Cinématique'} /> : null}
+                {currentSlide.imageData ? <img className="overlay-media" loading="eager" decoding="async" src={currentSlide.imageData} alt={currentSlide.imageName || currentSlide.narration || 'Cinématique'} /> : null}
                 {currentSlide.audioData ? <audio ref={audioRef} className="overlay-media" controls autoPlay src={currentSlide.audioData} /> : null}
                 <p className="narration">{currentSlide.narration}</p>
                 <div className="panel-head">

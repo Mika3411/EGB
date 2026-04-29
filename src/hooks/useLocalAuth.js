@@ -38,12 +38,14 @@ const safeParse = (value, fallback) => {
 const getProjectTitle = (project, fallback = 'Projet sans titre') =>
   project?.title?.trim?.() || project?.name?.trim?.() || fallback;
 
+const LARGE_MEDIA_FIELD_PATTERN = /^(backgroundData|imageData|objectImageData|popupImageData|popupBackgroundData|musicData|soundData|videoData|videoPoster|audioData)$/i;
+
 const stripLargeMediaForLocalCache = (value) => {
   if (Array.isArray(value)) return value.map(stripLargeMediaForLocalCache);
   if (!value || typeof value !== 'object') return value;
 
   return Object.fromEntries(Object.entries(value).map(([key, entry]) => {
-    if (/^(backgroundData|imageData|objectImageData|popupImageData|popupBackgroundData|videoData|audioData)$/i.test(key)) {
+    if (LARGE_MEDIA_FIELD_PATTERN.test(key)) {
       return [key, typeof entry === 'string' && entry.startsWith('http') ? entry : ''];
     }
     return [key, stripLargeMediaForLocalCache(entry)];
@@ -116,9 +118,9 @@ const writeProjects = (userId, projects) => {
   }
 };
 
-const persistProjects = async (userId, projects) => {
+const persistProjects = async (userId, projects, options = {}) => {
   writeProjects(userId, projects);
-  await saveProjectRecordsForUser(userId, projects);
+  await saveProjectRecordsForUser(userId, projects, options);
   return projects;
 };
 
@@ -446,7 +448,7 @@ export function useLocalAuth() {
         }
         : project
     ));
-    await persistProjects(user.id, nextProjects);
+    await persistProjects(user.id, nextProjects, { requirePublicIndex: true });
     setProjects(nextProjects);
     return nextProjects.find((project) => project.id === projectId) || null;
   };

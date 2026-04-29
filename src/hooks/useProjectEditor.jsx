@@ -171,7 +171,10 @@ export function useProjectEditor() {
   }, [patchProject, selectedScene]);
 
   const addHotspot = useCallback(() => {
-    const hotspot = makeHotspot();
+    const hotspot = {
+      ...makeHotspot(),
+      tutorialCreated: Boolean(document.body.classList.contains('tutorial-active')),
+    };
     patchProject((draft) => {
       const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
       if (scene) scene.hotspots.push(hotspot);

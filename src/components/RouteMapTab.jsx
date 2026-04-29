@@ -380,7 +380,7 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel }) {
           <span className={`status-badge ${diagnostics.ok ? '' : 'soft'}`}>{diagnostics.ok ? 'OK' : `${diagnostics.problems.length} souci(s)`}</span>
         </div>
 
-        <div className="inline-actions">
+        <div className="inline-actions" data-tour="map-add-room">
           <button type="button" onClick={() => addRoom()}>
             <Plus size={16} aria-hidden="true" />
             Pièce
@@ -434,7 +434,7 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel }) {
           <span className="small-note">{connections.length} liaison{connections.length > 1 ? 's' : ''}</span>
         </div>
 
-        <div className="route-room-board">
+        <div className="route-room-board" data-tour="map-board">
           <svg className="route-connection-layer" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
             <defs>
               <marker id="route-arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
@@ -502,7 +502,7 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel }) {
         </div>
 
         {selectedRoom ? (
-          <div className="editor-stack">
+          <div className="editor-stack" data-tour="map-room-detail">
             <label>
               Nom de la pièce
               <input value={selectedRoom.name || ''} onChange={(event) => updateRoom(selectedRoom.id, (room) => {
@@ -585,7 +585,7 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel }) {
         )}
 
         <div className="divider-line" />
-        <div className="route-diagnostics">
+        <div className="route-diagnostics" data-tour="map-diagnostics">
           <div className="panel-head">
             <h2>Vérification</h2>
           </div>

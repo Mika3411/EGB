@@ -162,7 +162,7 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
 
   return (
     <div className="layout two-cols-wide">
-      <section className="panel side">
+      <section className="panel side" data-tour="logic-scene-tree">
         <div className="panel-head">
           <h2>Actes et scènes</h2>
           <span className="status-badge soft">{totalRules} règle{totalRules > 1 ? 's' : ''}</span>
@@ -193,7 +193,7 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
 
         {selectedScene ? (
           <div className="editor-stack">
-            <section className="combo-card">
+            <section className="combo-card" data-tour="logic-zones">
               <div className="panel-head">
                 <HelpLabel className="compact-section-title" help={FIELD_HELP.actionZones}>Zones d’action</HelpLabel>
                 <span className="status-badge soft">{selectedScene.hotspots?.length || 0}</span>
@@ -205,14 +205,14 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
                       <h3>{hotspot.name}</h3>
                       <p className="small-note">{(hotspot.logicRules || []).length} règle{(hotspot.logicRules || []).length > 1 ? 's' : ''} conditionnelle{(hotspot.logicRules || []).length > 1 ? 's' : ''}</p>
                     </div>
-                    <div className="label-with-help">
+                    <div className="label-with-help" data-tour="logic-add-rule">
                       <button type="button" onClick={() => addRule(hotspot.id)}>+ Règle</button>
                       <span className="help-dot" data-help={FIELD_HELP.addRule} aria-label={FIELD_HELP.addRule} tabIndex={0}>?</span>
                     </div>
                   </div>
 
                   {(hotspot.logicRules || []).length ? hotspot.logicRules.map((rule) => (
-                    <details className="logic-rule-card" key={rule.id}>
+                    <details className="logic-rule-card" key={rule.id} open>
                       <summary>
                         <span>
                           <strong>{rule.name || 'Règle'}</strong>
@@ -236,7 +236,7 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
                         </div>
                         <div>
                           <HelpLabel help="Détermine quand cette règle remplace l’action normale de la zone. La première règle qui correspond est utilisée.">Condition</HelpLabel>
-                          <select value={rule.conditionType || 'has_item'} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
+                          <select data-tour="logic-condition" value={rule.conditionType || 'has_item'} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
                             draftRule.conditionType = event.target.value;
                           })}>
                             {Object.entries(CONDITION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -314,7 +314,7 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
                       <div className="grid-two">
                         <div>
                           <HelpLabel help="Action exécutée à la place de l’action normale de la zone quand la condition est vraie.">Action déclenchée</HelpLabel>
-                          <select value={rule.actionType || 'dialogue'} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
+                          <select data-tour="logic-action" value={rule.actionType || 'dialogue'} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
                             draftRule.actionType = event.target.value;
                           })}>
                             {Object.entries(ACTION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -387,7 +387,7 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
               ))}
             </section>
 
-            <section className="combo-card">
+            <section className="combo-card" data-tour="logic-visible-objects">
               <div className="panel-head">
                 <HelpLabel className="compact-section-title" help={FIELD_HELP.visibleObjects}>Objets visibles de la scène</HelpLabel>
                 <span className="status-badge soft">{selectedScene.sceneObjects?.length || 0}</span>

@@ -2,34 +2,7 @@
 
 Ce mode d'emploi explique comment créer, tester, partager et publier un escape game avec l'application en ligne. Il suit les écrans et les champs visibles dans le builder.
 
-## 1. Comprendre l'application
-
-Escape Game Builder sert à créer un jeu d'escape game jouable dans un navigateur. Un projet est composé de scènes, d'objets, de zones cliquables, d'énigmes, de cinématiques, de règles logiques et d'un plan de parcours.
-
-L'application est organisée en trois espaces :
-
-- **Profil** : création, ouverture, duplication, import, publication et gestion des projets.
-- **Builder** : édition complète du jeu avec les onglets `Scenes`, `Media`, `Plan`, `Cinematiques`, `Combinaisons`, `Enigmes`, `Logique`, `IA`, `Boutique`, `Preview` et `Bilan`.
-- **Galerie publique** : découverte, jeu, notation et consultation des créations publiées.
-
-Les petits boutons `?` à côté des champs donnent une aide contextuelle. Ce document reprend et développe ces aides.
-
-## 2. Se connecter ou créer un compte
-
-Au démarrage, connecte-toi avec ton email et ton mot de passe, ou crée un compte depuis l'onglet **Inscription**.
-
-Pendant l'inscription, renseigne :
-
-- **Nom ou pseudo** : nom affiché dans ton espace.
-- **Type de profil** : profil créateur, école, association, entreprise ou autre selon les choix proposés.
-- **Organisation** : structure associée au compte, si utile.
-- **Pays** et **Langue** : informations de profil.
-- **Email** : adresse utilisée pour la connexion et les liens de confirmation.
-- **Mot de passe** : minimum 6 caractères.
-
-Si l'application demande une confirmation email, ouvre le lien reçu avant de te reconnecter.
-
-## 3. Utiliser l'écran Profil
+## 1. Utiliser l'écran Profil
 
 L'écran **Profil** est le tableau de bord de tes projets.
 
@@ -73,7 +46,7 @@ Utilise cette fonction pour :
 
 Après import, ouvre le projet et vérifie-le dans **Preview**.
 
-## 4. Barre supérieure du builder
+## 2. Barre supérieure du builder
 
 Quand un projet est ouvert, la barre supérieure affiche les actions globales.
 
@@ -88,7 +61,7 @@ Différence importante :
 - Le **JSON** sert à continuer l'édition dans le builder.
 - L'**export jeu** sert à donner une version jouable à des joueurs.
 
-## 5. Méthode recommandée pour créer un jeu
+## 3. Méthode recommandée pour créer un jeu
 
 Pour éviter de se perdre, construis ton jeu dans cet ordre :
 
@@ -106,7 +79,7 @@ Pour éviter de se perdre, construis ton jeu dans cet ordre :
 12. Corrige avec **Bilan**.
 13. Publie ou exporte.
 
-## 6. Onglet Scenes
+## 4. Onglet Scenes
 
 L'onglet **Scenes** sert à construire les lieux du jeu et les interactions placées dessus.
 
@@ -256,7 +229,7 @@ Champs importants :
 
 Utilise-les pour attirer l'attention sans casser l'immersion : lumière sur un coffre, fumée devant une porte, étincelles sur un mécanisme.
 
-## 7. Onglet Media
+## 5. Onglet Media
 
 L'onglet **Media** centralise les images, sons, transitions, effets et minuteurs d'une scène.
 
@@ -330,7 +303,7 @@ Actions possibles :
 
 Utilise un minuteur seulement si la pression sert le jeu. Un compte à rebours gratuit peut frustrer le joueur.
 
-## 8. Onglet Plan
+## 6. Onglet Plan
 
 L'onglet **Plan** sert à représenter le parcours du joueur et à vérifier les liaisons entre scènes.
 
@@ -377,7 +350,7 @@ Une liaison peut être :
 
 Si le plan signale une liaison manquante, retourne dans **Scenes** et ajoute une zone d'action vers la bonne scène.
 
-## 9. Onglet Cinematiques
+## 7. Onglet Cinematiques
 
 Les cinématiques servent d'introduction, transition, révélation, récompense ou conclusion.
 
@@ -441,7 +414,7 @@ Champs liés :
 - **Scène de destination** : scène ouverte après la cinématique.
 - **Objet donné** : objet ajouté à l'inventaire à la fin.
 
-## 10. Onglet Combinaisons
+## 8. Onglet Combinaisons
 
 Les combinaisons créent des recettes d'inventaire. Le joueur combine deux objets pour obtenir un résultat.
 
@@ -464,7 +437,7 @@ Exemple :
 
 Conseil : évite les recettes ambiguës. Si deux objets peuvent logiquement créer plusieurs résultats, clarifie avec les noms ou les messages.
 
-## 11. Onglet Enigmes
+## 9. Onglet Enigmes
 
 L'onglet **Enigmes** crée les défis que le joueur doit résoudre.
 
@@ -642,7 +615,7 @@ Intensité du voile sombre placé sur l'image pour garder le texte lisible.
 
 Utilise un fond de pop-up pour donner du style à une énigme importante, mais vérifie que la consigne reste facile à lire.
 
-## 12. Onglet Logique
+## 10. Onglet Logique
 
 L'onglet **Logique** permet de remplacer ou compléter le comportement normal des zones selon l'état de la partie.
 
@@ -702,7 +675,7 @@ Exemple de règle :
 - Option : retirer l'objet requis.
 - Résultat : la clé ouvre la porte puis disparaît de l'inventaire.
 
-## 13. Onglet IA
+## 11. Onglet IA
 
 L'onglet **IA** aide à générer, continuer ou enrichir un projet.
 
@@ -788,7 +761,7 @@ Ajuste automatiquement la luminosité après génération pour garder une image 
 **Héritage visuel**  
 Détails récurrents à conserver entre les pièces : portes, parquet, lumière, époque, matériaux.
 
-## 14. Onglet Boutique
+## 12. Onglet Boutique
 
 L'onglet **Boutique** sert à acheter ou retrouver des crédits IA.
 
@@ -801,7 +774,7 @@ Il affiche :
 
 Copie l'identifiant d'achat si tu dois contacter le support. Les crédits sont associés à cet identifiant.
 
-## 15. Onglet Preview
+## 13. Onglet Preview
 
 L'onglet **Preview** permet de jouer au projet comme un joueur.
 
@@ -829,7 +802,7 @@ Le jeu exporté propose aussi des actions de sauvegarde de partie :
 
 Conseil : après chaque grosse modification, teste immédiatement. Une erreur repérée tout de suite est beaucoup plus simple à corriger.
 
-## 16. Onglet Bilan
+## 14. Onglet Bilan
 
 L'onglet **Bilan** donne une note globale et des conseils.
 
@@ -872,7 +845,7 @@ Le bilan affiche aussi :
 
 Lis les conseils avant de publier. Ils indiquent souvent les oublis les plus gênants.
 
-## 17. Publier dans la galerie publique
+## 15. Publier dans la galerie publique
 
 Depuis **Profil**, un projet peut être publié dans la galerie.
 
@@ -892,7 +865,7 @@ Après publication, le jeu peut être :
 - commenté ;
 - associé à ton profil auteur.
 
-## 18. Galerie publique
+## 16. Galerie publique
 
 La galerie permet de découvrir les jeux publiés.
 
@@ -911,7 +884,7 @@ Fonctions disponibles :
 
 Un jeu marqué +18 affiche un avertissement.
 
-## 19. Exporter le jeu
+## 17. Exporter le jeu
 
 Dans la barre supérieure, clique sur **Exporter jeu**.
 
@@ -924,7 +897,7 @@ Utilise l'export jeu quand :
 - tu veux archiver une version jouable ;
 - tu veux envoyer le jeu à quelqu'un sans lui donner accès à l'édition.
 
-## 20. Sauvegarder avec Export JSON
+## 18. Sauvegarder avec Export JSON
 
 Clique sur **Exporter JSON** pour créer une sauvegarde éditable.
 
@@ -938,7 +911,7 @@ Fais un export JSON :
 
 Le JSON est ton filet de sécurité.
 
-## 21. Checklist précise avant publication
+## 19. Checklist précise avant publication
 
 - Le projet a un titre clair.
 - Le jeu commence par la bonne scène ou la bonne cinématique.
@@ -967,7 +940,7 @@ Le JSON est ton filet de sécurité.
 - Une sauvegarde JSON a été exportée.
 - La catégorie, la mention d'âge et la miniature sont prêtes.
 
-## 22. Dépannage utilisateur
+## 20. Dépannage utilisateur
 
 ### Je ne retrouve pas une scène dans une liste
 

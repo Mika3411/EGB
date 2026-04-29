@@ -19,7 +19,7 @@ export default function CombinationsTab({ project, addCombination, getItemById, 
       <section className="panel side">
         <div className="panel-head">
           <h2>Recettes</h2>
-          <div className="label-with-help">
+          <div className="label-with-help" data-tour="combination-add">
             <button onClick={addCombination}>+ Combinaison</button>
             <span className="help-dot" data-help={FIELD_HELP.addCombination} aria-label={FIELD_HELP.addCombination} tabIndex={0}>?</span>
           </div>
@@ -41,7 +41,7 @@ export default function CombinationsTab({ project, addCombination, getItemById, 
         <div className="panel-head"><h2>Éditeur de combinaisons</h2></div>
         {(project.combinations || []).map((combo) => (
           <div className="combo-card" key={combo.id}>
-            <div className="grid-two">
+            <div className="grid-two" data-tour="combination-items">
               <div>
                 <HelpLabel help={FIELD_HELP.itemA}>Objet 1</HelpLabel>
                 <select value={combo.itemAId} onChange={(e) => patchProject((draft) => {
@@ -62,14 +62,14 @@ export default function CombinationsTab({ project, addCombination, getItemById, 
               </div>
             </div>
             <HelpLabel help={FIELD_HELP.result}>Résultat</HelpLabel>
-            <select value={combo.resultItemId} onChange={(e) => patchProject((draft) => {
+            <select data-tour="combination-result" value={combo.resultItemId} onChange={(e) => patchProject((draft) => {
               const target = (draft.combinations || []).find((c) => c.id === combo.id); if (target) target.resultItemId = e.target.value;
             })}>
               <option value="">Choisir</option>
               {project.items.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
             <HelpLabel help={FIELD_HELP.message}>Message affiché</HelpLabel>
-            <textarea value={combo.message} onChange={(e) => patchProject((draft) => {
+            <textarea data-tour="combination-message" value={combo.message} onChange={(e) => patchProject((draft) => {
               const target = (draft.combinations || []).find((c) => c.id === combo.id); if (target) target.message = e.target.value;
             })} />
           </div>

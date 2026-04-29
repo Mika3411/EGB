@@ -713,6 +713,7 @@ function playSceneMusic() {
   if (sceneAudioSource !== nextMusicData) {
     sceneAudio.pause();
     sceneAudio.currentTime = 0;
+    sceneAudio.preload = 'auto';
     sceneAudio.src = nextMusicData;
     sceneAudioSource = nextMusicData;
   }
@@ -725,6 +726,7 @@ function playHotspotSound(spot) {
   if (!spot?.soundData) return;
   hotspotAudio.pause();
   hotspotAudio.currentTime = 0;
+  hotspotAudio.preload = 'auto';
   hotspotAudio.src = spot.soundData;
   hotspotAudio.volume = typeof spot.soundVolume === 'number' ? spot.soundVolume : 0.8;
   hotspotAudio.play().catch(() => {});
@@ -1607,7 +1609,7 @@ function renderCinematic(cinematic, slide) {
   if ((cinematic.cinematicType || 'slides') === 'video') {
     return '<div class="overlay" id="cinematic-overlay"><div class="overlay-card">'
       + (cinematic.videoData ?
-         '<video id="cinematic-video" class="overlay-media" src="' + cinematic.videoData + '" '
+         '<video id="cinematic-video" class="overlay-media" preload="auto" src="' + cinematic.videoData + '" '
           + (cinematic.videoControls === false ? '' : 'controls ') + (cinematic.videoAutoplay === false ? '' : 'autoplay ')
           + '></video>'
         : '<p class="small-note">Ajoute une vidéo dans l’éditeur de cinématique.</p>')
@@ -1618,7 +1620,7 @@ function renderCinematic(cinematic, slide) {
   if (!slide) return '';
 
   return '<div class="overlay" id="cinematic-overlay"><div class="overlay-card">'
-    + (slide.imageData ? '<img class="overlay-media" src="' + slide.imageData + '" alt="' + safeHtml(slide.imageName || slide.narration || 'Cinématique') + '" />' : '')
+    + (slide.imageData ? '<img class="overlay-media" loading="eager" decoding="async" src="' + slide.imageData + '" alt="' + safeHtml(slide.imageName || slide.narration || 'Cinématique') + '" />' : '')
     + (slide.audioData ? '<audio id="cinematic-audio" class="overlay-media" controls autoplay src="' + slide.audioData + '"></audio>' : '')
     + '<p class="narration">' + safeHtml(slide.narration || '') + '</p>'
     + '<div class="panel-head">'

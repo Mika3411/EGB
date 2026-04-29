@@ -224,7 +224,7 @@ export default function CinematicsTab({
                   />
                 </label>
                 {selectedCinematic.videoData ? (
-                  <video className="thumb" src={selectedCinematic.videoData} controls style={{ width: '100%', maxHeight: 320, background: '#020617' }} />
+                  <video className="thumb" src={selectedCinematic.videoData} controls preload="metadata" style={{ width: '100%', maxHeight: 320, background: '#020617' }} />
                 ) : (
                   <p className="small-note">MP4 conseillé. WebM et MOV peuvent marcher selon le navigateur.</p>
                 )}
@@ -253,7 +253,7 @@ export default function CinematicsTab({
                         if (target) { target.imageData = data; target.imageName = name; }
                       }))} />
                     </label>
-                    {slide.imageData && <img className="thumb" src={slide.imageData} alt="slide" />}
+                    {slide.imageData && <img className="thumb" loading="lazy" decoding="async" src={slide.imageData} alt="slide" />}
                     <HelpLabel help={FIELD_HELP.slideNarration}>Narration</HelpLabel>
                     <textarea value={slide.narration} onChange={(e) => patchProject((draft) => {
                       const target = draft.cinematics.find((c) => c.id === selectedCinematicId)?.slides.find((s) => s.id === slide.id);
@@ -267,7 +267,7 @@ export default function CinematicsTab({
                         if (target) { target.audioData = data; target.audioName = name; }
                       }))} />
                     </label>
-                    {slide.audioData && <audio controls src={slide.audioData} style={{ width: '100%' }} />}
+                    {slide.audioData && <audio controls preload="metadata" src={slide.audioData} style={{ width: '100%' }} />}
                   </div>
                 ))}
               </div>

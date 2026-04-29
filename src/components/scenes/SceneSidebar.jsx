@@ -124,12 +124,12 @@ export default function SceneSidebar({
 
       <div className="divider-line" />
 
-      <div className="panel-head panel-head-stack">
+      <div className="panel-head panel-head-stack" data-tour="inventory">
         <div>
           <span className="section-kicker">Inventaire</span>
           <h2>Objets</h2>
         </div>
-        <button onClick={addItem}>+ Objet</button>
+        <button data-tour="object-create" onClick={addItem}>+ Objet</button>
       </div>
       <label>Liste des objets</label>
       <select value={selectedItemId} onChange={(event) => setSelectedItemId(event.target.value)}>

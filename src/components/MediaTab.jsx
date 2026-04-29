@@ -152,14 +152,14 @@ export default function MediaTab({
               <div className="subpanel">
                 <div className="subpanel-head"><h3>Visuels</h3></div>
                 <div className="compact-form-grid">
-                  <div>
+                  <div data-tour="media-background-image">
                     <HelpLabel help="Image principale vue par le joueur dans cette scene.">Image de fond</HelpLabel>
                     <label className="button like full secondary-action">
                       {selectedScene.backgroundName || 'Importer une image'}
                       <input type="file" accept="image/*" hidden onChange={(event) => handleUpload(event, updateSceneBackground)} />
                     </label>
                   </div>
-                  <div>
+                  <div data-tour="media-visual-effect">
                     <HelpLabel help="Filtre ou effet applique a toute la scene.">Effet global</HelpLabel>
                     <VisualEffectCascadeMenu
                       value={selectedScene.visualEffect || 'none'}
@@ -230,7 +230,7 @@ export default function MediaTab({
 
               <div className="subpanel">
                 <div className="subpanel-head"><h3>Musique</h3></div>
-                <div className="music-compact-row">
+                <div className="music-compact-row" data-tour="media-music">
                   <label className="button like full secondary-action">
                     {selectedScene.musicName || 'Importer une musique'}
                     <input type="file" accept="audio/*" hidden onChange={(event) => handleUpload(event, (data, name) => patchProject((draft) => {
@@ -244,7 +244,7 @@ export default function MediaTab({
                   </label>
                   {selectedScene.musicData ? (
                     <>
-                      <audio controls src={selectedScene.musicData} />
+                      <audio controls preload="metadata" src={selectedScene.musicData} />
                       <div className="music-compact-actions">
                         <label className="checkbox-row">
                           <input
@@ -418,9 +418,9 @@ export default function MediaTab({
 
             <div className="subpanel media-preview-panel">
               <div className="subpanel-head"><h3>Apercu de la scene</h3></div>
-              <div className="editor-canvas editor-canvas-pro media-scene-preview" style={{ aspectRatio: sceneAspectRatio }}>
+              <div className="editor-canvas editor-canvas-pro media-scene-preview" data-tour="media-preview" style={{ aspectRatio: sceneAspectRatio }}>
                 {selectedScene.backgroundData ? (
-                  <img src={selectedScene.backgroundData} alt="fond" onLoad={(event) => rememberSceneBackgroundAspectRatio(event.currentTarget)} />
+                  <img loading="eager" decoding="async" fetchPriority="high" src={selectedScene.backgroundData} alt="fond" onLoad={(event) => rememberSceneBackgroundAspectRatio(event.currentTarget)} />
                 ) : <div className="placeholder">Ajoute une image dans Media</div>}
                 <SceneVisualEffect effect={selectedScene.visualEffect} intensity={selectedScene.visualEffectIntensity} />
                 {(selectedScene.visualEffectZones || []).filter((zone) => !zone.isHidden).map((zone) => (
@@ -440,7 +440,7 @@ export default function MediaTab({
                 ))}
                 {(selectedScene.sceneObjects || []).filter((obj) => !obj.isHidden).map((obj) => (
                   <div key={obj.id} className="editor-hotspot editor-scene-object media-preview-object" style={getSceneObjectStyle(obj)}>
-                    {obj.imageData ? <img src={obj.imageData} alt={obj.name} style={getSceneObjectImageStyle()} /> : <span>{obj.name}</span>}
+                    {obj.imageData ? <img loading="lazy" decoding="async" src={obj.imageData} alt={obj.name} style={getSceneObjectImageStyle()} /> : <span>{obj.name}</span>}
                   </div>
                 ))}
                 {(selectedScene.hotspots || []).filter((spot) => !spot.isHidden).map((spot) => (
@@ -461,10 +461,10 @@ export default function MediaTab({
                     style={{ '--scene-transition-duration': `${selectedTransitionDuration}ms` }}
                   >
                     {selectedScene.backgroundData ? (
-                      <img src={selectedScene.backgroundData} alt="" />
+                      <img loading="lazy" decoding="async" src={selectedScene.backgroundData} alt="" />
                     ) : <div className="placeholder">Scene de depart</div>}
                     {transitionPreviewTarget.backgroundData ? (
-                      <img src={transitionPreviewTarget.backgroundData} alt="" />
+                      <img loading="lazy" decoding="async" src={transitionPreviewTarget.backgroundData} alt="" />
                     ) : <div className="placeholder">Scene d'arrivee</div>}
                   </div>
                 ) : null}

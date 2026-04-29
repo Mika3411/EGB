@@ -1,4 +1,4 @@
-import { getAllAccounts, loadProjectRecordsForUser } from './authStorage';
+import { getAllAccounts, loadProjectRecordsForUser, loadPublicProjectIndex } from './authStorage';
 import { getAuthorProfile } from './authorProfiles';
 import { getBlogModerationId, getModerationState } from './moderationStorage';
 
@@ -110,6 +110,12 @@ const normalizeRecord = (record = {}) => {
 
 export const getGameKey = (userId, projectId) => `${userId}:${projectId}`;
 
+const accountFromRecord = (record = {}) => ({
+  id: record.userId || '',
+  name: record.authorName || record.author || '',
+  email: record.authorEmail || '',
+});
+
 export const readPublicFeedback = () => readJson(FEEDBACK_KEY, {});
 
 export const readPublicStats = () => readJson(STATS_KEY, {});
@@ -196,17 +202,18 @@ export const incrementPublicGamePlay = (gameKey) => {
 
 export async function getPublicGames(options = {}) {
   const includeModerated = Boolean(options.includeModerated);
-  const accounts = getAllAccounts();
+  const currentUser = options.currentUser || null;
+  const accountsById = new Map(getAllAccounts().map((account) => [account.id, account]));
+  if (currentUser?.id) accountsById.set(currentUser.id, { ...accountsById.get(currentUser.id), ...currentUser });
+  const accounts = Array.from(accountsById.values());
   const stats = readPublicStats();
   const moderation = await getModerationState();
 
   const gamesByKey = new Map();
 
-  await Promise.all(accounts.map(async (account) => {
+  const addRecordsToGallery = (account, records = []) => {
+    if (!account?.id) return;
     const authorProfile = getAuthorProfile(account.id, account);
-    const localRecords = readJson(getLocalProjectsKey(account.id), []);
-    const remoteRecords = await loadProjectRecordsForUser(account.id).catch(() => null);
-    const records = Array.isArray(remoteRecords) && remoteRecords.length ? remoteRecords : localRecords;
 
     records.map(normalizeRecord).forEach((record) => {
       if (!record.id || !record.shareState?.isPublic) return;
@@ -271,6 +278,18 @@ export async function getPublicGames(options = {}) {
         project: data,
       });
     });
+  };
+
+  const publicIndex = await loadPublicProjectIndex().catch(() => []);
+  publicIndex.forEach((record) => {
+    addRecordsToGallery(accountFromRecord(record), [record]);
+  });
+
+  await Promise.all(accounts.map(async (account) => {
+    const localRecords = readJson(getLocalProjectsKey(account.id), []);
+    const remoteRecords = await loadProjectRecordsForUser(account.id).catch(() => null);
+    const records = Array.isArray(remoteRecords) && remoteRecords.length ? remoteRecords : localRecords;
+    addRecordsToGallery(account, records);
   }));
 
   return Array.from(gamesByKey.values());
@@ -280,7 +299,12 @@ export async function loadPublicProject(userId, projectId) {
   if (!userId || !projectId) return null;
   const remoteRecords = await loadProjectRecordsForUser(userId).catch(() => null);
   const localRecords = readJson(getLocalProjectsKey(userId), []);
-  const records = Array.isArray(remoteRecords) && remoteRecords.length ? remoteRecords : localRecords;
+  const publicIndex = await loadPublicProjectIndex().catch(() => []);
+  const indexedRecords = publicIndex.filter((record) => record.userId === userId);
+  const records = [
+    ...(Array.isArray(remoteRecords) && remoteRecords.length ? remoteRecords : localRecords),
+    ...indexedRecords,
+  ];
   const record = records.map(normalizeRecord).find((entry) => entry.id === projectId);
 
   if (!record?.shareState?.isPublic) return null;

@@ -364,7 +364,7 @@ export default function SceneFullscreenEditor({
                           </label>
                           {selectedHotspot.soundData && (
                             <>
-                              <audio controls src={selectedHotspot.soundData} style={{ width: '100%', marginTop: 10 }} />
+                              <audio controls preload="metadata" src={selectedHotspot.soundData} style={{ width: '100%', marginTop: 10 }} />
                               <button
                                 type="button"
                                 className="danger-button"

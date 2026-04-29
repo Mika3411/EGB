@@ -11,12 +11,23 @@ import LogicTab from './components/LogicTab';
 import ScoreTab from './components/ScoreTab';
 import AiTab from './components/AiTab';
 import ShopTab from './components/ShopTab';
+import HelpTab from './components/HelpTab';
 import PreviewPlayerPanel from './components/PreviewPlayerPanel';
+import BuilderTutorial from './components/BuilderTutorial';
 import AuthPanel from './components/AuthPanel';
+import LandingPage from './components/LandingPage';
 import ProfilePage from './components/ProfilePage';
 import AdminPage from './components/AdminPage';
 import PublicGallery from './components/PublicGallery';
 import { createInitialProject, normalizeProject } from './data/projectData';
+import {
+  BUILDER_TUTORIAL_STEPS,
+  BUILDER_TUTORIAL_TABS,
+  getFakeWindowImageOptions,
+  getTutorialName,
+  getTutorialStepIndexes,
+  prepareProjectForTutorial,
+} from './data/tutorialSteps';
 import { fileToDataURL, uploadFileToSupabase } from './utils/fileHelpers';
 import { exportProjectJson, exportStandalone } from './utils/exporters';
 import { mergeProjectPatch, validateProject } from './utils/projectValidation';
@@ -60,7 +71,11 @@ function App() {
   const auth = useLocalAuth();
   const [saveStatus, setSaveStatus] = useState('');
   const [screen, setScreen] = useState('profile');
+  const [showAuthPanel, setShowAuthPanel] = useState(false);
+  const [authEntryMode, setAuthEntryMode] = useState('login');
   const [sharedLoadStatus, setSharedLoadStatus] = useState('');
+  const [tutorialStepIndex, setTutorialStepIndex] = useState(null);
+  const [selectedTutorialTab, setSelectedTutorialTab] = useState('scenes');
   const hydratedProjectRef = useRef('');
   const sharedRouteRef = useSharedPlayableRoute({
     editor,
@@ -68,6 +83,10 @@ function App() {
     setScreen,
     setSharedLoadStatus,
   });
+  const activeTutorialIndexes = tutorialStepIndex === null ? [] : getTutorialStepIndexes(selectedTutorialTab);
+  const activeTutorialPosition = activeTutorialIndexes.indexOf(tutorialStepIndex);
+  const activeTutorialStep = tutorialStepIndex === null ? null : BUILDER_TUTORIAL_STEPS[tutorialStepIndex];
+  const tutorialUserName = getTutorialName(auth.user);
 
   useEffect(() => {
     const placeHelpTooltip = (target) => {
@@ -111,6 +130,12 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (tutorialStepIndex === null) return;
+    const step = BUILDER_TUTORIAL_STEPS[tutorialStepIndex];
+    if (step?.tab && editor.tab !== step.tab) editor.setTab(step.tab);
+  }, [tutorialStepIndex, editor]);
+
+  useEffect(() => {
     if (sharedRouteRef.current) return;
     if (!auth.user) {
       hydratedProjectRef.current = '';
@@ -133,6 +158,7 @@ function App() {
 
   useEffect(() => {
     let isCancelled = false;
+    let saveTimer = null;
 
     async function persistProject() {
       if (!auth.user?.id) return;
@@ -146,7 +172,7 @@ function App() {
           selectedSceneId: editor.selectedSceneId,
         });
         if (!isCancelled) {
-          setSaveStatus(hasSupabaseConfig() ? 'Sauvegardé dans Supabase' : 'Sauvegardé localement');
+          setSaveStatus(hasSupabaseConfig() ? 'SauvegardÃ© dans Supabase' : 'SauvegardÃ© localement');
         }
       } catch (error) {
         console.error('Erreur de sauvegarde du projet', error);
@@ -156,10 +182,11 @@ function App() {
       }
     }
 
-    persistProject();
+    saveTimer = window.setTimeout(persistProject, 900);
 
     return () => {
       isCancelled = true;
+      if (saveTimer) window.clearTimeout(saveTimer);
     };
   }, [auth.user, auth.activeProjectId, editor.project, editor.tab, editor.selectedSceneId, screen]);
 
@@ -185,13 +212,13 @@ function App() {
       });
 
       callback(publicUrl, file.name);
-      setSaveStatus(`${file.type?.startsWith('video/') ? 'Vidéo' : file.type?.startsWith('audio/') ? 'Son' : 'Média'} importé${file.type?.startsWith('image/') ? 'e' : ''} dans Supabase : ${file.name}`);
+      setSaveStatus(`${file.type?.startsWith('video/') ? 'VidÃ©o' : file.type?.startsWith('audio/') ? 'Son' : 'MÃ©dia'} importÃ©${file.type?.startsWith('image/') ? 'e' : ''} dans Supabase : ${file.name}`);
     } catch (error) {
-      console.error('Erreur import média', error);
+      console.error('Erreur import mÃ©dia', error);
       alert(
         hasSupabaseConfig() ?
-           "Impossible d'envoyer ce fichier vers Supabase Storage. Vérifie le bucket et les policies."
-          : 'Configuration Supabase manquante. Ajoute VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY (ou VITE_SUPABASE_ANON_KEY) et éventuellement VITE_SUPABASE_STORAGE_BUCKET.',
+           "Impossible d'envoyer ce fichier vers Supabase Storage. VÃ©rifie le bucket et les policies."
+          : 'Configuration Supabase manquante. Ajoute VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY (ou VITE_SUPABASE_ANON_KEY) et Ã©ventuellement VITE_SUPABASE_STORAGE_BUCKET.',
       );
     } finally {
       event.target.value = '';
@@ -199,7 +226,7 @@ function App() {
   };
 
   const uploadGalleryThumbnail = async (file) => {
-    if (!file) throw new Error('Aucune miniature à envoyer.');
+    if (!file) throw new Error('Aucune miniature Ã  envoyer.');
 
     if (!hasSupabaseConfig()) {
       return {
@@ -222,7 +249,7 @@ function App() {
 
   const handleDeleteItem = (itemId) => {
     const item = editor.project.items.find((entry) => entry.id === itemId);
-    if (!window.confirm(`Supprimer l'objet "${item?.name || 'sélectionné'}" ?`)) return;
+    if (!window.confirm(`Supprimer l'objet "${item?.name || 'sÃ©lectionnÃ©'}" ?`)) return;
     preview.removeInventoryItemReferences(itemId);
     editor.deleteItem(itemId);
   };
@@ -230,8 +257,8 @@ function App() {
   const handleDeleteScene = (sceneId) => {
     const deletedSceneIds = collectDescendantSceneIds(editor.project.scenes, sceneId);
     const scene = editor.project.scenes.find((entry) => entry.id === sceneId);
-    const suffix = deletedSceneIds.size > 1 ? ` et ses ${deletedSceneIds.size - 1} sous-scène(s)` : '';
-    if (!window.confirm(`Supprimer la scène "${scene?.name || 'sélectionnée'}"${suffix} ?`)) return;
+    const suffix = deletedSceneIds.size > 1 ? ` et ses ${deletedSceneIds.size - 1} sous-scÃ¨ne(s)` : '';
+    if (!window.confirm(`Supprimer la scÃ¨ne "${scene?.name || 'sÃ©lectionnÃ©e'}"${suffix} ?`)) return;
     const remainingScenes = editor.project.scenes.filter((scene) => !deletedSceneIds.has(scene.id));
     const fallbackScene = remainingScenes[0] || null;
     editor.deleteScene(sceneId);
@@ -240,7 +267,7 @@ function App() {
 
   const handleDeleteEnigma = (enigmaId) => {
     const enigma = editor.project.enigmas.find((entry) => entry.id === enigmaId);
-    if (!window.confirm(`Supprimer l'énigme "${enigma?.name || 'sélectionnée'}" ?`)) return;
+    if (!window.confirm(`Supprimer l'Ã©nigme "${enigma?.name || 'sÃ©lectionnÃ©e'}" ?`)) return;
     editor.deleteEnigma(enigmaId);
   };
 
@@ -271,10 +298,13 @@ function App() {
   const openProjectInEditor = async (projectId, options = {}) => {
     try {
       const savedProject = await auth.loadProject(projectId);
-      const projectToLoad = normalizeProject(savedProject || createInitialProject());
+      const projectToLoad = prepareProjectForTutorial(
+        normalizeProject(savedProject || createInitialProject()),
+        options.tutorialTab,
+      );
       const resumeState = auth.getProjectResumeState(projectId);
       const requestedTab = options.tab || resumeState?.tab;
-      const resumeTab = ['scenes', 'media', 'map', 'cinematics', 'combinations', 'enigmas', 'logic', 'score', 'ai', 'shop', 'preview'].includes(requestedTab) ?
+      const resumeTab = ['scenes', 'media', 'map', 'cinematics', 'combinations', 'enigmas', 'logic', 'score', 'ai', 'shop', 'help', 'preview'].includes(requestedTab) ?
          requestedTab
         : 'scenes';
       const resumeSceneId = projectToLoad.scenes?.some((scene) => scene.id === resumeState?.selectedSceneId) ?
@@ -286,7 +316,13 @@ function App() {
       preview.syncWithProject(projectToLoad);
       hydratedProjectRef.current = projectId || auth.activeProjectId;
       setScreen('editor');
-      setSaveStatus(savedProject ? 'Projet chargé' : 'Nouveau projet');
+      setSaveStatus(savedProject ? 'Projet chargÃ©' : 'Nouveau projet');
+      if (options.tutorialTab && projectId) {
+        await auth.saveProject(projectToLoad, projectId, {
+          tab: resumeTab,
+          selectedSceneId: resumeSceneId,
+        });
+      }
     } catch (error) {
       console.error('Erreur de chargement du projet', error);
       setSaveStatus('Erreur de chargement');
@@ -299,6 +335,54 @@ function App() {
     if (record?.id) await openProjectInEditor(record.id);
   };
 
+  const startBuilderTutorialFromProfile = async (requestedTab = 'scenes') => {
+    const tutorialTab = BUILDER_TUTORIAL_TABS.includes(requestedTab) ? requestedTab : 'scenes';
+    const startTab = tutorialTab === 'editor' ? 'scenes' : tutorialTab;
+    const sourceRecord = auth.projects.find((project) => project.id === auth.activeProjectId) || auth.projects[0];
+    const sourceProject = sourceRecord?.data ? normalizeProject(sourceRecord.data) : normalizeProject(createInitialProject());
+    const tutorialProject = prepareProjectForTutorial({
+      ...structuredClone(sourceProject),
+      title: 'Projet didacticiel temporaire',
+      isTemporaryTutorial: true,
+    }, tutorialTab);
+    const tutorialSceneId = tutorialProject.scenes?.[0]?.id || '';
+    editor.loadProject(tutorialProject);
+    editor.setTab(startTab);
+    if (tutorialSceneId) editor.setSelectedSceneId(tutorialSceneId);
+    preview.syncWithProject(tutorialProject);
+    hydratedProjectRef.current = '';
+    setScreen('editor');
+    setSaveStatus('Didacticiel temporaire : non enregistre');
+    setSelectedTutorialTab(tutorialTab);
+    setTutorialStepIndex(getTutorialStepIndexes(tutorialTab)[0] ?? 0);
+  };
+
+  const applyFakeTutorialImage = ({ name, dataUrl, target = 'object' }) => {
+    editor.patchProject((draft) => {
+      if (target === 'scene-background') {
+        const scene = draft.scenes.find((entry) => entry.id === editor.selectedSceneId) || draft.scenes[0];
+        if (!scene) return;
+        scene.backgroundData = dataUrl;
+        scene.backgroundName = name;
+        scene.backgroundAspectRatio = 1.6;
+        return;
+      }
+      if (target === 'scene-music') {
+        const scene = draft.scenes.find((entry) => entry.id === editor.selectedSceneId) || draft.scenes[0];
+        if (!scene) return;
+        scene.musicData = dataUrl;
+        scene.musicName = name;
+        scene.musicLoop = true;
+        return;
+      }
+      const itemId = editor.selectedItemId || draft.items?.[draft.items.length - 1]?.id || draft.items?.[0]?.id || '';
+      const item = draft.items?.find((entry) => entry.id === itemId);
+      if (!item) return;
+      item.imageData = dataUrl;
+      item.imageName = name;
+    });
+  };
+
   const renameProjectFromProfile = async (projectId, name) => {
     await auth.renameProject(projectId, name);
     if (projectId === auth.activeProjectId) {
@@ -306,12 +390,12 @@ function App() {
         draft.title = name;
       });
     }
-    setSaveStatus('Projet renommé');
+    setSaveStatus('Projet renommÃ©');
   };
 
   const duplicateProjectFromProfile = async (projectId) => {
     const copy = await auth.duplicateProject(projectId);
-    setSaveStatus(copy ? 'Projet dupliqué' : 'Duplication impossible');
+    setSaveStatus(copy ? 'Projet dupliquÃ©' : 'Duplication impossible');
   };
 
   const deleteProjectFromProfile = async (projectId) => {
@@ -320,7 +404,7 @@ function App() {
       hydratedProjectRef.current = '';
       setScreen('profile');
     }
-    setSaveStatus('Projet supprimé');
+    setSaveStatus('Projet supprimÃ©');
   };
 
   const testProjectFromProfile = async (projectId) => {
@@ -344,27 +428,33 @@ function App() {
       }
       await auth.markProjectLinkCopied(projectId);
       await navigator.clipboard.writeText(url.toString());
-      setSaveStatus('Lien joueur public copié');
+      setSaveStatus('Lien joueur public copiÃ©');
     } catch (error) {
-      console.error('Erreur de génération du lien jouable', error);
+      console.error('Erreur de gÃ©nÃ©ration du lien jouable', error);
       window.prompt('Lien jouable', url.toString());
-      setSaveStatus('Lien joueur public généré');
+      setSaveStatus('Lien joueur public gÃ©nÃ©rÃ©');
     }
   };
 
   const publishProjectFromProfile = async (projectId) => {
+    if (projectId === auth.activeProjectId && hydratedProjectRef.current === projectId) {
+      await auth.saveProject(editor.project, projectId, {
+        tab: editor.tab,
+        selectedSceneId: editor.selectedSceneId,
+      });
+    }
     await shareProjectFromProfile(projectId);
-    setSaveStatus('Jeu publié dans la galerie');
+    setSaveStatus('Jeu publiÃ© dans la galerie');
   };
 
   const updatePublicSettingsFromProfile = async (projectId, settings) => {
     await auth.updateProjectShareSettings(projectId, settings);
-    setSaveStatus('Paramètres publics mis à jour');
+    setSaveStatus('ParamÃ¨tres publics mis Ã  jour');
   };
 
   const updateAuthorProfileFromProfile = async (profile) => {
     await auth.updateAuthorProfile(profile);
-    setSaveStatus('Profil auteur mis à jour');
+    setSaveStatus('Profil auteur mis Ã  jour');
   };
 
   const openPublicGalleryWindow = () => {
@@ -380,7 +470,7 @@ function App() {
     const parsed = normalizeProject(JSON.parse(text));
     const record = await auth.importProject(parsed, parsed.title || file.name.replace(/\.json$/i, ''));
     if (record?.id) await openProjectInEditor(record.id);
-    setSaveStatus('Projet importé');
+    setSaveStatus('Projet importÃ©');
   };
 
   const importProjectJson = async (event) => {
@@ -391,7 +481,7 @@ function App() {
     editor.loadProject(parsed);
     preview.syncWithProject(parsed);
     if (auth.activeProjectId) await auth.saveProject(parsed, auth.activeProjectId);
-    setSaveStatus('Projet importé et sauvegardé');
+    setSaveStatus('Projet importÃ© et sauvegardÃ©');
     event.target.value = '';
   };
 
@@ -422,7 +512,7 @@ function App() {
         selectedSceneId,
       });
     }
-    setSaveStatus(options.isPatch || options.mode === 'improve' ? 'Amélioration IA appliquée' : 'Projet IA appliqué');
+    setSaveStatus(options.isPatch || options.mode === 'improve' ? 'AmÃ©lioration IA appliquÃ©e' : 'Projet IA appliquÃ©');
     return validation;
   };
 
@@ -441,7 +531,7 @@ function App() {
           selectedSceneId: editor.selectedSceneId,
         });
       }
-      setSaveStatus('Brouillon IA effacé');
+      setSaveStatus('Brouillon IA effacÃ©');
       return null;
     }
     const nextProject = structuredClone(editor.project);
@@ -456,7 +546,7 @@ function App() {
         selectedSceneId: editor.selectedSceneId,
       });
     }
-    setSaveStatus('Brouillon IA sauvegardé');
+    setSaveStatus('Brouillon IA sauvegardÃ©');
     return draft;
   };
 
@@ -486,7 +576,7 @@ function App() {
           };
         }
       } catch (error) {
-        setSaveStatus(`Image générée, mais upload Supabase impossible: ${error.message}`);
+        setSaveStatus(`Image gÃ©nÃ©rÃ©e, mais upload Supabase impossible: ${error.message}`);
       }
     }
 
@@ -522,7 +612,7 @@ function App() {
       });
     }
 
-    setSaveStatus(type === 'scene' ? 'Image de scène sauvegardée' : 'Image d’objet sauvegardée');
+    setSaveStatus(type === 'scene' ? 'Image de scÃ¨ne sauvegardÃ©e' : 'Image dâ€™objet sauvegardÃ©e');
     return { project: nextProject, patch: nextPatch };
   };
 
@@ -559,10 +649,26 @@ function App() {
   }
 
   if (!auth.isReady) {
-    return <div className="app-shell"><div className="panel">Chargement du compte…</div></div>;
+    return <div className="app-shell"><div className="panel">Chargement du compteâ€¦</div></div>;
   }
 
   if (!auth.user) {
+    if (!showAuthPanel && !auth.isPasswordRecovery) {
+      return (
+        <LandingPage
+          onLogin={() => {
+            setAuthEntryMode('login');
+            setShowAuthPanel(true);
+          }}
+          onRegister={() => {
+            setAuthEntryMode('register');
+            setShowAuthPanel(true);
+          }}
+          onOpenGallery={() => setScreen('gallery')}
+        />
+      );
+    }
+
     return (
       <div className="app-shell">
         <AuthPanel
@@ -570,6 +676,8 @@ function App() {
           onRegister={auth.register}
           onRequestPasswordReset={auth.requestPasswordReset}
           onUpdatePassword={auth.updatePassword}
+          onBack={() => setShowAuthPanel(false)}
+          initialMode={authEntryMode}
           isPasswordRecovery={auth.isPasswordRecovery}
           isBusy={auth.isBusy}
           errorMessage={auth.authError}
@@ -598,6 +706,7 @@ function App() {
           onUploadGalleryThumbnail={uploadGalleryThumbnail}
           onOpenPublicGallery={openPublicGalleryWindow}
           onOpenAdmin={() => setScreen('admin')}
+          onStartTutorial={startBuilderTutorialFromProfile}
           onRenameProject={renameProjectFromProfile}
           onDuplicateProject={duplicateProjectFromProfile}
           onDeleteProject={deleteProjectFromProfile}
@@ -767,9 +876,31 @@ function App() {
         <ShopTab user={auth.user} />
       )}
 
+      {editor.tab === 'help' && (
+        <HelpTab />
+      )}
+
       {editor.tab === 'preview' && (
         <PreviewPlayerPanel editor={editor} preview={preview} />
       )}
+
+      {activeTutorialStep ? (
+        <BuilderTutorial
+          step={activeTutorialStep}
+          stepNumber={Math.max(0, activeTutorialPosition) + 1}
+          totalSteps={activeTutorialIndexes.length || 1}
+          canPrevious={activeTutorialPosition > 0}
+          userName={tutorialUserName}
+          project={editor.project}
+          fakeFileOptions={getFakeWindowImageOptions(editor.project, activeTutorialStep?.completeWhen?.target)}
+          onFakeFileChosen={applyFakeTutorialImage}
+          onNext={() => setTutorialStepIndex((index) => (
+            index === null || activeTutorialPosition >= activeTutorialIndexes.length - 1 ? null : activeTutorialIndexes[activeTutorialPosition + 1]
+          ))}
+          onPrevious={() => setTutorialStepIndex(activeTutorialIndexes[Math.max(0, activeTutorialPosition - 1)] ?? null)}
+          onClose={() => setTutorialStepIndex(null)}
+        />
+      ) : null}
     </div>
   );
 }

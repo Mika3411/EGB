@@ -25,6 +25,23 @@ const makePlayUrl = (game) => {
   return url.toString();
 };
 
+function GalleryImage({ src, alt = '', eager = false, fallback }) {
+  const [hasError, setHasError] = useState(false);
+  if (!src || hasError) return fallback || null;
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      loading={eager ? 'eager' : 'lazy'}
+      decoding="async"
+      fetchPriority={eager ? 'high' : 'auto'}
+      referrerPolicy="no-referrer"
+      onError={() => setHasError(true)}
+    />
+  );
+}
+
 function Stars({ value = 0, onChange }) {
   return (
     <div className="public-stars" aria-label="Notation">
@@ -44,10 +61,11 @@ function Stars({ value = 0, onChange }) {
 }
 
 function GameCard({ game, onOpenGame, onOpenCreator, onPlay }) {
+  const fallback = <span>{game.title.charAt(0).toUpperCase()}</span>;
   return (
     <article className="public-game-card">
       <button type="button" className="public-game-image" onClick={() => onOpenGame(game.key)}>
-        {game.image ? <img src={game.image} alt="" /> : <span>{game.title.charAt(0).toUpperCase()}</span>}
+        <GalleryImage src={game.image} fallback={fallback} />
       </button>
       <div className="public-game-body">
         <div className="public-card-head">
@@ -99,19 +117,19 @@ export default function PublicGallery({
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [difficultyFilter, setDifficultyFilter] = useState('');
-  const [ageFilter, setAgeFilter] = useState('safe');
+  const [ageFilter, setAgeFilter] = useState('all');
   const [commentText, setCommentText] = useState('');
 
   const refreshGames = async () => {
     setIsLoading(true);
-    const nextGames = await getPublicGames();
+    const nextGames = await getPublicGames({ currentUser: user });
     setGames(nextGames);
     setIsLoading(false);
   };
 
   useEffect(() => {
     refreshGames();
-  }, []);
+  }, [user?.id]);
 
   const openDiscover = () => {
     setView('discover');
@@ -330,7 +348,11 @@ export default function PublicGallery({
           <button type="button" className="secondary-action public-back-button" onClick={openDiscover}>← Galerie</button>
           <div className="public-game-hero panel">
             <div className="public-game-cover">
-              {selectedGame.image ? <img src={selectedGame.image} alt="" /> : <span>{selectedGame.title.charAt(0).toUpperCase()}</span>}
+              <GalleryImage
+                src={selectedGame.image}
+                eager
+                fallback={<span>{selectedGame.title.charAt(0).toUpperCase()}</span>}
+              />
             </div>
             <div className="public-game-details">
               <div>
