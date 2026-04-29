@@ -206,7 +206,7 @@ export default function AdminPage({
     setStatus(nextStatus === 'disabled' ? 'Compte desactive.' : 'Compte reactive.');
   };
 
-  const toggleSupabaseAccountStatus = async (targetUser) => {
+  const updateSupabaseAccount = async (targetUser, action, options = {}) => {
     if (!targetUser?.userId || targetUser.provider !== 'supabase') return;
     setIsBusy(true);
     setStatus('');
@@ -220,20 +220,46 @@ export default function AdminPage({
         },
         body: JSON.stringify({
           userId: targetUser.userId,
-          action: targetUser.status === 'disabled' ? 'enable' : 'disable',
+          action,
+          ...options,
         }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Modification utilisateur impossible.');
+
+      if (payload.deletedUserId) {
+        setSupabaseUsers((previous) => previous.filter((entry) => entry.id !== payload.deletedUserId));
+        setCreditUsers((previous) => previous.filter((entry) => entry.userId !== payload.deletedUserId));
+        setSelectedUserId('');
+        setStatus('Compte Supabase supprime.');
+        return;
+      }
+
       setSupabaseUsers((previous) => previous.map((entry) => (
         entry.id === payload.user.id ? payload.user : entry
       )));
-      setStatus(payload.user.isDisabled ? 'Compte Supabase desactive.' : 'Compte Supabase reactive.');
+      setStatus(payload.user.isDisabled ? 'Compte Supabase bloque.' : 'Compte Supabase debloque.');
     } catch (error) {
       setStatus(error.message || 'Modification utilisateur impossible.');
     } finally {
       setIsBusy(false);
     }
+  };
+
+  const toggleSupabaseAccountStatus = (targetUser) => updateSupabaseAccount(
+    targetUser,
+    targetUser?.status === 'disabled' ? 'enable' : 'disable',
+  );
+
+  const banSupabaseAccountTemporarily = (targetUser, banDuration) =>
+    updateSupabaseAccount(targetUser, 'ban_temp', { banDuration });
+
+  const deleteSupabaseAccount = (targetUser) => {
+    if (!targetUser?.userId || targetUser.provider !== 'supabase') return;
+    const label = targetUser.email || targetUser.name || targetUser.userId;
+    const confirmed = window.confirm(`Supprimer definitivement le compte "${label}" ? Cette action est irreversible.`);
+    if (!confirmed) return;
+    updateSupabaseAccount(targetUser, 'delete');
   };
 
   return (
@@ -366,14 +392,50 @@ export default function AdminPage({
               {selectedUser?.status === 'disabled' ? 'Reactiver le compte local' : 'Desactiver le compte local'}
             </button>
             {selectedUser?.provider === 'supabase' ? (
-              <button
-                type="button"
-                className="secondary-action"
-                onClick={() => toggleSupabaseAccountStatus(selectedUser)}
-                disabled={isBusy}
-              >
-                {selectedUser.status === 'disabled' ? 'Reactiver le compte Supabase' : 'Desactiver le compte Supabase'}
-              </button>
+              <>
+                <div className="admin-ban-grid">
+                  <button
+                    type="button"
+                    className="secondary-action"
+                    onClick={() => banSupabaseAccountTemporarily(selectedUser, '24h')}
+                    disabled={isBusy}
+                  >
+                    Bloquer 24h
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-action"
+                    onClick={() => banSupabaseAccountTemporarily(selectedUser, '168h')}
+                    disabled={isBusy}
+                  >
+                    Bloquer 7j
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-action"
+                    onClick={() => banSupabaseAccountTemporarily(selectedUser, '720h')}
+                    disabled={isBusy}
+                  >
+                    Bloquer 30j
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  className="secondary-action"
+                  onClick={() => toggleSupabaseAccountStatus(selectedUser)}
+                  disabled={isBusy}
+                >
+                  {selectedUser.status === 'disabled' ? 'Debloquer le compte Supabase' : 'Bloquer sans limite'}
+                </button>
+                <button
+                  type="button"
+                  className="danger-button"
+                  onClick={() => deleteSupabaseAccount(selectedUser)}
+                  disabled={isBusy}
+                >
+                  Supprimer le membre
+                </button>
+              </>
             ) : null}
           </div>
 

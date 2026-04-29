@@ -267,7 +267,18 @@ label { display: block; font-size: 13px; color: #ccdaef; margin: 10px 0 8px; fon
   top: 18px;
 }
 .admin-account-actions {
+  display: grid;
+  gap: 10px;
   margin: 14px 0;
+}
+.admin-ban-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.admin-ban-grid button {
+  min-width: 0;
+  padding-inline: 10px;
 }
 .admin-transaction-row {
   display: grid;
@@ -2515,6 +2526,7 @@ label { display: block; font-size: 13px; color: #ccdaef; margin: 10px 0 8px; fon
   .admin-control-grid { grid-template-columns: 1fr; }
   .admin-table-head { display: none; }
   .admin-credit-editor { position: static; }
+  .admin-ban-grid { grid-template-columns: 1fr; }
   .score-section-grid,
   .score-metrics-grid,
   .score-connection-summary { grid-template-columns: 1fr; }

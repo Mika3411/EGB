@@ -454,10 +454,18 @@ const handleAdminUserUpdate = async (req, res) => {
 
   const client = getSupabaseAdminClient();
   const action = String(body.action || '');
+  if (action === 'delete') {
+    const { error } = await client.auth.admin.deleteUser(userId);
+    if (error) throw error;
+    sendJson(res, 200, { deletedUserId: userId });
+    return;
+  }
+
   const attributes = {};
 
   if (action === 'disable') attributes.ban_duration = '876000h';
   if (action === 'enable') attributes.ban_duration = 'none';
+  if (action === 'ban_temp') attributes.ban_duration = String(body.banDuration || '24h');
 
   if (!Object.keys(attributes).length) {
     sendJson(res, 400, { error: 'Action admin inconnue.' });

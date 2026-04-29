@@ -46,9 +46,16 @@ export const handler = async (event) => withErrors(event, async () => {
     if (!userId) return json(400, { error: 'Utilisateur manquant.' });
 
     const action = String(body.action || '');
+    if (action === 'delete') {
+      const { error } = await supabase.auth.admin.deleteUser(userId);
+      if (error) throw error;
+      return json(200, { deletedUserId: userId });
+    }
+
     const attributes = {};
     if (action === 'disable') attributes.ban_duration = '876000h';
     if (action === 'enable') attributes.ban_duration = 'none';
+    if (action === 'ban_temp') attributes.ban_duration = String(body.banDuration || '24h');
     if (!Object.keys(attributes).length) return json(400, { error: 'Action admin inconnue.' });
 
     const { data, error } = await supabase.auth.admin.updateUserById(userId, attributes);
