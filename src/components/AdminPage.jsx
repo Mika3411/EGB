@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getAllAccounts, normalizeEmail, updateStoredAccount } from '../lib/authStorage';
 import { getPublicGames } from '../lib/publicGalleryStorage';
+import { getBlogModerationId, getModerationState, updateModerationAction } from '../lib/moderationStorage';
 import { getSupabaseClient, hasSupabaseConfig } from '../supabaseStorage';
 
 const ADMIN_EMAIL = 'thorez.m@hotmail.fr';
@@ -48,6 +49,7 @@ export default function AdminPage({
   const [supabaseUsers, setSupabaseUsers] = useState([]);
   const [creditUsers, setCreditUsers] = useState([]);
   const [publicGames, setPublicGames] = useState([]);
+  const [moderation, setModeration] = useState({ games: new Set(), blogs: new Set(), comments: new Set(), actions: [] });
   const [selectedUserId, setSelectedUserId] = useState('');
   const [creditAction, setCreditAction] = useState('add');
   const [creditAmount, setCreditAmount] = useState(20);
@@ -67,7 +69,7 @@ export default function AdminPage({
     setAccounts(localAccounts);
     const authHeaders = await getAdminAuthHeaders();
 
-    const [usersPayload, creditsPayload, games] = await Promise.all([
+    const [usersPayload, creditsPayload, games, moderationState] = await Promise.all([
       hasSupabaseConfig()
         ? fetch(ADMIN_USERS_ENDPOINT, { headers: authHeaders }).then((response) => {
           if (!response.ok) throw new Error(`Utilisateurs Supabase indisponibles (${response.status}).`);
@@ -78,12 +80,14 @@ export default function AdminPage({
         if (!response.ok) throw new Error(`Credits indisponibles (${response.status}).`);
         return response.json();
       }),
-      getPublicGames().catch(() => []),
+      getPublicGames({ includeModerated: true }).catch(() => []),
+      getModerationState(),
     ]);
 
     setSupabaseUsers(Array.isArray(usersPayload.users) ? usersPayload.users : []);
     setCreditUsers(Array.isArray(creditsPayload.users) ? creditsPayload.users : []);
     setPublicGames(games.filter((game) => normalizeEmail(game.authorEmail) !== ADMIN_EMAIL));
+    setModeration(moderationState);
   };
 
   useEffect(() => {
@@ -262,6 +266,46 @@ export default function AdminPage({
     updateSupabaseAccount(targetUser, 'delete');
   };
 
+  const setModerationTarget = async ({ targetType, targetId, action, reason }) => {
+    if (!targetId) return;
+    setIsBusy(true);
+    setStatus('');
+    try {
+      await updateModerationAction({
+        targetType,
+        targetId,
+        action,
+        reason,
+        authHeaders: await getAdminAuthHeaders(),
+      });
+      await refreshAdminData();
+      setStatus(action === 'hidden' ? 'Element masque dans la galerie.' : 'Element restaure dans la galerie.');
+    } catch (error) {
+      setStatus(error.message || 'Moderation impossible.');
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const blogPosts = useMemo(() => publicGames.flatMap((game) => (
+    (game.authorProfile?.blogPosts || []).map((post) => ({
+      ...post,
+      moderationId: getBlogModerationId(game.userId, post.id),
+      userId: game.userId,
+      author: game.author,
+      authorEmail: game.authorEmail,
+    }))
+  )), [publicGames]);
+
+  const comments = useMemo(() => publicGames.flatMap((game) => (
+    (game.feedback?.comments || []).map((comment) => ({
+      ...comment,
+      gameKey: game.key,
+      gameTitle: game.title,
+      author: comment.authorName || 'Joueur',
+    }))
+  )), [publicGames]);
+
   return (
     <main className="layout admin-page">
       <section className="panel">
@@ -305,6 +349,10 @@ export default function AdminPage({
         <article className="panel admin-stat-card">
           <span>Jeux publics tiers</span>
           <strong>{publicGames.length}</strong>
+        </article>
+        <article className="panel admin-stat-card">
+          <span>Elements masques</span>
+          <strong>{moderation.actions.length}</strong>
         </article>
       </section>
 
@@ -470,16 +518,119 @@ export default function AdminPage({
                   <strong>{game.title}</strong>
                   <span>{game.author} - {normalizeEmail(game.authorEmail)}</span>
                 </div>
-                <span className="status-badge soft">{game.plays || 0} parties</span>
+                <span className="status-badge soft">
+                  {moderation.games.has(game.key) ? 'Masque' : `${game.plays || 0} parties`}
+                </span>
               </div>
               <p className="small-note">
                 {game.category} - {game.ageRating} - {game.feedback?.votes || 0} vote{game.feedback?.votes > 1 ? 's' : ''}
               </p>
+              <div className="toolbar">
+                {moderation.games.has(game.key) ? (
+                  <button
+                    type="button"
+                    className="secondary-action"
+                    onClick={() => setModerationTarget({ targetType: 'game', targetId: game.key, action: 'visible', reason: 'restore_game' })}
+                    disabled={isBusy}
+                  >
+                    Restaurer
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="danger-button"
+                    onClick={() => setModerationTarget({ targetType: 'game', targetId: game.key, action: 'hidden', reason: 'hide_game' })}
+                    disabled={isBusy}
+                  >
+                    Masquer le jeu
+                  </button>
+                )}
+              </div>
             </article>
           ))}
           {publicGames.length === 0 ? (
             <div className="empty-state-inline">
               <strong>Aucun jeu public tiers trouve.</strong>
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <div>
+            <h2>Moderation des blogs</h2>
+            <p className="small-note">{blogPosts.length} article{blogPosts.length > 1 ? 's' : ''} trouve{blogPosts.length > 1 ? 's' : ''}</p>
+          </div>
+        </div>
+
+        <div className="admin-public-list">
+          {blogPosts.map((post) => (
+            <article className="list-card" key={post.moderationId}>
+              <div className="inline-head">
+                <div>
+                  <strong>{post.title}</strong>
+                  <span>{post.author} - {normalizeEmail(post.authorEmail)}</span>
+                </div>
+                <span className="status-badge soft">{moderation.blogs.has(post.moderationId) ? 'Masque' : 'Visible'}</span>
+              </div>
+              <p className="small-note">{post.body}</p>
+              <div className="toolbar">
+                {moderation.blogs.has(post.moderationId) ? (
+                  <button type="button" className="secondary-action" onClick={() => setModerationTarget({ targetType: 'blog', targetId: post.moderationId, action: 'visible', reason: 'restore_blog' })} disabled={isBusy}>
+                    Restaurer
+                  </button>
+                ) : (
+                  <button type="button" className="danger-button" onClick={() => setModerationTarget({ targetType: 'blog', targetId: post.moderationId, action: 'hidden', reason: 'hide_blog' })} disabled={isBusy}>
+                    Masquer l'article
+                  </button>
+                )}
+              </div>
+            </article>
+          ))}
+          {blogPosts.length === 0 ? (
+            <div className="empty-state-inline">
+              <strong>Aucun article de blog trouve.</strong>
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <div>
+            <h2>Moderation des avis</h2>
+            <p className="small-note">{comments.length} avis trouve{comments.length > 1 ? 's' : ''}</p>
+          </div>
+        </div>
+
+        <div className="admin-public-list">
+          {comments.map((comment) => (
+            <article className="list-card" key={comment.id}>
+              <div className="inline-head">
+                <div>
+                  <strong>{comment.author}</strong>
+                  <span>{comment.gameTitle}</span>
+                </div>
+                <span className="status-badge soft">{moderation.comments.has(comment.id) ? 'Masque' : 'Visible'}</span>
+              </div>
+              <p className="small-note">{comment.text}</p>
+              <div className="toolbar">
+                {moderation.comments.has(comment.id) ? (
+                  <button type="button" className="secondary-action" onClick={() => setModerationTarget({ targetType: 'comment', targetId: comment.id, action: 'visible', reason: 'restore_comment' })} disabled={isBusy}>
+                    Restaurer
+                  </button>
+                ) : (
+                  <button type="button" className="danger-button" onClick={() => setModerationTarget({ targetType: 'comment', targetId: comment.id, action: 'hidden', reason: 'hide_comment' })} disabled={isBusy}>
+                    Masquer l'avis
+                  </button>
+                )}
+              </div>
+            </article>
+          ))}
+          {comments.length === 0 ? (
+            <div className="empty-state-inline">
+              <strong>Aucun avis trouve.</strong>
             </div>
           ) : null}
         </div>

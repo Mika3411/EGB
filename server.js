@@ -477,6 +477,63 @@ const handleAdminUserUpdate = async (req, res) => {
   sendJson(res, 200, { user: supabaseUserToAdminRecord(data.user) });
 };
 
+const handleModeration = async (req, res) => {
+  const client = getSupabaseAdminClient();
+
+  if (req.method === 'GET') {
+    const { data, error } = await client
+      .from('moderation_actions')
+      .select('target_type,target_id,action,reason,created_at,updated_at')
+      .eq('action', 'hidden')
+      .order('updated_at', { ascending: false });
+
+    if (error) throw error;
+    sendJson(res, 200, { actions: data || [] });
+    return;
+  }
+
+  if (req.method === 'POST') {
+    const adminUser = await verifySupabaseAdminRequest(req);
+    const body = await readJsonBody(req);
+    const targetType = String(body.targetType || '').trim();
+    const targetId = String(body.targetId || '').trim();
+    const action = String(body.action || '').trim();
+    const reason = String(body.reason || '').trim().slice(0, 240);
+
+    if (!['game', 'blog', 'comment'].includes(targetType)) {
+      sendJson(res, 400, { error: 'Type de cible invalide.' });
+      return;
+    }
+    if (!targetId) {
+      sendJson(res, 400, { error: 'Cible manquante.' });
+      return;
+    }
+    if (!['hidden', 'visible'].includes(action)) {
+      sendJson(res, 400, { error: 'Action de moderation invalide.' });
+      return;
+    }
+
+    const { data, error } = await client
+      .from('moderation_actions')
+      .upsert({
+        target_type: targetType,
+        target_id: targetId,
+        action,
+        reason,
+        moderator_email: adminUser.email || '',
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'target_type,target_id' })
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    sendJson(res, 200, { action: data });
+    return;
+  }
+
+  sendJson(res, 405, { error: 'Methode non autorisee.' });
+};
+
 const gumroadPacks = [
   {
     credits: Number(process.env.GUMROAD_PACK_100_CREDITS || 100),
@@ -766,6 +823,11 @@ const server = createServer(async (req, res) => {
 
     if (req.method === 'POST' && req.url === '/api/admin/users') {
       await handleAdminUserUpdate(req, res);
+      return;
+    }
+
+    if ((req.method === 'GET' || req.method === 'POST') && req.url.startsWith('/api/moderation')) {
+      await handleModeration(req, res);
       return;
     }
 

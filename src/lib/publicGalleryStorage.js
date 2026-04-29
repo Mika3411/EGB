@@ -1,5 +1,6 @@
 import { getAllAccounts, loadProjectRecordsForUser } from './authStorage';
 import { getAuthorProfile } from './authorProfiles';
+import { getBlogModerationId, getModerationState } from './moderationStorage';
 
 const LOCAL_PROJECTS_KEY_PREFIX = 'escapeGameBuilder.projects';
 const FEEDBACK_KEY = 'escapeGameBuilder.publicFeedback.v1';
@@ -193,9 +194,11 @@ export const incrementPublicGamePlay = (gameKey) => {
   writeJson(STATS_KEY, stats);
 };
 
-export async function getPublicGames() {
+export async function getPublicGames(options = {}) {
+  const includeModerated = Boolean(options.includeModerated);
   const accounts = getAllAccounts();
   const stats = readPublicStats();
+  const moderation = await getModerationState();
 
   const gamesByKey = new Map();
 
@@ -208,7 +211,12 @@ export async function getPublicGames() {
     records.map(normalizeRecord).forEach((record) => {
       if (!record.id || !record.shareState?.isPublic) return;
       const gameKey = getGameKey(account.id, record.id);
+      if (!includeModerated && moderation.games.has(gameKey)) return;
       const summary = getFeedbackSummary(gameKey);
+      const visibleSummary = {
+        ...summary,
+        comments: includeModerated ? summary.comments : summary.comments.filter((comment) => !moderation.comments.has(comment.id)),
+      };
       const projectStats = stats[gameKey] || {};
       const recentPlays = Array.isArray(projectStats.recentPlays) ? projectStats.recentPlays : [];
       const plays24h = countSince(recentPlays, Date.now() - 1000 * 60 * 60 * 24);
@@ -235,7 +243,12 @@ export async function getPublicGames() {
         projectId: record.id,
         title: getProjectTitle(data, record),
         author: authorProfile.displayName || account.name || account.email || 'Créateur',
-        authorProfile,
+        authorProfile: {
+          ...authorProfile,
+          blogPosts: includeModerated
+            ? (authorProfile.blogPosts || [])
+            : (authorProfile.blogPosts || []).filter((post) => !moderation.blogs.has(getBlogModerationId(account.id, post.id))),
+        },
         authorEmail: account.email || '',
         image: getProjectThumbnail(data, record),
         description: data.description || data.story || data.start?.introText || data.scenes?.[0]?.introText || '',
@@ -254,7 +267,7 @@ export async function getPublicGames() {
         plays7d,
         completions: Number(projectStats.completions || 0),
         badges,
-        feedback: summary,
+        feedback: visibleSummary,
         project: data,
       });
     });
