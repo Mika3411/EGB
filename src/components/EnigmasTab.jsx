@@ -76,7 +76,7 @@ export default function EnigmasTab({
           <h2>Éditeur d’énigme</h2>
           {selectedEnigma && (
             <div className="inline-actions end">
-              <button type="button" className="secondary-action" onClick={() => previewEnigma?.(selectedEnigma.id)}>
+              <button type="button" className="secondary-action" data-tour="enigma-preview-button" onClick={() => previewEnigma?.(selectedEnigma.id)}>
                 Prévisualiser ?
               </button>
               <button className="danger-button" onClick={() => deleteEnigma(selectedEnigma.id)}>
@@ -271,7 +271,7 @@ export default function EnigmasTab({
               </>
             ) : null}
 
-            <div className="combo-card subtle-card">
+            <div className="combo-card subtle-card" data-tour="enigma-popup-background">
               <div className="panel-head">
                 <HelpLabel className="compact-section-title" help={FIELD_HELP.popupBackground}>Fond de pop-up</HelpLabel>
                 <div className="inline-actions">
@@ -289,7 +289,7 @@ export default function EnigmasTab({
                       enigma.popupBackgroundOverlay = ['light', 'medium', 'dark'].includes(enigma.popupBackgroundOverlay) ? enigma.popupBackgroundOverlay : 'dark';
                     }))}
                   />
-                  <button type="button" onClick={() => popupBackgroundInputRef.current?.click()}>
+                  <button type="button" data-tour="enigma-popup-background-button" onClick={() => popupBackgroundInputRef.current?.click()}>
                     {selectedEnigma.popupBackgroundData ? 'Remplacer le fond' : 'Importer un fond'}
                   </button>
                   <button
@@ -312,6 +312,7 @@ export default function EnigmasTab({
               {selectedEnigma.popupBackgroundData ? (
                 <>
                   <div
+                    data-tour="enigma-popup-background-preview"
                     className="enigma-popup-preview"
                     style={{
                       backgroundImage: `${POPUP_OVERLAY_GRADIENTS[selectedEnigma.popupBackgroundOverlay || 'dark']}, url(${selectedEnigma.popupBackgroundData})`,
@@ -325,11 +326,11 @@ export default function EnigmasTab({
                     </div>
                   </div>
                   <HelpLabel help={FIELD_HELP.popupBackgroundCrop}>Zoom</HelpLabel>
-                  <input type="range" min="1" max="3" step="0.05" value={Number(selectedEnigma.popupBackgroundZoom) || 1} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
+                  <input data-tour="enigma-popup-background-zoom" type="range" min="1" max="3" step="0.05" value={Number(selectedEnigma.popupBackgroundZoom) || 1} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                     enigma.popupBackgroundZoom = Number(e.target.value);
                   })} />
                   <HelpLabel help={FIELD_HELP.popupBackgroundOverlay}>Voile de lisibilité</HelpLabel>
-                  <select value={selectedEnigma.popupBackgroundOverlay || 'dark'} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
+                  <select data-tour="enigma-popup-background-overlay" value={selectedEnigma.popupBackgroundOverlay || 'dark'} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                     enigma.popupBackgroundOverlay = e.target.value;
                   })}>
                     {POPUP_OVERLAY_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}

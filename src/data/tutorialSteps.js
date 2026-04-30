@@ -1,6 +1,6 @@
-import { makeCombination, makeEnigma, makeLogicRule, makeRouteMap } from './projectData';
+import { makeCinematic, makeCombination, makeEnigma, makeLogicRule, makeRouteMap } from './projectData';
 
-export const BUILDER_TUTORIAL_TABS = ['scenes', 'editor', 'map', 'cinematics', 'combinations', 'enigmas', 'logic', 'ai'];
+export const BUILDER_TUTORIAL_TABS = ['profile', 'scenes', 'editor', 'map', 'cinematics', 'combinations', 'enigmas', 'logic', 'ai'];
 
 const makeTutorialEndStep = (tab, selector) => ({
   tab,
@@ -12,6 +12,129 @@ const makeTutorialEndStep = (tab, selector) => ({
 });
 
 export const BUILDER_TUTORIAL_STEPS = [
+  {
+    tab: 'profile',
+    selector: '[data-tour="profile-header"]',
+    title: 'Bienvenue dans le profil',
+    body: 'Ici, tu retrouves ton espace de depart. C est la page qui sert a creer, reprendre, importer, tester et publier tes escape games.',
+    action: 'Clique dans l en-tete du profil pour commencer le tour.',
+    completeWhen: { type: 'interact' },
+  },
+  {
+    tab: 'profile',
+    selector: '[data-tour="profile-status"]',
+    title: 'Etat du compte',
+    body: 'Ce petit message indique ce qui vient de se passer : projet charge, sauvegarde, import, publication ou erreur. Garde toujours un oeil dessus apres une action importante.',
+    action: 'Clique sur la zone de statut pour la reperer.',
+    completeWhen: { type: 'interact' },
+  },
+  {
+    tab: 'profile',
+    selector: '[data-tour="profile-gallery"]',
+    title: 'Galerie publique',
+    body: 'La galerie publique permet de voir les jeux publies. C est pratique pour tester ce que les joueurs verront et pour retrouver les creations partagees.',
+    action: 'Repere le bouton Galerie publique. Tu pourras l ouvrir quand tu voudras visiter les jeux publies.',
+  },
+  {
+    tab: 'profile',
+    selector: '[data-tour="profile-tutorial-menu"]',
+    title: 'Didacticiels',
+    body: 'Ce menu contient les parcours d apprentissage. Tu peux choisir Profil, Scenes, Editeur, Plan, Cinematiques, Combinaisons, Enigmes, Logique ou IA selon ce que tu veux apprendre.',
+    action: 'Clique sur Didacticiel pour le reperer. Le menu reste bloque pendant ce parcours pour garder le fil.',
+    completeWhen: { type: 'interact' },
+    preventTargetAction: true,
+  },
+  {
+    tab: 'profile',
+    selector: '[data-tour="profile-create-section"]',
+    title: 'Creer un projet',
+    body: 'Pour commencer un nouveau jeu, donne-lui un nom clair. Exemple : Le manoir oublie. Le nom aide surtout a retrouver le bon projet plus tard.',
+    action: 'Clique dans la zone Nouveau projet.',
+    completeWhen: { type: 'interact' },
+  },
+  {
+    tab: 'profile',
+    selector: '[data-tour="profile-template-picker"]',
+    title: 'Choisir un template',
+    body: 'Un template pose une base de depart : vide si tu veux tout construire, ou un theme si tu veux gagner du temps. Tu pourras tout modifier ensuite dans le builder.',
+    action: 'Clique sur les templates pour voir les choix.',
+    completeWhen: { type: 'interact' },
+  },
+  {
+    tab: 'profile',
+    selector: '[data-tour="profile-create-button"]',
+    title: 'Bouton Creer',
+    body: 'Ce bouton cree le projet et t envoie dans l editeur. Le didacticiel ne force pas cette action, pour ne pas creer un projet sans te demander.',
+  },
+  {
+    tab: 'profile',
+    selector: '[data-tour="profile-import-section"]',
+    title: 'Importer un JSON',
+    body: 'Si tu as une sauvegarde de projet, tu peux l importer ici. C est utile pour recuperer un projet exporte, le transferer ou repartir d une ancienne version.',
+    action: 'Repere la zone Importer. Le didacticiel ne force pas l ouverture de tes fichiers.',
+  },
+  {
+    tab: 'profile',
+    selector: '[data-tour="profile-projects-section"]',
+    title: 'Mes projets',
+    body: 'Cette section liste tes projets sauvegardes. Tu y vois le projet actif, la date de modification, quelques controles de qualite et les actions rapides.',
+    action: 'Clique dans la section Mes projets.',
+    completeWhen: { type: 'interact' },
+  },
+  {
+    tab: 'profile',
+    selector: '[data-tour="profile-project-filters"]',
+    title: 'Rechercher et trier',
+    body: 'Quand tu as plusieurs jeux, utilise la recherche et le tri pour retrouver vite le bon projet : par nom, creation recente ou modification recente.',
+    action: 'Clique dans la recherche ou le tri.',
+    completeWhen: { type: 'interact' },
+  },
+  {
+    tab: 'profile',
+    selector: '[data-tour="profile-project-list"]',
+    title: 'Carte de projet',
+    body: 'Chaque carte resume un jeu. Les compteurs signalent les scenes, les zones non reliees et les enigmes sans solution. C est un premier controle avant de publier.',
+    action: 'Clique dans la liste des projets.',
+    completeWhen: { type: 'interact' },
+  },
+  {
+    tab: 'profile',
+    selector: '[data-tour="profile-project-actions"]',
+    fallbackSelector: '[data-tour="profile-project-list"]',
+    title: 'Reprendre et organiser',
+    body: 'Reprendre ouvre le projet dans le builder. Renommer change son titre, Dupliquer cree une copie, Supprimer efface le projet. Supprimer est irreversible, donc a utiliser avec prudence.',
+    action: 'Repere ces actions. Ne clique sur Supprimer que si tu veux vraiment effacer un projet.',
+  },
+  {
+    tab: 'profile',
+    selector: '[data-tour="profile-project-publish"]',
+    fallbackSelector: '[data-tour="profile-project-list"]',
+    title: 'Tester et partager',
+    body: 'Tester lance le jeu comme un joueur. Copier le lien prepare un lien jouable. Publier rend le jeu disponible dans la galerie si les reglages publics sont prets.',
+    action: 'Repere Tester, Copier le lien et Publier avant de les utiliser pour de vrai.',
+  },
+  {
+    tab: 'profile',
+    selector: '[data-tour="profile-public-settings"]',
+    fallbackSelector: '[data-tour="profile-project-list"]',
+    title: 'Reglages publics',
+    body: 'Avant publication, choisis une categorie, une mention d age et une miniature. Ces informations aident les joueurs a comprendre le type de jeu avant de l ouvrir.',
+    action: 'Lis ces reglages : ils deviennent importants juste avant de publier.',
+  },
+  {
+    tab: 'profile',
+    selector: '[data-tour="profile-logout"]',
+    title: 'Deconnexion',
+    body: 'Ce bouton ferme la session. Avant de te deconnecter, verifie simplement que le statut indique bien que tes changements sont sauvegardes.',
+  },
+  {
+    tab: 'profile',
+    selector: '[data-tour="profile-header"]',
+    title: 'Pret a commencer',
+    body: 'Bravo {name}, tu connais maintenant les bases du profil. Tu peux creer un nouveau projet, reprendre un jeu existant, importer une sauvegarde ou lancer un didacticiel plus precis quand tu veux apprendre une partie du builder.',
+    action: 'Clique sur Terminer pour revenir au profil et choisir ta prochaine action.',
+    celebration: true,
+  },
   {
     tab: 'scenes',
     selector: '[data-tour="scene-name"]',
@@ -171,6 +294,7 @@ export const BUILDER_TUTORIAL_STEPS = [
     body: 'Ce menu est ta petite boite a outils du canvas. On va commencer par une zone d action : une partie invisible ou visible que le joueur pourra cliquer.',
     action: 'Ouvre le menu Ajouter.',
     completeWhen: { type: 'details-open', selector: '[data-tour="scene-add-menu"]' },
+    autoNext: true,
   },
   {
     tab: 'scenes',
@@ -180,6 +304,7 @@ export const BUILDER_TUTORIAL_STEPS = [
     body: 'Choisis Zone d action. Le builder va poser une nouvelle zone au centre, puis on la deplacera ensemble.',
     action: 'Clique sur Zone d action.',
     completeWhen: { type: 'project-hotspot-created' },
+    autoNext: true,
   },
   {
     tab: 'scenes',
@@ -214,8 +339,8 @@ export const BUILDER_TUTORIAL_STEPS = [
     selector: '[data-tour="hotspot-action"]',
     title: 'Action au clic',
     body: 'L action decide ce que la zone fait pour le joueur : parler, donner un objet, changer de scene ou lancer une cinematique. Pour l instant, garde Dialogue, c est parfait pour tester.',
-    action: 'Clique sur le menu Action pour le confirmer.',
-    completeWhen: { type: 'interact' },
+    action: 'Ouvre le menu Action pour voir les choix, puis garde Dialogue pour ce test.',
+    completeWhen: { type: 'select-touched' },
   },
   {
     tab: 'scenes',
@@ -229,11 +354,57 @@ export const BUILDER_TUTORIAL_STEPS = [
   {
     tab: 'scenes',
     tutorial: 'editor',
+    selector: '[data-tour="hotspot-target-scene"]',
+    title: 'Scene cible',
+    body: 'Ce champ sert quand l action est Changer de scene. Tu peux envoyer le joueur vers une autre piece, un gros plan, un tiroir ouvert ou une version modifiee du lieu.',
+    action: 'Clique sur Scene cible pour voir ou se choisit la destination.',
+    completeWhen: { type: 'select-touched' },
+  },
+  {
+    tab: 'scenes',
+    tutorial: 'editor',
+    selector: '[data-tour="hotspot-target-cinematic"]',
+    title: 'Cinematique cible',
+    body: 'Ici, tu peux lancer une cinematique apres le clic. C est utile pour une revelation, une transition dramatique ou une petite recompense narrative.',
+    action: 'Clique sur Cinematique cible pour reperer ce choix.',
+    completeWhen: { type: 'select-touched' },
+  },
+  {
+    tab: 'scenes',
+    tutorial: 'editor',
+    selector: '[data-tour="hotspot-linked-enigma"]',
+    title: 'Enigme liee',
+    body: 'Une enigme liee bloque la zone tant que le joueur ne l a pas resolue. Par exemple : cliquer sur un coffre peut ouvrir directement un code a entrer.',
+    action: 'Clique sur Enigme liee pour voir ou connecter une enigme.',
+    completeWhen: { type: 'select-touched' },
+  },
+  {
+    tab: 'scenes',
+    tutorial: 'editor',
+    selector: '[data-tour="hotspot-sound"]',
+    title: 'Son de la zone',
+    body: 'Ce son se joue au moment du clic. Garde-le court : un grincement, un verrou, un bip, un souffle. C est une petite couche qui rend l interaction plus vivante.',
+    action: 'Clique sur le bouton du son pour le reperer.',
+    completeWhen: { type: 'interact' },
+  },
+  {
+    tab: 'scenes',
+    tutorial: 'editor',
+    selector: '[data-tour="hotspot-object-image"]',
+    title: 'Image objet',
+    body: 'Cette image peut accompagner l interaction, par exemple pour montrer un indice trouve ou un objet observe de pres. Elle aide le joueur a comprendre ce qu il vient de decouvrir.',
+    action: 'Clique sur le bouton Image objet pour le reperer.',
+    completeWhen: { type: 'interact' },
+  },
+  {
+    tab: 'scenes',
+    tutorial: 'editor',
     selector: '[data-tour="scene-add-menu"]',
     title: 'Ajouter une zone visuelle',
     body: 'Maintenant, on ajoute une zone visuelle. Elle ne remplace pas l action : elle sert a attirer l oeil, ajouter une ambiance ou signaler un endroit important.',
     action: 'Ouvre a nouveau le menu Ajouter.',
     completeWhen: { type: 'details-open', selector: '[data-tour="scene-add-menu"]' },
+    autoNext: true,
   },
   {
     tab: 'scenes',
@@ -243,6 +414,17 @@ export const BUILDER_TUTORIAL_STEPS = [
     body: 'Choisis Zone visuelle. Elle va apparaitre dans le canvas avec un effet local que tu pourras placer ou regler ensuite.',
     action: 'Clique sur Zone visuelle.',
     completeWhen: { type: 'project-visual-zone-created' },
+    autoNext: true,
+  },
+  {
+    tab: 'scenes',
+    tutorial: 'editor',
+    selector: '[data-tour="visual-zone-effect"]',
+    title: 'Effet de la zone',
+    body: 'Maintenant, choisis l ambiance locale de cette zone. Prends un effet visible, autre que celui deja pose, pour voir tout de suite comment il transforme un endroit precis de la scene.',
+    action: 'Ouvre le menu Effet de zone et choisis un autre effet.',
+    completeWhen: { type: 'project-visual-zone-effect-not', value: 'sparkles' },
+    autoNext: true,
   },
   {
     tab: 'scenes',
@@ -256,10 +438,10 @@ export const BUILDER_TUTORIAL_STEPS = [
   {
     tab: 'scenes',
     tutorial: 'editor',
-    selector: '[data-tour-tab="preview"]',
+    selector: '[data-tour="scene-preview-button"]',
     title: 'Voir le resultat',
-    body: 'On passe maintenant en Preview. C est la meilleure habitude a prendre : tu construis, puis tu testes tout de suite comme un joueur.',
-    action: 'Clique sur l onglet Preview.',
+    body: 'On passe maintenant en test direct. C est la meilleure habitude a prendre : tu construis, puis tu previsualises tout de suite comme un joueur.',
+    action: 'Clique sur le bouton Previsualiser de la scene.',
     completeWhen: { type: 'interact' },
   },
   {
@@ -319,11 +501,103 @@ export const BUILDER_TUTORIAL_STEPS = [
   makeTutorialEndStep('map', '[data-tour="map-diagnostics"]'),
   {
     tab: 'cinematics',
-    selector: '[data-tour-tab="cinematics"]',
+    selector: '[data-tour="cinematic-sidebar"]',
     title: 'Cinematiques',
-    body: 'Ajoute des transitions, introductions ou fins de jeu sous forme de sequences.',
+    body: 'Ici, tu prepares les moments non jouables : intro, souvenir, revelation, transition entre deux pieces ou petite scene de fin. Une cinematique sert a raconter quelque chose sans demander au joueur de cliquer partout.',
+    action: 'Clique dans la colonne des cinematiques pour la reperer.',
+    completeWhen: { type: 'interact' },
   },
-  makeTutorialEndStep('cinematics', '[data-tour-tab="cinematics"]'),
+  {
+    tab: 'cinematics',
+    selector: '[data-tour="cinematic-add"]',
+    title: 'Creer une cinematique',
+    body: 'Le bouton ajoute une nouvelle sequence. Dans un escape game, tu peux t en servir pour ouvrir l histoire, montrer une consequence apres une enigme, ou changer de chapitre avec un peu de mise en scene.',
+    action: 'Clique sur + Cinematique.',
+    completeWhen: { type: 'interact' },
+    autoNext: true,
+  },
+  {
+    tab: 'cinematics',
+    selector: '[data-tour="cinematic-list"]',
+    title: 'Liste des sequences',
+    body: 'Chaque carte est une cinematique de ton projet. Le nombre de slides te dit vite si c est une courte transition ou une vraie petite scene narrative.',
+    action: 'Clique une cinematique dans la liste.',
+    completeWhen: { type: 'interact' },
+  },
+  {
+    tab: 'cinematics',
+    selector: '[data-tour="cinematic-name"]',
+    title: 'Nom clair',
+    body: 'Donne un nom utile pour toi, pas seulement joli. Exemple : Intro reveil, Revelation du coffre, Fin chapitre 1. Plus tard, tu retrouveras ce nom dans les zones d action et les choix de logique.',
+    action: 'Ecris un nom d au moins 3 caracteres.',
+    completeWhen: { type: 'input-min', selector: '[data-tour="cinematic-name"]', min: 3 },
+  },
+  {
+    tab: 'cinematics',
+    selector: '[data-tour="cinematic-type"]',
+    title: 'Type de cinematique',
+    body: 'Diaporama sert a enchainer des images avec du texte, comme une BD ou un storyboard. Video importee sert si tu as deja un fichier video pret. Pour apprendre, garde Diaporama : c est le plus souple.',
+    action: 'Ouvre le menu Type pour voir les deux formats, puis garde Diaporama.',
+    completeWhen: { type: 'select-touched' },
+  },
+  {
+    tab: 'cinematics',
+    selector: '[data-tour="cinematic-add-slide"]',
+    title: 'Ajouter un slide',
+    body: 'Un slide, c est une image plus une phrase. Plusieurs slides creent le rythme : plan large, detail, revelation, puis retour au jeu.',
+    action: 'Clique sur + Slide pour ajouter une image narrative.',
+    completeWhen: { type: 'interact' },
+    autoNext: true,
+  },
+  {
+    tab: 'cinematics',
+    selector: '[data-tour="cinematic-slides"]',
+    title: 'Ordre des slides',
+    body: 'Lis cette zone de gauche a droite : c est l ordre dans lequel le joueur verra la sequence. Une bonne cinematique reste courte et chaque slide doit apporter une information.',
+    action: 'Clique dans la zone des slides pour la reperer.',
+    completeWhen: { type: 'interact' },
+  },
+  {
+    tab: 'cinematics',
+    selector: '[data-tour="cinematic-slide-image"]',
+    title: 'Image du slide',
+    body: 'L image pose l ambiance. Elle peut montrer un lieu, un objet important, une reaction de personnage ou un detail que le joueur doit retenir.',
+    action: 'Clique sur le bouton image du premier slide pour le reperer.',
+    completeWhen: { type: 'interact' },
+  },
+  {
+    tab: 'cinematics',
+    selector: '[data-tour="cinematic-slide-narration"]',
+    title: 'Narration',
+    body: 'La narration donne le sens de l image. Ecris comme si tu accompagnais un ami dans l histoire : court, clair, avec une petite emotion ou une information utile.',
+    action: 'Ecris au moins 10 caracteres dans la narration.',
+    completeWhen: { type: 'input-min', selector: '[data-tour="cinematic-slide-narration"]', min: 10 },
+  },
+  {
+    tab: 'cinematics',
+    selector: '[data-tour="cinematic-slide-audio"]',
+    title: 'Son du slide',
+    body: 'Le son est optionnel, mais il peut beaucoup aider : une voix, un bruit de porte, une note musicale, un souffle. Garde-le court pour ne pas ralentir le rythme.',
+    action: 'Clique sur le bouton son pour voir ou il se place.',
+    completeWhen: { type: 'interact' },
+  },
+  {
+    tab: 'cinematics',
+    selector: '[data-tour="cinematic-end-action"]',
+    title: 'Action de fin',
+    body: 'C est tres important : quand la cinematique se termine, tu peux ne rien faire, envoyer vers un acte, ouvrir une scene ou donner un objet. C est ce qui reconnecte la narration au jeu.',
+    action: 'Ouvre le menu Action de fin pour voir les possibilites.',
+    completeWhen: { type: 'select-touched' },
+  },
+  {
+    tab: 'cinematics',
+    selector: '[data-tour="cinematic-start-settings"]',
+    title: 'Demarrage du jeu',
+    body: 'Cette zone decide si le jeu commence directement dans une scene ou par une cinematique. Utilise une cinematique de depart si tu veux poser une intro avant que le joueur controle quoi que ce soit.',
+    action: 'Clique dans les reglages de demarrage pour les reperer.',
+    completeWhen: { type: 'interact' },
+  },
+  makeTutorialEndStep('cinematics', '[data-tour="cinematic-end-settings"]'),
   {
     tab: 'combinations',
     selector: '[data-tour="combination-add"]',
@@ -391,10 +665,64 @@ export const BUILDER_TUTORIAL_STEPS = [
   },
   {
     tab: 'enigmas',
+    selector: '[data-tour="enigma-code-appearance"]',
+    title: 'Apparence du code',
+    body: 'Cette partie decide comment le joueur va entrer la reponse. Le meme code peut devenir un coffre a molettes, un digicode, des cases a remplir ou une bande de papier. Ce choix change la sensation de l enigme, pas seulement son style.',
+    action: 'Clique dans le bloc Apparence du code pour le reperer.',
+    completeWhen: { type: 'interact' },
+  },
+  {
+    tab: 'enigmas',
+    selector: '[data-tour="enigma-code-skin"]',
+    title: 'Forme cote joueur',
+    body: 'Choisis la forme qui colle a ton decor. Digicode pour une porte moderne, molettes pour un coffre, cases pour un mot secret, papier pour un indice ecrit. Le joueur comprendra mieux quoi faire si la forme raconte deja quelque chose.',
+    action: 'Ouvre le menu Forme cote joueur pour voir les formats.',
+    completeWhen: { type: 'select-touched' },
+  },
+  {
+    tab: 'enigmas',
+    selector: '[data-tour="enigma-code-preview"]',
+    title: 'Apercu joueur',
+    body: 'L apercu te montre ce que le joueur verra. C est ici que tu verifies si la forme est lisible, si elle correspond a la scene, et si elle donne envie d essayer la solution.',
+    action: 'Clique dans l apercu pour valider que tu l as regarde.',
+    completeWhen: { type: 'interact' },
+  },
+  {
+    tab: 'enigmas',
+    selector: '[data-tour="enigma-popup-background"]',
+    title: 'Fond de pop-up',
+    body: 'Le fond de pop-up habille la fenetre de l enigme. Tu peux mettre une photo de clavier, coffre, carnet, tableau ou mecanisme pour que l enigme ait l air d exister dans le lieu.',
+    action: 'Clique dans le bloc Fond de pop-up pour le reperer.',
+    completeWhen: { type: 'interact' },
+  },
+  {
+    tab: 'enigmas',
+    selector: '[data-tour="enigma-popup-background-button"]',
+    title: 'Image de fond',
+    body: 'Ce bouton importe ou remplace l image de fond. Apres import, les reglages de zoom, position et voile aident a garder la zone d ecriture lisible.',
+    action: 'Observe ce bouton : il servira a choisir l image de fond de l enigme.',
+  },
+  {
+    tab: 'enigmas',
+    selector: '[data-tour="enigma-popup-background"]',
+    title: 'Lisibilite',
+    body: 'Le voile assombrit ou eclaircit l image pour que le texte et les boutons restent lisibles. Une belle image ne suffit pas : le joueur doit pouvoir lire sans forcer.',
+    action: 'Garde en tete : apres avoir ajoute un fond, ajuste le voile et le zoom pour proteger la lisibilite.',
+  },
+  {
+    tab: 'enigmas',
     selector: '[data-tour="enigma-unlock"]',
     title: 'Deblocage',
     body: 'Quand le joueur reussit, il faut que le monde reagisse. Tu peux simplement valider, ouvrir une scene ou lancer une cinematique.',
     action: 'Clique dans la zone de deblocage ou change un select.',
+    completeWhen: { type: 'interact' },
+  },
+  {
+    tab: 'enigmas',
+    selector: '[data-tour="enigma-preview-button"]',
+    title: 'Previsualiser',
+    body: 'Avant de relier ton enigme a une zone d action, teste-la comme un joueur. C est le meilleur moyen de verifier si la consigne, la solution et l apparence du code sont vraiment claires.',
+    action: 'Clique sur Previsualiser pour lancer le test de cette enigme.',
     completeWhen: { type: 'interact' },
   },
   makeTutorialEndStep('enigmas', '[data-tour="enigma-unlock"]'),
@@ -425,16 +753,47 @@ export const BUILDER_TUTORIAL_STEPS = [
     selector: '[data-tour="logic-condition"]',
     title: 'Condition',
     body: 'La condition est le declencheur. Prends ton temps ici : c est souvent ce qui fait qu une enigme devient vraiment satisfaisante.',
-    action: 'Change ou confirme la condition.',
-    completeWhen: { type: 'interact' },
+    action: 'Ouvre le menu Condition et choisis ce qui doit etre vrai.',
+    completeWhen: { type: 'select-touched' },
   },
   {
     tab: 'logic',
     selector: '[data-tour="logic-action"]',
     title: 'Action declenchee',
-    body: 'Maintenant, choisis la consequence. Quand la condition est vraie, que doit-il se passer pour le joueur ?',
-    action: 'Change ou confirme l action declenchee.',
-    completeWhen: { type: 'interact' },
+    body: 'Maintenant, choisis la consequence. Dialogue affiche juste un texte. Dialogue + objet peut donner une recompense. Changer de scene ouvre une destination. Lancer une cinematique declenche une sequence narrative.',
+    action: 'Ouvre le menu Action declenchee et choisis autre chose que Dialogue pour voir la suite apparaitre.',
+    completeWhen: { type: 'select-not', selector: '[data-tour="logic-action"]', value: 'dialogue' },
+  },
+  {
+    tab: 'logic',
+    selector: '[data-tour="logic-reward-item"]',
+    title: 'Objet donne',
+    body: 'Ce champ ajoute un objet a l inventaire quand la regle s active. Utilise-le pour recompenser une bonne action : cle trouvee, indice obtenu, carte revelee.',
+    action: 'Ouvre le menu Objet donne si ta regle doit donner une recompense.',
+    completeWhen: { type: 'select-touched' },
+  },
+  {
+    tab: 'logic',
+    selector: '[data-tour="logic-dialogue"]',
+    title: 'Dialogue affiche',
+    body: 'Ce message remplace le dialogue normal de la zone quand la condition est vraie. Il doit dire au joueur ce qui vient de se passer ou pourquoi la zone reagit autrement.',
+    action: 'Ecris ou confirme un message court pour cette regle.',
+    completeWhen: { type: 'input-min', selector: '[data-tour="logic-dialogue"]', min: 6 },
+  },
+  {
+    tab: 'logic',
+    selector: '[data-tour="logic-action"]',
+    title: 'La suite depend du choix',
+    body: 'Si tu choisis Changer de scene, le champ Scene cible apparait. Si tu choisis Lancer une cinematique, le champ Cinematique cible apparait. Pour Dialogue ou Dialogue + objet, le message et l objet donne suffisent.',
+    action: 'Garde cette logique en tete : le panneau s adapte au type d action choisi.',
+  },
+  {
+    tab: 'logic',
+    selector: '[data-tour="logic-target-scene"]',
+    title: 'Scene cible',
+    body: 'Quand l action est Changer de scene, ce champ choisit ou envoyer le joueur. Par exemple : une porte peut mener au couloir, un tiroir peut ouvrir un gros plan, une trappe peut envoyer vers une cave.',
+    action: 'Choisis une scene cible pour cette regle.',
+    completeWhen: { type: 'select-has-value', selector: '[data-tour="logic-target-scene"]' },
   },
   {
     tab: 'logic',
@@ -451,11 +810,100 @@ export const BUILDER_TUTORIAL_STEPS = [
   },
   {
     tab: 'ai',
-    selector: '[data-tour-tab="ai"]',
+    selector: '[data-tour="ai-credits"]',
     title: 'IA',
-    body: 'Utilise l IA pour generer ou ameliorer des idees, des scenes et certains contenus.',
+    body: 'Bienvenue dans l assistant IA, {name}. Il peut transformer une idee en base de jeu, continuer un projet, ameliorer une scene ou preparer des images. Certaines actions consomment des credits : le plus important est de toujours voir le cout avant de lancer.',
+    action: 'Clique dans le bloc Credits IA pour reperer le solde et le cout estime.',
+    completeWhen: { type: 'interact' },
   },
-  makeTutorialEndStep('ai', '[data-tour-tab="ai"]'),
+  {
+    tab: 'ai',
+    selector: '[data-tour="ai-mode"]',
+    title: 'Choisir le bon mode',
+    body: 'Le mode choisit la facon de travailler avec l IA. Generer cree une premiere base. Progressif avance etape par etape. Continuer prolonge ce qui existe deja. Ameliorer retouche une scene precise sans remplacer tout le projet.',
+    action: 'Clique sur les modes pour voir comment l onglet change.',
+    completeWhen: { type: 'interact' },
+  },
+  {
+    tab: 'ai',
+    selector: '[data-tour="ai-estimate"]',
+    title: 'Ce qui va changer',
+    body: 'Avant de lancer l IA, cette zone resume ce qui risque de bouger : scenes ajoutees, objets, enigmes, dialogues ou correction locale. Lis-la comme une petite checklist avant de depenser des credits.',
+    action: 'Clique dans le resume des modifications probables.',
+    completeWhen: { type: 'interact' },
+  },
+  {
+    tab: 'ai',
+    selector: '[data-tour="ai-visual-style"]',
+    title: 'Direction artistique',
+    body: 'Le style visuel global guide les images de scene. Plus il est clair, plus le resultat paraitra coherent : meme epoque, meme lumiere, meme ambiance. C est ce qui donne une impression professionnelle au projet genere.',
+    action: 'Ecris ou ajuste quelques mots de style visuel.',
+    completeWhen: { type: 'input-min', selector: '[data-tour="ai-visual-style"]', min: 8 },
+  },
+  {
+    tab: 'ai',
+    selector: '[data-tour="ai-image-readability"]',
+    title: 'Images jouables',
+    body: 'Une belle image sombre peut etre injouable si les objets et sorties sont invisibles. Ce reglage protege la lisibilite : ambiance sombre, lisibilite renforcee, tres lumineux, ou aucune correction.',
+    action: 'Ouvre le menu Lisibilite des images pour voir les options.',
+    completeWhen: { type: 'select-touched' },
+  },
+  {
+    tab: 'ai',
+    selector: '[data-tour="ai-visual-inheritance"]',
+    title: 'Coherence entre scenes',
+    body: 'L heritage visuel dit a l IA ce qui doit rester constant : portes, parquet, materiaux, lumiere, style des meubles. Sans ca, chaque image peut ressembler a un autre jeu.',
+    action: 'Clique dans l heritage visuel pour le reperer.',
+    completeWhen: { type: 'interact' },
+  },
+  {
+    tab: 'ai',
+    selector: '[data-tour="ai-generate-button"]',
+    title: 'Lancer la generation',
+    body: 'Ce bouton envoie vraiment la demande a l IA. Avant de cliquer, verifie le mode, le cout, le theme, les quantites et le style visuel. Le didacticiel ne force pas ce clic pour eviter de consommer des credits par accident.',
+    action: 'Repere le bouton de lancement. Ne clique que si tu veux vraiment consommer des credits.',
+  },
+  {
+    tab: 'ai',
+    selector: '[data-tour="ai-output"]',
+    title: 'Brouillon IA',
+    body: 'Le resultat arrive ici comme un brouillon, pas comme une modification immediate. Tu peux prendre le temps de lire, verifier, garder cette version ou repartir sur une autre idee.',
+    action: 'Clique dans la zone de brouillon IA.',
+    completeWhen: { type: 'interact' },
+  },
+  {
+    tab: 'ai',
+    selector: '[data-tour="ai-draft-actions"]',
+    title: 'Sauvegarder ou repartir',
+    body: 'Ces boutons servent a garder un brouillon ou a en ouvrir un nouveau. C est pratique pour comparer deux pistes avant de choisir celle qui colle le mieux a ton escape game.',
+    action: 'Clique dans les actions de brouillon pour les reperer.',
+    completeWhen: { type: 'interact' },
+  },
+  {
+    tab: 'ai',
+    selector: '[data-tour="ai-output"]',
+    title: 'Modifications prevues',
+    body: 'Quand un resultat existe, cette zone indique ce que l IA a ajoute ou modifie : scenes, objets, enigmes, cinematiques. C est le controle qualite rapide avant application.',
+  },
+  {
+    tab: 'ai',
+    selector: '[data-tour="ai-output"]',
+    title: 'Validation automatique',
+    body: 'La validation signale les erreurs bloquantes ou les avertissements. Elle evite d appliquer un projet incoherent, par exemple une scene introuvable ou une reference cassee.',
+  },
+  {
+    tab: 'ai',
+    selector: '[data-tour="ai-images-info"]',
+    title: 'Images a la demande',
+    body: 'Les images de scenes et d objets peuvent etre generees apres le texte. C est ce qui rend le projet beaucoup plus concret, mais chaque image peut consommer des credits : choisis seulement celles dont tu as vraiment besoin.',
+  },
+  {
+    tab: 'ai',
+    selector: '[data-tour="ai-apply-button"]',
+    title: 'Appliquer au projet',
+    body: 'Ce bouton applique le brouillon IA au projet. Tant que tu ne cliques pas ici, le projet actuel reste intact. C est le bon moment pour relire une derniere fois avant de valider.',
+  },
+  makeTutorialEndStep('ai', '[data-tour="ai-output"]'),
   {
     tab: 'shop',
     selector: '[data-tour-tab="shop"]',
@@ -514,9 +962,11 @@ export const isTutorialStepComplete = (step, interactedSteps, project) => {
   if (!step?.completeWhen) return true;
   const rule = step.completeWhen;
   if (rule.type === 'interact') return interactedSteps.has(step.selector);
+  if (rule.type === 'select-touched') return interactedSteps.has(step.selector);
   if (rule.type === 'fake-file') return interactedSteps.has(`fake-file:${step.selector}`);
   if (rule.type === 'input-min') return getTutorialInputValue(rule.selector).trim().length >= (rule.min || 1);
   if (rule.type === 'select-not') return getTutorialInputValue(rule.selector) !== rule.value;
+  if (rule.type === 'select-has-value') return getTutorialInputValue(rule.selector).trim().length > 0;
   if (rule.type === 'details-open') return Boolean(document.querySelector(`${rule.selector}[open]`));
   if (rule.type === 'project-scene-field-not') {
     const scene = getSelectedTutorialScene(project);
@@ -545,6 +995,12 @@ export const isTutorialStepComplete = (step, interactedSteps, project) => {
   if (rule.type === 'project-visual-zone-created') {
     const scene = getSelectedTutorialScene(project);
     return Boolean((scene?.visualEffectZones || []).some((zone) => zone.tutorialCreated));
+  }
+  if (rule.type === 'project-visual-zone-effect-not') {
+    const scene = getSelectedTutorialScene(project);
+    return Boolean((scene?.visualEffectZones || []).filter((zone) => zone.tutorialCreated).some((zone) => (
+      (zone.effect || '') !== rule.value
+    )));
   }
   if (rule.type === 'project-visual-zone-moved') {
     const scene = getSelectedTutorialScene(project);
@@ -750,6 +1206,15 @@ export const prepareProjectForTutorial = (project, tab) => {
       }];
     }
   }
+  if (tab === 'cinematics') {
+    if (!Array.isArray(nextProject.cinematics)) nextProject.cinematics = [];
+    if (!nextProject.cinematics.length) nextProject.cinematics.push(makeCinematic());
+    const cinematic = nextProject.cinematics[0];
+    cinematic.cinematicType = 'slides';
+    if (!Array.isArray(cinematic.slides) || !cinematic.slides.length) {
+      cinematic.slides = makeCinematic().slides;
+    }
+  }
   if (tab === 'combinations' && (!Array.isArray(nextProject.combinations) || nextProject.combinations.length === 0)) {
     if (!Array.isArray(nextProject.combinations)) nextProject.combinations = [];
     nextProject.combinations.push(makeCombination());
@@ -757,6 +1222,14 @@ export const prepareProjectForTutorial = (project, tab) => {
   if (tab === 'enigmas' && (!Array.isArray(nextProject.enigmas) || nextProject.enigmas.length === 0)) {
     if (!Array.isArray(nextProject.enigmas)) nextProject.enigmas = [];
     nextProject.enigmas.push(makeEnigma());
+  }
+  if (tab === 'enigmas') {
+    const enigma = nextProject.enigmas?.[0];
+    if (enigma) {
+      enigma.type = 'code';
+      enigma.codeSkin = enigma.codeSkin || 'safe-wheels';
+      enigma.solutionText = enigma.solutionText || '1234';
+    }
   }
   if (tab === 'logic') {
     const scene = nextProject.scenes?.[0];

@@ -42,8 +42,10 @@ import { normalizeEmail } from './lib/authStorage';
 import { buildStoragePath, hasSupabaseConfig, uploadToStorage } from './supabaseStorage';
 
 const ADMIN_EMAIL = 'thorez.m@hotmail.fr';
+const PROFILE_TUTORIAL_SEEN_KEY_PREFIX = 'escapeGameBuilder.profileTutorialSeen';
 
 const isAdminUser = (user) => normalizeEmail(user?.email) === ADMIN_EMAIL;
+const getProfileTutorialSeenKey = (userId) => `${PROFILE_TUTORIAL_SEEN_KEY_PREFIX}.${userId}`;
 
 const dataUrlToBlob = (dataUrl) => {
   const match = String(dataUrl || '').match(/^data:([^;]+);base64,(.+)$/);
@@ -77,6 +79,7 @@ function App() {
   const [tutorialStepIndex, setTutorialStepIndex] = useState(null);
   const [selectedTutorialTab, setSelectedTutorialTab] = useState('scenes');
   const hydratedProjectRef = useRef('');
+  const profileTutorialAutoStartedRef = useRef('');
   const sharedRouteRef = useSharedPlayableRoute({
     editor,
     preview,
@@ -132,8 +135,16 @@ function App() {
   useEffect(() => {
     if (tutorialStepIndex === null) return;
     const step = BUILDER_TUTORIAL_STEPS[tutorialStepIndex];
-    if (step?.tab && editor.tab !== step.tab) editor.setTab(step.tab);
-  }, [tutorialStepIndex, editor]);
+    if (step?.tab && step.tab !== 'profile' && editor.tab !== step.tab) editor.setTab(step.tab);
+    if (selectedTutorialTab === 'editor' && step?.tab === 'preview') {
+      const scene = editor.project.scenes.find((entry) => entry.id === editor.selectedSceneId) || editor.project.scenes[0];
+      if (!scene) return;
+      preview.setPlayingCinematic(null);
+      preview.setViewerImage(null);
+      preview.setPlaySceneId(scene.id);
+      preview.setDialogue(scene.introText || '');
+    }
+  }, [tutorialStepIndex, selectedTutorialTab, editor, preview]);
 
   useEffect(() => {
     if (sharedRouteRef.current) return;
@@ -155,6 +166,21 @@ function App() {
       setScreen('profile');
     }
   }, [screen, auth.user]);
+
+  useEffect(() => {
+    if (!auth.isReady || !auth.user?.id) return;
+    if (screen !== 'profile') return;
+    if (tutorialStepIndex !== null) return;
+    if (profileTutorialAutoStartedRef.current === auth.user.id) return;
+
+    const seenKey = getProfileTutorialSeenKey(auth.user.id);
+    if (window.localStorage.getItem(seenKey) === '1') return;
+
+    profileTutorialAutoStartedRef.current = auth.user.id;
+    window.localStorage.setItem(seenKey, '1');
+    setSelectedTutorialTab('profile');
+    setTutorialStepIndex(getTutorialStepIndexes('profile')[0] ?? null);
+  }, [auth.isReady, auth.user, screen, tutorialStepIndex]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -337,6 +363,15 @@ function App() {
 
   const startBuilderTutorialFromProfile = async (requestedTab = 'scenes') => {
     const tutorialTab = BUILDER_TUTORIAL_TABS.includes(requestedTab) ? requestedTab : 'scenes';
+    if (tutorialTab === 'profile') {
+      if (auth.user?.id) {
+        window.localStorage.setItem(getProfileTutorialSeenKey(auth.user.id), '1');
+      }
+      setScreen('profile');
+      setSelectedTutorialTab('profile');
+      setTutorialStepIndex(getTutorialStepIndexes('profile')[0] ?? null);
+      return;
+    }
     const startTab = tutorialTab === 'editor' ? 'scenes' : tutorialTab;
     const sourceRecord = auth.projects.find((project) => project.id === auth.activeProjectId) || auth.projects[0];
     const sourceProject = sourceRecord?.data ? normalizeProject(sourceRecord.data) : normalizeProject(createInitialProject());
@@ -620,6 +655,26 @@ function App() {
     <PreviewPlayerPanel editor={editor} preview={preview} sharedPlayerMode={screen === 'shared-preview'} />
   );
 
+  const handleTutorialNext = () => setTutorialStepIndex((index) => (
+    index === null || activeTutorialPosition >= activeTutorialIndexes.length - 1 ? null : activeTutorialIndexes[activeTutorialPosition + 1]
+  ));
+
+  const renderTutorialOverlay = () => activeTutorialStep ? (
+    <BuilderTutorial
+      step={activeTutorialStep}
+      stepNumber={Math.max(0, activeTutorialPosition) + 1}
+      totalSteps={activeTutorialIndexes.length || 1}
+      canPrevious={activeTutorialPosition > 0}
+      userName={tutorialUserName}
+      project={editor.project}
+      fakeFileOptions={getFakeWindowImageOptions(editor.project, activeTutorialStep?.completeWhen?.target)}
+      onFakeFileChosen={applyFakeTutorialImage}
+      onNext={handleTutorialNext}
+      onPrevious={() => setTutorialStepIndex(activeTutorialIndexes[Math.max(0, activeTutorialPosition - 1)] ?? null)}
+      onClose={() => setTutorialStepIndex(null)}
+    />
+  ) : null;
+
   if (screen === 'shared-preview') {
     return (
       <div className="shared-player-shell">
@@ -712,7 +767,9 @@ function App() {
           onDeleteProject={deleteProjectFromProfile}
           onImportProject={importProjectFromProfile}
           onLogout={auth.logout}
+          isProfileTutorialActive={selectedTutorialTab === 'profile' && Boolean(activeTutorialStep)}
         />
+        {selectedTutorialTab === 'profile' ? renderTutorialOverlay() : null}
       </div>
     );
   }
@@ -884,23 +941,7 @@ function App() {
         <PreviewPlayerPanel editor={editor} preview={preview} />
       )}
 
-      {activeTutorialStep ? (
-        <BuilderTutorial
-          step={activeTutorialStep}
-          stepNumber={Math.max(0, activeTutorialPosition) + 1}
-          totalSteps={activeTutorialIndexes.length || 1}
-          canPrevious={activeTutorialPosition > 0}
-          userName={tutorialUserName}
-          project={editor.project}
-          fakeFileOptions={getFakeWindowImageOptions(editor.project, activeTutorialStep?.completeWhen?.target)}
-          onFakeFileChosen={applyFakeTutorialImage}
-          onNext={() => setTutorialStepIndex((index) => (
-            index === null || activeTutorialPosition >= activeTutorialIndexes.length - 1 ? null : activeTutorialIndexes[activeTutorialPosition + 1]
-          ))}
-          onPrevious={() => setTutorialStepIndex(activeTutorialIndexes[Math.max(0, activeTutorialPosition - 1)] ?? null)}
-          onClose={() => setTutorialStepIndex(null)}
-        />
-      ) : null}
+      {selectedTutorialTab !== 'profile' ? renderTutorialOverlay() : null}
     </div>
   );
 }

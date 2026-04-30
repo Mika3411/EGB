@@ -6,7 +6,8 @@ import {
 } from './scenes/SceneEditorChrome.jsx';
 import SceneSidebar from './scenes/SceneSidebar.jsx';
 import SceneFullscreenEditor from './scenes/SceneFullscreenEditor.jsx';
-import SceneVisualEffect, { getVisualEffectZoneZIndex } from './SceneVisualEffect.jsx';
+import SceneVisualEffect, { VISUAL_EFFECT_INTENSITY_OPTIONS, getVisualEffectZoneZIndex } from './SceneVisualEffect.jsx';
+import VisualEffectCascadeMenu from './VisualEffectCascadeMenu.jsx';
 import {
   clampFullscreenZoom,
   clampPercent,
@@ -922,7 +923,7 @@ export default function ScenesTab(props) {
                 <div className="subpanel-head">
                   <h3>Général & structure</h3>
                   <div className="inline-actions end">
-                    <button type="button" className="secondary-action" onClick={() => previewScene?.(selectedSceneId)}>
+                    <button type="button" className="secondary-action" data-tour="scene-preview-button" onClick={() => previewScene?.(selectedSceneId)}>
                       Prévisualiser
                     </button>
                     <button type="button" className="danger-button" onClick={() => deleteScene(selectedSceneId)}>
@@ -1138,6 +1139,68 @@ export default function ScenesTab(props) {
                         setSelectedSceneObjectId('');
                       }}>Supprimer l’objet visible</button>
                     </>
+                  ) : selectedVisualEffectZone ? (
+                    <>
+                      <HelpLabel help="Nom interne de la zone visuelle. Il aide a la retrouver dans les calques et dans l'editeur.">Nom</HelpLabel>
+                      <input value={selectedVisualEffectZone.name} onChange={(e) => patchProject((draft) => {
+                        const zone = draft.scenes.find((s) => s.id === selectedSceneId)?.visualEffectZones?.find((entry) => entry.id === selectedVisualEffectZoneId);
+                        if (zone) zone.name = e.target.value;
+                      })} />
+                      <div className="grid-two small-gap">
+                        <div><HelpLabel help="Position horizontale du centre de la zone, en pourcentage de la largeur de l'image.">X</HelpLabel><input type="number" value={selectedVisualEffectZone.x} onChange={(e) => patchProject((draft) => { const zone = draft.scenes.find((s) => s.id === selectedSceneId)?.visualEffectZones?.find((entry) => entry.id === selectedVisualEffectZoneId); if (zone) zone.x = Number(e.target.value); })} /></div>
+                        <div><HelpLabel help="Position verticale du centre de la zone, en pourcentage de la hauteur de l'image.">Y</HelpLabel><input type="number" value={selectedVisualEffectZone.y} onChange={(e) => patchProject((draft) => { const zone = draft.scenes.find((s) => s.id === selectedSceneId)?.visualEffectZones?.find((entry) => entry.id === selectedVisualEffectZoneId); if (zone) zone.y = Number(e.target.value); })} /></div>
+                        <div><HelpLabel help="Largeur de la zone d'effet, en pourcentage de la largeur de la scene.">Largeur</HelpLabel><input type="number" value={selectedVisualEffectZone.width} onChange={(e) => patchProject((draft) => { const zone = draft.scenes.find((s) => s.id === selectedSceneId)?.visualEffectZones?.find((entry) => entry.id === selectedVisualEffectZoneId); if (zone) zone.width = Number(e.target.value); })} /></div>
+                        <div><HelpLabel help="Hauteur de la zone d'effet, en pourcentage de la hauteur de la scene.">Hauteur</HelpLabel><input type="number" value={selectedVisualEffectZone.height} onChange={(e) => patchProject((draft) => { const zone = draft.scenes.find((s) => s.id === selectedSceneId)?.visualEffectZones?.find((entry) => entry.id === selectedVisualEffectZoneId); if (zone) zone.height = Number(e.target.value); })} /></div>
+                      </div>
+                      <HelpLabel help="Effet visuel applique uniquement dans cette zone. Ce menu reprend les memes familles que l'onglet Media.">Effet de zone</HelpLabel>
+                      <div className="scene-zone-effect-picker" data-tour="visual-zone-effect">
+                        <VisualEffectCascadeMenu
+                          value={selectedVisualEffectZone.effect || 'sparkles'}
+                          onChange={(nextEffect) => patchProject((draft) => {
+                            const zone = draft.scenes.find((s) => s.id === selectedSceneId)?.visualEffectZones?.find((entry) => entry.id === selectedVisualEffectZoneId);
+                            if (zone) zone.effect = nextEffect;
+                          })}
+                        />
+                      </div>
+                      <HelpLabel help="Force de l'effet dans cette zone.">Intensite</HelpLabel>
+                      <select value={selectedVisualEffectZone.intensity || 'normal'} onChange={(e) => patchProject((draft) => {
+                        const zone = draft.scenes.find((s) => s.id === selectedSceneId)?.visualEffectZones?.find((entry) => entry.id === selectedVisualEffectZoneId);
+                        if (zone) zone.intensity = e.target.value;
+                      })}>
+                        {VISUAL_EFFECT_INTENSITY_OPTIONS.map((intensity) => (
+                          <option key={intensity.value} value={intensity.value}>{intensity.label}</option>
+                        ))}
+                      </select>
+                      <HelpLabel help="Plan d'affichage de l'effet par rapport aux autres elements de la scene.">Calque</HelpLabel>
+                      <select value={selectedVisualEffectZone.layer || 'behind'} onChange={(e) => patchProject((draft) => {
+                        const zone = draft.scenes.find((s) => s.id === selectedSceneId)?.visualEffectZones?.find((entry) => entry.id === selectedVisualEffectZoneId);
+                        if (zone) zone.layer = e.target.value;
+                      })}>
+                        <option value="behind">Arriere-plan</option>
+                        <option value="between">Entre objets et zones</option>
+                        <option value="front">Premier plan</option>
+                      </select>
+                      <label className="checkbox-row">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(selectedVisualEffectZone.isHidden)}
+                          onChange={(e) => patchProject((draft) => {
+                            const zone = draft.scenes.find((s) => s.id === selectedSceneId)?.visualEffectZones?.find((entry) => entry.id === selectedVisualEffectZoneId);
+                            if (zone) zone.isHidden = e.target.checked;
+                          })}
+                        />
+                        Masquer cette zone
+                      </label>
+                      <button className="danger-button" style={{ marginTop: 12 }} onClick={() => {
+                        if (!window.confirm(`Supprimer la zone visuelle "${selectedVisualEffectZone.name}" ?`)) return;
+                        patchProject((draft) => {
+                          const scene = draft.scenes.find((s) => s.id === selectedSceneId);
+                          if (!scene?.visualEffectZones) return;
+                          scene.visualEffectZones = scene.visualEffectZones.filter((entry) => entry.id !== selectedVisualEffectZoneId);
+                        });
+                        setSelectedVisualEffectZoneId('');
+                      }}>Supprimer la zone visuelle</button>
+                    </>
                   ) : selectedHotspot ? (
                     <>
                       <HelpLabel help="Nom de la zone d’action dans l’éditeur. Choisis un nom qui décrit l’intention, par exemple “Porte verrouillée”.">Nom</HelpLabel>
@@ -1164,28 +1227,28 @@ export default function ScenesTab(props) {
                         const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.dialogue = e.target.value;
                       })} />
                       <HelpLabel help="Destination utilisée si l’action est “Changer de scène”. Laisse vide si la zone doit seulement parler ou donner un objet.">Scène cible</HelpLabel>
-                      <select value={selectedHotspot.targetSceneId} onChange={(e) => patchProject((draft) => {
+                      <select data-tour="hotspot-target-scene" value={selectedHotspot.targetSceneId} onChange={(e) => patchProject((draft) => {
                         const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.targetSceneId = e.target.value;
                       })}>
                         <option value="">Aucune</option>
                         {project.scenes.filter((scene) => scene.id !== selectedSceneId).map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
                       </select>
                       <HelpLabel help="Cinématique lancée après l’interaction réussie. Elle peut servir de transition, révélation ou fin de séquence.">Cinématique cible</HelpLabel>
-                      <select value={selectedHotspot.targetCinematicId} onChange={(e) => patchProject((draft) => {
+                      <select data-tour="hotspot-target-cinematic" value={selectedHotspot.targetCinematicId} onChange={(e) => patchProject((draft) => {
                         const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.targetCinematicId = e.target.value;
                       })}>
                         <option value="">Aucune</option>
                         {project.cinematics.map((cinematic) => <option key={cinematic.id} value={cinematic.id}>{cinematic.name}</option>)}
                       </select>
                       <HelpLabel help="Énigme à résoudre avant d’exécuter l’action de la zone. Si elle échoue ou reste ouverte, la suite ne se déclenche pas encore.">Énigme liée</HelpLabel>
-                      <select value={selectedHotspot.enigmaId || ''} onChange={(e) => patchProject((draft) => {
+                      <select data-tour="hotspot-linked-enigma" value={selectedHotspot.enigmaId || ''} onChange={(e) => patchProject((draft) => {
                         const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.enigmaId = e.target.value;
                       })}>
                         <option value="">Aucune</option>
                         {(project.enigmas || []).map((enigma) => <option key={enigma.id} value={enigma.id}>{enigma.name}</option>)}
                       </select>
                       <HelpLabel help="Son joué au moment où cette zone est utilisée. Garde-le court pour ne pas couvrir la musique ou les dialogues.">Son de la zone</HelpLabel>
-                      <label className="button like full secondary-action">
+                      <label className="button like full secondary-action" data-tour="hotspot-sound">
                         {selectedHotspot.soundName || 'Importer un son unique'}
                         <input type="file" accept="audio/*" hidden onChange={(e) => handleUpload(e, (data, name) => patchProject((draft) => {
                           const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId);
@@ -1218,7 +1281,7 @@ export default function ScenesTab(props) {
                         </>
                       )}
                       <HelpLabel help="Image associée à l’action principale de cette zone, souvent utilisée pour montrer un objet trouvé ou un indice visuel.">Image objet</HelpLabel>
-                      <label className="button like full secondary-action">
+                      <label className="button like full secondary-action" data-tour="hotspot-object-image">
                         {selectedHotspot.objectImageName ? 'Remplacer l’image objet' : 'Importer une image objet'}
                         <input type="file" accept="image/*" hidden onChange={(e) => handleUpload(e, (data, name) => patchProject((draft) => {
                           const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId);

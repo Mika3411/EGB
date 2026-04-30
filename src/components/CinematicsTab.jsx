@@ -100,16 +100,16 @@ export default function CinematicsTab({
 
   return (
     <div className="layout two-cols-wide">
-      <section className="panel side">
+      <section className="panel side" data-tour="cinematic-sidebar">
         <div className="panel-head">
           <h2>Cinématiques</h2>
           <div className="label-with-help">
-            <button onClick={addCinematic}>+ Cinématique</button>
+            <button data-tour="cinematic-add" onClick={addCinematic}>+ Cinématique</button>
             <span className="help-dot" data-help={FIELD_HELP.addCinematic} aria-label={FIELD_HELP.addCinematic} tabIndex={0}>?</span>
           </div>
         </div>
 
-        <div className="stack" style={{ marginBottom: 18 }}>
+        <div className="stack" data-tour="cinematic-start-settings" style={{ marginBottom: 18 }}>
           <h3 style={{ margin: '6px 0 0' }}>Démarrage du jeu</h3>
           <HelpLabel help={FIELD_HELP.startType}>Le jeu commence par</HelpLabel>
           <select
@@ -172,34 +172,37 @@ export default function CinematicsTab({
           )}
         </div>
 
-        {project.cinematics.map((cine) => (
-          <button key={cine.id} className={`list-card ${cine.id === selectedCinematicId ? 'selected' : ''}`} onClick={() => setSelectedCinematicId(cine.id)}>
-            <strong>{cine.name}</strong>
-            <span>{(cine.cinematicType || 'slides') === 'video' ? 'Vidéo' : `${cine.slides.length} slide(s)`}</span>
-          </button>
-        ))}
+        <div data-tour="cinematic-list">
+          {project.cinematics.map((cine) => (
+            <button key={cine.id} className={`list-card ${cine.id === selectedCinematicId ? 'selected' : ''}`} onClick={() => setSelectedCinematicId(cine.id)}>
+              <strong>{cine.name}</strong>
+              <span>{(cine.cinematicType || 'slides') === 'video' ? 'Vidéo' : `${cine.slides.length} slide(s)`}</span>
+            </button>
+          ))}
+        </div>
       </section>
 
-      <section className="panel main">
+      <section className="panel main" data-tour="cinematic-editor">
         {selectedCinematic ? (
           <>
             <div className="panel-head">
               <h2>Éditeur de cinématique</h2>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {(selectedCinematic.cinematicType || 'slides') === 'slides' ?
-                   <button onClick={addSlide}>+ Slide</button>
+                   <button data-tour="cinematic-add-slide" onClick={addSlide}>+ Slide</button>
                   : <span className="small-note">Mode vidéo actif</span>}
                 <button type="button" onClick={deleteCinematic}>Supprimer la cinématique</button>
               </div>
             </div>
 
             <HelpLabel help={FIELD_HELP.name}>Nom de la cinématique</HelpLabel>
-            <input value={selectedCinematic.name} onChange={(e) => patchProject((draft) => {
+            <input data-tour="cinematic-name" value={selectedCinematic.name} onChange={(e) => patchProject((draft) => {
               const cine = draft.cinematics.find((c) => c.id === selectedCinematicId); if (cine) cine.name = e.target.value;
             })} />
 
             <HelpLabel help={FIELD_HELP.type}>Type de cinématique</HelpLabel>
             <select
+              data-tour="cinematic-type"
               value={selectedCinematic.cinematicType || 'slides'}
               onChange={(e) => patchProject((draft) => {
                 const cine = draft.cinematics.find((c) => c.id === selectedCinematicId);
@@ -238,15 +241,15 @@ export default function CinematicsTab({
                 })} />Afficher les contrôles<span className="help-dot" data-help={FIELD_HELP.videoControls} aria-label={FIELD_HELP.videoControls} tabIndex={0}>?</span></label>
               </div>
             ) : (
-              <div className="slides-grid">
+              <div className="slides-grid" data-tour="cinematic-slides">
                 {selectedCinematic.slides.map((slide, index) => (
-                  <div className="slide-card" key={slide.id}>
+                  <div className="slide-card" data-tour={index === 0 ? 'cinematic-slide-card' : undefined} key={slide.id}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
                       <h3 style={{ margin: 0 }}>Slide {index + 1}</h3>
                       <button type="button" onClick={() => deleteSlide(slide.id)}>Supprimer le slide</button>
                     </div>
                     <HelpLabel help={FIELD_HELP.slideImage}>Image</HelpLabel>
-                    <label className="button like full">
+                    <label className="button like full" data-tour={index === 0 ? 'cinematic-slide-image' : undefined}>
                       {slide.imageName || 'Importer image'}
                       <input type="file" accept="image/*" hidden onChange={(e) => handleUpload(e, (data, name) => patchProject((draft) => {
                         const target = draft.cinematics.find((c) => c.id === selectedCinematicId)?.slides.find((s) => s.id === slide.id);
@@ -255,12 +258,12 @@ export default function CinematicsTab({
                     </label>
                     {slide.imageData && <img className="thumb" loading="lazy" decoding="async" src={slide.imageData} alt="slide" />}
                     <HelpLabel help={FIELD_HELP.slideNarration}>Narration</HelpLabel>
-                    <textarea value={slide.narration} onChange={(e) => patchProject((draft) => {
+                    <textarea data-tour={index === 0 ? 'cinematic-slide-narration' : undefined} value={slide.narration} onChange={(e) => patchProject((draft) => {
                       const target = draft.cinematics.find((c) => c.id === selectedCinematicId)?.slides.find((s) => s.id === slide.id);
                       if (target) target.narration = e.target.value;
                     })} />
                     <HelpLabel help={FIELD_HELP.slideAudio}>Son</HelpLabel>
-                    <label className="button like full">
+                    <label className="button like full" data-tour={index === 0 ? 'cinematic-slide-audio' : undefined}>
                       {slide.audioName || 'Importer son'}
                       <input type="file" accept="audio/*" hidden onChange={(e) => handleUpload(e, (data, name) => patchProject((draft) => {
                         const target = draft.cinematics.find((c) => c.id === selectedCinematicId)?.slides.find((s) => s.id === slide.id);
@@ -273,10 +276,11 @@ export default function CinematicsTab({
               </div>
             )}
 
-            <div className="stack" style={{ marginBottom: 18 }}>
+            <div className="stack" data-tour="cinematic-end-settings" style={{ marginBottom: 18 }}>
               <h3 style={{ margin: '6px 0 0' }}>À la fin de la cinématique</h3>
               <HelpLabel help={FIELD_HELP.endAction}>Action de fin</HelpLabel>
               <select
+                data-tour="cinematic-end-action"
                 value={selectedCinematic.onEndType || 'none'}
                 onChange={(e) => patchProject((draft) => {
                   const cine = draft.cinematics.find((c) => c.id === selectedCinematicId);

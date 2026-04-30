@@ -18,22 +18,34 @@ export default function BuilderTutorial({ step, stepNumber, totalSteps, canPrevi
   const [isStepComplete, setIsStepComplete] = useState(() => isTutorialStepComplete(step, new Set(), project));
   const [fakeFileName, setFakeFileName] = useState('');
   const [isFakeWindowOpen, setIsFakeWindowOpen] = useState(false);
+  const autoNextStepRef = useRef('');
+  const autoNextTimerRef = useRef(null);
 
   useEffect(() => {
     if (!step) return undefined;
     setFakeFileName('');
     setIsFakeWindowOpen(false);
+    autoNextStepRef.current = '';
+    if (autoNextTimerRef.current) {
+      window.clearTimeout(autoNextTimerRef.current);
+      autoNextTimerRef.current = null;
+    }
     let frame = 0;
 
     const updateTarget = () => {
-      document.querySelectorAll('.tutorial-focus').forEach((entry) => entry.classList.remove('tutorial-focus'));
-      const target = document.querySelector(step.selector);
+      document.querySelectorAll('.tutorial-focus, .tutorial-focus-positioned').forEach((entry) => {
+        entry.classList.remove('tutorial-focus', 'tutorial-focus-positioned');
+      });
+      const target = document.querySelector(step.selector) || (step.fallbackSelector ? document.querySelector(step.fallbackSelector) : null);
       if (!(target instanceof HTMLElement)) {
         setTargetRect(null);
         return;
       }
 
       target.classList.add('tutorial-focus');
+      if (window.getComputedStyle(target).position === 'static') {
+        target.classList.add('tutorial-focus-positioned');
+      }
       target.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
       frame = requestAnimationFrame(() => {
         const rect = target.getBoundingClientRect();
@@ -80,7 +92,9 @@ export default function BuilderTutorial({ step, stepNumber, totalSteps, canPrevi
     return () => {
       window.clearTimeout(timer);
       cancelAnimationFrame(frame);
-      document.querySelectorAll('.tutorial-focus').forEach((entry) => entry.classList.remove('tutorial-focus'));
+      document.querySelectorAll('.tutorial-focus, .tutorial-focus-positioned').forEach((entry) => {
+        entry.classList.remove('tutorial-focus', 'tutorial-focus-positioned');
+      });
       window.removeEventListener('resize', updateTarget);
       window.removeEventListener('scroll', updateTarget, true);
       document.removeEventListener('click', updateAfterUiChange, true);
@@ -92,8 +106,12 @@ export default function BuilderTutorial({ step, stepNumber, totalSteps, canPrevi
     if (!step) return undefined;
 
     const markInteracted = (event) => {
-      const target = document.querySelector(step.selector);
+      const target = document.querySelector(step.selector) || (step.fallbackSelector ? document.querySelector(step.fallbackSelector) : null);
       if (!(target instanceof HTMLElement) || !target.contains(event.target)) return;
+      if (step.preventTargetAction) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
       if (step.completeWhen?.type === 'fake-file') {
         event.preventDefault();
         event.stopPropagation();
@@ -110,7 +128,15 @@ export default function BuilderTutorial({ step, stepNumber, totalSteps, canPrevi
     };
 
     const updateCompletion = () => {
-      setIsStepComplete(isTutorialStepComplete(step, interactedSteps, project));
+      const complete = isTutorialStepComplete(step, interactedSteps, project);
+      setIsStepComplete(complete);
+      if (complete && step.autoNext) {
+        const autoKey = `${step.selector}:${step.title}`;
+        if (autoNextStepRef.current !== autoKey) {
+          autoNextStepRef.current = autoKey;
+          autoNextTimerRef.current = window.setTimeout(onNext, 180);
+        }
+      }
     };
 
     const handleEnterToContinue = (event) => {
@@ -142,6 +168,10 @@ export default function BuilderTutorial({ step, stepNumber, totalSteps, canPrevi
       document.removeEventListener('keydown', handleEnterToContinue, true);
       document.removeEventListener('toggle', updateCompletion, true);
       window.clearInterval(timer);
+      if (autoNextTimerRef.current) {
+        window.clearTimeout(autoNextTimerRef.current);
+        autoNextTimerRef.current = null;
+      }
     };
   }, [step, interactedSteps, project, onNext]);
 

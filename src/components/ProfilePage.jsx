@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 const formatDate = (value) => {
   if (!value) return 'Jamais';
@@ -29,6 +29,7 @@ const CREATION_TEMPLATES = [
 const PUBLIC_CATEGORIES = ['Horreur', 'Enquete', 'Aventure', 'Science-fiction', 'Fantastique', 'Historique', 'Autre'];
 const AGE_RATINGS = ['Tout public', '+18 ans'];
 const PROFILE_TUTORIAL_OPTIONS = [
+  ['profile', 'Profil'],
   ['scenes', 'Scenes'],
   ['editor', 'Editeur'],
   ['map', 'Plan'],
@@ -284,7 +285,7 @@ function ProjectCard({
   const linkStatus = copiedRecently ? 'Copié récemment' : project.shareState?.isPublic ? 'Lien actif' : 'Privé';
 
   return (
-    <article className={`list-card ${isActive ? 'selected' : ''}`}>
+    <article className={`list-card ${isActive ? 'selected' : ''}`} data-tour="profile-project-card">
       <div className="project-card-layout">
         <div className="project-thumbnail" aria-hidden="true">
           {galleryThumbnail ? <img src={galleryThumbnail} alt="" /> : <span>{placeholderInitial}</span>}
@@ -319,7 +320,7 @@ function ProjectCard({
           )}
         </div>
 
-        <div className="toolbar">
+        <div className="toolbar" data-tour="profile-project-actions">
           <button type="button" className="profile-resume-button" onClick={() => onOpenProject?.(project.id)}>
             <span aria-hidden="true">▶</span>
             Reprendre
@@ -359,7 +360,7 @@ function ProjectCard({
         </div>
       </div>
 
-      <div className="project-card-footer">
+      <div className="project-card-footer" data-tour="profile-project-publish">
         <div className={`project-sync-badge ${syncStatus}`}>
           <span aria-hidden="true">{syncIcon}</span>
           <strong>{syncLabel}</strong>
@@ -380,7 +381,7 @@ function ProjectCard({
         </button>
       </div>
 
-      <div className="project-public-settings">
+      <div className="project-public-settings" data-tour="profile-public-settings">
         <label>
           Catégorie ?
           <select
@@ -500,6 +501,7 @@ export default function ProfilePage({
   onDeleteProject,
   onImportProject,
   onLogout,
+  isProfileTutorialActive = false,
 }) {
   const [newProjectName, setNewProjectName] = useState('');
   const [creationTemplate, setCreationTemplate] = useState('empty');
@@ -507,6 +509,13 @@ export default function ProfilePage({
   const [sortMode, setSortMode] = useState('updated-desc');
   const [importError, setImportError] = useState('');
   const fileInputRef = useRef(null);
+  const tutorialMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (isProfileTutorialActive && tutorialMenuRef.current) {
+      tutorialMenuRef.current.open = false;
+    }
+  }, [isProfileTutorialActive]);
 
   const visibleProjects = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -545,7 +554,7 @@ export default function ProfilePage({
 
   return (
     <main className="layout">
-      <section className="panel">
+      <section className="panel" data-tour="profile-header">
         <div className="panel-head panel-head-stack">
           <div>
             <span className="eyebrow">Profil</span>
@@ -556,16 +565,30 @@ export default function ProfilePage({
           </div>
 
           <div className="toolbar">
-            {statusMessage ? <span className="status-badge soft">{statusMessage}</span> : null}
+            <span className="status-badge soft" data-tour="profile-status">{statusMessage || 'Profil pret'}</span>
             {canOpenAdmin ? (
               <button type="button" className="secondary-action" onClick={onOpenAdmin}>
                 Admin
               </button>
             ) : null}
-            <button type="button" className="secondary-action" onClick={onOpenPublicGallery}>
+            <button type="button" className="secondary-action" onClick={onOpenPublicGallery} data-tour="profile-gallery">
               Galerie publique
             </button>
-            <details className="profile-tutorial-menu">
+            <details
+              ref={tutorialMenuRef}
+              className="profile-tutorial-menu"
+              data-tour="profile-tutorial-menu"
+              onClickCapture={(event) => {
+                if (!isProfileTutorialActive) return;
+                event.preventDefault();
+                tutorialMenuRef.current.open = false;
+              }}
+              onToggle={() => {
+                if (isProfileTutorialActive && tutorialMenuRef.current) {
+                  tutorialMenuRef.current.open = false;
+                }
+              }}
+            >
               <summary className="profile-action-button profile-tutorial-button">Didacticiel</summary>
               <div className="profile-tutorial-popover">
                 {PROFILE_TUTORIAL_OPTIONS.map(([value, label]) => (
@@ -575,14 +598,14 @@ export default function ProfilePage({
                 ))}
               </div>
             </details>
-            <button type="button" className="secondary-action" onClick={onLogout}>
+            <button type="button" className="secondary-action" onClick={onLogout} data-tour="profile-logout">
               Déconnexion
             </button>
           </div>
         </div>
       </section>
 
-      <section className="panel">
+      <section className="panel" data-tour="profile-create-section">
         <div className="grid-two">
           <form onSubmit={handleCreate}>
             <label htmlFor="new-project-name">Nouveau projet</label>
@@ -594,7 +617,7 @@ export default function ProfilePage({
               disabled={isBusy}
             />
             <label htmlFor="creation-template">Template</label>
-            <div className="template-picker" id="creation-template">
+            <div className="template-picker" id="creation-template" data-tour="profile-template-picker">
               {CREATION_TEMPLATES.map(([value, label]) => (
                 <button
                   key={value}
@@ -607,12 +630,12 @@ export default function ProfilePage({
                 </button>
               ))}
             </div>
-            <button type="submit" className="profile-action-button" disabled={isBusy}>
+            <button type="submit" className="profile-action-button" disabled={isBusy} data-tour="profile-create-button">
               + Créer ?
             </button>
           </form>
 
-          <div>
+          <div data-tour="profile-import-section">
             <label>Importer</label>
             <input
               ref={fileInputRef}
@@ -629,7 +652,7 @@ export default function ProfilePage({
         </div>
       </section>
 
-      <section className="panel">
+      <section className="panel" data-tour="profile-projects-section">
         <div className="panel-head">
           <div>
             <h2>Mes projets</h2>
@@ -639,7 +662,7 @@ export default function ProfilePage({
           </div>
         </div>
 
-        <div className="grid-two small-gap">
+        <div className="grid-two small-gap" data-tour="profile-project-filters">
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -652,7 +675,7 @@ export default function ProfilePage({
           </select>
         </div>
 
-        <div className="editor-stack" style={{ marginTop: 12 }}>
+        <div className="editor-stack" style={{ marginTop: 12 }} data-tour="profile-project-list">
           {visibleProjects.length > 0 ? (
             visibleProjects.map((project) => (
               <ProjectCard

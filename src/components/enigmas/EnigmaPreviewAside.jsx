@@ -37,16 +37,16 @@ export default function EnigmaPreviewAside({
   return (
     <>
               {selectedEnigma.type === 'code' ? (
-                <aside className="combo-card" style={{ position: 'sticky', top: 12, background: 'rgba(15, 23, 42, 0.72)' }}>
+                <aside className="combo-card" data-tour="enigma-code-appearance" style={{ position: 'sticky', top: 12, background: 'rgba(15, 23, 42, 0.72)' }}>
                   <h3 style={{ marginTop: 0 }}>Apparence du code</h3>
                   <HelpLabel help={FIELD_HELP.codeSkin}>Forme côté joueur</HelpLabel>
-                  <select value={selectedCodeSkin} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
+                  <select data-tour="enigma-code-skin" value={selectedCodeSkin} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                     enigma.codeSkin = e.target.value;
                   })}>
                     {CODE_SKIN_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
 
-                  <div style={{ marginTop: 14, padding: 16, border: '1px solid rgba(148, 163, 184, 0.25)', borderRadius: 16, background: 'rgba(2, 6, 23, 0.45)' }}>
+                  <div data-tour="enigma-code-preview" style={{ marginTop: 14, padding: 16, border: '1px solid rgba(148, 163, 184, 0.25)', borderRadius: 16, background: 'rgba(2, 6, 23, 0.45)' }}>
                     <p className="small-note" style={{ marginTop: 0 }}>Aperçu : {CODE_SKIN_LABELS[selectedCodeSkin]}</p>
 
                     {selectedCodeSkin === 'safe-wheels' ? (

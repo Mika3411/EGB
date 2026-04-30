@@ -322,7 +322,7 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
                         </div>
                         <div>
                           <HelpLabel help="Objet ajouté à l’inventaire quand cette règle s’active. Laisse Aucun si la règle ne donne rien.">Objet donné</HelpLabel>
-                          <select value={rule.rewardItemId || ''} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
+                          <select data-tour="logic-reward-item" value={rule.rewardItemId || ''} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
                             draftRule.rewardItemId = event.target.value;
                           })}>
                             <option value="">Aucun</option>
@@ -353,14 +353,14 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
                       </div>
 
                       <HelpLabel help="Message affiché au joueur quand cette règle s’active. Il remplace le dialogue normal de la zone.">Dialogue affiché</HelpLabel>
-                      <textarea value={rule.dialogue || ''} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
+                      <textarea data-tour="logic-dialogue" value={rule.dialogue || ''} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
                         draftRule.dialogue = event.target.value;
                       })} />
 
                       {rule.actionType === 'scene' ? (
                         <>
                           <HelpLabel help="Scène ouverte si l’action déclenchée est un changement de scène.">Scène cible</HelpLabel>
-                          <select value={rule.targetSceneId || ''} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
+                          <select data-tour="logic-target-scene" value={rule.targetSceneId || ''} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
                             draftRule.targetSceneId = event.target.value;
                           })}>
                             <option value="">Choisir une scène</option>
@@ -372,7 +372,7 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
                       {rule.actionType === 'cinematic' ? (
                         <>
                           <HelpLabel help="Cinématique lancée si l’action déclenchée est une cinématique.">Cinématique cible</HelpLabel>
-                          <select value={rule.targetCinematicId || ''} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
+                          <select data-tour="logic-target-cinematic" value={rule.targetCinematicId || ''} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
                             draftRule.targetCinematicId = event.target.value;
                           })}>
                             <option value="">Choisir une cinématique</option>

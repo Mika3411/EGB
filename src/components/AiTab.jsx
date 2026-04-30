@@ -1153,12 +1153,12 @@ export default function AiTab({
           </div>
         </div>
       ) : null}
-      <section className="panel side">
+      <section className="panel side" data-tour="ai-controls">
         <div className="panel-head">
           <h2>IA</h2>
           <span className="status-badge soft">{mode === 'improve' ? 'Patch' : 'IA'}</span>
         </div>
-        <div className={`ai-credit-panel ${aiCredits.balance != null && aiCredits.balance < getAiCreditCost('text') ? 'low' : ''}`}>
+        <div data-tour="ai-credits" className={`ai-credit-panel ${aiCredits.balance != null && aiCredits.balance < getAiCreditCost('text') ? 'low' : ''}`}>
           <div>
             <span className="section-kicker">CrÃ©dits IA</span>
             <strong>{aiCredits.isLoading ? '...' : `${aiCredits.balance ?? 0}`}</strong>
@@ -1176,10 +1176,10 @@ export default function AiTab({
         </p>
 
         <HelpLabel help="Style partagé par les images de scènes pour éviter que chaque pièce parte dans une direction visuelle différente.">Style visuel global</HelpLabel>
-        <input value={globalVisualStyle} onChange={(event) => setGlobalVisualStyle(event.target.value)} />
+        <input data-tour="ai-visual-style" value={globalVisualStyle} onChange={(event) => setGlobalVisualStyle(event.target.value)} />
 
         <HelpLabel help="Ajuste automatiquement la luminosité après génération pour garder une image jouable sans trop délaver l'ambiance.">Lisibilité des images</HelpLabel>
-        <select value={imageReadabilityLevel} onChange={(event) => setImageReadabilityLevel(event.target.value)}>
+        <select data-tour="ai-image-readability" value={imageReadabilityLevel} onChange={(event) => setImageReadabilityLevel(event.target.value)}>
           <option value="subtle">Ambiance sombre</option>
           <option value="balanced">Lisibilité renforcée</option>
           <option value="strong">Très lumineux</option>
@@ -1187,17 +1187,17 @@ export default function AiTab({
         </select>
 
         <HelpLabel help="Détails récurrents à conserver entre les pièces: portes, parquet, lumière, époque, matériaux.">Héritage visuel</HelpLabel>
-        <textarea value={visualInheritance} onChange={(event) => setVisualInheritance(event.target.value)} />
+        <textarea data-tour="ai-visual-inheritance" value={visualInheritance} onChange={(event) => setVisualInheritance(event.target.value)} />
 
         <HelpLabel help={FIELD_HELP.mode}>Mode</HelpLabel>
-        <div className="segmented-control">
+        <div className="segmented-control" data-tour="ai-mode">
           <button type="button" className={mode === 'generate' ? 'active' : ''} onClick={() => setMode('generate')}>Générer</button>
           <button type="button" className={mode === 'progressive' ? 'active' : ''} onClick={() => setMode('progressive')}>Progressif</button>
           <button type="button" className={mode === 'extend' ? 'active' : ''} onClick={() => setMode('extend')}>Continuer</button>
           <button type="button" className={mode === 'improve' ? 'active' : ''} onClick={() => setMode('improve')}>Améliorer</button>
         </div>
 
-        <div className="ai-estimate-panel">
+        <div className="ai-estimate-panel" data-tour="ai-estimate">
           <strong>Modifiera probablement :</strong>
           {getActionEstimate(mode).map((line) => <span key={line}>{line}</span>)}
         </div>
@@ -1438,26 +1438,26 @@ export default function AiTab({
         )}
 
         {mode !== 'progressive' && mode !== 'extend' ? (
-          <button type="button" disabled={isGenerating || !canRunTextAi || (mode === 'improve' && !targetSceneId)} onClick={generate}>
+          <button type="button" data-tour="ai-generate-button" disabled={isGenerating || !canRunTextAi || (mode === 'improve' && !targetSceneId)} onClick={generate}>
             {isGenerating ? 'Traitement...' : (mode === 'improve' ? 'Améliorer la scène' : 'Générer le récit')}
           </button>
         ) : null}
       </section>
 
-      <section className="panel main">
+      <section className="panel main" data-tour="ai-output">
         <div className="panel-head">
           <div>
             <span className="section-kicker">{isPatch ? 'Amélioration' : 'Génération'}</span>
             <h2>{isPatch ? 'Patch IA' : 'Projet IA'}</h2>
           </div>
-          <div className="ai-panel-actions">
+            <div className="ai-panel-actions" data-tour="ai-draft-actions">
             <button type="button" className="secondary-action" disabled={isGenerating && !generatedProject} onClick={clearAiDraft}>
               Nouveau brouillon ?
             </button>
             <button type="button" className="secondary-action" disabled={!generatedProject} onClick={() => saveDraftNow(true)}>
               Sauvegarder le brouillon IA ?
             </button>
-            <button type="button" disabled={!generatedProject || validation?.ok === false} onClick={applyProject}>Appliquer au projet</button>
+            <button type="button" data-tour="ai-apply-button" disabled={!generatedProject || validation?.ok === false} onClick={applyProject}>Appliquer au projet</button>
           </div>
         </div>
 
@@ -1466,7 +1466,7 @@ export default function AiTab({
         {draftSaveStatus ? <p className="small-note">{draftSaveStatus}</p> : null}
 
         {currentDiffLines.length ? (
-          <div className="combo-card ai-diff-panel">
+          <div className="combo-card ai-diff-panel" data-tour="ai-diff">
             <strong>Modifications prévues</strong>
             <div>
               {currentDiffLines.map((line) => <span key={line}>{line}</span>)}
@@ -1497,7 +1497,7 @@ export default function AiTab({
         ) : null}
 
         {validation ? (
-          <div className={`combo-card ${validation.ok ? 'success-panel' : 'danger-panel'}`}>
+          <div data-tour="ai-validation" className={`combo-card ${validation.ok ? 'success-panel' : 'danger-panel'}`}>
             <strong>{validation.ok ? 'Validation OK' : 'Validation bloquée'}</strong>
             {validation.errors?.length ? (
               <ul className="compact-list">
@@ -1511,7 +1511,7 @@ export default function AiTab({
         ) : null}
 
         {narrativePreview ? (
-          <div className="ai-narrative-preview">
+          <div className="ai-narrative-preview" data-tour="ai-result-preview">
             <section className="combo-card">
               <span className="section-kicker">{isPatch ? 'Résultat narratif' : 'Projet proposé'}</span>
               <h3>{narrativePreview.title}</h3>
@@ -1531,6 +1531,7 @@ export default function AiTab({
                     <HelpLabel className="ai-visual-label" help={FIELD_HELP.visualConstraints}>Contraintes visuelles de la scène</HelpLabel>
                     <textarea
                       className="ai-visual-constraints"
+                      data-tour="ai-scene-visual-constraints"
                       value={getSceneVisualConstraints(scene)}
                       onChange={(event) => updateSceneVisualConstraints(scene.id, event.target.value)}
                       placeholder={[
@@ -1543,6 +1544,7 @@ export default function AiTab({
                     <button
                       type="button"
                       className="secondary-action ai-image-action"
+                      data-tour="ai-scene-image-button"
                       disabled={generatingImageKey === `scene:${scene.id}` || !canRunImageAi}
                       onClick={() => generateSceneImage(scene)}
                     >
@@ -1626,7 +1628,7 @@ export default function AiTab({
         ) : (
           <div className="ai-narrative-preview">
             <div className="empty-state-inline">Aucun résultat narratif pour le moment.</div>
-            <section className="combo-card ai-image-empty-panel">
+            <section className="combo-card ai-image-empty-panel" data-tour="ai-images-info">
               <span className="section-kicker">Images à la demande</span>
               <h3>Scènes et objets</h3>
               <p className="small-note">
