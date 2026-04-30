@@ -934,7 +934,7 @@ function App() {
       )}
 
       {editor.tab === 'help' && (
-        <HelpTab />
+        <HelpTab onStartTutorial={startBuilderTutorialFromProfile} />
       )}
 
       {editor.tab === 'preview' && (

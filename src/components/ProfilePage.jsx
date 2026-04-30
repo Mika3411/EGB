@@ -338,8 +338,8 @@ function ProjectCard({
       </div>
 
       <p className="small-note">
-        {stats.scenes} ? scène{stats.scenes > 1 ? 's' : ''} ? {stats.enigmas} énigme{stats.enigmas > 1 ? 's' : ''} ?{' '}
-        {stats.cinematics} ? cinématique{stats.cinematics > 1 ? 's' : ''}
+        {stats.scenes} scène{stats.scenes > 1 ? 's' : ''} · {stats.enigmas} énigme{stats.enigmas > 1 ? 's' : ''} ·{' '}
+        {stats.cinematics} cinématique{stats.cinematics > 1 ? 's' : ''}
       </p>
 
       <div className="project-completion-box" aria-label="Indicateur de complétion">
@@ -351,12 +351,12 @@ function ProjectCard({
         <div className={`project-completion-row ${completion.unlinkedHotspots ? 'warn' : 'ok'}`}>
           <span aria-hidden="true">{completion.unlinkedHotspots ? '⚠' : '✓'}</span>
           <strong>{completion.unlinkedHotspots}</strong>
-          <em>hotspot{completion.unlinkedHotspots > 1 ? 's' : ''} non ? relié{completion.unlinkedHotspots > 1 ? 's' : ''}</em>
+          <em>hotspot{completion.unlinkedHotspots > 1 ? 's' : ''} non relié{completion.unlinkedHotspots > 1 ? 's' : ''}</em>
         </div>
         <div className={`project-completion-row ${completion.enigmasWithoutSolution ? 'danger' : 'ok'}`}>
           <span aria-hidden="true">{completion.enigmasWithoutSolution ? '✕' : '✓'}</span>
           <strong>{completion.enigmasWithoutSolution}</strong>
-          <em>énigme{completion.enigmasWithoutSolution > 1 ? 's' : ''} sans ? solution</em>
+          <em>énigme{completion.enigmasWithoutSolution > 1 ? 's' : ''} sans solution</em>
         </div>
       </div>
 
@@ -374,7 +374,7 @@ function ProjectCard({
         </span>
         <button type="button" className="secondary-action profile-share-button" onClick={() => onCopyProjectLink?.(project.id)}>
           <span aria-hidden="true">🔗</span>
-          Copier le lien ?
+          Copier le lien
         </button>
         <button type="button" className="profile-publish-button" onClick={handlePublish}>
           Publier
@@ -383,7 +383,7 @@ function ProjectCard({
 
       <div className="project-public-settings" data-tour="profile-public-settings">
         <label>
-          Catégorie ?
+          Catégorie
           <select
             value={project.shareState?.category || ''}
             onChange={(event) => onUpdatePublicSettings?.(project.id, { category: event.target.value })}
@@ -393,7 +393,7 @@ function ProjectCard({
           </select>
         </label>
         <label>
-          Mention d’âge ?
+          Mention d’âge
           <select
             value={project.shareState?.ageRating || ''}
             onChange={(event) => onUpdatePublicSettings?.(project.id, {
@@ -406,7 +406,7 @@ function ProjectCard({
           </select>
         </label>
         <label>
-          Miniature galerie ?
+          Miniature galerie
           <span className="gallery-thumbnail-control">
             {project.shareState?.galleryThumbnailName || 'Choisir une image'}
             <input type="file" accept="image/*" hidden onChange={handleGalleryThumbnail} />
@@ -414,7 +414,7 @@ function ProjectCard({
         </label>
         {project.shareState?.galleryThumbnail ? (
           <button type="button" className="secondary-action" onClick={() => onUpdatePublicSettings?.(project.id, { galleryThumbnail: '', galleryThumbnailName: '' })}>
-            Miniature auto ?
+            Miniature auto
           </button>
         ) : null}
         {thumbnailError ? <p className="auth-error">{thumbnailError}</p> : null}
@@ -631,7 +631,7 @@ export default function ProfilePage({
               ))}
             </div>
             <button type="submit" className="profile-action-button" disabled={isBusy} data-tour="profile-create-button">
-              + Créer ?
+              + Créer
             </button>
           </form>
 
@@ -645,7 +645,7 @@ export default function ProfilePage({
               onChange={handleImport}
             />
             <button type="button" className="profile-action-button secondary-action" onClick={() => fileInputRef.current?.click()}>
-              Importer un projet JSON ?
+              Importer un projet JSON
             </button>
             {importError ? <p className="auth-error">{importError}</p> : null}
           </div>
@@ -657,7 +657,7 @@ export default function ProfilePage({
           <div>
             <h2>Mes projets</h2>
             <p className="small-note">
-              {projects.length} ? projet{projects.length > 1 ? 's' : ''} ? sauvegardé{projects.length > 1 ? 's' : ''}
+              {projects.length} projet{projects.length > 1 ? 's' : ''} sauvegardé{projects.length > 1 ? 's' : ''}
             </p>
           </div>
         </div>

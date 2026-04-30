@@ -856,7 +856,7 @@ export default function AiTab({
       validateCandidate(nextProject, false);
       setStatus(result.source === 'api' ?
          (result.isPatch ? 'Patch généré par API IA.' : 'Projet généré par API IA.')
-        : `${result.isPatch ? 'Patch généré localement' : 'Projet généré localement'}. ${result.warning ? `API ? non ? utilisée: ${result.warning}` : ''}`);
+        : `${result.isPatch ? 'Patch généré localement' : 'Projet généré localement'}. ${result.warning ? `API non utilisée: ${result.warning}` : ''}`);
     } catch (error) {
       setStatus(`Erreur de génération: ${error.message}`);
     } finally {
@@ -902,7 +902,7 @@ export default function AiTab({
       }
       setStatus(result.source === 'api' ?
          `${stageLabel} généré par API IA.`
-        : `${stageLabel} généré localement. ${result.warning ? `API ? non ? utilisée: ${result.warning}` : ''}`);
+        : `${stageLabel} généré localement. ${result.warning ? `API non utilisée: ${result.warning}` : ''}`);
     } catch (error) {
       setProgressiveStatus((previous) => ({ ...previous, [stage]: 'pending' }));
       setStatus(`Erreur de génération progressive: ${error.message}`);
@@ -968,7 +968,7 @@ export default function AiTab({
       }
       setStatus(result.source === 'api' ?
          `${labels[stage]} généré par API IA.`
-        : `${labels[stage]} généré localement. ${result.warning ? `API ? non ? utilisée: ${result.warning}` : ''}`);
+        : `${labels[stage]} généré localement. ${result.warning ? `API non utilisée: ${result.warning}` : ''}`);
     } catch (error) {
       setStatus(`Erreur: ${error.message}`);
     } finally {
@@ -1261,11 +1261,11 @@ export default function AiTab({
                 );
               })()}
               <button type="button" disabled={isGenerating || !canRunTextAi || progressiveStatus.act1 !== 'done'} onClick={() => generateProgressiveStep('improveAct1')}>
-                <strong>{progressiveStatus.improveAct1 === 'running' ? '⏳' : progressiveStatus.improveAct1 === 'done' ? '✔' : progressiveStatus.act1 === 'done' ? '→' : '🔒'} Améliorer ? Acte ? 1</strong>
+                <strong>{progressiveStatus.improveAct1 === 'running' ? '⏳' : progressiveStatus.improveAct1 === 'done' ? '✔' : progressiveStatus.act1 === 'done' ? '→' : '🔒'} Améliorer Acte 1</strong>
                 <span>{progressiveStatus.improveAct1 === 'done' ? 'Acte 1 raffiné' : progressiveStatus.act1 === 'done' ? 'structure gardée' : 'verrouillé'}</span>
               </button>
               <button type="button" disabled={isGenerating || !canRunTextAi || progressiveStatus.act1 !== 'done'} onClick={() => generateProgressiveStep('act2_continuity')}>
-                <strong>{progressiveStatus.act2 === 'running' || progressiveStatus.act2_continuity === 'running' ? '⏳' : progressiveStatus.act2 === 'done' ? '✔' : progressiveStatus.act1 === 'done' ? '→' : '🔒'} Générer ? Acte ? 2 ? en ? continuité</strong>
+                <strong>{progressiveStatus.act2 === 'running' || progressiveStatus.act2_continuity === 'running' ? '⏳' : progressiveStatus.act2 === 'done' ? '✔' : progressiveStatus.act1 === 'done' ? '→' : '🔒'} Générer Acte 2 en continuité</strong>
                 <span>{progressiveStatus.act2 === 'done' ? 'Acte 2 généré' : progressiveStatus.act1 === 'done' ? 'Acte 2 disponible' : 'après Acte 1'}</span>
               </button>
               <button type="button" disabled={isGenerating || !canRunTextAi || progressiveStatus.act2 !== 'done'} onClick={() => generateProgressiveStep('enrich')}>
@@ -1297,10 +1297,10 @@ export default function AiTab({
 
             <HelpLabel help={FIELD_HELP.importJson}>Importer un JSON existant</HelpLabel>
             <label className="button like secondary-action full">
-              Importer un JSON existant ?
+              Importer un JSON existant
               <input type="file" accept="application/json,.json" hidden onChange={importExtensionJson} />
             </label>
-            {importedProject ? <p className="small-note">JSON ? chargé: {importedProject.title || 'Projet importé'}</p> : null}
+            {importedProject ? <p className="small-note">JSON chargé: {importedProject.title || 'Projet importé'}</p> : null}
 
             <HelpLabel help={FIELD_HELP.storySummary}>Résumé de l'histoire</HelpLabel>
             <textarea
@@ -1309,7 +1309,7 @@ export default function AiTab({
               placeholder="Résume les événements, révélations et objectifs déjà posés."
             />
             <button type="button" className="secondary-action full" onClick={() => setStorySummary(makeProjectStorySummary(extensionSourceProject))}>
-              Refaire le résumé depuis le projet ?
+              Refaire le résumé depuis le projet
             </button>
 
             <HelpLabel help={FIELD_HELP.sceneChronology}>Chronologie des scènes</HelpLabel>
@@ -1340,7 +1340,7 @@ export default function AiTab({
               setSceneChronology(chronology);
               setContinuationSceneId(getLastSceneIdFromChronology(chronology, extensionSourceProject));
             }}>
-              Reconstruire la chronologie depuis le projet ?
+              Reconstruire la chronologie depuis le projet
             </button>
 
             <HelpLabel help={FIELD_HELP.continuationScene}>Scène de départ détectée</HelpLabel>
@@ -1350,7 +1350,7 @@ export default function AiTab({
               ))}
             </select>
             <button type="button" className="secondary-action full" onClick={() => setContinuationSceneId(getLastSceneIdFromChronology(sceneChronology, extensionSourceProject))}>
-              Utiliser la dernière ligne de la chronologie ?
+              Utiliser la dernière ligne de la chronologie
             </button>
 
             <HelpLabel help={FIELD_HELP.continuationWish}>Ce que tu aimerais pour la suite</HelpLabel>
@@ -1452,10 +1452,10 @@ export default function AiTab({
           </div>
             <div className="ai-panel-actions" data-tour="ai-draft-actions">
             <button type="button" className="secondary-action" disabled={isGenerating && !generatedProject} onClick={clearAiDraft}>
-              Nouveau brouillon ?
+              Nouveau brouillon
             </button>
             <button type="button" className="secondary-action" disabled={!generatedProject} onClick={() => saveDraftNow(true)}>
-              Sauvegarder le brouillon IA ?
+              Sauvegarder le brouillon IA
             </button>
             <button type="button" data-tour="ai-apply-button" disabled={!generatedProject || validation?.ok === false} onClick={applyProject}>Appliquer au projet</button>
           </div>
