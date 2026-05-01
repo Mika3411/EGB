@@ -1160,7 +1160,7 @@ export default function PreviewTab(props) {
                   </>
                 ) : null}
 
-                <div className="inventory-actions inline-actions">
+                <div className="enigma-actions inline-actions">
                   {codeSkin === 'digicode' ? <button type="button" className="secondary-button code-secondary-button" onClick={() => setEnigmaCodeInput('')}>Effacer</button> : null}
                   <button className="code-primary-button" onClick={submitEnigma}>Valider l’énigme</button>
                 </div>
@@ -1316,7 +1316,7 @@ export default function PreviewTab(props) {
                     <p className="small-note">La réponse est acceptée même avec des majuscules différentes ou des mots en plus.</p>
                   </>
                 ) : null}
-                <div className="inventory-actions">
+                <div className="enigma-actions">
                   <button className="code-primary-button" onClick={submitEnigma}>Valider l’énigme</button>
                 </div>
               </div>
