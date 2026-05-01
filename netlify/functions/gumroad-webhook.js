@@ -104,14 +104,14 @@ const getGumroadPack = (body = {}) => {
     (pack.productId && pack.productId === productId)
     || (pack.permalink && pack.permalink.toLowerCase() === permalink)
     || (pack.permalink && productName.includes(pack.permalink.toLowerCase()))
-    || (pack.credits && productName.includes(`pack ${pack.credits}`))
+    || (pack.credits && new RegExp(`\\bpack\\s+${pack.credits}\\b`, 'i').test(productName))
   ));
 };
 
 const findExistingSale = async (supabase, saleId) => {
   const { data, error } = await supabase
     .from('ai_credit_transactions')
-    .select('id, user_id')
+    .select('id, user_id, amount')
     .eq('reason', `gumroad:${saleId}`)
     .maybeSingle();
 
@@ -157,6 +157,22 @@ const reassignExistingSale = async (supabase, existingSale, nextUserId, credits)
   await setCreditBalance(supabase, nextUserId, Number(targetAccount.balance || 0) + credits);
 };
 
+const repairExistingSaleAmount = async (supabase, existingSale, credits) => {
+  const previousAmount = Number(existingSale.amount || 0);
+  const delta = credits - previousAmount;
+  if (!delta) return { repaired: false, delta: 0 };
+
+  const account = await ensureCreditAccount(supabase, existingSale.user_id);
+  const { error: transactionError } = await supabase
+    .from('ai_credit_transactions')
+    .update({ amount: credits })
+    .eq('id', existingSale.id);
+
+  if (transactionError) throw transactionError;
+  await setCreditBalance(supabase, existingSale.user_id, Number(account.balance || 0) + delta);
+  return { repaired: true, delta };
+};
+
 export const handler = async (event) => withErrors(event, async () => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Methode non autorisee.' });
 
@@ -185,6 +201,17 @@ export const handler = async (event) => withErrors(event, async () => {
     if (existingSale.user_id !== userId) {
       await reassignExistingSale(supabase, existingSale, userId, pack.credits);
       return json(200, { ok: true, reassigned: true, saleId, userId, creditsAdded: pack.credits });
+    }
+    const repair = await repairExistingSaleAmount(supabase, existingSale, pack.credits);
+    if (repair.repaired) {
+      return json(200, {
+        ok: true,
+        repaired: true,
+        saleId,
+        userId,
+        creditsAdded: repair.delta,
+        expectedCredits: pack.credits,
+      });
     }
     return json(200, { ok: true, duplicate: true, saleId, userId: existingSale.user_id });
   }

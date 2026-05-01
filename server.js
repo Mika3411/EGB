@@ -590,12 +590,13 @@ const getGumroadUserId = (body = {}) => {
 
 const getGumroadPack = (body = {}) => {
   const productId = String(body.product_id || '').trim();
-  const permalink = String(body.product_permalink || body.permalink || '').trim();
+  const permalink = String(body.product_permalink || body.permalink || '').trim().split('/').filter(Boolean).pop()?.toLowerCase() || '';
   const productName = String(body.product_name || body.product || '').toLowerCase();
   return gumroadPacks.find((pack) => (
     (pack.productId && pack.productId === productId)
-    || (pack.permalink && pack.permalink === permalink)
+    || (pack.permalink && pack.permalink.toLowerCase() === permalink)
     || (pack.permalink && productName.includes(pack.permalink.toLowerCase()))
+    || (pack.credits && new RegExp(`\\bpack\\s+${pack.credits}\\b`, 'i').test(productName))
   ));
 };
 
