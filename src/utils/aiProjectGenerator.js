@@ -294,12 +294,13 @@ Génère uniquement un JSON compatible avec cette structure:
 Contraintes:
 - Thème: ${brief.theme}
 - Difficulté: ${difficultyLabel[brief.difficulty] || brief.difficulty}
-- Actes: ${brief.actCount}
-- Scènes principales: ${brief.sceneCount}
-- Sous-scènes: ${brief.subsceneCount}
-- Objets: ${brief.itemCount}
-- Énigmes: ${brief.enigmaCount}
-- Cinématiques: ${brief.cinematicCount}
+- Actes: exactement ${brief.actCount}
+- Scènes totales maximum: ${brief.sceneCount}. Ne dépasse jamais ce nombre, car chaque scène peut coûter des crédits image à l'utilisateur.
+- Sous-scènes: maximum ${brief.subsceneCount}, incluses dans le total de scènes si tu en utilises.
+- Objets: maximum ${brief.itemCount}. Ne crée pas d'objets supplémentaires.
+- Énigmes: maximum ${brief.enigmaCount}. Ne crée pas d'énigmes supplémentaires.
+- Cinématiques: maximum ${brief.cinematicCount}. Ne crée pas de cinématiques supplémentaires.
+- Les quantités demandées sont un contrat de coût: les dépasser est interdit.
 - Ton: ${brief.tone || 'immersif'}
 - Durée visée: ${brief.duration || '30 minutes'}
 - Les IDs doivent être stables, simples, uniques, sans espaces.
@@ -307,7 +308,7 @@ Contraintes:
 - Chaque item doit avoir un name lisible par un joueur et une icon cohérente.
 - Les zones doivent relier les scènes, objets, énigmes et cinématiques.
 - Les conditions de déblocage doivent utiliser logicRules si une interaction dépend d'un état de jeu.
-- Si Actes = 3 et Scènes principales = 24, produis exactement 8 scènes par acte. Plus généralement, répartis les scènes de façon équilibrée entre les actes.
+- Si Actes = 3 et Scènes totales maximum = 24, produis au plus 8 scènes par acte. Plus généralement, répartis les scènes de façon équilibrée entre les actes sans dépasser le total demandé.
 - Structure chaque acte comme un mini-labyrinthe logique non linéaire: au moins une scène pivot, au moins deux branches, au moins deux scènes reliées à plusieurs autres scènes, et au moins un retour utile vers une scène déjà visitée.
 - Le joueur doit parfois revenir en arrière dans le même acte pour utiliser un objet, une information ou un état obtenu ailleurs.
 - Sépare strictement les actes: une fois l'acte suivant atteint, aucune zone ne doit permettre de revenir à un acte précédent. Les transitions inter-actes doivent être à sens unique dans routeMap.connections avec allowOneWay: true.
@@ -368,6 +369,8 @@ Brief global:
 - Difficulté: ${difficultyLabel[brief.difficulty] || brief.difficulty}
 - Ton: ${brief.tone || 'immersif'}
 - Durée visée: ${brief.duration || '30 minutes'}
+- Plafonds de coût à respecter strictement: ${brief.actCount} acte(s), ${brief.sceneCount} scène(s) maximum, ${brief.itemCount} objet(s) maximum, ${brief.enigmaCount} énigme(s) maximum, ${brief.cinematicCount} cinématique(s) maximum.
+- Ne crée jamais plus de contenu que ces plafonds, car l'utilisateur paiera les images associées.
 
 Projet actuel:
 ${JSON.stringify(compactProjectForPrompt(currentProject || {}), null, 2)}
@@ -857,6 +860,85 @@ const repairDuplicateIds = (rawProject) => {
   return project;
 };
 
+const limitArray = (entries, max) => {
+  const limit = Number(max);
+  if (!Number.isFinite(limit) || limit <= 0 || !Array.isArray(entries)) return entries || [];
+  return entries.slice(0, Math.max(0, Math.round(limit)));
+};
+
+const trimProjectToBriefCounts = (rawProject, brief = {}, mode = 'generate', options = {}) => {
+  if (mode === 'improve' || mode === 'extend' || (mode === 'progressive' && options.stage !== 'act1')) {
+    return rawProject;
+  }
+
+  const project = structuredClone(rawProject || {});
+  const maxActs = toCount(brief.actCount);
+  const maxScenes = toCount(brief.sceneCount);
+  const maxItems = toCount(brief.itemCount);
+  const maxEnigmas = toCount(brief.enigmaCount);
+  const maxCinematics = toCount(brief.cinematicCount);
+
+  project.acts = limitArray(project.acts, maxActs);
+  project.scenes = limitArray(project.scenes, maxScenes);
+  project.items = limitArray(project.items, maxItems);
+  project.enigmas = limitArray(project.enigmas, maxEnigmas);
+  project.cinematics = limitArray(project.cinematics, maxCinematics);
+
+  const actIds = new Set((project.acts || []).map((act) => act.id).filter(Boolean));
+  const sceneIds = new Set((project.scenes || []).map((scene) => scene.id).filter(Boolean));
+  const itemIds = new Set((project.items || []).map((item) => item.id).filter(Boolean));
+  const enigmaIds = new Set((project.enigmas || []).map((enigma) => enigma.id).filter(Boolean));
+  const cinematicIds = new Set((project.cinematics || []).map((cinematic) => cinematic.id).filter(Boolean));
+
+  (project.scenes || []).forEach((scene) => {
+    if (scene.actId && !actIds.has(scene.actId)) scene.actId = project.acts?.[0]?.id || '';
+    if (scene.parentSceneId && !sceneIds.has(scene.parentSceneId)) scene.parentSceneId = '';
+    scene.hotspots = (scene.hotspots || []).map((hotspot) => ({
+      ...hotspot,
+      requiredItemId: itemIds.has(hotspot.requiredItemId) ? hotspot.requiredItemId : '',
+      rewardItemId: itemIds.has(hotspot.rewardItemId) ? hotspot.rewardItemId : '',
+      targetSceneId: sceneIds.has(hotspot.targetSceneId) ? hotspot.targetSceneId : '',
+      targetCinematicId: cinematicIds.has(hotspot.targetCinematicId) ? hotspot.targetCinematicId : '',
+      enigmaId: enigmaIds.has(hotspot.enigmaId) ? hotspot.enigmaId : '',
+      secondRequiredItemId: itemIds.has(hotspot.secondRequiredItemId) ? hotspot.secondRequiredItemId : '',
+      secondRewardItemId: itemIds.has(hotspot.secondRewardItemId) ? hotspot.secondRewardItemId : '',
+      secondTargetSceneId: sceneIds.has(hotspot.secondTargetSceneId) ? hotspot.secondTargetSceneId : '',
+      secondTargetCinematicId: cinematicIds.has(hotspot.secondTargetCinematicId) ? hotspot.secondTargetCinematicId : '',
+      secondEnigmaId: enigmaIds.has(hotspot.secondEnigmaId) ? hotspot.secondEnigmaId : '',
+      logicRules: (hotspot.logicRules || []).map((rule) => ({
+        ...rule,
+        itemId: itemIds.has(rule.itemId) ? rule.itemId : '',
+        rewardItemId: itemIds.has(rule.rewardItemId) ? rule.rewardItemId : '',
+        targetSceneId: sceneIds.has(rule.targetSceneId) ? rule.targetSceneId : '',
+        targetCinematicId: cinematicIds.has(rule.targetCinematicId) ? rule.targetCinematicId : '',
+        enigmaId: enigmaIds.has(rule.enigmaId) ? rule.enigmaId : '',
+        conditionEnigmaId: enigmaIds.has(rule.conditionEnigmaId) ? rule.conditionEnigmaId : '',
+        cinematicId: cinematicIds.has(rule.cinematicId) ? rule.cinematicId : '',
+      })),
+    }));
+  });
+
+  project.combinations = (project.combinations || []).filter((combo) => (
+    itemIds.has(combo.itemAId) && itemIds.has(combo.itemBId) && itemIds.has(combo.resultItemId)
+  ));
+  (project.enigmas || []).forEach((enigma) => {
+    if (enigma.targetSceneId && !sceneIds.has(enigma.targetSceneId)) enigma.targetSceneId = '';
+    if (enigma.targetCinematicId && !cinematicIds.has(enigma.targetCinematicId)) enigma.targetCinematicId = '';
+  });
+  (project.cinematics || []).forEach((cinematic) => {
+    if (cinematic.targetSceneId && !sceneIds.has(cinematic.targetSceneId)) cinematic.targetSceneId = '';
+    if (cinematic.rewardItemId && !itemIds.has(cinematic.rewardItemId)) cinematic.rewardItemId = '';
+  });
+  if (project.start?.targetSceneId && !sceneIds.has(project.start.targetSceneId)) {
+    project.start.targetSceneId = project.scenes?.[0]?.id || '';
+  }
+  if (project.start?.targetCinematicId && !cinematicIds.has(project.start.targetCinematicId)) {
+    project.start.targetCinematicId = '';
+  }
+
+  return project;
+};
+
 const assertExtendPatchAddsRequestedContent = (patch, options = {}) => {
   if (options.mode !== 'extend') return;
   const stage = options.stage || 'continue_story';
@@ -1015,7 +1097,12 @@ export async function generateProjectWithApi(brief, options = {}) {
   if (payload.jobId) {
     payload = await waitForAiJob(payload.jobId, options.userId);
   }
-  const parsed = repairDuplicateIds(repairMissingSceneReferences(repairMissingItemReferences(parseProjectResponse(payload))));
+  const parsed = trimProjectToBriefCounts(
+    repairDuplicateIds(repairMissingSceneReferences(repairMissingItemReferences(parseProjectResponse(payload)))),
+    brief,
+    mode,
+    options,
+  );
   assertProjectHasScenes(parsed, mode);
   const apiRenamed = await repairBadItemNamesWithApi(parsed, options);
   const repaired = repairBadItemNames(apiRenamed);
