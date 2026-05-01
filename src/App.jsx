@@ -198,7 +198,7 @@ function App() {
           selectedSceneId: editor.selectedSceneId,
         });
         if (!isCancelled) {
-          setSaveStatus(hasSupabaseConfig() ? 'SauvegardÃ© dans Supabase' : 'SauvegardÃ© localement');
+          setSaveStatus(hasSupabaseConfig() ? 'Sauvegardé dans Supabase' : 'Sauvegardé localement');
         }
       } catch (error) {
         console.error('Erreur de sauvegarde du projet', error);
@@ -238,13 +238,13 @@ function App() {
       });
 
       callback(publicUrl, file.name);
-      setSaveStatus(`${file.type?.startsWith('video/') ? 'VidÃ©o' : file.type?.startsWith('audio/') ? 'Son' : 'MÃ©dia'} importÃ©${file.type?.startsWith('image/') ? 'e' : ''} dans Supabase : ${file.name}`);
+      setSaveStatus(`${file.type?.startsWith('video/') ? 'Vidéo' : file.type?.startsWith('audio/') ? 'Son' : 'Média'} importé${file.type?.startsWith('image/') ? 'e' : ''} dans Supabase : ${file.name}`);
     } catch (error) {
-      console.error('Erreur import mÃ©dia', error);
+      console.error('Erreur import média', error);
       alert(
         hasSupabaseConfig() ?
-           "Impossible d'envoyer ce fichier vers Supabase Storage. VÃ©rifie le bucket et les policies."
-          : 'Configuration Supabase manquante. Ajoute VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY (ou VITE_SUPABASE_ANON_KEY) et Ã©ventuellement VITE_SUPABASE_STORAGE_BUCKET.',
+           "Impossible d'envoyer ce fichier vers Supabase Storage. Vérifie le bucket et les policies."
+          : 'Configuration Supabase manquante. Ajoute VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY (ou VITE_SUPABASE_ANON_KEY) et éventuellement VITE_SUPABASE_STORAGE_BUCKET.',
       );
     } finally {
       event.target.value = '';
@@ -252,7 +252,7 @@ function App() {
   };
 
   const uploadGalleryThumbnail = async (file) => {
-    if (!file) throw new Error('Aucune miniature Ã  envoyer.');
+    if (!file) throw new Error('Aucune miniature à envoyer.');
 
     if (!hasSupabaseConfig()) {
       return {
@@ -275,7 +275,7 @@ function App() {
 
   const handleDeleteItem = (itemId) => {
     const item = editor.project.items.find((entry) => entry.id === itemId);
-    if (!window.confirm(`Supprimer l'objet "${item?.name || 'sÃ©lectionnÃ©'}" ?`)) return;
+    if (!window.confirm(`Supprimer l'objet "${item?.name || 'sélectionné'}" ?`)) return;
     preview.removeInventoryItemReferences(itemId);
     editor.deleteItem(itemId);
   };
@@ -283,8 +283,8 @@ function App() {
   const handleDeleteScene = (sceneId) => {
     const deletedSceneIds = collectDescendantSceneIds(editor.project.scenes, sceneId);
     const scene = editor.project.scenes.find((entry) => entry.id === sceneId);
-    const suffix = deletedSceneIds.size > 1 ? ` et ses ${deletedSceneIds.size - 1} sous-scÃ¨ne(s)` : '';
-    if (!window.confirm(`Supprimer la scÃ¨ne "${scene?.name || 'sÃ©lectionnÃ©e'}"${suffix} ?`)) return;
+    const suffix = deletedSceneIds.size > 1 ? ` et ses ${deletedSceneIds.size - 1} sous-scène(s)` : '';
+    if (!window.confirm(`Supprimer la scène "${scene?.name || 'sélectionnée'}"${suffix} ?`)) return;
     const remainingScenes = editor.project.scenes.filter((scene) => !deletedSceneIds.has(scene.id));
     const fallbackScene = remainingScenes[0] || null;
     editor.deleteScene(sceneId);
@@ -293,7 +293,7 @@ function App() {
 
   const handleDeleteEnigma = (enigmaId) => {
     const enigma = editor.project.enigmas.find((entry) => entry.id === enigmaId);
-    if (!window.confirm(`Supprimer l'Ã©nigme "${enigma?.name || 'sÃ©lectionnÃ©e'}" ?`)) return;
+    if (!window.confirm(`Supprimer l'énigme "${enigma?.name || 'sélectionnée'}" ?`)) return;
     editor.deleteEnigma(enigmaId);
   };
 
@@ -342,7 +342,7 @@ function App() {
       preview.syncWithProject(projectToLoad);
       hydratedProjectRef.current = projectId || auth.activeProjectId;
       setScreen('editor');
-      setSaveStatus(savedProject ? 'Projet chargÃ©' : 'Nouveau projet');
+      setSaveStatus(savedProject ? 'Projet chargé' : 'Nouveau projet');
       if (options.tutorialTab && projectId) {
         await auth.saveProject(projectToLoad, projectId, {
           tab: resumeTab,
@@ -425,12 +425,12 @@ function App() {
         draft.title = name;
       });
     }
-    setSaveStatus('Projet renommÃ©');
+    setSaveStatus('Projet renommé');
   };
 
   const duplicateProjectFromProfile = async (projectId) => {
     const copy = await auth.duplicateProject(projectId);
-    setSaveStatus(copy ? 'Projet dupliquÃ©' : 'Duplication impossible');
+    setSaveStatus(copy ? 'Projet dupliqué' : 'Duplication impossible');
   };
 
   const deleteProjectFromProfile = async (projectId) => {
@@ -439,7 +439,7 @@ function App() {
       hydratedProjectRef.current = '';
       setScreen('profile');
     }
-    setSaveStatus('Projet supprimÃ©');
+    setSaveStatus('Projet supprimé');
   };
 
   const testProjectFromProfile = async (projectId) => {
@@ -463,11 +463,11 @@ function App() {
       }
       await auth.markProjectLinkCopied(projectId);
       await navigator.clipboard.writeText(url.toString());
-      setSaveStatus('Lien joueur public copiÃ©');
+      setSaveStatus('Lien joueur public copié');
     } catch (error) {
-      console.error('Erreur de gÃ©nÃ©ration du lien jouable', error);
+      console.error('Erreur de génération du lien jouable', error);
       window.prompt('Lien jouable', url.toString());
-      setSaveStatus('Lien joueur public gÃ©nÃ©rÃ©');
+      setSaveStatus('Lien joueur public généré');
     }
   };
 
@@ -479,17 +479,17 @@ function App() {
       });
     }
     await shareProjectFromProfile(projectId);
-    setSaveStatus('Jeu publiÃ© dans la galerie');
+    setSaveStatus('Jeu publié dans la galerie');
   };
 
   const updatePublicSettingsFromProfile = async (projectId, settings) => {
     await auth.updateProjectShareSettings(projectId, settings);
-    setSaveStatus('ParamÃ¨tres publics mis Ã  jour');
+    setSaveStatus('Paramètres publics mis à jour');
   };
 
   const updateAuthorProfileFromProfile = async (profile) => {
     await auth.updateAuthorProfile(profile);
-    setSaveStatus('Profil auteur mis Ã  jour');
+    setSaveStatus('Profil auteur mis à jour');
   };
 
   const openPublicGalleryWindow = () => {
@@ -505,7 +505,7 @@ function App() {
     const parsed = normalizeProject(JSON.parse(text));
     const record = await auth.importProject(parsed, parsed.title || file.name.replace(/\.json$/i, ''));
     if (record?.id) await openProjectInEditor(record.id);
-    setSaveStatus('Projet importÃ©');
+    setSaveStatus('Projet importé');
   };
 
   const importProjectJson = async (event) => {
@@ -516,7 +516,7 @@ function App() {
     editor.loadProject(parsed);
     preview.syncWithProject(parsed);
     if (auth.activeProjectId) await auth.saveProject(parsed, auth.activeProjectId);
-    setSaveStatus('Projet importÃ© et sauvegardÃ©');
+    setSaveStatus('Projet importé et sauvegardé');
     event.target.value = '';
   };
 
@@ -547,7 +547,7 @@ function App() {
         selectedSceneId,
       });
     }
-    setSaveStatus(options.isPatch || options.mode === 'improve' ? 'AmÃ©lioration IA appliquÃ©e' : 'Projet IA appliquÃ©');
+    setSaveStatus(options.isPatch || options.mode === 'improve' ? 'Amélioration IA appliquée' : 'Projet IA appliqué');
     return validation;
   };
 
@@ -566,7 +566,7 @@ function App() {
           selectedSceneId: editor.selectedSceneId,
         });
       }
-      setSaveStatus('Brouillon IA effacÃ©');
+      setSaveStatus('Brouillon IA effacé');
       return null;
     }
     const nextProject = structuredClone(editor.project);
@@ -581,7 +581,7 @@ function App() {
         selectedSceneId: editor.selectedSceneId,
       });
     }
-    setSaveStatus('Brouillon IA sauvegardÃ©');
+    setSaveStatus('Brouillon IA sauvegardé');
     return draft;
   };
 
@@ -620,7 +620,7 @@ function App() {
           };
         }
       } catch (error) {
-        setSaveStatus(`Image gÃ©nÃ©rÃ©e, mais upload Supabase impossible: ${error.message}`);
+        setSaveStatus(`Image générée, mais upload Supabase impossible: ${error.message}`);
       }
     }
 
@@ -674,7 +674,7 @@ function App() {
       });
     }
 
-    setSaveStatus(type === 'scene' ? 'Image de scÃ¨ne sauvegardÃ©e' : 'Image dâ€™objet sauvegardÃ©e');
+    setSaveStatus(type === 'scene' ? 'Image de scène sauvegardée' : "Image d'objet sauvegardée");
     return { project: nextProject, patch: nextPatch };
   };
 
@@ -731,7 +731,7 @@ function App() {
   }
 
   if (!auth.isReady) {
-    return <div className="app-shell"><div className="panel">Chargement du compteâ€¦</div></div>;
+    return <div className="app-shell"><div className="panel">Chargement du compte...</div></div>;
   }
 
   if (!auth.user) {
