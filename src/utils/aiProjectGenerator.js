@@ -463,9 +463,24 @@ const parseProjectResponse = (payload) => {
   if (!payload) throw new Error('Réponse IA vide.');
   if (payload.project) return payload.project;
   if (payload.data?.project) return payload.data.project;
-  if (typeof payload.output_text === 'string') return JSON.parse(payload.output_text);
-  if (typeof payload.text === 'string') return JSON.parse(payload.text);
+  if (typeof payload.output_text === 'string') {
+    const parsed = JSON.parse(payload.output_text);
+    return parsed.project || parsed.data?.project || parsed;
+  }
+  if (typeof payload.text === 'string') {
+    const parsed = JSON.parse(payload.text);
+    return parsed.project || parsed.data?.project || parsed;
+  }
   return payload;
+};
+
+const assertProjectHasScenes = (project, mode = 'generate') => {
+  const sceneCount = Array.isArray(project?.scenes) ? project.scenes.length : 0;
+  if (mode === 'improve' || mode === 'extend') return;
+  if (sceneCount > 0) return;
+  const error = new Error('La génération IA a renvoyé un projet sans scène. Les crédits doivent être remboursés automatiquement.');
+  error.code = 'AI_PROJECT_WITHOUT_SCENES';
+  throw error;
 };
 
 const wait = (delay) => new Promise((resolve) => setTimeout(resolve, delay));
@@ -930,6 +945,7 @@ export async function generateProjectWithApi(brief, options = {}) {
     payload = await waitForAiJob(payload.jobId, options.userId);
   }
   const parsed = repairMissingSceneReferences(repairMissingItemReferences(parseProjectResponse(payload)));
+  assertProjectHasScenes(parsed, mode);
   const apiRenamed = await repairBadItemNamesWithApi(parsed, options);
   const repaired = repairBadItemNames(apiRenamed);
   assertExtendPatchAddsRequestedContent(repaired, { ...options, mode });

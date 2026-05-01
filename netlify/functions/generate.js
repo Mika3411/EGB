@@ -8,6 +8,7 @@ import {
   getSupabaseAdminClient,
   json,
   openaiFetch,
+  parseOpenAiProjectJson,
   parseBody,
   refundCredits,
   spendCredits,
@@ -92,11 +93,11 @@ export const handler = async (event) => withErrors(event, async () => {
 
     if (body.responseFormat === 'escape-game-project-json') {
       try {
-        JSON.parse(outputText);
+        parseOpenAiProjectJson(outputText);
       } catch {
         const error = new Error('OpenAI a renvoye un JSON invalide ou incomplet. Credits rembourses.');
         error.statusCode = 502;
-        error.code = 'AI_INVALID_JSON';
+        error.code = 'AI_INVALID_PROJECT_JSON';
         throw error;
       }
     }

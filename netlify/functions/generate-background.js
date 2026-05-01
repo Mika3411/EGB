@@ -8,6 +8,7 @@ import {
   getSupabaseAdminClient,
   json,
   openaiFetch,
+  parseOpenAiProjectJson,
   parseBody,
   refundCredits,
   spendCredits,
@@ -58,7 +59,7 @@ export const handler = async (event) => {
     }
 
     if (body.responseFormat === 'escape-game-project-json') {
-      JSON.parse(outputText);
+      parseOpenAiProjectJson(outputText);
     }
 
     const account = await ensureCreditAccount(supabase, userId);

@@ -325,6 +325,40 @@ export const extractOutputText = (payload = {}) => {
   return chunks.join('\n').trim();
 };
 
+export const parseOpenAiProjectJson = (outputText = '') => {
+  const raw = String(outputText || '').trim();
+  if (!raw) {
+    const error = new Error('OpenAI a renvoye un texte vide.');
+    error.statusCode = 502;
+    error.code = 'AI_EMPTY_OUTPUT';
+    throw error;
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) {
+      const error = new Error('OpenAI a renvoye un JSON introuvable.');
+      error.statusCode = 502;
+      error.code = 'AI_INVALID_JSON';
+      throw error;
+    }
+    parsed = JSON.parse(match[0]);
+  }
+
+  const project = parsed.project || parsed.data?.project || parsed;
+  if (!Array.isArray(project.scenes) || project.scenes.length < 1) {
+    const error = new Error('OpenAI a renvoye un projet sans scene. Credits rembourses.');
+    error.statusCode = 502;
+    error.code = 'AI_PROJECT_WITHOUT_SCENES';
+    throw error;
+  }
+
+  return project;
+};
+
 export const withErrors = async (event, callback) => {
   if (event.httpMethod === 'OPTIONS') return optionsResponse();
   try {
