@@ -854,6 +854,14 @@ export default function AiTab({
     sceneVisualConstraints[scene.id] || makeSceneVisualConstraints(scene, previewCandidate || project)
   );
 
+  const assertPlayableAiCandidate = (candidate) => {
+    if (!Array.isArray(candidate?.scenes) || candidate.scenes.length < 1) {
+      const error = new Error('Le brouillon IA ne contient aucune scène exploitable. Relance la génération.');
+      error.code = 'AI_PROJECT_WITHOUT_SCENES';
+      throw error;
+    }
+  };
+
   const generate = async () => {
     const generationCost = getTextGenerationCreditCost(mode);
     if (!hasEnoughAiCredits('text', generationCost)) {
@@ -874,6 +882,7 @@ export default function AiTab({
       });
       const baseline = mode === 'improve' ? project : {};
       const nextProject = result.isPatch ? mergeProjectPatch(project, result.project) : result.project;
+      assertPlayableAiCandidate(nextProject);
       setGeneratedWithHistory(nextProject, mode === 'improve' ? 'Amélioration scène' : 'Génération initiale', baseline);
       setIsPatch(false);
       validateCandidate(nextProject, false);
@@ -917,6 +926,7 @@ export default function AiTab({
       const nextProject = result.isPatch ?
          mergeProjectPatch(previewCandidate || project, result.project)
         : result.project;
+      assertPlayableAiCandidate(nextProject);
       setGeneratedWithHistory(nextProject, stageLabel, previewCandidate || project);
       setIsPatch(false);
       validateCandidate(nextProject, false);
