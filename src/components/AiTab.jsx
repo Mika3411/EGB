@@ -588,9 +588,14 @@ export default function AiTab({
   const getTextGenerationCreditCost = (targetMode = mode, stage = '') => {
     if (targetMode === 'generate') return calculateProjectGenerationCreditCost();
     if (targetMode === 'progressive') {
+      if (stage === 'improveAct1') return Number(aiCredits.costs?.improve ?? 5);
       const stageBrief = getProgressiveStageBrief(stage || 'act1');
       return stageBrief ? calculateBriefCreditCost(stageBrief) : Number(aiCredits.costs?.text ?? 2);
     }
+    if (targetMode === 'extend') {
+      return stage && stage !== 'enrich_interactions' ? calculateBriefCreditCost(brief) : Number(aiCredits.costs?.text ?? 2);
+    }
+    if (targetMode === 'improve') return Number(aiCredits.costs?.improve ?? 5);
     return Number(aiCredits.costs?.text ?? 2);
   };
   const hasEnoughAiCredits = (kind, costOverride = null) => (
@@ -600,7 +605,10 @@ export default function AiTab({
     const cost = costOverride ?? getAiCreditCost(kind);
     return `Crédits IA insuffisants: ${aiCredits.balance || 0}/${cost}.`;
   };
-  const currentTextGenerationCost = getTextGenerationCreditCost(mode, mode === 'progressive' ? 'act1' : '');
+  const currentTextGenerationCost = getTextGenerationCreditCost(
+    mode,
+    mode === 'progressive' ? 'act1' : mode === 'extend' ? 'continue_story' : '',
+  );
   const canRunTextAi = !aiCredits.isLoading && hasEnoughAiCredits('text', currentTextGenerationCost);
   const canRunImageAi = !aiCredits.isLoading && hasEnoughAiCredits('image');
   const canRunObjectImageAi = !aiCredits.isLoading && hasEnoughAiCredits('objectImage');
@@ -1041,7 +1049,7 @@ export default function AiTab({
   };
 
   const extendExistingProject = async (stage) => {
-    const generationCost = getTextGenerationCreditCost('extend');
+    const generationCost = getTextGenerationCreditCost('extend', stage);
     if (!hasEnoughAiCredits('text', generationCost)) {
       setStatus(aiCreditMessage('text', generationCost));
       return;
@@ -1677,6 +1685,8 @@ export default function AiTab({
           </>
         ) : mode === 'extend' ? (
           <>
+            {briefForm}
+
             <HelpLabel help={FIELD_HELP.source}>Source</HelpLabel>
             <div className="segmented-control compact">
               <button type="button" className={extendSource === 'current' ? 'active' : ''} onClick={() => setExtendSource('current')}>Projet actuel</button>
@@ -1760,22 +1770,20 @@ export default function AiTab({
             ) : null}
 
             <div className="ai-progressive-steps">
-              <button type="button" disabled={isGenerating || !canRunTextAi} onClick={() => extendExistingProject('continue_story')}>
-                <strong>→ Continuer l’histoire</strong>
-                <span>suite cohérente · {formatCreditCost(getTextGenerationCreditCost('extend'))}</span>
-              </button>
-              <button type="button" disabled={isGenerating || !canRunTextAi} onClick={() => extendExistingProject('add_scenes')}>
-                <strong>→ Ajouter des scènes</strong>
-                <span>sans casser · {formatCreditCost(getTextGenerationCreditCost('extend'))}</span>
-              </button>
-              <button type="button" disabled={isGenerating || !canRunTextAi} onClick={() => extendExistingProject('add_enigmas')}>
-                <strong>→ Ajouter des énigmes</strong>
-                <span>références valides · {formatCreditCost(getTextGenerationCreditCost('extend'))}</span>
-              </button>
-              <button type="button" disabled={isGenerating || !canRunTextAi} onClick={() => extendExistingProject('enrich_interactions')}>
-                <strong>→ Enrichir les interactions</strong>
-                <span>zones + objets · {formatCreditCost(getTextGenerationCreditCost('extend'))}</span>
-              </button>
+              {[
+                ['continue_story', '→ Continuer l’histoire', 'suite cohérente'],
+                ['add_scenes', '→ Ajouter des scènes', 'sans casser'],
+                ['add_enigmas', '→ Ajouter des énigmes', 'références valides'],
+                ['enrich_interactions', '→ Enrichir les interactions', 'zones + objets'],
+              ].map(([stage, label, detail]) => {
+                const cost = getTextGenerationCreditCost('extend', stage);
+                return (
+                  <button type="button" key={stage} disabled={isGenerating || aiCredits.isLoading || !hasEnoughAiCredits('text', cost)} onClick={() => extendExistingProject(stage)}>
+                    <strong>{label}</strong>
+                    <span>{detail} · {formatCreditCost(cost)}</span>
+                  </button>
+                );
+              })}
             </div>
           </>
         ) : (

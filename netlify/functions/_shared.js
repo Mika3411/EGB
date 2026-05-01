@@ -4,6 +4,7 @@ export const ADMIN_EMAIL = 'thorez.m@hotmail.fr';
 
 export const aiCreditCosts = {
   text: Number(process.env.AI_TEXT_CREDIT_COST || 2),
+  improve: Number(process.env.AI_IMPROVE_CREDIT_COST || 5),
   image: Number(process.env.AI_IMAGE_CREDIT_COST || 5),
   objectImageBatchSize: Number(process.env.AI_OBJECT_IMAGE_BATCH_SIZE || 1),
   objectImageBatchCost: Number(process.env.AI_OBJECT_IMAGE_BATCH_COST || 3),
@@ -41,7 +42,9 @@ export const calculateTextCreditCost = (body = {}) => (
   body.mode === 'repair_item_names' ? 0
     : body.mode === 'generate'
       || (body.mode === 'progressive' && ['act1', 'act2', 'act2_continuity'].includes(body.stage))
+      || (body.mode === 'extend' && body.stage !== 'enrich_interactions')
       ? calculateProjectGenerationCost(body.brief || {})
+      : body.mode === 'improve' || (body.mode === 'progressive' && body.stage === 'improveAct1') ? aiCreditCosts.improve
       : aiCreditCosts.text
 );
 
