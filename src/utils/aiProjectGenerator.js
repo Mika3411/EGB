@@ -786,6 +786,77 @@ const repairMissingSceneReferences = (rawProject) => {
   return project;
 };
 
+const uniqueId = (baseId, usedIds) => {
+  const base = String(baseId || 'id').trim().replace(/[^a-zA-Z0-9_-]+/g, '_') || 'id';
+  if (!usedIds.has(base)) {
+    usedIds.add(base);
+    return base;
+  }
+  let index = 2;
+  let candidate = `${base}_${index}`;
+  while (usedIds.has(candidate)) {
+    index += 1;
+    candidate = `${base}_${index}`;
+  }
+  usedIds.add(candidate);
+  return candidate;
+};
+
+const repairDuplicateIds = (rawProject) => {
+  const project = structuredClone(rawProject || {});
+  const usedIds = new Set();
+  const hotspotIdMap = new Map();
+  const ruleIdMap = new Map();
+
+  (project.acts || []).forEach((act) => {
+    act.id = uniqueId(act.id || 'act', usedIds);
+  });
+  (project.items || []).forEach((item) => {
+    item.id = uniqueId(item.id || 'item', usedIds);
+  });
+  (project.cinematics || []).forEach((cinematic) => {
+    cinematic.id = uniqueId(cinematic.id || 'cinematic', usedIds);
+    (cinematic.slides || []).forEach((slide) => {
+      slide.id = uniqueId(slide.id || `${cinematic.id}_slide`, usedIds);
+    });
+  });
+  (project.enigmas || []).forEach((enigma) => {
+    enigma.id = uniqueId(enigma.id || 'enigma', usedIds);
+  });
+  (project.combinations || []).forEach((combo) => {
+    combo.id = uniqueId(combo.id || 'combination', usedIds);
+  });
+  (project.scenes || []).forEach((scene) => {
+    scene.id = uniqueId(scene.id || 'scene', usedIds);
+    (scene.hotspots || []).forEach((hotspot) => {
+      const previousId = hotspot.id;
+      hotspot.id = uniqueId(hotspot.id || `${scene.id}_hotspot`, usedIds);
+      if (previousId && previousId !== hotspot.id && !hotspotIdMap.has(previousId)) {
+        hotspotIdMap.set(previousId, hotspot.id);
+      }
+      (hotspot.logicRules || []).forEach((rule) => {
+        const previousRuleId = rule.id;
+        rule.id = uniqueId(rule.id || `${hotspot.id}_rule`, usedIds);
+        if (previousRuleId && previousRuleId !== rule.id && !ruleIdMap.has(previousRuleId)) {
+          ruleIdMap.set(previousRuleId, rule.id);
+        }
+      });
+    });
+  });
+
+  const mapHotspotId = (id) => hotspotIdMap.get(id) || id;
+  (project.scenes || []).forEach((scene) => {
+    (scene.hotspots || []).forEach((hotspot) => {
+      hotspot.requiredHotspotId = mapHotspotId(hotspot.requiredHotspotId);
+      (hotspot.logicRules || []).forEach((rule) => {
+        rule.hotspotId = mapHotspotId(rule.hotspotId);
+      });
+    });
+  });
+
+  return project;
+};
+
 const assertExtendPatchAddsRequestedContent = (patch, options = {}) => {
   if (options.mode !== 'extend') return;
   const stage = options.stage || 'continue_story';
@@ -944,7 +1015,7 @@ export async function generateProjectWithApi(brief, options = {}) {
   if (payload.jobId) {
     payload = await waitForAiJob(payload.jobId, options.userId);
   }
-  const parsed = repairMissingSceneReferences(repairMissingItemReferences(parseProjectResponse(payload)));
+  const parsed = repairDuplicateIds(repairMissingSceneReferences(repairMissingItemReferences(parseProjectResponse(payload))));
   assertProjectHasScenes(parsed, mode);
   const apiRenamed = await repairBadItemNamesWithApi(parsed, options);
   const repaired = repairBadItemNames(apiRenamed);
