@@ -546,17 +546,17 @@ const gumroadPacks = [
   {
     credits: Number(process.env.GUMROAD_PACK_250_CREDITS || 250),
     productId: process.env.GUMROAD_PACK_250_PRODUCT_ID || '',
-    permalink: process.env.GUMROAD_PACK_250_PERMALINK || '',
+    permalink: process.env.GUMROAD_PACK_250_PERMALINK || 'lvnjan',
   },
   {
     credits: Number(process.env.GUMROAD_PACK_500_CREDITS || 500),
     productId: process.env.GUMROAD_PACK_500_PRODUCT_ID || '',
-    permalink: process.env.GUMROAD_PACK_500_PERMALINK || '',
+    permalink: process.env.GUMROAD_PACK_500_PERMALINK || 'ojrsxa',
   },
   {
     credits: Number(process.env.GUMROAD_PACK_1000_CREDITS || 1000),
     productId: process.env.GUMROAD_PACK_1000_PRODUCT_ID || '',
-    permalink: process.env.GUMROAD_PACK_1000_PERMALINK || '',
+    permalink: process.env.GUMROAD_PACK_1000_PERMALINK || 'zyedcq',
   },
 ].filter((pack) => pack.credits > 0);
 

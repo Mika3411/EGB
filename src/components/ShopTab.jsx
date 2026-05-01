@@ -10,10 +10,10 @@ const parsePack = (value, fallback) => {
 };
 
 const defaultPacks = [
-  { credits: 100, price: '3,99 €', url: import.meta.env.VITE_GUMROAD_PACK_100_URL || '' },
-  { credits: 250, price: '9,49 €', url: import.meta.env.VITE_GUMROAD_PACK_250_URL || '' },
-  { credits: 500, price: '17,99 €', url: import.meta.env.VITE_GUMROAD_PACK_500_URL || '' },
-  { credits: 1000, price: '33,99 €', url: import.meta.env.VITE_GUMROAD_PACK_1000_URL || '' },
+  { credits: 100, price: '3,99 €', url: import.meta.env.VITE_GUMROAD_PACK_100_URL || 'https://mickalicious77.gumroad.com/l/blfvpj' },
+  { credits: 250, price: '9,49 €', url: import.meta.env.VITE_GUMROAD_PACK_250_URL || 'https://mickalicious77.gumroad.com/l/lvnjan' },
+  { credits: 500, price: '17,99 €', url: import.meta.env.VITE_GUMROAD_PACK_500_URL || 'https://mickalicious77.gumroad.com/l/ojrsxa' },
+  { credits: 1000, price: '33,99 €', url: import.meta.env.VITE_GUMROAD_PACK_1000_URL || 'https://mickalicious77.gumroad.com/l/zyedcq' },
 ].map((fallback, index) => parsePack(import.meta.env[`VITE_GUMROAD_PACK_${index + 1}`], fallback));
 
 const estimateProjects = (credits) => Math.max(1, Math.floor(Number(credits || 0) / 36));
@@ -29,7 +29,7 @@ export default function ShopTab({ user }) {
       await navigator.clipboard.writeText(purchaseId);
       setCopyStatus('Identifiant copié.');
     } catch {
-      setCopyStatus('Copie impossible, sélectionne l’identifiant manuellement.');
+      setCopyStatus("Copie impossible, sélectionne l'identifiant manuellement.");
     }
   };
 
@@ -50,7 +50,7 @@ export default function ShopTab({ user }) {
           <span className="status-badge soft">Gumroad</span>
         </div>
         <p className="small-note">
-          Achète un pack de crédits puis garde le même compte dans l’application. L’identifiant ci-dessous permet de retrouver ton achat.
+          Achète un pack de crédits puis garde le même compte dans l'application. L'identifiant ci-dessous permet de retrouver ton achat.
         </p>
 
         <div className="shop-identity-panel">
@@ -62,8 +62,8 @@ export default function ShopTab({ user }) {
 
         <div className="combo-card shop-info-card">
           <strong>Repères</strong>
-          <p>Un projet comme l’exemple récent consomme environ 36 crédits hors images.</p>
-          <p>Miniature économique d’objet: 1 crédit. Image d’objet détaillée: 3 crédits. Image de scène: 5 crédits.</p>
+          <p>Un projet comme l'exemple récent consomme environ 36 crédits hors images.</p>
+          <p>Miniature économique d'objet: 1 crédit. Image d'objet détaillée: 3 crédits. Image de scène: 5 crédits.</p>
         </div>
       </section>
 
@@ -92,7 +92,7 @@ export default function ShopTab({ user }) {
         <div className="combo-card shop-afterbuy-card">
           <h3>Après paiement</h3>
           <p>
-            Les crédits sont ajoutés au compte associé à ton identifiant d’achat. Si le crédit n’apparaît pas tout de suite, envoie ton identifiant et le reçu Gumroad{supportEmail ? ` à ${supportEmail}` : ' au support'}.
+            Les crédits sont ajoutés au compte associé à ton identifiant d'achat. Si le crédit n'apparaît pas tout de suite, envoie ton identifiant et le reçu Gumroad{supportEmail ? ` à ${supportEmail}` : ' au support'}.
           </p>
         </div>
       </section>
