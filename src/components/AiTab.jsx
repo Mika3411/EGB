@@ -1450,14 +1450,14 @@ export default function AiTab({
         </div>
         <div data-tour="ai-credits" className={`ai-credit-panel ${aiCredits.balance != null && aiCredits.balance < currentTextGenerationCost ? 'low' : ''}`}>
           <div>
-            <span className="section-kicker">CrÃ©dits IA</span>
+            <span className="section-kicker">Crédits IA</span>
             <strong>{aiCredits.isLoading ? '...' : `${aiCredits.balance ?? 0}`}</strong>
           </div>
           <button type="button" className="secondary-action" onClick={refreshAiCredits} disabled={aiCredits.isLoading}>
             Actualiser
           </button>
           <p>
-            Projet: {calculateProjectGenerationCreditCost()} crÃ©dits Â· Texte: {Number(aiCredits.costs?.text ?? 2)} crÃ©dits Â· ScÃ¨ne: {getAiCreditCost('image')} crÃ©dits Â· Objet dÃ©taillÃ©: {formatCreditCost(getAiCreditCost('objectImage'))} Â· Miniature Ã©co: {formatCreditCost(getAiCreditCost('objectThumbnail'))}
+            Projet: {calculateProjectGenerationCreditCost()} crédits · Texte: {Number(aiCredits.costs?.text ?? 2)} crédits · Scène: {getAiCreditCost('image')} crédits · Objet détaillé: {formatCreditCost(getAiCreditCost('objectImage'))} · Miniature éco: {formatCreditCost(getAiCreditCost('objectThumbnail'))}
           </p>
           <p className="ai-current-cost">
             Prochaine génération ({mode === 'generate' ? 'projet complet' : mode === 'progressive' ? 'étape progressive' : mode === 'extend' ? 'continuer/enrichir' : 'amélioration'}): <strong>{formatCreditCost(currentTextGenerationCost)}</strong>

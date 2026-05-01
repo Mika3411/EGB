@@ -1,8 +1,8 @@
 import {
   ensureCreditAccount,
-  getCreditUserId,
   getSupabaseAdminClient,
   json,
+  normalizeEmail,
   normalizeCreditAccount,
   withErrors,
 } from './_shared.js';
@@ -76,6 +76,23 @@ const getGumroadUserId = (body = {}) => {
     || '';
 };
 
+const getGumroadBuyerEmail = (body = {}) => normalizeEmail(body.email || body.email_address || body.buyer_email || '');
+
+const resolveSupabaseUserIdByEmail = async (supabase, email) => {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return '';
+
+  const { data, error } = await supabase.auth.admin.listUsers({
+    page: 1,
+    perPage: 1000,
+  });
+  if (error) throw error;
+
+  return (data.users || []).find((user) => normalizeEmail(user.email) === normalizedEmail)?.id || '';
+};
+
+const sanitizeCreditUserId = (value = '') => String(value).trim().replace(/[^a-zA-Z0-9._:@-]/g, '-') || 'anonymous';
+
 const normalizePermalink = (value = '') => String(value).trim().split('/').filter(Boolean).pop() || '';
 
 const getGumroadPack = (body = {}) => {
@@ -94,7 +111,7 @@ const getGumroadPack = (body = {}) => {
 const findExistingSale = async (supabase, saleId) => {
   const { data, error } = await supabase
     .from('ai_credit_transactions')
-    .select('id')
+    .select('id, user_id')
     .eq('reason', `gumroad:${saleId}`)
     .maybeSingle();
 
@@ -117,14 +134,17 @@ export const handler = async (event) => withErrors(event, async () => {
   const pack = getGumroadPack(body);
   if (!pack) return json(400, { ok: false, error: 'Pack Gumroad inconnu.' });
 
-  const userId = getCreditUserId(event, { userId: getGumroadUserId(body) });
+  const supabase = getSupabaseAdminClient();
+  const gumroadUserId = getGumroadUserId(body);
+  const resolvedUserId = await resolveSupabaseUserIdByEmail(supabase, getGumroadBuyerEmail(body));
+  const userId = sanitizeCreditUserId(resolvedUserId || gumroadUserId);
   if (!userId || userId === 'anonymous') {
     return json(400, { ok: false, error: 'Identifiant utilisateur manquant.' });
   }
 
-  const supabase = getSupabaseAdminClient();
-  if (await findExistingSale(supabase, saleId)) {
-    return json(200, { ok: true, duplicate: true, saleId, userId });
+  const existingSale = await findExistingSale(supabase, saleId);
+  if (existingSale) {
+    return json(200, { ok: true, duplicate: true, saleId, userId: existingSale.user_id });
   }
 
   const account = await ensureCreditAccount(supabase, userId);
