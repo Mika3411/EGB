@@ -19,6 +19,37 @@ export const aiCreditCosts = {
 
 export const defaultAiCredits = Number(process.env.AI_DEFAULT_CREDITS || 20);
 
+export const toCount = (value) => {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  return Math.max(0, Math.round(number));
+};
+
+export const calculateProjectGenerationCost = (brief = {}) => {
+  const units = aiCreditCosts.projectGeneration;
+  return Math.max(1, Math.ceil(
+    toCount(brief.actCount) * units.act
+    + toCount(brief.sceneCount) * units.scene
+    + toCount(brief.enigmaCount) * units.enigma
+    + toCount(brief.cinematicCount) * units.cinematic
+    + toCount(brief.itemCount) * units.item,
+  ));
+};
+
+export const calculateTextCreditCost = (body = {}) => (
+  body.mode === 'repair_item_names' ? 0
+    : body.mode === 'generate' ? calculateProjectGenerationCost(body.brief || {})
+      : aiCreditCosts.text
+);
+
+export const calculateImageCreditCost = (account = {}, body = {}) => {
+  if (body.type !== 'item') return aiCreditCosts.image;
+  if (body.variant === 'thumbnail') return aiCreditCosts.objectThumbnail;
+  const batchSize = Math.max(1, toCount(aiCreditCosts.objectImageBatchSize) || 1);
+  const usedInBatch = toCount(account.object_images_in_current_batch);
+  return usedInBatch % batchSize === 0 ? aiCreditCosts.objectImageBatchCost : 0;
+};
+
 export const normalizeEmail = (value = '') => String(value).trim().toLowerCase();
 
 export const json = (statusCode, payload) => ({
@@ -153,6 +184,117 @@ export const getRecentTransactions = async (supabase, userId) => {
   }));
 };
 
+export const addCreditTransaction = async (supabase, userId, transaction = {}) => {
+  const { error } = await supabase.from('ai_credit_transactions').insert({
+    user_id: userId,
+    type: transaction.type || 'spend',
+    amount: Number(transaction.amount || 0),
+    reason: transaction.reason || '',
+    created_at: transaction.createdAt || new Date().toISOString(),
+  });
+  if (error) throw error;
+};
+
+export const updateCreditAccount = async (supabase, userId, patch = {}) => {
+  const { data, error } = await supabase
+    .from('ai_credits')
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq('user_id', userId)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+export const spendCredits = async (supabase, userId, amount, reason) => {
+  const account = await ensureCreditAccount(supabase, userId);
+  const cost = Math.max(0, Math.round(Number(amount || 0)));
+  if (cost <= 0) return account;
+  if (Number(account.balance || 0) < cost) {
+    const error = new Error('Credits IA insuffisants.');
+    error.statusCode = 402;
+    error.code = 'AI_CREDITS_INSUFFICIENT';
+    error.balance = Number(account.balance || 0);
+    error.required = cost;
+    throw error;
+  }
+
+  const updated = await updateCreditAccount(supabase, userId, {
+    balance: Number(account.balance || 0) - cost,
+  });
+  await addCreditTransaction(supabase, userId, {
+    type: 'spend',
+    amount: -cost,
+    reason,
+  });
+  return updated;
+};
+
+export const refundCredits = async (supabase, userId, amount, reason) => {
+  const cost = Math.max(0, Math.round(Number(amount || 0)));
+  if (cost <= 0) return ensureCreditAccount(supabase, userId);
+  const account = await ensureCreditAccount(supabase, userId);
+  const updated = await updateCreditAccount(supabase, userId, {
+    balance: Number(account.balance || 0) + cost,
+  });
+  await addCreditTransaction(supabase, userId, {
+    type: 'refund',
+    amount: cost,
+    reason,
+  });
+  return updated;
+};
+
+export const commitImageCreditUsage = async (supabase, userId, body = {}) => {
+  const account = await ensureCreditAccount(supabase, userId);
+  if (body.type !== 'item' || body.variant === 'thumbnail') return account;
+  const batchSize = Math.max(1, toCount(aiCreditCosts.objectImageBatchSize) || 1);
+  return updateCreditAccount(supabase, userId, {
+    object_images_in_current_batch: (toCount(account.object_images_in_current_batch) + 1) % batchSize,
+  });
+};
+
+export const openaiFetch = async (path, body) => {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    const error = new Error('OPENAI_API_KEY manquant.');
+    error.statusCode = 500;
+    throw error;
+  }
+
+  const response = await fetch(`https://api.openai.com/v1/${path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  const text = await response.text();
+  const payload = text ? JSON.parse(text) : {};
+  if (!response.ok) {
+    const message = payload?.error?.message || `Erreur OpenAI ${response.status}.`;
+    const error = new Error(message);
+    error.statusCode = response.status;
+    throw error;
+  }
+  return payload;
+};
+
+export const extractOutputText = (payload = {}) => {
+  if (payload.output_text) return payload.output_text;
+  const chunks = [];
+  for (const item of payload.output || []) {
+    for (const content of item.content || []) {
+      if (content.type === 'output_text' && content.text) chunks.push(content.text);
+      if (content.type === 'text' && content.text) chunks.push(content.text);
+    }
+  }
+  return chunks.join('\n').trim();
+};
+
 export const withErrors = async (event, callback) => {
   if (event.httpMethod === 'OPTIONS') return optionsResponse();
   try {
@@ -161,6 +303,8 @@ export const withErrors = async (event, callback) => {
     return json(error.statusCode || error.status || 500, {
       error: error.message || 'Erreur serveur.',
       code: error.code,
+      balance: error.balance,
+      required: error.required,
     });
   }
 };
