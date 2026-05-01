@@ -88,6 +88,7 @@ body.game-fullscreen .inventory-drawer__backdrop{position:fixed;inset:0;z-index:
 .scene-player{position:relative;aspect-ratio:var(--scene-aspect,1.6);border-radius:24px;overflow:hidden;background:#020617;border:1px solid rgba(148,163,184,.12)}
 .scene-player img.bg{width:100%;height:100%;object-fit:cover;display:block}
 .scene-timer-hud{position:absolute;top:14px;right:14px;z-index:32;display:flex;align-items:center;gap:10px;min-height:38px;padding:8px 11px;border-radius:8px;color:#fff;background:rgba(2,6,23,.72);border:1px solid rgba(255,255,255,.14);box-shadow:0 14px 34px rgba(0,0,0,.28);backdrop-filter:blur(10px);pointer-events:none}.scene-timer-hud strong{font-variant-numeric:tabular-nums;font-size:18px;line-height:1}.scene-timer-hud span{color:#cbd7ea;font-size:12px;white-space:nowrap}
+.act-preload-overlay{position:absolute;inset:0;z-index:120;display:grid;place-items:center;padding:24px;background:rgba(2,6,23,.86);backdrop-filter:blur(10px);pointer-events:auto}.act-preload-card{width:min(420px,88%);display:grid;gap:12px;padding:22px;border-radius:8px;color:#f8fbff;background:rgba(8,16,30,.94);border:1px solid rgba(148,163,184,.22);box-shadow:0 28px 80px rgba(0,0,0,.42)}.act-preload-card strong{font-size:22px;line-height:1.15}.act-preload-card small{color:#cbd7ea}.act-preload-bar{height:12px;overflow:hidden;border-radius:999px;background:rgba(15,23,42,.92);border:1px solid rgba(147,197,253,.22)}.act-preload-bar span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#38bdf8,#4ade80);transition:width .18s ease}
 .scene-transition-overlay{position:absolute;inset:0;z-index:90;pointer-events:none;overflow:hidden;background:#020617}
 .scene-transition-overlay img,.scene-transition-overlay .placeholder{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;animation:sceneTransitionFadeOut var(--scene-transition-duration,700ms) ease both}
 .scene-transition-overlay--slide-left img,.scene-transition-overlay--slide-left .placeholder{animation-name:sceneTransitionSlideLeft}
@@ -233,6 +234,8 @@ let sceneTransitionTimer = null;
 let sceneTimerInterval = null;
 let activeSceneTimerKey = '';
 let expiredSceneTimerKey = '';
+let loadedActId = '';
+let actPreloadRunId = 0;
 
 const PREVIEW_COLOR_OPTIONS = ${serializedColorOptions};
 const POPUP_OVERLAY_GRADIENTS = ${serializedPopupOverlayGradients};
@@ -272,6 +275,7 @@ const DEFAULT_STATE = () => {
     usedLogicRuleIds: [],
     removedSceneObjectIds: [],
     sceneTransitionOverlay: null,
+    actPreload: { active: false, progress: 100, label: '' },
     sceneTimerRemaining: 0,
     simonPlaybackIndex: -1,
     simonPlayerTurn: false,
@@ -372,6 +376,7 @@ function loadGame(manual = false) {
       state.dialogue = 'Sauvegarde chargée.';
     }
 
+    beginActPreload(getPlayScene());
     render(false);
     return true;
   } catch (error) {
@@ -668,6 +673,166 @@ function getFirstSceneForAct(actId) {
   return actScenes.find((scene) => !scene.parentSceneId) || actScenes[0];
 }
 
+function isPreloadableUrl(value) {
+  return typeof value === 'string' && value.trim() && !value.startsWith('#');
+}
+
+function addPreloadUrl(set, value) {
+  if (isPreloadableUrl(value)) set.add(value);
+}
+
+function collectSceneMedia(scene, imageUrls, audioUrls) {
+  if (!scene) return;
+  addPreloadUrl(imageUrls, scene.backgroundData);
+  addPreloadUrl(audioUrls, scene.musicData);
+  (scene.sceneObjects || []).forEach((object) => {
+    addPreloadUrl(imageUrls, object.imageData);
+    addPreloadUrl(imageUrls, object.popupImageData || object.popupImage);
+  });
+  (scene.hotspots || []).forEach((spot) => {
+    addPreloadUrl(imageUrls, spot.objectImageData);
+    addPreloadUrl(imageUrls, spot.secondObjectImageData);
+    addPreloadUrl(audioUrls, spot.soundData);
+  });
+}
+
+function collectCinematicMedia(cinematic, imageUrls, audioUrls, videoUrls) {
+  if (!cinematic) return;
+  addPreloadUrl(videoUrls, cinematic.videoData);
+  (cinematic.slides || []).forEach((slide) => {
+    addPreloadUrl(imageUrls, slide.imageData);
+    addPreloadUrl(audioUrls, slide.audioData);
+  });
+}
+
+function collectActMedia(actId) {
+  const imageUrls = new Set();
+  const audioUrls = new Set();
+  const videoUrls = new Set();
+  const enigmaIds = new Set();
+  const cinematicIds = new Set();
+  const itemIds = new Set();
+  const scenes = (project.scenes || []).filter((scene) => (scene.actId || '') === (actId || ''));
+
+  scenes.forEach((scene) => {
+    collectSceneMedia(scene, imageUrls, audioUrls);
+    if (scene.timerTargetCinematicId) cinematicIds.add(scene.timerTargetCinematicId);
+    (scene.sceneObjects || []).forEach((object) => {
+      if (object.linkedItemId) itemIds.add(object.linkedItemId);
+    });
+    (scene.hotspots || []).forEach((spot) => {
+      if (spot.enigmaId) enigmaIds.add(spot.enigmaId);
+      if (spot.targetCinematicId) cinematicIds.add(spot.targetCinematicId);
+      if (spot.secondEnigmaId) enigmaIds.add(spot.secondEnigmaId);
+      if (spot.secondTargetCinematicId) cinematicIds.add(spot.secondTargetCinematicId);
+      if (spot.rewardItemId) itemIds.add(spot.rewardItemId);
+      if (spot.secondRewardItemId) itemIds.add(spot.secondRewardItemId);
+      (spot.logicRules || []).forEach((rule) => {
+        if (rule.enigmaId) enigmaIds.add(rule.enigmaId);
+        if (rule.targetCinematicId) cinematicIds.add(rule.targetCinematicId);
+        if (rule.rewardItemId) itemIds.add(rule.rewardItemId);
+      });
+    });
+  });
+
+  (project.enigmas || []).forEach((enigma) => {
+    if (!enigmaIds.has(enigma.id)) return;
+    addPreloadUrl(imageUrls, enigma.imageData);
+    addPreloadUrl(imageUrls, enigma.popupBackgroundData);
+    if (enigma.targetCinematicId) cinematicIds.add(enigma.targetCinematicId);
+  });
+  (project.cinematics || []).forEach((cinematic) => {
+    if (cinematicIds.has(cinematic.id)) collectCinematicMedia(cinematic, imageUrls, audioUrls, videoUrls);
+  });
+  (project.items || []).forEach((item) => {
+    if (itemIds.has(item.id) || scenes.length === 0) addPreloadUrl(imageUrls, item.imageData);
+  });
+
+  return {
+    imageUrls: Array.from(imageUrls),
+    audioUrls: Array.from(audioUrls),
+    videoUrls: Array.from(videoUrls),
+  };
+}
+
+function preloadImageUrl(url) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = resolve;
+    image.onerror = resolve;
+    image.src = url;
+    if (image.decode) image.decode().then(resolve).catch(resolve);
+  });
+}
+
+function preloadMediaUrl(url, tagName) {
+  return new Promise((resolve) => {
+    const node = document.createElement(tagName);
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(timeoutId);
+      node.oncanplaythrough = null;
+      node.onloadeddata = null;
+      node.onerror = null;
+      node.removeAttribute('src');
+      node.load();
+      resolve();
+    };
+    const timeoutId = setTimeout(finish, 8000);
+    node.preload = 'auto';
+    node.oncanplaythrough = finish;
+    node.onloadeddata = finish;
+    node.onerror = finish;
+    node.src = url;
+    node.load();
+  });
+}
+
+function beginActPreload(scene) {
+  const actId = scene?.actId || '';
+  if (loadedActId === actId) return false;
+  loadedActId = actId;
+  const act = (project.acts || []).find((entry) => entry.id === actId);
+  const label = act?.name || scene?.name || 'Acte suivant';
+  const media = collectActMedia(actId);
+  const tasks = [
+    ...media.imageUrls.map((url) => () => preloadImageUrl(url)),
+    ...media.audioUrls.map((url) => () => preloadMediaUrl(url, 'audio')),
+    ...media.videoUrls.map((url) => () => preloadMediaUrl(url, 'video')),
+  ];
+
+  if (!tasks.length) {
+    state.actPreload = { active: false, progress: 100, label };
+    return false;
+  }
+
+  const runId = ++actPreloadRunId;
+  let completed = 0;
+  state.actPreload = { active: true, progress: 0, label };
+  stopSceneTimer();
+
+  Promise.all(tasks.map((runTask) => (
+    runTask().catch(() => {}).then(() => {
+      if (runId !== actPreloadRunId) return;
+      completed += 1;
+      state.actPreload = {
+        active: completed < tasks.length,
+        progress: Math.round((completed / tasks.length) * 100),
+        label,
+      };
+      render(false);
+    })
+  ))).then(() => {
+    if (runId !== actPreloadRunId) return;
+    state.actPreload = { active: false, progress: 100, label };
+    render(false);
+  });
+
+  return true;
+}
+
 function goToScene(sceneId, fallbackText = 'Nouvelle scène.') {
   const nextScene = getSceneById(sceneId);
   if (!nextScene) return false;
@@ -681,8 +846,10 @@ function goToScene(sceneId, fallbackText = 'Nouvelle scène.') {
     };
   }
   if (currentScene?.id !== nextScene.id) expiredSceneTimerKey = '';
+  const changesAct = (currentScene?.actId || '') !== (nextScene.actId || '');
   state.playSceneId = nextScene.id;
   state.dialogue = nextScene.introText || fallbackText;
+  if (changesAct) beginActPreload(nextScene);
   return true;
 }
 
@@ -1794,6 +1961,7 @@ function render(shouldSave = true) {
   const currentSlide = getCurrentSlide();
   const enigma = state.activeEnigma?.enigma || null;
   const sceneAspectRatio = Number(playScene?.backgroundAspectRatio) > 0 ? Number(playScene.backgroundAspectRatio) : 1.6;
+  if (!hasRenderedOnce && !loadedActId) loadedActId = playScene?.actId || '';
 
   root.innerHTML = '<div class="layout">'
     + '<section class="panel main">'
@@ -1820,6 +1988,9 @@ function render(shouldSave = true) {
         '<img src="' + state.sceneTransitionOverlay.scene.backgroundData + '" alt="" />'
         : '<div class="placeholder">Scene precedente</div>')
       + '</div>' : '')
+    + (state.actPreload?.active ? '<div class="act-preload-overlay" role="status" aria-live="polite"><div class="act-preload-card"><span class="eyebrow">Chargement</span><strong>'
+      + safeHtml(state.actPreload.label || 'Acte suivant') + '</strong><div class="act-preload-bar" aria-label="Chargement ' + safeHtml(state.actPreload.progress || 0) + '%"><span style="width:'
+      + safeHtml(state.actPreload.progress || 0) + '%"></span></div><small>' + safeHtml(state.actPreload.progress || 0) + '% des medias de l\\'acte sont prets</small></div></div>' : '')
     + '</div><div class="inventory-actions"><button id="reset-preview">Recommencer</button></div></section>'
 
     + '<section class="panel side">'
@@ -1858,8 +2029,13 @@ function render(shouldSave = true) {
 
   bindEvents();
   syncFullscreenUi();
-  playSceneMusic();
-  scheduleSceneTimer();
+  if (state.actPreload?.active) {
+    sceneAudio.pause();
+    stopSceneTimer();
+  } else {
+    playSceneMusic();
+    scheduleSceneTimer();
+  }
   if (sceneTransitionTimer) {
     clearTimeout(sceneTransitionTimer);
     sceneTransitionTimer = null;

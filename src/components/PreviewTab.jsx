@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { COLOR_OPTIONS, POPUP_OVERLAY_GRADIENTS } from '../data/enigmaConfig';
 import { CODE_KEYPAD_KEYS } from '../data/playerConfig';
 import { parseJsonValue } from '../lib/gameEngine';
@@ -23,7 +23,7 @@ const formatTimerSeconds = (seconds = 0) => {
   return `${String(minutes).padStart(2, '0')}:${String(remaining).padStart(2, '0')}`;
 };
 
-const isPreloadableUrl = (value) => typeof value === 'string' && /^https?:\/\//i.test(value);
+const isPreloadableUrl = (value) => typeof value === 'string' && value.trim() && !value.startsWith('#');
 
 const addUrl = (set, value) => {
   if (isPreloadableUrl(value)) set.add(value);
@@ -43,6 +43,102 @@ const collectSceneMediaUrls = (scene, imageUrls, audioUrls) => {
     addUrl(audioUrls, spot.soundData);
   });
 };
+
+const collectCinematicMediaUrls = (cinematic, imageUrls, audioUrls, videoUrls) => {
+  if (!cinematic) return;
+  addUrl(videoUrls, cinematic.videoData);
+  (cinematic.slides || []).forEach((slide) => {
+    addUrl(imageUrls, slide.imageData);
+    addUrl(audioUrls, slide.audioData);
+  });
+};
+
+const collectActMediaUrls = (project, actId) => {
+  const imageUrls = new Set();
+  const audioUrls = new Set();
+  const videoUrls = new Set();
+  const enigmaIds = new Set();
+  const cinematicIds = new Set();
+  const itemIds = new Set();
+  const scenes = (project.scenes || []).filter((scene) => (scene.actId || '') === (actId || ''));
+
+  scenes.forEach((scene) => {
+    collectSceneMediaUrls(scene, imageUrls, audioUrls);
+    if (scene.timerTargetCinematicId) cinematicIds.add(scene.timerTargetCinematicId);
+    (scene.sceneObjects || []).forEach((object) => {
+      if (object.linkedItemId) itemIds.add(object.linkedItemId);
+    });
+    (scene.hotspots || []).forEach((spot) => {
+      if (spot.enigmaId) enigmaIds.add(spot.enigmaId);
+      if (spot.targetCinematicId) cinematicIds.add(spot.targetCinematicId);
+      if (spot.secondEnigmaId) enigmaIds.add(spot.secondEnigmaId);
+      if (spot.secondTargetCinematicId) cinematicIds.add(spot.secondTargetCinematicId);
+      if (spot.rewardItemId) itemIds.add(spot.rewardItemId);
+      if (spot.secondRewardItemId) itemIds.add(spot.secondRewardItemId);
+      (spot.logicRules || []).forEach((rule) => {
+        if (rule.enigmaId) enigmaIds.add(rule.enigmaId);
+        if (rule.targetCinematicId) cinematicIds.add(rule.targetCinematicId);
+        if (rule.rewardItemId) itemIds.add(rule.rewardItemId);
+      });
+    });
+  });
+
+  (project.enigmas || []).forEach((enigma) => {
+    if (!enigmaIds.has(enigma.id)) return;
+    addUrl(imageUrls, enigma.imageData);
+    addUrl(imageUrls, enigma.popupBackgroundData);
+    if (enigma.targetCinematicId) cinematicIds.add(enigma.targetCinematicId);
+  });
+
+  (project.cinematics || []).forEach((cinematic) => {
+    if (cinematicIds.has(cinematic.id)) collectCinematicMediaUrls(cinematic, imageUrls, audioUrls, videoUrls);
+  });
+
+  (project.items || []).forEach((item) => {
+    if (itemIds.has(item.id) || scenes.length === 0) addUrl(imageUrls, item.imageData);
+  });
+
+  return {
+    imageUrls: Array.from(imageUrls),
+    audioUrls: Array.from(audioUrls),
+    videoUrls: Array.from(videoUrls),
+  };
+};
+
+const preloadImage = (url) => new Promise((resolve) => {
+  const image = new Image();
+  image.decoding = 'async';
+  image.onload = () => resolve();
+  image.onerror = () => resolve();
+  image.src = url;
+  if (image.decode) image.decode().then(resolve).catch(resolve);
+});
+
+const preloadMediaElement = (url, tagName = 'audio') => new Promise((resolve) => {
+  const node = document.createElement(tagName);
+  let isDone = false;
+  const done = () => {
+    if (isDone) return;
+    isDone = true;
+    node.oncanplaythrough = null;
+    node.onloadeddata = null;
+    node.onerror = null;
+    node.removeAttribute('src');
+    node.load();
+    resolve();
+  };
+  const timeoutId = window.setTimeout(done, 8000);
+  const finish = () => {
+    window.clearTimeout(timeoutId);
+    done();
+  };
+  node.preload = 'auto';
+  node.oncanplaythrough = finish;
+  node.onloadeddata = finish;
+  node.onerror = finish;
+  node.src = url;
+  node.load();
+});
 
 export default function PreviewTab(props) {
   const {
@@ -112,6 +208,7 @@ export default function PreviewTab(props) {
   const sceneTimerIntervalRef = useRef(null);
   const expiredSceneTimerKeyRef = useRef('');
   const onSceneTimerEndRef = useRef(onSceneTimerEnd);
+  const loadedActIdRef = useRef(playScene?.actId || '');
   const mediaPreloadRef = useRef({ images: [], audios: [] });
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -122,6 +219,7 @@ export default function PreviewTab(props) {
   const [isNarrationCollapsed, setIsNarrationCollapsed] = useState(false);
   const [sceneTransitionOverlay, setSceneTransitionOverlay] = useState(null);
   const [sceneTimerRemaining, setSceneTimerRemaining] = useState(0);
+  const [actPreloadStatus, setActPreloadStatus] = useState({ isLoading: false, progress: 100, label: '' });
   const [debugInventoryItemId, setDebugInventoryItemId] = useState(project.items?.[0]?.id || '');
   const sceneAspectRatio = Number(loadedSceneAspectRatio || playScene?.backgroundAspectRatio) > 0 ?
      Number(loadedSceneAspectRatio || playScene.backgroundAspectRatio)
@@ -134,6 +232,50 @@ export default function PreviewTab(props) {
   useEffect(() => {
     setLoadedSceneAspectRatio(0);
   }, [playScene?.id, playScene?.backgroundData]);
+
+  useLayoutEffect(() => {
+    const nextActId = playScene?.actId || '';
+    if (!playScene?.id || loadedActIdRef.current === nextActId) return undefined;
+
+    let isCancelled = false;
+    const act = (project.acts || []).find((entry) => entry.id === nextActId);
+    const label = act?.name || playScene.name || 'Acte suivant';
+    const media = collectActMediaUrls(project, nextActId);
+    const tasks = [
+      ...media.imageUrls.map((url) => () => preloadImage(url)),
+      ...media.audioUrls.map((url) => () => preloadMediaElement(url, 'audio')),
+      ...media.videoUrls.map((url) => () => preloadMediaElement(url, 'video')),
+    ];
+
+    loadedActIdRef.current = nextActId;
+
+    if (!tasks.length) {
+      setActPreloadStatus({ isLoading: false, progress: 100, label });
+      return undefined;
+    }
+
+    let completed = 0;
+    setActPreloadStatus({ isLoading: true, progress: 0, label });
+
+    Promise.all(tasks.map((runTask) => (
+      runTask().catch(() => {}).then(() => {
+        completed += 1;
+        if (!isCancelled) {
+          setActPreloadStatus({
+            isLoading: completed < tasks.length,
+            progress: Math.round((completed / tasks.length) * 100),
+            label,
+          });
+        }
+      })
+    ))).then(() => {
+      if (!isCancelled) setActPreloadStatus({ isLoading: false, progress: 100, label });
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [playScene?.id, playScene?.actId, playScene?.name, project]);
 
   useEffect(() => {
     mediaPreloadRef.current.audios.forEach((audio) => {
@@ -193,7 +335,7 @@ export default function PreviewTab(props) {
     }
 
     const timerSeconds = Number(playScene?.timerSeconds) || 0;
-    if (!playScene?.timerEnabled || timerSeconds <= 0) {
+    if (actPreloadStatus.isLoading || !playScene?.timerEnabled || timerSeconds <= 0) {
       setSceneTimerRemaining(0);
       expiredSceneTimerKeyRef.current = '';
       return undefined;
@@ -234,6 +376,7 @@ export default function PreviewTab(props) {
     playScene?.timerTargetSceneId,
     playScene?.timerTargetCinematicId,
     sceneTimerResetKey,
+    actPreloadStatus.isLoading,
   ]);
 
   useEffect(() => {
@@ -295,7 +438,7 @@ export default function PreviewTab(props) {
   };
 
   useEffect(() => {
-    const nextMusicData = playScene?.musicData || '';
+    const nextMusicData = actPreloadStatus.isLoading ? '' : playScene?.musicData || '';
     const nextLoop = playScene?.musicLoop !== false;
     const nextVolume = typeof playScene?.musicVolume === 'number' ? playScene.musicVolume : 0.5;
 
@@ -332,7 +475,7 @@ export default function PreviewTab(props) {
     sceneAudioSourceRef.current = nextMusicData;
 
     return undefined;
-  }, [playScene?.musicData, playScene?.musicLoop, playScene?.musicVolume]);
+  }, [playScene?.musicData, playScene?.musicLoop, playScene?.musicVolume, actPreloadStatus.isLoading]);
 
   useEffect(() => () => {
     if (transitionTimerRef.current) {
@@ -660,6 +803,19 @@ export default function PreviewTab(props) {
               </div>
             </div>
           )}
+
+          {actPreloadStatus.isLoading ? (
+            <div className="act-preload-overlay" role="status" aria-live="polite">
+              <div className="act-preload-card">
+                <span className="eyebrow">Chargement</span>
+                <strong>{actPreloadStatus.label}</strong>
+                <div className="act-preload-bar" aria-label={`Chargement ${actPreloadStatus.progress}%`}>
+                  <span style={{ width: `${actPreloadStatus.progress}%` }} />
+                </div>
+                <small>{actPreloadStatus.progress}% des medias de l'acte sont prets</small>
+              </div>
+            </div>
+          ) : null}
 
           {sceneTransitionOverlay ? (
             <div
