@@ -1728,20 +1728,15 @@ export default function AiTab({
             ) : null}
 
             <div className="ai-progressive-steps">
-              {[
-                ['continue_story', '→ Continuer l’histoire', 'suite cohérente'],
-                ['add_scenes', '→ Ajouter des scènes', 'sans casser'],
-                ['add_enigmas', '→ Ajouter des énigmes', 'références valides'],
-                ['enrich_interactions', '→ Enrichir les interactions', 'zones + objets'],
-              ].map(([stage, label, detail]) => {
-                const cost = getTextGenerationCreditCost('extend', stage);
+              {(() => {
+                const cost = getTextGenerationCreditCost('extend', 'continue_story');
                 return (
-                  <button type="button" key={stage} disabled={isGenerating || aiCredits.isLoading || !hasEnoughAiCredits('text', cost)} onClick={() => extendExistingProject(stage)}>
-                    <strong>{label}</strong>
-                    <span>{detail} · {formatCreditCost(cost)}</span>
+                  <button type="button" disabled={isGenerating || aiCredits.isLoading || !hasEnoughAiCredits('text', cost)} onClick={() => extendExistingProject('continue_story')}>
+                    <strong>→ Continuer l’histoire</strong>
+                    <span>suite cohérente · {formatCreditCost(cost)}</span>
                   </button>
                 );
-              })}
+              })()}
             </div>
           </>
         ) : (
