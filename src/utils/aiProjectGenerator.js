@@ -361,8 +361,9 @@ ${PLAYABILITY_AND_COHERENCE_RULES}
 };
 
 const makeProgressivePrompt = (brief, { currentProject, stage, enrichmentType }) => `
-Tu es un concepteur d'escape game narratif.
-Génération progressive demandée: ${stage}.
+  Tu es un concepteur d'escape game narratif.
+  Génération progressive demandée: ${stage}.
+  Numéro d'acte à produire: ${String(stage || '').match(/^act(\d+)$/)?.[1] || '1'}.
 
 Brief global:
 - Thème: ${brief.theme}
@@ -372,22 +373,19 @@ Brief global:
 - Plafonds de coût à respecter strictement: ${brief.actCount} acte(s), ${brief.sceneCount} scène(s) maximum, ${brief.itemCount} objet(s) maximum, ${brief.enigmaCount} énigme(s) maximum, ${brief.cinematicCount} cinématique(s) maximum.
 - Ne crée jamais plus de contenu que ces plafonds, car l'utilisateur paiera les images associées.
 
-Projet actuel:
-${JSON.stringify(compactProjectForPrompt(currentProject || {}), null, 2)}
-
-Règles:
-- Étape act1: crée une base jouable pour l'Acte 1.
-- Étape improveAct1: conserve la structure de l'Acte 1 existant et raffine seulement textes, dialogues, indices et ambiance.
-- Étape act2: ajoute seulement l'Acte 2 et ses scènes, objets, énigmes, cinématiques utiles.
-- Étape act2_continuity: continue l'histoire en respectant strictement l'Acte 1. Ne crée pas de contradictions.
-- Étape enrich: enrichis le projet existant sans casser la structure. Type d'enrichissement: ${enrichmentType || 'dialogues, détails visuels et interactions'}.
-- En act1, crée déjà une structure non linéaire dans l'acte: scène pivot, branches, retour utile, objets et indices placés avant leurs usages.
-- En act2 et act2_continuity, le passage depuis l'acte précédent doit être à sens unique: ne crée aucun lien de retour vers l'acte précédent.
-- En add/enrich, si tu ajoutes routeMap ou modifies des zones de navigation, mets à jour les connexions concernées.
-- En add/enrich, si tu ajoutes une scène, donne-lui imagePrompt et instructions.
-- En add/enrich, si tu ajoutes un objet ou une cinématique, donne aussi item.imagePrompt ou slide.imagePrompt.
-- En improveAct1, act2, act2_continuity et enrich, réponds avec un JSON partiel compatible patch.
-- Conserve les IDs existants et ne crée aucune référence invalide.
+  Projet actuel:
+  ${JSON.stringify(compactProjectForPrompt(currentProject || {}), null, 2)}
+  
+  Règles:
+  - Étape act1: crée uniquement l'Acte 1 comme projet jouable de départ.
+  - Étape act2, act3, act4, etc.: ajoute uniquement l'acte demandé et ses scènes, objets, énigmes, cinématiques utiles.
+  - Pour tout acte après l'Acte 1, réponds avec un JSON partiel compatible patch.
+  - Chaque acte doit avoir une structure non linéaire: scène pivot, branches, retour utile, objets et indices placés avant leurs usages.
+  - Le passage depuis l'acte précédent doit être à sens unique: ne crée aucun lien de retour vers l'acte précédent.
+  - Si tu ajoutes routeMap ou modifies des zones de navigation, mets à jour les connexions concernées.
+  - Si tu ajoutes une scène, donne-lui imagePrompt et instructions.
+  - Si tu ajoutes un objet ou une cinématique, donne aussi item.imagePrompt ou slide.imagePrompt.
+  - Conserve les IDs existants et ne crée aucune référence invalide.
 ${PLAYABILITY_AND_COHERENCE_RULES}
 - Réponds uniquement avec le JSON, sans Markdown.
 `.trim();
@@ -1271,88 +1269,30 @@ export function improveProjectLocally(currentProject, target, instruction) {
 
 export function generateProgressiveProjectLocally(brief, options = {}) {
   const stage = options.stage || 'act1';
-  const currentProject = options.currentProject || {};
+  const actNumber = Number(String(stage).match(/^act(\d+)$/)?.[1] || 1);
 
-  if (stage === 'act1') {
-    const project = generateProjectLocally({
-      ...brief,
-      actCount: 1,
-      sceneCount: Math.max(2, Math.ceil(Number(brief.sceneCount || 6) / 2)),
-      subsceneCount: Math.max(1, Math.floor(Number(brief.subsceneCount || 2) / 2)),
-      itemCount: Math.max(3, Math.ceil(Number(brief.itemCount || 8) / 2)),
-      enigmaCount: Math.max(1, Math.ceil(Number(brief.enigmaCount || 4) / 2)),
-      cinematicCount: Math.max(1, Math.ceil(Number(brief.cinematicCount || 2) / 2)),
-    });
-    project.acts[0].name = 'Acte 1';
+  if (/^act\d+$/.test(stage)) {
+    const project = generateProjectLocally({ ...brief, actCount: 1 });
+    project.acts[0].name = `Acte ${actNumber}`;
     project.title = `Escape game progressif - ${brief.theme || 'Mystère'}`;
-    return project;
-  }
-
-  if (stage === 'improveAct1') {
-    const act1Id = currentProject.acts?.[0]?.id;
+    project.scenes.forEach((scene) => {
+      scene.name = scene.name.replace('Lieu', `Acte ${actNumber} - Lieu`);
+      if (actNumber > 1) {
+        scene.introText = `${scene.introText} Cette partie continue directement les découvertes de l’Acte ${actNumber - 1}, sans contradiction, et révèle une nouvelle couche du mystère.`;
+      }
+    });
+    if (actNumber === 1) return project;
     return {
-      scenes: (currentProject.scenes || [])
-        .filter((scene) => !act1Id || scene.actId === act1Id)
-        .map((scene) => ({
-          ...scene,
-          introText: `${scene.introText || ''}\n\nL’ambiance devient plus précise: chaque objet semble avoir été laissé là pour une raison, et le joueur comprend mieux la menace qui s’installe.`.trim(),
-          hotspots: (scene.hotspots || []).map((hotspot) => ({
-            ...hotspot,
-            dialogue: hotspot.dialogue ?
-               `${hotspot.dialogue} Un détail supplémentaire rend cette piste plus claire.`
-              : 'Un détail discret attire l’attention et renforce la cohérence de l’Acte 1.',
-          })),
-        })),
+      acts: project.acts,
+      scenes: project.scenes,
+      items: project.items,
+      combinations: project.combinations,
+      enigmas: project.enigmas,
+      cinematics: project.cinematics,
     };
   }
 
-  if (stage === 'act2' || stage === 'act2_continuity') {
-    const generated = generateProjectLocally({
-      ...brief,
-      actCount: 1,
-      sceneCount: Math.max(2, Math.floor(Number(brief.sceneCount || 6) / 2)),
-      subsceneCount: Math.max(1, Math.ceil(Number(brief.subsceneCount || 2) / 2)),
-      itemCount: Math.max(3, Math.floor(Number(brief.itemCount || 8) / 2)),
-      enigmaCount: Math.max(1, Math.floor(Number(brief.enigmaCount || 4) / 2)),
-      cinematicCount: Math.max(1, Math.floor(Number(brief.cinematicCount || 2) / 2)),
-    });
-    generated.acts[0].name = 'Acte 2';
-    generated.scenes.forEach((scene) => {
-      scene.name = scene.name.replace('Lieu', 'Acte 2 - Lieu');
-      scene.introText = `${scene.introText} Cette partie continue directement les découvertes de l’Acte 1, sans contradiction, et révèle une nouvelle couche du mystère.`;
-    });
-    return {
-      acts: generated.acts,
-      scenes: generated.scenes,
-      items: generated.items,
-      combinations: generated.combinations,
-      enigmas: generated.enigmas,
-      cinematics: generated.cinematics,
-    };
-  }
-
-  const enrichmentType = options.enrichmentType || 'all';
-  const scenes = (currentProject.scenes || []).slice(0, 8).map((scene, index) => ({
-    ...scene,
-    introText: enrichmentType === 'visual' || enrichmentType === 'all' ?
-       `${scene.introText || ''}\n\nDétail visuel: un élément du décor renforce la tension et donne une direction plus claire aux joueurs.`.trim()
-      : scene.introText,
-    hotspots: (scene.hotspots || []).map((hotspot, hotspotIndex) => ({
-      ...hotspot,
-      dialogue: enrichmentType === 'dialogues' || enrichmentType === 'all' ?
-         (hotspot.dialogue ?
-           `${hotspot.dialogue} ${hotspotIndex === 0 ? 'Un détail discret confirme que cette piste est importante.' : 'Cette interaction prend maintenant plus de sens dans l’ensemble.'}`
-          : `Un détail lié à ${brief.theme || 'l’histoire'} attire l’attention.`)
-        : hotspot.dialogue,
-      placementStatus: hotspot.placementStatus || 'needs_visual_review',
-      logicRules: enrichmentType === 'interactions' || enrichmentType === 'all' ?
-         (hotspot.logicRules || [])
-        : hotspot.logicRules,
-    })),
-    aiEnrichmentNote: `Enrichissement narratif ${index + 1}`,
-  }));
-
-  return { scenes };
+  return {};
 }
 
 export function extendProjectLocally(brief, options = {}) {

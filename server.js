@@ -67,10 +67,10 @@ const calculateProjectGenerationCost = (brief = {}) => {
 const calculateTextCreditCost = (body = {}) => (
   body.mode === 'repair_item_names' ? 0
     : body.mode === 'generate'
-      || (body.mode === 'progressive' && ['act1', 'act2', 'act2_continuity'].includes(body.stage))
+      || (body.mode === 'progressive' && /^act\d+$/.test(String(body.stage || '')))
       || (body.mode === 'extend' && body.stage !== 'enrich_interactions')
       ? calculateProjectGenerationCost(body.brief || {})
-      : body.mode === 'improve' || (body.mode === 'progressive' && body.stage === 'improveAct1') ? aiCreditCosts.improve
+      : body.mode === 'improve' ? aiCreditCosts.improve
       : aiCreditCosts.text
 );
 
