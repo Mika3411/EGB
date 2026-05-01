@@ -1,19 +1,34 @@
 import { useMemo, useState } from 'react';
 
+const PACK_URLS = {
+  100: 'https://mickalicious77.gumroad.com/l/blfvpj',
+  250: 'https://mickalicious77.gumroad.com/l/lvnjan',
+  500: 'https://mickalicious77.gumroad.com/l/ojrsxa',
+  1000: 'https://mickalicious77.gumroad.com/l/zyedcq',
+};
+
+const isConfiguredUrl = (value = '') => {
+  const url = String(value || '').trim();
+  return url && !url.toUpperCase().includes('YOUR_GUMROAD');
+};
+
+const getPackUrl = (credits, value) => (isConfiguredUrl(value) ? String(value).trim() : PACK_URLS[credits] || '');
+
 const parsePack = (value, fallback) => {
-  const [credits, price, url] = String(value || '').split('|').map((entry) => entry.trim());
+  const [creditsValue, price, url] = String(value || '').split('|').map((entry) => entry.trim());
+  const credits = Number(creditsValue || fallback.credits);
   return {
-    credits: Number(credits || fallback.credits),
+    credits,
     price: price || fallback.price,
-    url: url || fallback.url,
+    url: getPackUrl(credits, url || fallback.url),
   };
 };
 
 const defaultPacks = [
-  { credits: 100, price: '3,99 €', url: import.meta.env.VITE_GUMROAD_PACK_100_URL || 'https://mickalicious77.gumroad.com/l/blfvpj' },
-  { credits: 250, price: '9,49 €', url: import.meta.env.VITE_GUMROAD_PACK_250_URL || 'https://mickalicious77.gumroad.com/l/lvnjan' },
-  { credits: 500, price: '17,99 €', url: import.meta.env.VITE_GUMROAD_PACK_500_URL || 'https://mickalicious77.gumroad.com/l/ojrsxa' },
-  { credits: 1000, price: '33,99 €', url: import.meta.env.VITE_GUMROAD_PACK_1000_URL || 'https://mickalicious77.gumroad.com/l/zyedcq' },
+  { credits: 100, price: '3,99 \u20ac', url: import.meta.env.VITE_GUMROAD_PACK_100_URL || PACK_URLS[100] },
+  { credits: 250, price: '9,49 \u20ac', url: import.meta.env.VITE_GUMROAD_PACK_250_URL || PACK_URLS[250] },
+  { credits: 500, price: '17,99 \u20ac', url: import.meta.env.VITE_GUMROAD_PACK_500_URL || PACK_URLS[500] },
+  { credits: 1000, price: '33,99 \u20ac', url: import.meta.env.VITE_GUMROAD_PACK_1000_URL || PACK_URLS[1000] },
 ].map((fallback, index) => parsePack(import.meta.env[`VITE_GUMROAD_PACK_${index + 1}`], fallback));
 
 const estimateProjects = (credits) => Math.max(1, Math.floor(Number(credits || 0) / 36));
@@ -27,9 +42,9 @@ export default function ShopTab({ user }) {
   const copyPurchaseId = async () => {
     try {
       await navigator.clipboard.writeText(purchaseId);
-      setCopyStatus('Identifiant copié.');
+      setCopyStatus('Identifiant copie.');
     } catch {
-      setCopyStatus("Copie impossible, sélectionne l'identifiant manuellement.");
+      setCopyStatus("Copie impossible, selectionne l'identifiant manuellement.");
     }
   };
 
@@ -50,7 +65,7 @@ export default function ShopTab({ user }) {
           <span className="status-badge soft">Gumroad</span>
         </div>
         <p className="small-note">
-          Achète un pack de crédits puis garde le même compte dans l'application. L'identifiant ci-dessous permet de retrouver ton achat.
+          Achete un pack de credits puis garde le meme compte dans l'application. L'identifiant ci-dessous permet de retrouver ton achat.
         </p>
 
         <div className="shop-identity-panel">
@@ -61,16 +76,16 @@ export default function ShopTab({ user }) {
         </div>
 
         <div className="combo-card shop-info-card">
-          <strong>Repères</strong>
-          <p>Un projet comme l'exemple récent consomme environ 36 crédits hors images.</p>
-          <p>Miniature économique d'objet: 1 crédit. Image d'objet détaillée: 3 crédits. Image de scène: 5 crédits.</p>
+          <strong>Reperes</strong>
+          <p>Un projet comme l'exemple recent consomme environ 36 credits hors images.</p>
+          <p>Miniature economique d'objet: 1 credit. Image d'objet detaillee: 3 credits. Image de scene: 5 credits.</p>
         </div>
       </section>
 
       <section className="panel main">
         <div className="panel-head">
           <div>
-            <span className="section-kicker">Crédits IA</span>
+            <span className="section-kicker">Credits IA</span>
             <h2>Packs disponibles</h2>
           </div>
         </div>
@@ -79,20 +94,20 @@ export default function ShopTab({ user }) {
           {packs.map((pack) => (
             <article className="shop-pack-card" key={pack.credits}>
               <span className="section-kicker">Pack</span>
-              <h3>{pack.credits} crédits</h3>
+              <h3>{pack.credits} credits</h3>
               <strong>{pack.price}</strong>
               <p>Environ {estimateProjects(pack.credits)} projet{estimateProjects(pack.credits) > 1 ? 's' : ''} complet{estimateProjects(pack.credits) > 1 ? 's' : ''}, hors images.</p>
               <button type="button" disabled={!pack.url} onClick={() => openPack(pack)}>
-                {pack.url ? 'Acheter sur Gumroad' : 'Lien Gumroad à configurer'}
+                {pack.url ? 'Acheter ce pack' : 'Pack indisponible'}
               </button>
             </article>
           ))}
         </div>
 
         <div className="combo-card shop-afterbuy-card">
-          <h3>Après paiement</h3>
+          <h3>Apres paiement</h3>
           <p>
-            Les crédits sont ajoutés au compte associé à ton identifiant d'achat. Si le crédit n'apparaît pas tout de suite, envoie ton identifiant et le reçu Gumroad{supportEmail ? ` à ${supportEmail}` : ' au support'}.
+            Les credits sont ajoutes au compte associe a ton identifiant d'achat. Si le credit n'apparait pas tout de suite, envoie ton identifiant et le recu Gumroad{supportEmail ? ` a ${supportEmail}` : ' au support'}.
           </p>
         </div>
       </section>
