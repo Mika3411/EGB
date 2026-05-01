@@ -536,7 +536,8 @@ export default function AiTab({
       setAiCredits((previous) => ({ ...previous, isLoading: false, error: error.message || 'Crédits indisponibles.' }));
     }
   }, [aiUserId]);
-  const calculateProjectGenerationCreditCost = () => {
+  const countCreditUnits = (value) => Math.max(0, Math.round(Number(value) || 0));
+  const calculateBriefCreditCost = (targetBrief = brief) => {
     const units = aiCredits.costs?.projectGeneration || {
       act: 2,
       scene: 1,
@@ -544,14 +545,39 @@ export default function AiTab({
       cinematic: 1,
       item: 1,
     };
-    const count = (value) => Math.max(0, Math.round(Number(value) || 0));
     return Math.max(1, Math.ceil(
-      count(brief.actCount) * Number(units.act || 0)
-      + count(brief.sceneCount) * Number(units.scene || 0)
-      + count(brief.enigmaCount) * Number(units.enigma || 0)
-      + count(brief.cinematicCount) * Number(units.cinematic || 0)
-      + count(brief.itemCount) * Number(units.item || 0),
+      countCreditUnits(targetBrief.actCount) * Number(units.act || 0)
+      + countCreditUnits(targetBrief.sceneCount) * Number(units.scene || 0)
+      + countCreditUnits(targetBrief.enigmaCount) * Number(units.enigma || 0)
+      + countCreditUnits(targetBrief.cinematicCount) * Number(units.cinematic || 0)
+      + countCreditUnits(targetBrief.itemCount) * Number(units.item || 0),
     ));
+  };
+  const calculateProjectGenerationCreditCost = () => calculateBriefCreditCost(brief);
+  const splitProgressiveCount = (key, stage) => {
+    const total = countCreditUnits(brief[key]);
+    const acts = Math.max(1, countCreditUnits(brief.actCount) || 1);
+    const firstAct = Math.ceil(total / acts);
+    if (stage === 'act1') return Math.max(key === 'sceneCount' ? 1 : 0, firstAct);
+    if (stage === 'act2_continuity' || stage === 'act2') return Math.max(key === 'sceneCount' ? 1 : 0, total - firstAct);
+    return total;
+  };
+  const getProgressiveStageBrief = (stage) => {
+    if (stage !== 'act1' && stage !== 'act2' && stage !== 'act2_continuity') return null;
+    return {
+      ...brief,
+      actCount: 1,
+      sceneCount: splitProgressiveCount('sceneCount', stage),
+      subsceneCount: splitProgressiveCount('subsceneCount', stage),
+      itemCount: splitProgressiveCount('itemCount', stage),
+      enigmaCount: splitProgressiveCount('enigmaCount', stage),
+      cinematicCount: splitProgressiveCount('cinematicCount', stage),
+    };
+  };
+  const getProgressiveStageSummary = (stage) => {
+    const stageBrief = getProgressiveStageBrief(stage);
+    if (!stageBrief) return '';
+    return `${stageBrief.sceneCount} scènes, ${stageBrief.itemCount} objets, ${stageBrief.enigmaCount} énigmes, ${stageBrief.cinematicCount} cinématiques`;
   };
   const getAiCreditCost = (kind) => {
     if (kind === 'text' && mode === 'generate') return calculateProjectGenerationCreditCost();
@@ -559,9 +585,14 @@ export default function AiTab({
     if (kind === 'objectThumbnail') return Number(aiCredits.costs?.objectThumbnail ?? 1);
     return Number(aiCredits.costs?.[kind] ?? (kind === 'image' ? 5 : 2));
   };
-  const getTextGenerationCreditCost = (targetMode = mode) => (
-    targetMode === 'generate' ? calculateProjectGenerationCreditCost() : Number(aiCredits.costs?.text ?? 2)
-  );
+  const getTextGenerationCreditCost = (targetMode = mode, stage = '') => {
+    if (targetMode === 'generate') return calculateProjectGenerationCreditCost();
+    if (targetMode === 'progressive') {
+      const stageBrief = getProgressiveStageBrief(stage || 'act1');
+      return stageBrief ? calculateBriefCreditCost(stageBrief) : Number(aiCredits.costs?.text ?? 2);
+    }
+    return Number(aiCredits.costs?.text ?? 2);
+  };
   const hasEnoughAiCredits = (kind, costOverride = null) => (
     aiCredits.balance == null || aiCredits.balance >= (costOverride ?? getAiCreditCost(kind))
   );
@@ -569,7 +600,7 @@ export default function AiTab({
     const cost = costOverride ?? getAiCreditCost(kind);
     return `Crédits IA insuffisants: ${aiCredits.balance || 0}/${cost}.`;
   };
-  const currentTextGenerationCost = getTextGenerationCreditCost(mode);
+  const currentTextGenerationCost = getTextGenerationCreditCost(mode, mode === 'progressive' ? 'act1' : '');
   const canRunTextAi = !aiCredits.isLoading && hasEnoughAiCredits('text', currentTextGenerationCost);
   const canRunImageAi = !aiCredits.isLoading && hasEnoughAiCredits('image');
   const canRunObjectImageAi = !aiCredits.isLoading && hasEnoughAiCredits('objectImage');
@@ -898,7 +929,8 @@ export default function AiTab({
   };
 
   const generateProgressiveStep = async (stage) => {
-    const generationCost = getTextGenerationCreditCost('progressive');
+    const stageBrief = getProgressiveStageBrief(stage) || brief;
+    const generationCost = getTextGenerationCreditCost('progressive', stage);
     if (!hasEnoughAiCredits('text', generationCost)) {
       setStatus(aiCreditMessage('text', generationCost));
       return;
@@ -916,7 +948,7 @@ export default function AiTab({
     }[stage] || stage;
     setStatus(`Génération progressive: ${stageLabel} (${formatCreditCost(generationCost)})...`);
     try {
-      const result = await generateAiProject(brief, {
+      const result = await generateAiProject(stageBrief, {
         mode: 'progressive',
         stage,
         enrichmentType,
@@ -1562,6 +1594,29 @@ export default function AiTab({
             <HelpLabel help={FIELD_HELP.tone}>Ton</HelpLabel>
             <input value={brief.tone} onChange={(event) => updateBrief('tone', event.target.value)} />
 
+            <div className="form-grid compact">
+              <div>
+                <HelpLabel help={FIELD_HELP.actCount}>Actes prévus</HelpLabel>
+                <input type="number" min="1" max="6" value={brief.actCount} onChange={(event) => updateBrief('actCount', event.target.value)} />
+              </div>
+              <div>
+                <HelpLabel help={FIELD_HELP.sceneCount}>Scènes totales</HelpLabel>
+                <input type="number" min="1" max="24" value={brief.sceneCount} onChange={(event) => updateBrief('sceneCount', event.target.value)} />
+              </div>
+              <div>
+                <HelpLabel help={FIELD_HELP.itemCount}>Objets totaux</HelpLabel>
+                <input type="number" min="1" max="40" value={brief.itemCount} onChange={(event) => updateBrief('itemCount', event.target.value)} />
+              </div>
+              <div>
+                <HelpLabel help={FIELD_HELP.enigmaCount}>Énigmes totales</HelpLabel>
+                <input type="number" min="0" max="20" value={brief.enigmaCount} onChange={(event) => updateBrief('enigmaCount', event.target.value)} />
+              </div>
+              <div>
+                <HelpLabel help={FIELD_HELP.cinematicCount}>Cinématiques totales</HelpLabel>
+                <input type="number" min="0" max="12" value={brief.cinematicCount} onChange={(event) => updateBrief('cinematicCount', event.target.value)} />
+              </div>
+            </div>
+
             <HelpLabel help={FIELD_HELP.enrichmentType}>Type d’enrichissement</HelpLabel>
             <select value={enrichmentType} onChange={(event) => setEnrichmentType(event.target.value)}>
               <option value="all">Dialogues + visuel + interactions</option>
@@ -1573,24 +1628,25 @@ export default function AiTab({
             <div className="ai-progressive-steps">
               {(() => {
                 const meta = getStepMeta(progressiveStatus.act1, false, 'Acte 1 généré', 'Acte 1 disponible');
+                const cost = getTextGenerationCreditCost('progressive', 'act1');
                 return (
-                  <button type="button" disabled={isGenerating || !canRunTextAi} onClick={() => generateProgressiveStep('act1')}>
+                  <button type="button" disabled={isGenerating || aiCredits.isLoading || !hasEnoughAiCredits('text', cost)} onClick={() => generateProgressiveStep('act1')}>
                     <strong>{meta.icon} Acte 1</strong>
-                    <span>{meta.label} · {formatCreditCost(getTextGenerationCreditCost('progressive'))}</span>
+                    <span>{meta.label} · {getProgressiveStageSummary('act1')} · {formatCreditCost(cost)}</span>
                   </button>
                 );
               })()}
-              <button type="button" disabled={isGenerating || !canRunTextAi || progressiveStatus.act1 !== 'done'} onClick={() => generateProgressiveStep('improveAct1')}>
+              <button type="button" disabled={isGenerating || aiCredits.isLoading || !hasEnoughAiCredits('text', getTextGenerationCreditCost('progressive', 'improveAct1')) || progressiveStatus.act1 !== 'done'} onClick={() => generateProgressiveStep('improveAct1')}>
                 <strong>{progressiveStatus.improveAct1 === 'running' ? '⏳' : progressiveStatus.improveAct1 === 'done' ? '✔' : progressiveStatus.act1 === 'done' ? '→' : '🔒'} Améliorer Acte 1</strong>
-                <span>{progressiveStatus.improveAct1 === 'done' ? 'Acte 1 raffiné' : progressiveStatus.act1 === 'done' ? 'structure gardée' : 'verrouillé'} · {formatCreditCost(getTextGenerationCreditCost('progressive'))}</span>
+                <span>{progressiveStatus.improveAct1 === 'done' ? 'Acte 1 raffiné' : progressiveStatus.act1 === 'done' ? 'structure gardée' : 'verrouillé'} · {formatCreditCost(getTextGenerationCreditCost('progressive', 'improveAct1'))}</span>
               </button>
-              <button type="button" disabled={isGenerating || !canRunTextAi || progressiveStatus.act1 !== 'done'} onClick={() => generateProgressiveStep('act2_continuity')}>
+              <button type="button" disabled={isGenerating || aiCredits.isLoading || !hasEnoughAiCredits('text', getTextGenerationCreditCost('progressive', 'act2_continuity')) || progressiveStatus.act1 !== 'done'} onClick={() => generateProgressiveStep('act2_continuity')}>
                 <strong>{progressiveStatus.act2 === 'running' || progressiveStatus.act2_continuity === 'running' ? '⏳' : progressiveStatus.act2 === 'done' ? '✔' : progressiveStatus.act1 === 'done' ? '→' : '🔒'} Générer Acte 2 en continuité</strong>
-                <span>{progressiveStatus.act2 === 'done' ? 'Acte 2 généré' : progressiveStatus.act1 === 'done' ? 'Acte 2 disponible' : 'après Acte 1'} · {formatCreditCost(getTextGenerationCreditCost('progressive'))}</span>
+                <span>{progressiveStatus.act2 === 'done' ? 'Acte 2 généré' : progressiveStatus.act1 === 'done' ? getProgressiveStageSummary('act2_continuity') : 'après Acte 1'} · {formatCreditCost(getTextGenerationCreditCost('progressive', 'act2_continuity'))}</span>
               </button>
-              <button type="button" disabled={isGenerating || !canRunTextAi || progressiveStatus.act2 !== 'done'} onClick={() => generateProgressiveStep('enrich')}>
+              <button type="button" disabled={isGenerating || aiCredits.isLoading || !hasEnoughAiCredits('text', getTextGenerationCreditCost('progressive', 'enrich')) || progressiveStatus.act2 !== 'done'} onClick={() => generateProgressiveStep('enrich')}>
                 <strong>{progressiveStatus.enrich === 'running' ? '⏳' : progressiveStatus.enrich === 'done' ? '✔' : progressiveStatus.act2 === 'done' ? '→' : '🔒'} Enrichissement</strong>
-                <span>{progressiveStatus.enrich === 'done' ? 'enrichi' : progressiveStatus.act2 === 'done' ? 'disponible' : 'verrouillé'} · {formatCreditCost(getTextGenerationCreditCost('progressive'))}</span>
+                <span>{progressiveStatus.enrich === 'done' ? 'enrichi' : progressiveStatus.act2 === 'done' ? 'disponible' : 'verrouillé'} · {formatCreditCost(getTextGenerationCreditCost('progressive', 'enrich'))}</span>
               </button>
             </div>
 

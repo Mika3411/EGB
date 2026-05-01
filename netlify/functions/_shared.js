@@ -39,7 +39,9 @@ export const calculateProjectGenerationCost = (brief = {}) => {
 
 export const calculateTextCreditCost = (body = {}) => (
   body.mode === 'repair_item_names' ? 0
-    : body.mode === 'generate' ? calculateProjectGenerationCost(body.brief || {})
+    : body.mode === 'generate'
+      || (body.mode === 'progressive' && ['act1', 'act2', 'act2_continuity'].includes(body.stage))
+      ? calculateProjectGenerationCost(body.brief || {})
       : aiCreditCosts.text
 );
 
