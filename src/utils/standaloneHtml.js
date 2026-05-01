@@ -866,9 +866,15 @@ function toggleInventorySelection(itemId) {
   state.selectedInventoryIds = [...state.selectedInventoryIds, itemId];
 }
 
+function getSceneMusicKey(scene) {
+  if (!scene?.musicData) return '';
+  return scene.musicName || scene.musicData;
+}
+
 function playSceneMusic() {
   const playScene = getPlayScene();
   const nextMusicData = playScene?.musicData || '';
+  const nextMusicKey = getSceneMusicKey(playScene);
   if (!nextMusicData) {
     sceneAudio.pause();
     sceneAudio.removeAttribute('src');
@@ -877,12 +883,12 @@ function playSceneMusic() {
     return;
   }
 
-  if (sceneAudioSource !== nextMusicData) {
+  if (sceneAudioSource !== nextMusicKey) {
     sceneAudio.pause();
     sceneAudio.currentTime = 0;
     sceneAudio.preload = 'auto';
     sceneAudio.src = nextMusicData;
-    sceneAudioSource = nextMusicData;
+    sceneAudioSource = nextMusicKey;
   }
   sceneAudio.loop = playScene.musicLoop !== false;
   sceneAudio.volume = typeof playScene.musicVolume === 'number' ? playScene.musicVolume : 0.5;
@@ -2030,7 +2036,14 @@ function render(shouldSave = true) {
   bindEvents();
   syncFullscreenUi();
   if (state.actPreload?.active) {
-    sceneAudio.pause();
+    const playScene = getPlayScene();
+    if (sceneAudioSource !== getSceneMusicKey(playScene)) {
+      sceneAudio.pause();
+      sceneAudio.currentTime = 0;
+      sceneAudio.removeAttribute('src');
+      sceneAudio.load();
+      sceneAudioSource = '';
+    }
     stopSceneTimer();
   } else {
     playSceneMusic();

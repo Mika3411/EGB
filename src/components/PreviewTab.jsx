@@ -105,6 +105,11 @@ const collectActMediaUrls = (project, actId) => {
   };
 };
 
+const getSceneMusicKey = (scene) => {
+  if (!scene?.musicData) return '';
+  return scene.musicName || scene.musicData;
+};
+
 const preloadImage = (url) => new Promise((resolve) => {
   const image = new Image();
   image.decoding = 'async';
@@ -438,7 +443,25 @@ export default function PreviewTab(props) {
   };
 
   useEffect(() => {
-    const nextMusicData = actPreloadStatus.isLoading ? '' : playScene?.musicData || '';
+    const nextMusicKey = getSceneMusicKey(playScene);
+
+    if (actPreloadStatus.isLoading) {
+      const isSameTrack = Boolean(
+        sceneAudioRef.current
+        && nextMusicKey
+        && sceneAudioSourceRef.current === nextMusicKey,
+      );
+
+      if (!isSameTrack && sceneAudioRef.current) {
+        sceneAudioRef.current.pause();
+        sceneAudioRef.current.currentTime = 0;
+        sceneAudioRef.current = null;
+        sceneAudioSourceRef.current = '';
+      }
+      return undefined;
+    }
+
+    const nextMusicData = playScene?.musicData || '';
     const nextLoop = playScene?.musicLoop !== false;
     const nextVolume = typeof playScene?.musicVolume === 'number' ? playScene.musicVolume : 0.5;
 
@@ -452,7 +475,7 @@ export default function PreviewTab(props) {
       return undefined;
     }
 
-    if (sceneAudioRef.current && sceneAudioSourceRef.current === nextMusicData) {
+    if (sceneAudioRef.current && sceneAudioSourceRef.current === nextMusicKey) {
       sceneAudioRef.current.loop = nextLoop;
       sceneAudioRef.current.volume = nextVolume;
       sceneAudioRef.current.play().catch(() => {});
@@ -472,7 +495,7 @@ export default function PreviewTab(props) {
     audio.volume = nextVolume;
     audio.play().catch(() => {});
     sceneAudioRef.current = audio;
-    sceneAudioSourceRef.current = nextMusicData;
+    sceneAudioSourceRef.current = nextMusicKey;
 
     return undefined;
   }, [playScene?.musicData, playScene?.musicLoop, playScene?.musicVolume, actPreloadStatus.isLoading]);
