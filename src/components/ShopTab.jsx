@@ -7,6 +7,13 @@ const PACK_URLS = {
   1000: 'https://mickalicious77.gumroad.com/l/zyedcq',
 };
 
+const PACK_PRICES = {
+  100: '3,99 \u20ac',
+  250: '9,49 \u20ac',
+  500: '17,99 \u20ac',
+  1000: '33,99 \u20ac',
+};
+
 const isConfiguredUrl = (value = '') => {
   const url = String(value || '').trim();
   return url && !url.toUpperCase().includes('YOUR_GUMROAD');
@@ -19,16 +26,16 @@ const parsePack = (value, fallback) => {
   const credits = Number(creditsValue || fallback.credits);
   return {
     credits,
-    price: price || fallback.price,
+    price: PACK_PRICES[credits] || price || fallback.price,
     url: getPackUrl(credits, url || fallback.url),
   };
 };
 
 const defaultPacks = [
-  { credits: 100, price: '3,99 \u20ac', url: import.meta.env.VITE_GUMROAD_PACK_100_URL || PACK_URLS[100] },
-  { credits: 250, price: '9,49 \u20ac', url: import.meta.env.VITE_GUMROAD_PACK_250_URL || PACK_URLS[250] },
-  { credits: 500, price: '17,99 \u20ac', url: import.meta.env.VITE_GUMROAD_PACK_500_URL || PACK_URLS[500] },
-  { credits: 1000, price: '33,99 \u20ac', url: import.meta.env.VITE_GUMROAD_PACK_1000_URL || PACK_URLS[1000] },
+  { credits: 100, price: PACK_PRICES[100], url: import.meta.env.VITE_GUMROAD_PACK_100_URL || PACK_URLS[100] },
+  { credits: 250, price: PACK_PRICES[250], url: import.meta.env.VITE_GUMROAD_PACK_250_URL || PACK_URLS[250] },
+  { credits: 500, price: PACK_PRICES[500], url: import.meta.env.VITE_GUMROAD_PACK_500_URL || PACK_URLS[500] },
+  { credits: 1000, price: PACK_PRICES[1000], url: import.meta.env.VITE_GUMROAD_PACK_1000_URL || PACK_URLS[1000] },
 ].map((fallback, index) => parsePack(import.meta.env[`VITE_GUMROAD_PACK_${index + 1}`], fallback));
 
 const estimateProjects = (credits) => Math.max(1, Math.floor(Number(credits || 0) / 36));
