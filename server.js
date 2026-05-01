@@ -558,7 +558,7 @@ const gumroadPacks = [
     productId: process.env.GUMROAD_PACK_1000_PRODUCT_ID || '',
     permalink: process.env.GUMROAD_PACK_1000_PERMALINK || '',
   },
-].filter((pack) => pack.credits > 0 && (pack.productId || pack.permalink));
+].filter((pack) => pack.credits > 0);
 
 const parseGumroadCustomFields = (body = {}) => {
   if (body.custom_fields && typeof body.custom_fields === 'object') return body.custom_fields;

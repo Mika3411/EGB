@@ -28,7 +28,7 @@ const gumroadPacks = [
     productId: process.env.GUMROAD_PACK_1000_PRODUCT_ID || '',
     permalink: process.env.GUMROAD_PACK_1000_PERMALINK || '',
   },
-].filter((pack) => pack.credits > 0 && (pack.productId || pack.permalink));
+].filter((pack) => pack.credits > 0);
 
 const parseBody = (event) => {
   if (!event.body) return {};
