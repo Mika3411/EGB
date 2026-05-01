@@ -193,6 +193,24 @@ const compactProjectForExtendPrompt = (project = {}, continuationSceneId = '') =
   };
 };
 
+const PLAYABILITY_AND_COHERENCE_RULES = `
+Règles de logique et de jouabilité à respecter dans toutes les générations:
+- Évite le parcours en ligne droite: une création complète, progressive ou ajoutée doit proposer des branches, des scènes pivot, des liens multiples et des retours utiles quand le volume demandé le permet.
+- Le retour arrière doit servir à quelque chose: nouvel usage d'objet, nouvelle lecture d'indice, nouvel état, passage débloqué ou dialogue modifié.
+- Les actes doivent rester séparés: après une transition vers un acte suivant, aucun hotspot ni aucune règle ne doit permettre de revenir à un acte précédent.
+- Toute transition inter-acte doit être à sens unique et signalée dans routeMap.connections avec allowOneWay: true quand routeMap est renvoyé.
+- Dans routeMap, relie toutes les scènes qui partagent une zone d'action, une transition directe ou un passage à sens unique. Marque locked: true si le lien dépend d'un objet, d'une énigme, d'une cinématique, d'une combinaison ou d'une logicRule.
+- Aucune impasse bloquante: tout objet requis doit être obtenable avant son usage; toute énigme doit avoir ses indices avant sa résolution; aucun objet consommé ne doit être nécessaire plus tard sauf solution alternative explicite.
+- Les indices d'une énigme ne doivent pas être dans la même scène que l'énigme. Place-les dans une ou plusieurs autres scènes et renseigne clueSceneIds et logicNotes quand tu crées ou modifies une énigme.
+- Interdit aux énigmes évidentes: pas de solution écrite telle quelle dans le décor puis répétée dans la narration; pas de question qui donne directement le code ou l'ordre. Les indices doivent demander déduction, comparaison, ordre, transformation ou croisement entre scènes.
+- Les scènes créées ou enrichies doivent avoir des consignes concrètes dans instructions quand le champ est renvoyé.
+- Les prompts de scène doivent être en français et décrire lieu, ambiance, zones d'action et indices non-inventaire visibles.
+- Très important: les prompts d'image de scène ne doivent pas citer ni montrer les objets d'inventaire, car l'utilisateur les cachera lui-même dans l'image.
+- Les objets créés doivent avoir imagePrompt en français, isolé sur fond transparent ou neutre.
+- Les slides de cinématique créées doivent avoir imagePrompt en français, cohérent avec les scènes et sans contradiction narrative.
+- Tout doit rester cohérent entre scènes, cinématiques, objets, énigmes, routeMap, combinations et logicRules.
+`.trim();
+
 const makeGeneratePrompt = (brief) => `
 Tu es un concepteur d'escape game narratif.
 Génère uniquement un JSON compatible avec cette structure:
@@ -204,7 +222,9 @@ Génère uniquement un JSON compatible avec cette structure:
     "name": string,
     "actId": string,
     "parentSceneId": string,
+    "imagePrompt": string,
     "introText": string,
+    "instructions": string[],
     "hotspots": [{
       "id": string,
       "name": string,
@@ -219,14 +239,55 @@ Génère uniquement un JSON compatible avec cette structure:
       "targetSceneId": string,
       "targetCinematicId": string,
       "enigmaId": string,
-      "logicRules": []
+      "lockedMessage": string,
+      "logicRules": [{
+        "id": string,
+        "name": string,
+        "conditionType": "has_item"|"used_hotspot"|"solved_enigma"|"launched_cinematic"|"made_combination",
+        "itemId": string,
+        "hotspotId": string,
+        "conditionEnigmaId": string,
+        "cinematicId": string,
+        "combinationId": string,
+        "actionType": "dialogue"|"dialogue_item"|"scene"|"cinematic",
+        "dialogue": string,
+        "rewardItemId": string,
+        "targetSceneId": string,
+        "targetCinematicId": string,
+        "enigmaId": string
+      }]
     }]
   }],
-  "items": [{"id": string, "name": string, "icon": string}],
+  "items": [{"id": string, "name": string, "icon": string, "imagePrompt": string}],
   "combinations": [{"id": string, "itemAId": string, "itemBId": string, "resultItemId": string, "message": string}],
-  "enigmas": [{"id": string, "name": string, "type": "code"|"colors", "question": string, "solutionText": string, "solutionColors": string[], "successMessage": string, "failMessage": string, "unlockType": "none"|"scene"|"cinematic", "targetSceneId": string, "targetCinematicId": string}],
-  "cinematics": [{"id": string, "name": string, "cinematicType": "slides", "slides": [{"id": string, "narration": string}], "onEndType": "none"|"scene", "targetSceneId": string}],
-  "start": {"type": "scene", "targetSceneId": string, "targetCinematicId": ""}
+  "enigmas": [{
+    "id": string,
+    "name": string,
+    "type": "code"|"colors"|"misc",
+    "question": string,
+    "solutionText": string,
+    "solutionColors": string[],
+    "successMessage": string,
+    "failMessage": string,
+    "unlockType": "none"|"scene"|"cinematic",
+    "targetSceneId": string,
+    "targetCinematicId": string,
+    "clueSceneIds": string[],
+    "logicNotes": string
+  }],
+  "cinematics": [{"id": string, "name": string, "cinematicType": "slides", "slides": [{"id": string, "narration": string, "imagePrompt": string}], "onEndType": "none"|"scene", "targetSceneId": string}],
+  "routeMap": {
+    "rooms": [{"id": string, "name": string, "sceneId": string, "x": number, "y": number, "type": "start"|"room"|"end"}],
+    "connections": [{"id": string, "fromRoomId": string, "toRoomId": string, "label": string, "locked": boolean, "allowOneWay": boolean}],
+    "notes": string
+  },
+  "start": {"type": "scene", "targetSceneId": string, "targetCinematicId": ""},
+  "designNotes": {
+    "actLocks": string,
+    "backtracking": string[],
+    "antiSoftLock": string[],
+    "imagePromptRules": string
+  }
 }
 
 Contraintes:
@@ -245,6 +306,21 @@ Contraintes:
 - Chaque item doit avoir un name lisible par un joueur et une icon cohérente.
 - Les zones doivent relier les scènes, objets, énigmes et cinématiques.
 - Les conditions de déblocage doivent utiliser logicRules si une interaction dépend d'un état de jeu.
+- Si Actes = 3 et Scènes principales = 24, produis exactement 8 scènes par acte. Plus généralement, répartis les scènes de façon équilibrée entre les actes.
+- Structure chaque acte comme un mini-labyrinthe logique non linéaire: au moins une scène pivot, au moins deux branches, au moins deux scènes reliées à plusieurs autres scènes, et au moins un retour utile vers une scène déjà visitée.
+- Le joueur doit parfois revenir en arrière dans le même acte pour utiliser un objet, une information ou un état obtenu ailleurs.
+- Sépare strictement les actes: une fois l'acte suivant atteint, aucune zone ne doit permettre de revenir à un acte précédent. Les transitions inter-actes doivent être à sens unique dans routeMap.connections avec allowOneWay: true.
+- Dans routeMap, relie toutes les scènes qui ont une zone d'action commune ou une transition directe. Marque locked: true si le lien dépend d'un objet, d'une énigme, d'une cinématique ou d'une règle logique.
+- Aucune impasse bloquante: tout objet requis doit être obtenable avant son usage, toute énigme doit avoir ses indices avant d'être résolue, et aucune ressource consommée ne doit être indispensable plus tard sauf si une autre solution existe.
+- Les indices d'une énigme ne doivent jamais être dans la même scène que l'énigme. Utilise clueSceneIds et explique la logique dans logicNotes.
+- Interdit aux énigmes évidentes: pas de code écrit tel quel dans le décor puis redonné par la narration; pas de solution immédiatement visible dans la question. Les indices doivent demander déduction, comparaison, ordre, transformation ou croisement entre scènes.
+- Chaque scène doit avoir instructions: 2 à 5 consignes de gameplay concrètes pour le créateur, scène par scène.
+- Chaque scène doit avoir imagePrompt en français. Le prompt doit décrire le lieu, l'ambiance, les zones d'action visibles et les indices non-inventaire visibles.
+- Très important: les prompts d'image de scène ne doivent pas citer ni montrer les objets d'inventaire à cacher par l'utilisateur. N'inclus donc pas les noms des items dans scene.imagePrompt.
+- Chaque objet doit avoir item.imagePrompt en français, isolé sur fond transparent ou neutre.
+- Chaque slide de cinématique doit avoir imagePrompt en français, cohérent avec la révélation et sans contradiction avec les scènes.
+- Tout doit être cohérent entre scènes, cinématiques, objets, énigmes, routeMap et logicRules.
+${PLAYABILITY_AND_COHERENCE_RULES}
 - Réponds uniquement avec le JSON, sans Markdown.
 `.trim();
 
@@ -273,6 +349,10 @@ Règles strictes:
 - Conserve les IDs existants.
 - Ne crée pas de nouvelle zone.
 - Ne crée pas de référence vers une scène, un objet, une énigme, une cinématique ou une combinaison qui n'existe pas.
+- Si tu ajoutes ou modifies un objet dans items, ajoute aussi imagePrompt.
+- Si tu enrichis un texte ou un dialogue, ne transforme jamais un indice subtil en solution directe.
+- Préserve la logique existante: ne place pas l'indice d'une énigme dans la même scène que l'énigme et ne casse pas les retours arrière déjà prévus.
+${PLAYABILITY_AND_COHERENCE_RULES}
 - Format attendu: {"scenes":[{"id":"id_scene_existante","introText":"...","hotspots":[{"id":"id_zone_existante","dialogue":"..."}]}],"items":[...optionnel]}
 - Si tu modifies les hotspots, renvoie seulement leurs IDs et leurs nouveaux dialogues.
 `.trim();
@@ -297,8 +377,14 @@ Règles:
 - Étape act2: ajoute seulement l'Acte 2 et ses scènes, objets, énigmes, cinématiques utiles.
 - Étape act2_continuity: continue l'histoire en respectant strictement l'Acte 1. Ne crée pas de contradictions.
 - Étape enrich: enrichis le projet existant sans casser la structure. Type d'enrichissement: ${enrichmentType || 'dialogues, détails visuels et interactions'}.
+- En act1, crée déjà une structure non linéaire dans l'acte: scène pivot, branches, retour utile, objets et indices placés avant leurs usages.
+- En act2 et act2_continuity, le passage depuis l'acte précédent doit être à sens unique: ne crée aucun lien de retour vers l'acte précédent.
+- En add/enrich, si tu ajoutes routeMap ou modifies des zones de navigation, mets à jour les connexions concernées.
+- En add/enrich, si tu ajoutes une scène, donne-lui imagePrompt et instructions.
+- En add/enrich, si tu ajoutes un objet ou une cinématique, donne aussi item.imagePrompt ou slide.imagePrompt.
 - En improveAct1, act2, act2_continuity et enrich, réponds avec un JSON partiel compatible patch.
 - Conserve les IDs existants et ne crée aucune référence invalide.
+${PLAYABILITY_AND_COHERENCE_RULES}
 - Réponds uniquement avec le JSON, sans Markdown.
 `.trim();
 
@@ -355,6 +441,14 @@ Règles strictes:
 - Les dialogues et introText doivent contenir des détails concrets liés au résumé, à la chronologie et à la scène de départ.
 - Pour continue_story, crée au moins une nouvelle scène avec un nom spécifique de lieu ou d'événement, un enjeu clair, 2 zones interactives concrètes minimum, et une interaction qui fait avancer l'histoire.
 - Pour continue_story, ne renvoie pas les scènes existantes sauf la scène de départ obligatoire si tu lui ajoutes une zone vers la nouvelle scène.
+- Toute nouvelle scène doit avoir imagePrompt en français et instructions.
+- Tout nouvel objet doit avoir imagePrompt en français.
+- Toute nouvelle cinématique ou slide doit avoir imagePrompt en français.
+- Toute nouvelle énigme doit renseigner clueSceneIds et logicNotes si ces champs sont utiles; les indices doivent être placés hors de la scène de résolution.
+- Si tu ajoutes ou modifies des passages entre scènes, ajoute ou complète routeMap.rooms et routeMap.connections pour les scènes concernées.
+- Si la suite passe dans un nouvel acte, le passage doit être à sens unique et aucune nouvelle zone ne doit revenir vers l'acte précédent.
+- Si tu ajoutes 2 ou 3 scènes, ne les aligne pas simplement A -> B -> C: crée au moins une branche, un lien de retour utile ou une scène qui connecte plusieurs chemins.
+${PLAYABILITY_AND_COHERENCE_RULES}
 
 Actions:
 - continue_story: ajoute obligatoirement 1 à 3 nouvelles scènes de suite, avec au moins une zone de navigation depuis une scène existante vers une nouvelle scène. Ne te contente jamais de réécrire les scènes existantes.
@@ -1137,11 +1231,7 @@ export async function generateAiProject(brief, options = {}) {
     if (error.code === 'AI_CREDITS_EXHAUSTED' || error.status === 402) {
       throw error;
     }
-    const stage = options.stage || '';
-    const blocksLocalFallback = Boolean(endpoint)
-      && mode === 'extend'
-      && ['continue_story', 'add_scenes', 'add_enigmas'].includes(stage);
-    if (blocksLocalFallback) {
+    if (endpoint) {
       throw error;
     }
     return {

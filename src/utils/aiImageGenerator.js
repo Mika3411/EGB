@@ -164,9 +164,42 @@ const inferElementsFromConstraints = (constraints) => formatConstraints(constrai
   })
   .filter((entry) => entry.label);
 
-const buildPrompt = ({ type, entity, projectTitle, visualConstraints, visualContext }) => {
+const buildPrompt = ({ type, entity, projectTitle, visualConstraints, visualContext, variant }) => {
   if (type === 'item') {
-    return `Objet d'escape game: ${entity?.name}. Style lisible, isolé, iconique, cohérent avec "${projectTitle}".`;
+    const isThumbnail = variant === 'thumbnail';
+    return `
+Objet d'inventaire pour un escape game: ${entity?.name}.
+Style lisible, isolé, iconique, cohérent avec "${projectTitle}".
+Style d'image: ${visualContext?.style || 'rendu cohérent avec le projet'}.
+
+Contraintes obligatoires:
+- PNG détouré sur fond transparent avec canal alpha.
+- Un seul objet au centre, entier, sans recadrage.
+- Format ${isThumbnail ? 'miniature carrée simple, détails réduits, lisible en 64x64 pixels' : 'objet complet plus détaillé'}.
+- Aucun décor, aucune table, aucun mur, aucune pièce, aucun support.
+- Aucun texte, aucun logo, aucune étiquette lisible.
+- Ne pas dessiner de carré blanc, gris, noir ou coloré derrière l'objet.
+- Ombre douce autorisée uniquement si elle reste dans la transparence et ne crée pas un fond visible.
+- L'image doit pouvoir être posée directement par-dessus une scène.
+`.trim();
+  }
+  if (type === 'cinematic') {
+    return `
+Image cinématique 16:9 pour un escape game.
+
+Cinématique: ${entity?.cinematicName || entity?.name || projectTitle || 'Cinématique'}
+Slide: ${entity?.name || 'Slide'}
+Narration: ${entity?.narration || 'Révélation narrative.'}
+Thème global: ${visualContext?.globalTheme || projectTitle || 'escape game'}
+Style visuel: ${visualContext?.style || 'réaliste, cinématographique, lisible, dramatique'}
+
+Contraintes:
+- Image large 16:9, composition cinématographique.
+- Aucun texte incrusté dans l'image.
+- Montrer la révélation, la transition ou l'ambiance décrite par la narration.
+- Rester cohérent avec les scènes et objets du projet.
+- Lumière lisible, détails visibles, pas d'image trop noire.
+`.trim();
   }
   const safeStyle = String(visualContext?.style || 'réaliste, atmosphère mystérieuse mais clairement éclairée, caméra large, contraste suffisant pour un jeu cliquable')
     .replace(/\bsombre\b/gi, 'mystérieux')
@@ -187,6 +220,10 @@ Héritage visuel: ${visualContext?.visualInheritance || 'même époque, mêmes m
 
 Contraintes visuelles OBLIGATOIRES:
 ${constraints || '- Décor large et lisible permettant de placer des zones interactives.'}
+
+Interdiction importante:
+- Ne montre aucun objet d'inventaire dans l'image de scène, même s'il est mentionné par une zone, une récompense ou une condition. L'utilisateur doit pouvoir ajouter/cacher ces objets lui-même ensuite.
+- Tu peux montrer les supports, meubles, cachettes, mécanismes, portes, tiroirs, boîtes, marques et indices non-inventaire, mais pas l'objet collectable lui-même.
 
 La scène doit être cohérente avec les scènes adjacentes:
 ${connectedText}
@@ -212,8 +249,8 @@ Réponse attendue de l'API image:
 `.trim();
 };
 
-export async function generateAiImage({ type, entity, projectTitle, project, visualConstraints = '', visualContext = {}, regenerate = false, readabilityLevel = 'balanced', userId = '' }) {
-  const prompt = buildPrompt({ type, entity, projectTitle, visualConstraints, visualContext });
+export async function generateAiImage({ type, entity, projectTitle, project, visualConstraints = '', visualContext = {}, regenerate = false, readabilityLevel = 'balanced', userId = '', variant = '' }) {
+  const prompt = buildPrompt({ type, entity, projectTitle, visualConstraints, visualContext, variant });
   const elements = inferElementsFromConstraints(visualConstraints);
   if (endpoint) {
     const response = await fetch(endpoint, {
@@ -229,6 +266,7 @@ export async function generateAiImage({ type, entity, projectTitle, project, vis
         visualContext,
         prompt,
         regenerate,
+        variant,
         responseFormat: 'escape-game-image-with-elements',
       }),
     });

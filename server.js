@@ -34,8 +34,9 @@ const defaultAiCredits = Number(process.env.AI_DEFAULT_CREDITS || 20);
 const aiCreditCosts = {
   text: Number(process.env.AI_TEXT_CREDIT_COST || 2),
   image: Number(process.env.AI_IMAGE_CREDIT_COST || 5),
-  objectImageBatchSize: Number(process.env.AI_OBJECT_IMAGE_BATCH_SIZE || 5),
-  objectImageBatchCost: Number(process.env.AI_OBJECT_IMAGE_BATCH_COST || 1),
+  objectImageBatchSize: Number(process.env.AI_OBJECT_IMAGE_BATCH_SIZE || 1),
+  objectImageBatchCost: Number(process.env.AI_OBJECT_IMAGE_BATCH_COST || 3),
+  objectThumbnail: Number(process.env.AI_OBJECT_THUMBNAIL_CREDIT_COST || 1),
   projectGeneration: {
     act: Number(process.env.AI_PROJECT_ACT_CREDIT_COST || 2),
     scene: Number(process.env.AI_PROJECT_SCENE_CREDIT_COST || 1),
@@ -217,7 +218,8 @@ const getCreditAccount = (userId) => {
 
 const calculateImageCreditCost = (account, body = {}) => {
   if (body.type !== 'item') return aiCreditCosts.image;
-  const batchSize = Math.max(1, toCount(aiCreditCosts.objectImageBatchSize) || 5);
+  if (body.variant === 'thumbnail') return aiCreditCosts.objectThumbnail;
+  const batchSize = Math.max(1, toCount(aiCreditCosts.objectImageBatchSize) || 1);
   const usedInBatch = toCount(account.objectImagesInCurrentBatch);
   return usedInBatch % batchSize === 0 ? aiCreditCosts.objectImageBatchCost : 0;
 };
@@ -225,8 +227,8 @@ const calculateImageCreditCost = (account, body = {}) => {
 const commitImageCreditUsage = (userId, body = {}, cost = 0) => {
   const store = readCreditStore();
   const account = ensureCreditAccount(store, userId);
-  if (body.type === 'item') {
-    const batchSize = Math.max(1, toCount(aiCreditCosts.objectImageBatchSize) || 5);
+  const batchSize = Math.max(1, toCount(aiCreditCosts.objectImageBatchSize) || 1);
+  if (body.type === 'item' && body.variant !== 'thumbnail') {
     account.objectImagesInCurrentBatch = (toCount(account.objectImagesInCurrentBatch) + 1) % batchSize;
     account.updatedAt = new Date().toISOString();
   }
@@ -320,12 +322,13 @@ const handleCredits = async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const userId = getCreditUserId(req, { userId: url.searchParams.get('userId') });
   const account = getCreditAccount(userId);
-  const objectImageBatchSize = Math.max(1, toCount(aiCreditCosts.objectImageBatchSize) || 5);
+  const objectImageBatchSize = Math.max(1, toCount(aiCreditCosts.objectImageBatchSize) || 1);
   sendJson(res, 200, {
     userId,
     balance: account.balance || 0,
     costs: aiCreditCosts,
     nextObjectImageCost: calculateImageCreditCost(account, { type: 'item' }),
+    nextObjectThumbnailCost: calculateImageCreditCost(account, { type: 'item', variant: 'thumbnail' }),
     objectImagesInCurrentBatch: toCount(account.objectImagesInCurrentBatch),
     objectImageBatchSize,
     transactions: (account.transactions || []).slice(-10).reverse(),
@@ -706,31 +709,51 @@ const handleGenerate = async (req, res) => {
     body.prompt,
   ].filter(Boolean).join('\n\n');
 
-  spendCredits(userId, cost, `text:${body.mode || 'generate'}`);
-  let payload;
+  let charged = false;
   try {
-    payload = await openaiFetch('responses', {
+    spendCredits(userId, cost, `text:${body.mode || 'generate'}`);
+    charged = cost > 0;
+
+    const payload = await openaiFetch('responses', {
       model: process.env.OPENAI_TEXT_MODEL || 'gpt-5.2',
       input,
       max_output_tokens: Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || 12000),
     });
+
+    const outputText = extractOutputText(payload);
+    if (!outputText) {
+      const error = new Error('OpenAI n\'a pas renvoye de texte exploitable.');
+      error.status = 502;
+      throw error;
+    }
+    if (body.responseFormat === 'escape-game-project-json') {
+      try {
+        JSON.parse(outputText);
+      } catch {
+        const error = new Error('OpenAI a renvoye un JSON invalide ou incomplet. Credits rembourses.');
+        error.status = 502;
+        error.code = 'AI_INVALID_JSON';
+        throw error;
+      }
+    }
+
+    const account = getCreditAccount(userId);
+    sendJson(res, 200, {
+      output_text: outputText,
+      requestId: payload.id,
+      credits: {
+        balance: account.balance || 0,
+        cost,
+        costs: aiCreditCosts,
+        nextObjectImageCost: calculateImageCreditCost(account, { type: 'item' }),
+      },
+    });
   } catch (error) {
-    refundCredits(userId, cost, `failed_text:${body.mode || 'generate'}`);
+    if (charged) {
+      refundCredits(userId, cost, `failed_text:${body.mode || 'generate'}`);
+    }
     throw error;
   }
-
-  const outputText = extractOutputText(payload);
-  const account = getCreditAccount(userId);
-  sendJson(res, 200, {
-    output_text: outputText,
-    requestId: payload.id,
-    credits: {
-      balance: account.balance || 0,
-      cost,
-      costs: aiCreditCosts,
-      nextObjectImageCost: calculateImageCreditCost(account, { type: 'item' }),
-    },
-  });
 };
 
 const handleImage = async (req, res) => {
@@ -741,13 +764,23 @@ const handleImage = async (req, res) => {
   spendCredits(userId, cost, `image:${body.type || 'image'}`);
   let payload;
   try {
-    payload = await openaiFetch('images/generations', {
+    const imageRequest = {
       model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1',
       prompt: body.prompt,
       size: process.env.OPENAI_IMAGE_SIZE || '1536x1024',
       quality: process.env.OPENAI_IMAGE_QUALITY || 'medium',
       n: 1,
-    });
+    };
+    if (body.type === 'item') {
+      imageRequest.background = 'transparent';
+      imageRequest.output_format = 'png';
+      if (body.variant === 'thumbnail') {
+        imageRequest.model = process.env.OPENAI_ITEM_THUMBNAIL_MODEL || 'gpt-image-1-mini';
+        imageRequest.size = process.env.OPENAI_ITEM_THUMBNAIL_SIZE || '1024x1024';
+        imageRequest.quality = process.env.OPENAI_ITEM_THUMBNAIL_QUALITY || 'low';
+      }
+    }
+    payload = await openaiFetch('images/generations', imageRequest);
   } catch (error) {
     refundCredits(userId, cost, `failed_image:${body.type || 'image'}`);
     throw error;
@@ -765,7 +798,13 @@ const handleImage = async (req, res) => {
     throw error;
   }
 
-  const account = commitImageCreditUsage(userId, body, cost);
+  let account;
+  try {
+    account = commitImageCreditUsage(userId, body, cost);
+  } catch (error) {
+    refundCredits(userId, cost, `failed_image:${body.type || 'image'}`);
+    throw error;
+  }
   sendJson(res, 200, {
     imageData,
     imageName: `${body.type || 'image'}-${body.entity?.id || Date.now()}.png`,
@@ -775,6 +814,7 @@ const handleImage = async (req, res) => {
       cost,
       costs: aiCreditCosts,
       nextObjectImageCost: calculateImageCreditCost(account, { type: 'item' }),
+      nextObjectThumbnailCost: calculateImageCreditCost(account, { type: 'item', variant: 'thumbnail' }),
     },
   });
 };
@@ -868,6 +908,7 @@ const server = createServer(async (req, res) => {
 
     serveStatic(req, res);
   } catch (error) {
+    console.error('[api-error]', req.method, req.url, error);
     sendJson(res, error.status || 500, {
       error: error.message || 'Erreur serveur.',
       code: error.code,

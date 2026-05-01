@@ -598,16 +598,25 @@ function App() {
         const blob = dataUrlToBlob(imageData);
         if (blob) {
           const extension = extensionFromMime(blob.type);
-          const path = buildStoragePath('users', auth.user?.id, 'projects', auth.activeProjectId, 'ai-images', type, `${id}.${extension}`);
+          const storageId = type === 'cinematicSlide' && nextPatch.slideId ? `${id}-${nextPatch.slideId}` : id;
+          const version = Date.now().toString(36);
+          const path = buildStoragePath('users', auth.user?.id, 'projects', auth.activeProjectId, 'ai-images', type, `${storageId}-${version}.${extension}`);
           const uploaded = await uploadToStorage(path, blob, {
             contentType: blob.type,
-            cacheControl: '31536000',
+            cacheControl: '3600',
           });
+          const publicUrl = `${uploaded.publicUrl}${uploaded.publicUrl.includes('?') ? '&' : '?'}v=${version}`;
+          const imageVariants = Array.isArray(nextPatch.aiImageVariants) ?
+            nextPatch.aiImageVariants.map((variant) => (
+              variant?.imageData === imageData ? { ...variant, imageData: publicUrl, imageName: variant.imageName || nextPatch[imageNameField] } : variant
+            ))
+            : nextPatch.aiImageVariants;
           nextPatch = {
             ...nextPatch,
-            [imageField]: uploaded.publicUrl,
+            [imageField]: publicUrl,
             [imageNameField]: nextPatch[imageNameField] || `${type}-${id}.${extension}`,
             imageStoragePath: uploaded.path,
+            ...(imageVariants ? { aiImageVariants: imageVariants } : {}),
           };
         }
       } catch (error) {
@@ -629,6 +638,17 @@ function App() {
       ));
     }
 
+    if (type === 'cinematicSlide') {
+      nextProject.cinematics = (nextProject.cinematics || []).map((cinematic) => (
+        cinematic.id === id ? {
+          ...cinematic,
+          slides: (cinematic.slides || []).map((slide) => (
+            slide.id === nextPatch.slideId ? { ...slide, ...nextPatch } : slide
+          )),
+        } : cinematic
+      ));
+    }
+
     editor.patchProject((draft) => {
       if (type === 'scene') {
         const scene = draft.scenes.find((entry) => entry.id === id);
@@ -637,6 +657,13 @@ function App() {
       if (type === 'item') {
         const item = draft.items.find((entry) => entry.id === id);
         if (item) Object.assign(item, nextPatch);
+      }
+      if (type === 'cinematicSlide') {
+        const slide = draft.cinematics
+          .find((entry) => entry.id === id)
+          ?.slides
+          ?.find((entry) => entry.id === nextPatch.slideId);
+        if (slide) Object.assign(slide, nextPatch);
       }
     }, { rememberHistory: false });
 

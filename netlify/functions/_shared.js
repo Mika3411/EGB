@@ -5,8 +5,9 @@ export const ADMIN_EMAIL = 'thorez.m@hotmail.fr';
 export const aiCreditCosts = {
   text: Number(process.env.AI_TEXT_CREDIT_COST || 2),
   image: Number(process.env.AI_IMAGE_CREDIT_COST || 5),
-  objectImageBatchSize: Number(process.env.AI_OBJECT_IMAGE_BATCH_SIZE || 5),
-  objectImageBatchCost: Number(process.env.AI_OBJECT_IMAGE_BATCH_COST || 1),
+  objectImageBatchSize: Number(process.env.AI_OBJECT_IMAGE_BATCH_SIZE || 1),
+  objectImageBatchCost: Number(process.env.AI_OBJECT_IMAGE_BATCH_COST || 3),
+  objectThumbnail: Number(process.env.AI_OBJECT_THUMBNAIL_CREDIT_COST || 1),
   projectGeneration: {
     act: Number(process.env.AI_PROJECT_ACT_CREDIT_COST || 2),
     scene: Number(process.env.AI_PROJECT_SCENE_CREDIT_COST || 1),

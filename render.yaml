@@ -28,5 +28,11 @@ services:
         sync: false
       - key: OPENAI_IMAGE_QUALITY
         sync: false
+      - key: OPENAI_ITEM_THUMBNAIL_MODEL
+        value: gpt-image-1-mini
+      - key: OPENAI_ITEM_THUMBNAIL_SIZE
+        value: 1024x1024
+      - key: OPENAI_ITEM_THUMBNAIL_QUALITY
+        value: low
       - key: OPENAI_API_KEY
         sync: false

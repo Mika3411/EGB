@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { generateAiProject } from '../utils/aiProjectGenerator';
 import { buildGlobalSceneLayout, generateAiImage, getConnectedScenes } from '../utils/aiImageGenerator';
 import { mergeProjectPatch, validateProject } from '../utils/projectValidation';
+import { downloadBlob } from '../utils/fileHelpers';
 
 const FIELD_HELP = {
   theme: "Thème principal de l'histoire: manoir, station spatiale, enquête policière, laboratoire, musée...",
@@ -26,6 +27,17 @@ const FIELD_HELP = {
   continuationScene: "Scène exacte depuis laquelle l'histoire doit continuer. La nouvelle scène doit être reliée à celle-ci.",
   extendInstruction: "Ajoute une contrainte ou une idée à la continuation: nouveau lieu, type d'énigme, objet important, révélation, ton souhaité...",
   visualConstraints: "Contraintes données au générateur d'image pour cette scène. Liste les éléments qui doivent être visibles et leur placement approximatif.",
+};
+
+const IMAGE_STYLE_PRESETS = {
+  realistic: {
+    label: 'Réaliste',
+    description: 'cinématique photoréaliste, textures naturelles, lumière de film, profondeur et détails réalistes',
+  },
+  illustrated: {
+    label: 'BD / manga',
+    description: 'illustration BD manga adulte, encrage fin, contours expressifs, ombres dessinées, rendu cinématographique stylisé',
+  },
 };
 
 const AI_DRAFT_DB = 'escape-game-builder-ai-drafts';
@@ -368,7 +380,6 @@ const makeSceneVisualConstraints = (scene, project = {}) => {
   const text = `${scene?.name || ''} ${scene?.introText || ''}`.toLowerCase();
   const hotspots = scene?.hotspots || [];
   const scenes = project?.scenes || [];
-  const items = project?.items || [];
   const enigmas = project?.enigmas || [];
 
   lines.push(`- lieu principal clairement identifiable: ${scene?.name || 'scène'}`);
@@ -395,18 +406,12 @@ const makeSceneVisualConstraints = (scene, project = {}) => {
     } else {
       lines.push(`- élément interactif distinct pour "${name}"`);
     }
-
-    [hotspot.rewardItemId, hotspot.requiredItemId, hotspot.secondRewardItemId, hotspot.secondRequiredItemId]
-      .filter(Boolean)
-      .forEach((itemId) => {
-        const item = items.find((entry) => entry.id === itemId);
-        lines.push(`- objet "${item?.name || itemId}" visible ou suggéré près de "${name}"`);
-      });
   });
 
   if (!hotspots.length) lines.push('- décor large et lisible avec plusieurs zones interactives potentielles');
   lines.push('- composition en caméra large, sans texte incrusté, utilisable comme scène cliquable');
   lines.push('- exposition claire pour le jeu: ombres détaillées, aucun centre noir bouché, passages et objets inspectables');
+  lines.push('- ne pas afficher les objets d’inventaire dans l’image: ils seront ajoutés manuellement par l’utilisateur dans la scène');
 
   return uniqueLines(lines).join('\n');
 };
@@ -470,12 +475,14 @@ export default function AiTab({
   const [isGenerating, setIsGenerating] = useState(false);
   const [imageStatus, setImageStatus] = useState('');
   const [generatingImageKey, setGeneratingImageKey] = useState('');
+  const [imagePreview, setImagePreview] = useState(null);
+  const [imageCompare, setImageCompare] = useState(null);
   const [aiCredits, setAiCredits] = useState({
     balance: null,
     costs: { text: 2, image: 5 },
-    nextObjectImageCost: 1,
+    nextObjectImageCost: 3,
     objectImagesInCurrentBatch: 0,
-    objectImageBatchSize: 5,
+    objectImageBatchSize: 1,
     isLoading: false,
     error: '',
   });
@@ -487,6 +494,7 @@ export default function AiTab({
   });
   const [enrichmentType, setEnrichmentType] = useState('all');
   const [sceneVisualConstraints, setSceneVisualConstraints] = useState({});
+  const [imageStylePreset, setImageStylePreset] = useState('realistic');
   const [globalVisualStyle, setGlobalVisualStyle] = useState('réaliste, mystérieux mais clairement éclairé, manoir ancien, caméra large, zones interactives visibles, ombres détaillées non bouchées');
   const [imageReadabilityLevel, setImageReadabilityLevel] = useState('balanced');
   const [visualInheritance, setVisualInheritance] = useState('même type de poignée de porte, même parquet, même lumière, mêmes matériaux');
@@ -518,9 +526,9 @@ export default function AiTab({
       setAiCredits({
         balance: Number(payload.balance || 0),
         costs: payload.costs || { text: 2, image: 5 },
-        nextObjectImageCost: Number(payload.nextObjectImageCost ?? 1),
+        nextObjectImageCost: Number(payload.nextObjectImageCost ?? 3),
         objectImagesInCurrentBatch: Number(payload.objectImagesInCurrentBatch || 0),
-        objectImageBatchSize: Number(payload.objectImageBatchSize || payload.costs?.objectImageBatchSize || 5),
+        objectImageBatchSize: Number(payload.objectImageBatchSize || payload.costs?.objectImageBatchSize || 1),
         isLoading: false,
         error: '',
       });
@@ -548,13 +556,27 @@ export default function AiTab({
   const getAiCreditCost = (kind) => {
     if (kind === 'text' && mode === 'generate') return calculateProjectGenerationCreditCost();
     if (kind === 'objectImage') return Number(aiCredits.nextObjectImageCost ?? 1);
+    if (kind === 'objectThumbnail') return Number(aiCredits.costs?.objectThumbnail ?? 1);
     return Number(aiCredits.costs?.[kind] ?? (kind === 'image' ? 5 : 2));
   };
-  const hasEnoughAiCredits = (kind) => aiCredits.balance == null || aiCredits.balance >= getAiCreditCost(kind);
-  const aiCreditMessage = (kind) => `Crédits IA insuffisants: ${aiCredits.balance || 0}/${getAiCreditCost(kind)}.`;
-  const canRunTextAi = !aiCredits.isLoading && hasEnoughAiCredits('text');
+  const getTextGenerationCreditCost = (targetMode = mode) => (
+    targetMode === 'generate' ? calculateProjectGenerationCreditCost() : Number(aiCredits.costs?.text ?? 2)
+  );
+  const hasEnoughAiCredits = (kind, costOverride = null) => (
+    aiCredits.balance == null || aiCredits.balance >= (costOverride ?? getAiCreditCost(kind))
+  );
+  const aiCreditMessage = (kind, costOverride = null) => {
+    const cost = costOverride ?? getAiCreditCost(kind);
+    return `Crédits IA insuffisants: ${aiCredits.balance || 0}/${cost}.`;
+  };
+  const currentTextGenerationCost = getTextGenerationCreditCost(mode);
+  const canRunTextAi = !aiCredits.isLoading && hasEnoughAiCredits('text', currentTextGenerationCost);
   const canRunImageAi = !aiCredits.isLoading && hasEnoughAiCredits('image');
   const canRunObjectImageAi = !aiCredits.isLoading && hasEnoughAiCredits('objectImage');
+  const canRunObjectThumbnailAi = !aiCredits.isLoading && hasEnoughAiCredits('objectThumbnail');
+  const formatCreditCost = (cost) => `${cost} crédit${Number(cost) > 1 ? 's' : ''}`;
+  const selectedImageStyle = IMAGE_STYLE_PRESETS[imageStylePreset] || IMAGE_STYLE_PRESETS.realistic;
+  const effectiveVisualStyle = `${selectedImageStyle.description}. ${globalVisualStyle}`;
 
   useEffect(() => {
     refreshAiCredits();
@@ -833,14 +855,15 @@ export default function AiTab({
   );
 
   const generate = async () => {
-    if (!hasEnoughAiCredits('text')) {
-      setStatus(aiCreditMessage('text'));
+    const generationCost = getTextGenerationCreditCost(mode);
+    if (!hasEnoughAiCredits('text', generationCost)) {
+      setStatus(aiCreditMessage('text', generationCost));
       return;
     }
     setIsGenerating(true);
     setValidation(null);
     setGeneratedProject(null);
-    setStatus(mode === 'improve' ? 'Amélioration en cours...' : 'Génération en cours...');
+    setStatus(`${mode === 'improve' ? 'Amélioration' : 'Génération'} en cours (${formatCreditCost(generationCost)})...`);
     try {
       const result = await generateAiProject(brief, {
         mode,
@@ -866,8 +889,9 @@ export default function AiTab({
   };
 
   const generateProgressiveStep = async (stage) => {
-    if (!hasEnoughAiCredits('text')) {
-      setStatus(aiCreditMessage('text'));
+    const generationCost = getTextGenerationCreditCost('progressive');
+    if (!hasEnoughAiCredits('text', generationCost)) {
+      setStatus(aiCreditMessage('text', generationCost));
       return;
     }
     setIsGenerating(true);
@@ -881,7 +905,7 @@ export default function AiTab({
       act2_continuity: 'Acte 2 en continuité',
       enrich: 'enrichissement',
     }[stage] || stage;
-    setStatus(`Génération progressive: ${stageLabel}...`);
+    setStatus(`Génération progressive: ${stageLabel} (${formatCreditCost(generationCost)})...`);
     try {
       const result = await generateAiProject(brief, {
         mode: 'progressive',
@@ -929,8 +953,9 @@ export default function AiTab({
   };
 
   const extendExistingProject = async (stage) => {
-    if (!hasEnoughAiCredits('text')) {
-      setStatus(aiCreditMessage('text'));
+    const generationCost = getTextGenerationCreditCost('extend');
+    if (!hasEnoughAiCredits('text', generationCost)) {
+      setStatus(aiCreditMessage('text', generationCost));
       return;
     }
     setIsGenerating(true);
@@ -942,7 +967,7 @@ export default function AiTab({
       add_enigmas: 'Ajouter des énigmes',
       enrich_interactions: 'Enrichir les interactions',
     };
-    setStatus(`${labels[stage]}...`);
+    setStatus(`${labels[stage]} (${formatCreditCost(generationCost)})...`);
     try {
       const result = await generateAiProject(brief, {
         mode: 'extend',
@@ -1052,26 +1077,149 @@ export default function AiTab({
     });
   };
 
+  const patchGeneratedCinematicSlide = (cinematicId, slideId, patch) => {
+    setGeneratedProject((previous) => {
+      if (!previous?.cinematics) return previous;
+      return {
+        ...previous,
+        cinematics: previous.cinematics.map((cinematic) => (
+          cinematic.id === cinematicId ? {
+            ...cinematic,
+            slides: (cinematic.slides || []).map((slide) => (
+              slide.id === slideId ? { ...slide, ...patch } : slide
+            )),
+          } : cinematic
+        )),
+      };
+    });
+  };
+
+  const makeImageVariant = ({ imageData, imageName, label, kind }) => ({
+    id: `variant-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    imageData,
+    imageName: imageName || `${kind || 'image'}-${Date.now()}.png`,
+    label: label || 'Image IA',
+    kind: kind || 'image',
+    createdAt: new Date().toISOString(),
+  });
+
+  const mergeImageVariants = (current = [], previousVariant, nextVariant) => {
+    const variants = [
+      ...(Array.isArray(current) ? current : []),
+      previousVariant,
+      nextVariant,
+    ].filter((variant) => variant?.imageData);
+    const seen = new Set();
+    return variants
+      .filter((variant) => {
+        if (seen.has(variant.imageData)) return false;
+        seen.add(variant.imageData);
+        return true;
+      })
+      .slice(-10);
+  };
+
+  const downloadImage = async (src, name = 'image.png') => {
+    const safeName = String(name || 'image.png').replace(/[\\/:*?"<>|]+/g, '-');
+    if (!src.startsWith('data:')) {
+      try {
+        const response = await fetch(src);
+        if (response.ok) {
+          const blob = await response.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = objectUrl;
+          link.download = safeName;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          URL.revokeObjectURL(objectUrl);
+          return;
+        }
+      } catch {
+        // Fall back to a direct browser download/open below.
+      }
+    }
+    const link = document.createElement('a');
+    link.href = src;
+    link.download = safeName;
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
+  const openImageCompare = (target) => {
+    const variants = Array.isArray(target.variants) ? target.variants.filter((variant) => variant?.imageData) : [];
+    if (!variants.length) return;
+    setImageCompare({ ...target, variants });
+  };
+
+  const selectImageVariant = async (variant) => {
+    if (!imageCompare || !variant?.imageData) return;
+    const patch = imageCompare.type === 'scene' ? {
+      backgroundData: variant.imageData,
+      backgroundName: variant.imageName,
+      aiImageVariants: imageCompare.variants,
+    } : {
+      imageData: variant.imageData,
+      imageName: variant.imageName,
+      aiImageVariants: imageCompare.variants,
+    };
+
+    if (imageCompare.type === 'scene') {
+      patchGeneratedScene(imageCompare.id, patch);
+      await onPersistAiImage?.({ type: 'scene', id: imageCompare.id, patch });
+    } else if (imageCompare.type === 'item') {
+      patchGeneratedItem(imageCompare.id, patch);
+      await onPersistAiImage?.({ type: 'item', id: imageCompare.id, patch });
+    } else if (imageCompare.type === 'cinematicSlide') {
+      const slidePatch = { ...patch, slideId: imageCompare.slideId };
+      patchGeneratedCinematicSlide(imageCompare.id, imageCompare.slideId, slidePatch);
+      await onPersistAiImage?.({ type: 'cinematicSlide', id: imageCompare.id, patch: slidePatch });
+    }
+
+    setImageCompare((previous) => previous ? { ...previous, activeImageData: variant.imageData } : previous);
+    setImageStatus(`Image choisie pour "${imageCompare.title}".`);
+  };
+
   const renameGeneratedItem = async (itemId, name) => {
     const nextName = String(name || '').trim();
     patchGeneratedItem(itemId, { name: nextName });
     await onPersistAiImage?.({ type: 'item', id: itemId, patch: { name: nextName } });
   };
 
+  const exportAiJson = () => {
+    if (!generatedProject) {
+      setStatus('Aucun brouillon IA à exporter.');
+      return;
+    }
+    const safeTitle = String(generatedProject.title || 'projet-ia')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9._-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .toLowerCase() || 'projet-ia';
+    downloadBlob(`${safeTitle}-ia.json`, new Blob([JSON.stringify(generatedProject, null, 2)], { type: 'application/json' }));
+    setStatus('JSON IA exporté.');
+  };
+
   const generateSceneImage = async (scene) => {
-    if (!hasEnoughAiCredits('image')) {
-      setImageStatus(aiCreditMessage('image'));
+    const generationCost = getAiCreditCost('image');
+    if (!hasEnoughAiCredits('image', generationCost)) {
+      setImageStatus(aiCreditMessage('image', generationCost));
       return;
     }
     const key = `scene:${scene.id}`;
     setGeneratingImageKey(key);
-    setImageStatus(`Génération de l’image de "${scene.name}"...`);
+    setImageStatus(`Génération de l’image de "${scene.name}" (${formatCreditCost(generationCost)})...`);
     try {
       const visualContext = {
         currentScene: scene.name,
         connectedScenes: getConnectedScenes(previewCandidate || project, scene),
         globalTheme: brief.theme || previewCandidate?.title || project?.title,
-        style: globalVisualStyle,
+        style: effectiveVisualStyle,
+        stylePreset: imageStylePreset,
         visualInheritance,
         layout: buildGlobalSceneLayout(previewCandidate || project),
       };
@@ -1087,9 +1235,22 @@ export default function AiTab({
         userId: aiUserId,
       });
       const hotspots = placeHotspotsFromElements(scene.hotspots || [], result.elements || []);
+      const previousVariant = scene.backgroundData ? makeImageVariant({
+        imageData: scene.backgroundData,
+        imageName: scene.backgroundName,
+        label: 'Image précédente',
+        kind: 'scene',
+      }) : null;
+      const nextVariant = makeImageVariant({
+        imageData: result.imageData,
+        imageName: result.imageName,
+        label: `Image ${Number(scene.aiImageVariants?.length || 0) + 1}`,
+        kind: 'scene',
+      });
       const scenePatch = {
         backgroundData: result.imageData,
         backgroundName: result.imageName,
+        aiImageVariants: mergeImageVariants(scene.aiImageVariants, previousVariant, nextVariant),
         aiVisualConstraints: getSceneVisualConstraints(scene),
         aiVisualContext: visualContext,
         aiReadabilityLevel: imageReadabilityLevel,
@@ -1108,32 +1269,117 @@ export default function AiTab({
     }
   };
 
-  const generateItemImage = async (item) => {
-    if (!hasEnoughAiCredits('objectImage')) {
-      setImageStatus(aiCreditMessage('objectImage'));
+  const generateItemImage = async (item, variant = 'full') => {
+    const isThumbnail = variant === 'thumbnail';
+    const creditKind = isThumbnail ? 'objectThumbnail' : 'objectImage';
+    const generationCost = getAiCreditCost(creditKind);
+    if (!hasEnoughAiCredits(creditKind, generationCost)) {
+      setImageStatus(aiCreditMessage(creditKind, generationCost));
       return;
     }
-    const key = `item:${item.id}`;
+    const key = `item:${variant}:${item.id}`;
     setGeneratingImageKey(key);
-    setImageStatus(`Génération de l’image de "${item.name}"...`);
+    setImageStatus(`Génération de ${isThumbnail ? 'la miniature économique' : 'l’image détaillée'} de "${item.name}" (${formatCreditCost(generationCost)})...`);
     try {
       const result = await generateAiImage({
         type: 'item',
         entity: { ...item, name: getDisplayItemName(item) },
         projectTitle: previewCandidate?.title || project?.title,
+        visualContext: {
+          style: effectiveVisualStyle,
+          stylePreset: imageStylePreset,
+        },
         regenerate: Boolean(item.imageData),
+        variant,
         userId: aiUserId,
+      });
+      const previousVariant = item.imageData ? makeImageVariant({
+        imageData: item.imageData,
+        imageName: item.imageName,
+        label: 'Image précédente',
+        kind: isThumbnail ? 'thumbnail' : 'item',
+      }) : null;
+      const nextVariant = makeImageVariant({
+        imageData: result.imageData,
+        imageName: result.imageName,
+        label: isThumbnail ? 'Miniature économique' : 'Image détaillée',
+        kind: isThumbnail ? 'thumbnail' : 'item',
       });
       const itemPatch = {
         imageData: result.imageData,
         imageName: result.imageName,
+        aiImageVariants: mergeImageVariants(item.aiImageVariants, previousVariant, nextVariant),
       };
       patchGeneratedItem(item.id, itemPatch);
       const persisted = await onPersistAiImage?.({ type: 'item', id: item.id, patch: itemPatch });
       if (persisted?.patch) patchGeneratedItem(item.id, persisted.patch);
-      setImageStatus(result.warning || `Image de "${getDisplayItemName(item)}" prête.`);
+      setImageStatus(result.warning || `${isThumbnail ? 'Miniature économique' : 'Image détaillée'} de "${getDisplayItemName(item)}" prête.`);
     } catch (error) {
       setImageStatus(`Erreur image: ${error.message}`);
+    } finally {
+      setGeneratingImageKey('');
+      refreshAiCredits();
+    }
+  };
+
+  const generateCinematicImage = async (cinematic, slide = null) => {
+    const targetSlide = slide || cinematic?.slides?.[0];
+    if (!cinematic || !targetSlide) return;
+    const generationCost = getAiCreditCost('image');
+    if (!hasEnoughAiCredits('image', generationCost)) {
+      setImageStatus(aiCreditMessage('image', generationCost));
+      return;
+    }
+    const key = `cinematic:${cinematic.id}:${targetSlide.id}`;
+    setGeneratingImageKey(key);
+    setImageStatus(`Génération de l’image de la cinématique "${cinematic.name}" (${formatCreditCost(generationCost)})...`);
+    try {
+      const result = await generateAiImage({
+        type: 'cinematic',
+        entity: {
+          id: targetSlide.id,
+          name: `Slide de ${cinematic.name}`,
+          cinematicName: cinematic.name,
+          narration: targetSlide.narration,
+        },
+        projectTitle: previewCandidate?.title || project?.title,
+        project: previewCandidate || project,
+        visualContext: {
+          globalTheme: brief.theme || previewCandidate?.title || project?.title,
+          style: effectiveVisualStyle,
+          stylePreset: imageStylePreset,
+          visualInheritance,
+        },
+        regenerate: Boolean(targetSlide.imageData),
+        readabilityLevel: imageReadabilityLevel,
+        userId: aiUserId,
+      });
+      const slidePatch = {
+        slideId: targetSlide.id,
+        imageData: result.imageData,
+        imageName: result.imageName,
+        aiImageVariants: mergeImageVariants(
+          targetSlide.aiImageVariants,
+          targetSlide.imageData ? makeImageVariant({
+            imageData: targetSlide.imageData,
+            imageName: targetSlide.imageName,
+            label: 'Image précédente',
+            kind: 'cinematic',
+          }) : null,
+          makeImageVariant({
+            imageData: result.imageData,
+            imageName: result.imageName,
+            label: `Image ${Number(targetSlide.aiImageVariants?.length || 0) + 1}`,
+            kind: 'cinematic',
+          }),
+        ),
+      };
+      patchGeneratedCinematicSlide(cinematic.id, targetSlide.id, slidePatch);
+      const persisted = await onPersistAiImage?.({ type: 'cinematicSlide', id: cinematic.id, patch: slidePatch });
+      if (persisted?.patch) patchGeneratedCinematicSlide(cinematic.id, targetSlide.id, persisted.patch);
+      setImageStatus(result.warning || `Image de "${cinematic.name}" prête.`);
+    } catch (error) {
+      setImageStatus(`Erreur image cinématique: ${error.message}`);
     } finally {
       setGeneratingImageKey('');
       refreshAiCredits();
@@ -1149,7 +1395,51 @@ export default function AiTab({
           <div className="ai-generation-modal">
             <span className="ai-generation-spinner" aria-hidden="true" />
             <strong>génération en cours ...</strong>
-            <span>veuillez patienter</span>
+            <span>Veuillez patienter, cela peut prendre quelques minutes.</span>
+          </div>
+        </div>
+      ) : null}
+      {imagePreview ? (
+        <div className="ai-image-preview-overlay" role="dialog" aria-modal="true" onClick={() => setImagePreview(null)}>
+          <div className="ai-image-preview-modal" onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="secondary-action" onClick={() => setImagePreview(null)}>Fermer</button>
+            <img src={imagePreview.src} alt={imagePreview.name || 'Aperçu'} />
+            <strong>{imagePreview.name || 'Aperçu'}</strong>
+            <button type="button" className="secondary-action" onClick={() => downloadImage(imagePreview.src, imagePreview.name || 'image.png')}>Télécharger</button>
+          </div>
+        </div>
+      ) : null}
+      {imageCompare ? (
+        <div className="ai-image-preview-overlay" role="dialog" aria-modal="true" onClick={() => setImageCompare(null)}>
+          <div className="ai-image-compare-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="ai-compare-head">
+              <strong>{imageCompare.title}</strong>
+              <button type="button" className="secondary-action" onClick={() => setImageCompare(null)}>Fermer</button>
+            </div>
+            <div className="ai-compare-grid">
+              {imageCompare.variants.map((variant, index) => {
+                const selected = variant.imageData === imageCompare.activeImageData;
+                return (
+                  <article key={variant.id || variant.imageData} className={selected ? 'selected' : ''}>
+                    <button type="button" className="ai-compare-image-button" onClick={() => {
+                      setImageCompare(null);
+                      setImagePreview({ src: variant.imageData, name: variant.imageName || imageCompare.title });
+                    }}>
+                      <img src={variant.imageData} alt={variant.label || `Image ${index + 1}`} />
+                    </button>
+                    <span>{variant.label || `Image ${index + 1}`}</span>
+                    <div>
+                      <button type="button" className="secondary-action" disabled={selected} onClick={() => selectImageVariant(variant)}>
+                        {selected ? 'Sélectionnée' : 'Choisir'}
+                      </button>
+                      <button type="button" className="secondary-action" onClick={() => downloadImage(variant.imageData, variant.imageName || `${imageCompare.title}-${index + 1}.png`)}>
+                        Télécharger
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
           </div>
         </div>
       ) : null}
@@ -1158,7 +1448,7 @@ export default function AiTab({
           <h2>IA</h2>
           <span className="status-badge soft">{mode === 'improve' ? 'Patch' : 'IA'}</span>
         </div>
-        <div data-tour="ai-credits" className={`ai-credit-panel ${aiCredits.balance != null && aiCredits.balance < getAiCreditCost('text') ? 'low' : ''}`}>
+        <div data-tour="ai-credits" className={`ai-credit-panel ${aiCredits.balance != null && aiCredits.balance < currentTextGenerationCost ? 'low' : ''}`}>
           <div>
             <span className="section-kicker">CrÃ©dits IA</span>
             <strong>{aiCredits.isLoading ? '...' : `${aiCredits.balance ?? 0}`}</strong>
@@ -1167,13 +1457,30 @@ export default function AiTab({
             Actualiser
           </button>
           <p>
-            Projet: {calculateProjectGenerationCreditCost()} crÃ©dits Â· Texte: {Number(aiCredits.costs?.text ?? 2)} crÃ©dits Â· ScÃ¨ne: {getAiCreditCost('image')} crÃ©dits Â· Objet: 1 crÃ©dit / {Number(aiCredits.objectImageBatchSize || 5)} images
+            Projet: {calculateProjectGenerationCreditCost()} crÃ©dits Â· Texte: {Number(aiCredits.costs?.text ?? 2)} crÃ©dits Â· ScÃ¨ne: {getAiCreditCost('image')} crÃ©dits Â· Objet dÃ©taillÃ©: {formatCreditCost(getAiCreditCost('objectImage'))} Â· Miniature Ã©co: {formatCreditCost(getAiCreditCost('objectThumbnail'))}
+          </p>
+          <p className="ai-current-cost">
+            Prochaine génération ({mode === 'generate' ? 'projet complet' : mode === 'progressive' ? 'étape progressive' : mode === 'extend' ? 'continuer/enrichir' : 'amélioration'}): <strong>{formatCreditCost(currentTextGenerationCost)}</strong>
           </p>
           {aiCredits.error ? <p className="small-note">{aiCredits.error}</p> : null}
         </div>
         <p className="small-note">
           Génère un projet complet ou améliore une scène existante avec un JSON partiel validé avant application.
         </p>
+
+        <HelpLabel help="Choisis le rendu utilisé par les prochaines images IA: scènes, objets et cinématiques.">Style d'image</HelpLabel>
+        <div className="segmented-control compact ai-style-choice" data-tour="ai-image-style">
+          {Object.entries(IMAGE_STYLE_PRESETS).map(([value, preset]) => (
+            <button
+              type="button"
+              key={value}
+              className={imageStylePreset === value ? 'active' : ''}
+              onClick={() => setImageStylePreset(value)}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
 
         <HelpLabel help="Style partagé par les images de scènes pour éviter que chaque pièce parte dans une direction visuelle différente.">Style visuel global</HelpLabel>
         <input data-tour="ai-visual-style" value={globalVisualStyle} onChange={(event) => setGlobalVisualStyle(event.target.value)} />
@@ -1199,7 +1506,10 @@ export default function AiTab({
 
         <div className="ai-estimate-panel" data-tour="ai-estimate">
           <strong>Modifiera probablement :</strong>
-          {getActionEstimate(mode).map((line) => <span key={line}>{line}</span>)}
+          <b className="ai-cost-line">Coût annoncé avant lancement: {formatCreditCost(currentTextGenerationCost)}</b>
+          <div className="ai-estimate-tags">
+            {getActionEstimate(mode).map((line) => <span key={line}>{line}</span>)}
+          </div>
         </div>
 
         {mode === 'improve' ? (
@@ -1256,21 +1566,21 @@ export default function AiTab({
                 return (
                   <button type="button" disabled={isGenerating || !canRunTextAi} onClick={() => generateProgressiveStep('act1')}>
                     <strong>{meta.icon} Acte 1</strong>
-                    <span>{meta.label}</span>
+                    <span>{meta.label} · {formatCreditCost(getTextGenerationCreditCost('progressive'))}</span>
                   </button>
                 );
               })()}
               <button type="button" disabled={isGenerating || !canRunTextAi || progressiveStatus.act1 !== 'done'} onClick={() => generateProgressiveStep('improveAct1')}>
                 <strong>{progressiveStatus.improveAct1 === 'running' ? '⏳' : progressiveStatus.improveAct1 === 'done' ? '✔' : progressiveStatus.act1 === 'done' ? '→' : '🔒'} Améliorer Acte 1</strong>
-                <span>{progressiveStatus.improveAct1 === 'done' ? 'Acte 1 raffiné' : progressiveStatus.act1 === 'done' ? 'structure gardée' : 'verrouillé'}</span>
+                <span>{progressiveStatus.improveAct1 === 'done' ? 'Acte 1 raffiné' : progressiveStatus.act1 === 'done' ? 'structure gardée' : 'verrouillé'} · {formatCreditCost(getTextGenerationCreditCost('progressive'))}</span>
               </button>
               <button type="button" disabled={isGenerating || !canRunTextAi || progressiveStatus.act1 !== 'done'} onClick={() => generateProgressiveStep('act2_continuity')}>
                 <strong>{progressiveStatus.act2 === 'running' || progressiveStatus.act2_continuity === 'running' ? '⏳' : progressiveStatus.act2 === 'done' ? '✔' : progressiveStatus.act1 === 'done' ? '→' : '🔒'} Générer Acte 2 en continuité</strong>
-                <span>{progressiveStatus.act2 === 'done' ? 'Acte 2 généré' : progressiveStatus.act1 === 'done' ? 'Acte 2 disponible' : 'après Acte 1'}</span>
+                <span>{progressiveStatus.act2 === 'done' ? 'Acte 2 généré' : progressiveStatus.act1 === 'done' ? 'Acte 2 disponible' : 'après Acte 1'} · {formatCreditCost(getTextGenerationCreditCost('progressive'))}</span>
               </button>
               <button type="button" disabled={isGenerating || !canRunTextAi || progressiveStatus.act2 !== 'done'} onClick={() => generateProgressiveStep('enrich')}>
                 <strong>{progressiveStatus.enrich === 'running' ? '⏳' : progressiveStatus.enrich === 'done' ? '✔' : progressiveStatus.act2 === 'done' ? '→' : '🔒'} Enrichissement</strong>
-                <span>{progressiveStatus.enrich === 'done' ? 'enrichi' : progressiveStatus.act2 === 'done' ? 'disponible' : 'verrouillé'}</span>
+                <span>{progressiveStatus.enrich === 'done' ? 'enrichi' : progressiveStatus.act2 === 'done' ? 'disponible' : 'verrouillé'} · {formatCreditCost(getTextGenerationCreditCost('progressive'))}</span>
               </button>
             </div>
 
@@ -1374,19 +1684,19 @@ export default function AiTab({
             <div className="ai-progressive-steps">
               <button type="button" disabled={isGenerating || !canRunTextAi} onClick={() => extendExistingProject('continue_story')}>
                 <strong>→ Continuer l’histoire</strong>
-                <span>suite cohérente</span>
+                <span>suite cohérente · {formatCreditCost(getTextGenerationCreditCost('extend'))}</span>
               </button>
               <button type="button" disabled={isGenerating || !canRunTextAi} onClick={() => extendExistingProject('add_scenes')}>
                 <strong>→ Ajouter des scènes</strong>
-                <span>sans casser</span>
+                <span>sans casser · {formatCreditCost(getTextGenerationCreditCost('extend'))}</span>
               </button>
               <button type="button" disabled={isGenerating || !canRunTextAi} onClick={() => extendExistingProject('add_enigmas')}>
                 <strong>→ Ajouter des énigmes</strong>
-                <span>références valides</span>
+                <span>références valides · {formatCreditCost(getTextGenerationCreditCost('extend'))}</span>
               </button>
               <button type="button" disabled={isGenerating || !canRunTextAi} onClick={() => extendExistingProject('enrich_interactions')}>
                 <strong>→ Enrichir les interactions</strong>
-                <span>zones + objets</span>
+                <span>zones + objets · {formatCreditCost(getTextGenerationCreditCost('extend'))}</span>
               </button>
             </div>
           </>
@@ -1439,7 +1749,7 @@ export default function AiTab({
 
         {mode !== 'progressive' && mode !== 'extend' ? (
           <button type="button" data-tour="ai-generate-button" disabled={isGenerating || !canRunTextAi || (mode === 'improve' && !targetSceneId)} onClick={generate}>
-            {isGenerating ? 'Traitement...' : (mode === 'improve' ? 'Améliorer la scène' : 'Générer le récit')}
+            {isGenerating ? 'Traitement...' : `${mode === 'improve' ? 'Améliorer la scène' : 'Générer le récit'} · ${formatCreditCost(currentTextGenerationCost)}`}
           </button>
         ) : null}
       </section>
@@ -1456,6 +1766,9 @@ export default function AiTab({
             </button>
             <button type="button" className="secondary-action" disabled={!generatedProject} onClick={() => saveDraftNow(true)}>
               Sauvegarder le brouillon IA
+            </button>
+            <button type="button" className="secondary-action" disabled={!generatedProject} onClick={exportAiJson}>
+              Exporter JSON IA
             </button>
             <button type="button" data-tour="ai-apply-button" disabled={!generatedProject || validation?.ok === false} onClick={applyProject}>Appliquer au projet</button>
           </div>
@@ -1537,7 +1850,7 @@ export default function AiTab({
                       placeholder={[
                         '- une porte à droite',
                         '- une table au centre',
-                        '- une lettre visible',
+                        '- une cachette ou un support visible, sans objet d’inventaire',
                         '- une fenêtre à gauche',
                       ].join('\n')}
                     />
@@ -1550,8 +1863,23 @@ export default function AiTab({
                     >
                       {generatingImageKey === `scene:${scene.id}` ?
                          'Génération...'
-                        : (scene.backgroundData ? 'Regénérer uniquement cette image' : 'Générer l’image de cette scène')}
+                        : `${scene.backgroundData ? 'Regénérer uniquement cette image' : 'Générer l’image de cette scène'} · ${formatCreditCost(getAiCreditCost('image'))}`}
                     </button>
+                    {scene.aiImageVariants?.length > 1 ? (
+                      <button
+                        type="button"
+                        className="secondary-action ai-image-action"
+                        onClick={() => openImageCompare({
+                          type: 'scene',
+                          id: scene.id,
+                          title: scene.name,
+                          activeImageData: scene.backgroundData,
+                          variants: scene.aiImageVariants,
+                        })}
+                      >
+                        Comparer les images ({scene.aiImageVariants.length})
+                      </button>
+                    ) : null}
                     {scene.backgroundData && scene.hotspots?.length ? (
                       <p className="ai-placement-note">Zones préplacées automatiquement. Validation visuelle rapide dans l’éditeur après application.</p>
                     ) : null}
@@ -1588,7 +1916,14 @@ export default function AiTab({
                       {narrativePreview.items.map((item) => (
                         <article key={item.id} className="ai-object-card">
                           {item.imageData ? (
-                            <img src={item.imageData} alt={item.name} />
+                            <button
+                              type="button"
+                              className="ai-object-preview-button"
+                              onClick={() => setImagePreview({ src: item.imageData, name: item.name })}
+                              title="Aperçu de l'image"
+                            >
+                              <img src={item.imageData} alt={item.name} />
+                            </button>
                           ) : (
                             <span>{getItemFallbackIcon(item)}</span>
                           )}
@@ -1602,13 +1937,38 @@ export default function AiTab({
                           <button
                             type="button"
                             className="secondary-action ai-image-action"
-                            disabled={generatingImageKey === `item:${item.id}` || !canRunObjectImageAi}
+                            disabled={generatingImageKey === `item:full:${item.id}` || !canRunObjectImageAi}
                             onClick={() => generateItemImage(item)}
                           >
-                            {generatingImageKey === `item:${item.id}` ?
+                            {generatingImageKey === `item:full:${item.id}` ?
                                'Génération...'
-                              : (item.imageData ? 'Regénérer uniquement cette image' : 'Générer l’image de cet objet')}
+                              : `${item.imageData ? 'Regénérer l’image détaillée' : 'Générer image détaillée'} · ${formatCreditCost(getAiCreditCost('objectImage'))}`}
                           </button>
+                          <button
+                            type="button"
+                            className="secondary-action ai-image-action"
+                            disabled={generatingImageKey === `item:thumbnail:${item.id}` || !canRunObjectThumbnailAi}
+                            onClick={() => generateItemImage(item, 'thumbnail')}
+                          >
+                            {generatingImageKey === `item:thumbnail:${item.id}` ?
+                               'Génération...'
+                              : `${item.imageData ? 'Regénérer miniature économique' : 'Générer miniature économique'} · ${formatCreditCost(getAiCreditCost('objectThumbnail'))}`}
+                          </button>
+                          {item.aiImageVariants?.length > 1 ? (
+                            <button
+                              type="button"
+                              className="secondary-action ai-image-action"
+                              onClick={() => openImageCompare({
+                                type: 'item',
+                                id: item.id,
+                                title: item.name,
+                                activeImageData: item.imageData,
+                                variants: item.aiImageVariants,
+                              })}
+                            >
+                              Comparer les images ({item.aiImageVariants.length})
+                            </button>
+                          ) : null}
                         </article>
                       ))}
                     </div>
@@ -1620,7 +1980,63 @@ export default function AiTab({
                 </div>
                 <div>
                   <h3>Cinématiques</h3>
-                  <p>{narrativePreview.cinematics.map((cinematic) => cinematic.name).join(', ') || 'Aucune cinématique.'}</p>
+                  {narrativePreview.cinematics.length ? (
+                    <div className="ai-cinematic-list">
+                      {narrativePreview.cinematics.map((cinematic) => (
+                        <article key={cinematic.id} className="ai-cinematic-card">
+                          <strong>{cinematic.name}</strong>
+                          <div className="ai-cinematic-slide-list">
+                            {(cinematic.slides?.length ? cinematic.slides : [{ id: `${cinematic.id}-slide-1`, narration: 'Cinématique sans narration.' }]).map((slide, index) => {
+                              const imageKey = `cinematic:${cinematic.id}:${slide.id}`;
+                              return (
+                                <div key={slide.id || index} className="ai-cinematic-slide-card">
+                                  {slide.imageData ? (
+                                    <button
+                                      type="button"
+                                      className="ai-cinematic-preview-button"
+                                      onClick={() => setImagePreview({ src: slide.imageData, name: `${cinematic.name} - image ${index + 1}` })}
+                                      title="Aperçu de l'image"
+                                    >
+                                      <img src={slide.imageData} alt={`${cinematic.name} - image ${index + 1}`} />
+                                    </button>
+                                  ) : (
+                                    <span>Image {index + 1}</span>
+                                  )}
+                                  <p>{slide.narration || `Prompt cinématique ${index + 1}`}</p>
+                                  <button
+                                    type="button"
+                                    className="secondary-action ai-image-action"
+                                    disabled={!slide || generatingImageKey === imageKey || !canRunImageAi}
+                                    onClick={() => generateCinematicImage(cinematic, slide)}
+                                  >
+                                    {generatingImageKey === imageKey ?
+                                       'Génération...'
+                                      : `${slide.imageData ? 'Regénérer cette image' : 'Générer cette image'} · ${formatCreditCost(getAiCreditCost('image'))}`}
+                                  </button>
+                                  {slide.aiImageVariants?.length > 1 ? (
+                                    <button
+                                      type="button"
+                                      className="secondary-action ai-image-action"
+                                      onClick={() => openImageCompare({
+                                        type: 'cinematicSlide',
+                                        id: cinematic.id,
+                                        slideId: slide.id,
+                                        title: `${cinematic.name} - image ${index + 1}`,
+                                        activeImageData: slide.imageData,
+                                        variants: slide.aiImageVariants,
+                                      })}
+                                    >
+                                      Comparer les images ({slide.aiImageVariants.length})
+                                    </button>
+                                  ) : null}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : <p>Aucune cinématique.</p>}
                 </div>
               </section>
             ) : null}

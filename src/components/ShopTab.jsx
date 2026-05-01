@@ -10,10 +10,10 @@ const parsePack = (value, fallback) => {
 };
 
 const defaultPacks = [
-  { credits: 100, price: '2,99 €', url: import.meta.env.VITE_GUMROAD_PACK_100_URL || '' },
-  { credits: 250, price: '6,99 €', url: import.meta.env.VITE_GUMROAD_PACK_250_URL || '' },
-  { credits: 500, price: '12,99 €', url: import.meta.env.VITE_GUMROAD_PACK_500_URL || '' },
-  { credits: 1000, price: '24,99 €', url: import.meta.env.VITE_GUMROAD_PACK_1000_URL || '' },
+  { credits: 100, price: '3,99 €', url: import.meta.env.VITE_GUMROAD_PACK_100_URL || '' },
+  { credits: 250, price: '9,49 €', url: import.meta.env.VITE_GUMROAD_PACK_250_URL || '' },
+  { credits: 500, price: '17,99 €', url: import.meta.env.VITE_GUMROAD_PACK_500_URL || '' },
+  { credits: 1000, price: '33,99 €', url: import.meta.env.VITE_GUMROAD_PACK_1000_URL || '' },
 ].map((fallback, index) => parsePack(import.meta.env[`VITE_GUMROAD_PACK_${index + 1}`], fallback));
 
 const estimateProjects = (credits) => Math.max(1, Math.floor(Number(credits || 0) / 36));
@@ -63,7 +63,7 @@ export default function ShopTab({ user }) {
         <div className="combo-card shop-info-card">
           <strong>Repères</strong>
           <p>Un projet comme l’exemple récent consomme environ 36 crédits hors images.</p>
-          <p>Les images d’objet coûtent 1 crédit par lot de 5. Une image de scène coûte 5 crédits.</p>
+          <p>Miniature économique d’objet: 1 crédit. Image d’objet détaillée: 3 crédits. Image de scène: 5 crédits.</p>
         </div>
       </section>
 

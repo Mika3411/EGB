@@ -2,7 +2,6 @@ import bannerImage from '../assets/header-banner.png';
 
 export default function Header({
   projectTitle,
-  onExportJson,
   onImportJson,
   onExportStandalone,
   user,
@@ -29,7 +28,6 @@ export default function Header({
             </div>
           </div>
           <div className="toolbar project-actions">
-            <button onClick={onExportJson}>Exporter JSON</button>
             <label className="button like secondary-action">
               Importer JSON
               <input type="file" accept="application/json" onChange={onImportJson} hidden />
