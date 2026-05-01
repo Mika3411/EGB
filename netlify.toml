@@ -29,6 +29,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/ai-job"
+  to = "/.netlify/functions/ai-job"
+  status = 200
+
+[[redirects]]
   from = "/api/gumroad/webhook"
   to = "/.netlify/functions/gumroad-webhook"
   status = 200

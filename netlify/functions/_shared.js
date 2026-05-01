@@ -18,6 +18,7 @@ export const aiCreditCosts = {
 };
 
 export const defaultAiCredits = Number(process.env.AI_DEFAULT_CREDITS || 20);
+export const aiJobBucket = process.env.SUPABASE_STORAGE_BUCKET || process.env.VITE_SUPABASE_STORAGE_BUCKET || 'escape-game-assets';
 
 export const toCount = (value) => {
   const number = Number(value);
@@ -182,6 +183,35 @@ export const getRecentTransactions = async (supabase, userId) => {
     reason: entry.reason || '',
     at: entry.created_at || '',
   }));
+};
+
+export const getAiJobPath = (jobId) => `ai-jobs/${String(jobId || '').replace(/[^a-zA-Z0-9._-]/g, '-')}.json`;
+
+export const writeAiJob = async (supabase, job = {}) => {
+  const payload = {
+    ...job,
+    updatedAt: new Date().toISOString(),
+  };
+  const { error } = await supabase.storage
+    .from(aiJobBucket)
+    .upload(getAiJobPath(payload.id), Buffer.from(JSON.stringify(payload)), {
+      upsert: true,
+      contentType: 'application/json; charset=utf-8',
+      cacheControl: '0',
+    });
+
+  if (error) throw error;
+  return payload;
+};
+
+export const readAiJob = async (supabase, jobId) => {
+  const { data, error } = await supabase.storage.from(aiJobBucket).download(getAiJobPath(jobId));
+  if (error) {
+    const notFound = new Error('Job IA introuvable.');
+    notFound.statusCode = 404;
+    throw notFound;
+  }
+  return JSON.parse(await data.text());
 };
 
 export const addCreditTransaction = async (supabase, userId, transaction = {}) => {

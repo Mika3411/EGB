@@ -12,6 +12,7 @@ import {
 } from '../data/projectData';
 
 const endpoint = import.meta.env.VITE_AI_GENERATION_ENDPOINT || '/api/generate';
+const jobEndpoint = import.meta.env.VITE_AI_JOB_ENDPOINT || '/api/ai-job';
 
 const makeAiHeaders = (userId) => ({
   'Content-Type': 'application/json',
@@ -467,6 +468,43 @@ const parseProjectResponse = (payload) => {
   return payload;
 };
 
+const wait = (delay) => new Promise((resolve) => setTimeout(resolve, delay));
+
+const waitForAiJob = async (jobId, userId = '') => {
+  const startedAt = Date.now();
+  const timeout = Number(import.meta.env.VITE_AI_JOB_TIMEOUT_MS || 8 * 60 * 1000);
+  const interval = Number(import.meta.env.VITE_AI_JOB_POLL_INTERVAL_MS || 2500);
+
+  while (Date.now() - startedAt < timeout) {
+    await wait(interval);
+    const url = new URL(jobEndpoint, window.location.origin);
+    url.searchParams.set('id', jobId);
+    if (userId) url.searchParams.set('userId', userId);
+
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: userId ? { 'X-AI-User-Id': userId } : {},
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(payload.error || `Suivi IA indisponible (${response.status}).`);
+      error.status = response.status;
+      throw error;
+    }
+
+    if (payload.status === 'complete') return payload;
+    if (payload.status === 'error') {
+      const error = new Error(payload.error || 'Generation IA echouee.');
+      error.code = payload.code;
+      throw error;
+    }
+  }
+
+  const error = new Error('Generation IA toujours en cours. Reessaie dans quelques instants.');
+  error.code = 'AI_JOB_TIMEOUT';
+  throw error;
+};
+
 const itemNameFromId = (id) => String(id || '')
   .replace(/^it_/, '')
   .replace(/[_-]+/g, ' ')
@@ -887,7 +925,10 @@ export async function generateProjectWithApi(brief, options = {}) {
     throw error;
   }
 
-  const payload = await response.json();
+  let payload = await response.json();
+  if (payload.jobId) {
+    payload = await waitForAiJob(payload.jobId, options.userId);
+  }
   const parsed = repairMissingSceneReferences(repairMissingItemReferences(parseProjectResponse(payload)));
   const apiRenamed = await repairBadItemNamesWithApi(parsed, options);
   const repaired = repairBadItemNames(apiRenamed);

@@ -11,8 +11,34 @@ import {
   parseBody,
   refundCredits,
   spendCredits,
+  writeAiJob,
   withErrors,
 } from './_shared.js';
+
+const makeJobId = () => `ai_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
+const invokeBackgroundGeneration = async (event, jobId, body) => {
+  const host = event.headers.host || event.headers.Host;
+  const protocol = event.headers['x-forwarded-proto'] || 'https';
+  const baseUrl = host ? `${protocol}://${host}` : process.env.URL;
+  if (!baseUrl) {
+    const error = new Error('URL Netlify introuvable pour lancer la generation asynchrone.');
+    error.statusCode = 500;
+    throw error;
+  }
+
+  const response = await fetch(`${baseUrl}/.netlify/functions/generate-background`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jobId, body }),
+  });
+
+  if (!response.ok && response.status !== 202) {
+    const error = new Error(`Impossible de lancer la generation asynchrone (${response.status}).`);
+    error.statusCode = 502;
+    throw error;
+  }
+};
 
 export const handler = async (event) => withErrors(event, async () => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Methode non autorisee.' });
@@ -21,6 +47,26 @@ export const handler = async (event) => withErrors(event, async () => {
   const userId = getCreditUserId(event, body);
   const cost = calculateTextCreditCost(body);
   const supabase = getSupabaseAdminClient();
+  const shouldRunAsync = body.responseFormat === 'escape-game-project-json' && body.mode !== 'repair_item_names' && !body.runInline;
+  if (shouldRunAsync) {
+    const jobId = makeJobId();
+    await writeAiJob(supabase, {
+      id: jobId,
+      userId,
+      status: 'pending',
+      mode: body.mode || 'generate',
+      cost,
+      createdAt: new Date().toISOString(),
+    });
+    await invokeBackgroundGeneration(event, jobId, body);
+    return json(202, {
+      jobId,
+      status: 'pending',
+      message: 'Generation IA lancee en arriere-plan.',
+      credits: { cost, costs: aiCreditCosts },
+    });
+  }
+
   const input = [
     'Tu dois repondre uniquement avec un JSON valide, sans Markdown ni commentaire.',
     body.prompt,
