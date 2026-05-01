@@ -608,6 +608,52 @@ export default function AiTab({
   const formatCreditCost = (cost) => `${cost} crédit${Number(cost) > 1 ? 's' : ''}`;
   const selectedImageStyle = IMAGE_STYLE_PRESETS[imageStylePreset] || IMAGE_STYLE_PRESETS.realistic;
   const effectiveVisualStyle = `${selectedImageStyle.description}. ${globalVisualStyle}`;
+  const briefForm = (
+    <>
+      <HelpLabel help={FIELD_HELP.theme}>Thème</HelpLabel>
+      <input value={brief.theme} onChange={(event) => updateBrief('theme', event.target.value)} />
+
+      <HelpLabel help={FIELD_HELP.difficulty}>Difficulté</HelpLabel>
+      <select value={brief.difficulty} onChange={(event) => updateBrief('difficulty', event.target.value)}>
+        <option value="easy">Facile</option>
+        <option value="normal">Intermédiaire</option>
+        <option value="hard">Difficile</option>
+      </select>
+
+      <div className="grid-two small-gap">
+        <div>
+          <HelpLabel help={FIELD_HELP.actCount}>Actes</HelpLabel>
+          <input type="number" min="1" max="6" value={brief.actCount} onChange={(event) => updateBrief('actCount', event.target.value)} />
+        </div>
+        <div>
+          <HelpLabel help={FIELD_HELP.sceneCount}>Scènes</HelpLabel>
+          <input type="number" min="1" max="24" value={brief.sceneCount} onChange={(event) => updateBrief('sceneCount', event.target.value)} />
+        </div>
+        <div>
+          <HelpLabel help={FIELD_HELP.subsceneCount}>Sous-scènes</HelpLabel>
+          <input type="number" min="0" max="24" value={brief.subsceneCount} onChange={(event) => updateBrief('subsceneCount', event.target.value)} />
+        </div>
+        <div>
+          <HelpLabel help={FIELD_HELP.itemCount}>Objets</HelpLabel>
+          <input type="number" min="1" max="40" value={brief.itemCount} onChange={(event) => updateBrief('itemCount', event.target.value)} />
+        </div>
+        <div>
+          <HelpLabel help={FIELD_HELP.enigmaCount}>Énigmes</HelpLabel>
+          <input type="number" min="0" max="20" value={brief.enigmaCount} onChange={(event) => updateBrief('enigmaCount', event.target.value)} />
+        </div>
+        <div>
+          <HelpLabel help={FIELD_HELP.cinematicCount}>Cinématiques</HelpLabel>
+          <input type="number" min="0" max="12" value={brief.cinematicCount} onChange={(event) => updateBrief('cinematicCount', event.target.value)} />
+        </div>
+      </div>
+
+      <HelpLabel help={FIELD_HELP.tone}>Ton</HelpLabel>
+      <input value={brief.tone} onChange={(event) => updateBrief('tone', event.target.value)} />
+
+      <HelpLabel help={FIELD_HELP.duration}>Durée visée</HelpLabel>
+      <input value={brief.duration} onChange={(event) => updateBrief('duration', event.target.value)} />
+    </>
+  );
 
   useEffect(() => {
     refreshAiCredits();
@@ -1581,41 +1627,7 @@ export default function AiTab({
           </>
         ) : mode === 'progressive' ? (
           <>
-            <HelpLabel help={FIELD_HELP.theme}>Thème</HelpLabel>
-            <input value={brief.theme} onChange={(event) => updateBrief('theme', event.target.value)} />
-
-            <HelpLabel help={FIELD_HELP.difficulty}>Difficulté</HelpLabel>
-            <select value={brief.difficulty} onChange={(event) => updateBrief('difficulty', event.target.value)}>
-              <option value="easy">Facile</option>
-              <option value="normal">Intermédiaire</option>
-              <option value="hard">Difficile</option>
-            </select>
-
-            <HelpLabel help={FIELD_HELP.tone}>Ton</HelpLabel>
-            <input value={brief.tone} onChange={(event) => updateBrief('tone', event.target.value)} />
-
-            <div className="form-grid compact">
-              <div>
-                <HelpLabel help={FIELD_HELP.actCount}>Actes prévus</HelpLabel>
-                <input type="number" min="1" max="6" value={brief.actCount} onChange={(event) => updateBrief('actCount', event.target.value)} />
-              </div>
-              <div>
-                <HelpLabel help={FIELD_HELP.sceneCount}>Scènes totales</HelpLabel>
-                <input type="number" min="1" max="24" value={brief.sceneCount} onChange={(event) => updateBrief('sceneCount', event.target.value)} />
-              </div>
-              <div>
-                <HelpLabel help={FIELD_HELP.itemCount}>Objets totaux</HelpLabel>
-                <input type="number" min="1" max="40" value={brief.itemCount} onChange={(event) => updateBrief('itemCount', event.target.value)} />
-              </div>
-              <div>
-                <HelpLabel help={FIELD_HELP.enigmaCount}>Énigmes totales</HelpLabel>
-                <input type="number" min="0" max="20" value={brief.enigmaCount} onChange={(event) => updateBrief('enigmaCount', event.target.value)} />
-              </div>
-              <div>
-                <HelpLabel help={FIELD_HELP.cinematicCount}>Cinématiques totales</HelpLabel>
-                <input type="number" min="0" max="12" value={brief.cinematicCount} onChange={(event) => updateBrief('cinematicCount', event.target.value)} />
-              </div>
-            </div>
+            {briefForm}
 
             <HelpLabel help={FIELD_HELP.enrichmentType}>Type d’enrichissement</HelpLabel>
             <select value={enrichmentType} onChange={(event) => setEnrichmentType(event.target.value)}>
@@ -1768,48 +1780,7 @@ export default function AiTab({
           </>
         ) : (
           <>
-            <HelpLabel help={FIELD_HELP.theme}>Thème</HelpLabel>
-            <input value={brief.theme} onChange={(event) => updateBrief('theme', event.target.value)} />
-
-            <HelpLabel help={FIELD_HELP.difficulty}>Difficulté</HelpLabel>
-            <select value={brief.difficulty} onChange={(event) => updateBrief('difficulty', event.target.value)}>
-              <option value="easy">Facile</option>
-              <option value="normal">Intermédiaire</option>
-              <option value="hard">Difficile</option>
-            </select>
-
-            <div className="grid-two small-gap">
-              <div>
-                <HelpLabel help={FIELD_HELP.actCount}>Actes</HelpLabel>
-                <input type="number" min="1" max="6" value={brief.actCount} onChange={(event) => updateBrief('actCount', event.target.value)} />
-              </div>
-              <div>
-                <HelpLabel help={FIELD_HELP.sceneCount}>Scènes</HelpLabel>
-                <input type="number" min="1" max="24" value={brief.sceneCount} onChange={(event) => updateBrief('sceneCount', event.target.value)} />
-              </div>
-              <div>
-                <HelpLabel help={FIELD_HELP.subsceneCount}>Sous-scènes</HelpLabel>
-                <input type="number" min="0" max="24" value={brief.subsceneCount} onChange={(event) => updateBrief('subsceneCount', event.target.value)} />
-              </div>
-              <div>
-                <HelpLabel help={FIELD_HELP.itemCount}>Objets</HelpLabel>
-                <input type="number" min="1" max="40" value={brief.itemCount} onChange={(event) => updateBrief('itemCount', event.target.value)} />
-              </div>
-              <div>
-                <HelpLabel help={FIELD_HELP.enigmaCount}>Énigmes</HelpLabel>
-                <input type="number" min="0" max="20" value={brief.enigmaCount} onChange={(event) => updateBrief('enigmaCount', event.target.value)} />
-              </div>
-              <div>
-                <HelpLabel help={FIELD_HELP.cinematicCount}>Cinématiques</HelpLabel>
-                <input type="number" min="0" max="12" value={brief.cinematicCount} onChange={(event) => updateBrief('cinematicCount', event.target.value)} />
-              </div>
-            </div>
-
-            <HelpLabel help={FIELD_HELP.tone}>Ton</HelpLabel>
-            <input value={brief.tone} onChange={(event) => updateBrief('tone', event.target.value)} />
-
-            <HelpLabel help={FIELD_HELP.duration}>Durée visée</HelpLabel>
-            <input value={brief.duration} onChange={(event) => updateBrief('duration', event.target.value)} />
+            {briefForm}
           </>
         )}
 
