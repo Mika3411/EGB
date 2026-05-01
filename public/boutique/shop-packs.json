@@ -1,0 +1,33 @@
+[
+  {
+    "id": "pack-la-foret-maudite",
+    "title": "La Foret Maudite - Escape game non lineaire",
+    "costCredits": 150,
+    "description": "Un escape game non lineaire en 3 actes dans une foret maudite: exploration de la lisiere, descente sous les racines, puis coeur rituel de la malediction. Le pack contient un projet structure avec chemins multiples, objets, enigmes, cinematiques, ainsi que les prompts pour les scenes, les cinematiques et les objets.",
+    "rating": 9,
+    "actsCount": 3,
+    "scenesCount": 24,
+    "objectsCount": 12,
+    "enigmasCount": 11,
+    "cinematicsCount": 3,
+    "combinationsCount": 0,
+    "screenshots": [
+      {
+        "id": "shot-la-foret-maudite-cover",
+        "name": "cover.png",
+        "src": "/boutique/La%20for%C3%AAt%20maudite/cover.png"
+      },
+      {
+        "id": "shot-la-foret-maudite-sentier-rouge",
+        "name": "screenshot-sentier-rouge.png",
+        "src": "/boutique/La%20for%C3%AAt%20maudite/screenshot-sentier-rouge.png"
+      }
+    ],
+    "downloadUrl": "/boutique/La%20for%C3%AAt%20maudite/La%20for%C3%AAt%20maudite.zip",
+    "downloadFileName": "La forêt maudite.zip",
+    "downloadStoragePath": "public/boutique/La foret maudite/La foret maudite.zip",
+    "downloadMode": "public",
+    "createdAt": "2026-05-01T00:00:00.000Z",
+    "updatedAt": "2026-05-01T00:00:00.000Z"
+  }
+]

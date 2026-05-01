@@ -19,6 +19,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/shop/purchase"
+  to = "/.netlify/functions/shop-purchase"
+  status = 200
+
+[[redirects]]
   from = "/api/generate"
   to = "/.netlify/functions/generate"
   status = 200

@@ -422,6 +422,35 @@ const handleCreditsAdminUpdate = async (req, res) => {
   });
 };
 
+const handleShopPurchase = async (req, res) => {
+  const body = await readJsonBody(req);
+  const userId = getCreditUserId(req, body);
+  const packId = String(body.packId || '').trim().replace(/[^a-zA-Z0-9._:-]/g, '-');
+  const costCredits = Math.max(0, Math.round(Number(body.costCredits || 0)));
+  const title = String(body.title || 'Pack boutique').trim().slice(0, 120);
+
+  if (!packId) {
+    sendJson(res, 400, { error: 'Pack manquant.' });
+    return;
+  }
+  if (!userId || userId === 'anonymous') {
+    sendJson(res, 400, { error: 'Utilisateur manquant.' });
+    return;
+  }
+  if (!costCredits) {
+    sendJson(res, 400, { error: 'Cout en credits invalide.' });
+    return;
+  }
+
+  const account = spendCredits(userId, costCredits, `shop_pack:${packId}:${title}`);
+  sendJson(res, 200, {
+    ok: true,
+    packId,
+    costCredits,
+    balance: account.balance || 0,
+  });
+};
+
 const supabaseUserToAdminRecord = (user) => ({
   id: user.id,
   email: user.email || '',
@@ -894,6 +923,11 @@ const server = createServer(async (req, res) => {
 
     if (req.method === 'GET' && req.url.startsWith('/api/ai-credits')) {
       await handleCredits(req, res);
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/api/shop/purchase') {
+      await handleShopPurchase(req, res);
       return;
     }
 

@@ -2,6 +2,16 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { getAllAccounts, normalizeEmail, updateStoredAccount } from '../lib/authStorage';
 import { getPublicGames } from '../lib/publicGalleryStorage';
 import { getBlogModerationId, getModerationState, updateModerationAction } from '../lib/moderationStorage';
+import {
+  createEmptyShopPack,
+  archiveSharedShopPack,
+  deleteSharedShopPack,
+  getShopPacks,
+  loadSharedShopPacks,
+  relistSharedShopPack,
+  upsertSharedShopPack,
+} from '../lib/shopPacksStorage';
+import { fileToDataURL, uploadFileToSupabase } from '../utils/fileHelpers';
 import { getSupabaseClient, hasSupabaseConfig } from '../supabaseStorage';
 
 const ADMIN_EMAIL = 'thorez.m@hotmail.fr';
@@ -40,15 +50,31 @@ const readLocalProjects = (userId) => {
 const getDisplayName = (account) =>
   account?.name || account?.email || account?.userId || 'Utilisateur';
 
+const SHOP_PACK_NUMBER_FIELDS = [
+  'costCredits',
+  'rating',
+  'actsCount',
+  'scenesCount',
+  'objectsCount',
+  'enigmasCount',
+  'cinematicsCount',
+  'combinationsCount',
+];
+
+const createShopPackId = () => `pack_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
 export default function AdminPage({
   user,
   onBack,
   onLogout,
 }) {
+  const [activeTab, setActiveTab] = useState('members');
   const [accounts, setAccounts] = useState([]);
   const [supabaseUsers, setSupabaseUsers] = useState([]);
   const [creditUsers, setCreditUsers] = useState([]);
   const [publicGames, setPublicGames] = useState([]);
+  const [shopPacks, setShopPacks] = useState(() => getShopPacks());
+  const [shopPackForm, setShopPackForm] = useState(() => createEmptyShopPack());
   const [moderation, setModeration] = useState({ games: new Set(), blogs: new Set(), comments: new Set(), actions: [] });
   const [selectedUserId, setSelectedUserId] = useState('');
   const [creditAction, setCreditAction] = useState('add');
@@ -88,6 +114,9 @@ export default function AdminPage({
     setCreditUsers(Array.isArray(creditsPayload.users) ? creditsPayload.users : []);
     setPublicGames(games.filter((game) => normalizeEmail(game.authorEmail) !== ADMIN_EMAIL));
     setModeration(moderationState);
+    loadSharedShopPacks()
+      .then(setShopPacks)
+      .catch(() => {});
   };
 
   useEffect(() => {
@@ -287,6 +316,144 @@ export default function AdminPage({
     }
   };
 
+  const updateShopPackForm = (field, value) => {
+    setShopPackForm((previous) => ({
+      ...previous,
+      [field]: SHOP_PACK_NUMBER_FIELDS.includes(field) ? Number(value || 0) : value,
+    }));
+  };
+
+  const addShopPackScreenshots = async (event) => {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+    const screenshots = await Promise.all(files.map(async (file) => ({
+      id: `shot_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+      name: file.name,
+      src: await fileToDataURL(file),
+    })));
+    setShopPackForm((previous) => ({
+      ...previous,
+      screenshots: [...(previous.screenshots || []), ...screenshots],
+    }));
+    event.target.value = '';
+  };
+
+  const removeShopPackScreenshot = (screenshotId) => {
+    setShopPackForm((previous) => ({
+      ...previous,
+      screenshots: (previous.screenshots || []).filter((entry) => entry.id !== screenshotId),
+    }));
+  };
+
+  const importShopPackZip = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!/\.zip$/i.test(file.name)) {
+      setStatus('Importe un fichier ZIP pour le pack.');
+      event.target.value = '';
+      return;
+    }
+
+    setIsBusy(true);
+    try {
+      const packId = shopPackForm.id || createShopPackId();
+      const patch = hasSupabaseConfig() ?
+        await uploadFileToSupabase(file, {
+          userId: user?.id,
+          folder: `shop-packs-${packId}`,
+          optimizeImage: false,
+          cacheControl: '0',
+        }).then((result) => ({
+          downloadUrl: result.publicUrl,
+          downloadStoragePath: result.path,
+          downloadMode: 'supabase',
+        }))
+        : {
+          downloadUrl: await fileToDataURL(file),
+          downloadStoragePath: '',
+          downloadMode: 'local',
+        };
+
+      setShopPackForm((previous) => ({
+        ...previous,
+        id: packId,
+        downloadFileName: file.name,
+        ...patch,
+      }));
+      setStatus('ZIP du pack importe.');
+    } catch (error) {
+      setStatus(error.message || 'Import ZIP impossible.');
+    } finally {
+      setIsBusy(false);
+      event.target.value = '';
+    }
+  };
+
+  const saveShopPack = async (event) => {
+    event.preventDefault();
+    if (!shopPackForm.title.trim()) {
+      setStatus('Ajoute un nom au pack boutique.');
+      return;
+    }
+    setIsBusy(true);
+    try {
+      const nextPacks = await upsertSharedShopPack(shopPackForm);
+      setShopPacks(nextPacks);
+      setShopPackForm(createEmptyShopPack());
+      setStatus(hasSupabaseConfig() ? 'Pack boutique publie.' : 'Pack boutique enregistre localement.');
+    } catch (error) {
+      setStatus(error.message || 'Enregistrement du pack impossible.');
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const editShopPack = (pack) => {
+    setShopPackForm(pack);
+    setStatus(`Edition du pack "${pack.title}".`);
+  };
+
+  const removeShopPack = async (pack) => {
+    if (!window.confirm(`Supprimer le pack "${pack.title}" ?`)) return;
+    setIsBusy(true);
+    try {
+      const nextPacks = await deleteSharedShopPack(pack.id);
+      setShopPacks(nextPacks);
+      if (shopPackForm.id === pack.id) setShopPackForm(createEmptyShopPack());
+      setStatus('Pack boutique supprime.');
+    } catch (error) {
+      setStatus(error.message || 'Suppression du pack impossible.');
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const archiveShopPack = async (pack) => {
+    setIsBusy(true);
+    try {
+      const nextPacks = await archiveSharedShopPack(pack.id, { archivedReason: 'admin' });
+      setShopPacks(nextPacks);
+      setStatus('Pack archive.');
+    } catch (error) {
+      setStatus(error.message || 'Archivage du pack impossible.');
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const relistShopPack = async (pack) => {
+    setIsBusy(true);
+    try {
+      const nextPacks = await relistSharedShopPack(pack.id);
+      setShopPacks(nextPacks);
+      setStatus('Pack remis en vente.');
+    } catch (error) {
+      setStatus(error.message || 'Remise en vente impossible.');
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
   const blogPosts = useMemo(() => publicGames.flatMap((game) => (
     (game.authorProfile?.blogPosts || []).map((post) => ({
       ...post,
@@ -305,6 +472,9 @@ export default function AdminPage({
       author: comment.authorName || 'Joueur',
     }))
   )), [publicGames]);
+
+  const activeShopPacks = shopPacks.filter((pack) => !pack.archived);
+  const archivedShopPacks = shopPacks.filter((pack) => pack.archived);
 
   return (
     <main className="layout admin-page">
@@ -333,6 +503,27 @@ export default function AdminPage({
         </div>
       </section>
 
+      <section className="panel admin-tabs-panel" aria-label="Navigation admin">
+        <div className="admin-tabs">
+          {[
+            ['members', 'Membres'],
+            ['gallery', 'Gallerie'],
+            ['shop', 'Boutique'],
+          ].map(([tabId, label]) => (
+            <button
+              key={tabId}
+              type="button"
+              className={activeTab === tabId ? 'active' : ''}
+              onClick={() => setActiveTab(tabId)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {activeTab === 'members' ? (
+        <>
       <section className="admin-stats-grid">
         <article className="panel admin-stat-card">
           <span>Utilisateurs geres</span>
@@ -501,7 +692,11 @@ export default function AdminPage({
           </div>
         </aside>
       </section>
+        </>
+      ) : null}
 
+      {activeTab === 'gallery' ? (
+        <>
       <section className="panel">
         <div className="panel-head">
           <div>
@@ -635,6 +830,195 @@ export default function AdminPage({
           ) : null}
         </div>
       </section>
+        </>
+      ) : null}
+
+      {activeTab === 'shop' ? (
+        <section className="panel admin-shop-panel">
+          <div className="panel-head">
+            <div>
+              <span className="eyebrow">Boutique</span>
+              <h2>Packs de jeux</h2>
+              <p className="small-note">Cree des fiches produit avec cout en credits, contenu du pack et screenshots.</p>
+            </div>
+            <button type="button" className="secondary-action" onClick={() => setShopPackForm(createEmptyShopPack())}>
+              Nouveau pack
+            </button>
+          </div>
+
+          <div className="admin-shop-grid">
+            <form className="subpanel admin-shop-form" onSubmit={saveShopPack}>
+              <div className="subpanel-head">
+                <div>
+                  <h3>{shopPackForm.id ? 'Modifier le pack' : 'Ajouter un pack'}</h3>
+                  <p className="small-note">Les champs numeriques alimentent la fiche produit.</p>
+                </div>
+              </div>
+
+              <label>Nom du pack</label>
+              <input
+                value={shopPackForm.title}
+                onChange={(event) => updateShopPackForm('title', event.target.value)}
+                placeholder="Ex: Manoir victorien"
+              />
+
+              <div className="grid-two compact-grid">
+                <label>
+                  Cout en credits
+                  <input type="number" min="0" value={shopPackForm.costCredits} onChange={(event) => updateShopPackForm('costCredits', event.target.value)} />
+                </label>
+                <label>
+                  Note /10
+                  <input type="number" min="0" max="10" step="0.1" value={shopPackForm.rating} onChange={(event) => updateShopPackForm('rating', event.target.value)} />
+                </label>
+              </div>
+
+              <label>Descriptif</label>
+              <textarea
+                rows={5}
+                value={shopPackForm.description}
+                onChange={(event) => updateShopPackForm('description', event.target.value)}
+                placeholder="Resume du pack, ambiance, type d'enigmes, public cible..."
+              />
+
+              <div className="admin-pack-metrics-form">
+                {[
+                  ['actsCount', 'Actes'],
+                  ['scenesCount', 'Scenes'],
+                  ['objectsCount', 'Objets'],
+                  ['enigmasCount', 'Enigmes'],
+                  ['cinematicsCount', 'Cinematiques'],
+                  ['combinationsCount', 'Combinaisons'],
+                ].map(([field, label]) => (
+                  <label key={field}>
+                    {label}
+                    <input type="number" min="0" value={shopPackForm[field]} onChange={(event) => updateShopPackForm(field, event.target.value)} />
+                  </label>
+                ))}
+              </div>
+
+              <label>
+                Screenshots
+                <input type="file" accept="image/*" multiple onChange={addShopPackScreenshots} />
+              </label>
+
+              {shopPackForm.screenshots?.length ? (
+                <div className="admin-screenshot-grid">
+                  {shopPackForm.screenshots.map((screenshot) => (
+                    <figure key={screenshot.id}>
+                      <img src={screenshot.src} alt={screenshot.name || 'Screenshot'} />
+                      <button type="button" className="secondary-action" onClick={() => removeShopPackScreenshot(screenshot.id)}>
+                        Retirer
+                      </button>
+                    </figure>
+                  ))}
+                </div>
+              ) : null}
+
+              <label>
+                ZIP telechargeable
+                <input type="file" accept=".zip,application/zip,application/x-zip-compressed" onChange={importShopPackZip} />
+              </label>
+              {shopPackForm.downloadUrl ? (
+                <div className="admin-pack-download-chip">
+                  <strong>{shopPackForm.downloadFileName || 'pack.zip'}</strong>
+                  <span>{shopPackForm.downloadMode === 'supabase' ? 'Pret pour les acheteurs' : 'Stockage local'}</span>
+                </div>
+              ) : (
+                <p className="small-note">Ajoute le dossier ZIP qui sera propose au telechargement apres achat.</p>
+              )}
+
+              <button type="submit" className="profile-action-button">
+                {shopPackForm.id ? 'Enregistrer les changements' : 'Ajouter le pack'}
+              </button>
+            </form>
+
+            <div className="admin-shop-list">
+              <div className="admin-shop-list-section">
+                <div className="panel-head">
+                  <div>
+                    <h3>En vente</h3>
+                    <p className="small-note">{activeShopPacks.length} pack{activeShopPacks.length > 1 ? 's' : ''} disponible{activeShopPacks.length > 1 ? 's' : ''}</p>
+                  </div>
+                </div>
+                <div className="admin-shop-card-grid">
+              {activeShopPacks.map((pack) => (
+                <article className="list-card admin-pack-card" key={pack.id}>
+                  {pack.screenshots?.[0]?.src ? <img className="admin-pack-cover" src={pack.screenshots[0].src} alt={pack.title} /> : null}
+                  <div className="inline-head">
+                    <div>
+                      <strong>{pack.title}</strong>
+                      <span>{pack.costCredits} credits - note {pack.rating}/10</span>
+                    </div>
+                    <span className="status-badge soft">{pack.downloadUrl ? 'ZIP pret' : 'ZIP manquant'}</span>
+                  </div>
+                  <p className="small-note">{pack.description || 'Aucun descriptif.'}</p>
+                  <div className="admin-pack-metrics">
+                    <span>{pack.scenesCount} scenes</span>
+                    <span>{pack.objectsCount} objets</span>
+                    <span>{pack.enigmasCount} enigmes</span>
+                    <span>{pack.cinematicsCount} cinemat.</span>
+                    <span>{pack.combinationsCount} combinaisons</span>
+                  </div>
+                  {pack.screenshots?.length > 1 ? (
+                    <div className="admin-pack-thumbs">
+                      {pack.screenshots.slice(1, 5).map((screenshot) => (
+                        <img key={screenshot.id} src={screenshot.src} alt={screenshot.name || pack.title} />
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="toolbar">
+                    <button type="button" className="secondary-action" onClick={() => editShopPack(pack)}>Modifier</button>
+                    <button type="button" className="secondary-action" onClick={() => archiveShopPack(pack)} disabled={isBusy}>Archiver</button>
+                    <button type="button" className="danger-button" onClick={() => removeShopPack(pack)}>Supprimer</button>
+                  </div>
+                </article>
+              ))}
+                </div>
+              {activeShopPacks.length === 0 ? (
+                <div className="empty-state-inline">
+                  <strong>Aucun pack en vente pour le moment.</strong>
+                </div>
+              ) : null}
+              </div>
+
+              <div className="admin-shop-list-section">
+                <div className="panel-head">
+                  <div>
+                    <h3>Archives de vente</h3>
+                    <p className="small-note">{archivedShopPacks.length} pack{archivedShopPacks.length > 1 ? 's' : ''} archive{archivedShopPacks.length > 1 ? 's' : ''}</p>
+                  </div>
+                </div>
+                <div className="admin-shop-card-grid">
+                  {archivedShopPacks.map((pack) => (
+                    <article className="list-card admin-pack-card archived" key={pack.id}>
+                      {pack.screenshots?.[0]?.src ? <img className="admin-pack-cover" src={pack.screenshots[0].src} alt={pack.title} /> : null}
+                      <div className="inline-head">
+                        <div>
+                          <strong>{pack.title}</strong>
+                          <span>{pack.costCredits} credits - {pack.soldTo ? `vendu a ${pack.soldTo}` : 'archive'}</span>
+                        </div>
+                        <span className="status-badge soft">Archive</span>
+                      </div>
+                      <p className="small-note">{pack.soldAt ? `Vendu le ${formatDate(pack.soldAt)}` : pack.description || 'Pack archive.'}</p>
+                      <div className="toolbar">
+                        <button type="button" className="secondary-action" onClick={() => editShopPack(pack)}>Modifier</button>
+                        <button type="button" className="profile-action-button" onClick={() => relistShopPack(pack)} disabled={isBusy}>Remettre en vente</button>
+                        <button type="button" className="danger-button" onClick={() => removeShopPack(pack)}>Supprimer</button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+                {archivedShopPacks.length === 0 ? (
+                  <div className="empty-state-inline">
+                    <strong>Aucune vente archivee.</strong>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : null}
     </main>
   );
 }

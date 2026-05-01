@@ -43,6 +43,20 @@ const THUMBNAIL_CROPS = {
   wide: { label: '16:9', aspect: 16 / 9, width: 1280, height: 720 },
   square: { label: 'Carré', aspect: 1, width: 900, height: 900 },
 };
+const SHOP_PURCHASES_KEY_PREFIX = 'escapeGameBuilder.shopPurchases';
+
+const getShopPurchasesKey = (userId) => `${SHOP_PURCHASES_KEY_PREFIX}.${userId || 'anonymous'}`;
+
+const readShopPurchases = (userId) => {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(getShopPurchasesKey(userId)) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
 
 const readImageFile = (file) => new Promise((resolve, reject) => {
   const reader = new FileReader();
@@ -508,14 +522,33 @@ export default function ProfilePage({
   const [search, setSearch] = useState('');
   const [sortMode, setSortMode] = useState('updated-desc');
   const [importError, setImportError] = useState('');
+  const [isOrdersOpen, setIsOrdersOpen] = useState(false);
   const fileInputRef = useRef(null);
   const tutorialMenuRef = useRef(null);
+  const shopUserId = user?.id || user?.email || 'anonymous';
+  const [orders, setOrders] = useState(() => readShopPurchases(shopUserId));
+
+  const refreshOrders = () => {
+    setOrders(readShopPurchases(shopUserId));
+  };
 
   useEffect(() => {
     if (isProfileTutorialActive && tutorialMenuRef.current) {
       tutorialMenuRef.current.open = false;
     }
   }, [isProfileTutorialActive]);
+
+  useEffect(() => {
+    refreshOrders();
+
+    const handleOrdersUpdate = () => refreshOrders();
+    window.addEventListener('storage', handleOrdersUpdate);
+    window.addEventListener('shop-purchases-updated', handleOrdersUpdate);
+    return () => {
+      window.removeEventListener('storage', handleOrdersUpdate);
+      window.removeEventListener('shop-purchases-updated', handleOrdersUpdate);
+    };
+  }, [shopUserId]);
 
   const visibleProjects = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -574,6 +607,16 @@ export default function ProfilePage({
             <button type="button" className="secondary-action" onClick={onOpenPublicGallery} data-tour="profile-gallery">
               Galerie publique
             </button>
+            <button
+              type="button"
+              className="secondary-action"
+              onClick={() => {
+                refreshOrders();
+                setIsOrdersOpen(true);
+              }}
+            >
+              Commandes{orders.length ? ` (${orders.length})` : ''}
+            </button>
             <details
               ref={tutorialMenuRef}
               className="profile-tutorial-menu"
@@ -604,6 +647,78 @@ export default function ProfilePage({
           </div>
         </div>
       </section>
+
+      {isOrdersOpen ? (
+        <div className="profile-orders-overlay" role="presentation" onClick={() => setIsOrdersOpen(false)}>
+          <section
+            className="profile-orders-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="profile-orders-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="panel-head">
+              <div>
+                <span className="eyebrow">Commandes</span>
+                <h2 id="profile-orders-title">Suivi des achats</h2>
+                <p className="small-note">
+                  Tes packs achetes et leurs liens de telechargement disponibles.
+                </p>
+              </div>
+              <button type="button" className="secondary-action" onClick={() => setIsOrdersOpen(false)}>
+                Fermer
+              </button>
+            </div>
+
+            <div className="profile-orders-list">
+              {orders.length > 0 ? (
+                orders.map((order, index) => {
+                  const hasDownload = Boolean(order.downloadUrl);
+                  const orderKey = `${order.packId || order.title || 'order'}-${order.purchasedAt || index}`;
+
+                  return (
+                    <article key={orderKey} className="profile-order-card">
+                      <div className="profile-order-head">
+                        <div>
+                          <h3>{order.title || 'Pack boutique'}</h3>
+                          <p className="small-note">Commande du {formatDate(order.purchasedAt)}</p>
+                        </div>
+                        <span className={`profile-order-status ${hasDownload ? 'ready' : 'pending'}`}>
+                          {hasDownload ? 'Telechargement disponible' : 'En preparation'}
+                        </span>
+                      </div>
+
+                      <div className="profile-order-meta">
+                        <span>{Number(order.costCredits || 0)} credits</span>
+                        <span>Suivi: achat valide</span>
+                      </div>
+
+                      {hasDownload ? (
+                        <a
+                          className="profile-action-button profile-order-download"
+                          href={order.downloadUrl}
+                          download={order.downloadFileName || ''}
+                        >
+                          Telecharger le pack
+                        </a>
+                      ) : (
+                        <p className="small-note">Le lien apparaitra ici quand le fichier sera ajoute.</p>
+                      )}
+                    </article>
+                  );
+                })
+              ) : (
+                <div className="empty-state-inline">
+                  <div>
+                    <strong>Aucune commande</strong>
+                    <p className="small-note">Les packs achetes dans la boutique apparaitront ici.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       <section className="panel" data-tour="profile-create-section">
         <div className="grid-two">
