@@ -119,6 +119,44 @@ const findExistingSale = async (supabase, saleId) => {
   return data;
 };
 
+const getCreditAccount = async (supabase, userId) => {
+  const { data, error } = await supabase
+    .from('ai_credits')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+};
+
+const setCreditBalance = async (supabase, userId, balance) => {
+  const { error } = await supabase
+    .from('ai_credits')
+    .update({ balance: Math.max(0, Number(balance || 0)), updated_at: new Date().toISOString() })
+    .eq('user_id', userId);
+
+  if (error) throw error;
+};
+
+const reassignExistingSale = async (supabase, existingSale, nextUserId, credits) => {
+  const targetAccount = await ensureCreditAccount(supabase, nextUserId);
+  const sourceAccount = await getCreditAccount(supabase, existingSale.user_id);
+
+  const { error: transactionError } = await supabase
+    .from('ai_credit_transactions')
+    .update({ user_id: nextUserId })
+    .eq('id', existingSale.id);
+
+  if (transactionError) throw transactionError;
+
+  if (sourceAccount && sourceAccount.user_id !== nextUserId) {
+    await setCreditBalance(supabase, sourceAccount.user_id, Number(sourceAccount.balance || 0) - credits);
+  }
+
+  await setCreditBalance(supabase, nextUserId, Number(targetAccount.balance || 0) + credits);
+};
+
 export const handler = async (event) => withErrors(event, async () => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Methode non autorisee.' });
 
@@ -144,6 +182,10 @@ export const handler = async (event) => withErrors(event, async () => {
 
   const existingSale = await findExistingSale(supabase, saleId);
   if (existingSale) {
+    if (existingSale.user_id !== userId) {
+      await reassignExistingSale(supabase, existingSale, userId, pack.credits);
+      return json(200, { ok: true, reassigned: true, saleId, userId, creditsAdded: pack.credits });
+    }
     return json(200, { ok: true, duplicate: true, saleId, userId: existingSale.user_id });
   }
 
