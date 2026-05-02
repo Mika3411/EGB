@@ -25,6 +25,12 @@ const clampNumber = (value, min, max, fallback) => {
   return Math.max(min, Math.min(max, Math.round(number)));
 };
 
+const toCount = (value) => {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  return Math.max(0, Math.round(number));
+};
+
 const difficultyLabel = {
   easy: 'facile',
   normal: 'intermédiaire',
