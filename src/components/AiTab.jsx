@@ -726,7 +726,7 @@ export default function AiTab({
       cancelled = true;
       if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
     };
-  }, [aiDraftKey, project, draftVersion]);
+  }, [aiDraftKey, draftVersion]);
 
   const clearAiDraft = async () => {
     setGeneratedProject(null);
