@@ -49,6 +49,7 @@ export function EditorToolbarMenus({
   setSnapGridEnabled,
   addHotspot,
   addSceneObject,
+  addInvisibleSceneObject,
   addVisualEffectZone,
 }) {
   return (
@@ -58,7 +59,7 @@ export function EditorToolbarMenus({
         <div className="editor-menu-popover">
           <MenuItem onClick={() => previewScene?.(selectedSceneId)}>Prévisualiser</MenuItem>
           <MenuItem danger onClick={() => deleteScene(selectedSceneId)}>Supprimer la scène</MenuItem>
-          {fullscreen ? <MenuItem shortcut="Esc" onClick={closeEditorFullscreen}>Fermer ? le plein écran</MenuItem> : null}
+          {fullscreen ? <MenuItem shortcut="Esc" onClick={closeEditorFullscreen}>Fermer le plein écran</MenuItem> : null}
         </div>
       </details>
 
@@ -100,6 +101,7 @@ export function EditorToolbarMenus({
         <div className="editor-menu-popover">
           <MenuItem tour="scene-add-hotspot" onClick={addHotspot}>Zone d'action</MenuItem>
           <MenuItem tour="scene-add-visible-object" onClick={addSceneObject}>Objet visible</MenuItem>
+          <MenuItem onClick={addInvisibleSceneObject}>Objet invisible</MenuItem>
           <MenuItem tour="scene-add-visual-zone" onClick={addVisualEffectZone}>Zone visuelle</MenuItem>
         </div>
       </details>

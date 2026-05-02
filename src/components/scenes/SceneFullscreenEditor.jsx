@@ -61,6 +61,9 @@ export default function SceneFullscreenEditor({
   deleteHotspot,
   setTab,
 }) {
+  const getLinkedItem = (itemId) => project.items?.find((item) => item.id === itemId) || null;
+  const getSceneObjectDisplayImage = (obj) => obj?.imageData || getLinkedItem(obj?.linkedItemId)?.imageData || '';
+
   return (
                 <div style={{ position: 'fixed', inset: 0, zIndex: 20000, background: '#020617', padding: 12, overflow: 'hidden' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(320px,360px)', gap: 12, height: '100%', alignItems: 'stretch' }}>
@@ -175,12 +178,12 @@ export default function SceneFullscreenEditor({
                           <button
                             key={obj.id}
                             type="button"
-                            className={`editor-hotspot editor-scene-object ${(obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id)) ? 'selected' : ''} ${obj.id === draggingSceneObjectId ? 'dragging' : ''}`}
+                            className={`editor-hotspot editor-scene-object ${obj.isInvisible ? 'editor-scene-object-invisible' : ''} ${(obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id)) ? 'selected' : ''} ${obj.id === draggingSceneObjectId ? 'dragging' : ''}`}
                             style={getSceneObjectStyle(obj)}
                             onPointerDown={(event) => beginObjectDrag(event, obj.id, 'fullscreen')}
                             onClick={(event) => selectSceneObject(obj.id, event)}
                           >
-                            {obj.imageData ? <img src={obj.imageData} alt={obj.name} style={getSceneObjectImageStyle()} /> : <span>{obj.name}</span>}
+                            {getSceneObjectDisplayImage(obj) && !obj.isInvisible ? <img src={getSceneObjectDisplayImage(obj)} alt={obj.name} style={getSceneObjectImageStyle()} /> : <span>{obj.isInvisible ? `${obj.name || 'Objet'} (invisible)` : obj.name}</span>}
                           </button>
                         ))}
                         {selectedScene.hotspots.filter((spot) => !spot.isHidden).map((spot) => (
@@ -251,20 +254,6 @@ export default function SceneFullscreenEditor({
                             <div><HelpLabel help="Largeur de la zone cliquable et de l’image visible, en pourcentage de la largeur de la scène.">Largeur</HelpLabel><input type="number" value={selectedSceneObject.width} onChange={(e) => patchProject((draft) => { const obj = draft.scenes.find((s) => s.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === selectedSceneObjectId); if (obj) obj.width = Number(e.target.value); })} /></div>
                             <div><HelpLabel help="Hauteur de la zone cliquable et de l’image visible, en pourcentage de la hauteur de la scène.">Hauteur</HelpLabel><input type="number" value={selectedSceneObject.height} onChange={(e) => patchProject((draft) => { const obj = draft.scenes.find((s) => s.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === selectedSceneObjectId); if (obj) obj.height = Number(e.target.value); })} /></div>
                           </div>
-                          <HelpLabel help="Image affichée directement dans la scène, à l’emplacement X/Y. L’objet reste cliquable même si l’image est transparente.">Image visible</HelpLabel>
-                          <label className="button like full secondary-action">
-                            {selectedSceneObject.imageName || 'Importer une image visible'}
-                            <input type="file" accept="image/*" hidden onChange={(e) => handleUpload(e, (data, name) => patchProject((draft) => {
-                              const obj = draft.scenes.find((s) => s.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === selectedSceneObjectId); if (obj) { obj.imageData = data; obj.imageName = name; }
-                            }))} />
-                          </label>
-                          <HelpLabel help="Image montrée en grand quand l’objet visible déclenche un pop-up. Utile pour inspecter un document, un détail ou un indice.">Image pop-up</HelpLabel>
-                          <label className="button like full secondary-action">
-                            {selectedSceneObject.popupImageName || 'Importer une image pop-up'}
-                            <input type="file" accept="image/*" hidden onChange={(e) => handleUpload(e, (data, name) => patchProject((draft) => {
-                              const obj = draft.scenes.find((s) => s.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === selectedSceneObjectId); if (obj) { obj.popupImage = data; obj.popupImageName = name; }
-                            }))} />
-                          </label>
                           <HelpLabel help="Définit ce qui se passe au clic : montrer un pop-up, ajouter l’objet lié à l’inventaire, ou faire les deux.">Mode d’interaction</HelpLabel>
                           <select value={selectedSceneObject.interactionMode || 'popup'} onChange={(e) => patchProject((draft) => {
                             const obj = draft.scenes.find((s) => s.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === selectedSceneObjectId); if (obj) obj.interactionMode = e.target.value;
@@ -275,7 +264,14 @@ export default function SceneFullscreenEditor({
                           </select>
                           <HelpLabel help="Objet ajouté à l’inventaire si le mode inclut l’inventaire. Sans sélection, le clic ne donne aucun objet.">Objet d’inventaire lié</HelpLabel>
                           <select value={selectedSceneObject.linkedItemId || ''} onChange={(e) => patchProject((draft) => {
-                            const obj = draft.scenes.find((s) => s.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === selectedSceneObjectId); if (obj) obj.linkedItemId = e.target.value;
+                            const obj = draft.scenes.find((s) => s.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === selectedSceneObjectId);
+                            if (obj) {
+                              obj.linkedItemId = e.target.value;
+                              obj.imageData = '';
+                              obj.imageName = '';
+                              obj.popupImage = '';
+                              obj.popupImageName = '';
+                            }
                           })}>
                             <option value="">Aucun</option>
                             {project.items.map((item) => <option key={item.id} value={item.id}>{item.icon} {item.name}</option>)}

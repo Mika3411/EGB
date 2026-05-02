@@ -157,6 +157,36 @@
   outline-offset: 0 !important;
 }
 
+.editor-canvas .editor-scene-object-invisible,
+.editor-canvas .editor-scene-object-invisible:hover,
+.editor-canvas .editor-scene-object-invisible:focus,
+.editor-canvas .editor-scene-object-invisible:active,
+.fullscreen-scene-stage .editor-scene-object-invisible,
+.fullscreen-scene-stage .editor-scene-object-invisible:hover,
+.fullscreen-scene-stage .editor-scene-object-invisible:focus,
+.fullscreen-scene-stage .editor-scene-object-invisible:active {
+  border: 2px dashed rgba(250, 204, 21, 0.82) !important;
+  background: rgba(250, 204, 21, 0.12) !important;
+  line-height: 1.1 !important;
+}
+
+.editor-canvas .editor-scene-object-invisible span,
+.fullscreen-scene-stage .editor-scene-object-invisible span {
+  left: 6px;
+  top: 6px;
+  right: 6px;
+  max-width: calc(100% - 12px);
+  white-space: normal;
+}
+
+.scene-player .player-scene-object-invisible,
+.scene-player .player-scene-object-invisible:hover,
+.scene-player .player-scene-object-invisible:focus,
+.scene-player .player-scene-object-invisible:active {
+  color: transparent !important;
+  background: transparent !important;
+}
+
 .editor-canvas .editor-scene-object img,
 .scene-player .player-scene-object img,
 .scene-player .scene-object {

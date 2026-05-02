@@ -177,6 +177,7 @@ function ProjectCard({
   onTestProject,
   onCopyProjectLink,
   onPublishProject,
+  onUnpublishProject,
   onUpdatePublicSettings,
   onUploadGalleryThumbnail,
   onRenameProject,
@@ -391,8 +392,13 @@ function ProjectCard({
           Copier le lien
         </button>
         <button type="button" className="profile-publish-button" onClick={handlePublish}>
-          Publier
+          {project.shareState?.isPublic ? 'Mise à jour' : 'Publier'}
         </button>
+        {project.shareState?.isPublic ? (
+          <button type="button" className="danger-button" onClick={() => onUnpublishProject?.(project.id)}>
+            Retirer de la galerie
+          </button>
+        ) : null}
       </div>
 
       <div className="project-public-settings" data-tour="profile-public-settings">
@@ -505,6 +511,7 @@ export default function ProfilePage({
   onTestProject,
   onCopyProjectLink,
   onPublishProject,
+  onUnpublishProject,
   onUpdatePublicSettings,
   onUploadGalleryThumbnail,
   onOpenPublicGallery,
@@ -802,6 +809,7 @@ export default function ProfilePage({
                 onTestProject={onTestProject}
                 onCopyProjectLink={onCopyProjectLink}
                 onPublishProject={onPublishProject}
+                onUnpublishProject={onUnpublishProject}
                 onUpdatePublicSettings={onUpdatePublicSettings}
                 onUploadGalleryThumbnail={onUploadGalleryThumbnail}
                 onRenameProject={onRenameProject}

@@ -38,7 +38,7 @@ export default function SceneCanvas({ scene, onUpdate }) {
       {objects.map((obj) => (
         <div
           key={obj.id}
-          className="hotspot scene-object-visual"
+          className={`hotspot scene-object-visual ${obj.isInvisible ? 'editor-scene-object-invisible' : ''}`}
           style={{
             top: `${obj.y}%`,
             left: `${obj.x}%`,
@@ -46,14 +46,14 @@ export default function SceneCanvas({ scene, onUpdate }) {
             height: `${obj.height || 12}%`,
             position: 'absolute',
             transform: 'translate(-50%, -50%)',
-            backgroundImage: obj.imageData ? `url(${obj.imageData})` : undefined,
+            backgroundImage: obj.imageData && !obj.isInvisible ? `url(${obj.imageData})` : undefined,
             backgroundSize: 'contain',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
           }}
           onMouseDown={(e) => handleMouseDown(e, obj)}
         >
-          {obj.name}
+          {obj.isInvisible ? `${obj.name || 'Objet'} (invisible)` : obj.name}
         </div>
       ))}
     </div>

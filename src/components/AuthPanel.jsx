@@ -256,7 +256,7 @@ export default function AuthPanel({
             <div className="auth-consents">
               <label>
                 <input type="checkbox" checked={form.acceptedTerms} onChange={(event) => handleChange('acceptedTerms', event.target.checked)} />
-                <span>J’accepte les conditions d’utilisation.</span>
+                <span>J'accepte les <a href="/conditions-utilisation.html" target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>conditions d'utilisation</a>.</span>
               </label>
               <label>
                 <input type="checkbox" checked={form.marketingConsent} onChange={(event) => handleChange('marketingConsent', event.target.checked)} />

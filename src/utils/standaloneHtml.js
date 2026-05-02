@@ -133,6 +133,7 @@ body.game-fullscreen .inventory-drawer__backdrop{position:fixed;inset:0;z-index:
 .player-hotspot:hover,.player-hotspot:focus,.player-hotspot:active{background:transparent!important;border:none!important;box-shadow:none!important;outline:none!important}
 .player-scene-object{position:absolute!important;transform:translate(-50%,-50%)!important;transform-origin:center center!important;z-index:18;cursor:pointer;display:block!important;pointer-events:auto;padding:0!important;margin:0!important;border:0!important;outline:0!important;background:transparent!important;box-shadow:none!important;border-radius:0!important;overflow:hidden!important;appearance:none!important;-webkit-appearance:none!important;line-height:0!important;box-sizing:border-box!important;min-width:0!important;min-height:0!important}
 .player-scene-object:hover,.player-scene-object:focus,.player-scene-object:active{transform:translate(-50%,-50%)!important;padding:0!important;margin:0!important;border:0!important;outline:0!important;background:transparent!important;box-shadow:none!important}
+.player-scene-object-invisible,.player-scene-object-invisible:hover,.player-scene-object-invisible:focus,.player-scene-object-invisible:active{color:transparent!important;background:transparent!important}
 .player-scene-object img{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;object-fit:contain!important;object-position:center center!important;display:block!important;pointer-events:none!important;padding:0!important;margin:0!important;border:0!important;background:transparent!important;box-shadow:none!important}
 .scene-visual-effect{position:absolute;inset:0;z-index:12;overflow:hidden;pointer-events:none}
 .scene-visual-effect-zone{inset:auto;transform:translate(-50%,-50%)}
@@ -1075,8 +1076,9 @@ function markLogicRuleUsed(ruleId) {
 function resolveHotspotInteraction(spot) {
   if (!spot) return null;
   const usedRule = (spot.logicRules || []).find((rule) => rule.disableAfterUse && state.usedLogicRuleIds.includes(rule.id));
-  const matchingRule = (spot.logicRules || []).find((rule) => {
-    if (rule.disableAfterUse && state.usedLogicRuleIds.includes(rule.id)) return false;
+  const isRuleAvailable = (rule) => !(rule.disableAfterUse && state.usedLogicRuleIds.includes(rule.id));
+  const doesRuleMatch = (rule) => {
+    if (!isRuleAvailable(rule)) return false;
     if (rule.conditionType === 'missing_item') return rule.itemId && !state.inventory.includes(rule.itemId);
     if (rule.conditionType === 'completed_hotspot') return rule.hotspotId && state.completedHotspotIds.includes(rule.hotspotId);
     if (rule.conditionType === 'solved_enigma') return rule.conditionEnigmaId && state.solvedEnigmaIds.includes(rule.conditionEnigmaId);
@@ -1086,7 +1088,15 @@ function resolveHotspotInteraction(spot) {
     if (rule.conditionType === 'completed_combination') return rule.combinationId && state.completedCombinationIds.includes(rule.combinationId);
     if (rule.conditionType === 'second_click') return state.completedHotspotIds.includes(spot.id);
     return rule.itemId && state.inventory.includes(rule.itemId);
-  });
+  };
+  const isRuleConfigured = (rule) => {
+    if (['has_item', 'missing_item'].includes(rule.conditionType || 'has_item')) return Boolean(rule.itemId);
+    if (rule.conditionType === 'completed_hotspot') return Boolean(rule.hotspotId);
+    if (rule.conditionType === 'solved_enigma') return Boolean(rule.conditionEnigmaId);
+    if (rule.conditionType === 'completed_combination') return Boolean(rule.combinationId);
+    return true;
+  };
+  const matchingRule = (spot.logicRules || []).find(doesRuleMatch);
 
   if (matchingRule) {
     const useDefaultAction = matchingRule.actionType === 'default';
@@ -1104,6 +1114,28 @@ function resolveHotspotInteraction(spot) {
       objectImageName: useDefaultAction ? spot.objectImageName || '' : matchingRule.objectImageName || '',
       logicRuleId: matchingRule.id || '',
       disableAfterUse: Boolean(matchingRule.disableAfterUse),
+    };
+  }
+
+  const unmetRule = (spot.logicRules || []).find((rule) => (
+    isRuleAvailable(rule)
+    && isRuleConfigured(rule)
+    && rule.failureDialogue
+    && !doesRuleMatch(rule)
+  ));
+  if (unmetRule) {
+    return {
+      ...spot,
+      actionType: 'dialogue',
+      dialogue: unmetRule.failureDialogue,
+      requiredItemId: '',
+      consumeRequiredItemOnUse: false,
+      rewardItemId: '',
+      targetSceneId: '',
+      targetCinematicId: '',
+      enigmaId: '',
+      objectImageData: '',
+      objectImageName: '',
     };
   }
 
@@ -1407,8 +1439,8 @@ function triggerSceneObject(objectId) {
   if (!obj || state.removedSceneObjectIds.includes(obj.id)) return;
 
   const mode = obj.interactionMode || 'popup';
-  const popupSrc = obj.popupImage || obj.imageData || '';
   const linkedItem = obj.linkedItemId ? getItemById(obj.linkedItemId) : null;
+  const popupSrc = obj.popupImageData || obj.popupImage || obj.imageData || linkedItem?.imageData || '';
 
   if (mode === 'popup' || mode === 'both') {
     if (popupSrc) {
@@ -1449,14 +1481,14 @@ function triggerHotspot(spotId) {
   if (!activeSpot) return;
 
   if (activeSpot.requiredHotspotId && !state.completedHotspotIds.includes(activeSpot.requiredHotspotId)) {
-    state.dialogue = activeSpot.lockedMessage || 'Je ne peux pas faire ?a maintenant.';
+    state.dialogue = activeSpot.lockedMessage || 'Je ne peux pas faire ça maintenant.';
     render();
     return;
   }
 
   if (activeSpot.requiredItemId && !state.inventory.includes(activeSpot.requiredItemId)) {
     const need = getItemById(activeSpot.requiredItemId);
-    state.dialogue = 'Il te faut ' + (need?.name || 'un objet') + ' pour faire ?a.';
+    state.dialogue = 'Il te faut ' + (need?.name || 'un objet') + ' pour faire ça.';
     render();
     return;
   }
@@ -1979,10 +2011,14 @@ function render(shouldSave = true) {
     + (playScene?.visualEffectZones || []).filter((zone) => !zone.isHidden).map((zone) => '<div class="scene-visual-effect scene-visual-effect-zone scene-visual-effect--' + safeHtml(zone.effect || 'sparkles') + ' scene-visual-effect--' + safeHtml(zone.intensity || 'normal') + '" style="left:' + zone.x + '%;top:' + zone.y + '%;width:' + zone.width + '%;height:' + zone.height + '%;z-index:' + getVisualEffectZoneZIndex(zone.layer) + '"></div>').join('')
     + (playScene?.hotspots || []).map((spot) => '<button type="button" class="player-hotspot" data-hotspot-id="' + spot.id + '" '
       + 'style="left:' + spot.x + '%;top:' + spot.y + '%;width:' + spot.width + '%;height:' + spot.height + '%;z-index:20;cursor:pointer;" title="' + safeHtml(spot.name || '') + '"></button>').join('')
-    + (playScene?.sceneObjects || []).filter((obj) => !state.removedSceneObjectIds.includes(obj.id)).map((obj) => '<button type="button" class="player-scene-object" data-scene-object-id="' + obj.id + '" '
-      + 'style="left:' + obj.x + '%;top:' + obj.y + '%;width:' + obj.width + '%;height:' + obj.height + '%;z-index:18;" title="' + safeHtml(obj.name || 'Objet') + '">'
-      + (obj.imageData ? '<img src="' + obj.imageData + '" alt="' + safeHtml(obj.name || 'Objet') + '" />' : '<span>' + safeHtml(obj.name || 'Objet') + '</span>')
-      + '</button>').join('')
+    + (playScene?.sceneObjects || []).filter((obj) => !state.removedSceneObjectIds.includes(obj.id)).map((obj) => {
+      const linkedItem = obj.linkedItemId ? getItemById(obj.linkedItemId) : null;
+      const displayImage = obj.imageData || linkedItem?.imageData || '';
+      return '<button type="button" class="player-scene-object' + (obj.isInvisible ? ' player-scene-object-invisible' : '') + '" data-scene-object-id="' + obj.id + '" '
+        + 'style="left:' + obj.x + '%;top:' + obj.y + '%;width:' + obj.width + '%;height:' + obj.height + '%;z-index:18;" title="' + safeHtml(obj.name || 'Objet') + '" aria-label="' + safeHtml(obj.name || 'Objet invisible') + '">'
+        + (!obj.isInvisible && displayImage ? '<img src="' + displayImage + '" alt="' + safeHtml(obj.name || linkedItem?.name || 'Objet') + '" />' : (!obj.isInvisible ? '<span>' + safeHtml(obj.name || linkedItem?.name || 'Objet') + '</span>' : ''))
+        + '</button>';
+    }).join('')
     + (playScene?.timerEnabled ? '<div class="scene-timer-hud"><strong id="scene-timer-count">' + formatSceneTimerSeconds(state.sceneTimerRemaining || playScene.timerSeconds || 0) + '</strong>'
       + (playScene.timerEndAction === 'damage-life' ? '<span>Vies: ' + safeHtml(state.playerLives ?? 3) + '</span>' : '')
       + '</div>' : '')

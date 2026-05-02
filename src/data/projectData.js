@@ -23,6 +23,7 @@ const makeLogicRule = () => ({
   combinationId: '',
   actionType: 'dialogue',
   dialogue: 'La zone réagit autrement.',
+  failureDialogue: '',
   consumeRequiredItemOnUse: false,
   disableAfterUse: false,
   rewardItemId: '',

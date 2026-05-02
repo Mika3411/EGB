@@ -524,8 +524,15 @@ function App() {
         selectedSceneId: editor.selectedSceneId,
       });
     }
-    await shareProjectFromProfile(projectId);
+    await auth.publishProject(projectId);
     setSaveStatus('Jeu publié dans la galerie');
+  };
+
+  const unpublishProjectFromProfile = async (projectId) => {
+    const confirmed = window.confirm('Retirer ce jeu de la galerie publique ? Le projet restera dans ton profil.');
+    if (!confirmed) return;
+    await auth.unpublishProject(projectId);
+    setSaveStatus('Jeu retirÃ© de la galerie');
   };
 
   const updatePublicSettingsFromProfile = async (projectId, settings) => {
@@ -841,6 +848,7 @@ function App() {
           onTestProject={testProjectFromProfile}
           onCopyProjectLink={shareProjectFromProfile}
           onPublishProject={publishProjectFromProfile}
+          onUnpublishProject={unpublishProjectFromProfile}
           onUpdatePublicSettings={updatePublicSettingsFromProfile}
           onUploadGalleryThumbnail={uploadGalleryThumbnail}
           onOpenPublicGallery={openPublicGalleryWindow}

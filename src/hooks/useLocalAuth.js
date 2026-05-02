@@ -38,6 +38,8 @@ const safeParse = (value, fallback) => {
 const getProjectTitle = (project, fallback = 'Projet sans titre') =>
   project?.title?.trim?.() || project?.name?.trim?.() || fallback;
 
+const cloneProjectData = (data) => JSON.parse(JSON.stringify(data || {}));
+
 const LARGE_MEDIA_FIELD_PATTERN = /^(backgroundData|imageData|objectImageData|popupImageData|popupBackgroundData|musicData|soundData|videoData|videoPoster|audioData)$/i;
 
 const stripLargeMediaForLocalCache = (value) => {
@@ -453,6 +455,54 @@ export function useLocalAuth() {
     return nextProjects.find((project) => project.id === projectId) || null;
   };
 
+  const publishProject = async (projectId) => {
+    if (!user?.id || !projectId) return null;
+    const timestamp = nowIso();
+    const nextProjects = readProjects(user.id).map((project) => {
+      if (project.id !== projectId) return project;
+      const snapshot = cloneProjectData(project.data);
+      return {
+        ...project,
+        shareState: {
+          ...(project.shareState || {}),
+          isPublic: true,
+          copiedAt: project.shareState?.copiedAt || timestamp,
+          publishedAt: timestamp,
+          publishedData: snapshot,
+          publishedName: project.name || getProjectTitle(project.data),
+          publishedThumbnail: project.shareState?.galleryThumbnail || project.thumbnail || getProjectThumbnail(snapshot) || '',
+          durationMinutes: Math.max(15, Math.min(90, 15 + (snapshot?.scenes?.length || 0) * 8 + (snapshot?.enigmas?.length || 0) * 5)),
+          difficulty: (snapshot?.enigmas?.length || 0) >= 5 ? 'difficile' : (snapshot?.enigmas?.length || 0) >= 2 ? 'intermédiaire' : 'facile',
+        },
+        updatedAt: timestamp,
+      };
+    });
+    await persistProjects(user.id, nextProjects, { requirePublicIndex: true });
+    setProjects(nextProjects);
+    return nextProjects.find((project) => project.id === projectId) || null;
+  };
+
+  const unpublishProject = async (projectId) => {
+    if (!user?.id || !projectId) return null;
+    const timestamp = nowIso();
+    const nextProjects = readProjects(user.id).map((project) => (
+      project.id === projectId ?
+         {
+          ...project,
+          shareState: {
+            ...(project.shareState || {}),
+            isPublic: false,
+            unpublishedAt: timestamp,
+          },
+          updatedAt: timestamp,
+        }
+        : project
+    ));
+    await persistProjects(user.id, nextProjects, { requirePublicIndex: true });
+    setProjects(nextProjects);
+    return nextProjects.find((project) => project.id === projectId) || null;
+  };
+
   const updateProjectShareSettings = async (projectId, settings = {}) => {
     if (!user?.id || !projectId) return null;
     const timestamp = nowIso();
@@ -551,6 +601,8 @@ export function useLocalAuth() {
     setActiveProjectId,
     getProjectResumeState,
     markProjectLinkCopied,
+    publishProject,
+    unpublishProject,
     updateProjectShareSettings,
     refreshProjects,
     createProject,

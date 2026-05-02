@@ -264,7 +264,7 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
                           })}>
                             <option value="">Choisir une zone</option>
                             {allHotspots.map(({ scene, hotspot: candidate }) => (
-                              <option key={candidate.id} value={candidate.id}>{getSceneLabel(scene.id)} ? {candidate.name}</option>
+                              <option key={candidate.id} value={candidate.id}>{getSceneLabel(scene.id)} - {candidate.name}</option>
                             ))}
                           </select>
                         </>
@@ -352,10 +352,20 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
                         </label>
                       </div>
 
-                      <HelpLabel help="Message affiché au joueur quand cette règle s’active. Il remplace le dialogue normal de la zone.">Dialogue affiché</HelpLabel>
-                      <textarea data-tour="logic-dialogue" value={rule.dialogue || ''} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
-                        draftRule.dialogue = event.target.value;
-                      })} />
+                      <div className="grid-two">
+                        <div>
+                          <HelpLabel help="Message affiché au joueur quand cette règle s’active. Il remplace le dialogue normal de la zone.">Dialogue affiché</HelpLabel>
+                          <textarea data-tour="logic-dialogue" value={rule.dialogue || ''} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
+                            draftRule.dialogue = event.target.value;
+                          })} />
+                        </div>
+                        <div>
+                          <HelpLabel help="Message affiché si cette règle ne peut pas s’activer parce que sa condition n’est pas remplie. Exemple : il manque une clé, une énigme n’est pas encore réussie, ou une cinématique n’a pas encore été lancée.">Dialogue si condition non remplie</HelpLabel>
+                          <textarea value={rule.failureDialogue || ''} placeholder="Exemple : La porte reste verrouillée. Il te manque la clé." onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
+                            draftRule.failureDialogue = event.target.value;
+                          })} />
+                        </div>
+                      </div>
 
                       {rule.actionType === 'scene' ? (
                         <>

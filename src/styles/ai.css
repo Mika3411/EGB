@@ -619,6 +619,29 @@
   gap: 12px;
 }
 
+.ai-compare-head .secondary-action,
+.ai-compare-grid article > div .secondary-action {
+  color: #eaf2ff !important;
+  background: rgba(18, 31, 56, 0.96) !important;
+  border-color: rgba(147, 197, 253, 0.34) !important;
+  box-shadow: none !important;
+}
+
+.ai-compare-head .secondary-action:hover,
+.ai-compare-grid article > div .secondary-action:not(:disabled):hover {
+  color: #fff !important;
+  background: rgba(37, 99, 235, 0.44) !important;
+  border-color: rgba(147, 197, 253, 0.58) !important;
+}
+
+.ai-compare-grid article > div .secondary-action:disabled {
+  color: #bfdbfe !important;
+  opacity: 1;
+  cursor: default;
+  background: rgba(30, 64, 175, 0.38) !important;
+  border-color: rgba(96, 165, 250, 0.58) !important;
+}
+
 .ai-compare-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -677,6 +700,9 @@
 .ai-compare-grid article > div button {
   flex: 1;
   min-width: 94px;
+  min-height: 36px;
+  padding: 8px 12px;
+  font-weight: 800;
 }
 
 .ai-object-card strong,

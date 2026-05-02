@@ -635,10 +635,10 @@ export default function PreviewTab(props) {
     if (!obj) return;
 
     const mode = obj.interactionMode || 'popup';
-    const popupSrc = obj.popupImageData || obj.popupImage || obj.imageData || '';
     const linkedItem = obj.linkedItemId ?
        project.items.find((entry) => entry.id === obj.linkedItemId)
       : null;
+    const popupSrc = obj.popupImageData || obj.popupImage || obj.imageData || linkedItem?.imageData || '';
 
     if ((mode === 'popup' || mode === 'both') && popupSrc) {
       setViewerImage({
@@ -783,22 +783,27 @@ export default function PreviewTab(props) {
 
           {(playScene?.sceneObjects || [])
             .filter((obj) => !usedSceneObjectIds.includes(obj.id))
-            .map((obj) => (
-              <button
-                key={obj.id}
-                type="button"
-                className="player-scene-object"
-                style={getSceneObjectStyle(obj)}
-                onClick={(event) => handleSceneObjectClick(event, obj)}
-                title={obj.name}
-              >
-                {obj.imageData ? (
-                  <img src={obj.imageData} alt={obj.name || 'Objet'} />
-                ) : (
-                  <span>{obj.name || 'Objet'}</span>
-                )}
-              </button>
-            ))}
+            .map((obj) => {
+              const linkedItem = obj.linkedItemId ? project.items.find((entry) => entry.id === obj.linkedItemId) : null;
+              const displayImage = obj.imageData || linkedItem?.imageData || '';
+              return (
+                <button
+                  key={obj.id}
+                  type="button"
+                  className={`player-scene-object ${obj.isInvisible ? 'player-scene-object-invisible' : ''}`}
+                  style={getSceneObjectStyle(obj)}
+                  onClick={(event) => handleSceneObjectClick(event, obj)}
+                  title={obj.name}
+                  aria-label={obj.name || 'Objet invisible'}
+                >
+                  {!obj.isInvisible && displayImage ? (
+                    <img src={displayImage} alt={obj.name || linkedItem?.name || 'Objet'} />
+                  ) : !obj.isInvisible ? (
+                    <span>{obj.name || linkedItem?.name || 'Objet'}</span>
+                  ) : null}
+                </button>
+              );
+            })}
 
           {(playScene?.hotspots || []).map((spot) => (
             <button
@@ -896,7 +901,7 @@ export default function PreviewTab(props) {
               event.stopPropagation();
               setIsInventoryOpen((value) => !value);
             }}>
-              Inventaire ? {inventory.length ? `(${inventory.length})` : ''}
+              Inventaire {inventory.length ? `(${inventory.length})` : ''}
             </button>
           </div>
 
@@ -917,7 +922,7 @@ export default function PreviewTab(props) {
                   combineInventoryItems(selectedInventoryIds[0], selectedInventoryIds[1]);
                 }}
               >
-                Combiner les 2 objets ?
+                Combiner les 2 objets
               </button>
               {!sharedPlayerMode ? (
                 <div className="inventory-test-tools">
@@ -988,7 +993,7 @@ export default function PreviewTab(props) {
               combineInventoryItems(selectedInventoryIds[0], selectedInventoryIds[1]);
             }}
           >
-            Combiner les 2 objets ?
+            Combiner les 2 objets
           </button>
         </div>
         {!sharedPlayerMode ? (

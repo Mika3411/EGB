@@ -261,7 +261,7 @@ export default function PublicGallery({
         </div>
         <div className="toolbar">
           <button type="button" className="secondary-action" onClick={openDiscover}>Découverte</button>
-          {user?.id ? <button type="button" className="secondary-action" onClick={openAuthorEditor}>Mon ? profil auteur</button> : null}
+          {user?.id ? <button type="button" className="secondary-action" onClick={openAuthorEditor}>Mon profil auteur</button> : null}
           {onClose ? <button type="button" className="secondary-action" onClick={onClose}>Builder</button> : null}
         </div>
       </header>

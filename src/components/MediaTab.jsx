@@ -67,6 +67,7 @@ export default function MediaTab({
   getSceneLabel,
 }) {
   const sceneAspectRatio = Number(selectedScene?.backgroundAspectRatio) > 0 ? Number(selectedScene.backgroundAspectRatio) : 1.6;
+  const getSceneObjectDisplayImage = (obj) => obj?.imageData || project.items?.find((item) => item.id === obj?.linkedItemId)?.imageData || '';
   const [transitionPreviewTargetId, setTransitionPreviewTargetId] = useState('');
   const [transitionPreviewKey, setTransitionPreviewKey] = useState(0);
   const transitionPreviewTarget = useMemo(
@@ -439,8 +440,8 @@ export default function MediaTab({
                   />
                 ))}
                 {(selectedScene.sceneObjects || []).filter((obj) => !obj.isHidden).map((obj) => (
-                  <div key={obj.id} className="editor-hotspot editor-scene-object media-preview-object" style={getSceneObjectStyle(obj)}>
-                    {obj.imageData ? <img loading="lazy" decoding="async" src={obj.imageData} alt={obj.name} style={getSceneObjectImageStyle()} /> : <span>{obj.name}</span>}
+                  <div key={obj.id} className={`editor-hotspot editor-scene-object media-preview-object ${obj.isInvisible ? 'editor-scene-object-invisible' : ''}`} style={getSceneObjectStyle(obj)}>
+                    {getSceneObjectDisplayImage(obj) && !obj.isInvisible ? <img loading="lazy" decoding="async" src={getSceneObjectDisplayImage(obj)} alt={obj.name} style={getSceneObjectImageStyle()} /> : <span>{obj.isInvisible ? `${obj.name || 'Objet'} (invisible)` : obj.name}</span>}
                   </div>
                 ))}
                 {(selectedScene.hotspots || []).filter((spot) => !spot.isHidden).map((spot) => (

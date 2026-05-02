@@ -42,6 +42,7 @@ const getProjectThumbnail = (project = {}, record = {}) => {
     : null;
   const candidates = [
     record.shareState?.galleryThumbnail,
+    record.shareState?.publishedThumbnail,
     record.thumbnail,
     startScene?.backgroundData,
     ...(project.scenes || []).map((scene) => scene.backgroundData),
@@ -97,14 +98,15 @@ const detectAgeRating = (project = {}, record = {}) => {
 };
 
 const normalizeRecord = (record = {}) => {
-  const data = record.data || record.project || record;
+  const shareState = record.shareState || record.share_state || {};
+  const data = shareState.publishedData || record.data || record.project || record;
   return {
     ...record,
     id: record.id,
-    name: record.name || getProjectTitle(data, record),
+    name: shareState.publishedName || record.name || getProjectTitle(data, record),
     thumbnail: getProjectThumbnail(data, record),
     data,
-    shareState: record.shareState || record.share_state || {},
+    shareState,
   };
 };
 
@@ -308,5 +310,5 @@ export async function loadPublicProject(userId, projectId) {
   const record = records.map(normalizeRecord).find((entry) => entry.id === projectId);
 
   if (!record?.shareState?.isPublic) return null;
-  return record.data || null;
+  return record.shareState?.publishedData || record.data || null;
 }

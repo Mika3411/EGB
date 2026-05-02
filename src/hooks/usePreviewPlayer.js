@@ -209,8 +209,9 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
   const resolveHotspotInteraction = (spot) => {
     if (!spot) return null;
     const usedRule = (spot.logicRules || []).find((rule) => rule.disableAfterUse && usedLogicRuleIds.includes(rule.id));
-    const matchingRule = (spot.logicRules || []).find((rule) => {
-      if (rule.disableAfterUse && usedLogicRuleIds.includes(rule.id)) return false;
+    const isRuleAvailable = (rule) => !(rule.disableAfterUse && usedLogicRuleIds.includes(rule.id));
+    const doesRuleMatch = (rule) => {
+      if (!isRuleAvailable(rule)) return false;
       if (rule.conditionType === 'missing_item') return rule.itemId && !inventory.includes(rule.itemId);
       if (rule.conditionType === 'completed_hotspot') return rule.hotspotId && completedHotspotIds.includes(rule.hotspotId);
       if (rule.conditionType === 'solved_enigma') return rule.conditionEnigmaId && solvedEnigmaIds.includes(rule.conditionEnigmaId);
@@ -220,7 +221,15 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
       if (rule.conditionType === 'completed_combination') return rule.combinationId && completedCombinationIds.includes(rule.combinationId);
       if (rule.conditionType === 'second_click') return completedHotspotIds.includes(spot.id);
       return rule.itemId && inventory.includes(rule.itemId);
-    });
+    };
+    const isRuleConfigured = (rule) => {
+      if (['has_item', 'missing_item'].includes(rule.conditionType || 'has_item')) return Boolean(rule.itemId);
+      if (rule.conditionType === 'completed_hotspot') return Boolean(rule.hotspotId);
+      if (rule.conditionType === 'solved_enigma') return Boolean(rule.conditionEnigmaId);
+      if (rule.conditionType === 'completed_combination') return Boolean(rule.combinationId);
+      return true;
+    };
+    const matchingRule = (spot.logicRules || []).find(doesRuleMatch);
 
     if (matchingRule) {
       const useDefaultAction = matchingRule.actionType === 'default';
@@ -238,6 +247,28 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
         objectImageName: useDefaultAction ? spot.objectImageName || '' : matchingRule.objectImageName || '',
         logicRuleId: matchingRule.id || '',
         disableAfterUse: Boolean(matchingRule.disableAfterUse),
+      };
+    }
+
+    const unmetRule = (spot.logicRules || []).find((rule) => (
+      isRuleAvailable(rule)
+      && isRuleConfigured(rule)
+      && rule.failureDialogue
+      && !doesRuleMatch(rule)
+    ));
+    if (unmetRule) {
+      return {
+        ...spot,
+        actionType: 'dialogue',
+        dialogue: unmetRule.failureDialogue,
+        requiredItemId: '',
+        consumeRequiredItemOnUse: false,
+        rewardItemId: '',
+        targetSceneId: '',
+        targetCinematicId: '',
+        enigmaId: '',
+        objectImageData: '',
+        objectImageName: '',
       };
     }
 
@@ -565,13 +596,13 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     if (!activeSpot) return;
 
     if (activeSpot.requiredHotspotId && !completedHotspotIds.includes(activeSpot.requiredHotspotId)) {
-      setDialogue(activeSpot.lockedMessage || 'Je ne peux pas faire ?a maintenant.');
+      setDialogue(activeSpot.lockedMessage || 'Je ne peux pas faire ça maintenant.');
       return;
     }
 
     if (activeSpot.requiredItemId && !inventory.includes(activeSpot.requiredItemId)) {
       const need = getItemById?.(activeSpot.requiredItemId) || project.items.find((item) => item.id === activeSpot.requiredItemId);
-      setDialogue(`Il te faut ${need?.name || 'un objet'} pour faire ?a.`);
+      setDialogue(`Il te faut ${need?.name || 'un objet'} pour faire ça.`);
       return;
     }
 

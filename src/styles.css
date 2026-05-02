@@ -521,6 +521,14 @@ label { display: block; font-size: 13px; color: #ccdaef; margin: 10px 0 8px; fon
   background: rgba(18, 31, 56, 0.95) !important;
   border-color: var(--line) !important;
   box-shadow: none !important;
+  color: #eaf2ff !important;
+}
+.secondary-action:disabled, .secondary-button:disabled {
+  color: #9fb3d1 !important;
+  background: rgba(15, 23, 42, 0.82) !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  opacity: 0.72;
+  cursor: not-allowed;
 }
 .profile-action-button {
   display: inline-flex;
