@@ -43,9 +43,29 @@ import { buildStoragePath, hasSupabaseConfig, uploadToStorage } from './supabase
 
 const ADMIN_EMAIL = 'thorez.m@hotmail.fr';
 const PROFILE_TUTORIAL_SEEN_KEY_PREFIX = 'escapeGameBuilder.profileTutorialSeen';
+const BUILDER_UI_STATE_KEY_PREFIX = 'escapeGameBuilder.builderUiState';
+const BUILDER_TABS = ['scenes', 'media', 'map', 'cinematics', 'combinations', 'enigmas', 'logic', 'score', 'ai', 'shop', 'help', 'preview'];
 
 const isAdminUser = (user) => normalizeEmail(user?.email) === ADMIN_EMAIL;
 const getProfileTutorialSeenKey = (userId) => `${PROFILE_TUTORIAL_SEEN_KEY_PREFIX}.${userId}`;
+const getBuilderUiStateKey = (userId, projectId) => `${BUILDER_UI_STATE_KEY_PREFIX}.${userId || 'anonymous'}.${projectId || 'default'}`;
+const isBuilderTab = (tab) => BUILDER_TABS.includes(tab);
+const readBuilderUiState = (userId, projectId) => {
+  if (!userId || !projectId || typeof window === 'undefined') return {};
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(getBuilderUiStateKey(userId, projectId)) || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+const writeBuilderUiState = (userId, projectId, state) => {
+  if (!userId || !projectId || typeof window === 'undefined') return;
+  window.localStorage.setItem(getBuilderUiStateKey(userId, projectId), JSON.stringify({
+    ...state,
+    updatedAt: new Date().toISOString(),
+  }));
+};
 
 const dataUrlToBlob = (dataUrl) => {
   const match = String(dataUrl || '').match(/^data:([^;]+);base64,(.+)$/);
@@ -86,6 +106,7 @@ function App() {
     setScreen,
     setSharedLoadStatus,
   });
+  const builderResumeAttemptedRef = useRef(false);
   const activeTutorialIndexes = tutorialStepIndex === null ? [] : getTutorialStepIndexes(selectedTutorialTab);
   const activeTutorialPosition = activeTutorialIndexes.indexOf(tutorialStepIndex);
   const activeTutorialStep = tutorialStepIndex === null ? null : BUILDER_TUTORIAL_STEPS[tutorialStepIndex];
@@ -183,6 +204,14 @@ function App() {
   }, [auth.isReady, auth.user, screen, tutorialStepIndex]);
 
   useEffect(() => {
+    if (screen === 'editor' && auth.user?.id && auth.activeProjectId && isBuilderTab(editor.tab)) {
+      writeBuilderUiState(auth.user.id, auth.activeProjectId, {
+        screen: 'editor',
+        tab: editor.tab,
+        selectedSceneId: editor.selectedSceneId,
+      });
+    }
+
     let isCancelled = false;
     let saveTimer = null;
 
@@ -329,12 +358,14 @@ function App() {
         options.tutorialTab,
       );
       const resumeState = auth.getProjectResumeState(projectId);
-      const requestedTab = options.tab || resumeState?.tab;
-      const resumeTab = ['scenes', 'media', 'map', 'cinematics', 'combinations', 'enigmas', 'logic', 'score', 'ai', 'shop', 'help', 'preview'].includes(requestedTab) ?
+      const localResumeState = readBuilderUiState(auth.user?.id, projectId);
+      const requestedTab = options.tab || localResumeState?.tab || resumeState?.tab;
+      const resumeTab = isBuilderTab(requestedTab) ?
          requestedTab
         : 'scenes';
-      const resumeSceneId = projectToLoad.scenes?.some((scene) => scene.id === resumeState?.selectedSceneId) ?
-         resumeState.selectedSceneId
+      const requestedSceneId = localResumeState?.selectedSceneId || resumeState?.selectedSceneId;
+      const resumeSceneId = projectToLoad.scenes?.some((scene) => scene.id === requestedSceneId) ?
+         requestedSceneId
         : projectToLoad.scenes?.[0]?.id || '';
       editor.loadProject(projectToLoad);
       editor.setTab(resumeTab);
@@ -354,6 +385,21 @@ function App() {
       setSaveStatus('Erreur de chargement');
     }
   };
+
+  useEffect(() => {
+    if (builderResumeAttemptedRef.current) return;
+    if (sharedRouteRef.current) return;
+    if (!auth.isReady || !auth.user?.id || !auth.activeProjectId) return;
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('admin') === '1') return;
+
+    const lastBuilderState = readBuilderUiState(auth.user.id, auth.activeProjectId);
+    if (lastBuilderState.screen !== 'editor' || !isBuilderTab(lastBuilderState.tab)) return;
+
+    builderResumeAttemptedRef.current = true;
+    openProjectInEditor(auth.activeProjectId, { tab: lastBuilderState.tab });
+  }, [auth.isReady, auth.user, auth.activeProjectId]);
 
   const createProjectFromProfile = async (name, templateId = 'empty') => {
     const project = applyCreationTemplate(createInitialProject(), templateId, name);
@@ -498,6 +544,17 @@ function App() {
     url.hash = '';
     url.searchParams.set('gallery', '1');
     window.open(url.toString(), '_blank', 'noopener,noreferrer');
+  };
+
+  const openProfileFromBuilder = () => {
+    if (auth.user?.id && auth.activeProjectId) {
+      writeBuilderUiState(auth.user.id, auth.activeProjectId, {
+        screen: 'profile',
+        tab: editor.tab,
+        selectedSceneId: editor.selectedSceneId,
+      });
+    }
+    setScreen('profile');
   };
 
   const importProjectFromProfile = async (file) => {
@@ -831,7 +888,7 @@ function App() {
         saveStatus={saveStatus || 'Sauvegarde active'}
       />
 
-      <Tabs value={editor.tab} onChange={editor.setTab} onProfile={() => setScreen('profile')} projectScore={projectScore} />
+      <Tabs value={editor.tab} onChange={editor.setTab} onProfile={openProfileFromBuilder} projectScore={projectScore} />
 
       {editor.tab === 'scenes' && (
         <ScenesTab

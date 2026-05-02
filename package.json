@@ -6,7 +6,7 @@
   "scripts": {
     "api": "node server.js",
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/generate-seo-files.mjs",
     "preview": "vite preview",
     "start": "node server.js"
   },
