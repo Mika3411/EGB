@@ -488,7 +488,7 @@ const wait = (delay) => new Promise((resolve) => setTimeout(resolve, delay));
 
 const waitForAiJob = async (jobId, userId = '') => {
   const startedAt = Date.now();
-  const timeout = Number(import.meta.env.VITE_AI_JOB_TIMEOUT_MS || 8 * 60 * 1000);
+  const timeout = Number(import.meta.env.VITE_AI_JOB_TIMEOUT_MS || 20 * 60 * 1000);
   const interval = Number(import.meta.env.VITE_AI_JOB_POLL_INTERVAL_MS || 2500);
 
   while (Date.now() - startedAt < timeout) {

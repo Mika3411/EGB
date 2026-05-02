@@ -596,7 +596,10 @@ function App() {
       throw error;
     }
 
-    const projectToLoad = validation.project;
+    const projectToLoad = {
+      ...validation.project,
+      ...(options.aiDraft ? { aiDraft: options.aiDraft } : {}),
+    };
     const selectedSceneId = projectToLoad.scenes?.some((scene) => scene.id === options.selectedSceneId) ?
        options.selectedSceneId
       : projectToLoad.scenes?.[0]?.id || '';

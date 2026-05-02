@@ -31,6 +31,7 @@ let supabaseAdminClient = null;
 
 const creditStorePath = process.env.AI_CREDITS_FILE || join(rootDir, '.data', 'ai-credits.json');
 const defaultAiCredits = Number(process.env.AI_DEFAULT_CREDITS || 20);
+const aiJobs = new Map();
 const aiCreditCosts = {
   text: Number(process.env.AI_TEXT_CREDIT_COST || 2),
   improve: Number(process.env.AI_IMPROVE_CREDIT_COST || 5),
@@ -735,10 +736,16 @@ const extractOutputText = (payload) => {
   return chunks.join('\n').trim();
 };
 
-const handleGenerate = async (req, res) => {
-  const body = await readJsonBody(req);
-  const userId = getCreditUserId(req, body);
-  const cost = calculateTextCreditCost(body);
+const makeAiJobId = () => `ai_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
+const getPublicCreditPayload = (account, cost) => ({
+  balance: account.balance || 0,
+  cost,
+  costs: aiCreditCosts,
+  nextObjectImageCost: calculateImageCreditCost(account, { type: 'item' }),
+});
+
+const runTextGeneration = async (body, userId, cost) => {
   const input = [
     'Tu dois repondre uniquement avec un JSON valide, sans Markdown ni commentaire.',
     body.prompt,
@@ -752,7 +759,7 @@ const handleGenerate = async (req, res) => {
     const payload = await openaiFetch('responses', {
       model: process.env.OPENAI_TEXT_MODEL || 'gpt-5.2',
       input,
-      max_output_tokens: Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || 12000),
+      max_output_tokens: Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || 30000),
     });
 
     const outputText = extractOutputText(payload);
@@ -773,22 +780,115 @@ const handleGenerate = async (req, res) => {
     }
 
     const account = getCreditAccount(userId);
-    sendJson(res, 200, {
+    return {
       output_text: outputText,
       requestId: payload.id,
-      credits: {
-        balance: account.balance || 0,
-        cost,
-        costs: aiCreditCosts,
-        nextObjectImageCost: calculateImageCreditCost(account, { type: 'item' }),
-      },
-    });
+      credits: getPublicCreditPayload(account, cost),
+    };
   } catch (error) {
     if (charged) {
       refundCredits(userId, cost, `failed_text:${body.mode || 'generate'}`);
     }
     throw error;
   }
+};
+
+const startAiJob = (body, userId, cost) => {
+  const jobId = makeAiJobId();
+  aiJobs.set(jobId, {
+    id: jobId,
+    userId,
+    status: 'pending',
+    mode: body.mode || 'generate',
+    cost,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  setTimeout(async () => {
+    const runningJob = aiJobs.get(jobId) || {};
+    aiJobs.set(jobId, {
+      ...runningJob,
+      status: 'running',
+      updatedAt: new Date().toISOString(),
+    });
+
+    try {
+      const result = await runTextGeneration(body, userId, cost);
+      aiJobs.set(jobId, {
+        ...runningJob,
+        ...result,
+        id: jobId,
+        userId,
+        status: 'complete',
+        mode: body.mode || 'generate',
+        cost,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      aiJobs.set(jobId, {
+        ...runningJob,
+        id: jobId,
+        userId,
+        status: 'error',
+        mode: body.mode || 'generate',
+        cost,
+        error: error.message || 'Erreur IA.',
+        code: error.code,
+        balance: error.balance,
+        required: error.required,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+  }, 0);
+
+  return aiJobs.get(jobId);
+};
+
+const handleGenerate = async (req, res) => {
+  const body = await readJsonBody(req);
+  const userId = getCreditUserId(req, body);
+  const cost = calculateTextCreditCost(body);
+  const shouldRunAsync = body.responseFormat === 'escape-game-project-json'
+    && body.mode !== 'repair_item_names'
+    && !body.runInline;
+
+  if (shouldRunAsync) {
+    const job = startAiJob(body, userId, cost);
+    sendJson(res, 202, {
+      jobId: job.id,
+      status: job.status,
+      message: 'Generation IA lancee en arriere-plan.',
+      credits: { cost, costs: aiCreditCosts },
+    });
+    return;
+  }
+
+  const result = await runTextGeneration(body, userId, cost);
+  sendJson(res, 200, result);
+};
+
+const handleAiJob = async (req, res) => {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const jobId = String(url.searchParams.get('id') || '').trim();
+  if (!jobId) {
+    sendJson(res, 400, { error: 'Job IA manquant.' });
+    return;
+  }
+
+  const job = aiJobs.get(jobId);
+  if (!job) {
+    sendJson(res, 404, { error: 'Job IA introuvable.' });
+    return;
+  }
+
+  const userId = getCreditUserId(req, { userId: url.searchParams.get('userId') });
+  if (job.userId && userId !== 'anonymous' && job.userId !== userId) {
+    sendJson(res, 403, { error: 'Job IA refuse.' });
+    return;
+  }
+
+  sendJson(res, 200, job);
 };
 
 const handleImage = async (req, res) => {
@@ -941,6 +1041,11 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === 'GET' && req.url.startsWith('/api/ai-job')) {
+      await handleAiJob(req, res);
+      return;
+    }
+
     if (req.method === 'POST' && req.url === '/api/image') {
       await handleImage(req, res);
       return;
@@ -957,6 +1062,9 @@ const server = createServer(async (req, res) => {
     });
   }
 });
+
+server.requestTimeout = 0;
+server.headersTimeout = 0;
 
 server.listen(port, () => {
   console.log(`Escape Game Builder API listening on ${port}`);

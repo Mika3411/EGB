@@ -1124,9 +1124,25 @@ export default function AiTab({
       const sceneToValidateId = generatedProject.scenes?.find((scene) => scene.backgroundData)?.id
         || generatedProject.scenes?.[0]?.id
         || targetSceneId;
-      const result = await onApplyProject?.(generatedProject, { mode, isPatch, selectedSceneId: sceneToValidateId });
-      await saveDraftNow(false);
+      const fullDraft = buildAiDraftPayload();
+      const lightDraft = buildLightAiDraftPayload();
+      let fullDraftSaved = false;
+      try {
+        await writeAiDraft(aiDraftKey, fullDraft);
+        fullDraftSaved = true;
+      } catch {
+        fullDraftSaved = false;
+      }
+      const result = await onApplyProject?.(generatedProject, {
+        mode,
+        isPatch,
+        selectedSceneId: sceneToValidateId,
+        aiDraft: lightDraft,
+      });
       setValidation(result || validateCandidate(generatedProject, isPatch));
+      setDraftSaveStatus(fullDraftSaved ?
+         'Brouillon IA conservé: complet sur cet appareil, copie légère dans le projet.'
+        : 'Copie légère du brouillon IA conservée dans le projet.');
       setStatus(isPatch ?
          'Amélioration appliquée. Vérifie rapidement l’image et les zones dans l’éditeur.'
         : 'Projet appliqué. Vérifie rapidement les images et les zones dans l’éditeur.');
