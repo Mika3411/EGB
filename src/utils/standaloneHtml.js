@@ -222,11 +222,19 @@ button,.button-like{border:1px solid transparent;background:linear-gradient(180d
 .overlay-media{width:100%;max-height:62vh;object-fit:contain;display:block;border-radius:16px;background:#020617}
 .narration{font-size:18px;line-height:1.8}
 .anime2d-player{position:relative;width:100%;aspect-ratio:16 / 10;overflow:hidden;border-radius:16px;background:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(180deg,#101827 0%,#182033 62%,#273040 63%,#111827 100%);background-size:40px 40px,40px 40px,auto}
-.anime2d-player-layer{position:absolute;transform:translate(-50%,-50%);aspect-ratio:1;animation:anime2dPlayerFade 420ms ease both}
+.anime2d-player-layer{position:absolute;transform:translate(-50%,-50%);aspect-ratio:1}
 .anime2d-player-layer img{width:100%;height:100%;object-fit:contain;display:block}
 .anime2d-player-narration{position:absolute;left:24px;right:24px;bottom:22px;z-index:100;margin:0;padding:13px 16px;border-radius:12px;background:rgba(2,6,23,.74);color:#fff;font-size:18px;line-height:1.35;font-weight:800;pointer-events:none}
 .anime2d-player-empty{position:absolute;inset:0;display:grid;place-items:center;margin:0;color:#bfdbfe;font-weight:800;text-align:center;padding:24px}
 @keyframes anime2dPlayerFade{from{opacity:0;filter:blur(2px)}to{opacity:1;filter:blur(0)}}
+.anime2d-embedded{position:absolute;inset:0;display:block;overflow:hidden;pointer-events:none;background:transparent;line-height:1}
+.anime2d-embedded-layer{position:absolute;display:block;transform:translate(-50%,-50%);aspect-ratio:1}
+.anime2d-embedded-animated{display:block;width:100%;height:100%;transform-origin:center bottom}
+.anime2d-embedded-animated img{width:100%;height:100%;object-fit:contain;display:block;filter:drop-shadow(0 8px 10px rgba(0,0,0,.28))}
+.anime2d-embedded-empty{position:absolute;inset:0;display:grid;place-items:center;color:#bfdbfe;font-size:12px;font-weight:800}
+.anime2d-preset-idle-breathe{animation-name:anime2dBreathe;animation-timing-function:ease-in-out}.anime2d-preset-float{animation-name:anime2dFloat;animation-timing-function:ease-in-out}.anime2d-preset-shake{animation-name:anime2dShake;animation-timing-function:linear}.anime2d-preset-blink{animation-name:anime2dBlink;animation-timing-function:step-end}.anime2d-preset-reveal{animation-name:anime2dReveal;animation-timing-function:cubic-bezier(.2,.8,.2,1)}.anime2d-preset-talk{animation-name:anime2dTalk;animation-timing-function:ease-in-out}.anime2d-preset-glow,.anime2d-preset-embers{animation-name:anime2dGlow;animation-timing-function:ease-in-out}.anime2d-preset-look-around{animation-name:anime2dLook;animation-timing-function:ease-in-out}
+@keyframes anime2dBreathe{0%,100%{transform:scale(1)}50%{transform:scale(1.035,.965)}}@keyframes anime2dFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-7%)}}@keyframes anime2dShake{0%,100%{transform:translateX(0) rotate(0)}25%{transform:translateX(-3%) rotate(-1.2deg)}75%{transform:translateX(3%) rotate(1.2deg)}}@keyframes anime2dBlink{0%,100%{opacity:1}50%{opacity:.35}}@keyframes anime2dReveal{0%{opacity:0;transform:scale(.88)}100%{opacity:1;transform:scale(1)}}@keyframes anime2dTalk{0%,100%{transform:translateY(0) scale(1)}40%{transform:translateY(-1.5%) scale(1.018)}70%{transform:translateY(1%) scale(.995)}}@keyframes anime2dGlow{0%,100%{filter:drop-shadow(0 0 0 rgba(56,189,248,0))}50%{filter:drop-shadow(0 0 16px rgba(56,189,248,.72))}}@keyframes anime2dLook{0%,100%{transform:rotate(0)}35%{transform:rotate(-2.2deg)}70%{transform:rotate(2.2deg)}}
+.player-scene-object-not-clickable{cursor:default;pointer-events:none}
 .color-picker-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:10px}
 .color-picker-button{height:52px;border-radius:14px;border:2px solid rgba(255,255,255,.18)!important}
 .color-attempt-row{display:flex;gap:10px;flex-wrap:wrap;min-height:42px;align-items:center;margin-top:6px}
@@ -801,6 +809,10 @@ function normalizeAnime2dLayer(entry = {}) {
     y: Number(entry.y ?? source.y ?? 50),
     width: Number(entry.width ?? source.width ?? 28),
     opacity: Number(entry.opacity ?? source.opacity ?? 100),
+    preset: entry.preset || source.preset || 'none',
+    duration: Number(entry.duration ?? source.duration ?? 1000),
+    delay: Number(entry.delay ?? source.delay ?? 0),
+    loop: entry.loop ?? source.loop ?? true,
     visible: entry.visible ?? source.visible ?? true,
     visibleAtStart: entry.visibleAtStart ?? source.visibleAtStart ?? false,
   };
@@ -818,6 +830,17 @@ function getAnime2dSpec(cinematic) {
   const layers = Array.isArray(spec.layers) ? spec.layers.map(normalizeAnime2dLayer) : [];
   const duration = Math.max(1, ...steps.map((step) => Number(step.at || 0) + Number(step.duration || 0)));
   return { steps, layers, duration };
+}
+
+function renderAnime2dEmbedded(spec) {
+  const layers = Array.isArray(spec?.layers) ? spec.layers.map(normalizeAnime2dLayer).filter((layer) => layer.visible !== false) : [];
+  if (!layers.length) return '<span class="anime2d-embedded"><span class="anime2d-embedded-empty">JSON 2D</span></span>';
+  return '<span class="anime2d-embedded">'
+    + layers.map((layer) => '<span class="anime2d-embedded-layer" style="left:' + safeHtml(layer.x || 50) + '%;top:' + safeHtml(layer.y || 50) + '%;width:' + safeHtml(layer.width || 28) + '%;opacity:' + safeHtml((Number(layer.opacity || 100) / 100).toFixed(3)) + ';z-index:' + safeHtml(layers.length - layers.findIndex((entry) => entry.id === layer.id) + 2) + '">'
+      + '<span class="anime2d-embedded-animated anime2d-preset-' + safeHtml(layer.preset || 'none') + '" style="animation-duration:' + safeHtml(layer.duration || 1000) + 'ms;animation-delay:' + safeHtml(layer.delay || 0) + 'ms;animation-iteration-count:' + (layer.loop === false ? '1' : 'infinite') + '">'
+      + (layer.src ? '<img src="' + layer.src + '" alt="' + safeHtml(layer.name || '') + '" />' : '')
+      + '</span></span>').join('')
+    + '</span>';
 }
 
 function ensureAnime2dStarted(cinematic) {
@@ -838,6 +861,21 @@ function clearAnime2dTimer() {
 function getAnime2dElapsed(cinematic) {
   ensureAnime2dStarted(cinematic);
   return Math.max(0, (Date.now() - anime2dStartedAt) / 1000);
+}
+
+function getNextAnime2dRenderDelay(cinematic) {
+  const { steps, duration } = getAnime2dSpec(cinematic);
+  const elapsed = getAnime2dElapsed(cinematic);
+  if (elapsed >= duration) return 0;
+  const boundaries = [duration];
+  steps.forEach((step) => {
+    const start = Number(step.at || 0);
+    const end = start + Math.max(0, Number(step.duration || 0));
+    if (start > elapsed) boundaries.push(start);
+    if (end > elapsed) boundaries.push(end);
+  });
+  const nextBoundary = Math.min(...boundaries.filter((value) => value > elapsed));
+  return Math.max(16, Math.round((nextBoundary - elapsed) * 1000));
 }
 
 function getFirstSceneForAct(actId) {
@@ -862,6 +900,9 @@ function collectSceneMedia(scene, imageUrls, audioUrls) {
   (scene.sceneObjects || []).forEach((object) => {
     addPreloadUrl(imageUrls, object.imageData);
     addPreloadUrl(imageUrls, object.popupImageData || object.popupImage);
+    addPreloadUrl(imageUrls, object.objectImageData);
+    addPreloadUrl(audioUrls, object.soundData);
+    (object.anime2dSpec?.layers || []).forEach((layer) => addPreloadUrl(imageUrls, normalizeAnime2dLayer(layer).src));
   });
   (scene.hotspots || []).forEach((spot) => {
     addPreloadUrl(imageUrls, spot.objectImageData);
@@ -1616,10 +1657,23 @@ function combineInventoryItems(firstId, secondId) {
   return true;
 }
 
+function getSceneObjectClickMode(obj) {
+  if (!obj) return 'object';
+  if (obj.clickMode) return obj.clickMode;
+  if (obj.isClickable === false) return 'none';
+  return 'object';
+}
+
 function triggerSceneObject(objectId) {
   const scene = getPlayScene();
   const obj = scene?.sceneObjects?.find((entry) => entry.id === objectId);
   if (!obj || state.removedSceneObjectIds.includes(obj.id)) return;
+  const clickMode = getSceneObjectClickMode(obj);
+  if (clickMode === 'none') return;
+  if (clickMode === 'action') {
+    triggerHotspot(objectId);
+    return;
+  }
 
   const mode = obj.interactionMode || 'popup';
   const linkedItem = obj.linkedItemId ? getItemById(obj.linkedItemId) : null;
@@ -1658,7 +1712,8 @@ function triggerSceneObject(objectId) {
 
 function triggerHotspot(spotId) {
   const scene = getPlayScene();
-  const spot = scene?.hotspots?.find((entry) => entry.id === spotId);
+  const spot = scene?.hotspots?.find((entry) => entry.id === spotId)
+    || scene?.sceneObjects?.find((entry) => entry.id === spotId && getSceneObjectClickMode(entry) === 'action');
   if (!spot) return;
   const activeSpot = resolveHotspotInteraction(spot);
   if (!activeSpot) return;
@@ -2100,11 +2155,11 @@ function renderCinematic(cinematic, slide) {
       + '<div class="anime2d-player">'
       + (!layers.some((layer) => layer.src) ? '<p class="anime2d-player-empty">Aucune image embarquée dans ce JSON 2D Anime.</p>' : '')
       + visibleLayers.map((layer) => '<div class="anime2d-player-layer" style="left:' + safeHtml(layer.x || 50) + '%;top:' + safeHtml(layer.y || 50) + '%;width:' + safeHtml(layer.width || 28) + '%;opacity:' + safeHtml(Number(layer.opacity || 100) / 100) + ';z-index:' + safeHtml(layers.length - layers.findIndex((entry) => entry.id === layer.id) + 2) + '">'
-        + (layer.src ? '<img src="' + layer.src + '" alt="' + safeHtml(layer.name || '') + '" />' : '')
+        + (layer.src ? '<img src="' + layer.src + '" alt="' + safeHtml(layer.name || '') + '" loading="eager" decoding="sync" />' : '')
         + '</div>').join('')
       + (narration ? '<p class="anime2d-player-narration">' + safeHtml(narration) + '</p>' : '')
       + '</div>'
-      + '<p class="small-note">' + safeHtml(Math.min(duration, time).toFixed(1)) + 's / ' + safeHtml(duration.toFixed(1)) + 's</p>'
+      + '<p class="small-note">' + safeHtml(duration.toFixed(1)) + 's</p>'
       + '<div class="panel-head"><span></span><button id="close-cinematic" class="secondary-button">Terminer</button></div>'
       + '</div></div>';
   }
@@ -2321,9 +2376,10 @@ function render(shouldSave = true) {
     + (playScene?.sceneObjects || []).filter((obj) => !state.removedSceneObjectIds.includes(obj.id)).map((obj) => {
       const linkedItem = obj.linkedItemId ? getItemById(obj.linkedItemId) : null;
       const displayImage = obj.imageData || linkedItem?.imageData || '';
-      return '<button type="button" class="player-scene-object' + (obj.isInvisible ? ' player-scene-object-invisible' : '') + '" data-scene-object-id="' + obj.id + '" '
+      const clickMode = getSceneObjectClickMode(obj);
+      return '<button type="button" class="player-scene-object' + (obj.isInvisible ? ' player-scene-object-invisible' : '') + (clickMode === 'none' ? ' player-scene-object-not-clickable' : '') + '" data-scene-object-id="' + obj.id + '" '
         + 'style="left:' + obj.x + '%;top:' + obj.y + '%;width:' + obj.width + '%;height:' + obj.height + '%;z-index:18;' + getElementShapeStyle(obj) + '" title="' + safeHtml(obj.name || 'Objet') + '" aria-label="' + safeHtml(obj.name || 'Objet invisible') + '">'
-        + (!obj.isInvisible && displayImage ? '<img src="' + displayImage + '" alt="' + safeHtml(obj.name || linkedItem?.name || 'Objet') + '" />' : (!obj.isInvisible ? '<span>' + safeHtml(obj.name || linkedItem?.name || 'Objet') + '</span>' : ''))
+        + (!obj.isInvisible && obj.anime2dSpec ? renderAnime2dEmbedded(obj.anime2dSpec) : (!obj.isInvisible && displayImage ? '<img src="' + displayImage + '" alt="' + safeHtml(obj.name || linkedItem?.name || 'Objet') + '" />' : (!obj.isInvisible ? '<span>' + safeHtml(obj.name || linkedItem?.name || 'Objet') + '</span>' : '')))
         + '</button>';
     }).join('')
     + (playScene?.timerEnabled ? '<div class="scene-timer-hud"><strong id="scene-timer-count">' + formatSceneTimerSeconds(state.sceneTimerRemaining || playScene.timerSeconds || 0) + '</strong>'
@@ -2429,16 +2485,16 @@ function render(shouldSave = true) {
   }
   clearAnime2dTimer();
   if (cinematic?.cinematicType === 'anime2d') {
-    const { duration } = getAnime2dSpec(cinematic);
-    const elapsed = getAnime2dElapsed(cinematic);
+    const delay = getNextAnime2dRenderDelay(cinematic);
     anime2dTimer = setTimeout(() => {
       if (getCurrentCinematic()?.id !== cinematic.id) return;
+      const { duration } = getAnime2dSpec(cinematic);
       if (getAnime2dElapsed(cinematic) >= duration) {
         closeCinematic();
       } else {
         render(false);
       }
-    }, elapsed >= duration ? 0 : 80);
+    }, delay);
   }
 
   if (shouldSave && hasRenderedOnce) saveGame(false);

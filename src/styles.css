@@ -2677,6 +2677,78 @@ label { display: block; font-size: 13px; color: #ccdaef; margin: 10px 0 8px; fon
   from { opacity: 0; filter: blur(2px); }
   to { opacity: 1; filter: blur(0); }
 }
+.anime2d-embedded {
+  position: absolute;
+  inset: 0;
+  display: block;
+  overflow: hidden;
+  pointer-events: none;
+  background: transparent;
+  line-height: 1;
+}
+.anime2d-embedded-layer {
+  position: absolute;
+  display: block;
+  transform: translate(-50%, -50%);
+  aspect-ratio: 1;
+}
+.anime2d-embedded-animated {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: center bottom;
+}
+.anime2d-embedded-animated img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 8px 10px rgba(0, 0, 0, .28));
+}
+.anime2d-embedded-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #bfdbfe;
+  font-size: 12px;
+  font-weight: 800;
+}
+.anime2d-embedded-narration {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: 8%;
+  z-index: 50;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.25;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(2, 6, 23, .74);
+}
+.anime2d-preset-idle-breathe { animation-name: anime2dBreathe; animation-timing-function: ease-in-out; }
+.anime2d-preset-float { animation-name: anime2dFloat; animation-timing-function: ease-in-out; }
+.anime2d-preset-shake { animation-name: anime2dShake; animation-timing-function: linear; }
+.anime2d-preset-blink { animation-name: anime2dBlink; animation-timing-function: step-end; }
+.anime2d-preset-reveal { animation-name: anime2dReveal; animation-timing-function: cubic-bezier(.2, .8, .2, 1); }
+.anime2d-preset-talk { animation-name: anime2dTalk; animation-timing-function: ease-in-out; }
+.anime2d-preset-glow { animation-name: anime2dGlow; animation-timing-function: ease-in-out; }
+.anime2d-preset-embers { animation-name: anime2dGlow; animation-timing-function: ease-in-out; }
+.anime2d-preset-look-around { animation-name: anime2dLook; animation-timing-function: ease-in-out; }
+@keyframes anime2dBreathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.035, .965); } }
+@keyframes anime2dFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7%); } }
+@keyframes anime2dShake { 0%, 100% { transform: translateX(0) rotate(0); } 25% { transform: translateX(-3%) rotate(-1.2deg); } 75% { transform: translateX(3%) rotate(1.2deg); } }
+@keyframes anime2dBlink { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@keyframes anime2dReveal { 0% { opacity: 0; transform: scale(.88); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes anime2dTalk { 0%, 100% { transform: translateY(0) scale(1); } 40% { transform: translateY(-1.5%) scale(1.018); } 70% { transform: translateY(1%) scale(.995); } }
+@keyframes anime2dGlow { 0%, 100% { filter: drop-shadow(0 0 0 rgba(56,189,248,0)); } 50% { filter: drop-shadow(0 0 16px rgba(56,189,248,.72)); } }
+@keyframes anime2dLook { 0%, 100% { transform: rotate(0deg); } 35% { transform: rotate(-2.2deg); } 70% { transform: rotate(2.2deg); } }
+.player-scene-object-not-clickable {
+  cursor: default;
+  pointer-events: none;
+}
 .slides-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 14px; }
 .slide-card { background: rgba(12,21,39,0.92); border: 1px solid var(--line); border-radius: 20px; padding: 14px; }
 .slide-card h3 { margin-top: 0; }

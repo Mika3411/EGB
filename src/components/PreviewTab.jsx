@@ -3,6 +3,8 @@ import { COLOR_OPTIONS, POPUP_OVERLAY_GRADIENTS } from '../data/enigmaConfig';
 import { CODE_KEYPAD_KEYS } from '../data/playerConfig';
 import { parseJsonValue } from '../lib/gameEngine';
 import { getElementShapeStyle, getLayerZIndex } from './scenes/sceneEditorUtils';
+import { getSceneObjectClickMode } from './scenes/SceneObjectInspector.jsx';
+import Anime2DPreview from './Anime2DPreview.jsx';
 import SceneVisualEffect, { getVisualEffectZoneZIndex } from './SceneVisualEffect';
 
 const makePieceStyle = (imageData, rows, cols, pieceIndex, rotation = 0) => {
@@ -138,6 +140,9 @@ const collectSceneMediaUrls = (scene, imageUrls, audioUrls) => {
   (scene.sceneObjects || []).forEach((object) => {
     addUrl(imageUrls, object.imageData);
     addUrl(imageUrls, object.popupImageData || object.popupImage);
+    addUrl(imageUrls, object.objectImageData);
+    addUrl(audioUrls, object.soundData);
+    (object.anime2dSpec?.layers || []).forEach((layer) => addUrl(imageUrls, normalizeAnime2dLayer(layer).src));
   });
   (scene.hotspots || []).forEach((spot) => {
     addUrl(imageUrls, spot.objectImageData);
@@ -738,6 +743,12 @@ export default function PreviewTab(props) {
   const handleSceneObjectClick = (event, obj) => {
     event.stopPropagation();
     if (!obj) return;
+    const clickMode = getSceneObjectClickMode(obj);
+    if (clickMode === 'none') return;
+    if (clickMode === 'action') {
+      handleHotspotClick(event, obj);
+      return;
+    }
 
     const mode = obj.interactionMode || 'popup';
     const linkedItem = obj.linkedItemId ?
@@ -897,13 +908,15 @@ export default function PreviewTab(props) {
                 <button
                   key={obj.id}
                   type="button"
-                  className={`player-scene-object ${obj.isInvisible ? 'player-scene-object-invisible' : ''}`}
+                  className={`player-scene-object ${obj.isInvisible ? 'player-scene-object-invisible' : ''} ${getSceneObjectClickMode(obj) === 'none' ? 'player-scene-object-not-clickable' : ''}`}
                   style={getSceneObjectStyle(obj)}
                   onClick={(event) => handleSceneObjectClick(event, obj)}
                   title={obj.name}
                   aria-label={obj.name || 'Objet invisible'}
                 >
-                  {!obj.isInvisible && displayImage ? (
+                  {!obj.isInvisible && obj.anime2dSpec ? (
+                    <Anime2DPreview spec={obj.anime2dSpec} />
+                  ) : !obj.isInvisible && displayImage ? (
                     <img src={displayImage} alt={obj.name || linkedItem?.name || 'Objet'} />
                   ) : !obj.isInvisible ? (
                     <span>{obj.name || linkedItem?.name || 'Objet'}</span>

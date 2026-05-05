@@ -3,6 +3,8 @@ import {
   HelpLabel,
   MiniMap,
 } from './SceneEditorChrome.jsx';
+import Anime2DPreview from '../Anime2DPreview.jsx';
+import SceneObjectInspector, { getSceneObjectClickMode } from './SceneObjectInspector.jsx';
 import SceneVisualEffect, { getVisualEffectZoneZIndex } from '../SceneVisualEffect.jsx';
 import {
   getElementShapeStyle,
@@ -60,6 +62,7 @@ export default function SceneFullscreenEditor({
   miniMapProps,
   setSelectedItemId,
   handleUpload,
+  importSceneObjectAnime2d,
   patchProject,
   deleteItem,
   setSelectedSceneObjectId,
@@ -192,7 +195,11 @@ export default function SceneFullscreenEditor({
                             onPointerDown={(event) => beginObjectDrag(event, obj.id, 'fullscreen')}
                             onClick={(event) => selectSceneObject(obj.id, event)}
                           >
-                            {getSceneObjectDisplayImage(obj) && !obj.isInvisible ? <img src={getSceneObjectDisplayImage(obj)} alt={obj.name} style={getSceneObjectImageStyle()} /> : <span>{obj.isInvisible ? `${obj.name || 'Objet'} (invisible)` : obj.name}</span>}
+                            {obj.anime2dSpec && !obj.isInvisible ? (
+                              <Anime2DPreview spec={obj.anime2dSpec} />
+                            ) : getSceneObjectDisplayImage(obj) && !obj.isInvisible ? (
+                              <img src={getSceneObjectDisplayImage(obj)} alt={obj.name} style={getSceneObjectImageStyle()} />
+                            ) : <span>{obj.isInvisible ? `${obj.name || 'Objet'} (invisible)` : obj.name}</span>}
                             {renderShapeOutline?.(obj, obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id))}
                             {renderResizeHandles?.('sceneObject', obj.id, obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id), 'fullscreen')}
                             {renderShapePointHandles?.('sceneObject', obj.id, obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id), 'fullscreen')}
@@ -223,7 +230,7 @@ export default function SceneFullscreenEditor({
                       <div className="panel-head panel-head-stack">
                         <div>
                           <span className="section-kicker">Contexte</span>
-                          <h2>{selectedItem ? 'Objet sélectionné' : selectedSceneObject ? 'Objet visible sélectionné' : 'Zone sélectionnée'}</h2>
+                          <h2>{selectedItem ? 'Objet sélectionné' : selectedSceneObject ? (getSceneObjectClickMode(selectedSceneObject) === 'action' ? "Zone d'action sélectionnée" : 'Objet visible sélectionné') : 'Zone sélectionnée'}</h2>
                         </div>
                       </div>
 
@@ -258,65 +265,18 @@ export default function SceneFullscreenEditor({
                           }}>Supprimer l’objet</button>
                         </>
                       ) : selectedSceneObject ? (
-                        <>
-                          <HelpLabel help="Nom interne de l’objet visible. Il aide à le retrouver dans les calques et les listes de l’éditeur.">Nom</HelpLabel>
-                          <input value={selectedSceneObject.name} onChange={(e) => patchProject((draft) => {
-                            const obj = draft.scenes.find((s) => s.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === selectedSceneObjectId); if (obj) obj.name = e.target.value;
-                          })} />
-                          <div className="grid-two small-gap">
-                            <div><HelpLabel help="Position horizontale du centre de l’objet, en pourcentage de la largeur de l’image. 0 est le bord gauche, 100 le bord droit.">X</HelpLabel><input type="number" value={selectedSceneObject.x} onChange={(e) => patchProject((draft) => { const obj = draft.scenes.find((s) => s.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === selectedSceneObjectId); if (obj) obj.x = Number(e.target.value); })} /></div>
-                            <div><HelpLabel help="Position verticale du centre de l’objet, en pourcentage de la hauteur de l’image. 0 est le haut, 100 le bas.">Y</HelpLabel><input type="number" value={selectedSceneObject.y} onChange={(e) => patchProject((draft) => { const obj = draft.scenes.find((s) => s.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === selectedSceneObjectId); if (obj) obj.y = Number(e.target.value); })} /></div>
-                            <div><HelpLabel help="Largeur de la zone cliquable et de l’image visible, en pourcentage de la largeur de la scène.">Largeur</HelpLabel><input type="number" value={selectedSceneObject.width} onChange={(e) => patchProject((draft) => { const obj = draft.scenes.find((s) => s.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === selectedSceneObjectId); if (obj) obj.width = Number(e.target.value); })} /></div>
-                            <div><HelpLabel help="Hauteur de la zone cliquable et de l’image visible, en pourcentage de la hauteur de la scène.">Hauteur</HelpLabel><input type="number" value={selectedSceneObject.height} onChange={(e) => patchProject((draft) => { const obj = draft.scenes.find((s) => s.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === selectedSceneObjectId); if (obj) obj.height = Number(e.target.value); })} /></div>
-                          </div>
-                          {renderShapeControls?.('sceneObject', selectedSceneObjectId)}
-                          <HelpLabel help="Définit ce qui se passe au clic : montrer un pop-up, ajouter l’objet lié à l’inventaire, ou faire les deux.">Mode d’interaction</HelpLabel>
-                          <select value={selectedSceneObject.interactionMode || 'popup'} onChange={(e) => patchProject((draft) => {
-                            const obj = draft.scenes.find((s) => s.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === selectedSceneObjectId); if (obj) obj.interactionMode = e.target.value;
-                          })}>
-                            <option value="popup">Pop-up uniquement</option>
-                            <option value="inventory">Inventaire uniquement</option>
-                            <option value="both">Pop-up + inventaire</option>
-                          </select>
-                          <HelpLabel help="Objet ajouté à l’inventaire si le mode inclut l’inventaire. Sans sélection, le clic ne donne aucun objet.">Objet d’inventaire lié</HelpLabel>
-                          <select value={selectedSceneObject.linkedItemId || ''} onChange={(e) => patchProject((draft) => {
-                            const obj = draft.scenes.find((s) => s.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === selectedSceneObjectId);
-                            if (obj) {
-                              obj.linkedItemId = e.target.value;
-                              obj.imageData = '';
-                              obj.imageName = '';
-                              obj.popupImage = '';
-                              obj.popupImageName = '';
-                            }
-                          })}>
-                            <option value="">Aucun</option>
-                            {project.items.map((item) => <option key={item.id} value={item.id}>{item.icon} {item.name}</option>)}
-                          </select>
-                          <HelpLabel help="Texte affiché quand le joueur interagit avec cet objet visible. Pratique pour donner un indice sans créer une zone séparée.">Dialogue</HelpLabel>
-                          <textarea value={selectedSceneObject.dialogue || ''} onChange={(e) => patchProject((draft) => {
-                            const obj = draft.scenes.find((s) => s.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === selectedSceneObjectId); if (obj) obj.dialogue = e.target.value;
-                          })} />
-                          <label className="checkbox-row">
-                            <input
-                              type="checkbox"
-                              checked={Boolean(selectedSceneObject.removeAfterUse)}
-                              onChange={(e) => patchProject((draft) => {
-                                const obj = draft.scenes.find((s) => s.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === selectedSceneObjectId); if (obj) obj.removeAfterUse = e.target.checked;
-                              })}
-                            />
-                            Retirer l’objet visible après interaction ?
-                          </label>
-                          <p className="small-note help-inline-note">Quand c’est activé, l’objet disparaît de la scène après son utilisation réussie, par exemple une clé ramassée.</p>
-                          <button className="danger-button" style={{ marginTop: 12 }} onClick={() => {
-                            if (!window.confirm(`Supprimer l'objet visible "${selectedSceneObject.name}" ?`)) return;
-                            patchProject((draft) => {
-                              const scene = draft.scenes.find((s) => s.id === selectedSceneId);
-                              if (!scene?.sceneObjects) return;
-                              scene.sceneObjects = scene.sceneObjects.filter((entry) => entry.id !== selectedSceneObjectId);
-                            });
-                            setSelectedSceneObjectId('');
-                          }}>Supprimer l’objet visible</button>
-                        </>
+                        <SceneObjectInspector
+                          project={project}
+                          selectedSceneId={selectedSceneId}
+                          selectedSceneObject={selectedSceneObject}
+                          selectedSceneObjectId={selectedSceneObjectId}
+                          patchProject={patchProject}
+                          renderShapeControls={renderShapeControls}
+                          handleUpload={handleUpload}
+                          importSceneObjectAnime2d={importSceneObjectAnime2d}
+                          getSceneLabel={getSceneLabel}
+                          setSelectedSceneObjectId={setSelectedSceneObjectId}
+                        />
                       ) : selectedHotspot ? (
                         <>
                           <HelpLabel help="Nom de la zone d’action dans l’éditeur. Choisis un nom qui décrit l’intention, par exemple “Porte verrouillée”.">Nom</HelpLabel>

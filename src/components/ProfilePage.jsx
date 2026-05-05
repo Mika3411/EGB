@@ -547,6 +547,19 @@ export default function ProfilePage({
   }, [isProfileTutorialActive]);
 
   useEffect(() => {
+    const closeTutorialMenuOnOutsideClick = (event) => {
+      if (!tutorialMenuRef.current?.contains(event.target)) {
+        tutorialMenuRef.current?.removeAttribute('open');
+      }
+    };
+
+    document.addEventListener('pointerdown', closeTutorialMenuOnOutsideClick, true);
+    return () => {
+      document.removeEventListener('pointerdown', closeTutorialMenuOnOutsideClick, true);
+    };
+  }, []);
+
+  useEffect(() => {
     refreshOrders();
 
     const handleOrdersUpdate = () => refreshOrders();
