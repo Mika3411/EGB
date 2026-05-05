@@ -36,6 +36,7 @@ const aiCreditCosts = {
   text: Number(process.env.AI_TEXT_CREDIT_COST || 2),
   improve: Number(process.env.AI_IMPROVE_CREDIT_COST || 5),
   image: Number(process.env.AI_IMAGE_CREDIT_COST || 5),
+  removeBackground: Number(process.env.REMOVE_BG_CREDIT_COST || 8),
   objectImageBatchSize: Number(process.env.AI_OBJECT_IMAGE_BATCH_SIZE || 1),
   objectImageBatchCost: Number(process.env.AI_OBJECT_IMAGE_BATCH_COST || 3),
   objectThumbnail: Number(process.env.AI_OBJECT_THUMBNAIL_CREDIT_COST || 1),
@@ -126,6 +127,22 @@ const readJsonBody = (req) => new Promise((resolveBody, rejectBody) => {
   });
   req.on('error', rejectBody);
 });
+
+const imageDataToBlob = (imageData = '') => {
+  const value = String(imageData);
+  const match = value.match(/^data:([^;,]+)?(;base64)?,(.*)$/);
+  if (!match) {
+    const error = new Error('Image invalide.');
+    error.status = 400;
+    throw error;
+  }
+
+  const mimeType = match[1] || 'image/png';
+  const buffer = match[2]
+    ? Buffer.from(match[3], 'base64')
+    : Buffer.from(decodeURIComponent(match[3]));
+  return new Blob([buffer], { type: mimeType });
+};
 
 const readCreditStore = () => {
   if (!existsSync(creditStorePath)) return { users: {}, gumroadSales: {} };
@@ -954,6 +971,64 @@ const handleImage = async (req, res) => {
   });
 };
 
+const handleRemoveBackground = async (req, res) => {
+  const apiKey = process.env.REMOVE_BG_API_KEY || '';
+  if (!apiKey) {
+    sendJson(res, 500, { error: 'Cle remove.bg manquante cote serveur.' });
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const userId = getCreditUserId(req, body);
+  const cost = Math.max(0, Math.round(Number(aiCreditCosts.removeBackground || 0)));
+  if (!body.imageData) {
+    sendJson(res, 400, { error: 'Image manquante.' });
+    return;
+  }
+
+  let charged = false;
+  let account = null;
+
+  const formData = new FormData();
+  formData.append('image_file', imageDataToBlob(body.imageData), 'image.png');
+  formData.append('size', 'auto');
+  formData.append('format', 'png');
+
+  try {
+    account = spendCredits(userId, cost, 'remove_background:remove.bg');
+    charged = cost > 0;
+
+    const response = await fetch('https://api.remove.bg/v1.0/removebg', {
+      method: 'POST',
+      headers: {
+        'X-Api-Key': apiKey,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      const error = new Error(errorText || `remove.bg a repondu ${response.status}.`);
+      error.status = response.status;
+      throw error;
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const imageData = `data:image/png;base64,${Buffer.from(arrayBuffer).toString('base64')}`;
+    sendJson(res, 200, {
+      imageData,
+      credits: {
+        balance: account?.balance || 0,
+        cost,
+        costs: aiCreditCosts,
+      },
+    });
+  } catch (error) {
+    if (charged) refundCredits(userId, cost, 'failed_remove_background:remove.bg');
+    throw error;
+  }
+};
+
 const serveStatic = (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const requestedPath = decodeURIComponent(url.pathname);
@@ -1048,6 +1123,11 @@ const server = createServer(async (req, res) => {
 
     if (req.method === 'POST' && req.url === '/api/image') {
       await handleImage(req, res);
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/api/remove-background') {
+      await handleRemoveBackground(req, res);
       return;
     }
 

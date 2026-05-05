@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react';
+
 function MenuItem({ children, shortcut = '', onClick, disabled = false, active = false, danger = false, tour }) {
   return (
     <button
@@ -52,9 +54,49 @@ export function EditorToolbarMenus({
   addInvisibleSceneObject,
   addVisualEffectZone,
 }) {
+  const menuBarRef = useRef(null);
+
+  const closeOpenMenus = () => {
+    menuBarRef.current
+      ?.querySelectorAll('details[open]')
+      .forEach((menu) => menu.removeAttribute('open'));
+  };
+
+  useEffect(() => {
+    const closeMenusOnOutsideClick = (event) => {
+      if (!menuBarRef.current?.contains(event.target)) {
+        closeOpenMenus();
+      }
+    };
+
+    const closeMenusOnEscape = (event) => {
+      if (event.key === 'Escape') {
+        closeOpenMenus();
+      }
+    };
+
+    document.addEventListener('pointerdown', closeMenusOnOutsideClick, true);
+    document.addEventListener('keydown', closeMenusOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeMenusOnOutsideClick, true);
+      document.removeEventListener('keydown', closeMenusOnEscape);
+    };
+  }, []);
+
+  const closeSiblingMenus = (event) => {
+    if (!event.currentTarget.open) return;
+    menuBarRef.current
+      ?.querySelectorAll('details[open]')
+      .forEach((menu) => {
+        if (menu !== event.currentTarget) {
+          menu.removeAttribute('open');
+        }
+      });
+  };
+
   return (
-    <nav className="editor-menu-bar" aria-label="Menus de l'éditeur de scène">
-      <details className="editor-menu" data-tour="scene-toolbar-add">
+    <nav ref={menuBarRef} className="editor-menu-bar" aria-label="Menus de l'éditeur de scène">
+      <details className="editor-menu" data-tour="scene-toolbar-add" onToggle={closeSiblingMenus}>
         <summary>Fichier</summary>
         <div className="editor-menu-popover">
           <MenuItem onClick={() => previewScene?.(selectedSceneId)}>Prévisualiser</MenuItem>
@@ -63,7 +105,7 @@ export function EditorToolbarMenus({
         </div>
       </details>
 
-      <details className="editor-menu">
+      <details className="editor-menu" onToggle={closeSiblingMenus}>
         <summary>Édition</summary>
         <div className="editor-menu-popover">
           <MenuItem shortcut="Ctrl+Z" onClick={undoProjectChange} disabled={!canUndoProjectChange}>Annuler</MenuItem>
@@ -80,11 +122,14 @@ export function EditorToolbarMenus({
       </details>
 
       {!fullscreen ? (
-        <button type="button" className="editor-menu-button" onClick={enterEditorFullscreen}>
+        <button type="button" className="editor-menu-button" onClick={(event) => {
+          closeOpenMenus();
+          enterEditorFullscreen?.(event);
+        }}>
           Plein écran
         </button>
       ) : (
-        <details className="editor-menu">
+        <details className="editor-menu" onToggle={closeSiblingMenus}>
           <summary>Affichage</summary>
           <div className="editor-menu-popover">
             <MenuItem shortcut="-" onClick={() => setFullscreenZoom((value) => clampFullscreenZoom(value - 0.1))}>Zoom -</MenuItem>
@@ -96,7 +141,7 @@ export function EditorToolbarMenus({
       )}
 
 
-      <details className="editor-menu" data-tour="scene-add-menu">
+      <details className="editor-menu" data-tour="scene-add-menu" onToggle={closeSiblingMenus}>
         <summary>Ajouter</summary>
         <div className="editor-menu-popover">
           <MenuItem tour="scene-add-hotspot" onClick={addHotspot}>Zone d'action</MenuItem>

@@ -55,7 +55,8 @@ radial-gradient(circle at top right, rgba(59,130,246,.08), transparent 22%),
 linear-gradient(180deg, #08101c 0%, #09111f 100%);color:#eef4ff}
 button,input,select,textarea{font:inherit}
 button{cursor:pointer}
-.app-shell{max-width:1540px;margin:0 auto;padding:28px}
+.app-shell{max-width:none;margin:0;padding:0}
+.app-shell>.topbar{display:none}
 .topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:20px}
 .brand-block{max-width:760px}
 .topbar h1{margin:0 0 10px;font-size:40px;line-height:1.04;letter-spacing:-.03em}
@@ -72,8 +73,38 @@ body.game-fullscreen .main{padding:0;border:none;border-radius:0;background:#000
 body.game-fullscreen .scene-player{width:min(100vw,calc(100vh * var(--scene-aspect,1.6)));height:min(100vh,calc(100vw / var(--scene-aspect,1.6)));aspect-ratio:var(--scene-aspect,1.6);min-height:0;border:none;border-radius:0}
 body.game-fullscreen .inventory-actions{display:none}
 body.game-fullscreen .scene-inline-viewer{padding:40px}
-.fullscreen-hud{display:none}
+.fullscreen-hud{display:none!important}
 .inventory-drawer{display:none}
+.player-shell{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px}
+.player-shell.is-shared-player{width:100vw;min-height:100vh;grid-template-columns:1fr;gap:0;padding:0;background:#020617;place-items:center}
+.player-stage-panel{min-width:0}
+.player-shell.is-shared-player .player-stage-panel{width:100%;height:100vh;border-radius:0;border:0;padding:0;background:#020617;box-shadow:none;display:grid;place-items:center}
+.player-topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;pointer-events:none;transition:opacity .2s ease,transform .2s ease}
+.player-topbar button{pointer-events:auto}
+.player-shell.controls-hidden .player-topbar{opacity:0;transform:translateY(-10px);pointer-events:none}
+.player-shell.controls-hidden .player-topbar button{pointer-events:none}
+.player-topbar strong{display:block;margin-top:4px;color:#f8fbff}
+.player-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.player-actions button{min-height:36px;padding:8px 12px;border-radius:12px}
+.player-actions .secondary-action{color:#eaf2ff!important;background:rgba(18,31,56,.96)!important;border-color:rgba(148,163,184,.22)!important;box-shadow:none!important}
+.player-actions .secondary-action:hover{background:rgba(30,48,82,.98)!important;border-color:rgba(96,165,250,.36)!important}
+.player-shell.is-shared-player .player-side-panel,.player-shell.is-shared-player .inventory-actions,.player-shell.is-shared-player .player-reset-button{display:none}
+.player-shell.is-shared-player .player-topbar{position:fixed;top:14px;left:14px;right:14px;z-index:35;padding:10px 12px;border-radius:16px;background:rgba(2,6,23,.32);border:1px solid rgba(255,255,255,.08);backdrop-filter:blur(10px);pointer-events:none}
+.player-shell.is-shared-player .scene-player{width:min(100vw,calc(100vh * var(--scene-aspect,1.6)));height:min(100vh,calc(100vw / var(--scene-aspect,1.6)));aspect-ratio:var(--scene-aspect,1.6);border-radius:0;border:0}
+.player-narration-bar{position:absolute;left:18px;right:18px;bottom:18px;z-index:24;display:flex;align-items:flex-end;justify-content:space-between;gap:14px;pointer-events:none}
+.player-shell.is-shared-player .player-narration-bar{left:24px;right:24px;bottom:24px}
+.player-narration-bar p{max-width:min(780px,72%);margin:0;padding:12px 15px;border-radius:16px;background:rgba(2,6,23,.42);border:1px solid rgba(255,255,255,.10);color:#fff;line-height:1.55;box-shadow:0 16px 42px rgba(0,0,0,.28);backdrop-filter:blur(8px);pointer-events:auto;cursor:pointer}
+.player-shell.is-shared-player .player-narration-bar p{font-size:20px;max-width:min(860px,72vw)}
+.player-narration-bar.is-collapsed{justify-content:flex-end}
+.narration-discreet-button,.inventory-discreet-button{pointer-events:auto;min-height:38px;padding:9px 13px;border-radius:999px;background:rgba(15,23,42,.42)!important;border:1px solid rgba(148,163,184,.20)!important;color:#eaf2ff!important;box-shadow:0 12px 30px rgba(0,0,0,.22)!important}
+.narration-discreet-button{min-height:34px;padding:7px 12px;background:rgba(15,23,42,.34)!important;color:#dbeafe!important}
+.player-inventory-drawer{position:absolute;top:14px;right:14px;bottom:72px;z-index:30;width:min(360px,86%);overflow:auto;padding:14px;border-radius:18px;background:rgba(8,16,30,.94);border:1px solid rgba(148,163,184,.18);box-shadow:0 24px 70px rgba(0,0,0,.36);backdrop-filter:blur(12px)}
+.player-combine-button{width:100%;justify-content:center;margin-bottom:12px}
+.player-pause-overlay{position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:24px;background:rgba(2,6,23,.48);backdrop-filter:blur(8px)}
+.player-pause-menu{width:min(420px,92vw);padding:22px;border-radius:22px;background:rgba(8,16,30,.94);border:1px solid rgba(148,163,184,.2);box-shadow:0 30px 90px rgba(0,0,0,.42);color:#fff}
+.player-pause-menu h2{margin:8px 0 18px;font-size:28px}
+.player-pause-actions{display:grid;gap:10px}
+.player-pause-actions button{justify-content:center;min-height:42px;border-radius:13px}
 body.game-fullscreen .fullscreen-hud{display:flex;position:fixed;left:20px;right:20px;bottom:20px;z-index:35;align-items:flex-end;justify-content:space-between;gap:16px;pointer-events:none}
 body.game-fullscreen .fullscreen-dialogue{max-width:min(70vw,900px);padding:16px 20px;border-radius:20px;background:rgba(3,10,24,.72);border:1px solid rgba(255,255,255,.10);backdrop-filter:blur(10px);box-shadow:0 20px 50px rgba(0,0,0,.35);font-size:28px;line-height:1.5;color:#fff}
 body.game-fullscreen .fullscreen-actions{display:flex;gap:12px;pointer-events:auto}
@@ -190,6 +221,12 @@ button,.button-like{border:1px solid transparent;background:linear-gradient(180d
 .overlay-card{width:min(92vw,980px);max-height:90vh;overflow:auto;border-radius:24px;padding:18px;background:linear-gradient(180deg, rgba(12,20,37,.98) 0%, rgba(8,16,30,.98) 100%);border:1px solid rgba(148,163,184,.16);box-shadow:0 20px 60px rgba(0,0,0,.34)}
 .overlay-media{width:100%;max-height:62vh;object-fit:contain;display:block;border-radius:16px;background:#020617}
 .narration{font-size:18px;line-height:1.8}
+.anime2d-player{position:relative;width:100%;aspect-ratio:16 / 10;overflow:hidden;border-radius:16px;background:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(180deg,#101827 0%,#182033 62%,#273040 63%,#111827 100%);background-size:40px 40px,40px 40px,auto}
+.anime2d-player-layer{position:absolute;transform:translate(-50%,-50%);aspect-ratio:1;animation:anime2dPlayerFade 420ms ease both}
+.anime2d-player-layer img{width:100%;height:100%;object-fit:contain;display:block}
+.anime2d-player-narration{position:absolute;left:24px;right:24px;bottom:22px;z-index:100;margin:0;padding:13px 16px;border-radius:12px;background:rgba(2,6,23,.74);color:#fff;font-size:18px;line-height:1.35;font-weight:800;pointer-events:none}
+.anime2d-player-empty{position:absolute;inset:0;display:grid;place-items:center;margin:0;color:#bfdbfe;font-weight:800;text-align:center;padding:24px}
+@keyframes anime2dPlayerFade{from{opacity:0;filter:blur(2px)}to{opacity:1;filter:blur(0)}}
 .color-picker-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:10px}
 .color-picker-button{height:52px;border-radius:14px;border:2px solid rgba(255,255,255,.18)!important}
 .color-attempt-row{display:flex;gap:10px;flex-wrap:wrap;min-height:42px;align-items:center;margin-top:6px}
@@ -210,17 +247,17 @@ button,.button-like{border:1px solid transparent;background:linear-gradient(180d
 </head>
 <body>
 <div class="app-shell">
-  <div class="topbar">
+  <div class="topbar" hidden>
     <div class="brand-block">
       <div class="status-badge">🎮 Export prêt à jouer</div>
       <h1>${safeTitle}</h1>
       <p>Version standalone générée depuis le preview du builder.</p>
     </div>
     <div class="topbar-actions">
-      <button id="save-game" class="fullscreen-toggle" type="button">Sauvegarder</button>
-      <button id="load-game" class="fullscreen-toggle" type="button">Charger</button>
-      <button id="delete-save" class="fullscreen-toggle" type="button">Effacer sauvegarde</button>
-      <button id="fullscreen-toggle" class="fullscreen-toggle" type="button">Plein ?cran</button>
+      <button class="fullscreen-toggle" type="button">Sauvegarder</button>
+      <button class="fullscreen-toggle" type="button">Charger</button>
+      <button class="fullscreen-toggle" type="button">Effacer sauvegarde</button>
+      <button class="fullscreen-toggle" type="button">Plein écran</button>
       <span id="save-status" class="small-note" style="align-self:center"></span>
     </div>
   </div>
@@ -233,6 +270,10 @@ const root = document.getElementById('game-root');
 let hasRenderedOnce = false;
 let sceneTransitionTimer = null;
 let sceneTimerInterval = null;
+let controlsTimer = null;
+let anime2dTimer = null;
+let anime2dStartedAt = 0;
+let anime2dActiveCinematicId = '';
 let activeSceneTimerKey = '';
 let expiredSceneTimerKey = '';
 let loadedActId = '';
@@ -260,6 +301,10 @@ const DEFAULT_STATE = () => {
     selectedInventoryIds: [],
     draggedInventoryId: null,
     inventoryDrawerOpen: false,
+    narrationCollapsed: false,
+    pauseOpen: false,
+    showInteractionHints: true,
+    controlsVisible: false,
     activeEnigma: null,
     enigmaCodeInput: '',
     enigmaColorAttempt: [],
@@ -315,7 +360,7 @@ function getSerializableState() {
 function saveGame(manual = false) {
   try {
     localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(getSerializableState()));
-    updateSaveStatus(manual ? 'Sauvegard?.' : '');
+    updateSaveStatus(manual ? 'Sauvegardé.' : '');
     if (manual) {
       state.dialogue = 'Partie sauvegardée.';
       render(false);
@@ -371,7 +416,7 @@ function loadGame(manual = false) {
       simonPlaybackIndex: -1,
       simonPlayerTurn: false,
     });
-    updateSaveStatus('Charg?.');
+    updateSaveStatus('Chargé.');
 
     if (manual) {
       state.dialogue = 'Sauvegarde chargée.';
@@ -495,7 +540,7 @@ function normalizeImportedSave(data) {
     };
   }
 
-  // Compatibilit? : si l'utilisateur importe directement un ancien state.
+  // Compatibilité : si l'utilisateur importe directement un ancien state.
   if (data.playSceneId || Array.isArray(data.inventory) || Array.isArray(data.completedHotspotIds)) {
     return {
       name: 'Sauvegarde importée',
@@ -566,9 +611,9 @@ function isFullscreenActive() {
 
 function syncFullscreenUi() {
   document.body.classList.toggle('game-fullscreen', isFullscreenActive());
-  const button = document.getElementById('fullscreen-toggle');
+  const button = root.querySelector('#fullscreen-toggle');
   if (button) {
-    button.textContent = isFullscreenActive() ? 'Quitter le plein ?cran' : 'Plein ?cran';
+    button.textContent = isFullscreenActive() ? 'Quitter le plein écran' : 'Plein écran';
   }
 }
 
@@ -604,6 +649,75 @@ function safeHtml(value = '') {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function clampPercent(value) {
+  return Math.max(0, Math.min(100, Number(value) || 0));
+}
+
+function getElementShapeCorners(entry = {}) {
+  const corners = entry.shapeCorners || {};
+  return {
+    nw: { x: Number.isFinite(Number(corners.nw?.x)) ? Number(corners.nw.x) : 0, y: Number.isFinite(Number(corners.nw?.y)) ? Number(corners.nw.y) : 0 },
+    ne: { x: Number.isFinite(Number(corners.ne?.x)) ? Number(corners.ne.x) : 100, y: Number.isFinite(Number(corners.ne?.y)) ? Number(corners.ne.y) : 0 },
+    se: { x: Number.isFinite(Number(corners.se?.x)) ? Number(corners.se.x) : 100, y: Number.isFinite(Number(corners.se?.y)) ? Number(corners.se.y) : 100 },
+    sw: { x: Number.isFinite(Number(corners.sw?.x)) ? Number(corners.sw.x) : 0, y: Number.isFinite(Number(corners.sw?.y)) ? Number(corners.sw.y) : 100 },
+  };
+}
+
+function getElementShapeType(entry = {}) {
+  if (['rectangle', 'ellipse', 'free'].includes(entry.shapeType)) return entry.shapeType;
+  return (Array.isArray(entry.shapePoints) && entry.shapePoints.length >= 3) || entry.shapeCorners ? 'free' : 'rectangle';
+}
+
+function getElementShapePoints(entry = {}) {
+  if (Array.isArray(entry.shapePoints) && entry.shapePoints.length >= 3) {
+    return entry.shapePoints.map((point) => ({
+      x: Number.isFinite(Number(point?.x)) ? Number(point.x) : 50,
+      y: Number.isFinite(Number(point?.y)) ? Number(point.y) : 50,
+    }));
+  }
+  const corners = getElementShapeCorners(entry);
+  return [corners.nw, corners.ne, corners.se, corners.sw];
+}
+
+function getElementShapeStyle(entry = {}) {
+  const shapeType = getElementShapeType(entry);
+  if (shapeType === 'ellipse') return 'clip-path:ellipse(50% 50% at 50% 50%);';
+  if (shapeType !== 'free') return '';
+  const points = getElementShapePoints(entry);
+  return 'clip-path:polygon(' + points.map((point) => (
+    clampPercent(point.x) + '% ' + clampPercent(point.y) + '%'
+  )).join(',') + ');';
+}
+
+function isPointInsidePolygon(point, polygon) {
+  let inside = false;
+  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index++) {
+    const currentPoint = polygon[index];
+    const previousPoint = polygon[previous];
+    const intersects = ((currentPoint.y > point.y) !== (previousPoint.y > point.y))
+      && (point.x < ((previousPoint.x - currentPoint.x) * (point.y - currentPoint.y)) / ((previousPoint.y - currentPoint.y) || 0.0001) + currentPoint.x);
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+function isPointerInsideElementShape(event, entry, element) {
+  const shapeType = getElementShapeType(entry);
+  if (shapeType === 'rectangle') return true;
+  const rect = element.getBoundingClientRect();
+  if (!rect.width || !rect.height) return true;
+  const point = {
+    x: clampPercent(((event.clientX - rect.left) / rect.width) * 100),
+    y: clampPercent(((event.clientY - rect.top) / rect.height) * 100),
+  };
+  if (shapeType === 'ellipse') {
+    const x = (point.x - 50) / 50;
+    const y = (point.y - 50) / 50;
+    return (x * x + y * y) <= 1;
+  }
+  return isPointInsidePolygon(point, getElementShapePoints(entry));
 }
 
 ${standaloneGameEngineScript}
@@ -667,6 +781,65 @@ function getCurrentSlide() {
   return cinematic?.slides?.[state.playingSlideIndex] || null;
 }
 
+function getAnimeStepStart(step) {
+  return Number(step?.at || 0);
+}
+
+function sortAnimeStepsByTime(steps = []) {
+  return [...steps].sort((a, b) => getAnimeStepStart(a) - getAnimeStepStart(b));
+}
+
+function normalizeAnime2dLayer(entry = {}) {
+  const source = entry.layer && typeof entry.layer === 'object' ? entry.layer : {};
+  return {
+    ...source,
+    ...entry,
+    id: entry.id || source.id || '',
+    name: entry.name || source.name || '',
+    src: entry.src || entry.imageData || source.src || source.imageData || '',
+    x: Number(entry.x ?? source.x ?? 50),
+    y: Number(entry.y ?? source.y ?? 50),
+    width: Number(entry.width ?? source.width ?? 28),
+    opacity: Number(entry.opacity ?? source.opacity ?? 100),
+    visible: entry.visible ?? source.visible ?? true,
+    visibleAtStart: entry.visibleAtStart ?? source.visibleAtStart ?? false,
+  };
+}
+
+function isAnimeStepActive(step, time) {
+  const start = Number(step.at || 0);
+  const duration = Math.max(0, Number(step.duration || 0));
+  return time >= start && time < start + duration;
+}
+
+function getAnime2dSpec(cinematic) {
+  const spec = cinematic?.anime2dSpec || {};
+  const steps = sortAnimeStepsByTime(Array.isArray(spec.cinematicSteps) ? spec.cinematicSteps : []);
+  const layers = Array.isArray(spec.layers) ? spec.layers.map(normalizeAnime2dLayer) : [];
+  const duration = Math.max(1, ...steps.map((step) => Number(step.at || 0) + Number(step.duration || 0)));
+  return { steps, layers, duration };
+}
+
+function ensureAnime2dStarted(cinematic) {
+  if (!cinematic) return;
+  if (anime2dActiveCinematicId !== cinematic.id) {
+    anime2dActiveCinematicId = cinematic.id;
+    anime2dStartedAt = Date.now();
+  }
+}
+
+function clearAnime2dTimer() {
+  if (anime2dTimer) {
+    clearTimeout(anime2dTimer);
+    anime2dTimer = null;
+  }
+}
+
+function getAnime2dElapsed(cinematic) {
+  ensureAnime2dStarted(cinematic);
+  return Math.max(0, (Date.now() - anime2dStartedAt) / 1000);
+}
+
 function getFirstSceneForAct(actId) {
   if (!actId) return null;
   const actScenes = project.scenes.filter((scene) => scene.actId === actId);
@@ -700,6 +873,11 @@ function collectSceneMedia(scene, imageUrls, audioUrls) {
 function collectCinematicMedia(cinematic, imageUrls, audioUrls, videoUrls) {
   if (!cinematic) return;
   addPreloadUrl(videoUrls, cinematic.videoData);
+  if (cinematic.cinematicType === 'anime2d') {
+    (cinematic.anime2dSpec?.layers || []).forEach((layer) => {
+      addPreloadUrl(imageUrls, layer.src || layer.imageData || layer.layer?.src || layer.layer?.imageData);
+    });
+  }
   (cinematic.slides || []).forEach((slide) => {
     addPreloadUrl(imageUrls, slide.imageData);
     addPreloadUrl(audioUrls, slide.audioData);
@@ -1061,6 +1239,11 @@ function launchCinematic(cinematicId) {
   }
   state.playingCinematicId = cinematic.id;
   state.playingSlideIndex = 0;
+  if (cinematic.cinematicType === 'anime2d') {
+    anime2dActiveCinematicId = '';
+    anime2dStartedAt = 0;
+    clearAnime2dTimer();
+  }
 }
 
 function markHotspotCompleted(hotspotId) {
@@ -1541,6 +1724,9 @@ function closeCinematic() {
   const cinematic = getCurrentCinematic();
   state.playingCinematicId = null;
   state.playingSlideIndex = 0;
+  clearAnime2dTimer();
+  anime2dActiveCinematicId = '';
+  anime2dStartedAt = 0;
 
   if (cinematicAudio) {
     cinematicAudio.pause();
@@ -1554,6 +1740,10 @@ function closeCinematic() {
 function advanceCinematic() {
   const cinematic = getCurrentCinematic();
   if (!cinematic) return;
+  if (cinematic.cinematicType === 'anime2d') {
+    closeCinematic();
+    return;
+  }
   const total = cinematic.slides?.length || 0;
   if (state.playingSlideIndex + 1 >= total) {
     closeCinematic();
@@ -1565,6 +1755,9 @@ function advanceCinematic() {
 
 function resetPreview() {
   stopSceneTimer();
+  clearAnime2dTimer();
+  anime2dActiveCinematicId = '';
+  anime2dStartedAt = 0;
   expiredSceneTimerKey = '';
   Object.assign(state, DEFAULT_STATE());
   state.inventoryDrawerOpen = false;
@@ -1576,10 +1769,29 @@ function resetPreview() {
   render();
 }
 
+function clearControlsTimer() {
+  if (controlsTimer) {
+    clearTimeout(controlsTimer);
+    controlsTimer = null;
+  }
+}
+
+function revealControls(autoHide = true) {
+  state.controlsVisible = true;
+  clearControlsTimer();
+  if (autoHide) {
+    controlsTimer = setTimeout(() => {
+      state.controlsVisible = false;
+      render(false);
+    }, 3000);
+  }
+  render(false);
+}
+
 function bindEvents() {
-  document.getElementById('fullscreen-toggle')?.addEventListener('click', toggleFullscreen);
-  document.getElementById('save-game')?.addEventListener('click', () => saveGame(true));
-  document.getElementById('load-game')?.addEventListener('click', () => loadGame(true));
+  root.querySelector('#fullscreen-toggle')?.addEventListener('click', toggleFullscreen);
+  root.querySelector('#save-game')?.addEventListener('click', () => saveGame(true));
+  root.querySelector('#load-game')?.addEventListener('click', () => loadGame(true));
   document.getElementById('delete-save')?.addEventListener('click', () => deleteSave(true));
   document.getElementById('export-save-json')?.addEventListener('click', exportSaveAsJson);
   document.getElementById('import-save-json')?.addEventListener('click', () => document.getElementById('import-save-file')?.click());
@@ -1589,6 +1801,15 @@ function bindEvents() {
   });
   document.getElementById('rename-save')?.addEventListener('click', renameCurrentSave);
   document.getElementById('clear-save')?.addEventListener('click', clearGameSave);
+  root.querySelector('.player-shell')?.addEventListener('mousemove', (event) => {
+    if (event.clientY <= 8) {
+      if (!state.controlsVisible) revealControls(false);
+    } else if (event.clientY > 96 && state.controlsVisible) {
+      state.controlsVisible = false;
+      clearControlsTimer();
+      render(false);
+    }
+  });
   root.querySelector('#open-inventory-drawer')?.addEventListener('click', () => {
     state.inventoryDrawerOpen = true;
     render();
@@ -1597,6 +1818,44 @@ function bindEvents() {
     state.inventoryDrawerOpen = false;
     render();
   });
+  root.querySelector('#collapse-narration')?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    state.narrationCollapsed = true;
+    render();
+  });
+  root.querySelector('#open-narration')?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    state.narrationCollapsed = false;
+    render();
+  });
+  root.querySelector('#pause-game')?.addEventListener('click', () => {
+    state.pauseOpen = true;
+    render(false);
+  });
+  root.querySelector('#resume-game')?.addEventListener('click', () => {
+    state.pauseOpen = false;
+    render(false);
+  });
+  root.querySelector('#toggle-hints')?.addEventListener('click', () => {
+    state.showInteractionHints = !state.showInteractionHints;
+    render();
+  });
+  root.querySelector('#pause-toggle-hints')?.addEventListener('click', () => {
+    state.showInteractionHints = !state.showInteractionHints;
+    state.pauseOpen = false;
+    render();
+  });
+  root.querySelector('#pause-save-game')?.addEventListener('click', () => {
+    saveGame(true);
+    state.pauseOpen = false;
+    render(false);
+  });
+  root.querySelector('#pause-load-game')?.addEventListener('click', () => {
+    loadGame(true);
+    state.pauseOpen = false;
+    render(false);
+  });
+  root.querySelector('#pause-reset-preview')?.addEventListener('click', resetPreview);
   root.querySelector('#inventory-drawer-backdrop')?.addEventListener('click', () => {
     state.inventoryDrawerOpen = false;
     render();
@@ -1608,10 +1867,13 @@ function bindEvents() {
     }
   });
 
-  root.querySelector('#reset-preview')?.addEventListener('click', resetPreview);
+  root.querySelectorAll('#reset-preview').forEach((button) => button.addEventListener('click', resetPreview));
 
   root.querySelectorAll('[data-hotspot-id]').forEach((button) => {
     button.addEventListener('click', (event) => {
+      const scene = getPlayScene();
+      const spot = scene?.hotspots?.find((entry) => entry.id === button.dataset.hotspotId);
+      if (spot && !isPointerInsideElementShape(event, spot, button)) return;
       event.preventDefault();
       event.stopPropagation();
       triggerHotspot(button.dataset.hotspotId);
@@ -1620,6 +1882,9 @@ function bindEvents() {
 
   root.querySelectorAll('[data-scene-object-id]').forEach((el) => {
     el.addEventListener('click', (event) => {
+      const scene = getPlayScene();
+      const obj = scene?.sceneObjects?.find((entry) => entry.id === el.dataset.sceneObjectId);
+      if (obj && !isPointerInsideElementShape(event, obj, el)) return;
       event.preventDefault();
       event.stopPropagation();
       triggerSceneObject(el.dataset.sceneObjectId);
@@ -1811,6 +2076,38 @@ function bindEvents() {
 
 function renderCinematic(cinematic, slide) {
   if (!cinematic) return '';
+  if (cinematic.cinematicType === 'anime2d') {
+    const { steps, layers, duration } = getAnime2dSpec(cinematic);
+    const time = Math.min(duration, getAnime2dElapsed(cinematic));
+    const imageSteps = steps.filter((step) => ['add', 'replace'].includes(step.mode) && step.layerId && isAnimeStepActive(step, time));
+    const replaceStep = [...imageSteps].reverse().find((step) => step.mode === 'replace');
+    const eventLayerIds = new Set(steps.filter((step) => ['add', 'replace'].includes(step.mode) && step.layerId).map((step) => step.layerId));
+    const baseLayers = layers.filter((layer) => layer.visible !== false && !eventLayerIds.has(layer.id) && (layer.visibleAtStart === true || !layer.src));
+    const visibleLayers = replaceStep ?
+       layers.filter((layer) => layer.visible !== false && layer.id === replaceStep.layerId)
+      : [
+          ...baseLayers,
+          ...imageSteps
+            .filter((step) => step.mode === 'add')
+            .map((step) => layers.find((layer) => layer.visible !== false && layer.id === step.layerId))
+            .filter(Boolean),
+        ];
+    const fallbackNarration = cinematic.slides?.find((entry) => String(entry?.narration || '').trim())?.narration || '';
+    const currentNarrationStep = [...steps].reverse().find((step) => String(step.narration || '').trim() && getAnimeStepStart(step) <= time) || null;
+    const narration = String(currentNarrationStep?.narration || '').trim() || fallbackNarration;
+
+    return '<div class="overlay" id="cinematic-overlay"><div class="overlay-card wide">'
+      + '<div class="anime2d-player">'
+      + (!layers.some((layer) => layer.src) ? '<p class="anime2d-player-empty">Aucune image embarquée dans ce JSON 2D Anime.</p>' : '')
+      + visibleLayers.map((layer) => '<div class="anime2d-player-layer" style="left:' + safeHtml(layer.x || 50) + '%;top:' + safeHtml(layer.y || 50) + '%;width:' + safeHtml(layer.width || 28) + '%;opacity:' + safeHtml(Number(layer.opacity || 100) / 100) + ';z-index:' + safeHtml(layers.length - layers.findIndex((entry) => entry.id === layer.id) + 2) + '">'
+        + (layer.src ? '<img src="' + layer.src + '" alt="' + safeHtml(layer.name || '') + '" />' : '')
+        + '</div>').join('')
+      + (narration ? '<p class="anime2d-player-narration">' + safeHtml(narration) + '</p>' : '')
+      + '</div>'
+      + '<p class="small-note">' + safeHtml(Math.min(duration, time).toFixed(1)) + 's / ' + safeHtml(duration.toFixed(1)) + 's</p>'
+      + '<div class="panel-head"><span></span><button id="close-cinematic" class="secondary-button">Terminer</button></div>'
+      + '</div></div>';
+  }
   if ((cinematic.cinematicType || 'slides') === 'video') {
     return '<div class="overlay" id="cinematic-overlay"><div class="overlay-card">'
       + (cinematic.videoData ?
@@ -1902,7 +2199,7 @@ function renderEnigma(enigma) {
         + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
     } else if (miscMode === 'true-false') {
       body = '<div><label>Choisis une réponse</label><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">'
-        + ['vrai', 'faux'].map((choice) => '<button type="button" data-misc-choice="' + choice + '" style="' + (state.enigmaCodeInput === choice ? primaryButtonStyle : secondaryButtonStyle) + '">' + (choice === 'vrai' 'Vrai' : 'Faux') + '</button>').join('')
+        + ['vrai', 'faux'].map((choice) => '<button type="button" data-misc-choice="' + choice + '" style="' + (state.enigmaCodeInput === choice ? primaryButtonStyle : secondaryButtonStyle) + '">' + (choice === 'vrai' ? 'Vrai' : 'Faux') + '</button>').join('')
         + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
     } else if (miscMode === 'ordering') {
       const current = parseJsonValue(state.enigmaCodeInput, []);
@@ -1920,9 +2217,9 @@ function renderEnigma(enigma) {
           + '</select></div>').join('')
         + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
     } else if (miscMode === 'numeric-range' || miscMode === 'exact-number') {
-      body = '<div><label>' + (miscMode === 'exact-number' 'Nombre exact' : 'Nombre') + '</label><input id="enigma-input" type="number" value="' + safeHtml(state.enigmaCodeInput) + '" '
+      body = '<div><label>' + (miscMode === 'exact-number' ? 'Nombre exact' : 'Nombre') + '</label><input id="enigma-input" type="number" value="' + safeHtml(state.enigmaCodeInput) + '" '
         + 'style="width:100%;padding:12px 14px;border-radius:14px;border:1px solid rgba(148,163,184,.16);background:rgba(12,21,39,.9);color:white;outline:none" />'
-        + '<p class="small-note">' + (miscMode === 'exact-number' 'La réponse doit correspondre au nombre attendu.' : 'La réponse doit être comprise entre ' + safeHtml(enigma.miscMin ?? '') + ' et ' + safeHtml(enigma.miscMax ?? '') + '.') + '</p>'
+        + '<p class="small-note">' + (miscMode === 'exact-number' ? 'La réponse doit correspondre au nombre attendu.' : 'La réponse doit être comprise entre ' + safeHtml(enigma.miscMin ?? '') + ' et ' + safeHtml(enigma.miscMax ?? '') + '.') + '</p>'
         + '<div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
     } else if (miscMode === 'item-select') {
       body = '<div><label>Choisis l’objet</label><div style="display:grid;gap:10px;margin-top:10px">'
@@ -1934,7 +2231,7 @@ function renderEnigma(enigma) {
         + (enigma.miscChoices || []).map((choice) => '<button type="button" data-misc-toggle="' + safeHtml(choice) + '" style="' + (current.includes(choice) ? primaryButtonStyle : secondaryButtonStyle) + '">' + safeHtml(choice) + '</button>').join('')
         + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
     } else {
-      body = '<div><label>' + (miscMode === 'fill-blank' 'Mot manquant' : 'Réponse') + '</label><input id="enigma-input" value="' + safeHtml(state.enigmaCodeInput) + '" placeholder="Écris ta réponse..." '
+      body = '<div><label>' + (miscMode === 'fill-blank' ? 'Mot manquant' : 'Réponse') + '</label><input id="enigma-input" value="' + safeHtml(state.enigmaCodeInput) + '" placeholder="Écris ta réponse..." '
         + 'style="width:100%;padding:12px 14px;border-radius:14px;border:1px solid rgba(148,163,184,.16);background:rgba(12,21,39,.9);color:white;outline:none" />'
         + '<p class="small-note">La réponse est acceptée même avec des majuscules différentes ou des mots en plus.</p>'
         + '<div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
@@ -1942,7 +2239,7 @@ function renderEnigma(enigma) {
   }
 
   if (enigma.type === 'simon') {
-    body = '<div><p class="small-note">' + (state.simonPlayerTurn 'À toi de rejouer la séquence.' : 'Observe la séquence?') + '</p>'
+    body = '<div><p class="small-note">' + (state.simonPlayerTurn ? 'À toi de rejouer la séquence.' : 'Observe la séquence.') + '</p>'
       + '<div class="color-picker-grid simon-grid">'
       + PREVIEW_COLOR_OPTIONS.slice(0, 4).map(([value, label], index) => {
         const solutionColor = (enigma.solutionColors || [])[state.simonPlaybackIndex];
@@ -2001,21 +2298,31 @@ function render(shouldSave = true) {
   const sceneAspectRatio = Number(playScene?.backgroundAspectRatio) > 0 ? Number(playScene.backgroundAspectRatio) : 1.6;
   if (!hasRenderedOnce && !loadedActId) loadedActId = playScene?.actId || '';
 
-  root.innerHTML = '<div class="layout">'
-    + '<section class="panel main">'
+  root.innerHTML = '<div class="player-shell is-shared-player ' + (state.showInteractionHints ? 'show-hints' : 'hide-hints') + ' ' + (state.controlsVisible ? '' : 'controls-hidden') + '">'
+    + '<section class="panel player-stage-panel">'
+    + '<div class="player-topbar">'
+    + '<div><span class="eyebrow">Player</span><strong>' + safeHtml(playScene ? getSceneLabel(playScene.id) : 'Aucune scène') + '</strong></div>'
+    + '<div class="player-actions">'
+    + '<button id="pause-game" type="button" class="secondary-action">Pause</button>'
+    + '<button id="reset-preview" type="button" class="secondary-action player-reset-button">Recommencer</button>'
+    + '<button id="save-game" type="button" class="secondary-action">Sauvegarder</button>'
+    + '<button id="load-game" type="button" class="secondary-action">Charger</button>'
+    + '<button id="toggle-hints" type="button" class="secondary-action">' + (state.showInteractionHints ? 'Sans aide' : 'Aide visuelle') + '</button>'
+    + '<button id="fullscreen-toggle" type="button" class="secondary-action">Plein écran</button>'
+    + '</div></div>'
     + '<div class="scene-player" id="scene-layer" style="--scene-aspect:' + sceneAspectRatio + '">'
     + (playScene?.backgroundData ?
        '<img class="bg" src="' + playScene.backgroundData + '" alt="' + safeHtml(playScene.name || 'Scène') + '" onload="setSceneAspectFromImage(this)" />'
       : '<div class="placeholder">Ajoute un fond pour jouer la scène.</div>')
     + (playScene?.visualEffect && playScene.visualEffect !== 'none' ? '<div class="scene-visual-effect scene-visual-effect--' + safeHtml(playScene.visualEffect) + ' scene-visual-effect--' + safeHtml(playScene.visualEffectIntensity || 'normal') + '"></div>' : '')
-    + (playScene?.visualEffectZones || []).filter((zone) => !zone.isHidden).map((zone) => '<div class="scene-visual-effect scene-visual-effect-zone scene-visual-effect--' + safeHtml(zone.effect || 'sparkles') + ' scene-visual-effect--' + safeHtml(zone.intensity || 'normal') + '" style="left:' + zone.x + '%;top:' + zone.y + '%;width:' + zone.width + '%;height:' + zone.height + '%;z-index:' + getVisualEffectZoneZIndex(zone.layer) + '"></div>').join('')
+    + (playScene?.visualEffectZones || []).filter((zone) => !zone.isHidden).map((zone) => '<div class="scene-visual-effect scene-visual-effect-zone scene-visual-effect--' + safeHtml(zone.effect || 'sparkles') + ' scene-visual-effect--' + safeHtml(zone.intensity || 'normal') + '" style="left:' + zone.x + '%;top:' + zone.y + '%;width:' + zone.width + '%;height:' + zone.height + '%;z-index:' + getVisualEffectZoneZIndex(zone.layer) + ';' + getElementShapeStyle(zone) + '"></div>').join('')
     + (playScene?.hotspots || []).map((spot) => '<button type="button" class="player-hotspot" data-hotspot-id="' + spot.id + '" '
-      + 'style="left:' + spot.x + '%;top:' + spot.y + '%;width:' + spot.width + '%;height:' + spot.height + '%;z-index:20;cursor:pointer;" title="' + safeHtml(spot.name || '') + '"></button>').join('')
+      + 'style="left:' + spot.x + '%;top:' + spot.y + '%;width:' + spot.width + '%;height:' + spot.height + '%;z-index:20;cursor:pointer;' + getElementShapeStyle(spot) + '" title="' + safeHtml(spot.name || '') + '"></button>').join('')
     + (playScene?.sceneObjects || []).filter((obj) => !state.removedSceneObjectIds.includes(obj.id)).map((obj) => {
       const linkedItem = obj.linkedItemId ? getItemById(obj.linkedItemId) : null;
       const displayImage = obj.imageData || linkedItem?.imageData || '';
       return '<button type="button" class="player-scene-object' + (obj.isInvisible ? ' player-scene-object-invisible' : '') + '" data-scene-object-id="' + obj.id + '" '
-        + 'style="left:' + obj.x + '%;top:' + obj.y + '%;width:' + obj.width + '%;height:' + obj.height + '%;z-index:18;" title="' + safeHtml(obj.name || 'Objet') + '" aria-label="' + safeHtml(obj.name || 'Objet invisible') + '">'
+        + 'style="left:' + obj.x + '%;top:' + obj.y + '%;width:' + obj.width + '%;height:' + obj.height + '%;z-index:18;' + getElementShapeStyle(obj) + '" title="' + safeHtml(obj.name || 'Objet') + '" aria-label="' + safeHtml(obj.name || 'Objet invisible') + '">'
         + (!obj.isInvisible && displayImage ? '<img src="' + displayImage + '" alt="' + safeHtml(obj.name || linkedItem?.name || 'Objet') + '" />' : (!obj.isInvisible ? '<span>' + safeHtml(obj.name || linkedItem?.name || 'Objet') + '</span>' : ''))
         + '</button>';
     }).join('')
@@ -2033,9 +2340,26 @@ function render(shouldSave = true) {
     + (state.actPreload?.active ? '<div class="act-preload-overlay" role="status" aria-live="polite"><div class="act-preload-card"><span class="eyebrow">Chargement</span><strong>'
       + safeHtml(state.actPreload.label || 'Acte suivant') + '</strong><div class="act-preload-bar" aria-label="Chargement ' + safeHtml(state.actPreload.progress || 0) + '%"><span style="width:'
       + safeHtml(state.actPreload.progress || 0) + '%"></span></div><small>' + safeHtml(state.actPreload.progress || 0) + '% des medias de l\\'acte sont prets</small></div></div>' : '')
-    + '</div><div class="inventory-actions"><button id="reset-preview">Recommencer</button></div></section>'
+    + '<div class="player-narration-bar ' + (state.narrationCollapsed ? 'is-collapsed' : '') + '">'
+    + (state.narrationCollapsed ?
+       '<button id="open-narration" type="button" class="narration-discreet-button">Texte</button>'
+      : '<p id="collapse-narration" role="button" tabindex="0">' + safeHtml(state.dialogue || 'Aucun message.') + '</p>')
+    + '<button id="open-inventory-drawer" type="button" class="inventory-discreet-button">Inventaire' + (state.inventory.length ? ' (' + state.inventory.length + ')' : '') + '</button>'
+    + '</div>'
+    + (state.inventoryDrawerOpen ? '<div class="player-inventory-drawer"><div class="panel-head"><h3>Inventaire</h3><button id="close-inventory-drawer" class="secondary-button" type="button">Fermer</button></div><button id="combine-items" class="secondary-action player-combine-button" type="button">Combiner les 2 objets</button><div class="inventory-grid">'
+      + (state.inventory.length ? state.inventory.map((itemId) => {
+        const item = getItemById(itemId);
+        if (!item) return '';
+        return '<button type="button" class="inventory-tile'
+          + (state.selectedInventoryIds.includes(itemId) ? ' selected' : '') + '" data-item-id="' + itemId + '">'
+          + '<div class="inventory-thumb">'
+          + (item.imageData ? '<img src="' + item.imageData + '" alt="' + safeHtml(item.name || '') + '" />' : '<span>' + safeHtml(item.icon || '📦') + '</span>')
+          + '</div><strong>' + safeHtml(item.name || '') + '</strong></button>';
+      }).join('') : '<p>Aucun objet.</p>')
+      + '</div></div>' : '')
+    + '</div></section>'
 
-    + '<section class="panel side">'
+    + '<section class="panel side player-side-panel">'
     + '<div class="badge-line">' + safeHtml(playScene ? getSceneLabel(playScene.id) : 'Aucune scène') + '</div>'
     + '<div class="dialogue-box"><p>' + safeHtml(state.dialogue || 'Aucun message.') + '</p></div>'
     + '<div class="panel-head"><h3>Inventaire</h3><button id="combine-items">Combiner les 2 objets</button></div>'
@@ -2055,7 +2379,7 @@ function render(shouldSave = true) {
     + '<div class="fullscreen-dialogue">' + safeHtml(state.dialogue || 'Aucun message.') + '</div>'
     + '<div class="fullscreen-actions"><button id="save-game" class="hud-button" type="button">Sauvegarder</button><button id="load-game" class="hud-button" type="button">Charger</button><button id="export-save-json" class="hud-button" type="button">Exporter JSON</button><button id="import-save-json" class="hud-button" type="button">Importer JSON</button><button id="open-inventory-drawer" class="hud-button" type="button">Inventaire</button></div>'
     + '</div>'
-    + (state.inventoryDrawerOpen  '<div id="inventory-drawer-backdrop" class="inventory-drawer__backdrop"></div><aside class="inventory-drawer open"><div class="inventory-drawer__head"><h3>Inventaire</h3><button id="close-inventory-drawer" class="secondary-button" type="button">Fermer</button></div><div class="inventory-actions"><button id="combine-items" type="button">Combiner les 2 objets</button></div><div class="inventory-grid">'
+    + (state.inventoryDrawerOpen ? '<div id="inventory-drawer-backdrop" class="inventory-drawer__backdrop"></div><aside class="inventory-drawer open"><div class="inventory-drawer__head"><h3>Inventaire</h3><button id="close-inventory-drawer" class="secondary-button" type="button">Fermer</button></div><div class="inventory-actions"><button id="combine-items" type="button">Combiner les 2 objets</button></div><div class="inventory-grid">'
     + (state.inventory.length ? state.inventory.map((itemId) => {
       const item = getItemById(itemId);
       if (!item) return '';
@@ -2066,6 +2390,13 @@ function render(shouldSave = true) {
         + '</div><strong>' + safeHtml(item.name || '') + '</strong></button>';
     }).join('') : '<p>Aucun objet dans l’inventaire.</p>')
     + '</div><p class="small-note">Cliquer = voir l’image. Glisser-déposer un objet sur un autre = tenter une combinaison.</p></aside>' : '')
+    + (state.pauseOpen ? '<div class="player-pause-overlay"><div class="player-pause-menu"><span class="eyebrow">Pause</span><h2>' + safeHtml(project.title || 'Escape game') + '</h2><div class="player-pause-actions">'
+      + '<button id="resume-game" type="button">Reprendre</button>'
+      + '<button id="pause-save-game" type="button" class="secondary-action">Sauvegarder</button>'
+      + '<button id="pause-load-game" type="button" class="secondary-action">Charger</button>'
+      + '<button id="pause-reset-preview" type="button" class="secondary-action">Recommencer</button>'
+      + '<button id="pause-toggle-hints" type="button" class="secondary-action">' + (state.showInteractionHints ? 'Masquer l’aide visuelle' : 'Afficher l’aide visuelle') + '</button>'
+      + '</div></div></div>' : '')
     + renderCinematic(cinematic, currentSlide)
     + renderEnigma(enigma);
 
@@ -2096,6 +2427,19 @@ function render(shouldSave = true) {
       render(false);
     }, (Number(state.sceneTransitionOverlay.duration) || 700) + 80);
   }
+  clearAnime2dTimer();
+  if (cinematic?.cinematicType === 'anime2d') {
+    const { duration } = getAnime2dSpec(cinematic);
+    const elapsed = getAnime2dElapsed(cinematic);
+    anime2dTimer = setTimeout(() => {
+      if (getCurrentCinematic()?.id !== cinematic.id) return;
+      if (getAnime2dElapsed(cinematic) >= duration) {
+        closeCinematic();
+      } else {
+        render(false);
+      }
+    }, elapsed >= duration ? 0 : 80);
+  }
 
   if (shouldSave && hasRenderedOnce) saveGame(false);
   hasRenderedOnce = true;
@@ -2109,9 +2453,6 @@ function render(shouldSave = true) {
     cinematicAudio = audioNode;
   }
 
-  if (shouldAutosave) {
-    saveGame(false);
-  }
 }
 
 if (!loadGame(false)) {

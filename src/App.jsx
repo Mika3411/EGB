@@ -13,6 +13,7 @@ import AiTab from './components/AiTab';
 import ShopTab from './components/ShopTab';
 import HelpTab from './components/HelpTab';
 import PreviewPlayerPanel from './components/PreviewPlayerPanel';
+import TwoDAnimeEditor from './components/TwoDAnimeEditor.jsx';
 import BuilderTutorial from './components/BuilderTutorial';
 import AuthPanel from './components/AuthPanel';
 import LandingPage from './components/LandingPage';
@@ -44,12 +45,31 @@ import { buildStoragePath, hasSupabaseConfig, uploadToStorage } from './supabase
 const ADMIN_EMAIL = 'thorez.m@hotmail.fr';
 const PROFILE_TUTORIAL_SEEN_KEY_PREFIX = 'escapeGameBuilder.profileTutorialSeen';
 const BUILDER_UI_STATE_KEY_PREFIX = 'escapeGameBuilder.builderUiState';
-const BUILDER_TABS = ['scenes', 'media', 'map', 'cinematics', 'combinations', 'enigmas', 'logic', 'score', 'ai', 'shop', 'help', 'preview'];
+const BUILDER_TABS = ['scenes', 'media', 'map', 'cinematics', 'combinations', 'enigmas', 'logic', 'ai', 'shop', 'preview', 'animation', 'help', 'score'];
 
 const isAdminUser = (user) => normalizeEmail(user?.email) === ADMIN_EMAIL;
 const getProfileTutorialSeenKey = (userId) => `${PROFILE_TUTORIAL_SEEN_KEY_PREFIX}.${userId}`;
 const getBuilderUiStateKey = (userId, projectId) => `${BUILDER_UI_STATE_KEY_PREFIX}.${userId || 'anonymous'}.${projectId || 'default'}`;
 const isBuilderTab = (tab) => BUILDER_TABS.includes(tab);
+const getAnime2dStorageId = (projectId, project = {}) => (
+  project?.isTemporaryTutorial
+    ? `temporary:${project.title || 'tutorial'}`
+    : `project:${projectId || 'unsaved'}`
+);
+const getAnime2dDraftMeta = (draft) => draft ? {
+  savedAt: draft.savedAt || new Date().toISOString(),
+  title: draft.sceneName || draft.projectName || 'Projet 2D Anime',
+  layerCount: Array.isArray(draft.layers) ? draft.layers.length : 0,
+  stepCount: Array.isArray(draft.cinematicSteps) ? draft.cinematicSteps.length : 0,
+} : null;
+const stripAnime2dDraftFromProject = (project = {}) => {
+  const { anime2dDraft, ...projectWithoutDraft } = project || {};
+  if (!anime2dDraft) return projectWithoutDraft;
+  return {
+    ...projectWithoutDraft,
+    anime2dDraftMeta: getAnime2dDraftMeta(anime2dDraft),
+  };
+};
 const readBuilderUiState = (userId, projectId) => {
   if (!userId || !projectId || typeof window === 'undefined') return {};
   try {
@@ -107,6 +127,8 @@ function App() {
     setSharedLoadStatus,
   });
   const builderResumeAttemptedRef = useRef(false);
+  const anime2dSaveBeforeLeaveRef = useRef(null);
+  const [anime2dHasUnsavedChanges, setAnime2dHasUnsavedChanges] = useState(false);
   const activeTutorialIndexes = tutorialStepIndex === null ? [] : getTutorialStepIndexes(selectedTutorialTab);
   const activeTutorialPosition = activeTutorialIndexes.indexOf(tutorialStepIndex);
   const activeTutorialStep = tutorialStepIndex === null ? null : BUILDER_TUTORIAL_STEPS[tutorialStepIndex];
@@ -227,7 +249,7 @@ function App() {
           selectedSceneId: editor.selectedSceneId,
         });
         if (!isCancelled) {
-          setSaveStatus(hasSupabaseConfig() ? 'Sauvegardé dans Supabase' : 'Sauvegardé localement');
+          setSaveStatus('Sauvegardé localement');
         }
       } catch (error) {
         console.error('Erreur de sauvegarde du projet', error);
@@ -347,14 +369,38 @@ function App() {
     editor.setTab('preview');
   };
 
+  const handlePreviewCinematic = (cinematicId) => {
+    const cinematic = editor.project.cinematics.find((entry) => entry.id === cinematicId);
+    if (!cinematic) return;
+    preview.setViewerImage(null);
+    preview.closeEnigma();
+    preview.launchCinematic(cinematic.id);
+    editor.setTab('preview');
+  };
+
   const handleExportProjectJson = () => exportProjectJson(editor.project);
   const handleExportStandalone = async () => exportStandalone(editor.project);
 
   const openProjectInEditor = async (projectId, options = {}) => {
     try {
       const savedProject = await auth.loadProject(projectId);
+      const savedRecord = auth.projects.find((project) => project.id === projectId);
+      const normalizedSavedProject = normalizeProject(savedProject || createInitialProject());
+      if (normalizedSavedProject.isTemporaryTutorial && !options.tutorialTab) {
+        delete normalizedSavedProject.isTemporaryTutorial;
+        if (normalizedSavedProject.title === 'Projet didacticiel temporaire') {
+          normalizedSavedProject.title = savedRecord?.name || 'Projet';
+        }
+        if (projectId) {
+          await auth.saveProject(normalizedSavedProject, projectId, {
+            tab: 'animation',
+            selectedSceneId: normalizedSavedProject.scenes?.[0]?.id || '',
+          });
+        }
+        setSaveStatus('Projet récupéré');
+      }
       const projectToLoad = prepareProjectForTutorial(
-        normalizeProject(savedProject || createInitialProject()),
+        normalizedSavedProject,
         options.tutorialTab,
       );
       const resumeState = auth.getProjectResumeState(projectId);
@@ -652,6 +698,85 @@ function App() {
     return draft;
   };
 
+  const saveAnime2dDraft = async (draft) => {
+    const { anime2dDraft, anime2dDraftMeta, ...projectWithoutAnimeDraft } = editor.project || {};
+    const isTemporaryProject = Boolean(editor.project?.isTemporaryTutorial);
+    const nextMeta = getAnime2dDraftMeta(draft);
+    const nextProject = nextMeta
+      ? { ...projectWithoutAnimeDraft, anime2dDraft: draft, anime2dDraftMeta: nextMeta }
+      : projectWithoutAnimeDraft;
+    const fallbackProjectDraft = anime2dDraft;
+    if (draft) {
+      nextProject.anime2dDraft = draft;
+      nextProject.anime2dDraftMeta = nextMeta;
+    } else {
+      delete nextProject.anime2dDraft;
+      delete nextProject.anime2dDraftMeta;
+    }
+    editor.patchProject((current) => {
+      if (draft) {
+        current.anime2dDraft = draft;
+        current.anime2dDraftMeta = nextMeta;
+      } else {
+        delete current.anime2dDraft;
+        delete current.anime2dDraftMeta;
+      }
+    }, { rememberHistory: false });
+
+    if (isTemporaryProject) {
+      setSaveStatus(draft ? 'Brouillon 2D temporaire sauvegardé' : 'Brouillon 2D temporaire effacé');
+      return draft;
+    }
+
+    if (auth.activeProjectId) {
+      try {
+        await auth.saveProject(nextProject, auth.activeProjectId, {
+          tab: 'animation',
+          selectedSceneId: editor.selectedSceneId,
+        });
+      } catch (error) {
+        console.warn('Sauvegarde projet sans brouillon 2D Anime impossible.', error);
+        if (fallbackProjectDraft) {
+          editor.patchProject((current) => {
+            current.anime2dDraft = draft || fallbackProjectDraft;
+            if (nextMeta) current.anime2dDraftMeta = nextMeta;
+          }, { rememberHistory: false });
+        }
+      }
+    }
+    setSaveStatus(draft ? 'Brouillon 2D Anime sauvegardé' : 'Brouillon 2D Anime effacé');
+    return draft;
+  };
+
+  const confirmAnimationExit = async () => {
+    if (editor.tab !== 'animation' || !anime2dHasUnsavedChanges) return true;
+    const shouldSave = window.confirm(
+      "Des modifications 2D Anime ne sont pas sauvegardees. Voulez-vous sauvegarder avant de changer d'onglet ?",
+    );
+    if (!shouldSave) return false;
+
+    try {
+      await anime2dSaveBeforeLeaveRef.current?.();
+      setAnime2dHasUnsavedChanges(false);
+      return true;
+    } catch (error) {
+      console.warn('Sauvegarde 2D Anime avant sortie impossible.', error);
+      window.alert("La sauvegarde 2D Anime a echoue. Vous restez sur l'onglet Animation.");
+      return false;
+    }
+  };
+
+  const handleBuilderTabChange = async (nextTab) => {
+    if (nextTab === editor.tab) return;
+    if (!(await confirmAnimationExit())) return;
+    editor.setTab(nextTab);
+  };
+
+  const handleBuilderProfileOpen = async () => {
+    if (!(await confirmAnimationExit())) return;
+    openProfileFromBuilder();
+  };
+
   const persistAiImage = async ({ type, id, patch }) => {
     if (!type || !id || !patch) return null;
     let nextPatch = { ...patch };
@@ -899,7 +1024,7 @@ function App() {
         saveStatus={saveStatus || 'Sauvegarde active'}
       />
 
-      <Tabs value={editor.tab} onChange={editor.setTab} onProfile={openProfileFromBuilder} projectScore={projectScore} />
+      <Tabs value={editor.tab} onChange={handleBuilderTabChange} onProfile={handleBuilderProfileOpen} projectScore={projectScore} />
 
       {editor.tab === 'scenes' && (
         <ScenesTab
@@ -972,6 +1097,7 @@ function App() {
           addSlide={editor.addSlide}
           patchProject={editor.patchProject}
           handleUpload={handleUpload}
+          previewCinematic={handlePreviewCinematic}
         />
       )}
 
@@ -1034,6 +1160,22 @@ function App() {
 
       {editor.tab === 'preview' && (
         <PreviewPlayerPanel editor={editor} preview={preview} />
+      )}
+
+      {editor.tab === 'animation' && (
+        <TwoDAnimeEditor
+          key={getAnime2dStorageId(auth.activeProjectId, editor.project)}
+          user={auth.user}
+          projectName={editor.project.title}
+          projectDraft={editor.project.anime2dDraft}
+          draftStorageKey={getAnime2dStorageId(auth.activeProjectId, editor.project)}
+          onSaveDraft={saveAnime2dDraft}
+          onDirtyChange={setAnime2dHasUnsavedChanges}
+          onRegisterSaveBeforeLeave={(saveHandler) => {
+            anime2dSaveBeforeLeaveRef.current = saveHandler;
+          }}
+          onBackToBuilder={() => editor.setTab('preview')}
+        />
       )}
 
       {selectedTutorialTab !== 'profile' ? renderTutorialOverlay() : null}

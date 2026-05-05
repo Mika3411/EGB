@@ -8,15 +8,21 @@ const tabs = [
   ['logic', 'Logique'],
   ['ai', 'IA'],
   ['shop', 'Boutique'],
-  ['help', 'Aide'],
   ['preview', 'Preview'],
+  ['animation', 'Animation'],
+  ['help', 'Aide'],
 ];
 
 export default function Tabs({ value, onChange, onProfile, projectScore }) {
   return (
     <nav className="tabs tabs-pro">
       {tabs.map(([tabValue, label]) => (
-        <button key={tabValue} data-tour-tab={tabValue} className={value === tabValue ? 'active' : ''} onClick={() => onChange(tabValue)}>
+        <button
+          key={tabValue}
+          data-tour-tab={tabValue}
+          className={value === tabValue ? 'active' : ''}
+          onClick={() => onChange(tabValue)}
+        >
           <span>{label}</span>
         </button>
       ))}

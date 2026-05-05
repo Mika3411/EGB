@@ -6,6 +6,7 @@ export const aiCreditCosts = {
   text: Number(process.env.AI_TEXT_CREDIT_COST || 2),
   improve: Number(process.env.AI_IMPROVE_CREDIT_COST || 5),
   image: Number(process.env.AI_IMAGE_CREDIT_COST || 5),
+  removeBackground: Number(process.env.REMOVE_BG_CREDIT_COST || 8),
   objectImageBatchSize: Number(process.env.AI_OBJECT_IMAGE_BATCH_SIZE || 1),
   objectImageBatchCost: Number(process.env.AI_OBJECT_IMAGE_BATCH_COST || 3),
   objectThumbnail: Number(process.env.AI_OBJECT_THUMBNAIL_CREDIT_COST || 1),

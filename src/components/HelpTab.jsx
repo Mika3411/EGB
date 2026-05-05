@@ -13,6 +13,7 @@ const HELP_TUTORIAL_OPTIONS = [
   ['editor', 'Editeur', 'Ajouter des zones cliquables, zones visuelles et tester le rendu joueur.'],
   ['map', 'Plan', 'Organiser les pieces et verifier les connexions du parcours.'],
   ['cinematics', 'Cinematiques', 'Construire une sequence narrative avec images, textes et transitions.'],
+  ['animation', 'Animation', 'Composer une sequence 2D avec storyboard, calques, mouvements et previsualisation.'],
   ['combinations', 'Combinaisons', 'Relier des objets entre eux pour creer de nouveaux resultats.'],
   ['enigmas', 'Enigmes', 'Creer un code, une apparence joueur et une validation claire.'],
   ['logic', 'Logique', 'Declencher des consequences selon les actions, objets ou zones franchies.'],

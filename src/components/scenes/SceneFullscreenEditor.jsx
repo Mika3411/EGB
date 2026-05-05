@@ -5,6 +5,7 @@ import {
 } from './SceneEditorChrome.jsx';
 import SceneVisualEffect, { getVisualEffectZoneZIndex } from '../SceneVisualEffect.jsx';
 import {
+  getElementShapeStyle,
   getLayerZIndex,
   getSceneObjectImageStyle,
   getSceneObjectStyle,
@@ -51,6 +52,11 @@ export default function SceneFullscreenEditor({
   draggingVisualEffectZoneId,
   beginVisualEffectZoneDrag,
   selectVisualEffectZone,
+  renderResizeHandles,
+  renderShapePointHandles,
+  renderShapeControls,
+  renderShapeOutline,
+  getShapeClassName,
   miniMapProps,
   setSelectedItemId,
   handleUpload,
@@ -164,13 +170,16 @@ export default function SceneFullscreenEditor({
                             <button
                               key={zone.id}
                               type="button"
-                              className={`editor-hotspot editor-visual-zone ${zone.id === selectedVisualEffectZoneId ? 'selected' : ''} ${zone.id === draggingVisualEffectZoneId ? 'dragging' : ''}`}
-                              style={{ left: `${zone.x}%`, top: `${zone.y}%`, width: `${zone.width}%`, height: `${zone.height}%`, zIndex: getVisualEffectZoneZIndex(zone.layer) }}
+                              className={`editor-hotspot editor-visual-zone ${getShapeClassName?.(zone) || ''} ${zone.id === selectedVisualEffectZoneId ? 'selected' : ''} ${zone.id === draggingVisualEffectZoneId ? 'dragging' : ''}`}
+                              style={{ left: `${zone.x}%`, top: `${zone.y}%`, width: `${zone.width}%`, height: `${zone.height}%`, zIndex: getVisualEffectZoneZIndex(zone.layer), ...getElementShapeStyle(zone) }}
                               onPointerDown={(event) => beginVisualEffectZoneDrag(event, zone.id, 'fullscreen')}
                               onClick={() => selectVisualEffectZone(zone.id)}
                             >
                               <SceneVisualEffect effect={zone.effect} intensity={zone.intensity} />
                               <span>{zone.name}</span>
+                              {renderShapeOutline?.(zone, zone.id === selectedVisualEffectZoneId)}
+                              {renderResizeHandles?.('visualEffectZone', zone.id, zone.id === selectedVisualEffectZoneId, 'fullscreen')}
+                              {renderShapePointHandles?.('visualEffectZone', zone.id, zone.id === selectedVisualEffectZoneId, 'fullscreen')}
                             </button>
                           ))}
                           {snapGridEnabled ? <div style={gridOverlayStyle} /> : null}
@@ -178,24 +187,30 @@ export default function SceneFullscreenEditor({
                           <button
                             key={obj.id}
                             type="button"
-                            className={`editor-hotspot editor-scene-object ${obj.isInvisible ? 'editor-scene-object-invisible' : ''} ${(obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id)) ? 'selected' : ''} ${obj.id === draggingSceneObjectId ? 'dragging' : ''}`}
+                            className={`editor-hotspot editor-scene-object ${getShapeClassName?.(obj) || ''} ${obj.isInvisible ? 'editor-scene-object-invisible' : ''} ${(obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id)) ? 'selected' : ''} ${obj.id === draggingSceneObjectId ? 'dragging' : ''}`}
                             style={getSceneObjectStyle(obj)}
                             onPointerDown={(event) => beginObjectDrag(event, obj.id, 'fullscreen')}
                             onClick={(event) => selectSceneObject(obj.id, event)}
                           >
                             {getSceneObjectDisplayImage(obj) && !obj.isInvisible ? <img src={getSceneObjectDisplayImage(obj)} alt={obj.name} style={getSceneObjectImageStyle()} /> : <span>{obj.isInvisible ? `${obj.name || 'Objet'} (invisible)` : obj.name}</span>}
+                            {renderShapeOutline?.(obj, obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id))}
+                            {renderResizeHandles?.('sceneObject', obj.id, obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id), 'fullscreen')}
+                            {renderShapePointHandles?.('sceneObject', obj.id, obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id), 'fullscreen')}
                           </button>
                         ))}
                         {selectedScene.hotspots.filter((spot) => !spot.isHidden).map((spot) => (
                           <button
                             key={spot.id}
                             type="button"
-                            className={`editor-hotspot ${(spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id)) ? 'selected' : ''} ${spot.id === draggingHotspotId ? 'dragging' : ''}`}
-                            style={{ left: `${spot.x}%`, top: `${spot.y}%`, width: `${spot.width}%`, height: `${spot.height}%`, zIndex: getLayerZIndex(spot, 'hotspot') }}
+                            className={`editor-hotspot ${getShapeClassName?.(spot) || ''} ${(spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id)) ? 'selected' : ''} ${spot.id === draggingHotspotId ? 'dragging' : ''}`}
+                            style={{ left: `${spot.x}%`, top: `${spot.y}%`, width: `${spot.width}%`, height: `${spot.height}%`, zIndex: getLayerZIndex(spot, 'hotspot'), ...getElementShapeStyle(spot) }}
                             onPointerDown={(event) => beginDrag(event, spot.id, 'fullscreen')}
                             onClick={(event) => selectHotspot(spot.id, event)}
                           >
                             <span>{spot.name}</span>
+                            {renderShapeOutline?.(spot, spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id))}
+                            {renderResizeHandles?.('hotspot', spot.id, spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id), 'fullscreen')}
+                            {renderShapePointHandles?.('hotspot', spot.id, spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id), 'fullscreen')}
                           </button>
                         ))}
                         </div>
@@ -254,6 +269,7 @@ export default function SceneFullscreenEditor({
                             <div><HelpLabel help="Largeur de la zone cliquable et de l’image visible, en pourcentage de la largeur de la scène.">Largeur</HelpLabel><input type="number" value={selectedSceneObject.width} onChange={(e) => patchProject((draft) => { const obj = draft.scenes.find((s) => s.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === selectedSceneObjectId); if (obj) obj.width = Number(e.target.value); })} /></div>
                             <div><HelpLabel help="Hauteur de la zone cliquable et de l’image visible, en pourcentage de la hauteur de la scène.">Hauteur</HelpLabel><input type="number" value={selectedSceneObject.height} onChange={(e) => patchProject((draft) => { const obj = draft.scenes.find((s) => s.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === selectedSceneObjectId); if (obj) obj.height = Number(e.target.value); })} /></div>
                           </div>
+                          {renderShapeControls?.('sceneObject', selectedSceneObjectId)}
                           <HelpLabel help="Définit ce qui se passe au clic : montrer un pop-up, ajouter l’objet lié à l’inventaire, ou faire les deux.">Mode d’interaction</HelpLabel>
                           <select value={selectedSceneObject.interactionMode || 'popup'} onChange={(e) => patchProject((draft) => {
                             const obj = draft.scenes.find((s) => s.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === selectedSceneObjectId); if (obj) obj.interactionMode = e.target.value;
@@ -313,6 +329,7 @@ export default function SceneFullscreenEditor({
                             <div><HelpLabel help="Largeur de la zone cliquable. Augmente-la si le joueur risque de manquer la cible.">Largeur</HelpLabel><input type="number" value={selectedHotspot.width} onChange={(e) => patchProject((draft) => { const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.width = Number(e.target.value); })} /></div>
                             <div><HelpLabel help="Hauteur de la zone cliquable. Une zone trop petite peut être difficile à trouver sur mobile.">Hauteur</HelpLabel><input type="number" value={selectedHotspot.height} onChange={(e) => patchProject((draft) => { const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.height = Number(e.target.value); })} /></div>
                           </div>
+                          {renderShapeControls?.('hotspot', selectedHotspotId)}
                           <HelpLabel help="Action principale déclenchée par cette zone après validation des prérequis éventuels : dialogue, objet, changement de scène ou cinématique.">Action</HelpLabel>
                           <select value={selectedHotspot.actionType} onChange={(e) => patchProject((draft) => {
                             const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.actionType = e.target.value;

@@ -1,5 +1,7 @@
 import { fileToDataURL } from '../utils/fileHelpers';
 
+const makeId = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
 const FIELD_HELP = {
   addCinematic: "Crée une nouvelle cinématique. Elle peut servir d’intro, de transition, de révélation ou de récompense après une énigme.",
   startType: "Détermine le premier écran du joueur au lancement: une scène jouable ou une cinématique d’introduction.",
@@ -19,6 +21,56 @@ const FIELD_HELP = {
   rewardItem: "Objet ajouté à l’inventaire à la fin de la cinématique si l’action de fin donne une récompense.",
 };
 
+const normalizeAnime2dSpecLayer = (entry = {}) => {
+  const layer = entry.layer && typeof entry.layer === 'object' ? entry.layer : entry;
+  if (!layer || typeof layer !== 'object') return null;
+  const src = entry.src || entry.imageData || layer.src || layer.imageData || '';
+  return {
+    order: entry.order ?? layer.order ?? 0,
+    id: entry.id || layer.id || '',
+    name: entry.name || layer.name || 'Image',
+    type: entry.type || layer.type || 'character',
+    preset: entry.preset || layer.preset || 'idle-breathe',
+    state: entry.state || layer.state || 'neutre',
+    x: Number(entry.x ?? layer.x ?? 50),
+    y: Number(entry.y ?? layer.y ?? 50),
+    width: Number(entry.width ?? layer.width ?? 28),
+    opacity: Number(entry.opacity ?? layer.opacity ?? 100),
+    duration: Number(entry.duration ?? layer.duration ?? 1000),
+    delay: Number(entry.delay ?? layer.delay ?? 0),
+    loop: entry.loop ?? layer.loop ?? true,
+    locked: Boolean(entry.locked ?? layer.locked),
+    visible: entry.visible ?? layer.visible ?? true,
+    visibleAtStart: entry.visibleAtStart ?? layer.visibleAtStart ?? false,
+    src,
+    hasEmbeddedImage: Boolean(src),
+  };
+};
+
+const normalizeAnime2dSpecForProject = (payload) => ({
+  version: payload?.version || 1,
+  kind: 'escape-game-builder-2d-animation',
+  sceneName: payload?.sceneName || '2D Anime',
+  backdrop: payload?.backdrop || payload?.selectedBackdrop || 'room',
+  canvas: payload?.canvas || {
+    aspectRatio: '16:10',
+    width: 1600,
+    height: 1000,
+    clipOverflow: true,
+  },
+  cinematicSteps: Array.isArray(payload?.cinematicSteps) ? payload.cinematicSteps.map((step, index) => ({
+    id: step.id || `anime-step-${index + 1}`,
+    at: Number(step.at || 0),
+    duration: Number(step.duration || 2),
+    narration: step.narration || '',
+    mode: step.mode || 'scene',
+    layerId: step.layerId || '',
+    transition: step.transition || 'fade',
+    exitTransition: step.exitTransition || 'fade',
+  })) : [],
+  layers: Array.isArray(payload?.layers) ? payload.layers.map(normalizeAnime2dSpecLayer).filter(Boolean) : [],
+});
+
 const HelpLabel = ({ children, help, className = '' }) => (
   <label className={`label-with-help${className ? ` ${className}` : ''}`}>
     <span>{children}</span>
@@ -35,8 +87,55 @@ export default function CinematicsTab({
   addSlide,
   patchProject,
   handleUpload,
+  previewCinematic,
 }) {
   const rootSceneOptions = project.scenes.filter((scene) => !scene.parentSceneId);
+
+  const import2dAnimeJson = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    try {
+      const payload = JSON.parse(await file.text());
+      if (payload?.kind !== 'escape-game-builder-2d-animation' || !Array.isArray(payload.cinematicSteps)) {
+        throw new Error('Ce JSON ne vient pas de l editeur 2D Anime.');
+      }
+
+      const anime2dSpec = normalizeAnime2dSpecForProject(payload);
+      const cinematic = {
+        id: makeId('cinematic-anime2d'),
+        name: anime2dSpec.sceneName || file.name.replace(/\.json$/i, '') || '2D Anime',
+        cinematicType: 'anime2d',
+        slides: [{
+          id: makeId('slide'),
+          imageData: '',
+          imageName: '',
+          narration: anime2dSpec.cinematicSteps.find((step) => step.narration)?.narration || '',
+          audioData: '',
+          audioName: '',
+        }],
+        anime2dSpec,
+        anime2dName: file.name,
+        videoData: '',
+        videoName: '',
+        videoAutoplay: true,
+        videoControls: true,
+        onEndType: 'none',
+        targetActId: '',
+        targetSceneId: '',
+        rewardItemId: '',
+      };
+
+      patchProject((draft) => {
+        if (!Array.isArray(draft.cinematics)) draft.cinematics = [];
+        draft.cinematics.push(cinematic);
+      }, { rememberHistory: false });
+      setSelectedCinematicId(cinematic.id);
+    } catch (error) {
+      alert(error.message || 'Import 2D Anime impossible.');
+    }
+  };
 
   const handleVideoUpload = async (event) => {
     const file = event.target.files?.[0];
@@ -109,6 +208,11 @@ export default function CinematicsTab({
           </div>
         </div>
 
+        <label className="button like full">
+          Importer 2D Anime
+          <input type="file" accept="application/json,.json" hidden onChange={import2dAnimeJson} />
+        </label>
+
         <div className="stack" data-tour="cinematic-start-settings" style={{ marginBottom: 18 }}>
           <h3 style={{ margin: '6px 0 0' }}>Démarrage du jeu</h3>
           <HelpLabel help={FIELD_HELP.startType}>Le jeu commence par</HelpLabel>
@@ -176,7 +280,7 @@ export default function CinematicsTab({
           {project.cinematics.map((cine) => (
             <button key={cine.id} className={`list-card ${cine.id === selectedCinematicId ? 'selected' : ''}`} onClick={() => setSelectedCinematicId(cine.id)}>
               <strong>{cine.name}</strong>
-              <span>{(cine.cinematicType || 'slides') === 'video' ? 'Vidéo' : `${cine.slides.length} slide(s)`}</span>
+              <span>{(cine.cinematicType || 'slides') === 'video' ? 'Video' : (cine.cinematicType === 'anime2d' ? '2D Anime' : `${cine.slides.length} slide(s)`)}</span>
             </button>
           ))}
         </div>
@@ -190,7 +294,8 @@ export default function CinematicsTab({
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {(selectedCinematic.cinematicType || 'slides') === 'slides' ?
                    <button data-tour="cinematic-add-slide" onClick={addSlide}>+ Slide</button>
-                  : <span className="small-note">Mode vidéo actif</span>}
+                  : <span className="small-note">{selectedCinematic.cinematicType === 'anime2d' ? 'Mode 2D Anime actif' : 'Mode video actif'}</span>}
+                <button type="button" onClick={() => previewCinematic?.(selectedCinematic.id)}>Previsualiser</button>
                 <button type="button" onClick={deleteCinematic}>Supprimer la cinématique</button>
               </div>
             </div>
@@ -206,11 +311,12 @@ export default function CinematicsTab({
               value={selectedCinematic.cinematicType || 'slides'}
               onChange={(e) => patchProject((draft) => {
                 const cine = draft.cinematics.find((c) => c.id === selectedCinematicId);
-                if (cine) cine.cinematicType = e.target.value === 'video' ? 'video' : 'slides';
+                if (cine) cine.cinematicType = ['video', 'anime2d'].includes(e.target.value) ? e.target.value : 'slides';
               })}
             >
               <option value="slides">Diaporama</option>
-              <option value="video">Vidéo importée</option>
+              <option value="video">Video importee</option>
+              <option value="anime2d">2D Anime</option>
             </select>
 
             {(selectedCinematic.cinematicType || 'slides') === 'video' ? (
@@ -239,6 +345,34 @@ export default function CinematicsTab({
                   const cine = draft.cinematics.find((c) => c.id === selectedCinematicId);
                   if (cine) cine.videoControls = e.target.checked;
                 })} />Afficher les contrôles<span className="help-dot" data-help={FIELD_HELP.videoControls} aria-label={FIELD_HELP.videoControls} tabIndex={0}>?</span></label>
+              </div>
+            ) : selectedCinematic.cinematicType === 'anime2d' ? (
+              <div className="stack" style={{ marginBottom: 18 }}>
+                <h3 style={{ margin: '6px 0 0' }}>2D Anime</h3>
+                <label className="button like full">
+                  Remplacer le JSON 2D Anime
+                  <input type="file" accept="application/json,.json" hidden onChange={async (event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = '';
+                    if (!file) return;
+                    try {
+                      const payload = JSON.parse(await file.text());
+                      if (payload?.kind !== 'escape-game-builder-2d-animation') throw new Error('JSON 2D Anime invalide.');
+                      const anime2dSpec = normalizeAnime2dSpecForProject(payload);
+                      patchProject((draft) => {
+                        const cine = draft.cinematics.find((c) => c.id === selectedCinematicId);
+                        if (cine) {
+                          cine.anime2dSpec = anime2dSpec;
+                          cine.anime2dName = file.name;
+                          cine.name = cine.name || anime2dSpec.sceneName || '2D Anime';
+                        }
+                      }, { rememberHistory: false });
+                    } catch (error) {
+                      alert(error.message || 'Import 2D Anime impossible.');
+                    }
+                  }} />
+                </label>
+                <p className="small-note">{selectedCinematic.anime2dName || 'Aucun JSON 2D Anime importe.'}</p>
               </div>
             ) : (
               <div className="slides-grid" data-tour="cinematic-slides">

@@ -182,6 +182,7 @@ const normalizeProject = (rawProject) => {
     targetSceneId: draft.start.targetSceneId || '',
     targetCinematicId: draft.start.targetCinematicId || '',
   };
+  draft.anime2dDraft = draft.anime2dDraft && typeof draft.anime2dDraft === 'object' ? draft.anime2dDraft : null;
   const rawRouteMap = draft.routeMap && typeof draft.routeMap === 'object' ? draft.routeMap : makeRouteMap();
   const routeRows = Number.isFinite(Number(rawRouteMap.rows)) ? Math.max(8, Math.min(32, Number(rawRouteMap.rows))) : 16;
   const routeCols = Number.isFinite(Number(rawRouteMap.cols)) ? Math.max(8, Math.min(40, Number(rawRouteMap.cols))) : 24;
@@ -264,11 +265,13 @@ const normalizeProject = (rawProject) => {
   draft.cinematics = draft.cinematics.map((cinematic) => ({
     ...makeCinematic(),
     ...cinematic,
-    cinematicType: cinematic.cinematicType === 'video' ? 'video' : 'slides',
-    slides: Array.isArray(cinematic.slides) && cinematic.slides.length ?
-       cinematic.slides.map((slide) => ({ ...makeCinematicSlide(), ...slide }))
-      : [makeCinematicSlide()],
-    videoData: cinematic.videoData || '',
+      cinematicType: ['video', 'anime2d'].includes(cinematic.cinematicType) ? cinematic.cinematicType : 'slides',
+      slides: Array.isArray(cinematic.slides) && cinematic.slides.length ?
+         cinematic.slides.map((slide) => ({ ...makeCinematicSlide(), ...slide }))
+        : [makeCinematicSlide()],
+      anime2dSpec: cinematic.anime2dSpec && typeof cinematic.anime2dSpec === 'object' ? cinematic.anime2dSpec : null,
+      anime2dName: cinematic.anime2dName || '',
+      videoData: cinematic.videoData || '',
     videoName: cinematic.videoName || '',
     videoAutoplay: cinematic.videoAutoplay !== false,
     videoControls: cinematic.videoControls !== false,

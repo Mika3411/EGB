@@ -34,6 +34,7 @@ const PROFILE_TUTORIAL_OPTIONS = [
   ['editor', 'Editeur'],
   ['map', 'Plan'],
   ['cinematics', 'Cinematiques'],
+  ['animation', 'Animation'],
   ['combinations', 'Combinaisons'],
   ['enigmas', 'Enigmes'],
   ['logic', 'Logique'],

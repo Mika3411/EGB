@@ -47,6 +47,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/remove-background"
+  to = "/.netlify/functions/remove-background"
+  status = 200
+
+[[redirects]]
   from = "/api/ai-job"
   to = "/.netlify/functions/ai-job"
   status = 200

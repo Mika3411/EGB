@@ -51,6 +51,84 @@
   transition: none !important;
 }
 
+.editor-hotspot .editor-resize-handle {
+  position: absolute;
+  left: auto;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  width: 10px;
+  height: 10px;
+  min-width: 10px;
+  min-height: 10px;
+  padding: 0;
+  border: 2px solid #0f172a;
+  border-radius: 999px;
+  background: #e0f2fe;
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, .75), 0 4px 12px rgba(2, 6, 23, .34);
+  font-size: 0;
+  line-height: 0;
+  z-index: 40;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.editor-hotspot .editor-resize-handle-nw { cursor: nwse-resize; }
+.editor-hotspot .editor-resize-handle-n { cursor: ns-resize; }
+.editor-hotspot .editor-resize-handle-ne { cursor: nesw-resize; }
+.editor-hotspot .editor-resize-handle-e { cursor: ew-resize; }
+.editor-hotspot .editor-resize-handle-se { cursor: nwse-resize; }
+.editor-hotspot .editor-resize-handle-s { cursor: ns-resize; }
+.editor-hotspot .editor-resize-handle-sw { cursor: nesw-resize; }
+.editor-hotspot .editor-resize-handle-w { cursor: ew-resize; }
+
+.editor-hotspot .editor-shape-point-handle {
+  background: #fef3c7;
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, .85), 0 4px 12px rgba(2, 6, 23, .34);
+  cursor: grab;
+}
+
+.editor-hotspot.editor-shape-ellipse {
+  border-radius: 9999px !important;
+}
+
+.editor-hotspot.editor-shape-free,
+.editor-hotspot.editor-shape-free:hover,
+.editor-hotspot.editor-shape-free:focus,
+.editor-hotspot.editor-shape-free:active {
+  border-color: transparent !important;
+  outline-color: transparent !important;
+}
+
+.editor-hotspot .editor-shape-outline {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 35;
+}
+
+.editor-hotspot .editor-shape-outline polygon {
+  fill: rgba(59, 130, 246, .22);
+  stroke: rgba(255, 255, 255, .65);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.editor-hotspot .editor-shape-outline.selected polygon {
+  fill: rgba(96, 165, 250, .34);
+  stroke: #60a5fa;
+}
+
+.shape-editor-controls {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 12px;
+}
+
 
 /* === Interactive scene objects === */
 .scene-player .scene-background,
@@ -332,5 +410,53 @@ textarea { min-height: 68px; }
 @media (max-width: 1200px) { .three-cols { grid-template-columns: 1fr; } .panel-nav-pro, .panel-context-pro {
   overflow-x: clip !important; max-height: none; overflow: visible; } .panel-context-pro .grid-two.small-gap { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 900px) { .app-shell { padding: 10px; } .compact-form-grid, .music-compact-row { grid-template-columns: 1fr; } .music-compact-row audio { width: 100%; } }
+
+.editor-canvas .editor-hotspot.editor-shape-free,
+.editor-canvas .editor-hotspot.editor-shape-free:hover,
+.editor-canvas .editor-hotspot.editor-shape-free:focus,
+.editor-canvas .editor-hotspot.editor-shape-free:active,
+.fullscreen-scene-stage .editor-hotspot.editor-shape-free,
+.fullscreen-scene-stage .editor-hotspot.editor-shape-free:hover,
+.fullscreen-scene-stage .editor-hotspot.editor-shape-free:focus,
+.fullscreen-scene-stage .editor-hotspot.editor-shape-free:active {
+  border-color: transparent !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  clip-path: none !important;
+  overflow: visible !important;
+}
+
+.editor-canvas .editor-hotspot.editor-shape-free.editor-scene-object-invisible,
+.editor-canvas .editor-hotspot.editor-shape-free.editor-scene-object-invisible:hover,
+.editor-canvas .editor-hotspot.editor-shape-free.editor-scene-object-invisible:focus,
+.editor-canvas .editor-hotspot.editor-shape-free.editor-scene-object-invisible:active,
+.fullscreen-scene-stage .editor-hotspot.editor-shape-free.editor-scene-object-invisible,
+.fullscreen-scene-stage .editor-hotspot.editor-shape-free.editor-scene-object-invisible:hover,
+.fullscreen-scene-stage .editor-hotspot.editor-shape-free.editor-scene-object-invisible:focus,
+.fullscreen-scene-stage .editor-hotspot.editor-shape-free.editor-scene-object-invisible:active {
+  border-color: transparent !important;
+  background: transparent !important;
+}
+
+.editor-canvas .editor-hotspot.editor-shape-free .editor-shape-outline,
+.fullscreen-scene-stage .editor-hotspot.editor-shape-free .editor-shape-outline {
+  display: block !important;
+  clip-path: none !important;
+}
+
+.editor-canvas .editor-hotspot.editor-shape-free .editor-shape-outline polygon,
+.fullscreen-scene-stage .editor-hotspot.editor-shape-free .editor-shape-outline polygon {
+  fill: rgba(59, 130, 246, .22);
+  stroke: rgba(255, 255, 255, .65);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.editor-canvas .editor-hotspot.editor-shape-free .editor-shape-outline.selected polygon,
+.fullscreen-scene-stage .editor-hotspot.editor-shape-free .editor-shape-outline.selected polygon {
+  fill: rgba(96, 165, 250, .34);
+  stroke: #60a5fa;
+}
 
 

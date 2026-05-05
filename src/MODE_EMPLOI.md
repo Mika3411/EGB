@@ -72,12 +72,13 @@ Pour éviter de se perdre, construis ton jeu dans cet ordre :
 5. Crée les énigmes.
 6. Relie les énigmes aux zones d'action.
 7. Ajoute les cinématiques.
-8. Crée les combinaisons d'objets.
-9. Ajoute les règles avancées dans **Logique**.
-10. Dessine le parcours dans **Plan**.
-11. Teste du début à la fin dans **Preview**.
-12. Corrige avec **Bilan**.
-13. Publie ou exporte.
+8. Prépare les animations 2D dans **Animation** si ton jeu en utilise.
+9. Crée les combinaisons d'objets.
+10. Ajoute les règles avancées dans **Logique**.
+11. Dessine le parcours dans **Plan**.
+12. Teste du début à la fin dans **Preview**.
+13. Corrige avec **Bilan**.
+14. Publie ou exporte.
 
 ## 4. Onglet Scenes
 
@@ -414,7 +415,154 @@ Champs liés :
 - **Scène de destination** : scène ouverte après la cinématique.
 - **Objet donné** : objet ajouté à l'inventaire à la fin.
 
-## 8. Onglet Combinaisons
+## 8. Onglet Animation
+
+L'onglet **Animation** sert à préparer une scène animée en 2D : tu importes des images, tu les places sur un décor, tu leur appliques une animation, puis tu construis une petite séquence avec une timeline. Il est utile pour créer un plan vivant, une apparition de personnage, une révélation visuelle, une courte transition ou une image animée à exporter.
+
+### Barre de menus
+
+La barre du haut regroupe les actions principales :
+
+- **Fichier** : importer une image, importer un JSON, sauvegarder le brouillon, exporter le JSON, enregistrer l'image sélectionnée ou repartir sur un nouveau brouillon.
+- **Editer** : annuler, rétablir, dupliquer un calque, changer son ordre, verrouiller ou supprimer le calque sélectionné.
+- **Affichage** : zoomer, dézoomer, réinitialiser la vue ou lancer la lecture.
+- **Image** : détourer, gommer, restaurer, rogner ou revenir à l'image originale.
+- **Animation** : appliquer un preset d'animation au calque sélectionné.
+
+Le bouton **Nouveau projet** remet l'animation à zéro. Un message d'avertissement confirme que le projet en cours sera supprimé avant d'effacer le brouillon.
+
+### Sauvegarde et brouillon
+
+**Sauvegarder** enregistre le brouillon de l'animation. Le brouillon est restauré automatiquement quand tu reviens dans l'onglet, ce qui évite de perdre une composition en cours.
+
+Utilise **Exporter JSON** pour garder une version portable de l'animation ou la transférer sur un autre appareil. Utilise **Importer JSON** pour reprendre une animation exportée.
+
+Conseil : sauvegarde avant une grosse retouche d'image ou avant de remplacer plusieurs calques.
+
+### Storyboard
+
+Le panneau **Storyboard** contient les étapes de la séquence.
+
+**Ajouter une étape** crée un nouveau moment sur la timeline. Chaque étape indique :
+
+- le temps de départ ;
+- la durée ;
+- l'action image ;
+- le texte ou la narration associée.
+
+Une étape peut afficher une image, remplacer une image déjà visible ou piloter une partie de la scène. Garde les étapes courtes pour que la lecture reste lisible.
+
+Exemple :
+
+1. `0.0s` : afficher le décor.
+2. `3.0s` : faire apparaître un personnage.
+3. `7.0s` : révéler un indice.
+4. `11.0s` : remplacer l'image par une version plus dramatique.
+
+### Canvas
+
+Le **Canvas** est la zone de composition. Tu peux y déplacer les calques visuellement, ajuster leur taille et vérifier leur rendu sur le décor.
+
+Commandes utiles :
+
+- **Lecture** : joue la séquence.
+- **Annuler / rétablir** : revient sur les dernières modifications.
+- **Zoom** : agrandit ou réduit la vue de travail.
+- **Réinitialiser la vue** : replace le canvas dans une vue confortable.
+
+Clique sur un calque pour le sélectionner, puis utilise l'inspecteur à droite pour le régler précisément.
+
+### Calques et images
+
+Chaque image importée devient un calque. Un calque peut représenter un personnage, un objet, une lumière, un indice ou un élément de décor.
+
+Champs importants :
+
+- **Nom** : nom interne du calque.
+- **X (%)** : position horizontale du centre.
+- **Y (%)** : position verticale du centre.
+- **Taille (%)** : taille du calque sur le canvas.
+- **Opacité (%)** : transparence.
+- **Durée (ms)** : vitesse de l'animation du calque.
+- **Délai (ms)** : retard avant le début de l'animation.
+- **Boucler l'animation** : répète l'animation en continu.
+
+L'ordre des calques détermine ce qui passe devant ou derrière. Place les fonds et ombres en bas, les personnages et objets importants au-dessus.
+
+### Verrouiller un calque
+
+Le verrouillage empêche de déplacer ou modifier accidentellement une image. Utilise-le quand un élément est bien placé, surtout pour les grands fonds ou les décors.
+
+Un calque verrouillé reste visible, mais il ne se retouche pas tant qu'il n'est pas déverrouillé.
+
+### Presets d'animation
+
+Les presets donnent rapidement du mouvement à un calque :
+
+- **Aucun** : image fixe.
+- **Respiration** : mouvement léger, utile pour un personnage.
+- **Flottement** : mouvement doux vers le haut et le bas.
+- **Tremblement** : secousse courte pour surprise, peur ou impact.
+- **Clignotement** : variation d'opacité.
+- **Apparition** : entrée progressive avec zoom et fondu.
+- **Parle** : micro-mouvement pour accompagner un dialogue.
+- **Aura** : effet de halo pour un objet magique ou important.
+- **Braises** : effet chaud et vivant sur un élément lumineux.
+- **Regard** : léger balancement pour une silhouette ou un personnage.
+
+Choisis un preset selon l'intention narrative. Un indice peut clignoter doucement, mais un personnage principal sera souvent plus naturel avec **Respiration** ou **Regard**.
+
+### Retouche d'image
+
+Le menu **Image** permet de corriger un calque sans quitter l'éditeur.
+
+Fonctions disponibles :
+
+- **Détourage remove.bg** : retire le fond avec le service remove.bg si la configuration est disponible.
+- **Détourage IA local** : tente un détourage directement dans le navigateur.
+- **Gommer** : efface une partie de l'image.
+- **Restaurer** : récupère une zone depuis l'image originale.
+- **Rogner** : recadre l'image.
+- **Revenir à l'original** : annule les retouches du calque sélectionné.
+
+Conseil : duplique un calque avant une retouche risquée. Tu gardes ainsi une version de secours.
+
+### Inspecteur
+
+L'**Inspecteur** affiche les réglages du calque sélectionné.
+
+Utilise-le pour :
+
+- verrouiller ou déverrouiller l'image ;
+- modifier l'ordre du calque ;
+- corriger précisément X, Y, taille et opacité ;
+- régler durée, délai et boucle ;
+- activer les outils de gommage, restauration ou rognage.
+
+Si rien n'est sélectionné, clique d'abord sur un calque dans le canvas ou dans la scène.
+
+### Prévisualiser
+
+Le bouton **Prévisualiser** ouvre une lecture de l'animation. Utilise-le pour vérifier :
+
+- le rythme des étapes ;
+- l'ordre d'apparition des images ;
+- la lisibilité du texte ;
+- la cohérence des mouvements ;
+- les problèmes de calques qui passent devant ou derrière au mauvais moment.
+
+Teste toujours la prévisualisation avant d'exporter ou de considérer l'animation terminée.
+
+### Bonnes pratiques
+
+- Donne des noms clairs aux calques : `Personnage robe rouge`, `Indice tiroir`, `Ombre porte`.
+- Limite le nombre d'animations fortes en même temps.
+- Utilise les mouvements subtils pour garder une ambiance professionnelle.
+- Verrouille les calques terminés.
+- Sauvegarde souvent le brouillon.
+- Exporte un JSON quand une version fonctionne bien.
+
+## 9. Onglet Combinaisons
 
 Les combinaisons créent des recettes d'inventaire. Le joueur combine deux objets pour obtenir un résultat.
 
@@ -437,7 +585,7 @@ Exemple :
 
 Conseil : évite les recettes ambiguës. Si deux objets peuvent logiquement créer plusieurs résultats, clarifie avec les noms ou les messages.
 
-## 9. Onglet Enigmes
+## 10. Onglet Enigmes
 
 L'onglet **Enigmes** crée les défis que le joueur doit résoudre.
 
@@ -615,7 +763,7 @@ Intensité du voile sombre placé sur l'image pour garder le texte lisible.
 
 Utilise un fond de pop-up pour donner du style à une énigme importante, mais vérifie que la consigne reste facile à lire.
 
-## 10. Onglet Logique
+## 11. Onglet Logique
 
 L'onglet **Logique** permet de remplacer ou compléter le comportement normal des zones selon l'état de la partie.
 
@@ -675,7 +823,7 @@ Exemple de règle :
 - Option : retirer l'objet requis.
 - Résultat : la clé ouvre la porte puis disparaît de l'inventaire.
 
-## 11. Onglet IA
+## 12. Onglet IA
 
 L'onglet **IA** aide à générer, continuer ou enrichir un projet.
 
@@ -761,7 +909,7 @@ Ajuste automatiquement la luminosité après génération pour garder une image 
 **Héritage visuel**  
 Détails récurrents à conserver entre les pièces : portes, parquet, lumière, époque, matériaux.
 
-## 12. Onglet Boutique
+## 13. Onglet Boutique
 
 L'onglet **Boutique** sert à acheter ou retrouver des crédits IA.
 
@@ -774,7 +922,7 @@ Il affiche :
 
 Copie l'identifiant d'achat si tu dois contacter le support. Les crédits sont associés à cet identifiant.
 
-## 13. Onglet Preview
+## 14. Onglet Preview
 
 L'onglet **Preview** permet de jouer au projet comme un joueur.
 
@@ -802,7 +950,7 @@ Le jeu exporté propose aussi des actions de sauvegarde de partie :
 
 Conseil : après chaque grosse modification, teste immédiatement. Une erreur repérée tout de suite est beaucoup plus simple à corriger.
 
-## 14. Onglet Bilan
+## 15. Onglet Bilan
 
 L'onglet **Bilan** donne une note globale et des conseils.
 
@@ -845,7 +993,7 @@ Le bilan affiche aussi :
 
 Lis les conseils avant de publier. Ils indiquent souvent les oublis les plus gênants.
 
-## 15. Publier dans la galerie publique
+## 16. Publier dans la galerie publique
 
 Depuis **Profil**, un projet peut être publié dans la galerie.
 
@@ -865,7 +1013,7 @@ Après publication, le jeu peut être :
 - commenté ;
 - associé à ton profil auteur.
 
-## 16. Galerie publique
+## 17. Galerie publique
 
 La galerie permet de découvrir les jeux publiés.
 
@@ -884,7 +1032,7 @@ Fonctions disponibles :
 
 Un jeu marqué +18 affiche un avertissement.
 
-## 17. Exporter le jeu
+## 18. Exporter le jeu
 
 Dans la barre supérieure, clique sur **Exporter jeu**.
 
@@ -897,7 +1045,7 @@ Utilise l'export jeu quand :
 - tu veux archiver une version jouable ;
 - tu veux envoyer le jeu à quelqu'un sans lui donner accès à l'édition.
 
-## 18. Sauvegarder avec Export JSON
+## 19. Sauvegarder avec Export JSON
 
 Clique sur **Exporter JSON** pour créer une sauvegarde éditable.
 
@@ -911,7 +1059,7 @@ Fais un export JSON :
 
 Le JSON est ton filet de sécurité.
 
-## 19. Checklist précise avant publication
+## 20. Checklist précise avant publication
 
 - Le projet a un titre clair.
 - Le jeu commence par la bonne scène ou la bonne cinématique.
@@ -930,6 +1078,7 @@ Le JSON est ton filet de sécurité.
 - Les combinaisons utilisent deux objets distincts et un résultat utile.
 - Les règles de logique ne contredisent pas les actions normales.
 - Les cinématiques ont une action de fin correcte.
+- Les animations 2D ont été prévisualisées, sauvegardées et exportées si elles doivent être réutilisées.
 - Les transitions ne ralentissent pas trop le rythme.
 - Les minuteurs sont justifiés et testés.
 - Le plan contient un départ et une arrivée.
@@ -940,7 +1089,7 @@ Le JSON est ton filet de sécurité.
 - Une sauvegarde JSON a été exportée.
 - La catégorie, la mention d'âge et la miniature sont prêtes.
 
-## 20. Dépannage utilisateur
+## 21. Dépannage utilisateur
 
 ### Je ne retrouve pas une scène dans une liste
 

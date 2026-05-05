@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import SceneVisualEffect, { VISUAL_EFFECT_INTENSITY_OPTIONS, getVisualEffectZoneZIndex } from './SceneVisualEffect.jsx';
 import VisualEffectCascadeMenu from './VisualEffectCascadeMenu.jsx';
 import { HelpLabel } from './scenes/SceneEditorChrome.jsx';
-import { getLayerZIndex, getSceneObjectImageStyle, getSceneObjectStyle } from './scenes/sceneEditorUtils.js';
+import { getElementShapeStyle, getLayerZIndex, getSceneObjectImageStyle, getSceneObjectStyle } from './scenes/sceneEditorUtils.js';
 
 const SCENE_TRANSITION_OPTIONS = [
   { value: 'none', label: 'Aucune' },
@@ -436,6 +436,7 @@ export default function MediaTab({
                       width: `${zone.width}%`,
                       height: `${zone.height}%`,
                       zIndex: getVisualEffectZoneZIndex(zone.layer),
+                      ...getElementShapeStyle(zone),
                     }}
                   />
                 ))}
@@ -445,7 +446,7 @@ export default function MediaTab({
                   </div>
                 ))}
                 {(selectedScene.hotspots || []).filter((spot) => !spot.isHidden).map((spot) => (
-                  <div key={spot.id} className="editor-hotspot media-preview-hotspot" style={{ left: `${spot.x}%`, top: `${spot.y}%`, width: `${spot.width}%`, height: `${spot.height}%`, zIndex: getLayerZIndex(spot, 'hotspot') }}>
+                  <div key={spot.id} className="editor-hotspot media-preview-hotspot" style={{ left: `${spot.x}%`, top: `${spot.y}%`, width: `${spot.width}%`, height: `${spot.height}%`, zIndex: getLayerZIndex(spot, 'hotspot'), ...getElementShapeStyle(spot) }}>
                     <span>{spot.name}</span>
                   </div>
                 ))}

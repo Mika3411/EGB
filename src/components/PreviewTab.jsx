@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { COLOR_OPTIONS, POPUP_OVERLAY_GRADIENTS } from '../data/enigmaConfig';
 import { CODE_KEYPAD_KEYS } from '../data/playerConfig';
 import { parseJsonValue } from '../lib/gameEngine';
-import { getLayerZIndex } from './scenes/sceneEditorUtils';
+import { getElementShapeStyle, getLayerZIndex } from './scenes/sceneEditorUtils';
 import SceneVisualEffect, { getVisualEffectZoneZIndex } from './SceneVisualEffect';
 
 const makePieceStyle = (imageData, rows, cols, pieceIndex, rotation = 0) => {
@@ -22,6 +22,108 @@ const formatTimerSeconds = (seconds = 0) => {
   const remaining = safeSeconds % 60;
   return `${String(minutes).padStart(2, '0')}:${String(remaining).padStart(2, '0')}`;
 };
+
+const isAnimeStepActive = (step, time) => {
+  const start = Number(step.at || 0);
+  const duration = Math.max(0, Number(step.duration || 0));
+  return time >= start && time < start + duration;
+};
+
+const getAnimeStepStart = (step) => Number(step?.at || 0);
+const sortAnimeStepsByTime = (steps = []) => [...steps].sort((a, b) => getAnimeStepStart(a) - getAnimeStepStart(b));
+
+const normalizeAnime2dLayer = (entry = {}) => {
+  const source = entry.layer && typeof entry.layer === 'object' ? entry.layer : {};
+  return {
+    ...source,
+    ...entry,
+    id: entry.id || source.id || '',
+    name: entry.name || source.name || '',
+    src: entry.src || entry.imageData || source.src || source.imageData || '',
+    x: Number(entry.x ?? source.x ?? 50),
+    y: Number(entry.y ?? source.y ?? 50),
+    width: Number(entry.width ?? source.width ?? 28),
+    opacity: Number(entry.opacity ?? source.opacity ?? 100),
+    visible: entry.visible ?? source.visible ?? true,
+    visibleAtStart: entry.visibleAtStart ?? source.visibleAtStart ?? false,
+  };
+};
+
+function Anime2DCinematicPlayer({ cinematic, onEnd }) {
+  const spec = cinematic?.anime2dSpec || {};
+  const steps = sortAnimeStepsByTime(Array.isArray(spec.cinematicSteps) ? spec.cinematicSteps : []);
+  const layers = Array.isArray(spec.layers) ? spec.layers.map(normalizeAnime2dLayer) : [];
+  const duration = Math.max(1, ...steps.map((step) => Number(step.at || 0) + Number(step.duration || 0)));
+  const [time, setTime] = useState(0);
+  const onEndRef = useRef(onEnd);
+
+  useEffect(() => {
+    onEndRef.current = onEnd;
+  }, [onEnd]);
+
+  useEffect(() => {
+    setTime(0);
+    const startedAt = performance.now();
+    const timer = window.setInterval(() => {
+      const nextTime = (performance.now() - startedAt) / 1000;
+      if (nextTime >= duration) {
+        window.clearInterval(timer);
+        setTime(duration);
+        onEndRef.current?.();
+      } else {
+        setTime(nextTime);
+      }
+    }, 80);
+    return () => window.clearInterval(timer);
+  }, [duration]);
+
+  const imageSteps = steps.filter((step) => ['add', 'replace'].includes(step.mode) && step.layerId && isAnimeStepActive(step, time));
+  const replaceStep = [...imageSteps].reverse().find((step) => step.mode === 'replace');
+  const eventLayerIds = new Set(steps.filter((step) => ['add', 'replace'].includes(step.mode) && step.layerId).map((step) => step.layerId));
+  const baseLayers = layers.filter((layer) => layer.visible !== false && !eventLayerIds.has(layer.id) && (layer.visibleAtStart === true || !layer.src));
+  const visibleLayers = replaceStep
+    ? layers.filter((layer) => layer.visible !== false && layer.id === replaceStep.layerId)
+    : [
+        ...baseLayers,
+        ...imageSteps
+          .filter((step) => step.mode === 'add')
+          .map((step) => layers.find((layer) => layer.visible !== false && layer.id === step.layerId))
+          .filter(Boolean),
+      ];
+  const fallbackNarration = cinematic?.slides?.find((slide) => String(slide?.narration || '').trim())?.narration || '';
+  const currentNarrationStep = [...steps]
+    .reverse()
+    .find((step) => String(step.narration || '').trim() && getAnimeStepStart(step) <= time)
+    || null;
+  const narration = String(currentNarrationStep?.narration || '').trim() || fallbackNarration;
+
+  return (
+    <>
+      <div className="anime2d-player">
+        {!layers.some((layer) => layer.src) ? (
+          <p className="anime2d-player-empty">Aucune image embarquee dans ce JSON 2D Anime.</p>
+        ) : null}
+        {visibleLayers.map((layer) => (
+          <div
+            key={layer.id}
+            className="anime2d-player-layer"
+            style={{
+              left: `${layer.x || 50}%`,
+              top: `${layer.y || 50}%`,
+              width: `${layer.width || 28}%`,
+              opacity: Number(layer.opacity || 100) / 100,
+              zIndex: layers.length - layers.findIndex((entry) => entry.id === layer.id) + 2,
+            }}
+          >
+            {layer.src ? <img src={layer.src} alt={layer.name || ''} /> : null}
+          </div>
+        ))}
+        {narration ? <p className="anime2d-player-narration">{narration}</p> : null}
+      </div>
+      <p className="small-note">{Math.min(duration, time).toFixed(1)}s / {duration.toFixed(1)}s</p>
+    </>
+  );
+}
 
 const isPreloadableUrl = (value) => typeof value === 'string' && value.trim() && !value.startsWith('#');
 
@@ -47,6 +149,9 @@ const collectSceneMediaUrls = (scene, imageUrls, audioUrls) => {
 const collectCinematicMediaUrls = (cinematic, imageUrls, audioUrls, videoUrls) => {
   if (!cinematic) return;
   addUrl(videoUrls, cinematic.videoData);
+  if (cinematic.cinematicType === 'anime2d') {
+    (cinematic.anime2dSpec?.layers || []).forEach((layer) => addUrl(imageUrls, normalizeAnime2dLayer(layer).src));
+  }
   (cinematic.slides || []).forEach((slide) => {
     addUrl(imageUrls, slide.imageData);
     addUrl(audioUrls, slide.audioData);
@@ -715,6 +820,7 @@ export default function PreviewTab(props) {
     transform: 'translate(-50%, -50%)',
     transformOrigin: 'center center',
     lineHeight: 0,
+    ...getElementShapeStyle(obj),
   });
 
   return (
@@ -777,6 +883,7 @@ export default function PreviewTab(props) {
                 width: `${zone.width}%`,
                 height: `${zone.height}%`,
                 zIndex: getVisualEffectZoneZIndex(zone.layer),
+                ...getElementShapeStyle(zone),
               }}
             />
           ))}
@@ -816,6 +923,7 @@ export default function PreviewTab(props) {
                 width: `${spot.width}%`,
                 height: `${spot.height}%`,
                 zIndex: getLayerZIndex(spot, 'hotspot'),
+                ...getElementShapeStyle(spot),
               }}
               onClick={(event) => handleHotspotClick(event, spot)}
               title={spot.name}
@@ -1052,7 +1160,14 @@ export default function PreviewTab(props) {
       {playingCinematic && (
         <div className="overlay" onClick={(event) => { if (event.target === event.currentTarget) closeCinematic(); }}>
           <div className="overlay-card wide">
-            {(playingCinematic.cinematicType || 'slides') === 'video' ? (
+            {playingCinematic.cinematicType === 'anime2d' ? (
+              <>
+                <Anime2DCinematicPlayer cinematic={playingCinematic} onEnd={closeCinematic} />
+                <div className="panel-head">
+                  <button className="secondary-button" onClick={closeCinematic}>Terminer</button>
+                </div>
+              </>
+            ) : (playingCinematic.cinematicType || 'slides') === 'video' ? (
               <>
                 {playingCinematic.videoData ? (
                   <video

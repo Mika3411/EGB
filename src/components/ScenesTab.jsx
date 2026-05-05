@@ -11,10 +11,15 @@ import VisualEffectCascadeMenu from './VisualEffectCascadeMenu.jsx';
 import {
   clampFullscreenZoom,
   clampPercent,
+  getElementShapeCorners,
+  getElementShapePoints,
+  getElementShapeStyle,
+  getElementShapeType,
   getLayerZIndex,
   getSceneObjectImageStyle,
   getSceneObjectStyle,
   gridOverlayStyle,
+  makeRegularShapePoints,
   shouldIgnoreEditorShortcut,
 } from './scenes/sceneEditorUtils.js';
 
@@ -63,10 +68,12 @@ export default function ScenesTab(props) {
   const draggingHotspotIdRef = useRef('');
   const draggingSceneObjectIdRef = useRef('');
   const draggingVisualEffectZoneIdRef = useRef('');
+  const resizingElementRef = useRef(null);
   const dragSourceRef = useRef('main');
   const [draggingHotspotId, setDraggingHotspotId] = useState('');
   const [draggingSceneObjectId, setDraggingSceneObjectId] = useState('');
   const [draggingVisualEffectZoneId, setDraggingVisualEffectZoneId] = useState('');
+  const [resizingElement, setResizingElement] = useState(null);
   const [selectedSceneObjectId, setSelectedSceneObjectId] = useState('');
   const [selectedVisualEffectZoneId, setSelectedVisualEffectZoneId] = useState('');
   const [isEditorFullscreen, setIsEditorFullscreen] = useState(false);
@@ -262,14 +269,19 @@ export default function ScenesTab(props) {
   };
 
   useEffect(() => {
-    if (!draggingHotspotId && !draggingSceneObjectId && !draggingVisualEffectZoneId) return undefined;
+    if (!draggingHotspotId && !draggingSceneObjectId && !draggingVisualEffectZoneId && !resizingElement) return undefined;
 
     const handlePointerMove = (event) => {
       event.preventDefault();
+      if (resizingElementRef.current) {
+        updateElementSize(event.clientX, event.clientY);
+        return;
+      }
       updateHotspotPosition(event.clientX, event.clientY, dragSourceRef.current);
     };
 
     const handlePointerEnd = () => {
+      stopResizing();
       stopDragging();
     };
 
@@ -281,7 +293,7 @@ export default function ScenesTab(props) {
       window.removeEventListener('pointerup', handlePointerEnd);
       window.removeEventListener('pointercancel', handlePointerEnd);
     };
-  }, [draggingHotspotId, draggingSceneObjectId, draggingVisualEffectZoneId]);
+  }, [draggingHotspotId, draggingSceneObjectId, draggingVisualEffectZoneId, resizingElement]);
 
   const toggleSceneChildren = (event, sceneId) => {
     event.preventDefault();
@@ -327,6 +339,12 @@ export default function ScenesTab(props) {
     setDraggingHotspotId('');
     setDraggingSceneObjectId('');
     setDraggingVisualEffectZoneId('');
+    setIsDragLocked(false);
+  };
+
+  const stopResizing = () => {
+    resizingElementRef.current = null;
+    setResizingElement(null);
     setIsDragLocked(false);
   };
 
@@ -405,6 +423,328 @@ export default function ScenesTab(props) {
         visualZone.y = Number(y.toFixed(2));
       }
     }, { rememberHistory: false });
+  };
+
+  const getEditorElementByType = (scene, type, id) => {
+    const collections = {
+      hotspot: scene?.hotspots,
+      sceneObject: scene?.sceneObjects,
+      visualEffectZone: scene?.visualEffectZones,
+    };
+    return collections[type]?.find((item) => item.id === id) || null;
+  };
+
+  const getAbsoluteShapeCorners = (entry) => {
+    const corners = getElementShapeCorners(entry);
+    const left = Number(entry.x) - Number(entry.width) / 2;
+    const top = Number(entry.y) - Number(entry.height) / 2;
+    return Object.fromEntries(Object.entries(corners).map(([key, corner]) => ([
+      key,
+      {
+        x: left + (Number(entry.width) * corner.x) / 100,
+        y: top + (Number(entry.height) * corner.y) / 100,
+      },
+    ])));
+  };
+
+  const getAbsoluteShapePoints = (entry) => {
+    const points = getElementShapePoints(entry);
+    const left = Number(entry.x) - Number(entry.width) / 2;
+    const top = Number(entry.y) - Number(entry.height) / 2;
+    return points.map((point) => ({
+      x: left + (Number(entry.width) * point.x) / 100,
+      y: top + (Number(entry.height) * point.y) / 100,
+    }));
+  };
+
+  const applyShapeCorners = (entry, absoluteCorners) => {
+    const xs = Object.values(absoluteCorners).map((corner) => corner.x);
+    const ys = Object.values(absoluteCorners).map((corner) => corner.y);
+    const minSize = 2;
+    let left = clampPercent(Math.min(...xs));
+    let right = clampPercent(Math.max(...xs));
+    let top = clampPercent(Math.min(...ys));
+    let bottom = clampPercent(Math.max(...ys));
+
+    if (right - left < minSize) right = Math.min(100, left + minSize);
+    if (right - left < minSize) left = Math.max(0, right - minSize);
+    if (bottom - top < minSize) bottom = Math.min(100, top + minSize);
+    if (bottom - top < minSize) top = Math.max(0, bottom - minSize);
+
+    const width = right - left;
+    const height = bottom - top;
+    entry.x = Number(((left + right) / 2).toFixed(2));
+    entry.y = Number(((top + bottom) / 2).toFixed(2));
+    entry.width = Number(width.toFixed(2));
+    entry.height = Number(height.toFixed(2));
+    entry.shapeCorners = Object.fromEntries(Object.entries(absoluteCorners).map(([key, corner]) => ([
+      key,
+      {
+        x: Number(clampPercent(((corner.x - left) / width) * 100).toFixed(2)),
+        y: Number(clampPercent(((corner.y - top) / height) * 100).toFixed(2)),
+      },
+    ])));
+  };
+
+  const applyShapePoints = (entry, absolutePoints) => {
+    const xs = absolutePoints.map((point) => point.x);
+    const ys = absolutePoints.map((point) => point.y);
+    const minSize = 2;
+    let left = clampPercent(Math.min(...xs));
+    let right = clampPercent(Math.max(...xs));
+    let top = clampPercent(Math.min(...ys));
+    let bottom = clampPercent(Math.max(...ys));
+
+    if (right - left < minSize) right = Math.min(100, left + minSize);
+    if (right - left < minSize) left = Math.max(0, right - minSize);
+    if (bottom - top < minSize) bottom = Math.min(100, top + minSize);
+    if (bottom - top < minSize) top = Math.max(0, bottom - minSize);
+
+    const width = right - left;
+    const height = bottom - top;
+    entry.x = Number(((left + right) / 2).toFixed(2));
+    entry.y = Number(((top + bottom) / 2).toFixed(2));
+    entry.width = Number(width.toFixed(2));
+    entry.height = Number(height.toFixed(2));
+    entry.shapeType = 'free';
+    entry.shapePointCount = absolutePoints.length;
+    entry.shapePoints = absolutePoints.map((point) => ({
+      x: Number(clampPercent(((point.x - left) / width) * 100).toFixed(2)),
+      y: Number(clampPercent(((point.y - top) / height) * 100).toFixed(2)),
+    }));
+    delete entry.shapeCorners;
+  };
+
+  const updateElementSize = (clientX, clientY) => {
+    const resizing = resizingElementRef.current;
+    if (!resizing || !selectedSceneId) return;
+    dragMovedRef.current = true;
+
+    const activeRef = resizing.source === 'fullscreen' ? fullscreenCanvasRef : canvasRef;
+    if (!activeRef.current) return;
+
+    const rect = activeRef.current.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+
+    const pointerX = clampPercent(snapValue(((clientX - rect.left) / rect.width) * 100));
+    const pointerY = clampPercent(snapValue(((clientY - rect.top) / rect.height) * 100));
+    const minSize = 2;
+
+    patchProject((draft) => {
+      const scene = draft.scenes.find((s) => s.id === selectedSceneId);
+      const entry = getEditorElementByType(scene, resizing.type, resizing.id);
+      if (!entry) return;
+
+      if (resizing.handle.startsWith('point-')) {
+        const pointIndex = Number(resizing.handle.replace('point-', ''));
+        const absolutePoints = resizing.start.absolutePoints.map((point) => ({ ...point }));
+        if (absolutePoints[pointIndex]) {
+          absolutePoints[pointIndex] = { x: pointerX, y: pointerY };
+          applyShapePoints(entry, absolutePoints);
+        }
+        return;
+      }
+
+      if (getElementShapeType(entry) === 'free') {
+        const absolutePoints = resizing.start.absolutePoints.map((point) => ({ ...point }));
+        if (resizing.handle.length === 1) {
+          const xs = resizing.start.absolutePoints.map((point) => point.x);
+          const ys = resizing.start.absolutePoints.map((point) => point.y);
+          const left = Math.min(...xs);
+          const right = Math.max(...xs);
+          const top = Math.min(...ys);
+          const bottom = Math.max(...ys);
+          absolutePoints.forEach((point) => {
+            if (resizing.handle === 'e' && Math.abs(point.x - right) < 0.01) point.x = pointerX;
+            if (resizing.handle === 'w' && Math.abs(point.x - left) < 0.01) point.x = pointerX;
+            if (resizing.handle === 'n' && Math.abs(point.y - top) < 0.01) point.y = pointerY;
+            if (resizing.handle === 's' && Math.abs(point.y - bottom) < 0.01) point.y = pointerY;
+          });
+        }
+        applyShapePoints(entry, absolutePoints);
+        return;
+      }
+
+      let left = resizing.start.x - resizing.start.width / 2;
+      let right = resizing.start.x + resizing.start.width / 2;
+      let top = resizing.start.y - resizing.start.height / 2;
+      let bottom = resizing.start.y + resizing.start.height / 2;
+
+      if (resizing.handle.includes('e')) right = Math.max(left + minSize, pointerX);
+      if (resizing.handle.includes('w')) left = Math.min(right - minSize, pointerX);
+      if (resizing.handle.includes('s')) bottom = Math.max(top + minSize, pointerY);
+      if (resizing.handle.includes('n')) top = Math.min(bottom - minSize, pointerY);
+
+      left = clampPercent(left);
+      right = clampPercent(right);
+      top = clampPercent(top);
+      bottom = clampPercent(bottom);
+
+      if (right - left < minSize) {
+        if (resizing.handle.includes('w')) left = Math.max(0, right - minSize);
+        else right = Math.min(100, left + minSize);
+      }
+      if (bottom - top < minSize) {
+        if (resizing.handle.includes('n')) top = Math.max(0, bottom - minSize);
+        else bottom = Math.min(100, top + minSize);
+      }
+
+      entry.x = Number(((left + right) / 2).toFixed(2));
+      entry.y = Number(((top + bottom) / 2).toFixed(2));
+      entry.width = Number((right - left).toFixed(2));
+      entry.height = Number((bottom - top).toFixed(2));
+      delete entry.shapeCorners;
+      delete entry.shapePoints;
+    }, { rememberHistory: false });
+  };
+
+  const beginResize = (event, type, id, handle, source = 'main') => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+
+    const entry = getEditorElementByType(selectedScene, type, id);
+    if (!entry || entry.isLocked) return;
+
+    rememberProjectState?.();
+    dragMovedRef.current = false;
+    resizingElementRef.current = {
+      type,
+      id,
+      handle,
+      source,
+      start: {
+        x: Number(entry.x) || 0,
+        y: Number(entry.y) || 0,
+        width: Number(entry.width) || 2,
+        height: Number(entry.height) || 2,
+        shapeCorners: getElementShapeCorners(entry),
+        absoluteCorners: getAbsoluteShapeCorners(entry),
+        absolutePoints: getAbsoluteShapePoints(entry),
+      },
+    };
+    setResizingElement({ type, id, handle });
+    setIsDragLocked(true);
+  };
+
+  const getResizeHandleStyle = (entry, handle) => {
+    const corners = getElementShapeCorners(entry);
+    if (corners[handle]) return { left: `${corners[handle].x}%`, top: `${corners[handle].y}%` };
+
+    const edgeCorners = {
+      n: [corners.nw, corners.ne],
+      e: [corners.ne, corners.se],
+      s: [corners.sw, corners.se],
+      w: [corners.nw, corners.sw],
+    }[handle];
+
+    return {
+      left: `${(edgeCorners[0].x + edgeCorners[1].x) / 2}%`,
+      top: `${(edgeCorners[0].y + edgeCorners[1].y) / 2}%`,
+    };
+  };
+
+  const renderResizeHandles = (type, id, isSelected, source = 'main') => {
+    if (!isSelected) return null;
+    const entry = getEditorElementByType(selectedScene, type, id);
+    if (!entry) return null;
+    return ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].map((handle) => (
+      <span
+        key={handle}
+        className={`editor-resize-handle editor-resize-handle-${handle}`}
+        style={getResizeHandleStyle(entry, handle)}
+        aria-hidden="true"
+        onPointerDown={(event) => beginResize(event, type, id, handle, source)}
+      />
+    ));
+  };
+
+  const renderShapePointHandles = (type, id, isSelected, source = 'main') => {
+    if (!isSelected) return null;
+    const entry = getEditorElementByType(selectedScene, type, id);
+    if (!entry || getElementShapeType(entry) !== 'free') return null;
+    return getElementShapePoints(entry).map((point, index) => (
+      <span
+        key={`point-${index}`}
+        className="editor-resize-handle editor-shape-point-handle"
+        style={{ left: `${point.x}%`, top: `${point.y}%` }}
+        aria-hidden="true"
+        onPointerDown={(event) => beginResize(event, type, id, `point-${index}`, source)}
+      />
+    ));
+  };
+
+  const renderShapeOutline = (entry, isSelected) => {
+    if (getElementShapeType(entry) !== 'free') return null;
+    const points = getElementShapePoints(entry);
+    return (
+      <svg className={`editor-shape-outline ${isSelected ? 'selected' : ''}`} viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <polygon points={points.map((point) => `${point.x},${point.y}`).join(' ')} />
+      </svg>
+    );
+  };
+
+  const getShapeClassName = (entry) => `editor-shape-${getElementShapeType(entry)}`;
+
+  const patchEditorElementShape = (type, id, updater) => {
+    patchProject((draft) => {
+      const scene = draft.scenes.find((s) => s.id === selectedSceneId);
+      const entry = getEditorElementByType(scene, type, id);
+      if (entry) updater(entry);
+    });
+  };
+
+  const setEditorElementShapeType = (type, id, shapeType) => {
+    patchEditorElementShape(type, id, (entry) => {
+      entry.shapeType = shapeType;
+      if (shapeType === 'free') {
+        const count = Math.max(3, Number(entry.shapePointCount) || getElementShapePoints(entry).length || 4);
+        entry.shapePointCount = count;
+        entry.shapePoints = makeRegularShapePoints(count);
+        delete entry.shapeCorners;
+      } else {
+        delete entry.shapePoints;
+        delete entry.shapeCorners;
+      }
+    });
+  };
+
+  const setEditorElementShapePointCount = (type, id, count) => {
+    const nextCount = Math.max(3, Math.min(16, Math.round(Number(count) || 3)));
+    patchEditorElementShape(type, id, (entry) => {
+      entry.shapeType = 'free';
+      entry.shapePointCount = nextCount;
+      entry.shapePoints = makeRegularShapePoints(nextCount);
+      delete entry.shapeCorners;
+    });
+  };
+
+  const renderShapeControls = (type, id) => {
+    const entry = getEditorElementByType(selectedScene, type, id);
+    if (!entry) return null;
+    const shapeType = getElementShapeType(entry);
+    return (
+      <div className="shape-editor-controls">
+        <HelpLabel help="Forme de la zone interactive. Rectangle est le comportement classique, ronde devient une ellipse et libre permet de tirer chaque point.">Forme</HelpLabel>
+        <select value={shapeType} onChange={(event) => setEditorElementShapeType(type, id, event.target.value)}>
+          <option value="rectangle">Rectangle</option>
+          <option value="ellipse">Ronde / ovale</option>
+          <option value="free">Libre</option>
+        </select>
+        {shapeType === 'free' ? (
+          <div>
+            <HelpLabel help="Nombre de points de la forme libre. Minimum 3. Changer ce nombre recrée une forme régulière que tu peux ensuite déformer.">Nombre d'angles</HelpLabel>
+            <input
+              type="number"
+              min="3"
+              max="16"
+              value={Number(entry.shapePointCount) || getElementShapePoints(entry).length}
+              onChange={(event) => setEditorElementShapePointCount(type, id, event.target.value)}
+            />
+          </div>
+        ) : null}
+      </div>
+    );
   };
 
   const addSceneObject = ({ invisible = false } = {}) => {
@@ -1004,13 +1344,16 @@ export default function ScenesTab(props) {
                       key={zone.id}
                       type="button"
                       data-tour={zone.tutorialCreated ? 'visual-zone-on-canvas' : undefined}
-                      className={`editor-hotspot editor-visual-zone ${zone.id === selectedVisualEffectZoneId ? 'selected' : ''} ${zone.id === draggingVisualEffectZoneId ? 'dragging' : ''}`}
-                      style={{ left: `${zone.x}%`, top: `${zone.y}%`, width: `${zone.width}%`, height: `${zone.height}%`, zIndex: getVisualEffectZoneZIndex(zone.layer) }}
+                      className={`editor-hotspot editor-visual-zone ${getShapeClassName(zone)} ${zone.id === selectedVisualEffectZoneId ? 'selected' : ''} ${zone.id === draggingVisualEffectZoneId ? 'dragging' : ''}`}
+                      style={{ left: `${zone.x}%`, top: `${zone.y}%`, width: `${zone.width}%`, height: `${zone.height}%`, zIndex: getVisualEffectZoneZIndex(zone.layer), ...getElementShapeStyle(zone) }}
                       onPointerDown={(event) => beginVisualEffectZoneDrag(event, zone.id)}
                       onClick={() => selectVisualEffectZone(zone.id)}
                     >
                       <SceneVisualEffect effect={zone.effect} intensity={zone.intensity} />
                       <span>{zone.name}</span>
+                      {renderShapeOutline(zone, zone.id === selectedVisualEffectZoneId)}
+                      {renderResizeHandles('visualEffectZone', zone.id, zone.id === selectedVisualEffectZoneId)}
+                      {renderShapePointHandles('visualEffectZone', zone.id, zone.id === selectedVisualEffectZoneId)}
                     </button>
                   ))}
                   {snapGridEnabled ? <div style={gridOverlayStyle} /> : null}
@@ -1019,12 +1362,15 @@ export default function ScenesTab(props) {
                       key={obj.id}
                       type="button"
                       data-tour={obj.tutorialCreated ? 'scene-object-on-canvas' : undefined}
-                      className={`editor-hotspot editor-scene-object ${obj.isInvisible ? 'editor-scene-object-invisible' : ''} ${(obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id)) ? 'selected' : ''} ${obj.id === draggingSceneObjectId ? 'dragging' : ''}`}
+                      className={`editor-hotspot editor-scene-object ${getShapeClassName(obj)} ${obj.isInvisible ? 'editor-scene-object-invisible' : ''} ${(obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id)) ? 'selected' : ''} ${obj.id === draggingSceneObjectId ? 'dragging' : ''}`}
                       style={getSceneObjectStyle(obj)}
                       onPointerDown={(event) => beginObjectDrag(event, obj.id)}
                       onClick={(event) => selectSceneObject(obj.id, event)}
                     >
                       {getSceneObjectDisplayImage(obj) && !obj.isInvisible ? <img src={getSceneObjectDisplayImage(obj)} alt={obj.name} style={getSceneObjectImageStyle()} /> : <span>{obj.isInvisible ? `${obj.name || 'Objet'} (invisible)` : obj.name}</span>}
+                      {renderShapeOutline(obj, obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id))}
+                      {renderResizeHandles('sceneObject', obj.id, obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id))}
+                      {renderShapePointHandles('sceneObject', obj.id, obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id))}
                     </button>
                   ))}
                   {selectedScene.hotspots.filter((spot) => !spot.isHidden).map((spot) => (
@@ -1032,12 +1378,15 @@ export default function ScenesTab(props) {
                       key={spot.id}
                       type="button"
                       data-tour={spot.tutorialCreated ? 'hotspot-on-canvas' : undefined}
-                      className={`editor-hotspot ${(spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id)) ? 'selected' : ''} ${spot.id === draggingHotspotId ? 'dragging' : ''}`}
-                      style={{ left: `${spot.x}%`, top: `${spot.y}%`, width: `${spot.width}%`, height: `${spot.height}%`, zIndex: getLayerZIndex(spot, 'hotspot') }}
+                      className={`editor-hotspot ${getShapeClassName(spot)} ${(spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id)) ? 'selected' : ''} ${spot.id === draggingHotspotId ? 'dragging' : ''}`}
+                      style={{ left: `${spot.x}%`, top: `${spot.y}%`, width: `${spot.width}%`, height: `${spot.height}%`, zIndex: getLayerZIndex(spot, 'hotspot'), ...getElementShapeStyle(spot) }}
                       onPointerDown={(event) => beginDrag(event, spot.id)}
                       onClick={(event) => selectHotspot(spot.id, event)}
                     >
                       <span>{spot.name}</span>
+                      {renderShapeOutline(spot, spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id))}
+                      {renderResizeHandles('hotspot', spot.id, spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id))}
+                      {renderShapePointHandles('hotspot', spot.id, spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id))}
                     </button>
                   ))}
                 </div>
@@ -1091,6 +1440,7 @@ export default function ScenesTab(props) {
                         <div><HelpLabel help="Largeur de la zone cliquable et de l’image visible, en pourcentage de la largeur de la scène.">Largeur</HelpLabel><input type="number" value={selectedSceneObject.width} onChange={(e) => patchProject((draft) => { const obj = draft.scenes.find((s) => s.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === selectedSceneObjectId); if (obj) obj.width = Number(e.target.value); })} /></div>
                         <div><HelpLabel help="Hauteur de la zone cliquable et de l’image visible, en pourcentage de la hauteur de la scène.">Hauteur</HelpLabel><input type="number" value={selectedSceneObject.height} onChange={(e) => patchProject((draft) => { const obj = draft.scenes.find((s) => s.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === selectedSceneObjectId); if (obj) obj.height = Number(e.target.value); })} /></div>
                       </div>
+                      {renderShapeControls('sceneObject', selectedSceneObjectId)}
                       <HelpLabel help="Définit ce qui se passe au clic : montrer un pop-up, ajouter l’objet lié à l’inventaire, ou faire les deux.">Mode d’interaction</HelpLabel>
                       <select value={selectedSceneObject.interactionMode || 'popup'} onChange={(e) => patchProject((draft) => {
                         const obj = draft.scenes.find((s) => s.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === selectedSceneObjectId); if (obj) obj.interactionMode = e.target.value;
@@ -1151,6 +1501,7 @@ export default function ScenesTab(props) {
                         <div><HelpLabel help="Largeur de la zone d'effet, en pourcentage de la largeur de la scene.">Largeur</HelpLabel><input type="number" value={selectedVisualEffectZone.width} onChange={(e) => patchProject((draft) => { const zone = draft.scenes.find((s) => s.id === selectedSceneId)?.visualEffectZones?.find((entry) => entry.id === selectedVisualEffectZoneId); if (zone) zone.width = Number(e.target.value); })} /></div>
                         <div><HelpLabel help="Hauteur de la zone d'effet, en pourcentage de la hauteur de la scene.">Hauteur</HelpLabel><input type="number" value={selectedVisualEffectZone.height} onChange={(e) => patchProject((draft) => { const zone = draft.scenes.find((s) => s.id === selectedSceneId)?.visualEffectZones?.find((entry) => entry.id === selectedVisualEffectZoneId); if (zone) zone.height = Number(e.target.value); })} /></div>
                       </div>
+                      {renderShapeControls('visualEffectZone', selectedVisualEffectZoneId)}
                       <HelpLabel help="Effet visuel applique uniquement dans cette zone. Ce menu reprend les memes familles que l'onglet Media.">Effet de zone</HelpLabel>
                       <div className="scene-zone-effect-picker" data-tour="visual-zone-effect">
                         <VisualEffectCascadeMenu
@@ -1212,6 +1563,7 @@ export default function ScenesTab(props) {
                         <div><HelpLabel help="Largeur de la zone cliquable. Augmente-la si le joueur risque de manquer la cible.">Largeur</HelpLabel><input type="number" value={selectedHotspot.width} onChange={(e) => patchProject((draft) => { const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.width = Number(e.target.value); })} /></div>
                         <div><HelpLabel help="Hauteur de la zone cliquable. Une zone trop petite peut être difficile à trouver sur mobile.">Hauteur</HelpLabel><input type="number" value={selectedHotspot.height} onChange={(e) => patchProject((draft) => { const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.height = Number(e.target.value); })} /></div>
                       </div>
+                      {renderShapeControls('hotspot', selectedHotspotId)}
                       <HelpLabel help="Action principale déclenchée par cette zone après validation des prérequis éventuels : dialogue, objet, changement de scène ou cinématique.">Action</HelpLabel>
                       <select data-tour="hotspot-action" value={selectedHotspot.actionType} onChange={(e) => patchProject((draft) => {
                         const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.actionType = e.target.value;
@@ -1357,6 +1709,11 @@ export default function ScenesTab(props) {
                   draggingVisualEffectZoneId={draggingVisualEffectZoneId}
                   beginVisualEffectZoneDrag={beginVisualEffectZoneDrag}
                   selectVisualEffectZone={selectVisualEffectZone}
+                  renderResizeHandles={renderResizeHandles}
+                  renderShapePointHandles={renderShapePointHandles}
+                  renderShapeControls={renderShapeControls}
+                  renderShapeOutline={renderShapeOutline}
+                  getShapeClassName={getShapeClassName}
                   miniMapProps={miniMapProps}
                   setSelectedItemId={setSelectedItemId}
                   handleUpload={handleUpload}
