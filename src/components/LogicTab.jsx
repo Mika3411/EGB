@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { makeLogicRule } from '../data/projectData';
+import { getSceneObjectClickMode } from './scenes/SceneObjectInspector.jsx';
 
 const ACTION_LABELS = {
   default: 'Action normale de la zone',
@@ -18,7 +19,7 @@ const OBJECT_MODES = {
 const CONDITION_LABELS = {
   has_item: 'Si le joueur possède l’objet',
   missing_item: 'Si le joueur ne possède pas l’objet',
-  completed_hotspot: 'Si une zone d’action est franchie entièrement',
+  completed_hotspot: 'Si une zone d’action ou image-zone est franchie entièrement',
   solved_enigma: 'Si une énigme est réussie',
   launched_cinematic: 'Si une cinématique est lancée',
   completed_combination: 'Si une combinaison est réalisée',
@@ -27,7 +28,7 @@ const CONDITION_LABELS = {
 
 const FIELD_HELP = {
   sceneTree: "Choisis la scène dont tu veux régler les conditions. Les règles affichées à droite ne concernent que cette scène.",
-  actionZones: "Zones cliquables de la scène sélectionnée. Une règle conditionnelle peut remplacer leur action normale selon l’état de la partie.",
+  actionZones: "Zones cliquables de la scène sélectionnée, y compris les objets visibles réglés en Zone d'action. Une règle conditionnelle peut remplacer leur action normale selon l’état de la partie.",
   addRule: "Ajoute une condition spéciale sur cette zone. La règle s’active seulement si sa condition est vraie pendant la partie.",
   visibleObjects: "Objets placés directement dans l’image de la scène. Leur comportement peut être réglé ici sans passer par les zones d’action.",
   consumeRequiredItem: "Retire l’objet testé de l’inventaire après activation. Utile pour une clé utilisée une seule fois, un ticket donné, une pile consommée.",
@@ -37,7 +38,10 @@ const FIELD_HELP = {
 
 const getRuleSummary = (rule, project) => {
   const testedItem = project.items?.find((item) => item.id === rule.itemId);
-  const testedHotspot = (project.scenes || []).flatMap((scene) => scene.hotspots || []).find((hotspot) => hotspot.id === rule.hotspotId);
+  const testedHotspot = (project.scenes || []).flatMap((scene) => [
+    ...(scene.hotspots || []),
+    ...(scene.sceneObjects || []).filter((object) => getSceneObjectClickMode(object) === 'action'),
+  ]).find((hotspot) => hotspot.id === rule.hotspotId);
   const testedEnigma = project.enigmas?.find((enigma) => enigma.id === rule.conditionEnigmaId);
   const testedCinematic = project.cinematics?.find((cinematic) => cinematic.id === rule.cinematicId);
   const testedCombination = project.combinations?.find((combo) => combo.id === rule.combinationId);
@@ -80,12 +84,16 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
     () => scenes.find((scene) => scene.id === selectedSceneId) || scenes[0] || null,
     [scenes, selectedSceneId],
   );
-  const allHotspots = useMemo(() => scenes.flatMap((scene) => (
-    (scene.hotspots || []).map((hotspot) => ({ scene, hotspot }))
-  )), [scenes]);
+  const getSceneActionTargets = (scene) => [
+    ...(scene.hotspots || []).map((hotspot) => ({ scene, target: hotspot, type: 'hotspot' })),
+    ...(scene.sceneObjects || [])
+      .filter((object) => getSceneObjectClickMode(object) === 'action')
+      .map((object) => ({ scene, target: object, type: 'sceneObject' })),
+  ];
+  const allActionTargets = useMemo(() => scenes.flatMap((scene) => getSceneActionTargets(scene)), [scenes]);
 
   const totalRules = scenes.reduce((count, scene) => (
-    count + (scene.hotspots || []).reduce((sceneCount, hotspot) => sceneCount + (hotspot.logicRules || []).length, 0)
+    count + getSceneActionTargets(scene).reduce((sceneCount, { target }) => sceneCount + (target.logicRules || []).length, 0)
   ), 0);
 
   const updateScene = (updater) => {
@@ -96,34 +104,35 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
     });
   };
 
-  const updateHotspot = (hotspotId, updater) => {
+  const updateActionTarget = (targetId, targetType, updater) => {
     if (!selectedScene) return;
     patchProject((draft) => {
-      const hotspot = draft.scenes
-        .find((scene) => scene.id === selectedScene.id)
-        ?.hotspots.find((entry) => entry.id === hotspotId);
-      if (hotspot) updater(hotspot);
+      const scene = draft.scenes.find((entry) => entry.id === selectedScene.id);
+      const target = targetType === 'sceneObject'
+        ? scene?.sceneObjects?.find((entry) => entry.id === targetId)
+        : scene?.hotspots?.find((entry) => entry.id === targetId);
+      if (target) updater(target);
     });
   };
 
-  const updateRule = (hotspotId, ruleId, updater) => {
-    updateHotspot(hotspotId, (hotspot) => {
-      const rule = hotspot.logicRules?.find((entry) => entry.id === ruleId);
+  const updateRule = (targetId, targetType, ruleId, updater) => {
+    updateActionTarget(targetId, targetType, (target) => {
+      const rule = target.logicRules?.find((entry) => entry.id === ruleId);
       if (rule) updater(rule);
     });
   };
 
-  const addRule = (hotspotId) => {
-    updateHotspot(hotspotId, (hotspot) => {
-      if (!Array.isArray(hotspot.logicRules)) hotspot.logicRules = [];
-      hotspot.logicRules.push(makeLogicRule());
+  const addRule = (targetId, targetType) => {
+    updateActionTarget(targetId, targetType, (target) => {
+      if (!Array.isArray(target.logicRules)) target.logicRules = [];
+      target.logicRules.push(makeLogicRule());
     });
   };
 
-  const deleteRule = (hotspotId, ruleId) => {
+  const deleteRule = (targetId, targetType, ruleId) => {
     if (!window.confirm('Supprimer cette règle logique ?')) return;
-    updateHotspot(hotspotId, (hotspot) => {
-      hotspot.logicRules = (hotspot.logicRules || []).filter((rule) => rule.id !== ruleId);
+    updateActionTarget(targetId, targetType, (target) => {
+      target.logicRules = (target.logicRules || []).filter((rule) => rule.id !== ruleId);
     });
   };
 
@@ -133,6 +142,8 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
       if (object) updater(object);
     });
   };
+  const selectedActionTargets = selectedScene ? getSceneActionTargets(selectedScene) : [];
+  const selectedClickableObjects = (selectedScene?.sceneObjects || []).filter((object) => getSceneObjectClickMode(object) === 'object');
 
   const renderSceneTree = (sceneList, depth = 0) => (
     <div className={depth ? 'scene-children-list' : ''}>
@@ -196,22 +207,22 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
             <section className="combo-card" data-tour="logic-zones">
               <div className="panel-head">
                 <HelpLabel className="compact-section-title" help={FIELD_HELP.actionZones}>Zones d’action</HelpLabel>
-                <span className="status-badge soft">{selectedScene.hotspots?.length || 0}</span>
+                <span className="status-badge soft">{selectedActionTargets.length}</span>
               </div>
-              {(selectedScene.hotspots || []).map((hotspot) => (
-                <div className="combo-card" key={hotspot.id}>
+              {selectedActionTargets.map(({ target, type }) => (
+                <div className="combo-card" key={`${type}-${target.id}`}>
                   <div className="panel-head">
                     <div>
-                      <h3>{hotspot.name}</h3>
-                      <p className="small-note">{(hotspot.logicRules || []).length} règle{(hotspot.logicRules || []).length > 1 ? 's' : ''} conditionnelle{(hotspot.logicRules || []).length > 1 ? 's' : ''}</p>
+                      <h3>{target.name}</h3>
+                      <p className="small-note">{type === 'sceneObject' ? 'Image-zone · ' : ''}{(target.logicRules || []).length} règle{(target.logicRules || []).length > 1 ? 's' : ''} conditionnelle{(target.logicRules || []).length > 1 ? 's' : ''}</p>
                     </div>
                     <div className="label-with-help" data-tour="logic-add-rule">
-                      <button type="button" onClick={() => addRule(hotspot.id)}>+ Règle</button>
+                      <button type="button" onClick={() => addRule(target.id, type)}>+ Règle</button>
                       <span className="help-dot" data-help={FIELD_HELP.addRule} aria-label={FIELD_HELP.addRule} tabIndex={0}>?</span>
                     </div>
                   </div>
 
-                  {(hotspot.logicRules || []).length ? hotspot.logicRules.map((rule) => (
+                  {(target.logicRules || []).length ? target.logicRules.map((rule) => (
                     <details className="logic-rule-card" key={rule.id} open>
                       <summary>
                         <span>
@@ -220,7 +231,7 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
                         </span>
                         <button type="button" className="danger-button" onClick={(event) => {
                           event.preventDefault();
-                          deleteRule(hotspot.id, rule.id);
+                          deleteRule(target.id, type, rule.id);
                         }}>
                           Supprimer
                         </button>
@@ -230,13 +241,13 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
                       <div className="grid-two">
                         <div>
                           <HelpLabel help="Nom interne pour reconnaître rapidement cette règle dans la liste compacte.">Nom de la règle</HelpLabel>
-                          <input value={rule.name || ''} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
+                          <input value={rule.name || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                             draftRule.name = event.target.value;
                           })} />
                         </div>
                         <div>
                           <HelpLabel help="Détermine quand cette règle remplace l’action normale de la zone. La première règle qui correspond est utilisée.">Condition</HelpLabel>
-                          <select data-tour="logic-condition" value={rule.conditionType || 'has_item'} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
+                          <select data-tour="logic-condition" value={rule.conditionType || 'has_item'} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                             draftRule.conditionType = event.target.value;
                           })}>
                             {Object.entries(CONDITION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -247,7 +258,7 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
                       {['has_item', 'missing_item'].includes(rule.conditionType || 'has_item') ? (
                         <>
                           <HelpLabel help="Objet vérifié dans l’inventaire du joueur pour savoir si la règle doit s’activer.">Objet testé</HelpLabel>
-                          <select value={rule.itemId || ''} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
+                          <select value={rule.itemId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                             draftRule.itemId = event.target.value;
                           })}>
                             <option value="">Choisir un objet</option>
@@ -259,12 +270,12 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
                       {rule.conditionType === 'completed_hotspot' ? (
                         <>
                           <HelpLabel help="Zone qui doit avoir déjà terminé son action au moins une fois.">Zone d’action franchie</HelpLabel>
-                          <select value={rule.hotspotId || ''} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
+                          <select value={rule.hotspotId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                             draftRule.hotspotId = event.target.value;
                           })}>
                             <option value="">Choisir une zone</option>
-                            {allHotspots.map(({ scene, hotspot: candidate }) => (
-                              <option key={candidate.id} value={candidate.id}>{getSceneLabel(scene.id)} - {candidate.name}</option>
+                            {allActionTargets.map(({ scene, target: candidate, type: candidateType }) => (
+                              <option key={`${candidateType}-${candidate.id}`} value={candidate.id}>{getSceneLabel(scene.id)} - {candidateType === 'sceneObject' ? 'Image-zone: ' : ''}{candidate.name}</option>
                             ))}
                           </select>
                         </>
@@ -273,7 +284,7 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
                       {rule.conditionType === 'solved_enigma' ? (
                         <>
                           <HelpLabel help="Énigme qui doit avoir été réussie pendant la partie.">Énigme réussie</HelpLabel>
-                          <select value={rule.conditionEnigmaId || ''} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
+                          <select value={rule.conditionEnigmaId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                             draftRule.conditionEnigmaId = event.target.value;
                           })}>
                             <option value="">Choisir une énigme</option>
@@ -285,7 +296,7 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
                       {rule.conditionType === 'launched_cinematic' ? (
                         <>
                           <HelpLabel help="Cinématique qui doit avoir été lancée au moins une fois pendant la partie.">Cinématique lancée</HelpLabel>
-                          <select value={rule.cinematicId || ''} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
+                          <select value={rule.cinematicId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                             draftRule.cinematicId = event.target.value;
                           })}>
                             <option value="">N’importe quelle cinématique lancée</option>
@@ -297,7 +308,7 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
                       {rule.conditionType === 'completed_combination' ? (
                         <>
                           <HelpLabel help="Combinaison d’objets qui doit avoir été réalisée dans l’inventaire.">Combinaison réalisée</HelpLabel>
-                          <select value={rule.combinationId || ''} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
+                          <select value={rule.combinationId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                             draftRule.combinationId = event.target.value;
                           })}>
                             <option value="">Choisir une combinaison</option>
@@ -314,7 +325,7 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
                       <div className="grid-two">
                         <div>
                           <HelpLabel help="Action exécutée à la place de l’action normale de la zone quand la condition est vraie.">Action déclenchée</HelpLabel>
-                          <select data-tour="logic-action" value={rule.actionType || 'dialogue'} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
+                          <select data-tour="logic-action" value={rule.actionType || 'dialogue'} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                             draftRule.actionType = event.target.value;
                           })}>
                             {Object.entries(ACTION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -322,7 +333,7 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
                         </div>
                         <div>
                           <HelpLabel help="Objet ajouté à l’inventaire quand cette règle s’active. Laisse Aucun si la règle ne donne rien.">Objet donné</HelpLabel>
-                          <select data-tour="logic-reward-item" value={rule.rewardItemId || ''} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
+                          <select data-tour="logic-reward-item" value={rule.rewardItemId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                             draftRule.rewardItemId = event.target.value;
                           })}>
                             <option value="">Aucun</option>
@@ -335,7 +346,7 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
                         <div>
                           {rule.conditionType === 'has_item' ? (
                             <label className="checkbox-row">
-                              <input type="checkbox" checked={Boolean(rule.consumeRequiredItemOnUse)} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
+                              <input type="checkbox" checked={Boolean(rule.consumeRequiredItemOnUse)} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                                 draftRule.consumeRequiredItemOnUse = event.target.checked;
                               })} />
                               <span>Consommer l’objet testé quand la règle s’active</span>
@@ -344,7 +355,7 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
                           ) : null}
                         </div>
                         <label className="checkbox-row">
-                          <input type="checkbox" checked={Boolean(rule.disableAfterUse)} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
+                          <input type="checkbox" checked={Boolean(rule.disableAfterUse)} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                             draftRule.disableAfterUse = event.target.checked;
                           })} />
                           <span>Cette règle ne s’applique qu’une fois, puis s’annule</span>
@@ -355,13 +366,13 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
                       <div className="grid-two">
                         <div>
                           <HelpLabel help="Message affiché au joueur quand cette règle s’active. Il remplace le dialogue normal de la zone.">Dialogue affiché</HelpLabel>
-                          <textarea data-tour="logic-dialogue" value={rule.dialogue || ''} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
+                          <textarea data-tour="logic-dialogue" value={rule.dialogue || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                             draftRule.dialogue = event.target.value;
                           })} />
                         </div>
                         <div>
                           <HelpLabel help="Message affiché si cette règle ne peut pas s’activer parce que sa condition n’est pas remplie. Exemple : il manque une clé, une énigme n’est pas encore réussie, ou une cinématique n’a pas encore été lancée.">Dialogue si condition non remplie</HelpLabel>
-                          <textarea value={rule.failureDialogue || ''} placeholder="Exemple : La porte reste verrouillée. Il te manque la clé." onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
+                          <textarea value={rule.failureDialogue || ''} placeholder="Exemple : La porte reste verrouillée. Il te manque la clé." onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                             draftRule.failureDialogue = event.target.value;
                           })} />
                         </div>
@@ -370,7 +381,7 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
                       {rule.actionType === 'scene' ? (
                         <>
                           <HelpLabel help="Scène ouverte si l’action déclenchée est un changement de scène.">Scène cible</HelpLabel>
-                          <select data-tour="logic-target-scene" value={rule.targetSceneId || ''} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
+                          <select data-tour="logic-target-scene" value={rule.targetSceneId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                             draftRule.targetSceneId = event.target.value;
                           })}>
                             <option value="">Choisir une scène</option>
@@ -382,7 +393,7 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
                       {rule.actionType === 'cinematic' ? (
                         <>
                           <HelpLabel help="Cinématique lancée si l’action déclenchée est une cinématique.">Cinématique cible</HelpLabel>
-                          <select data-tour="logic-target-cinematic" value={rule.targetCinematicId || ''} onChange={(event) => updateRule(hotspot.id, rule.id, (draftRule) => {
+                          <select data-tour="logic-target-cinematic" value={rule.targetCinematicId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                             draftRule.targetCinematicId = event.target.value;
                           })}>
                             <option value="">Choisir une cinématique</option>
@@ -399,10 +410,10 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
 
             <section className="combo-card" data-tour="logic-visible-objects">
               <div className="panel-head">
-                <HelpLabel className="compact-section-title" help={FIELD_HELP.visibleObjects}>Objets visibles de la scène</HelpLabel>
-                <span className="status-badge soft">{selectedScene.sceneObjects?.length || 0}</span>
+                <HelpLabel className="compact-section-title" help={FIELD_HELP.visibleObjects}>Objets visibles cliquables</HelpLabel>
+                <span className="status-badge soft">{selectedClickableObjects.length}</span>
               </div>
-              {(selectedScene.sceneObjects || []).length ? selectedScene.sceneObjects.map((object) => (
+              {selectedClickableObjects.length ? selectedClickableObjects.map((object) => (
                 <div className="combo-card" key={object.id}>
                   <div className="grid-two">
                     <div>
@@ -439,7 +450,7 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
                     <span className="help-dot" data-help={FIELD_HELP.removeVisibleObject} aria-label={FIELD_HELP.removeVisibleObject} tabIndex={0}>?</span>
                   </label>
                 </div>
-              )) : <p className="small-note">Aucun objet visible dans cette scène.</p>}
+              )) : <p className="small-note">Aucun objet visible cliquable dans cette scène.</p>}
             </section>
           </div>
         ) : (

@@ -7,6 +7,7 @@ import {
 import Anime2DPreview, { readAnime2dJsonFile } from './Anime2DPreview.jsx';
 import SceneSidebar from './scenes/SceneSidebar.jsx';
 import SceneFullscreenEditor from './scenes/SceneFullscreenEditor.jsx';
+import HotspotAssetsPanel from './scenes/HotspotAssetsPanel.jsx';
 import SceneObjectInspector, { getSceneObjectClickMode } from './scenes/SceneObjectInspector.jsx';
 import SceneVisualEffect, { VISUAL_EFFECT_INTENSITY_OPTIONS, getVisualEffectZoneZIndex } from './SceneVisualEffect.jsx';
 import VisualEffectCascadeMenu from './VisualEffectCascadeMenu.jsx';
@@ -1355,13 +1356,14 @@ export default function ScenesTab(props) {
               </div>
 
               <div className="preview-editor" data-tour="scene-canvas">
-                <div
-                  ref={canvasRef}
-                  className="editor-canvas editor-canvas-pro"
-                  style={{ aspectRatio: sceneAspectRatio }}
-                  onPointerUp={stopDragging}
-                  onPointerCancel={stopDragging}
-                >
+                <div className="scene-canvas-column">
+                  <div
+                    ref={canvasRef}
+                    className="editor-canvas editor-canvas-pro"
+                    style={{ aspectRatio: sceneAspectRatio }}
+                    onPointerUp={stopDragging}
+                    onPointerCancel={stopDragging}
+                  >
                   {selectedScene.backgroundData ? <img src={selectedScene.backgroundData} alt="fond" onLoad={(event) => rememberSceneBackgroundAspectRatio(event.currentTarget)} /> : <div className="placeholder">Ajoute une image de scène</div>}
                   <SceneVisualEffect effect={selectedScene.visualEffect} intensity={selectedScene.visualEffectIntensity} />
                   {(selectedScene.visualEffectZones || []).filter((zone) => !zone.isHidden).map((zone) => (
@@ -1418,6 +1420,17 @@ export default function ScenesTab(props) {
                       {renderShapePointHandles('hotspot', spot.id, spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id))}
                     </button>
                   ))}
+                  </div>
+                  {selectedHotspot ? (
+                    <HotspotAssetsPanel
+                      selectedHotspot={selectedHotspot}
+                      selectedSceneId={selectedSceneId}
+                      selectedHotspotId={selectedHotspotId}
+                      patchProject={patchProject}
+                      handleUpload={handleUpload}
+                      className="hotspot-assets-below-canvas"
+                    />
+                  ) : null}
                 </div>
                 <section className="panel side panel-context-pro side-editor side-editor-pro" data-tour="selected-zone-panel" style={{ margin: 0, overflow: 'auto' }}>
                   <div className="panel-head panel-head-stack">
@@ -1580,65 +1593,6 @@ export default function ScenesTab(props) {
                         <option value="">Aucune</option>
                         {(project.enigmas || []).map((enigma) => <option key={enigma.id} value={enigma.id}>{enigma.name}</option>)}
                       </select>
-                      <HelpLabel help="Son joué au moment où cette zone est utilisée. Garde-le court pour ne pas couvrir la musique ou les dialogues.">Son de la zone</HelpLabel>
-                      <label className="button like full secondary-action" data-tour="hotspot-sound">
-                        {selectedHotspot.soundName || 'Importer un son unique'}
-                        <input type="file" accept="audio/*" hidden onChange={(e) => handleUpload(e, (data, name) => patchProject((draft) => {
-                          const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId);
-                          if (spot) {
-                            spot.soundData = data;
-                            spot.soundName = name;
-                          }
-                        }))} />
-                      </label>
-                      {selectedHotspot.soundData && (
-                        <>
-                          <audio controls preload="metadata" src={selectedHotspot.soundData} style={{ width: '100%', marginTop: 10 }} />
-                          <button
-                            type="button"
-                            className="danger-button"
-                            style={{ marginTop: 12 }}
-                          onClick={() => {
-                            if (!window.confirm('Supprimer le son de cette zone ?')) return;
-                            patchProject((draft) => {
-                              const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId);
-                              if (spot) {
-                                spot.soundData = '';
-                                spot.soundName = '';
-                              }
-                            });
-                          }}
-                          >
-                            Supprimer le son ?
-                          </button>
-                        </>
-                      )}
-                      <HelpLabel help="Image associée à l’action principale de cette zone, souvent utilisée pour montrer un objet trouvé ou un indice visuel.">Image objet</HelpLabel>
-                      <label className="button like full secondary-action" data-tour="hotspot-object-image">
-                        {selectedHotspot.objectImageName ? 'Remplacer l’image objet' : 'Importer une image objet'}
-                        <input type="file" accept="image/*" hidden onChange={(e) => handleUpload(e, (data, name) => patchProject((draft) => {
-                          const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId);
-                          if (spot) { spot.objectImageData = data; spot.objectImageName = name; }
-                        }))} />
-                      </label>
-                      {selectedHotspot.objectImageData && (
-                        <button
-                          className="danger-button"
-                          style={{ marginTop: 12 }}
-                          onClick={() => {
-                            if (!window.confirm("Supprimer l'image de cette zone ?")) return;
-                            patchProject((draft) => {
-                            const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId);
-                            if (spot) {
-                              spot.objectImageData = '';
-                              spot.objectImageName = '';
-                            }
-                            });
-                          }}
-                        >
-                          Supprimer l’image ?
-                        </button>
-                      )}
                       <button className="danger-button" style={{ marginTop: 12 }} onClick={() => {
                         if (!window.confirm(`Supprimer la zone "${selectedHotspot.name}" ?`)) return;
                         deleteHotspot(selectedSceneId, selectedHotspotId);

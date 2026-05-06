@@ -117,6 +117,9 @@ const makeScene = (overrides = {}) => ({
   timerLifeLoss: 1,
   timerEndMessage: 'Le temps est ecoule.',
   visualEffectZones: [],
+  ambientSoundData: '',
+  ambientSoundName: '',
+  ambientSoundLoop: false,
   introText: 'Décris l’ambiance de cette scène.',
   hotspots: [makeHotspot()],
   ...overrides,
@@ -238,6 +241,9 @@ const normalizeProject = (rawProject) => {
        Math.max(1, Math.min(9, Math.round(Number(scene.timerLifeLoss))))
       : 1,
     timerEndMessage: scene.timerEndMessage || 'Le temps est ecoule.',
+    ambientSoundData: scene.ambientSoundData || '',
+    ambientSoundName: scene.ambientSoundName || '',
+    ambientSoundLoop: Boolean(scene.ambientSoundLoop),
     visualEffectZones: Array.isArray(scene.visualEffectZones) ?
        scene.visualEffectZones.map((zone) => ({
         id: zone.id || uid(),

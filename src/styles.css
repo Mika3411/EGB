@@ -1606,10 +1606,26 @@ label { display: block; font-size: 13px; color: #ccdaef; margin: 10px 0 8px; fon
 @media (max-width:1280px){.scene-compact-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.scene-intro-field{grid-column:auto}}
 @media (max-width:760px){.scene-compact-grid,.scene-compact-action-row{grid-template-columns:1fr}.scene-intro-field{grid-column:auto}}
 .preview-editor { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; margin-top: 8px; }
-.media-layout-pro{grid-template-columns:300px minmax(0,1fr)}
-.media-editor-grid{display:grid;grid-template-columns:minmax(340px,480px) minmax(0,1fr);gap:16px;align-items:start}
+.media-layout-pro{grid-template-columns:minmax(0,1fr)}
+.media-editor-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(460px,.95fr);gap:16px;align-items:start}
+.media-topline{display:grid;grid-template-columns:minmax(180px,.42fr) minmax(280px,.72fr) minmax(300px,1fr);gap:14px;align-items:end;margin-bottom:14px}
+.media-topline h2{margin:2px 0 0;font-size:30px}
+.media-scene-picker{display:grid;gap:5px;min-width:0}
 .media-preview-panel{position:sticky;top:12px}
-.media-scene-preview{width:100%;min-height:280px}
+.media-scene-preview{width:100%;min-height:250px}
+.media-layout-pro .editor-stack{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
+.media-layout-pro .media-visuals-card{grid-column:1 / -1}
+.media-layout-pro .subpanel{min-width:0}
+.media-status-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.media-status-pill{display:inline-flex;align-items:center;height:28px;padding:0 10px;border-radius:999px;border:1px solid rgba(148,163,184,.18);background:rgba(15,23,42,.72);color:#9fb3d1;font-size:12px;font-weight:800}
+.media-status-pill.ready{border-color:rgba(34,197,94,.34);background:rgba(20,83,45,.24);color:#bbf7d0}
+.media-background-line{display:grid;grid-template-columns:minmax(0,1fr) minmax(150px,220px);gap:10px;align-items:center;margin-bottom:12px}
+.media-background-line strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#eef4ff}
+.media-audio-card{padding:12px;border:1px solid rgba(148,163,184,.12);border-radius:14px;background:rgba(8,15,29,.34)}
+.media-layout-pro .media-audio-panel .music-compact-row{grid-template-columns:1fr;gap:10px}
+.media-layout-pro .media-audio-panel .music-compact-row audio{width:100%;min-width:0}
+.media-layout-pro .media-audio-panel .music-compact-actions{grid-column:auto;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.media-layout-pro .media-timer-panel .compact-form-grid{grid-template-columns:1fr 1fr;gap:10px}
 .media-layout-pro .visual-effect-cascade{z-index:400}
 .media-layout-pro .visual-effect-cascade__menu{min-width:min(320px,calc(100vw - 80px))}
 .media-layout-pro .visual-effect-cascade__submenu{left:calc(100% + 4px);min-width:230px}
@@ -2079,7 +2095,7 @@ label { display: block; font-size: 13px; color: #ccdaef; margin: 10px 0 8px; fon
   100%{opacity:0}
 }
 @media (max-width:1100px){
-  .media-layout-pro,.media-editor-grid{grid-template-columns:1fr}
+  .media-layout-pro,.media-editor-grid,.media-topline{grid-template-columns:1fr}
   .media-preview-panel{position:relative;top:auto}
   .media-zone-row{grid-template-columns:1fr}
 }
@@ -2091,6 +2107,8 @@ label { display: block; font-size: 13px; color: #ccdaef; margin: 10px 0 8px; fon
 }
 @media (max-width:900px){
   .media-layout-pro .music-compact-row{grid-template-columns:1fr}
+  .media-layout-pro .editor-stack{grid-template-columns:1fr}
+  .media-background-line{grid-template-columns:1fr}
 }
 .editor-canvas, .scene-player {
   position: relative;
@@ -2637,7 +2655,6 @@ label { display: block; font-size: 13px; color: #ccdaef; margin: 10px 0 8px; fon
 .anime2d-player-layer {
   position: absolute;
   transform: translate(-50%, -50%);
-  aspect-ratio: 1;
   animation: anime2dPlayerFade 420ms ease both;
 }
 .anime2d-player-layer img {
@@ -2690,7 +2707,6 @@ label { display: block; font-size: 13px; color: #ccdaef; margin: 10px 0 8px; fon
   position: absolute;
   display: block;
   transform: translate(-50%, -50%);
-  aspect-ratio: 1;
 }
 .anime2d-embedded-animated {
   display: block;

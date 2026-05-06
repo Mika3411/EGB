@@ -45,6 +45,7 @@ const normalizeAnime2dLayer = (entry = {}) => {
     x: Number(entry.x ?? source.x ?? 50),
     y: Number(entry.y ?? source.y ?? 50),
     width: Number(entry.width ?? source.width ?? 28),
+    height: Number(entry.height ?? source.height ?? (Number(entry.width ?? source.width ?? 28) * 1.6)),
     opacity: Number(entry.opacity ?? source.opacity ?? 100),
     visible: entry.visible ?? source.visible ?? true,
     visibleAtStart: entry.visibleAtStart ?? source.visibleAtStart ?? false,
@@ -113,6 +114,7 @@ function Anime2DCinematicPlayer({ cinematic, onEnd }) {
               left: `${layer.x || 50}%`,
               top: `${layer.y || 50}%`,
               width: `${layer.width || 28}%`,
+              height: `${layer.height || ((layer.width || 28) * 1.6)}%`,
               opacity: Number(layer.opacity || 100) / 100,
               zIndex: layers.length - layers.findIndex((entry) => entry.id === layer.id) + 2,
             }}
@@ -137,6 +139,7 @@ const collectSceneMediaUrls = (scene, imageUrls, audioUrls) => {
   if (!scene) return;
   addUrl(imageUrls, scene.backgroundData);
   addUrl(audioUrls, scene.musicData);
+  addUrl(audioUrls, scene.ambientSoundData);
   (scene.sceneObjects || []).forEach((object) => {
     addUrl(imageUrls, object.imageData);
     addUrl(imageUrls, object.popupImageData || object.popupImage);
@@ -218,6 +221,11 @@ const collectActMediaUrls = (project, actId) => {
 const getSceneMusicKey = (scene) => {
   if (!scene?.musicData) return '';
   return scene.musicName || scene.musicData;
+};
+
+const getSceneAmbientSoundKey = (scene) => {
+  if (!scene?.ambientSoundData) return '';
+  return scene.ambientSoundName || scene.ambientSoundData;
 };
 
 const preloadImage = (url) => new Promise((resolve) => {
@@ -315,6 +323,8 @@ export default function PreviewTab(props) {
 
   const sceneAudioRef = useRef(null);
   const sceneAudioSourceRef = useRef('');
+  const ambientAudioRef = useRef(null);
+  const ambientAudioSourceRef = useRef('');
   const hotspotAudioRef = useRef(null);
   const playerShellRef = useRef(null);
   const controlsTimerRef = useRef(null);
@@ -554,6 +564,7 @@ export default function PreviewTab(props) {
 
   useEffect(() => {
     const nextMusicKey = getSceneMusicKey(playScene);
+    const nextAmbientKey = getSceneAmbientSoundKey(playScene);
 
     if (actPreloadStatus.isLoading) {
       const isSameTrack = Boolean(
@@ -567,6 +578,17 @@ export default function PreviewTab(props) {
         sceneAudioRef.current.currentTime = 0;
         sceneAudioRef.current = null;
         sceneAudioSourceRef.current = '';
+      }
+      const isSameAmbient = Boolean(
+        ambientAudioRef.current
+        && nextAmbientKey
+        && ambientAudioSourceRef.current === nextAmbientKey,
+      );
+      if (!isSameAmbient && ambientAudioRef.current) {
+        ambientAudioRef.current.pause();
+        ambientAudioRef.current.currentTime = 0;
+        ambientAudioRef.current = null;
+        ambientAudioSourceRef.current = '';
       }
       return undefined;
     }
@@ -610,6 +632,50 @@ export default function PreviewTab(props) {
     return undefined;
   }, [playScene?.musicData, playScene?.musicLoop, playScene?.musicVolume, actPreloadStatus.isLoading]);
 
+  useEffect(() => {
+    const nextAmbientKey = getSceneAmbientSoundKey(playScene);
+
+    if (actPreloadStatus.isLoading) return undefined;
+
+    const nextSoundData = playScene?.ambientSoundData || '';
+    const nextLoop = Boolean(playScene?.ambientSoundLoop);
+    const nextVolume = typeof playScene?.ambientSoundVolume === 'number' ? playScene.ambientSoundVolume : 0.75;
+
+    if (!nextSoundData) {
+      if (ambientAudioRef.current) {
+        ambientAudioRef.current.pause();
+        ambientAudioRef.current.currentTime = 0;
+        ambientAudioRef.current = null;
+      }
+      ambientAudioSourceRef.current = '';
+      return undefined;
+    }
+
+    if (ambientAudioRef.current && ambientAudioSourceRef.current === nextAmbientKey) {
+      ambientAudioRef.current.loop = nextLoop;
+      ambientAudioRef.current.volume = nextVolume;
+      ambientAudioRef.current.play().catch(() => {});
+      return undefined;
+    }
+
+    if (ambientAudioRef.current) {
+      ambientAudioRef.current.pause();
+      ambientAudioRef.current.currentTime = 0;
+      ambientAudioRef.current = null;
+    }
+
+    const audio = new Audio();
+    audio.preload = 'auto';
+    audio.src = nextSoundData;
+    audio.loop = nextLoop;
+    audio.volume = nextVolume;
+    audio.play().catch(() => {});
+    ambientAudioRef.current = audio;
+    ambientAudioSourceRef.current = nextAmbientKey;
+
+    return undefined;
+  }, [playScene?.ambientSoundData, playScene?.ambientSoundLoop, playScene?.ambientSoundVolume, actPreloadStatus.isLoading]);
+
   useEffect(() => () => {
     if (transitionTimerRef.current) {
       window.clearTimeout(transitionTimerRef.current);
@@ -629,6 +695,12 @@ export default function PreviewTab(props) {
       sceneAudioRef.current.currentTime = 0;
       sceneAudioRef.current = null;
       sceneAudioSourceRef.current = '';
+    }
+    if (ambientAudioRef.current) {
+      ambientAudioRef.current.pause();
+      ambientAudioRef.current.currentTime = 0;
+      ambientAudioRef.current = null;
+      ambientAudioSourceRef.current = '';
     }
   }, []);
 

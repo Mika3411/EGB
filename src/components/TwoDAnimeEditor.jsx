@@ -92,6 +92,8 @@ const ANIME_DRAFT_DB = 'escape-game-builder-2d-anime-drafts';
 const ANIME_DRAFT_STORE = 'drafts';
 const LAYER_SIZE_MIN = 6;
 const LAYER_SIZE_MAX = 180;
+const LAYER_HEIGHT_MIN = 6;
+const LAYER_HEIGHT_MAX = 260;
 const CANVAS_ASPECT_RATIO = 16 / 10;
 const EXPORT_CANVAS_WIDTH = 1600;
 const EXPORT_CANVAS_HEIGHT = 1000;
@@ -108,6 +110,7 @@ const defaultLayers = [
     x: 50,
     y: 58,
     width: 24,
+    height: 38.4,
     opacity: 100,
     duration: 2400,
     delay: 0,
@@ -530,6 +533,17 @@ const getStageViewportTransform = (pan, zoom) => {
     : `scale(${normalizedZoom})`;
 };
 
+const getLayerHeight = (layer) => Number.isFinite(Number(layer?.height))
+  ? Number(layer.height)
+  : Number(layer?.width || 0) * CANVAS_ASPECT_RATIO;
+
+const normalizeLayerDimensions = (layer) => ({
+  ...layer,
+  height: getLayerHeight(layer),
+});
+
+const RESIZE_HANDLES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+
 const makeLayer = (file, src) => {
   const preset = getPreset('idle-breathe');
   return {
@@ -543,6 +557,7 @@ const makeLayer = (file, src) => {
     x: 50,
     y: 56,
     width: 28,
+    height: 44.8,
     opacity: 100,
     duration: preset.duration,
     delay: 0,
@@ -567,7 +582,7 @@ const makeCinematicStep = (overrides = {}) => ({
 
 const getLayerVisibleFrame = (layer) => {
   const width = Number(layer.width || 0);
-  const height = width * CANVAS_ASPECT_RATIO;
+  const height = getLayerHeight(layer);
   const left = Number(layer.x || 0) - (width / 2);
   const right = Number(layer.x || 0) + (width / 2);
   const top = Number(layer.y || 0) - (height / 2);
@@ -641,6 +656,7 @@ const exportSpec = ({ layers, selectedBackdrop, sceneName, cinematicSteps }) => 
       x: layer.x,
       y: layer.y,
       width: layer.width,
+      height: getLayerHeight(layer),
       opacity: layer.opacity,
       duration: layer.duration,
       delay: layer.delay,
@@ -706,6 +722,7 @@ const normalizeImportedLayer = (entry, index) => {
     x: clamp(layer.x ?? 50, -200, 300),
     y: clamp(layer.y ?? 56, -200, 300),
     width: clamp(layer.width ?? 28, LAYER_SIZE_MIN, LAYER_SIZE_MAX),
+    height: clamp(layer.height ?? ((layer.width ?? 28) * CANVAS_ASPECT_RATIO), LAYER_HEIGHT_MIN, LAYER_HEIGHT_MAX),
     opacity: clamp(layer.opacity ?? 100, 0, 100),
     duration: Number(layer.duration || preset.duration),
     delay: Number(layer.delay || 0),
@@ -966,7 +983,7 @@ export default function TwoDAnimeEditor({
   const savedDraftSignatureRef = useRef(initialProjectDraftRef.current?.layers?.length
     ? getDraftDirtySignature(initialProjectDraftRef.current)
     : getDraftDirtySignature(initialDraftRef.current || {}));
-  const initialLayers = initialDraftRef.current?.layers?.length ? initialDraftRef.current.layers : defaultLayers;
+  const initialLayers = (initialDraftRef.current?.layers?.length ? initialDraftRef.current.layers : defaultLayers).map(normalizeLayerDimensions);
   const fallbackProjectName = projectName || 'Projet 2D Anime';
   const [layers, setLayers] = useState(initialLayers);
   const layersRef = useRef(initialLayers);
@@ -1104,12 +1121,13 @@ export default function TwoDAnimeEditor({
 
   const restoreDraft = useCallback((draft, label = 'Brouillon restaure.') => {
     if (!draft?.layers?.length) return false;
-    setLayers(draft.layers);
-    layersRef.current = draft.layers;
+    const restoredLayers = draft.layers.map(normalizeLayerDimensions);
+    setLayers(restoredLayers);
+    layersRef.current = restoredLayers;
     setSelectedLayerId(
-      draft.selectedLayerId && draft.layers.some((layer) => layer.id === draft.selectedLayerId)
+      draft.selectedLayerId && restoredLayers.some((layer) => layer.id === draft.selectedLayerId)
         ? draft.selectedLayerId
-        : draft.layers[0]?.id || '',
+        : restoredLayers[0]?.id || '',
     );
     setSelectedBackdrop(draft.selectedBackdrop || 'room');
     setSceneName(draft.sceneName && draft.sceneName !== 'Scene animee' ? draft.sceneName : fallbackProjectName);
@@ -1504,10 +1522,12 @@ export default function TwoDAnimeEditor({
       const nextSrc = await cropLayerImage(selectedLayer, cropRect);
       if (!nextSrc) return;
       const nextWidth = Number(clamp(selectedLayer.width * (cropRect.width / 100), LAYER_SIZE_MIN, LAYER_SIZE_MAX).toFixed(1));
+      const nextHeight = Number(clamp(getLayerHeight(selectedLayer) * (cropRect.height / 100), LAYER_HEIGHT_MIN, LAYER_HEIGHT_MAX).toFixed(1));
       patchSelectedLayer({
         src: nextSrc,
         originalSrc: selectedLayer.originalSrc || selectedLayer.src,
         width: nextWidth,
+        height: nextHeight,
         name: selectedLayer.name.includes('(rogne)') ? selectedLayer.name : `${selectedLayer.name} (rogne)`,
       });
       setRetouchMode('none');
@@ -1533,6 +1553,7 @@ export default function TwoDAnimeEditor({
       name: `${selectedLayer.name} copie`,
       x: clamp(selectedLayer.x + 5, 0, 100),
       y: clamp(selectedLayer.y + 5, 0, 100),
+      height: getLayerHeight(selectedLayer),
       locked: false,
     };
     const selectedIndex = layers.findIndex((layer) => layer.id === selectedLayer.id);
@@ -1609,7 +1630,7 @@ export default function TwoDAnimeEditor({
       if (!draft) throw new Error('JSON 2D Anime invalide ou incomplet.');
       setUndoStack([]);
       setRedoStack([]);
-      setLayers(draft.layers);
+      setLayers(draft.layers.map(normalizeLayerDimensions));
       setSelectedLayerId(draft.layers[0]?.id || '');
       setSelectedBackdrop(draft.selectedBackdrop);
       setSceneName(draft.sceneName && draft.sceneName !== 'Scene animee' ? draft.sceneName : fallbackProjectName);
@@ -1762,20 +1783,22 @@ export default function TwoDAnimeEditor({
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
 
-  const startResizeLayer = (event, layer) => {
+  const startResizeLayer = (event, layer, handle = 'se') => {
     event.preventDefault();
     event.stopPropagation();
     setSelectedLayerId(layer.id);
     if (layer.locked) return;
-    const point = getStagePoint(event);
-    if (!point) return;
     rememberLayers();
+    const width = Number(layer.width || LAYER_SIZE_MIN);
+    const height = getLayerHeight(layer);
     setInteraction({
       mode: 'resize',
       layerId: layer.id,
-      startX: point.x,
-      startY: point.y,
-      startWidth: layer.width,
+      handle,
+      left: Number(layer.x || 0) - width / 2,
+      right: Number(layer.x || 0) + width / 2,
+      top: Number(layer.y || 0) - height / 2,
+      bottom: Number(layer.y || 0) + height / 2,
     });
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
@@ -1810,9 +1833,25 @@ export default function TwoDAnimeEditor({
     }
 
     if (interaction.mode === 'resize') {
-      const delta = Math.max(point.x - interaction.startX, point.y - interaction.startY);
+      let left = interaction.left;
+      let right = interaction.right;
+      let top = interaction.top;
+      let bottom = interaction.bottom;
+      if (interaction.handle.includes('w')) left = Math.min(point.x, right - LAYER_SIZE_MIN);
+      if (interaction.handle.includes('e')) right = Math.max(point.x, left + LAYER_SIZE_MIN);
+      if (interaction.handle.includes('n')) top = Math.min(point.y, bottom - LAYER_HEIGHT_MIN);
+      if (interaction.handle.includes('s')) bottom = Math.max(point.y, top + LAYER_HEIGHT_MIN);
+      const width = clamp(right - left, LAYER_SIZE_MIN, LAYER_SIZE_MAX);
+      const height = clamp(bottom - top, LAYER_HEIGHT_MIN, LAYER_HEIGHT_MAX);
+      if (interaction.handle.includes('w') && width === LAYER_SIZE_MAX) left = right - width;
+      if (interaction.handle.includes('e') && width === LAYER_SIZE_MAX) right = left + width;
+      if (interaction.handle.includes('n') && height === LAYER_HEIGHT_MAX) top = bottom - height;
+      if (interaction.handle.includes('s') && height === LAYER_HEIGHT_MAX) bottom = top + height;
       patchLayer(interaction.layerId, {
-        width: Number(clamp(interaction.startWidth + delta * 2, LAYER_SIZE_MIN, LAYER_SIZE_MAX).toFixed(1)),
+        x: Number(((left + right) / 2).toFixed(1)),
+        y: Number(((top + bottom) / 2).toFixed(1)),
+        width: Number(width.toFixed(1)),
+        height: Number(height.toFixed(1)),
       }, { rememberHistory: false });
     }
   };
@@ -2126,6 +2165,7 @@ export default function TwoDAnimeEditor({
                   left: `${layer.x}%`,
                   top: `${layer.y}%`,
                   width: `${layer.width}%`,
+                  height: `${getLayerHeight(layer)}%`,
                   transform: 'translate(-50%, -50%)',
                   opacity: layer.opacity / 100,
                   zIndex: layers.length - layers.findIndex((entry) => entry.id === layer.id) + 2,
@@ -2178,11 +2218,14 @@ export default function TwoDAnimeEditor({
                         }}
                       />
                     ) : null}
-                    <span
-                      className="anime-resize-handle"
-                      role="presentation"
-                      onPointerDown={(event) => startResizeLayer(event, layer)}
-                    />
+                    {RESIZE_HANDLES.map((handle) => (
+                      <span
+                        key={handle}
+                        className={`anime-resize-handle anime-resize-handle--${handle}`}
+                        role="presentation"
+                        onPointerDown={(event) => startResizeLayer(event, layer, handle)}
+                      />
+                    ))}
                   </>
                 ) : null}
               </div>
@@ -2337,6 +2380,9 @@ export default function TwoDAnimeEditor({
               </Field>
               <Field label="Taille (%)" help={FIELD_HELP.layerSize}>
                 <input type="number" min={LAYER_SIZE_MIN} max={LAYER_SIZE_MAX} step="0.1" value={selectedLayer.width} onChange={(event) => patchSelectedLayer({ width: clamp(event.target.value, LAYER_SIZE_MIN, LAYER_SIZE_MAX) })} />
+              </Field>
+              <Field label="Hauteur (%)" help="Hauteur du rectangle dans le canvas.">
+                <input type="number" min={LAYER_HEIGHT_MIN} max={LAYER_HEIGHT_MAX} step="0.1" value={getLayerHeight(selectedLayer)} onChange={(event) => patchSelectedLayer({ height: clamp(event.target.value, LAYER_HEIGHT_MIN, LAYER_HEIGHT_MAX) })} />
               </Field>
               <Field label="Opacite (%)" help={FIELD_HELP.layerOpacity}>
                 <input type="number" min="0" max="100" step="1" value={selectedLayer.opacity} onChange={(event) => patchSelectedLayer({ opacity: clamp(event.target.value, 0, 100) })} />

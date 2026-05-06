@@ -15,6 +15,7 @@ export const normalizeAnime2dLayer = (entry = {}) => {
     x: Number(entry.x ?? source.x ?? 50),
     y: Number(entry.y ?? source.y ?? 50),
     width: Number(entry.width ?? source.width ?? 28),
+    height: Number(entry.height ?? source.height ?? (Number(entry.width ?? source.width ?? 28) * 1.6)),
     opacity: Number(entry.opacity ?? source.opacity ?? 100),
     preset: entry.preset || source.preset || 'none',
     duration: Number(entry.duration ?? source.duration ?? 1000),
@@ -115,6 +116,7 @@ export default function Anime2DPreview({ spec, className = '', showNarration = f
             left: `${layer.x || 50}%`,
             top: `${layer.y || 50}%`,
             width: `${layer.width || 28}%`,
+            height: `${layer.height || ((layer.width || 28) * 1.6)}%`,
             opacity: Number(layer.opacity || 100) / 100,
             zIndex: layers.length - layers.findIndex((entry) => entry.id === layer.id) + 2,
           }}

@@ -659,7 +659,6 @@
   border: 0;
   background: transparent;
   padding: 0;
-  aspect-ratio: 1;
   z-index: 2;
   cursor: grab;
   touch-action: none;
@@ -788,18 +787,24 @@
 
 .anime-resize-handle {
   position: absolute;
-  right: -10px;
-  bottom: -10px;
-  width: 18px;
-  height: 18px;
-  border-radius: 6px;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
   border: 2px solid #0f172a;
   background: #38bdf8;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.32);
-  cursor: nwse-resize;
   pointer-events: auto;
   touch-action: none;
 }
+
+.anime-resize-handle--nw { left: -12px; top: -12px; cursor: nwse-resize; }
+.anime-resize-handle--n { left: 50%; top: -12px; transform: translateX(-50%); cursor: ns-resize; }
+.anime-resize-handle--ne { right: -12px; top: -12px; cursor: nesw-resize; }
+.anime-resize-handle--e { right: -12px; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
+.anime-resize-handle--se { right: -12px; bottom: -12px; cursor: nwse-resize; }
+.anime-resize-handle--s { left: 50%; bottom: -12px; transform: translateX(-50%); cursor: ns-resize; }
+.anime-resize-handle--sw { left: -12px; bottom: -12px; cursor: nesw-resize; }
+.anime-resize-handle--w { left: -12px; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
 
 .anime-layer-object.locked .anime-resize-handle {
   background: #f59e0b;

@@ -222,13 +222,13 @@ button,.button-like{border:1px solid transparent;background:linear-gradient(180d
 .overlay-media{width:100%;max-height:62vh;object-fit:contain;display:block;border-radius:16px;background:#020617}
 .narration{font-size:18px;line-height:1.8}
 .anime2d-player{position:relative;width:100%;aspect-ratio:16 / 10;overflow:hidden;border-radius:16px;background:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(180deg,#101827 0%,#182033 62%,#273040 63%,#111827 100%);background-size:40px 40px,40px 40px,auto}
-.anime2d-player-layer{position:absolute;transform:translate(-50%,-50%);aspect-ratio:1}
+.anime2d-player-layer{position:absolute;transform:translate(-50%,-50%)}
 .anime2d-player-layer img{width:100%;height:100%;object-fit:contain;display:block}
 .anime2d-player-narration{position:absolute;left:24px;right:24px;bottom:22px;z-index:100;margin:0;padding:13px 16px;border-radius:12px;background:rgba(2,6,23,.74);color:#fff;font-size:18px;line-height:1.35;font-weight:800;pointer-events:none}
 .anime2d-player-empty{position:absolute;inset:0;display:grid;place-items:center;margin:0;color:#bfdbfe;font-weight:800;text-align:center;padding:24px}
 @keyframes anime2dPlayerFade{from{opacity:0;filter:blur(2px)}to{opacity:1;filter:blur(0)}}
 .anime2d-embedded{position:absolute;inset:0;display:block;overflow:hidden;pointer-events:none;background:transparent;line-height:1}
-.anime2d-embedded-layer{position:absolute;display:block;transform:translate(-50%,-50%);aspect-ratio:1}
+.anime2d-embedded-layer{position:absolute;display:block;transform:translate(-50%,-50%)}
 .anime2d-embedded-animated{display:block;width:100%;height:100%;transform-origin:center bottom}
 .anime2d-embedded-animated img{width:100%;height:100%;object-fit:contain;display:block;filter:drop-shadow(0 8px 10px rgba(0,0,0,.28))}
 .anime2d-embedded-empty{position:absolute;inset:0;display:grid;place-items:center;color:#bfdbfe;font-size:12px;font-weight:800}
@@ -608,6 +608,9 @@ loadGame(false);
 const sceneAudio = new Audio();
 sceneAudio.preload = 'auto';
 let sceneAudioSource = '';
+const ambientAudio = new Audio();
+ambientAudio.preload = 'auto';
+let ambientAudioSource = '';
 const hotspotAudio = new Audio();
 hotspotAudio.preload = 'auto';
 let cinematicAudio = null;
@@ -808,6 +811,7 @@ function normalizeAnime2dLayer(entry = {}) {
     x: Number(entry.x ?? source.x ?? 50),
     y: Number(entry.y ?? source.y ?? 50),
     width: Number(entry.width ?? source.width ?? 28),
+    height: Number(entry.height ?? source.height ?? (Number(entry.width ?? source.width ?? 28) * 1.6)),
     opacity: Number(entry.opacity ?? source.opacity ?? 100),
     preset: entry.preset || source.preset || 'none',
     duration: Number(entry.duration ?? source.duration ?? 1000),
@@ -836,7 +840,7 @@ function renderAnime2dEmbedded(spec) {
   const layers = Array.isArray(spec?.layers) ? spec.layers.map(normalizeAnime2dLayer).filter((layer) => layer.visible !== false) : [];
   if (!layers.length) return '<span class="anime2d-embedded"><span class="anime2d-embedded-empty">JSON 2D</span></span>';
   return '<span class="anime2d-embedded">'
-    + layers.map((layer) => '<span class="anime2d-embedded-layer" style="left:' + safeHtml(layer.x || 50) + '%;top:' + safeHtml(layer.y || 50) + '%;width:' + safeHtml(layer.width || 28) + '%;opacity:' + safeHtml((Number(layer.opacity || 100) / 100).toFixed(3)) + ';z-index:' + safeHtml(layers.length - layers.findIndex((entry) => entry.id === layer.id) + 2) + '">'
+    + layers.map((layer) => '<span class="anime2d-embedded-layer" style="left:' + safeHtml(layer.x || 50) + '%;top:' + safeHtml(layer.y || 50) + '%;width:' + safeHtml(layer.width || 28) + '%;height:' + safeHtml(layer.height || ((layer.width || 28) * 1.6)) + '%;opacity:' + safeHtml((Number(layer.opacity || 100) / 100).toFixed(3)) + ';z-index:' + safeHtml(layers.length - layers.findIndex((entry) => entry.id === layer.id) + 2) + '">'
       + '<span class="anime2d-embedded-animated anime2d-preset-' + safeHtml(layer.preset || 'none') + '" style="animation-duration:' + safeHtml(layer.duration || 1000) + 'ms;animation-delay:' + safeHtml(layer.delay || 0) + 'ms;animation-iteration-count:' + (layer.loop === false ? '1' : 'infinite') + '">'
       + (layer.src ? '<img src="' + layer.src + '" alt="' + safeHtml(layer.name || '') + '" />' : '')
       + '</span></span>').join('')
@@ -897,6 +901,7 @@ function collectSceneMedia(scene, imageUrls, audioUrls) {
   if (!scene) return;
   addPreloadUrl(imageUrls, scene.backgroundData);
   addPreloadUrl(audioUrls, scene.musicData);
+  addPreloadUrl(audioUrls, scene.ambientSoundData);
   (scene.sceneObjects || []).forEach((object) => {
     addPreloadUrl(imageUrls, object.imageData);
     addPreloadUrl(imageUrls, object.popupImageData || object.popupImage);
@@ -1091,6 +1096,11 @@ function getSceneMusicKey(scene) {
   return scene.musicName || scene.musicData;
 }
 
+function getSceneAmbientSoundKey(scene) {
+  if (!scene?.ambientSoundData) return '';
+  return scene.ambientSoundName || scene.ambientSoundData;
+}
+
 function playSceneMusic() {
   const playScene = getPlayScene();
   const nextMusicData = playScene?.musicData || '';
@@ -1113,6 +1123,30 @@ function playSceneMusic() {
   sceneAudio.loop = playScene.musicLoop !== false;
   sceneAudio.volume = typeof playScene.musicVolume === 'number' ? playScene.musicVolume : 0.5;
   sceneAudio.play().catch(() => {});
+}
+
+function playSceneAmbientSound() {
+  const playScene = getPlayScene();
+  const nextSoundData = playScene?.ambientSoundData || '';
+  const nextSoundKey = getSceneAmbientSoundKey(playScene);
+  if (!nextSoundData) {
+    ambientAudio.pause();
+    ambientAudio.removeAttribute('src');
+    ambientAudio.load();
+    ambientAudioSource = '';
+    return;
+  }
+
+  if (ambientAudioSource !== nextSoundKey) {
+    ambientAudio.pause();
+    ambientAudio.currentTime = 0;
+    ambientAudio.preload = 'auto';
+    ambientAudio.src = nextSoundData;
+    ambientAudioSource = nextSoundKey;
+  }
+  ambientAudio.loop = Boolean(playScene.ambientSoundLoop);
+  ambientAudio.volume = typeof playScene.ambientSoundVolume === 'number' ? playScene.ambientSoundVolume : 0.75;
+  ambientAudio.play().catch(() => {});
 }
 
 function playHotspotSound(spot) {
@@ -2154,7 +2188,7 @@ function renderCinematic(cinematic, slide) {
     return '<div class="overlay" id="cinematic-overlay"><div class="overlay-card wide">'
       + '<div class="anime2d-player">'
       + (!layers.some((layer) => layer.src) ? '<p class="anime2d-player-empty">Aucune image embarquée dans ce JSON 2D Anime.</p>' : '')
-      + visibleLayers.map((layer) => '<div class="anime2d-player-layer" style="left:' + safeHtml(layer.x || 50) + '%;top:' + safeHtml(layer.y || 50) + '%;width:' + safeHtml(layer.width || 28) + '%;opacity:' + safeHtml(Number(layer.opacity || 100) / 100) + ';z-index:' + safeHtml(layers.length - layers.findIndex((entry) => entry.id === layer.id) + 2) + '">'
+      + visibleLayers.map((layer) => '<div class="anime2d-player-layer" style="left:' + safeHtml(layer.x || 50) + '%;top:' + safeHtml(layer.y || 50) + '%;width:' + safeHtml(layer.width || 28) + '%;height:' + safeHtml(layer.height || ((layer.width || 28) * 1.6)) + '%;opacity:' + safeHtml(Number(layer.opacity || 100) / 100) + ';z-index:' + safeHtml(layers.length - layers.findIndex((entry) => entry.id === layer.id) + 2) + '">'
         + (layer.src ? '<img src="' + layer.src + '" alt="' + safeHtml(layer.name || '') + '" loading="eager" decoding="sync" />' : '')
         + '</div>').join('')
       + (narration ? '<p class="anime2d-player-narration">' + safeHtml(narration) + '</p>' : '')
@@ -2467,9 +2501,17 @@ function render(shouldSave = true) {
       sceneAudio.load();
       sceneAudioSource = '';
     }
+    if (ambientAudioSource !== getSceneAmbientSoundKey(playScene)) {
+      ambientAudio.pause();
+      ambientAudio.currentTime = 0;
+      ambientAudio.removeAttribute('src');
+      ambientAudio.load();
+      ambientAudioSource = '';
+    }
     stopSceneTimer();
   } else {
     playSceneMusic();
+    playSceneAmbientSound();
     scheduleSceneTimer();
   }
   if (sceneTransitionTimer) {

@@ -83,6 +83,7 @@ export function buildExportProjectWithAssets(project, zip) {
   (nextProject.scenes || []).forEach((scene, sceneIndex) => {
     exportMediaField(scene, 'backgroundData', 'backgroundName', 'scenes', scene.name || `scene-${sceneIndex + 1}-background`);
     exportMediaField(scene, 'musicData', 'musicName', 'audio', scene.name || `scene-${sceneIndex + 1}-music`);
+    exportMediaField(scene, 'ambientSoundData', 'ambientSoundName', 'audio', `${scene.name || `scene-${sceneIndex + 1}`}-secondary-sound`);
 
     (scene.hotspots || []).forEach((spot, spotIndex) => {
       const hotspotName = `${scene.name || `scene-${sceneIndex + 1}`}-${spot.name || `hotspot-${spotIndex + 1}`}`;

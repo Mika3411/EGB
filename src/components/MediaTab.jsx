@@ -81,6 +81,13 @@ export default function MediaTab({
   const selectedTransition = selectedScene?.sceneTransition || 'none';
   const selectedTransitionDuration = Number(selectedScene?.sceneTransitionDuration) || 700;
   const selectedTimerAction = selectedScene?.timerEndAction || 'none';
+  const mediaStatusItems = [
+    { label: 'Fond', ready: Boolean(selectedScene?.backgroundData) },
+    { label: 'Effet', ready: Boolean(selectedScene?.visualEffect && selectedScene.visualEffect !== 'none') },
+    { label: 'Musique', ready: Boolean(selectedScene?.musicData) },
+    { label: 'Son', ready: Boolean(selectedScene?.ambientSoundData) },
+    { label: 'Timer', ready: Boolean(selectedScene?.timerEnabled) },
+  ];
 
   useEffect(() => {
     if (!transitionPreviewTargets.length) {
@@ -119,47 +126,48 @@ export default function MediaTab({
 
   return (
     <div className="layout media-layout-pro">
-      <section className="panel side panel-nav-pro">
-        <div className="panel-head panel-head-stack">
-          <div>
-            <span className="section-kicker">Bibliotheque</span>
-            <h2>Media</h2>
-          </div>
-        </div>
-        <HelpLabel help="Choisis la scene dont tu veux regler les images, sons et effets.">Scene</HelpLabel>
-        <select value={selectedSceneId || ''} onChange={(event) => {
-          setSelectedSceneId(event.target.value);
-          const target = project.scenes.find((scene) => scene.id === event.target.value);
-          setSelectedHotspotId(target?.hotspots?.[0]?.id || '');
-        }}>
-          {project.scenes.map((scene) => (
-            <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>
-          ))}
-        </select>
-        <p className="small-note">Centralise ici les fonds, musiques, filtres lens et effets visuels. L'editeur de scenes reste concentre sur le placement.</p>
-      </section>
-
       <section className="panel main panel-main-pro">
-        <div className="panel-head panel-main-header">
+        <div className="media-topline">
           <div>
-            <span className="section-kicker">Ambiance</span>
+            <span className="section-kicker">Media</span>
             <h2>{selectedScene?.name || 'Aucune scene'}</h2>
           </div>
+          <div className="media-scene-picker">
+            <HelpLabel help="Choisis la scene dont tu veux regler les images, sons et effets.">Scene</HelpLabel>
+            <select value={selectedSceneId || ''} onChange={(event) => {
+              setSelectedSceneId(event.target.value);
+              const target = project.scenes.find((scene) => scene.id === event.target.value);
+              setSelectedHotspotId(target?.hotspots?.[0]?.id || '');
+            }}>
+              {project.scenes.map((scene) => (
+                <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>
+              ))}
+            </select>
+          </div>
+          {selectedScene ? (
+            <div className="media-status-strip">
+              {mediaStatusItems.map((item) => (
+                <span key={item.label} className={`media-status-pill ${item.ready ? 'ready' : ''}`}>
+                  {item.label}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         {selectedScene ? (
           <div className="media-editor-grid">
             <div className="editor-stack">
-              <div className="subpanel">
+              <div className="subpanel media-visuals-card">
                 <div className="subpanel-head"><h3>Visuels</h3></div>
+                <div className="media-background-line">
+                  <strong>{selectedScene.backgroundName || 'Aucune image de fond'}</strong>
+                  <label className="button like secondary-action">
+                    {selectedScene.backgroundData ? 'Remplacer le fond' : 'Importer une image'}
+                    <input type="file" accept="image/*" hidden onChange={(event) => handleUpload(event, updateSceneBackground)} />
+                  </label>
+                </div>
                 <div className="compact-form-grid">
-                  <div data-tour="media-background-image">
-                    <HelpLabel help="Image principale vue par le joueur dans cette scene.">Image de fond</HelpLabel>
-                    <label className="button like full secondary-action">
-                      {selectedScene.backgroundName || 'Importer une image'}
-                      <input type="file" accept="image/*" hidden onChange={(event) => handleUpload(event, updateSceneBackground)} />
-                    </label>
-                  </div>
                   <div data-tour="media-visual-effect">
                     <HelpLabel help="Filtre ou effet applique a toute la scene.">Effet global</HelpLabel>
                     <VisualEffectCascadeMenu
@@ -229,9 +237,9 @@ export default function MediaTab({
                 </div>
               </div>
 
-              <div className="subpanel">
+              <div className="subpanel media-audio-panel">
                 <div className="subpanel-head"><h3>Musique</h3></div>
-                <div className="music-compact-row" data-tour="media-music">
+                <div className="music-compact-row media-audio-card" data-tour="media-music">
                   <label className="button like full secondary-action">
                     {selectedScene.musicName || 'Importer une musique'}
                     <input type="file" accept="audio/*" hidden onChange={(event) => handleUpload(event, (data, name) => patchProject((draft) => {
@@ -277,7 +285,55 @@ export default function MediaTab({
                 </div>
               </div>
 
-              <div className="subpanel">
+              <div className="subpanel media-audio-panel">
+                <div className="subpanel-head"><h3>Son secondaire</h3></div>
+                <div className="music-compact-row media-audio-card">
+                  <label className="button like full secondary-action">
+                    {selectedScene.ambientSoundName || 'Importer un son'}
+                    <input type="file" accept="audio/*" hidden onChange={(event) => handleUpload(event, (data, name) => patchProject((draft) => {
+                      const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
+                      if (scene) {
+                        scene.ambientSoundData = data;
+                        scene.ambientSoundName = name;
+                        if (typeof scene.ambientSoundLoop !== 'boolean') scene.ambientSoundLoop = false;
+                      }
+                    }))} />
+                  </label>
+                  {selectedScene.ambientSoundData ? (
+                    <>
+                      <audio controls preload="metadata" src={selectedScene.ambientSoundData} />
+                      <div className="music-compact-actions">
+                        <label className="checkbox-row">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(selectedScene.ambientSoundLoop)}
+                            onChange={(event) => patchProject((draft) => {
+                              const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
+                              if (scene) scene.ambientSoundLoop = event.target.checked;
+                            })}
+                          />
+                          Boucle
+                        </label>
+                        <button type="button" className="danger-button" onClick={() => {
+                          if (!window.confirm('Supprimer le son secondaire de cette scene ?')) return;
+                          patchProject((draft) => {
+                            const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
+                            if (scene) {
+                              scene.ambientSoundData = '';
+                              scene.ambientSoundName = '';
+                              scene.ambientSoundLoop = false;
+                            }
+                          });
+                        }}>
+                          Supprimer
+                        </button>
+                      </div>
+                    </>
+                  ) : <p className="small-note">Aucun son secondaire n'est attache a cette scene.</p>}
+                </div>
+              </div>
+
+              <div className="subpanel media-timer-panel">
                 <div className="subpanel-head"><h3>Temps de scene</h3></div>
                 <div className="compact-form-grid">
                   <label className="checkbox-row media-timer-toggle">
@@ -388,7 +444,7 @@ export default function MediaTab({
                 </div>
               </div>
 
-              <div className="subpanel">
+              <div className="subpanel media-zones-panel">
                 <div className="subpanel-head"><h3>Zones visuelles</h3></div>
                 {(selectedScene.visualEffectZones || []).length ? (
                   <div className="media-zone-list">
