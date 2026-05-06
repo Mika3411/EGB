@@ -907,12 +907,20 @@ function collectSceneMedia(scene, imageUrls, audioUrls) {
     addPreloadUrl(imageUrls, object.popupImageData || object.popupImage);
     addPreloadUrl(imageUrls, object.objectImageData);
     addPreloadUrl(audioUrls, object.soundData);
+    (object.logicRules || []).forEach((rule) => {
+      addPreloadUrl(audioUrls, rule.successSoundData);
+      addPreloadUrl(audioUrls, rule.failureSoundData);
+    });
     (object.anime2dSpec?.layers || []).forEach((layer) => addPreloadUrl(imageUrls, normalizeAnime2dLayer(layer).src));
   });
   (scene.hotspots || []).forEach((spot) => {
     addPreloadUrl(imageUrls, spot.objectImageData);
     addPreloadUrl(imageUrls, spot.secondObjectImageData);
     addPreloadUrl(audioUrls, spot.soundData);
+    (spot.logicRules || []).forEach((rule) => {
+      addPreloadUrl(audioUrls, rule.successSoundData);
+      addPreloadUrl(audioUrls, rule.failureSoundData);
+    });
   });
 }
 
@@ -1370,6 +1378,8 @@ function resolveHotspotInteraction(spot) {
       enigmaId: useDefaultAction ? spot.enigmaId || '' : matchingRule.enigmaId || '',
       objectImageData: useDefaultAction ? spot.objectImageData || '' : matchingRule.objectImageData || '',
       objectImageName: useDefaultAction ? spot.objectImageName || '' : matchingRule.objectImageName || '',
+      soundData: matchingRule.successSoundData || (useDefaultAction ? spot.soundData || '' : ''),
+      soundName: matchingRule.successSoundName || (useDefaultAction ? spot.soundName || '' : ''),
       logicRuleId: matchingRule.id || '',
       disableAfterUse: Boolean(matchingRule.disableAfterUse),
     };
@@ -1378,7 +1388,7 @@ function resolveHotspotInteraction(spot) {
   const unmetRule = (spot.logicRules || []).find((rule) => (
     isRuleAvailable(rule)
     && isRuleConfigured(rule)
-    && rule.failureDialogue
+    && (rule.failureDialogue || rule.failureSoundData)
     && !doesRuleMatch(rule)
   ));
   if (unmetRule) {
@@ -1394,6 +1404,8 @@ function resolveHotspotInteraction(spot) {
       enigmaId: '',
       objectImageData: '',
       objectImageName: '',
+      soundData: unmetRule.failureSoundData || '',
+      soundName: unmetRule.failureSoundName || '',
     };
   }
 
@@ -1403,6 +1415,8 @@ function resolveHotspotInteraction(spot) {
       ...spot,
       requiredItemId: '',
       consumeRequiredItemOnUse: false,
+      soundData: '',
+      soundName: '',
     } : spot;
   }
   return {
@@ -1708,6 +1722,7 @@ function triggerSceneObject(objectId) {
     triggerHotspot(objectId);
     return;
   }
+  playHotspotSound(obj);
 
   const mode = obj.interactionMode || 'popup';
   const linkedItem = obj.linkedItemId ? getItemById(obj.linkedItemId) : null;

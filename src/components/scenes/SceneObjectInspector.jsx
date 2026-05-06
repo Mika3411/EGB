@@ -20,6 +20,11 @@ export default function SceneObjectInspector({
   setSelectedSceneObjectId,
 }) {
   const clickMode = getSceneObjectClickMode(selectedSceneObject);
+  const isAnimationObject = Boolean(
+    selectedSceneObject.anime2dSpec
+    || selectedSceneObject.anime2dName
+    || selectedSceneObject.name === 'Animation',
+  );
   const patchObject = (updater) => patchProject((draft) => {
     const obj = draft.scenes.find((scene) => scene.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === selectedSceneObjectId);
     if (obj) updater(obj);
@@ -36,7 +41,7 @@ export default function SceneObjectInspector({
 
   return (
     <>
-      <HelpLabel help="Nom interne de l'objet visible. Il aide a le retrouver dans les calques et les listes de l'editeur.">Nom</HelpLabel>
+      <HelpLabel help="Nom interne de cet element. Il aide a le retrouver dans les calques et les listes de l'editeur.">Nom</HelpLabel>
       <input value={selectedSceneObject.name} onChange={(event) => patchObject((obj) => { obj.name = event.target.value; })} />
       <div className="grid-two small-gap">
         <div><HelpLabel help="Position horizontale du centre de l'objet, en pourcentage de la largeur de l'image.">X</HelpLabel><input type="number" value={selectedSceneObject.x} onChange={(event) => patchObject((obj) => { obj.x = Number(event.target.value); })} /></div>
@@ -46,38 +51,48 @@ export default function SceneObjectInspector({
       </div>
       {renderShapeControls?.('sceneObject', selectedSceneObjectId)}
 
-      <HelpLabel help="Choisis si cette image est seulement decorative, si elle se comporte comme un objet ramassable, ou si elle declenche une action comme une zone.">Cliquable</HelpLabel>
-      <select value={clickMode} onChange={(event) => patchObject((obj) => {
-        obj.clickMode = event.target.value;
-        if (event.target.value === 'action') {
-          obj.actionType = obj.actionType || 'dialogue';
-          obj.dialogue = obj.dialogue || '';
-        }
-        if (event.target.value === 'object') {
-          obj.interactionMode = obj.interactionMode || (obj.linkedItemId ? 'inventory' : 'popup');
-        }
-      })}>
-        <option value="none">Non cliquable</option>
-        <option value="object">Objet</option>
-        <option value="action">Zone d'action</option>
-      </select>
-
-      <HelpLabel help="Image fixe ou JSON exporte depuis l'onglet Animation. Un JSON 2D Anime reste anime directement sur la scene.">Image visible</HelpLabel>
+      {!isAnimationObject ? (
+        <label className="button like full secondary-action">
+          {selectedSceneObject.imageName || 'Importer une image fixe'}
+          <input type="file" accept="image/*" hidden onChange={(event) => handleUpload(event, (data, name) => patchObject((obj) => {
+            obj.imageData = data;
+            obj.imageName = name;
+            obj.anime2dSpec = null;
+            obj.anime2dName = '';
+            obj.linkedItemId = '';
+            obj.isInvisible = false;
+          }))} />
+        </label>
+      ) : null}
+      <HelpLabel help={isAnimationObject ? "Son joue quand le joueur clique sur cette animation." : "Son joue quand le joueur clique sur cet objet."}>{isAnimationObject ? "Son de l'animation" : "Son de l'objet"}</HelpLabel>
       <label className="button like full secondary-action">
-        {selectedSceneObject.imageName || 'Importer une image fixe'}
-        <input type="file" accept="image/*" hidden onChange={(event) => handleUpload(event, (data, name) => patchObject((obj) => {
-          obj.imageData = data;
-          obj.imageName = name;
-          obj.anime2dSpec = null;
-          obj.anime2dName = '';
-          obj.linkedItemId = '';
-          obj.isInvisible = false;
+        {selectedSceneObject.soundName || 'Importer un son'}
+        <input type="file" accept="audio/*" hidden onChange={(event) => handleUpload(event, (data, name) => patchObject((obj) => {
+          obj.soundData = data;
+          obj.soundName = name;
+          if (isAnimationObject) obj.clickMode = 'object';
         }))} />
       </label>
-      <label className="button like full secondary-action">
-        {selectedSceneObject.anime2dName || 'Importer JSON 2D Anime'}
-        <input type="file" accept="application/json,.json" hidden onChange={(event) => importSceneObjectAnime2d?.(event, selectedSceneObjectId)} />
-      </label>
+      {selectedSceneObject.soundData ? (
+        <div className="hotspot-audio-compact">
+          <audio controls preload="metadata" src={selectedSceneObject.soundData} />
+          <button type="button" className="danger-button" onClick={() => patchObject((obj) => {
+            obj.soundData = '';
+            obj.soundName = '';
+          })}>
+            Supprimer
+          </button>
+        </div>
+      ) : null}
+      {isAnimationObject ? (
+        <>
+          <HelpLabel help="JSON exporte depuis l'onglet Animation. Un JSON 2D Anime reste anime directement sur la scene.">Animation 2D</HelpLabel>
+          <label className="button like full secondary-action">
+            {selectedSceneObject.anime2dName ? 'Remplacer JSON 2D Anime' : 'Importer JSON 2D Anime'}
+            <input type="file" accept="application/json,.json" hidden onChange={(event) => importSceneObjectAnime2d?.(event, selectedSceneObjectId)} />
+          </label>
+        </>
+      ) : null}
       {(selectedSceneObject.imageData || selectedSceneObject.anime2dSpec) ? (
         <button
           type="button"
@@ -94,7 +109,7 @@ export default function SceneObjectInspector({
         </button>
       ) : null}
 
-      {clickMode === 'object' ? (
+      {clickMode === 'object' && !isAnimationObject ? (
         <>
           <HelpLabel help="Definit ce qui se passe au clic : montrer un pop-up, ajouter l'objet lie a l'inventaire, ou faire les deux.">Mode d'interaction</HelpLabel>
           <select value={selectedSceneObject.interactionMode || 'popup'} onChange={(event) => patchObject((obj) => { obj.interactionMode = event.target.value; })}>
@@ -207,7 +222,9 @@ export default function SceneObjectInspector({
         <p className="small-note help-inline-note">Cette image reste visible dans la scene, mais aucun clic joueur ne declenche d'action.</p>
       ) : null}
 
-      <button className="danger-button" style={{ marginTop: 12 }} onClick={removeObject}>Supprimer l'objet visible</button>
+      <button className="danger-button" style={{ marginTop: 12 }} onClick={removeObject}>
+        {isAnimationObject ? "Supprimer l'animation" : "Supprimer l'objet visible"}
+      </button>
     </>
   );
 }

@@ -90,12 +90,24 @@ export function buildExportProjectWithAssets(project, zip) {
       exportMediaField(spot, 'objectImageData', 'objectImageName', 'hotspots', `${hotspotName}-image`);
       exportMediaField(spot, 'soundData', 'soundName', 'audio', `${hotspotName}-sound`);
       exportMediaField(spot, 'secondObjectImageData', 'secondObjectImageName', 'hotspots', `${hotspotName}-second-image`);
+      (spot.logicRules || []).forEach((rule, ruleIndex) => {
+        const ruleName = `${hotspotName}-${rule.name || `rule-${ruleIndex + 1}`}`;
+        exportMediaField(rule, 'successSoundData', 'successSoundName', 'audio', `${ruleName}-success`);
+        exportMediaField(rule, 'failureSoundData', 'failureSoundName', 'audio', `${ruleName}-failure`);
+      });
     });
 
     (scene.sceneObjects || []).forEach((obj, objIndex) => {
+      const objectName = `${scene.name || `scene-${sceneIndex + 1}`}-object-${objIndex + 1}`;
       exportMediaField(obj, 'imageData', 'name', 'scene-objects', `${scene.name || `scene-${sceneIndex + 1}`}-object-${objIndex + 1}`);
       exportMediaField(obj, 'popupImage', 'popupImageName', 'scene-objects', `${scene.name || `scene-${sceneIndex + 1}`}-object-popup-${objIndex + 1}`);
       exportMediaField(obj, 'popupImageData', 'popupImageName', 'scene-objects', `${scene.name || `scene-${sceneIndex + 1}`}-object-popup-${objIndex + 1}`);
+      exportMediaField(obj, 'soundData', 'soundName', 'audio', `${objectName}-sound`);
+      (obj.logicRules || []).forEach((rule, ruleIndex) => {
+        const ruleName = `${objectName}-${rule.name || `rule-${ruleIndex + 1}`}`;
+        exportMediaField(rule, 'successSoundData', 'successSoundName', 'audio', `${ruleName}-success`);
+        exportMediaField(rule, 'failureSoundData', 'failureSoundName', 'audio', `${ruleName}-failure`);
+      });
     });
   });
 

@@ -39,6 +39,7 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
   const [simonPlaybackIndex, setSimonPlaybackIndex] = useState(-1);
   const [simonPlayerTurn, setSimonPlayerTurn] = useState(false);
   const audioRef = useRef(null);
+  const hotspotAudioRef = useRef(null);
   const simonTimeoutsRef = useRef([]);
   const saveStorageKey = `escapeGamePlayerSave:${project?.title || 'default'}`;
 
@@ -206,6 +207,20 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     setUsedLogicRuleIds((prev) => (prev.includes(ruleId) ? prev : [...prev, ruleId]));
   };
 
+  const playHotspotSound = (spot) => {
+    if (!spot?.soundData) return;
+    if (hotspotAudioRef.current) {
+      hotspotAudioRef.current.pause();
+      hotspotAudioRef.current.currentTime = 0;
+    }
+    const audio = new Audio();
+    audio.preload = 'auto';
+    audio.src = spot.soundData;
+    audio.volume = typeof spot.soundVolume === 'number' ? spot.soundVolume : 0.8;
+    audio.play().catch(() => {});
+    hotspotAudioRef.current = audio;
+  };
+
   const resolveHotspotInteraction = (spot) => {
     if (!spot) return null;
     const usedRule = (spot.logicRules || []).find((rule) => rule.disableAfterUse && usedLogicRuleIds.includes(rule.id));
@@ -245,6 +260,8 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
         enigmaId: useDefaultAction ? spot.enigmaId || '' : matchingRule.enigmaId || '',
         objectImageData: useDefaultAction ? spot.objectImageData || '' : matchingRule.objectImageData || '',
         objectImageName: useDefaultAction ? spot.objectImageName || '' : matchingRule.objectImageName || '',
+        soundData: matchingRule.successSoundData || (useDefaultAction ? spot.soundData || '' : ''),
+        soundName: matchingRule.successSoundName || (useDefaultAction ? spot.soundName || '' : ''),
         logicRuleId: matchingRule.id || '',
         disableAfterUse: Boolean(matchingRule.disableAfterUse),
       };
@@ -253,7 +270,7 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     const unmetRule = (spot.logicRules || []).find((rule) => (
       isRuleAvailable(rule)
       && isRuleConfigured(rule)
-      && rule.failureDialogue
+      && (rule.failureDialogue || rule.failureSoundData)
       && !doesRuleMatch(rule)
     ));
     if (unmetRule) {
@@ -266,19 +283,23 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
         rewardItemId: '',
         targetSceneId: '',
         targetCinematicId: '',
-        enigmaId: '',
-        objectImageData: '',
-        objectImageName: '',
-      };
-    }
+      enigmaId: '',
+      objectImageData: '',
+      objectImageName: '',
+      soundData: unmetRule.failureSoundData || '',
+      soundName: unmetRule.failureSoundName || '',
+    };
+  }
 
     const useSecondAction = Boolean(spot.hasSecondAction && completedHotspotIds.includes(spot.id));
     if (!useSecondAction) {
       return usedRule?.conditionType === 'has_item' ? {
         ...spot,
-        requiredItemId: '',
-        consumeRequiredItemOnUse: false,
-      } : spot;
+      requiredItemId: '',
+      consumeRequiredItemOnUse: false,
+      soundData: '',
+      soundName: '',
+    } : spot;
     }
     return {
       ...spot,
@@ -605,6 +626,8 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
       setDialogue(`Il te faut ${need?.name || 'un objet'} pour faire ça.`);
       return;
     }
+
+    playHotspotSound(activeSpot);
 
     if (activeSpot.enigmaId) {
       const enigma = getEnigmaById(activeSpot.enigmaId);

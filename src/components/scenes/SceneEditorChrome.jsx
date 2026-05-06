@@ -51,6 +51,7 @@ export function EditorToolbarMenus({
   setSnapGridEnabled,
   addHotspot,
   addSceneObject,
+  addAnimationObject,
   addInvisibleSceneObject,
   addVisualEffectZone,
 }) {
@@ -146,6 +147,7 @@ export function EditorToolbarMenus({
         <div className="editor-menu-popover">
           <MenuItem tour="scene-add-hotspot" onClick={addHotspot}>Zone d'action</MenuItem>
           <MenuItem tour="scene-add-visible-object" onClick={addSceneObject}>Objet visible</MenuItem>
+          <MenuItem onClick={addAnimationObject}>Animation</MenuItem>
           <MenuItem onClick={addInvisibleSceneObject}>Objet invisible</MenuItem>
           <MenuItem tour="scene-add-visual-zone" onClick={addVisualEffectZone}>Zone visuelle</MenuItem>
         </div>

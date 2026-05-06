@@ -1129,6 +1129,7 @@ function App() {
         <LogicTab
           project={editor.project}
           patchProject={editor.patchProject}
+          handleUpload={handleUpload}
           getSceneLabel={editor.getSceneLabel}
           selectedSceneId={editor.selectedSceneId}
         />

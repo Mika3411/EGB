@@ -772,7 +772,7 @@ export default function ScenesTab(props) {
     );
   };
 
-  const addSceneObject = ({ invisible = false } = {}) => {
+  const addSceneObject = ({ invisible = false, animation = false } = {}) => {
     if (!selectedSceneId) return;
     const nextId = `scene-object-${Math.random().toString(36).slice(2, 10)}`;
     const sourceItem = selectedItem || project.items?.find((item) => item.id === selectedItemId) || project.items?.[0];
@@ -783,7 +783,7 @@ export default function ScenesTab(props) {
       if (!Array.isArray(scene.sceneObjects)) scene.sceneObjects = [];
       scene.sceneObjects.push({
         id: nextId,
-        name: invisible ? 'Objet invisible' : (sourceItem?.name || 'Nouvel objet visible'),
+        name: animation ? 'Animation' : (invisible ? 'Objet invisible' : (sourceItem?.name || 'Nouvel objet visible')),
         imageData: '',
         imageName: '',
         popupImage: '',
@@ -793,11 +793,11 @@ export default function ScenesTab(props) {
         width: 14,
         height: 14,
         isInvisible: invisible,
-        clickMode: invisible ? 'none' : 'object',
-        interactionMode: sourceItem?.id ? 'inventory' : 'popup',
-        linkedItemId: sourceItem?.id || '',
-        removeAfterUse: true,
-        dialogue: sourceItem?.name ? `Tu as trouve ${sourceItem.name}.` : '',
+        clickMode: 'object',
+        interactionMode: animation ? 'popup' : (sourceItem?.id ? 'inventory' : 'popup'),
+        linkedItemId: animation ? '' : (sourceItem?.id || ''),
+        removeAfterUse: !animation,
+        dialogue: animation ? '' : (sourceItem?.name ? `Tu as trouve ${sourceItem.name}.` : ''),
         tutorialCreated: isTutorialObject,
       });
     });
@@ -807,6 +807,7 @@ export default function ScenesTab(props) {
   };
 
   const addInvisibleSceneObject = () => addSceneObject({ invisible: true });
+  const addAnimationObject = () => addSceneObject({ animation: true });
 
   const addVisualEffectZone = () => {
     if (!selectedSceneId) return;
@@ -1233,6 +1234,7 @@ export default function ScenesTab(props) {
     setSnapGridEnabled,
     addHotspot,
     addSceneObject,
+    addAnimationObject,
     addInvisibleSceneObject,
     addVisualEffectZone,
   };
@@ -1436,7 +1438,7 @@ export default function ScenesTab(props) {
                   <div className="panel-head panel-head-stack">
                     <div>
                       <span className="section-kicker">Contexte</span>
-                      <h2>{selectedItem ? 'Objet sélectionné' : selectedSceneObject ? (getSceneObjectClickMode(selectedSceneObject) === 'action' ? "Zone d'action sélectionnée" : 'Objet visible sélectionné') : selectedVisualEffectZone ? 'Zone visuelle sélectionnée' : 'Zone sélectionnée'}</h2>
+                      <h2>{selectedItem ? 'Objet sélectionné' : selectedSceneObject ? ((selectedSceneObject.anime2dSpec || selectedSceneObject.anime2dName || selectedSceneObject.name === 'Animation') ? 'Animation sélectionnée' : (getSceneObjectClickMode(selectedSceneObject) === 'action' ? "Zone d'action sélectionnée" : 'Objet visible sélectionné')) : selectedVisualEffectZone ? 'Zone visuelle sélectionnée' : 'Zone sélectionnée'}</h2>
                     </div>
                   </div>
 

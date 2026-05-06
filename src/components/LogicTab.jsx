@@ -69,7 +69,7 @@ const HelpLabel = ({ children, help, className = '' }) => (
   </label>
 );
 
-export default function LogicTab({ project, patchProject, getSceneLabel, selectedSceneId: editorSelectedSceneId = '' }) {
+export default function LogicTab({ project, patchProject, handleUpload, getSceneLabel, selectedSceneId: editorSelectedSceneId = '' }) {
   const scenes = project.scenes || [];
   const acts = project.acts || [];
   const [selectedSceneId, setSelectedSceneId] = useState(editorSelectedSceneId || scenes[0]?.id || '');
@@ -133,6 +133,13 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
     if (!window.confirm('Supprimer cette règle logique ?')) return;
     updateActionTarget(targetId, targetType, (target) => {
       target.logicRules = (target.logicRules || []).filter((rule) => rule.id !== ruleId);
+    });
+  };
+
+  const clearRuleSound = (targetId, targetType, ruleId, kind) => {
+    updateRule(targetId, targetType, ruleId, (draftRule) => {
+      draftRule[`${kind}SoundData`] = '';
+      draftRule[`${kind}SoundName`] = '';
     });
   };
 
@@ -375,6 +382,41 @@ export default function LogicTab({ project, patchProject, getSceneLabel, selecte
                           <textarea value={rule.failureDialogue || ''} placeholder="Exemple : La porte reste verrouillée. Il te manque la clé." onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                             draftRule.failureDialogue = event.target.value;
                           })} />
+                        </div>
+                      </div>
+
+                      <div className="grid-two">
+                        <div className="logic-sound-field">
+                          <HelpLabel help="Son joué quand la condition est remplie et que l’action de cette règle se lance.">Son si condition réussie</HelpLabel>
+                          <label className="button like full secondary-action">
+                            {rule.successSoundName || 'Importer un son de réussite'}
+                            <input type="file" accept="audio/*" hidden onChange={(event) => handleUpload?.(event, (data, name) => updateRule(target.id, type, rule.id, (draftRule) => {
+                              draftRule.successSoundData = data;
+                              draftRule.successSoundName = name;
+                            }))} />
+                          </label>
+                          {rule.successSoundData ? (
+                            <div className="logic-sound-preview">
+                              <audio controls preload="metadata" src={rule.successSoundData} />
+                              <button type="button" className="danger-button" onClick={() => clearRuleSound(target.id, type, rule.id, 'success')}>Supprimer</button>
+                            </div>
+                          ) : null}
+                        </div>
+                        <div className="logic-sound-field">
+                          <HelpLabel help="Son joué quand cette règle est configurée mais que sa condition n’est pas remplie.">Son si condition échouée</HelpLabel>
+                          <label className="button like full secondary-action">
+                            {rule.failureSoundName || "Importer un son d'échec"}
+                            <input type="file" accept="audio/*" hidden onChange={(event) => handleUpload?.(event, (data, name) => updateRule(target.id, type, rule.id, (draftRule) => {
+                              draftRule.failureSoundData = data;
+                              draftRule.failureSoundName = name;
+                            }))} />
+                          </label>
+                          {rule.failureSoundData ? (
+                            <div className="logic-sound-preview">
+                              <audio controls preload="metadata" src={rule.failureSoundData} />
+                              <button type="button" className="danger-button" onClick={() => clearRuleSound(target.id, type, rule.id, 'failure')}>Supprimer</button>
+                            </div>
+                          ) : null}
                         </div>
                       </div>
 

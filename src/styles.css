@@ -2793,6 +2793,10 @@ label { display: block; font-size: 13px; color: #ccdaef; margin: 10px 0 8px; fon
 .logic-rule-card summary small{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .logic-rule-card summary .danger-button{min-height:32px;padding:6px 10px;box-shadow:none!important}
 .logic-rule-body{border-top:1px solid var(--line);padding:10px 12px 12px}
+.logic-sound-field{min-width:0;display:grid;gap:8px;align-content:start}
+.logic-sound-preview{min-width:0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+.logic-sound-preview audio{width:100%;min-width:0;height:34px}
+.logic-sound-preview .danger-button{min-height:34px;padding:6px 10px;white-space:nowrap}
 .ai-json-editor{min-height:420px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;line-height:1.45;white-space:pre}
 .item-editor-top{display:flex;gap:12px;align-items:center;margin-bottom:10px}
 .item-miniature{width:72px;height:72px;border-radius:18px;background:#020617;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:28px;flex:0 0 auto;border:1px solid rgba(148,163,184,0.14)}

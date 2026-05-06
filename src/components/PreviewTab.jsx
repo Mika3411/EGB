@@ -145,12 +145,20 @@ const collectSceneMediaUrls = (scene, imageUrls, audioUrls) => {
     addUrl(imageUrls, object.popupImageData || object.popupImage);
     addUrl(imageUrls, object.objectImageData);
     addUrl(audioUrls, object.soundData);
+    (object.logicRules || []).forEach((rule) => {
+      addUrl(audioUrls, rule.successSoundData);
+      addUrl(audioUrls, rule.failureSoundData);
+    });
     (object.anime2dSpec?.layers || []).forEach((layer) => addUrl(imageUrls, normalizeAnime2dLayer(layer).src));
   });
   (scene.hotspots || []).forEach((spot) => {
     addUrl(imageUrls, spot.objectImageData);
     addUrl(imageUrls, spot.secondObjectImageData);
     addUrl(audioUrls, spot.soundData);
+    (spot.logicRules || []).forEach((rule) => {
+      addUrl(audioUrls, rule.successSoundData);
+      addUrl(audioUrls, rule.failureSoundData);
+    });
   });
 };
 
@@ -794,20 +802,6 @@ export default function PreviewTab(props) {
   const handleHotspotClick = (event, spot) => {
     event.stopPropagation();
 
-    if (spot.soundData) {
-      if (hotspotAudioRef.current) {
-        hotspotAudioRef.current.pause();
-        hotspotAudioRef.current.currentTime = 0;
-      }
-
-      const audio = new Audio();
-      audio.preload = 'auto';
-      audio.src = spot.soundData;
-      audio.volume = typeof spot.soundVolume === 'number' ? spot.soundVolume : 0.8;
-      audio.play().catch(() => {});
-      hotspotAudioRef.current = audio;
-    }
-
     triggerHotspot(spot);
   };
 
@@ -820,6 +814,18 @@ export default function PreviewTab(props) {
     if (clickMode === 'action') {
       handleHotspotClick(event, obj);
       return;
+    }
+    if (obj.soundData) {
+      if (hotspotAudioRef.current) {
+        hotspotAudioRef.current.pause();
+        hotspotAudioRef.current.currentTime = 0;
+      }
+      const audio = new Audio();
+      audio.preload = 'auto';
+      audio.src = obj.soundData;
+      audio.volume = typeof obj.soundVolume === 'number' ? obj.soundVolume : 0.8;
+      audio.play().catch(() => {});
+      hotspotAudioRef.current = audio;
     }
 
     const mode = obj.interactionMode || 'popup';
