@@ -1,16 +1,17 @@
 ﻿import { useMemo, useRef, useState } from 'react';
-import {
-  randomRotations,
-  sameColorSequence,
-  shuffledIndices,
-  validateMiscAnswer,
-} from '../lib/gameEngine';
+import { createGameEngine, gameActions } from '../lib/gameEngine';
+import { resolveAssetUrl } from '../lib/assetManager';
 
 const DEFAULT_COLOR_SEQUENCE = [];
 const DEFAULT_PLAYER_LIVES = 3;
+const addUnique = (items = [], item) => (item && !items.includes(item) ? [...items, item] : items);
 
 export function usePreviewPlayer(project, { getItemById } = {}) {
   const initialScene = project.scenes.find((scene) => scene.id === project.start?.targetSceneId) || project.scenes[0] || null;
+  const engineRef = useRef(null);
+  if (!engineRef.current || engineRef.current.getState().project !== project) {
+    engineRef.current = createGameEngine(project);
+  }
   const [playSceneId, setPlaySceneId] = useState(initialScene?.id || '');
   const [inventory, setInventory] = useState([]);
   const [playerLives, setPlayerLives] = useState(DEFAULT_PLAYER_LIVES);
@@ -22,6 +23,8 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
   const [completedCombinationIds, setCompletedCombinationIds] = useState([]);
   const [usedLogicRuleIds, setUsedLogicRuleIds] = useState([]);
   const [usedSceneObjectIds, setUsedSceneObjectIds] = useState([]);
+  const [revealedSceneObjectIds, setRevealedSceneObjectIds] = useState([]);
+  const [sceneObjectTextOverrides, setSceneObjectTextOverrides] = useState({});
   const [viewerImage, setViewerImage] = useState(null);
   const [playingCinematic, setPlayingCinematic] = useState(null);
   const [playingSlideIndex, setPlayingSlideIndex] = useState(0);
@@ -43,6 +46,39 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
   const simonTimeoutsRef = useRef([]);
   const saveStorageKey = `escapeGamePlayerSave:${project?.title || 'default'}`;
 
+  const syncFromGameEngine = (nextState = engineRef.current.getState()) => {
+    setPlaySceneId(nextState.currentScene?.id || nextState.currentSceneId || '');
+    setInventory(nextState.inventory || []);
+    setDialogue(nextState.dialogue || '');
+    setCompletedHotspotIds(nextState.completedHotspotIds || nextState.flags?.completedHotspots || []);
+    setSolvedEnigmaIds(nextState.solvedEnigmas || nextState.solvedEnigmaIds || []);
+    setLaunchedCinematicIds(nextState.launchedCinematicIds || nextState.flags?.launchedCinematics || []);
+    setCompletedCombinationIds(nextState.completedCombinationIds || nextState.flags?.completedCombinations || []);
+    setUsedLogicRuleIds(nextState.usedLogicRuleIds || nextState.flags?.usedLogicRules || []);
+    setUsedSceneObjectIds(nextState.usedSceneObjectIds || []);
+    setRevealedSceneObjectIds(nextState.revealedSceneObjectIds || nextState.flags?.revealedSceneObjects || []);
+    setSceneObjectTextOverrides(nextState.sceneObjectTextOverrides || {});
+    setViewerImage(nextState.viewerImage || null);
+    setPlayingCinematic(nextState.playingCinematic || null);
+    setPlayingSlideIndex(nextState.playingSlideIndex || 0);
+    setSelectedInventoryIds(nextState.selectedInventoryIds || []);
+    setActiveEnigma(nextState.activeEnigma || null);
+
+    const enigmaState = nextState.activeEnigmaState || {};
+    if ('codeInput' in enigmaState) setEnigmaCodeInput(enigmaState.codeInput || '');
+    if ('colorAttempt' in enigmaState) setEnigmaColorAttempt(enigmaState.colorAttempt || []);
+    setEnigmaPuzzleOrder(enigmaState.puzzleOrder || []);
+    setEnigmaDragBank(enigmaState.dragBank || []);
+    setEnigmaDragSlots(enigmaState.dragSlots || []);
+    setEnigmaRotationAngles(enigmaState.rotationAngles || []);
+  };
+
+  const dispatchPreview = (action) => {
+    const nextState = engineRef.current.dispatch(action);
+    syncFromGameEngine(nextState);
+    return nextState.lastResult;
+  };
+
   const playScene = useMemo(
     () => project.scenes.find((scene) => scene.id === playSceneId) || project.scenes[0] || null,
     [project, playSceneId],
@@ -52,14 +88,6 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     () => playingCinematic?.slides?.[playingSlideIndex] || null,
     [playingCinematic, playingSlideIndex],
   );
-
-  const getCombinationForItems = (firstId, secondId) => {
-    if (!firstId || !secondId) return null;
-    return (project.combinations || []).find((combo) => (
-      (combo.itemAId === firstId && combo.itemBId === secondId)
-      || (combo.itemAId === secondId && combo.itemBId === firstId)
-    )) || null;
-  };
 
   const getEnigmaById = (enigmaId) => (
     (project.enigmas || []).find((entry) => entry.id === enigmaId) || null
@@ -72,11 +100,8 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
   };
 
   const launchCinematic = (cinematicId) => {
-    const cinematic = project.cinematics.find((entry) => entry.id === cinematicId);
-    if (!cinematic) return;
-    setLaunchedCinematicIds((prev) => (prev.includes(cinematic.id) ? prev : [...prev, cinematic.id]));
-    setPlayingCinematic(cinematic);
-    setPlayingSlideIndex(0);
+    const result = dispatchPreview(gameActions.startCinematic(cinematicId));
+    return Boolean(result?.ok);
   };
 
 
@@ -88,19 +113,9 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     return project.scenes[0] || null;
   };
 
-  const getFirstSceneForAct = (actId) => {
-    if (!actId) return null;
-    const actScenes = project.scenes.filter((scene) => scene.actId === actId);
-    if (!actScenes.length) return null;
-    return actScenes.find((scene) => !scene.parentSceneId) || actScenes[0];
-  };
-
-  const goToScene = (sceneId, fallbackText = 'Nouvelle scène.') => {
-    const nextScene = project.scenes.find((scene) => scene.id === sceneId);
-    if (!nextScene) return false;
-    setPlaySceneId(nextScene.id);
-    setDialogue(nextScene.introText || fallbackText);
-    return true;
+  const goToScene = (sceneId, fallbackText = 'Nouvelle scene.') => {
+    const result = dispatchPreview({ ...gameActions.enterScene(sceneId), dialogue: fallbackText });
+    return Boolean(result?.ok);
   };
 
   const applySceneTimerEnd = (scene) => {
@@ -152,70 +167,91 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
   };
 
   const applyCinematicEnd = (cinematic) => {
-    if (!cinematic || !cinematic.onEndType || cinematic.onEndType === 'none') return;
-
-    if (cinematic.onEndType === 'scene' && cinematic.targetSceneId) {
-      goToScene(cinematic.targetSceneId, 'Nouvelle scène débloquée.');
-      return;
-    }
-
-    if (cinematic.onEndType === 'act' && cinematic.targetActId) {
-      const actScene = getFirstSceneForAct(cinematic.targetActId);
-      if (actScene) goToScene(actScene.id, 'Un nouvel acte commence.');
-      return;
-    }
-
-    if (cinematic.onEndType === 'item' && cinematic.rewardItemId) {
-      const rewardItem = getItemById?.(cinematic.rewardItemId) || project.items.find((entry) => entry.id === cinematic.rewardItemId);
-      setInventory((prev) => prev.includes(cinematic.rewardItemId) ? prev : [...prev, cinematic.rewardItemId]);
-      setSelectedInventoryIds((prev) => prev.includes(cinematic.rewardItemId) ? prev : [...prev, cinematic.rewardItemId].slice(-2));
-      if (rewardItem?.imageData) setViewerImage({ id: rewardItem.id, src: rewardItem.imageData, name: rewardItem.name });
-      setDialogue(`Tu obtiens ${rewardItem?.name || 'un nouvel objet'}.`);
-    }
+    if (!cinematic) return;
+    dispatchPreview({ type: 'CLOSE_CINEMATIC', cinematic });
   };
 
   const closeCinematic = () => {
-    if (playingCinematic) applyCinematicEnd(playingCinematic);
-    setPlayingCinematic(null);
-    setPlayingSlideIndex(0);
+    dispatchPreview(gameActions.closeCinematic());
   };
 
   const advanceCinematic = () => {
-    if (!playingCinematic) return;
-    const total = playingCinematic.slides?.length || 0;
-    setPlayingSlideIndex((index) => {
-      if (index + 1 >= total) {
-        window.setTimeout(() => closeCinematic(), 0);
-        return 0;
-      }
-      return index + 1;
-    });
+    dispatchPreview(gameActions.advanceCinematic());
   };
 
   const markHotspotCompleted = (hotspotId) => {
     if (!hotspotId) return;
+    const state = engineRef.current.getState();
+    engineRef.current.setState({
+      completedHotspotIds: addUnique(state.completedHotspotIds || [], hotspotId),
+    });
     setCompletedHotspotIds((prev) => (prev.includes(hotspotId) ? prev : [...prev, hotspotId]));
+  };
+
+  const addInventoryItem = (itemId) => {
+    if (!itemId) return false;
+    const result = dispatchPreview(gameActions.addItem(itemId));
+    return Boolean(result?.ok);
+  };
+
+  const removeInventoryItem = (itemId) => {
+    if (!itemId) return false;
+    const result = dispatchPreview(gameActions.removeItem(itemId));
+    return Boolean(result?.ok);
   };
 
   const markSceneObjectUsed = (sceneObjectId) => {
     if (!sceneObjectId) return;
+    const state = engineRef.current.getState();
+    engineRef.current.setState({
+      usedSceneObjectIds: addUnique(state.usedSceneObjectIds || [], sceneObjectId),
+      revealedSceneObjectIds: (state.revealedSceneObjectIds || []).filter((id) => id !== sceneObjectId),
+    });
     setUsedSceneObjectIds((prev) => (prev.includes(sceneObjectId) ? prev : [...prev, sceneObjectId]));
+  };
+
+  const revealSceneObject = (sceneObjectId) => {
+    if (!sceneObjectId) return;
+    const state = engineRef.current.getState();
+    engineRef.current.setState({
+      usedSceneObjectIds: (state.usedSceneObjectIds || []).filter((id) => id !== sceneObjectId),
+      revealedSceneObjectIds: addUnique(state.revealedSceneObjectIds || [], sceneObjectId),
+    });
+    setRevealedSceneObjectIds((prev) => (prev.includes(sceneObjectId) ? prev : [...prev, sceneObjectId]));
+    setUsedSceneObjectIds((prev) => prev.filter((id) => id !== sceneObjectId));
+  };
+
+  const updateSceneObjectText = (sceneObjectId, text) => {
+    if (!sceneObjectId) return;
+    const state = engineRef.current.getState();
+    engineRef.current.setState({
+      sceneObjectTextOverrides: {
+        ...(state.sceneObjectTextOverrides || {}),
+        [sceneObjectId]: text || '',
+      },
+    });
+    setSceneObjectTextOverrides((prev) => ({ ...prev, [sceneObjectId]: text || '' }));
   };
 
   const markLogicRuleUsed = (ruleId) => {
     if (!ruleId) return;
+    const state = engineRef.current.getState();
+    engineRef.current.setState({
+      usedLogicRuleIds: addUnique(state.usedLogicRuleIds || [], ruleId),
+    });
     setUsedLogicRuleIds((prev) => (prev.includes(ruleId) ? prev : [...prev, ruleId]));
   };
 
   const playHotspotSound = (spot) => {
-    if (!spot?.soundData) return;
+    const soundUrl = resolveAssetUrl(project, spot?.soundId, spot?.soundData);
+    if (!soundUrl) return;
     if (hotspotAudioRef.current) {
       hotspotAudioRef.current.pause();
       hotspotAudioRef.current.currentTime = 0;
     }
     const audio = new Audio();
     audio.preload = 'auto';
-    audio.src = spot.soundData;
+    audio.src = soundUrl;
     audio.volume = typeof spot.soundVolume === 'number' ? spot.soundVolume : 0.8;
     audio.play().catch(() => {});
     hotspotAudioRef.current = audio;
@@ -227,6 +263,7 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     const isRuleAvailable = (rule) => !(rule.disableAfterUse && usedLogicRuleIds.includes(rule.id));
     const doesRuleMatch = (rule) => {
       if (!isRuleAvailable(rule)) return false;
+      if (rule.conditionType === 'always') return true;
       if (rule.conditionType === 'missing_item') return rule.itemId && !inventory.includes(rule.itemId);
       if (rule.conditionType === 'completed_hotspot') return rule.hotspotId && completedHotspotIds.includes(rule.hotspotId);
       if (rule.conditionType === 'solved_enigma') return rule.conditionEnigmaId && solvedEnigmaIds.includes(rule.conditionEnigmaId);
@@ -239,6 +276,7 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     };
     const isRuleConfigured = (rule) => {
       if (['has_item', 'missing_item'].includes(rule.conditionType || 'has_item')) return Boolean(rule.itemId);
+      if (rule.conditionType === 'always') return true;
       if (rule.conditionType === 'completed_hotspot') return Boolean(rule.hotspotId);
       if (rule.conditionType === 'solved_enigma') return Boolean(rule.conditionEnigmaId);
       if (rule.conditionType === 'completed_combination') return Boolean(rule.combinationId);
@@ -258,8 +296,12 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
         targetSceneId: useDefaultAction ? spot.targetSceneId || '' : matchingRule.targetSceneId || '',
         targetCinematicId: useDefaultAction ? spot.targetCinematicId || '' : matchingRule.targetCinematicId || '',
         enigmaId: useDefaultAction ? spot.enigmaId || '' : matchingRule.enigmaId || '',
+        blockActionType: matchingRule.blockActionType || 'show',
+        targetBlockId: matchingRule.targetBlockId || '',
+        targetBlockText: matchingRule.targetBlockText || '',
         objectImageData: useDefaultAction ? spot.objectImageData || '' : matchingRule.objectImageData || '',
         objectImageName: useDefaultAction ? spot.objectImageName || '' : matchingRule.objectImageName || '',
+        soundId: matchingRule.successSoundId || (useDefaultAction ? spot.soundId || '' : ''),
         soundData: matchingRule.successSoundData || (useDefaultAction ? spot.soundData || '' : ''),
         soundName: matchingRule.successSoundName || (useDefaultAction ? spot.soundName || '' : ''),
         logicRuleId: matchingRule.id || '',
@@ -270,7 +312,7 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     const unmetRule = (spot.logicRules || []).find((rule) => (
       isRuleAvailable(rule)
       && isRuleConfigured(rule)
-      && (rule.failureDialogue || rule.failureSoundData)
+      && (rule.failureDialogue || rule.failureSoundData || rule.failureSoundId)
       && !doesRuleMatch(rule)
     ));
     if (unmetRule) {
@@ -286,6 +328,7 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
       enigmaId: '',
       objectImageData: '',
       objectImageName: '',
+      soundId: unmetRule.failureSoundId || '',
       soundData: unmetRule.failureSoundData || '',
       soundName: unmetRule.failureSoundName || '',
     };
@@ -297,6 +340,7 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
         ...spot,
       requiredItemId: '',
       consumeRequiredItemOnUse: false,
+      soundId: '',
       soundData: '',
       soundName: '',
     } : spot;
@@ -349,6 +393,17 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
       ));
     }
 
+    if (spot.actionType === 'block' && spot.targetBlockId) {
+      if ((spot.blockActionType || 'show') === 'hide') {
+        markSceneObjectUsed(spot.targetBlockId);
+      } else if (spot.blockActionType === 'update_text') {
+        revealSceneObject(spot.targetBlockId);
+        updateSceneObjectText(spot.targetBlockId, spot.targetBlockText);
+      } else {
+        revealSceneObject(spot.targetBlockId);
+      }
+    }
+
     markHotspotCompleted(sourceHotspotId || spot.id);
     if (spot.disableAfterUse && spot.logicRuleId) markLogicRuleUsed(spot.logicRuleId);
   };
@@ -374,7 +429,7 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     if (enigma.successMessage) setDialogue(enigma.successMessage);
 
     if (enigma.unlockType === 'scene' && enigma.targetSceneId) {
-      goToScene(enigma.targetSceneId, enigma.successMessage || 'Nouvelle scène débloquée.');
+      goToScene(enigma.targetSceneId, enigma.successMessage || 'Nouvelle scene débloquée.');
     } else if (enigma.unlockType === 'cinematic' && enigma.targetCinematicId) {
       launchCinematic(enigma.targetCinematicId);
     } else if (linkedHotspot) {
@@ -398,10 +453,14 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
 
   const solveActiveEnigma = () => {
     if (!activeEnigma?.enigma) return;
-    const { enigma, hotspot } = activeEnigma;
-    setSolvedEnigmaIds((prev) => (prev.includes(enigma.id) ? prev : [...prev, enigma.id]));
-    closeEnigma();
-    applyEnigmaSuccess(enigma, hotspot);
+    const { enigma } = activeEnigma;
+    dispatchPreview(gameActions.solveEnigma(enigma.id, {
+      codeInput: enigma.solutionText || '',
+      colorAttempt: enigma.solutionColors || [],
+      puzzleOrder: enigmaPuzzleOrder,
+      dragSlots: enigmaDragSlots,
+      rotationAngles: enigmaRotationAngles,
+    }));
   };
 
   const failActiveEnigma = () => {
@@ -427,33 +486,13 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
   };
 
   const openEnigma = (enigma, hotspot = null) => {
-    const pieceCount = Math.max(4, (Number(enigma.gridRows) || 3) * (Number(enigma.gridCols) || 3));
-    setActiveEnigma({ enigma, hotspot });
+    const result = dispatchPreview(gameActions.startEnigma(enigma.id, { enigma, hotspot }));
+    if (!result?.ok) return;
     setEnigmaCodeInput('');
     setEnigmaColorAttempt([]);
     setEnigmaPuzzleSelectedIndex(null);
     setEnigmaDraggedPiece(null);
     setSimonPlayerTurn(enigma.type !== 'simon');
-
-    if (enigma.type === 'puzzle') {
-      setEnigmaPuzzleOrder(shuffledIndices(pieceCount));
-    } else {
-      setEnigmaPuzzleOrder([]);
-    }
-
-    if (enigma.type === 'dragdrop') {
-      setEnigmaDragBank(shuffledIndices(pieceCount));
-      setEnigmaDragSlots(Array.from({ length: pieceCount }, () => null));
-    } else {
-      setEnigmaDragBank([]);
-      setEnigmaDragSlots([]);
-    }
-
-    if (enigma.type === 'rotation') {
-      setEnigmaRotationAngles(randomRotations(pieceCount));
-    } else {
-      setEnigmaRotationAngles([]);
-    }
 
     if (enigma.type === 'simon') {
       startSimonPlayback(enigma);
@@ -466,19 +505,19 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     if (!activeEnigma?.enigma) return false;
 
     const { enigma } = activeEnigma;
-    const isSuccess = enigma.type === 'colors' ?
-       sameColorSequence(enigmaColorAttempt, enigma.solutionColors || [])
-      : enigma.type === 'misc' ?
-         validateMiscAnswer(enigma, enigmaCodeInput)
-        : (enigmaCodeInput || '').trim().toLowerCase() === (enigma.solutionText || '').trim().toLowerCase();
+    const result = dispatchPreview(gameActions.solveEnigma(enigma.id, {
+      codeInput: enigmaCodeInput,
+      colorAttempt: enigmaColorAttempt,
+      puzzleOrder: enigmaPuzzleOrder,
+      dragSlots: enigmaDragSlots,
+      rotationAngles: enigmaRotationAngles,
+    }));
 
-    if (!isSuccess) {
-      failActiveEnigma();
+    if (!result?.ok) {
       if (enigma.type === 'colors') setEnigmaColorAttempt(DEFAULT_COLOR_SEQUENCE);
       return false;
     }
 
-    solveActiveEnigma();
     return true;
   };
 
@@ -580,69 +619,31 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
   };
 
   const combineInventoryItems = (firstId, secondId) => {
-    const combo = getCombinationForItems(firstId, secondId);
-    if (!combo?.resultItemId) {
-      setDialogue('Ces deux objets ne peuvent pas être combinés.');
-      return false;
-    }
-
-    setInventory((prev) => {
-      const remaining = [...prev];
-      const removeOne = (id) => {
-        const index = remaining.indexOf(id);
-        if (index >= 0) remaining.splice(index, 1);
-      };
-      removeOne(firstId);
-      removeOne(secondId);
-      if (!remaining.includes(combo.resultItemId)) remaining.push(combo.resultItemId);
-      return remaining;
-    });
-
-    const resultItem = getItemById?.(combo.resultItemId) || project.items.find((entry) => entry.id === combo.resultItemId);
-    setCompletedCombinationIds((prev) => (prev.includes(combo.id) ? prev : [...prev, combo.id]));
-    setDialogue(combo.message || `Tu obtiens ${resultItem?.name || 'un nouvel objet'}.`);
-    setSelectedInventoryIds(combo.resultItemId ? [combo.resultItemId] : []);
-
-    if (resultItem?.imageData) {
-      setViewerImage({ id: resultItem.id, src: resultItem.imageData, name: resultItem.name });
-    } else {
-      setViewerImage(null);
-    }
-
-    return true;
+    const result = dispatchPreview(gameActions.combine(firstId, secondId));
+    return Boolean(result?.ok);
   };
 
   const triggerHotspot = (spot) => {
-    const activeSpot = resolveHotspotInteraction(spot);
-    if (!activeSpot) return;
-
-    if (activeSpot.requiredHotspotId && !completedHotspotIds.includes(activeSpot.requiredHotspotId)) {
-      setDialogue(activeSpot.lockedMessage || 'Je ne peux pas faire ça maintenant.');
-      return;
-    }
-
-    if (activeSpot.requiredItemId && !inventory.includes(activeSpot.requiredItemId)) {
-      const need = getItemById?.(activeSpot.requiredItemId) || project.items.find((item) => item.id === activeSpot.requiredItemId);
-      setDialogue(`Il te faut ${need?.name || 'un objet'} pour faire ça.`);
-      return;
-    }
-
-    playHotspotSound(activeSpot);
-
-    if (activeSpot.enigmaId) {
-      const enigma = getEnigmaById(activeSpot.enigmaId);
-      if (enigma) {
-        openEnigma(enigma, activeSpot);
-        return;
-      }
-    }
-
-    applyHotspotAction(activeSpot, spot.id);
+    if (!spot) return;
+    const resolvedSpot = resolveHotspotInteraction(spot);
+    if (!resolvedSpot) return;
+    playHotspotSound(resolvedSpot);
+    const result = dispatchPreview({
+      ...gameActions.triggerHotspot(resolvedSpot.id),
+      hotspot: resolvedSpot,
+      scene: playScene,
+    });
+    const startedEnigma = engineRef.current.getState().activeEnigma?.enigma;
+    if (startedEnigma?.type === 'simon' && result?.ok) startSimonPlayback(startedEnigma);
   };
 
   const initializeFromProject = (sourceProject) => {
     const start = sourceProject.start || { type: 'scene', targetSceneId: sourceProject.scenes?.[0]?.id || '', targetCinematicId: '' };
     const fallbackScene = sourceProject.scenes?.find((scene) => scene.id === start.targetSceneId) || sourceProject.scenes?.[0] || null;
+    engineRef.current.reset(sourceProject, {
+      currentSceneId: fallbackScene?.id || '',
+      playerLives: DEFAULT_PLAYER_LIVES,
+    });
 
     setInventory([]);
     setPlayerLives(DEFAULT_PLAYER_LIVES);
@@ -653,6 +654,8 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     setCompletedCombinationIds([]);
     setUsedLogicRuleIds([]);
     setUsedSceneObjectIds([]);
+    setRevealedSceneObjectIds([]);
+    setSceneObjectTextOverrides({});
     setViewerImage(null);
     setPlayingCinematic(null);
     setPlayingSlideIndex(0);
@@ -662,6 +665,7 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
 
     if (start.type === 'cinematic' && start.targetCinematicId) {
       const openingScene = fallbackScene || sourceProject.scenes?.[0] || null;
+      dispatchPreview(gameActions.startCinematic(start.targetCinematicId));
       setPlaySceneId(openingScene?.id || '');
       setDialogue(openingScene?.introText || '');
       const introCinematic = sourceProject.cinematics?.find((entry) => entry.id === start.targetCinematicId) || null;
@@ -690,6 +694,8 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
       completedCombinationIds,
       usedLogicRuleIds,
       usedSceneObjectIds,
+      revealedSceneObjectIds,
+      sceneObjectTextOverrides,
       selectedInventoryIds,
     };
     localStorage.setItem(saveStorageKey, JSON.stringify(payload));
@@ -706,6 +712,21 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
       }
       const payload = JSON.parse(raw);
       const nextScene = project.scenes.find((scene) => scene.id === payload.playSceneId) || project.scenes[0] || null;
+      engineRef.current.setState({
+        currentSceneId: nextScene?.id || '',
+        inventory: Array.isArray(payload.inventory) ? payload.inventory : [],
+        playerLives: Number.isFinite(Number(payload.playerLives)) ? Math.max(0, Number(payload.playerLives)) : DEFAULT_PLAYER_LIVES,
+        dialogue: payload.dialogue || nextScene?.introText || 'Partie chargée.',
+        completedHotspotIds: Array.isArray(payload.completedHotspotIds) ? payload.completedHotspotIds : [],
+        solvedEnigmaIds: Array.isArray(payload.solvedEnigmaIds) ? payload.solvedEnigmaIds : [],
+        launchedCinematicIds: Array.isArray(payload.launchedCinematicIds) ? payload.launchedCinematicIds : [],
+        completedCombinationIds: Array.isArray(payload.completedCombinationIds) ? payload.completedCombinationIds : [],
+        usedLogicRuleIds: Array.isArray(payload.usedLogicRuleIds) ? payload.usedLogicRuleIds : [],
+        usedSceneObjectIds: Array.isArray(payload.usedSceneObjectIds) ? payload.usedSceneObjectIds : [],
+        revealedSceneObjectIds: Array.isArray(payload.revealedSceneObjectIds) ? payload.revealedSceneObjectIds : [],
+        sceneObjectTextOverrides: payload.sceneObjectTextOverrides && typeof payload.sceneObjectTextOverrides === 'object' ? payload.sceneObjectTextOverrides : {},
+        selectedInventoryIds: Array.isArray(payload.selectedInventoryIds) ? payload.selectedInventoryIds : [],
+      });
       setPlaySceneId(nextScene?.id || '');
       setInventory(Array.isArray(payload.inventory) ? payload.inventory : []);
       setPlayerLives(Number.isFinite(Number(payload.playerLives)) ? Math.max(0, Number(payload.playerLives)) : DEFAULT_PLAYER_LIVES);
@@ -716,6 +737,8 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
       setCompletedCombinationIds(Array.isArray(payload.completedCombinationIds) ? payload.completedCombinationIds : []);
       setUsedLogicRuleIds(Array.isArray(payload.usedLogicRuleIds) ? payload.usedLogicRuleIds : []);
       setUsedSceneObjectIds(Array.isArray(payload.usedSceneObjectIds) ? payload.usedSceneObjectIds : []);
+      setRevealedSceneObjectIds(Array.isArray(payload.revealedSceneObjectIds) ? payload.revealedSceneObjectIds : []);
+      setSceneObjectTextOverrides(payload.sceneObjectTextOverrides && typeof payload.sceneObjectTextOverrides === 'object' ? payload.sceneObjectTextOverrides : {});
       setSelectedInventoryIds(Array.isArray(payload.selectedInventoryIds) ? payload.selectedInventoryIds : []);
       setViewerImage(null);
       setPlayingCinematic(null);
@@ -732,6 +755,11 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
   };
 
   const removeInventoryItemReferences = (itemId) => {
+    engineRef.current.setState({
+      inventory: engineRef.current.getState().inventory.filter((id) => id !== itemId),
+      selectedInventoryIds: engineRef.current.getState().selectedInventoryIds.filter((id) => id !== itemId),
+      viewerImage: engineRef.current.getState().viewerImage?.id === itemId ? null : engineRef.current.getState().viewerImage,
+    });
     setInventory((prev) => prev.filter((id) => id !== itemId));
     setSelectedInventoryIds((prev) => prev.filter((id) => id !== itemId));
     if (viewerImage?.id === itemId) setViewerImage(null);
@@ -750,13 +778,18 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     playScene,
     inventory,
     setInventory,
+    addInventoryItem,
+    removeInventoryItem,
     playerLives,
     setPlayerLives,
     sceneTimerResetKey,
     completedHotspotIds,
     usedLogicRuleIds,
     usedSceneObjectIds,
+    revealedSceneObjectIds,
+    sceneObjectTextOverrides,
     markSceneObjectUsed,
+    markHotspotCompleted,
     dialogue,
     setDialogue,
     viewerImage,

@@ -1,4 +1,10 @@
-import { buildStoragePath, uploadToStorage } from '../supabaseStorage';
+import { buildStoragePath, generateStorageFilename, uploadToStorage } from '../supabaseStorage';
+
+const IMAGE_UPLOAD_OPTIMIZATION = {
+  maxDimension: 1920,
+  quality: 0.8,
+  mimeType: 'image/webp',
+};
 
 function downloadBlob(filename, blob) {
   const url = URL.createObjectURL(blob);
@@ -44,10 +50,10 @@ async function imageFileToOptimizedBlob(file, options = {}) {
   }
 
   const {
-    maxDimension = 1600,
-    quality = 0.82,
-    mimeType = 'image/webp',
-  } = options;
+    maxDimension = IMAGE_UPLOAD_OPTIMIZATION.maxDimension,
+    quality = IMAGE_UPLOAD_OPTIMIZATION.quality,
+    mimeType = IMAGE_UPLOAD_OPTIMIZATION.mimeType,
+  } = { ...IMAGE_UPLOAD_OPTIMIZATION, ...options };
 
   const image = await loadImageFromFile(file);
   const longestSide = Math.max(image.naturalWidth || image.width, image.naturalHeight || image.height) || 1;
@@ -100,7 +106,7 @@ async function uploadFileToSupabase(file, {
   userId,
   folder = 'uploads',
   optimizeImage = true,
-  imageOptions,
+  imageOptions = IMAGE_UPLOAD_OPTIMIZATION,
   cacheControl = '31536000',
 } = {}) {
   if (!file) {
@@ -112,31 +118,42 @@ async function uploadFileToSupabase(file, {
   }
 
   const preparedBlob = file.type?.startsWith('image/') && optimizeImage ?
-     await imageFileToOptimizedBlob(file, imageOptions)
+     await imageFileToOptimizedBlob(file, { ...IMAGE_UPLOAD_OPTIMIZATION, ...imageOptions })
     : file;
 
   const extension = getExtensionFromType(preparedBlob, file.name);
-  const fileBaseName = String(file.name || 'asset')
-    .replace(/\.[^.]+$/, '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9._-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .toLowerCase() || 'asset';
-
-  const filename = `${Date.now()}-${fileBaseName}.${extension}`;
+  const originalBaseName = String(file.name || 'asset').replace(/\.[^.]+$/, '') || 'asset';
+  const filename = generateStorageFilename(`${originalBaseName}.${extension}`);
   const uploadFile = renameBlob(preparedBlob, filename);
   const path = buildStoragePath('users', userId, folder, filename);
 
-  return uploadToStorage(path, uploadFile, {
+  const result = await uploadToStorage(path, uploadFile, {
     contentType: uploadFile.type || file.type || 'application/octet-stream',
     cacheControl,
+    visibility: 'public',
   });
+
+  return {
+    ...result,
+    filename,
+    originalName: file.name,
+    contentType: uploadFile.type || file.type || 'application/octet-stream',
+    originalSize: file.size || 0,
+    optimizedSize: uploadFile.size || preparedBlob.size || file.size || 0,
+    optimized: preparedBlob !== file,
+  };
 }
 
 async function imageFileToOptimizedDataURL(file, options = {}) {
-  const optimizedBlob = await imageFileToOptimizedBlob(file, options);
+  const optimizedBlob = await imageFileToOptimizedBlob(file, { ...IMAGE_UPLOAD_OPTIMIZATION, ...options });
   return fileToDataURL(optimizedBlob instanceof File ? optimizedBlob : new File([optimizedBlob], file.name, { type: optimizedBlob.type || file.type }));
 }
 
-export { downloadBlob, fileToDataURL, imageFileToOptimizedBlob, imageFileToOptimizedDataURL, uploadFileToSupabase };
+export {
+  IMAGE_UPLOAD_OPTIMIZATION,
+  downloadBlob,
+  fileToDataURL,
+  imageFileToOptimizedBlob,
+  imageFileToOptimizedDataURL,
+  uploadFileToSupabase,
+};

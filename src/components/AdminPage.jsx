@@ -1,7 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { getAllAccounts, normalizeEmail, updateStoredAccount } from '../lib/authStorage';
-import { getPublicGames } from '../lib/publicGalleryStorage';
-import { getBlogModerationId, getModerationState, updateModerationAction } from '../lib/moderationStorage';
+import { normalizeEmail } from '../lib/authStorage';
+import { getBlogModerationId } from '../lib/moderationStorage';
+import {
+  getDisplayName,
+  getManagedUsers,
+  loadAdminDashboard,
+  prepareAdminShopPackScreenshots,
+  prepareAdminShopPackZip,
+  toggleStoredLocalAccountStatus,
+  updateAdminCredits,
+  updateAdminModeration,
+  updateAdminUser,
+} from '../lib/adminApi';
 import {
   createEmptyShopPack,
   archiveSharedShopPack,
@@ -11,21 +21,7 @@ import {
   relistSharedShopPack,
   upsertSharedShopPack,
 } from '../lib/shopPacksStorage';
-import { fileToDataURL, uploadFileToSupabase } from '../utils/fileHelpers';
-import { getSupabaseClient, hasSupabaseConfig } from '../supabaseStorage';
-
-const ADMIN_EMAIL = 'thorez.m@hotmail.fr';
-const AI_CREDITS_ADMIN_ENDPOINT = import.meta.env.VITE_AI_CREDITS_ADMIN_ENDPOINT || '/api/ai-credits/admin';
-const ADMIN_USERS_ENDPOINT = import.meta.env.VITE_ADMIN_USERS_ENDPOINT || '/api/admin/users';
-const LOCAL_PROJECTS_KEY_PREFIX = 'escapeGameBuilder.projects';
-
-const safeParse = (value, fallback) => {
-  try {
-    return value ? JSON.parse(value) : fallback;
-  } catch {
-    return fallback;
-  }
-};
+import { hasSupabaseConfig } from '../supabaseStorage';
 
 const formatDate = (value) => {
   if (!value) return 'Jamais';
@@ -42,14 +38,6 @@ const formatDate = (value) => {
   }
 };
 
-const readLocalProjects = (userId) => {
-  if (!userId || typeof window === 'undefined') return [];
-  return safeParse(window.localStorage.getItem(`${LOCAL_PROJECTS_KEY_PREFIX}.${userId}`), []);
-};
-
-const getDisplayName = (account) =>
-  account?.name || account?.email || account?.userId || 'Utilisateur';
-
 const SHOP_PACK_NUMBER_FIELDS = [
   'costCredits',
   'rating',
@@ -60,8 +48,6 @@ const SHOP_PACK_NUMBER_FIELDS = [
   'cinematicsCount',
   'combinationsCount',
 ];
-
-const createShopPackId = () => `pack_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
 export default function AdminPage({
   user,
@@ -82,38 +68,13 @@ export default function AdminPage({
   const [status, setStatus] = useState('');
   const [isBusy, setIsBusy] = useState(false);
 
-  const getAdminAuthHeaders = async () => {
-    if (!hasSupabaseConfig()) return {};
-    const { data } = await getSupabaseClient().auth.getSession();
-    const token = data.session?.access_token;
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  };
-
   const refreshAdminData = async () => {
-    const localAccounts = getAllAccounts()
-      .filter((account) => normalizeEmail(account.email) !== ADMIN_EMAIL);
-    setAccounts(localAccounts);
-    const authHeaders = await getAdminAuthHeaders();
-
-    const [usersPayload, creditsPayload, games, moderationState] = await Promise.all([
-      hasSupabaseConfig()
-        ? fetch(ADMIN_USERS_ENDPOINT, { headers: authHeaders }).then((response) => {
-          if (!response.ok) throw new Error(`Utilisateurs Supabase indisponibles (${response.status}).`);
-          return response.json();
-        })
-        : Promise.resolve({ users: [] }),
-      fetch(AI_CREDITS_ADMIN_ENDPOINT, { headers: authHeaders }).then((response) => {
-        if (!response.ok) throw new Error(`Credits indisponibles (${response.status}).`);
-        return response.json();
-      }),
-      getPublicGames({ includeModerated: true }).catch(() => []),
-      getModerationState(),
-    ]);
-
-    setSupabaseUsers(Array.isArray(usersPayload.users) ? usersPayload.users : []);
-    setCreditUsers(Array.isArray(creditsPayload.users) ? creditsPayload.users : []);
-    setPublicGames(games.filter((game) => normalizeEmail(game.authorEmail) !== ADMIN_EMAIL));
-    setModeration(moderationState);
+    const dashboard = await loadAdminDashboard();
+    setAccounts(dashboard.accounts);
+    setSupabaseUsers(dashboard.supabaseUsers);
+    setCreditUsers(dashboard.creditUsers);
+    setPublicGames(dashboard.publicGames);
+    setModeration(dashboard.moderation);
     loadSharedShopPacks()
       .then(setShopPacks)
       .catch(() => {});
@@ -135,60 +96,7 @@ export default function AdminPage({
     };
   }, []);
 
-  const managedUsers = useMemo(() => {
-    const byId = new Map();
-
-    accounts.forEach((account) => {
-      const projects = readLocalProjects(account.id);
-      byId.set(account.id, {
-        userId: account.id,
-        name: account.name,
-        email: account.email,
-        provider: account.provider || 'local',
-        status: account.status || 'active',
-        createdAt: account.createdAt,
-        projects,
-        publicProjects: projects.filter((project) => project.shareState?.isPublic).length,
-      });
-    });
-
-    supabaseUsers.forEach((account) => {
-      const projects = readLocalProjects(account.id);
-      byId.set(account.id, {
-        userId: account.id,
-        name: account.name,
-        email: account.email,
-        provider: 'supabase',
-        status: account.isDisabled ? 'disabled' : 'active',
-        createdAt: account.createdAt,
-        updatedAt: account.updatedAt,
-        lastSignInAt: account.lastSignInAt,
-        projects,
-        publicProjects: projects.filter((project) => project.shareState?.isPublic).length,
-      });
-    });
-
-    creditUsers.forEach((creditAccount) => {
-      if (normalizeEmail(creditAccount.userId) === ADMIN_EMAIL) return;
-      const existing = byId.get(creditAccount.userId) || {
-        userId: creditAccount.userId,
-        name: '',
-        email: '',
-        provider: 'credits',
-        status: 'active',
-        createdAt: creditAccount.createdAt,
-        projects: [],
-        publicProjects: 0,
-      };
-      byId.set(creditAccount.userId, {
-        ...existing,
-        credits: creditAccount,
-      });
-    });
-
-    return Array.from(byId.values())
-      .sort((a, b) => getDisplayName(a).localeCompare(getDisplayName(b), 'fr'));
-  }, [accounts, supabaseUsers, creditUsers]);
+  const managedUsers = useMemo(() => getManagedUsers({ accounts, supabaseUsers, creditUsers }), [accounts, supabaseUsers, creditUsers]);
 
   const selectedUser = managedUsers.find((entry) => entry.userId === selectedUserId) || managedUsers[0] || null;
 
@@ -203,21 +111,12 @@ export default function AdminPage({
     setStatus('');
 
     try {
-      const response = await fetch(AI_CREDITS_ADMIN_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(await getAdminAuthHeaders()),
-        },
-        body: JSON.stringify({
-          userId: selectedUser.userId,
-          action: creditAction,
-          amount: Number(creditAmount || 0),
-          reason: `admin:${user?.email || 'admin'}`,
-        }),
+      const payload = await updateAdminCredits({
+        userId: selectedUser.userId,
+        action: creditAction,
+        amount: Number(creditAmount || 0),
+        reason: `admin:${user?.email || 'admin'}`,
       });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || 'Modification impossible.');
 
       setCreditUsers((previous) => {
         const withoutUser = previous.filter((entry) => entry.userId !== payload.user.userId);
@@ -232,11 +131,10 @@ export default function AdminPage({
   };
 
   const toggleLocalAccountStatus = (targetUser) => {
-    if (!targetUser?.userId || targetUser.provider === 'credits' || targetUser.provider === 'supabase') return;
-    const nextStatus = targetUser.status === 'disabled' ? 'active' : 'disabled';
-    updateStoredAccount(targetUser.userId, { status: nextStatus });
-    setAccounts(getAllAccounts().filter((account) => normalizeEmail(account.email) !== ADMIN_EMAIL));
-    setStatus(nextStatus === 'disabled' ? 'Compte desactive.' : 'Compte reactive.');
+    const result = toggleStoredLocalAccountStatus(targetUser);
+    if (!result) return;
+    setAccounts(result.accounts);
+    setStatus(result.nextStatus === 'disabled' ? 'Compte desactive.' : 'Compte reactive.');
   };
 
   const updateSupabaseAccount = async (targetUser, action, options = {}) => {
@@ -245,20 +143,11 @@ export default function AdminPage({
     setStatus('');
 
     try {
-      const response = await fetch(ADMIN_USERS_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(await getAdminAuthHeaders()),
-        },
-        body: JSON.stringify({
-          userId: targetUser.userId,
-          action,
-          ...options,
-        }),
+      const payload = await updateAdminUser({
+        userId: targetUser.userId,
+        action,
+        ...options,
       });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || 'Modification utilisateur impossible.');
 
       if (payload.deletedUserId) {
         setSupabaseUsers((previous) => previous.filter((entry) => entry.id !== payload.deletedUserId));
@@ -271,7 +160,7 @@ export default function AdminPage({
       setSupabaseUsers((previous) => previous.map((entry) => (
         entry.id === payload.user.id ? payload.user : entry
       )));
-      setStatus(payload.user.isDisabled ? 'Compte Supabase bloque.' : 'Compte Supabase debloque.');
+      setStatus(payload.user.isDisabled ? 'Compte Supabase bloqué.' : 'Compte Supabase debloqué.');
     } catch (error) {
       setStatus(error.message || 'Modification utilisateur impossible.');
     } finally {
@@ -300,13 +189,7 @@ export default function AdminPage({
     setIsBusy(true);
     setStatus('');
     try {
-      await updateModerationAction({
-        targetType,
-        targetId,
-        action,
-        reason,
-        authHeaders: await getAdminAuthHeaders(),
-      });
+      await updateAdminModeration({ targetType, targetId, action, reason });
       await refreshAdminData();
       setStatus(action === 'hidden' ? 'Element masque dans la galerie.' : 'Element restaure dans la galerie.');
     } catch (error) {
@@ -326,11 +209,7 @@ export default function AdminPage({
   const addShopPackScreenshots = async (event) => {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
-    const screenshots = await Promise.all(files.map(async (file) => ({
-      id: `shot_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
-      name: file.name,
-      src: await fileToDataURL(file),
-    })));
+    const screenshots = await prepareAdminShopPackScreenshots(files);
     setShopPackForm((previous) => ({
       ...previous,
       screenshots: [...(previous.screenshots || []), ...screenshots],
@@ -348,37 +227,18 @@ export default function AdminPage({
   const importShopPackZip = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!/\.zip$/i.test(file.name)) {
-      setStatus('Importe un fichier ZIP pour le pack.');
-      event.target.value = '';
-      return;
-    }
 
     setIsBusy(true);
     try {
-      const packId = shopPackForm.id || createShopPackId();
-      const patch = hasSupabaseConfig() ?
-        await uploadFileToSupabase(file, {
-          userId: user?.id,
-          folder: `shop-packs-${packId}`,
-          optimizeImage: false,
-          cacheControl: '0',
-        }).then((result) => ({
-          downloadUrl: result.publicUrl,
-          downloadStoragePath: result.path,
-          downloadMode: 'supabase',
-        }))
-        : {
-          downloadUrl: await fileToDataURL(file),
-          downloadStoragePath: '',
-          downloadMode: 'local',
-        };
+      const zipPatch = await prepareAdminShopPackZip({
+        file,
+        packId: shopPackForm.id,
+        userId: user?.id,
+      });
 
       setShopPackForm((previous) => ({
         ...previous,
-        id: packId,
-        downloadFileName: file.name,
-        ...patch,
+        ...zipPatch,
       }));
       setStatus('ZIP du pack importe.');
     } catch (error) {
@@ -584,7 +444,7 @@ export default function AdminPage({
             ))}
             {managedUsers.length === 0 ? (
               <div className="empty-state-inline">
-                <strong>Aucun autre compte trouve.</strong>
+                <strong>Aucun autre compte trouvé.</strong>
               </div>
             ) : null}
           </div>
@@ -664,7 +524,7 @@ export default function AdminPage({
                   onClick={() => toggleSupabaseAccountStatus(selectedUser)}
                   disabled={isBusy}
                 >
-                  {selectedUser.status === 'disabled' ? 'Debloquer le compte Supabase' : 'Bloquer sans limite'}
+                  {selectedUser.status === 'disabled' ? 'Debloquér le compte Supabase' : 'Bloquer sans limite'}
                 </button>
                 <button
                   type="button"
@@ -745,7 +605,7 @@ export default function AdminPage({
           ))}
           {publicGames.length === 0 ? (
             <div className="empty-state-inline">
-              <strong>Aucun jeu public tiers trouve.</strong>
+              <strong>Aucun jeu public tiers trouvé.</strong>
             </div>
           ) : null}
         </div>
@@ -755,7 +615,7 @@ export default function AdminPage({
         <div className="panel-head">
           <div>
             <h2>Moderation des blogs</h2>
-            <p className="small-note">{blogPosts.length} article{blogPosts.length > 1 ? 's' : ''} trouve{blogPosts.length > 1 ? 's' : ''}</p>
+            <p className="small-note">{blogPosts.length} articlé{blogPosts.length > 1 ? 's' : ''} trouvé{blogPosts.length > 1 ? 's' : ''}</p>
           </div>
         </div>
 
@@ -777,7 +637,7 @@ export default function AdminPage({
                   </button>
                 ) : (
                   <button type="button" className="danger-button" onClick={() => setModerationTarget({ targetType: 'blog', targetId: post.moderationId, action: 'hidden', reason: 'hide_blog' })} disabled={isBusy}>
-                    Masquer l'article
+                    Masquer l'articlé
                   </button>
                 )}
               </div>
@@ -785,7 +645,7 @@ export default function AdminPage({
           ))}
           {blogPosts.length === 0 ? (
             <div className="empty-state-inline">
-              <strong>Aucun article de blog trouve.</strong>
+              <strong>Aucun articlé de blog trouvé.</strong>
             </div>
           ) : null}
         </div>
@@ -795,7 +655,7 @@ export default function AdminPage({
         <div className="panel-head">
           <div>
             <h2>Moderation des avis</h2>
-            <p className="small-note">{comments.length} avis trouve{comments.length > 1 ? 's' : ''}</p>
+            <p className="small-note">{comments.length} avis trouvé{comments.length > 1 ? 's' : ''}</p>
           </div>
         </div>
 
@@ -825,7 +685,7 @@ export default function AdminPage({
           ))}
           {comments.length === 0 ? (
             <div className="empty-state-inline">
-              <strong>Aucun avis trouve.</strong>
+              <strong>Aucun avis trouvé.</strong>
             </div>
           ) : null}
         </div>
@@ -887,7 +747,7 @@ export default function AdminPage({
                   ['scenesCount', 'Scenes'],
                   ['objectsCount', 'Objets'],
                   ['enigmasCount', 'Enigmes'],
-                  ['cinematicsCount', 'Cinematiques'],
+                  ['cinematicsCount', 'Cinematics'],
                   ['combinationsCount', 'Combinaisons'],
                 ].map(([field, label]) => (
                   <label key={field}>
@@ -922,10 +782,10 @@ export default function AdminPage({
               {shopPackForm.downloadUrl ? (
                 <div className="admin-pack-download-chip">
                   <strong>{shopPackForm.downloadFileName || 'pack.zip'}</strong>
-                  <span>{shopPackForm.downloadMode === 'supabase' ? 'Pret pour les acheteurs' : 'Stockage local'}</span>
+                  <span>{shopPackForm.downloadMode === 'supabase' ? 'Prêt pour les acheteurs' : 'Stockage local'}</span>
                 </div>
               ) : (
-                <p className="small-note">Ajoute le dossier ZIP qui sera propose au telechargement apres achat.</p>
+                <p className="small-note">Ajoute le dossier ZIP qui sera propos? au telechargement après achat.</p>
               )}
 
               <button type="submit" className="profile-action-button">
@@ -950,7 +810,7 @@ export default function AdminPage({
                       <strong>{pack.title}</strong>
                       <span>{pack.costCredits} credits - note {pack.rating}/10</span>
                     </div>
-                    <span className="status-badge soft">{pack.downloadUrl ? 'ZIP pret' : 'ZIP manquant'}</span>
+                    <span className="status-badge soft">{pack.downloadUrl ? 'ZIP prêt' : 'ZIP manquant'}</span>
                   </div>
                   <p className="small-note">{pack.description || 'Aucun descriptif.'}</p>
                   <div className="admin-pack-metrics">

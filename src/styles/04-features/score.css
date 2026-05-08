@@ -1,0 +1,99 @@
+/* Score */
+
+.score-layout{grid-template-columns:minmax(0,1.05fr) minmax(360px,.95fr);grid-template-areas:"hero inventory" "dimensions inventory" "player inventory" "badges inventory" "advice inventory" "conclusion conclusion";align-items:start}
+
+.score-hero-panel{grid-area:hero}
+
+.score-dimensions-panel{grid-area:dimensions}
+
+.score-player-panel{grid-area:player}
+
+.score-badges-panel{grid-area:badges}
+
+.score-inventory-panel{grid-area:inventory}
+
+.score-advice-panel{grid-area:advice}
+
+.score-conclusion-panel{grid-area:conclusion}
+
+.score-hero-panel,.score-conclusion-panel{display:grid;gap:14px}
+
+.score-hero-main h2{margin:8px 0;font-size:32px}
+
+.score-hero-main p,.score-conclusion-panel p{margin:0;color:var(--text-info);line-height:1.55}
+
+.score-big{display:inline-flex;align-items:center;gap:10px;width:fit-content;min-height:58px;padding:10px 16px;border-radius:12px;border:1px solid var(--border-muted-strong);background:#0f172aa3}
+
+.score-big strong{font-size:28px;font-variant-numeric:tabular-nums}
+
+.score-big.good{border-color:var(--state-success-border);color:var(--text-success)}
+
+.score-big.warn{border-color:var(--state-warning-border);color:var(--text-warning)}
+
+.score-big.danger{border-color:var(--state-danger-border);color:var(--text-danger)}
+
+.score-section-grid,.score-metrics-grid,.score-connection-summary{display:grid;gap:8px}
+
+.score-section-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+
+.score-metrics-grid{grid-template-columns:repeat(5,minmax(0,1fr))}
+
+.score-section-grid div,.score-metric-card,.score-connection-summary div{display:grid;gap:5px;padding:10px;border-radius:var(--radius-md);border:1px solid var(--border-muted);background:var(--surface-dark-muted)}
+
+.score-section-grid span,.score-metric-card span,.score-connection-summary span{color:#9fb0cc;font-size:12px;font-weight:700}
+
+.score-help-label{display:inline-flex;align-items:center;gap:6px;width:fit-content}
+
+.score-help-label .help-dot{width:17px;height:17px;font-size:11px}
+
+.score-section-grid strong,.score-metric-card strong,.score-connection-summary strong{color:#fff;font-size:18px;font-variant-numeric:tabular-nums}
+
+.score-metric-card small{color:var(--muted);font-size:11px;font-weight:800}
+
+.score-mini-total{align-self:center;padding:7px 10px;border-radius:var(--radius-pill);border:1px solid rgba(96,165,250,.25);background:#2563eb1f;color:var(--text-info);font-size:13px;font-variant-numeric:tabular-nums}
+
+.score-badge-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+
+.score-badge-card{display:grid;grid-template-columns:auto 1fr;gap:9px;align-items:start;padding:10px;border-radius:var(--radius-md);border:1px solid rgba(34,197,94,.24);background:#16a34a1a;color:#dcfce7}
+
+.score-badge-card.expert{border-color:#a855f747;background:#7e22ce1f;color:#f3e8ff}
+
+.score-badge-card span{display:grid;gap:3px}
+
+.score-badge-card strong{color:#fff;font-size:14px}
+
+.score-badge-card small{color:currentColor;opacity:.82;line-height:1.35}
+
+.score-connection-summary{grid-template-columns:repeat(4,minmax(0,1fr));margin-top:10px}
+
+.score-playtime-card{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start;margin-top:10px;padding:12px;border-radius:var(--radius-md);border:1px solid var(--border-info);background:#2563eb1a}
+
+.score-playtime-card span{display:block;color:#9fb0cc;font-size:12px;font-weight:800}
+
+.score-playtime-card strong{display:block;margin-top:4px;color:#fff;font-size:22px;font-variant-numeric:tabular-nums}
+
+.score-playtime-card small{display:block;margin-top:4px;color:var(--muted);line-height:1.35}
+
+.score-advice-list{display:grid;gap:8px}
+
+.score-advice-card{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start;padding:10px;border-radius:var(--radius-md);border:1px solid rgba(96,165,250,.2);background:#2563eb17;color:var(--text-info);line-height:1.45}
+
+.score-advice-card.success{border-color:#22c55e42;background:#16a34a1a;color:#dcfce7}
+
+.score-advice-card.warning{border-color:#f59e0b47;background:#f59e0b1a;color:#fef3c7}
+
+.score-advice-card.danger{border-color:#ef44444d;background:#ef44441a;color:#fee2e2}
+
+.score-advice-card span{display:grid;gap:3px}
+
+.score-advice-card strong{color:#fff;font-size:14px}
+
+.score-advice-card em{width:fit-content;padding:2px 7px;border-radius:var(--radius-pill);background:#ffffff14;color:#ffffffc7;font-size:11px;font-style:normal;font-weight:800}
+
+.score-advice-card small{color:currentColor;opacity:.82;font-size:13px}
+
+.score-conclusion-panel{grid-template-columns:auto 1fr}
+
+.score-conclusion-panel h2{margin:0 0 6px}
+
+.score-conclusion-panel small{display:block;margin-top:8px;color:var(--muted);line-height:1.4}

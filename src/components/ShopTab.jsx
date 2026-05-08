@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { archiveSharedShopPack, getShopPacks, loadSharedShopPacks } from '../lib/shopPacksStorage';
+import { getShopPacks, loadSharedShopPacks } from '../lib/shopPacksStorage';
+import { getSupabaseClient, hasSupabaseConfig } from '../supabaseStorage';
 
 const PACK_URLS = {
   100: 'https://mickalicious77.gumroad.com/l/blfvpj',
@@ -76,6 +77,13 @@ const readJsonResponse = async (response, fallbackMessage) => {
   }
 };
 
+const getAuthHeaders = async () => {
+  if (!hasSupabaseConfig()) return {};
+  const { data } = await getSupabaseClient().auth.getSession();
+  const token = data.session?.access_token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
 export default function ShopTab({ user }) {
   const [copyStatus, setCopyStatus] = useState('');
   const [productPacks, setProductPacks] = useState(() => getShopPacks());
@@ -109,8 +117,8 @@ export default function ShopTab({ user }) {
   const refreshAiCredits = async () => {
     setAiCredits((previous) => ({ ...previous, isLoading: true, error: '' }));
     try {
-      const response = await fetch(`${AI_CREDITS_ENDPOINT}?userId=${encodeURIComponent(purchaseId)}`, {
-        headers: purchaseId ? { 'X-AI-User-Id': purchaseId } : {},
+      const response = await fetch(AI_CREDITS_ENDPOINT, {
+        headers: await getAuthHeaders(),
       });
       if (!response.ok) throw new Error(`Credits indisponibles (${response.status}).`);
       const payload = await readJsonResponse(response, 'Credits indisponibles. Lance le serveur API pour actualiser le solde.');
@@ -164,19 +172,16 @@ export default function ShopTab({ user }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-AI-User-Id': purchaseId,
+          ...(await getAuthHeaders()),
         },
         body: JSON.stringify({
-          userId: purchaseId,
           packId: pack.id,
-          costCredits: cost,
-          title: pack.title,
         }),
       });
       const payload = await readJsonResponse(response, 'Achat impossible: le serveur API boutique ne repond pas.');
       if (!response.ok) throw new Error(payload.error || 'Achat impossible.');
 
-      const purchase = {
+      const purchase = payload.purchase || {
         packId: pack.id,
         title: pack.title,
         costCredits: cost,
@@ -186,15 +191,9 @@ export default function ShopTab({ user }) {
       };
       const nextPurchases = savePurchases(purchaseId, [purchase, ...purchases.filter((entry) => entry.packId !== pack.id)]);
       setPurchases(nextPurchases);
-      archiveSharedShopPack(pack.id, {
-        archivedReason: 'sold',
-        soldAt: purchase.purchasedAt,
-        soldTo: purchaseId,
-      })
-        .then(setProductPacks)
-        .catch(() => {});
+      loadSharedShopPacks().then(setProductPacks).catch(() => {});
       setAiCredits((previous) => ({ ...previous, balance: Number(payload.balance ?? Math.max(0, Number(previous.balance || 0) - cost)) }));
-      setPurchaseStatus('Pack achete. Le lien de telechargement est disponible ci-dessous.');
+      setPurchaseStatus('Pack achété. Le lien de telechargement est disponible ci-dessous.');
     } catch (error) {
       setPurchaseStatus(error.message || 'Achat impossible.');
     } finally {
@@ -210,7 +209,7 @@ export default function ShopTab({ user }) {
           <span className="status-badge soft">Gumroad</span>
         </div>
         <p className="small-note">
-          Achete un pack de credits puis garde le meme compte dans l'application. L'identifiant ci-dessous permet de retrouver ton achat.
+          Achété un pack de credits puis garde le même compte dans l'application. L'identifiant ci-dessous permet de retrouver ton achat.
         </p>
 
         <div className="shop-identity-panel">
@@ -228,7 +227,7 @@ export default function ShopTab({ user }) {
         <div className="combo-card shop-info-card">
           <strong>Reperes</strong>
           <p>Un projet comme l'exemple recent consomme environ 36 credits hors images.</p>
-          <p>Miniature economique d'objet: 1 credit. Image d'objet detaillee: 3 credits. Image de scene: 5 credits.</p>
+          <p>Miniature economique d'objet: 1 credit. Image d'objet détaillee: 3 credits. Image de scene: 5 credits.</p>
         </div>
       </section>
 
@@ -248,16 +247,16 @@ export default function ShopTab({ user }) {
               <strong>{pack.price}</strong>
               <p>Environ {estimateProjects(pack.credits)} projet{estimateProjects(pack.credits) > 1 ? 's' : ''} complet{estimateProjects(pack.credits) > 1 ? 's' : ''}, hors images.</p>
               <button type="button" disabled={!pack.url} onClick={() => openPack(pack)}>
-                {pack.url ? 'Acheter ce pack' : 'Pack indisponible'}
+                {pack.url ? 'Achétér ce pack' : 'Pack indisponible'}
               </button>
             </article>
           ))}
         </div>
 
         <div className="combo-card shop-afterbuy-card">
-          <h3>Apres paiement</h3>
+          <h3>Après paiement</h3>
           <p>
-            Les credits sont ajoutes au compte associe a ton identifiant d'achat. Si le credit n'apparait pas tout de suite, envoie ton identifiant et le recu Gumroad{supportEmail ? ` a ${supportEmail}` : ' au support'}.
+            Les credits sont ajoutes au compte associe à ton identifiant d'achat. Si le credit n'apparait pas tout de suite, envoie ton identifiant et le recu Gumroad{supportEmail ? ` a ${supportEmail}` : ' au support'}.
           </p>
         </div>
 
@@ -266,7 +265,7 @@ export default function ShopTab({ user }) {
             <div className="panel-head">
               <div>
                 <span className="section-kicker">Achats</span>
-                <h2>Telechargements debloques</h2>
+                <h2>Telechargements debloqués</h2>
               </div>
             </div>
             <div className="shop-download-list">
@@ -309,7 +308,7 @@ export default function ShopTab({ user }) {
                     <span className="section-kicker">{pack.costCredits} credits</span>
                     <h3>{pack.title}</h3>
                     <strong>{pack.rating}/10</strong>
-                    <p>{pack.description || 'Pack pret a importer dans un projet.'}</p>
+                    <p>{pack.description || 'Pack prêt ? importer dans un projet.'}</p>
                     <div className="shop-product-metrics">
                       <span>{pack.actsCount} actes</span>
                       <span>{pack.scenesCount} scenes</span>
@@ -324,7 +323,7 @@ export default function ShopTab({ user }) {
                       disabled={buyingPackId === pack.id || !pack.downloadUrl || aiCredits.isLoading}
                       onClick={() => buyProductPack(pack)}
                     >
-                      {buyingPackId === pack.id ? 'Achat...' : `Acheter pour ${pack.costCredits} credits`}
+                      {buyingPackId === pack.id ? 'Achat...' : `Achétér pour ${pack.costCredits} credits`}
                     </button>
                   </div>
                 </article>

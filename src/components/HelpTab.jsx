@@ -9,45 +9,45 @@ const HELP_MODES = [
 
 const HELP_TUTORIAL_OPTIONS = [
   ['profile', 'Profil', 'Comprendre la page de depart, les projets, les imports et la publication.'],
-  ['scenes', 'Scenes', 'Creer une scene, poser une ambiance, ajouter des objets et medias.'],
-  ['editor', 'Editeur', 'Ajouter des zones cliquables, zones visuelles et tester le rendu joueur.'],
-  ['map', 'Plan', 'Organiser les pieces et verifier les connexions du parcours.'],
-  ['cinematics', 'Cinematiques', 'Construire une sequence narrative avec images, textes et transitions.'],
+  ['scenes', 'Scenes', 'Créer une scene, poser une ambiance, ajouter des objets et medias.'],
+  ['editor', 'Éditeur', 'Ajouter des zones cliquables, zones visuelles et tester le rendu joueur.'],
+  ['map', 'Plan', 'Organiser les pieces et vérifier les connexions du parcours.'],
+  ['cinematics', 'Cinematics', 'Construire une sequence narrative avec images, textes et transitions.'],
   ['animation', 'Animation', 'Composer une sequence 2D avec storyboard, calques, mouvements et previsualisation.'],
-  ['combinations', 'Combinaisons', 'Relier des objets entre eux pour creer de nouveaux resultats.'],
-  ['enigmas', 'Enigmes', 'Creer un code, une apparence joueur et une validation claire.'],
-  ['logic', 'Logique', 'Declencher des consequences selon les actions, objets ou zones franchies.'],
+  ['combinations', 'Combinaisons', 'Relier des objets entre eux pour créer de nouveaux resultats.'],
+  ['enigmas', 'Enigmes', 'Créer un code, une apparence joueur et une validation claire.'],
+  ['logic', 'Logique', 'Decléncher des consequences selon les actions, objets ou zones franchies.'],
   ['ai', 'IA', 'Utiliser l assistant IA, comprendre les credits, brouillons et generations.'],
 ];
 
 const FAQ_ITEMS = [
   {
     question: 'Par quoi commencer quand on decouvre le builder ?',
-    answer: 'Commence par le didacticiel Profil, puis Scenes, Editeur et Logique. Ces parcours donnent les bases pour creer un jeu jouable : lieux, interactions et consequences.',
+    answer: 'Commence par le didacticiel Profil, puis Scenes, Éditeur et Logique. Ces parcours donnént les bases pour créer un jeu jouable : lieux, interactions et consequences.',
   },
   {
     question: 'Quelle difference entre une scene et une sous-scene ?',
-    answer: 'Une scene est un lieu principal. Une sous-scene est un detail ou une variation rattachee a ce lieu : tiroir ouvert, coffre, gros plan, couloir secondaire.',
+    answer: 'Une scene est un lieu principal. Une sous-scene est un détail ou une variation rattachee a ce lieu : tiroir ouvert, coffre, gros plan, couloir secondaire.',
   },
   {
     question: 'Pourquoi tester souvent en Preview ?',
-    answer: 'La Preview montre ce que voit le joueur. Elle permet de verifier les dialogues, les zones cliquables, les enigmes, les objets gagnes et les changements de scene.',
+    answer: 'La Preview montre ce que voit le joueur. Elle permet de vérifier les dialogues, les zones cliquables, les enigmes, les objets gagnes et les changements de scene.',
   },
   {
     question: 'A quoi sert le Plan ?',
-    answer: 'Le Plan sert a voir le parcours d un seul coup d oeil et a verifier que les connexions entre les pieces sont bien presentes.',
+    answer: 'Le Plan sert a voir le parcours d un seul coup d oeil et a vérifier que les connexions entre les pieces sont bien prèsentes.',
   },
   {
     question: 'Quand utiliser la Logique ?',
-    answer: 'Utilise la Logique quand une action doit dependre d une condition : posseder un objet, avoir traverse une zone, resoudre une enigme, puis declencher une consequence.',
+    answer: 'Utilise la Logique quand une action doit dépendre d une condition : possèder un objet, avoir traversé une zone, résoudre une enigme, puis décléncher une consequence.',
   },
   {
-    question: 'Est-ce que les didacticiels modifient mon vrai projet ?',
-    answer: 'Les didacticiels du builder utilisent un projet temporaire quand c est necessaire. Le didacticiel Profil explique la page actuelle sans creer de projet tout seul.',
+    question: 'Est-ce que les didacticiels modifiént mon vrai projet ?',
+    answer: 'Les didacticiels du builder utilisent un projet temporaire quand c est necessaire. Le didacticiel Profil explique la page actuelle sans créer de projet tout seul.',
   },
   {
-    question: 'Que verifier avant de publier ?',
-    answer: 'Teste le jeu, verifie les zones non reliees, les enigmes sans solution, la categorie, la mention d age et la miniature de galerie.',
+    question: 'Que vérifier avant de publier ?',
+    answer: 'Teste le jeu, vérifié les zones non reliées, les enigmes sans solution, la catégorie, la mention d’âge et la miniature de galerie.',
   },
 ];
 
@@ -268,7 +268,7 @@ export default function HelpTab({ onStartTutorial }) {
                 </button>
               ))}
               {!filteredSections.length ? (
-                <p className="small-note help-empty-search">Aucune section trouvee.</p>
+                <p className="small-note help-empty-search">Aucune section trouvée.</p>
               ) : null}
             </nav>
           </>
@@ -295,7 +295,7 @@ export default function HelpTab({ onStartTutorial }) {
               <div>
                 <span className="section-kicker">FAQ</span>
                 <h2>Questions frequentes</h2>
-                <p className="small-note">Les reponses rapides aux blocages les plus courants.</p>
+                <p className="small-note">Les réponses rapides aux blocages les plus courants.</p>
               </div>
             </div>
             <div className="help-faq-list">
@@ -315,7 +315,7 @@ export default function HelpTab({ onStartTutorial }) {
               <div>
                 <span className="section-kicker">Didacticiel</span>
                 <h2>Choisir un parcours</h2>
-                <p className="small-note">Lance un parcours guide pour apprendre une partie precise du builder.</p>
+                <p className="small-note">Lance un parcours guide pour apprendre une partie précise du builder.</p>
               </div>
             </div>
             <div className="help-tutorial-grid">

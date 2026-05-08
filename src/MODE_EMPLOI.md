@@ -17,7 +17,7 @@ L'écran **Profil** est le tableau de bord de tes projets.
    - **Musée** : prépare une aventure autour d'artefacts.
 3. Clique sur **Créer**.
 
-Le template donne une première structure, mais tu peux tout modifier ensuite.
+Le template donné une première structure, mais tu peux tout modifiér ensuite.
 
 ### Gérer les projets existants
 
@@ -48,7 +48,7 @@ Après import, ouvre le projet et vérifie-le dans **Preview**.
 
 ## 2. Barre supérieure du builder
 
-Quand un projet est ouvert, la barre supérieure affiche les actions globales.
+Quand un projet est ouvert, la barre supérieure affiché les actions globales.
 
 - **Exporter JSON** : télécharge une sauvegarde complète du projet. C'est le fichier de travail.
 - **Importer JSON** : charge un projet JSON depuis ton ordinateur.
@@ -65,9 +65,9 @@ Différence importante :
 
 Pour éviter de se perdre, construis ton jeu dans cet ordre :
 
-1. Crée les scènes principales.
-2. Ajoute les images et effets dans **Media**.
-3. Place les objets visibles et les zones cliquables dans **Scenes**.
+1. Crée les sc?nes principales.
+2. Ajoute les images et effets dans **Média**.
+3. Place les objets visibles et les zones cliquables dans **Sc?nes**.
 4. Crée les objets d'inventaire.
 5. Crée les énigmes.
 6. Relie les énigmes aux zones d'action.
@@ -80,14 +80,14 @@ Pour éviter de se perdre, construis ton jeu dans cet ordre :
 13. Corrige avec **Bilan**.
 14. Publie ou exporte.
 
-## 4. Onglet Scenes
+## 4. Onglet Sc?nes
 
-L'onglet **Scenes** sert à construire les lieux du jeu et les interactions placées dessus.
+L'onglet **Sc?nes** sert à construire les lieux du jeu et les interactions placées dessus.
 
-### Champs principaux d'une scène
+### Champs principaux d'une scene
 
-**Nom de la scène**  
-Nom affiché dans la navigation de l'éditeur et dans les listes de choix. Garde-le court et explicite, surtout si plusieurs scènes se ressemblent.
+**Nom de la scene**  
+Nom affiché dans la navigation de l'éditeur et dans les listes de choix. Garde-le court et explicite, surtout si plusieurs sc?nes se ressemblent.
 
 Exemples :
 
@@ -97,7 +97,7 @@ Exemples :
 - `Sous-sol - porte rouge`
 
 **Acte**  
-Regroupe la scène dans un chapitre. Si tu changes l'acte d'une scène, une scène parente incompatible peut être retirée.
+Regroupe la sc?ne dans un chapitre. Si tu changes l'acte d'une scene, une sc?ne parente incompatible peut être retirée.
 
 Utilise les actes pour séparer :
 
@@ -106,16 +106,16 @@ Utilise les actes pour séparer :
 - révélation ;
 - final.
 
-**Scène parente**  
-Transforme la scène en sous-scène d'une autre. C'est utile pour les gros plans, tiroirs, portes, documents, coffres, placards ou variantes d'une même pièce.
+**Sc?ne parente**  
+Transforme la sc?ne en sous-sc?ne d'une autre. C'est utile pour les gros plans, tiroirs, portes, documents, coffres, placards ou variantes d'une même pièce.
 
 Exemple :
 
-- Scène principale : `Bureau`
-- Sous-scènes : `Tiroir du bureau`, `Coffre mural`, `Tableau retourné`
+- Sc?ne principale : `Bureau`
+- Sous-sc?nes : `Tiroir du bureau`, `Coffre mural`, `Tableau retourné`
 
 **Texte d'introduction**  
-Texte montré à l'entrée de la scène, avant que le joueur interagisse. Il pose l'ambiance ou l'objectif local.
+Texte montré à l'entrée de la scene, avant que le joueur interagisse. Il pose l'ambiance ou l'objectif local.
 
 Bon exemple :
 
@@ -125,7 +125,7 @@ Mauvais exemple :
 
 > Trouve le code 4821 dans le tiroir.
 
-Le deuxième donne trop directement la solution.
+Le deuxième donné trop directement la solution.
 
 ### Objets d'inventaire
 
@@ -147,9 +147,9 @@ Exemples :
 
 Conseil : un objet doit avoir une utilité claire. Si un objet ne sert jamais, il risque de distraire inutilement le joueur.
 
-### Objets visibles dans une scène
+### Objets visibles dans une scene
 
-Un objet visible est placé directement sur l'image de la scène. Il peut être cliquable, inspecté, ramassé ou les deux.
+Un objet visible est placé directement sur l'image de la scene. Il peut être cliquable, inspecté, ramassé ou les deux.
 
 Champs importants :
 
@@ -158,7 +158,7 @@ Champs importants :
 - **Y** : position verticale du centre, en pourcentage de la hauteur de l'image. `0` = haut, `100` = bas.
 - **Largeur** : largeur de la zone cliquable et de l'image visible, en pourcentage.
 - **Hauteur** : hauteur de la zone cliquable et de l'image visible, en pourcentage.
-- **Image visible** : image affichée dans la scène à l'emplacement choisi.
+- **Image visible** : image affichée dans la sc?ne à l'emplacement choisi.
 - **Image pop-up** : image montrée en grand quand le joueur inspecte l'objet.
 - **Mode d'interaction** : définit si le clic montre un pop-up, ajoute un objet à l'inventaire, ou fait les deux.
 - **Objet d'inventaire lié** : objet ajouté à l'inventaire si le mode inclut l'inventaire.
@@ -174,16 +174,16 @@ Conseil : sur mobile, évite les objets trop petits. Une largeur ou hauteur trop
 
 ### Zones d'action
 
-Une zone d'action est une zone cliquable invisible ou semi-visible. Elle déclenche une action après validation des prérequis éventuels.
+Une zone d'action est une zone cliquable invisible ou semi-visible. Elle déclénche une action après validation des prérequis éventuels.
 
 Champs importants :
 
 - **Nom** : nom interne qui décrit l'intention, par exemple `Porte verrouillée`.
 - **X** et **Y** : position du centre de la zone en pourcentage.
 - **Largeur** et **Hauteur** : taille de la zone cliquable.
-- **Action** : action principale déclenchée.
+- **Action** : action principale déclénchée.
 - **Dialogue** : réaction, indice ou confirmation affichée au joueur.
-- **Scène cible** : destination si l'action est un changement de scène.
+- **Sc?ne cible** : destination si l'action est un changement de scene.
 - **Cinématique cible** : cinématique lancée après interaction.
 - **Énigme liée** : énigme à résoudre avant d'exécuter l'action de la zone.
 - **Son de la zone** : son joué au moment où la zone est utilisée.
@@ -194,16 +194,16 @@ Actions typiques :
 - afficher un dialogue ;
 - donner un objet ;
 - afficher un dialogue puis donner un objet ;
-- changer de scène ;
+- changer de sc?ne ;
 - lancer une cinématique ;
 - ouvrir une énigme.
 
 Exemples :
 
-- `Porte cave` : demande une clé, puis ouvre la scène `Cave`.
-- `Tableau étrange` : affiche un indice.
+- `Porte cave` : demande une clé, puis ouvre la sc?ne `Cave`.
+- `Tableau étrange` : affiché un indice.
 - `Coffre mural` : ouvre l'énigme `Code du coffre`.
-- `Radio cassée` : joue un son puis donne une information.
+- `Radio cassée` : joué un son puis donné une information.
 
 ### Deuxième action
 
@@ -211,14 +211,14 @@ Une zone peut avoir un comportement différent après une première utilisation.
 
 Exemple :
 
-- Premier clic sur `Tiroir` : donne `Clé rouillée`.
-- Deuxième clic : affiche `Le tiroir est vide maintenant.`
+- Premier clic sur `Tiroir` : donné `Clé rouillée`.
+- Deuxième clic : affiché `Le tiroir est vide maintenant.`
 
 Cette logique évite qu'un joueur récupère plusieurs fois le même objet.
 
 ### Effets visuels de zone
 
-Une scène peut contenir des zones d'effet visuel localisées.
+Une sc?ne peut contenir des zones d'effet visuel localisées.
 
 Champs importants :
 
@@ -230,22 +230,22 @@ Champs importants :
 
 Utilise-les pour attirer l'attention sans casser l'immersion : lumière sur un coffre, fumée devant une porte, étincelles sur un mécanisme.
 
-## 5. Onglet Media
+## 5. Onglet Média
 
-L'onglet **Media** centralise les images, sons, transitions, effets et minuteurs d'une scène.
+L'onglet **Média** centralise les images, sons, transitions, effets et minuteurs d'une scene.
 
-### Sélection de scène
+### Sélection de scene
 
-**Scène**  
-Choisis la scène dont tu veux régler les images, sons et effets.
+**Scene**  
+Choisis la sc?ne dont tu veux régler les images, sons et effets.
 
 ### Image et ambiance
 
 **Image de fond**  
-Image principale vue par le joueur dans cette scène. Elle doit être lisible et assez nette pour que les zones importantes soient compréhensibles.
+Image principale vue par le joueur dans cette scene. Elle doit être lisible et assez nette pour que les zones importantes soient compréhensibles.
 
 **Effet global**  
-Filtre ou effet appliqué à toute la scène. Exemples : pluie, brouillard, neige, glitch, vision nocturne, film noir.
+Filtre ou effet appliqué à toute la scene. Exemples : pluie, brouillard, neige, glitch, vision nocturne, film noir.
 
 **Intensité globale**  
 Force du filtre ou de l'effet global. Si l'effet gêne la lecture des indices, baisse l'intensité.
@@ -253,7 +253,7 @@ Force du filtre ou de l'effet global. Si l'effet gêne la lecture des indices, b
 ### Transitions
 
 **Transition de sortie**  
-Transition jouée quand le joueur quitte cette scène vers une autre scène.
+Transition jouée quand le joueur quitte cette sc?ne vers une autre scene.
 
 Types possibles :
 
@@ -276,18 +276,18 @@ Types possibles :
 **Durée**  
 Vitesse de la transition : rapide, normale, lente ou très lente.
 
-**Scène d'arrivée test**  
-Scène utilisée uniquement pour rejouer la transition dans l'aperçu Media. Cela ne change pas la vraie logique du jeu.
+**Sc?ne d'arrivée test**  
+Sc?ne utilisée uniquement pour rejouer la transition dans l'aperçu Média. Cela ne change pas la vraie logique du jeu.
 
-### Minuteur de scène
+### Minuteur de scene
 
-Un minuteur ajoute une contrainte de temps à une scène.
+Un minuteur ajoute une contrainte de temps à une scene.
 
 Champs importants :
 
-- **Durée** : temps disponible dans cette scène avant action automatique.
-- **Fin du temps** : action déclenchée à zéro.
-- **Scène cible** : scène ouverte à la fin du temps ou quand les vies tombent à zéro.
+- **Durée** : temps disponible dans cette sc?ne avant action automatique.
+- **Fin du temps** : action déclénchée à zéro.
+- **Sc?ne cible** : sc?ne ouverte à la fin du temps ou quand les vies tombent à zéro.
 - **Cinématique cible** : cinématique lancée automatiquement.
 - **Vies perdues** : nombre de vies retirées. Le joueur commence avec 3 vies dans l'aperçu.
 - **Message de fin** : texte affiché si l'action de fin a besoin d'un message.
@@ -295,34 +295,34 @@ Champs importants :
 Actions possibles :
 
 - rien ;
-- aller à une scène ;
-- relancer cette scène ;
+- aller à une sc?ne ;
+- relancer cette sc?ne ;
 - recommencer le jeu ;
 - perdre des vies ;
 - afficher un message ;
 - lancer une cinématique.
 
-Utilise un minuteur seulement si la pression sert le jeu. Un compte à rebours gratuit peut frustrer le joueur.
+Utilise un minuteur seulement si la prèssion sert le jeu. Un compte à rebours gratuit peut frustrer le joueur.
 
 ## 6. Onglet Plan
 
-L'onglet **Plan** sert à représenter le parcours du joueur et à vérifier les liaisons entre scènes.
+L'onglet **Plan** sert à représenter le parcours du joueur et à vérifier les liaisons entre sc?nes.
 
 ### Pièces
 
-Une pièce représente un lieu ou une étape du parcours. Elle peut être liée à une scène.
+Une pièce représente un lieu ou une étape du parcours. Elle peut être liée à une scene.
 
 Actions utiles :
 
 - **Ajouter une pièce** : crée une pièce manuellement.
-- **Ajouter les scènes manquantes** : crée automatiquement des pièces pour les scènes non placées.
+- **Ajouter les sc?nes manquantes** : crée automatiquement des pièces pour les sc?nes non placées.
 - **Relier** : crée une liaison entre deux pièces.
 - **Supprimer** : supprime une pièce et ses liaisons.
 
 Champs d'une pièce :
 
 - **Nom** : nom affiché sur le plan.
-- **Scène liée** : scène du builder associée à cette pièce.
+- **Sc?ne liée** : sc?ne du builder associée à cette pièce.
 - **Type** : pièce normale, départ ou arrivée.
 
 Le plan accepte un seul départ principal. Si tu définis une nouvelle pièce comme départ, l'ancienne redevient normale.
@@ -335,7 +335,7 @@ Utilise **Notes de parcours** pour écrire :
 - ordre prévu ;
 - passages optionnels ;
 - pièges de connexion ;
-- scènes à sens unique ;
+- sc?nes à sens unique ;
 - remarques de test.
 
 ### Vérification des liaisons
@@ -344,24 +344,24 @@ Le plan compare les liaisons dessinées avec les vraies transitions du jeu.
 
 Une liaison peut être :
 
-- **valide** : les zones d'action permettent bien de passer entre les scènes ;
+- **valide** : les zones d'action permettent bien de passer entre les sc?nes ;
 - **partielle** : un seul sens existe ;
 - **manquante** : le plan montre une liaison qui n'existe pas encore dans les zones ;
 - **acceptée en aller simple** : tu confirmes volontairement qu'un retour n'est pas prévu.
 
-Si le plan signale une liaison manquante, retourne dans **Scenes** et ajoute une zone d'action vers la bonne scène.
+Si le plan signale une liaison manquante, retourne dans **Sc?nes** et ajoute une zone d'action vers la bonne scene.
 
-## 7. Onglet Cinematiques
+## 7. Onglet Cinématiques
 
 Les cinématiques servent d'introduction, transition, révélation, récompense ou conclusion.
 
 ### Démarrage du jeu
 
 **Le jeu commence par**  
-Détermine le premier écran du joueur : une scène jouable ou une cinématique d'introduction.
+Détermine le premier écran du joueur : une sc?ne jouable ou une cinématique d'introduction.
 
-**Scène de départ**  
-Scène ouverte au début si le démarrage est réglé sur une scène.
+**Sc?ne de départ**  
+Sc?ne ouverte au début si le démarrage est réglé sur une scene.
 
 **Cinématique de départ**  
 Cinématique jouée au début si le démarrage est réglé sur une cinématique.
@@ -382,7 +382,7 @@ Champs importants :
 Fichier joué par la cinématique. Le format MP4 est le plus fiable.
 
 **Lecture auto**  
-Lance automatiquement la vidéo au démarrage de la cinématique. Certains navigateurs bloquent l'audio tant que le joueur n'a pas interagi.
+Lance automatiquement la vidéo au démarrage de la cinématique. Certains navigateurs bloquént l'audio tant que le joueur n'a pas interagi.
 
 **Afficher les contrôles**  
 Affiche lecture, pause, barre de progression et volume.
@@ -400,24 +400,24 @@ La narration doit être courte. Une cinématique doit rythmer le jeu, pas rempla
 ### Action de fin
 
 **Action de fin**  
-Action déclenchée quand la cinématique se termine.
+Action déclénchée quand la cinématique se terminé.
 
 Possibilités :
 
 - rester sur place ;
 - aller à un acte ;
-- ouvrir une scène ;
+- ouvrir une sc?ne ;
 - donner un objet.
 
 Champs liés :
 
 - **Acte de destination** : utile pour passer à un nouveau chapitre.
-- **Scène de destination** : scène ouverte après la cinématique.
+- **Sc?ne de destination** : sc?ne ouverte après la cinématique.
 - **Objet donné** : objet ajouté à l'inventaire à la fin.
 
 ## 8. Onglet Animation
 
-L'onglet **Animation** sert à préparer une scène animée en 2D : tu importes des images, tu les places sur un décor, tu leur appliques une animation, puis tu construis une petite séquence avec une timeline. Il est utile pour créer un plan vivant, une apparition de personnage, une révélation visuelle, une courte transition ou une image animée à exporter.
+L'onglet **Animation** sert à préparer une sc?ne animée en 2D : tu importes des images, tu les places sur un décor, tu leur appliques une animation, puis tu construis une petite séquence avec une timeline. Il est utile pour créer un plan vivant, une apparition de personnage, une révélation visuelle, une courte transition ou une image animée à exporter.
 
 ### Barre de menus
 
@@ -427,7 +427,7 @@ La barre du haut regroupe les actions principales :
 - **Editer** : annuler, rétablir, dupliquer un calque, changer son ordre, verrouiller ou supprimer le calque sélectionné.
 - **Affichage** : zoomer, dézoomer, réinitialiser la vue ou lancer la lecture.
 - **Image** : détourer, gommer, restaurer, rogner ou revenir à l'image originale.
-- **Animation** : appliquer un preset d'animation au calque sélectionné.
+- **Animation** : appliquer un prèset d'animation au calque sélectionné.
 
 Le bouton **Nouveau projet** remet l'animation à zéro. Un message d'avertissement confirme que le projet en cours sera supprimé avant d'effacer le brouillon.
 
@@ -450,7 +450,7 @@ Le panneau **Storyboard** contient les étapes de la séquence.
 - l'action image ;
 - le texte ou la narration associée.
 
-Une étape peut afficher une image, remplacer une image déjà visible ou piloter une partie de la scène. Garde les étapes courtes pour que la lecture reste lisible.
+Une étape peut afficher une image, remplacer une image déjà visible ou piloter une partie de la scene. Garde les étapes courtes pour que la lecture reste lisible.
 
 Exemple :
 
@@ -465,7 +465,7 @@ Le **Canvas** est la zone de composition. Tu peux y déplacer les calques visuel
 
 Commandes utiles :
 
-- **Lecture** : joue la séquence.
+- **Lecture** : joué la séquence.
 - **Annuler / rétablir** : revient sur les dernières modifications.
 - **Zoom** : agrandit ou réduit la vue de travail.
 - **Réinitialiser la vue** : replace le canvas dans une vue confortable.
@@ -485,19 +485,19 @@ Champs importants :
 - **Opacité (%)** : transparence.
 - **Durée (ms)** : vitesse de l'animation du calque.
 - **Délai (ms)** : retard avant le début de l'animation.
-- **Boucler l'animation** : répète l'animation en continu.
+- **Bouclér l'animation** : répète l'animation en continu.
 
 L'ordre des calques détermine ce qui passe devant ou derrière. Place les fonds et ombres en bas, les personnages et objets importants au-dessus.
 
 ### Verrouiller un calque
 
-Le verrouillage empêche de déplacer ou modifier accidentellement une image. Utilise-le quand un élément est bien placé, surtout pour les grands fonds ou les décors.
+Le verrouillage empêche de déplacer ou modifiér accidentellement une image. Utilise-le quand un élément est bien placé, surtout pour les grands fonds ou les décors.
 
 Un calque verrouillé reste visible, mais il ne se retouche pas tant qu'il n'est pas déverrouillé.
 
 ### Presets d'animation
 
-Les presets donnent rapidement du mouvement à un calque :
+Les prèsets donnént rapidement du mouvement à un calque :
 
 - **Aucun** : image fixe.
 - **Respiration** : mouvement léger, utile pour un personnage.
@@ -510,7 +510,7 @@ Les presets donnent rapidement du mouvement à un calque :
 - **Braises** : effet chaud et vivant sur un élément lumineux.
 - **Regard** : léger balancement pour une silhouette ou un personnage.
 
-Choisis un preset selon l'intention narrative. Un indice peut clignoter doucement, mais un personnage principal sera souvent plus naturel avec **Respiration** ou **Regard**.
+Choisis un prèset selon l'intention narrative. Un indice peut clignoter doucement, mais un personnage principal sera souvent plus naturel avec **Respiration** ou **Regard**.
 
 ### Retouche d'image
 
@@ -529,17 +529,17 @@ Conseil : duplique un calque avant une retouche risquée. Tu gardes ainsi une ve
 
 ### Inspecteur
 
-L'**Inspecteur** affiche les réglages du calque sélectionné.
+L'**Inspecteur** affiché les réglages du calque sélectionné.
 
 Utilise-le pour :
 
 - verrouiller ou déverrouiller l'image ;
-- modifier l'ordre du calque ;
+- modifiér l'ordre du calque ;
 - corriger précisément X, Y, taille et opacité ;
-- régler durée, délai et boucle ;
+- régler durée, délai et bouclé ;
 - activer les outils de gommage, restauration ou rognage.
 
-Si rien n'est sélectionné, clique d'abord sur un calque dans le canvas ou dans la scène.
+Si rien n'est sélectionné, clique d'abord sur un calque dans le canvas ou dans la scene.
 
 ### Prévisualiser
 
@@ -555,7 +555,7 @@ Teste toujours la prévisualisation avant d'exporter ou de considérer l'animati
 
 ### Bonnes pratiques
 
-- Donne des noms clairs aux calques : `Personnage robe rouge`, `Indice tiroir`, `Ombre porte`.
+- Donné des noms clairs aux calques : `Personnage robe rouge`, `Indice tiroir`, `Ombre porte`.
 - Limite le nombre d'animations fortes en même temps.
 - Utilise les mouvements subtils pour garder une ambiance professionnelle.
 - Verrouille les calques terminés.
@@ -581,21 +581,21 @@ Exemple :
 - Objet 1 : `Pile`
 - Objet 2 : `Lampe torche`
 - Résultat : `Lampe allumée`
-- Message : `La lampe fonctionne. Tu peux maintenant explorer les zones sombres.`
+- Message : `Là lampe fonctionne. Tu peux maintenant explorer les zones sombres.`
 
 Conseil : évite les recettes ambiguës. Si deux objets peuvent logiquement créer plusieurs résultats, clarifie avec les noms ou les messages.
 
-## 10. Onglet Enigmes
+## 10. Onglet Énigmes
 
-L'onglet **Enigmes** crée les défis que le joueur doit résoudre.
+L'onglet **Énigmes** crée les défis que le joueur doit résoudre.
 
 ### Liste des énigmes
 
 **Énigme à configurer**  
-Liste des énigmes du projet. Sélectionne une énigme pour modifier sa question, sa solution et ce qu'elle débloque.
+Liste des énigmes du projet. Sélectionne une énigme pour modifiér sa question, sa solution et ce qu'elle débloqué.
 
 **+ Énigme**  
-Crée une nouvelle énigme. Elle devra ensuite être liée à une zone d'action dans l'éditeur de scène pour être jouable.
+Crée une nouvelle énigme. Elle devra ensuite être liée à une zone d'action dans l'éditeur de sc?ne pour être jouable.
 
 ### Champs communs
 
@@ -614,25 +614,25 @@ Texte affiché quand le joueur réussit. Idéal pour confirmer la découverte ou
 **Message d'échec**  
 Texte affiché quand la réponse est incorrecte. Il peut guider sans révéler directement la solution.
 
-**Débloque**  
-Action déclenchée après réussite :
+**Débloqué**  
+Action déclénchée après réussite :
 
 - rien de spécial ;
-- ouvrir une scène ;
+- ouvrir une sc?ne ;
 - lancer une cinématique.
 
-**Scène à débloquer**  
-Scène rendue accessible après réussite si le déblocage choisi est une scène.
+**Sc?ne à débloquér**  
+Sc?ne rendue accessible après réussite si le déblocage choisi est une scene.
 
 **Cinématique à lancer**  
 Cinématique lancée après réussite si le déblocage choisi est une cinématique.
 
-### Type Code lettres / chiffres
+### Type Code lettrès / chiffres
 
 Le joueur saisit une réponse exacte.
 
 **Solution**  
-Réponse exacte attendue. Tu peux utiliser chiffres, lettres ou mélange court.
+Réponse exacte attendue. Tu peux utiliser chiffres, lettrès ou mélange court.
 
 **Forme côté joueur**  
 Apparence visuelle du code. La solution reste la même, seule l'interface change.
@@ -665,7 +665,7 @@ Modes possibles :
 - position + couleur ;
 - logique Mastermind ;
 - indices cachés dans l'environnement ;
-- couleurs vers chiffres ou lettres ;
+- couleurs vers chiffres ou lettrès ;
 - couleurs + timing ;
 - mélange de couleurs.
 
@@ -767,15 +767,15 @@ Utilise un fond de pop-up pour donner du style à une énigme importante, mais v
 
 L'onglet **Logique** permet de remplacer ou compléter le comportement normal des zones selon l'état de la partie.
 
-### Sélectionner une scène
+### Sélectionner une scene
 
-**Scène à configurer**  
-Choisis la scène dont tu veux régler les conditions. Les règles affichées ne concernent que cette scène.
+**Sc?ne à configurer**  
+Choisis la sc?ne dont tu veux régler les conditions. Les règles affichées ne concernent que cette scene.
 
 ### Zones d'action
 
 **Zones d'action**  
-Zones cliquables de la scène sélectionnée. Une règle conditionnelle peut remplacer leur action normale selon l'état de la partie.
+Zones cliquables de la sc?ne sélectionnée. Une règle conditionnelle peut remplacer leur action normale selon l'état de la partie.
 
 **Ajouter une règle**  
 Ajoute une condition spéciale sur une zone. La règle s'active seulement si sa condition est vraie pendant la partie.
@@ -794,12 +794,12 @@ Une règle peut dépendre de :
 
 ### Actions possibles
 
-Une règle peut déclencher :
+Une règle peut décléncher :
 
 - l'action normale de la zone ;
 - un dialogue ;
 - un dialogue + objet ;
-- un changement de scène ;
+- un changement de sc?ne ;
 - une cinématique.
 
 ### Options utiles
@@ -811,15 +811,15 @@ Retire l'objet testé de l'inventaire après activation. Utile pour une clé uti
 Désactive cette règle après sa première activation. Utile pour ouvrir une porte une fois, puis laisser la zone suivre sa logique normale.
 
 **Objets visibles**  
-Objets placés directement dans l'image de la scène. Leur comportement peut être réglé ici sans passer par les zones d'action.
+Objets placés directement dans l'image de la scene. Leur comportement peut être réglé ici sans passer par les zones d'action.
 
 **Cacher l'objet visible**  
-Cache l'objet dans la scène après son utilisation. Pratique pour un objet ramassé ou un élément qui disparaît.
+Cache l'objet dans la sc?ne après son utilisation. Pratique pour un objet ramassé ou un élément qui disparaît.
 
 Exemple de règle :
 
 - Condition : le joueur possède `Clé rouillée`.
-- Action : changer de scène vers `Cave`.
+- Action : changer de sc?ne vers `Cave`.
 - Option : retirer l'objet requis.
 - Résultat : la clé ouvre la porte puis disparaît de l'inventaire.
 
@@ -830,7 +830,7 @@ L'onglet **IA** aide à générer, continuer ou enrichir un projet.
 ### Champs de génération
 
 **Mode**  
-Choisit le type d'aide IA : créer un récit complet, avancer acte par acte, continuer un projet existant ou améliorer une scène précise.
+Choisit le type d'aide IA : créer un récit complet, avancer acte par acte, continuer un projet existant ou améliorer une sc?ne précise.
 
 **Thème**  
 Thème principal de l'histoire : manoir, station spatiale, enquête policière, laboratoire, musée, etc.
@@ -839,13 +839,13 @@ Thème principal de l'histoire : manoir, station spatiale, enquête policière, 
 Influence la complexité des énigmes, le nombre de dépendances et les conditions de déblocage.
 
 **Actes**  
-Grandes parties de l'histoire. Un acte contient plusieurs scènes.
+Grandes parties de l'histoire. Un acte contient plusieurs sc?nes.
 
-**Scènes**  
-Nombre de scènes principales à générer.
+**Sc?nes**  
+Nombre de sc?nes principales à générer.
 
-**Sous-scènes**  
-Nombre de sous-scènes rattachées à des scènes principales.
+**Sous-sc?nes**  
+Nombre de sous-sc?nes rattachées à des sc?nes principales.
 
 **Objets**  
 Objets d'inventaire qui pourront être trouvés, requis ou combinés.
@@ -880,28 +880,28 @@ Charge un projet JSON pour que l'IA puisse le continuer sans dépendre du projet
 **Résumé de l'histoire**  
 Résumé de ce qui a déjà été joué. Il garde la suite cohérente avec les révélations et enjeux actuels.
 
-**Chronologie des scènes**  
-Ordre canonique de l'histoire. Numérote les scènes dans l'ordre de jeu prévu ; la suite partira de la dernière ligne.
+**Chronologie des sc?nes**  
+Ordre canonique de l'histoire. Numérote les sc?nes dans l'ordre de jeu prévu ; la suite partira de la dernière ligne.
 
-**Scène de départ détectée**  
-Scène exacte depuis laquelle l'histoire doit continuer. La nouvelle scène doit être reliée à celle-ci.
+**Sc?ne de départ détectée**  
+Sc?ne exacte depuis laquelle l'histoire doit continuer. La nouvelle sc?ne doit être reliée à celle-ci.
 
 **Ce que tu aimerais pour la suite**  
 Direction souhaitée : nouveau lieu, type d'énigme, objet important, révélation, ton.
 
-### Améliorer une scène
+### Améliorer une scene
 
-**Scène à améliorer**  
-L'IA garde la structure de la scène et modifie seulement ambiance, dialogues et objets.
+**Sc?ne à améliorer**  
+L'IA garde la structure de la sc?ne et modifié seulement ambiance, dialogues et objets.
 
 **Type d'enrichissement**  
 Définit ce que l'étape doit renforcer : textes, descriptions visuelles, zones d'action ou tout ensemble.
 
-**Contraintes visuelles de la scène**  
+**Contraintes visuelles de la scene**  
 Contraintes données au générateur d'image. Liste les éléments visibles et leur placement approximatif.
 
 **Style visuel global**  
-Style partagé par les images de scènes pour éviter que chaque pièce parte dans une direction visuelle différente.
+Style partagé par les images de sc?nes pour éviter que chaque pièce parte dans une direction visuelle différente.
 
 **Lisibilité des images**  
 Ajuste automatiquement la luminosité après génération pour garder une image jouable sans trop délaver l'ambiance.
@@ -911,9 +911,9 @@ Détails récurrents à conserver entre les pièces : portes, parquet, lumière,
 
 ## 13. Onglet Boutique
 
-L'onglet **Boutique** sert à acheter ou retrouver des crédits IA.
+L'onglet **Boutique** sert à achétér ou retrouver des crédits IA.
 
-Il affiche :
+Il affiché :
 
 - ton identifiant d'achat ;
 - les packs disponibles ;
@@ -928,13 +928,13 @@ L'onglet **Preview** permet de jouer au projet comme un joueur.
 
 Teste dans cet ordre :
 
-1. La scène ou cinématique de départ.
+1. La sc?ne ou cinématique de départ.
 2. Chaque zone cliquable.
 3. Les objets reçus.
 4. L'inventaire.
 5. Les combinaisons.
 6. Les énigmes.
-7. Les scènes débloquées.
+7. Les sc?nes débloquées.
 8. Les cinématiques.
 9. Les minuteurs.
 10. Les règles de logique.
@@ -948,18 +948,18 @@ Le jeu exporté propose aussi des actions de sauvegarde de partie :
 - importer une sauvegarde JSON ;
 - ouvrir l'inventaire.
 
-Conseil : après chaque grosse modification, teste immédiatement. Une erreur repérée tout de suite est beaucoup plus simple à corriger.
+Conseil : après chaque grosse modification, testé immédiatement. Une erreur repérée tout de suite est beaucoup plus simple à corriger.
 
 ## 15. Onglet Bilan
 
-L'onglet **Bilan** donne une note globale et des conseils.
+L'onglet **Bilan** donné une note globale et des conseils.
 
 ### Structure
 
 Mesure la richesse de base du projet :
 
 - actes ;
-- scènes ;
+- sc?nes ;
 - objets ;
 - énigmes ;
 - cinématiques.
@@ -968,7 +968,7 @@ Mesure la richesse de base du projet :
 
 Mesure la cohérence du parcours :
 
-- scènes associées à des pièces ;
+- sc?nes associées à des pièces ;
 - départ ;
 - liaisons vertes ;
 - allers simples validés ;
@@ -979,13 +979,13 @@ Mesure la cohérence du parcours :
 Mesure la jouabilité :
 
 - point de départ valide ;
-- scènes avec zones d'action utiles ;
+- sc?nes avec zones d'action utiles ;
 - énigmes correctement renseignées.
 
-Le bilan affiche aussi :
+Le bilan affiché aussi :
 
 - le nombre d'éléments créés ;
-- les scènes mappées ;
+- les sc?nes mappées ;
 - les liaisons valides ;
 - les allers simples validés ;
 - les points à vérifier ;
@@ -1000,7 +1000,7 @@ Depuis **Profil**, un projet peut être publié dans la galerie.
 Avant de cliquer sur **Publier**, renseigne :
 
 - **Catégorie** : horreur, enquête, aventure, science-fiction, fantastique, historique ou autre.
-- **Mention d'âge** : tout public ou +18 ans.
+- **Mention d'age** : tout public ou +18 ans.
 - **Miniature galerie** : image de présentation.
 
 La miniature peut être recadrée avant publication. Choisis une image claire qui représente vraiment le jeu.
@@ -1020,7 +1020,7 @@ La galerie permet de découvrir les jeux publiés.
 Fonctions disponibles :
 
 - recherche par jeu, auteur ou difficulté ;
-- filtre par âge ;
+- filtre par age ;
 - classement par sections ;
 - page détail d'un jeu ;
 - page auteur ;
@@ -1030,7 +1030,7 @@ Fonctions disponibles :
 - compteur de parties jouées ;
 - bouton **Jouer maintenant**.
 
-Un jeu marqué +18 affiche un avertissement.
+Un jeu marqué +18 affiché un avertissement.
 
 ## 18. Exporter le jeu
 
@@ -1062,19 +1062,19 @@ Le JSON est ton filet de sécurité.
 ## 20. Checklist précise avant publication
 
 - Le projet a un titre clair.
-- Le jeu commence par la bonne scène ou la bonne cinématique.
-- Chaque scène importante possède un nom court et compréhensible.
+- Le jeu commence par la bonne sc?ne ou la bonne cinématique.
+- Chaque sc?ne importante possède un nom court et compréhensible.
 - Les textes d'introduction posent l'ambiance sans donner les solutions.
 - Les images de fond sont lisibles.
 - Les zones cliquables sont assez grandes, y compris sur mobile.
-- Chaque zone importante a une action claire.
+- Chaque zone importante à une action claire.
 - Les objets d'inventaire ont un nom compréhensible.
 - Les objets visibles sont bien placés avec X, Y, largeur et hauteur.
 - Les objets ramassables ne peuvent pas être récupérés à l'infini.
 - Les énigmes ont une consigne claire.
 - Les solutions d'énigmes ont été testées.
 - Les messages d'échec aident sans révéler toute la réponse.
-- Les déblocages d'énigmes pointent vers les bonnes scènes ou cinématiques.
+- Les déblocages d'énigmes pointent vers les bonnes sc?nes ou cinématiques.
 - Les combinaisons utilisent deux objets distincts et un résultat utile.
 - Les règles de logique ne contredisent pas les actions normales.
 - Les cinématiques ont une action de fin correcte.
@@ -1087,13 +1087,13 @@ Le JSON est ton filet de sécurité.
 - Le jeu a été joué du début à la fin dans **Preview**.
 - Le **Bilan** ne signale plus de problème majeur.
 - Une sauvegarde JSON a été exportée.
-- La catégorie, la mention d'âge et la miniature sont prêtes.
+- La catégorie, la mention d'age et la miniature sont prêtes.
 
 ## 21. Dépannage utilisateur
 
-### Je ne retrouve pas une scène dans une liste
+### Je ne retrouvé pas une sc?ne dans une liste
 
-Vérifie son nom, son acte et son éventuelle scène parente. Certaines listes privilégient les scènes principales ou les scènes du même acte.
+Vérifie son nom, son acte et son éventuelle sc?ne parente. Certaines listes privilégient les sc?nes principales ou les sc?nes du même acte.
 
 ### Une zone cliquable ne fonctionne pas
 
@@ -1104,16 +1104,16 @@ Vérifie :
 - son action ;
 - son objet requis ;
 - son énigme liée ;
-- sa scène cible ;
+- sa sc?ne cible ;
 - les règles de logique qui peuvent remplacer son action.
 
 ### Une énigme ne se lance pas
 
-Vérifie qu'elle est bien liée à une zone d'action ou à une règle logique. Créer une énigme dans l'onglet **Enigmes** ne suffit pas à la rendre accessible.
+Vérifie qu'elle est bien liée à une zone d'action ou à une règle logique. Créer une énigme dans l'onglet **Énigmes** ne suffit pas à la rendre accessible.
 
-### Une énigme réussie ne débloque rien
+### Une énigme réussie ne débloqué rien
 
-Vérifie le champ **Débloque**, puis la **Scène à débloquer** ou la **Cinématique à lancer**.
+Vérifie le champ **Débloqué**, puis la **Sc?ne à débloquér** ou la **Cinématique à lancer**.
 
 ### Un objet n'apparaît pas dans l'inventaire
 
@@ -1126,7 +1126,7 @@ Vérifie :
 
 ### Une transition du plan est signalée manquante
 
-Le plan indique une liaison entre deux pièces, mais aucune zone d'action ne relie réellement les scènes. Ajoute une zone dans la scène de départ vers la scène cible, ou valide l'aller simple si c'est volontaire.
+Le plan indique une liaison entre deux pièces, mais aucune zone d'action ne relie réellement les sc?nes. Ajoute une zone dans la sc?ne de départ vers la sc?ne cible, ou valide l'aller simple si c'est volontaire.
 
 ### Le joueur reste bloqué
 

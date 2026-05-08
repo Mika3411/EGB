@@ -1,0 +1,5 @@
+/* Cards */
+
+.card{padding:var(--component-card-padding)}
+
+.card,.landing-card,.profile-order-card{border:1px solid var(--border-info-soft);border-radius:var(--radius-sm);background:var(--surface-card)}

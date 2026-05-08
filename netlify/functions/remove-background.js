@@ -1,10 +1,10 @@
 import {
   aiCreditCosts,
-  getCreditUserId,
   getSupabaseAdminClient,
   json,
   parseBody,
   refundCredits,
+  resolveCreditUserId,
   spendCredits,
   withErrors,
 } from './_shared.js';
@@ -32,7 +32,7 @@ export const handler = async (event) => withErrors(event, async () => {
   if (!apiKey) return json(500, { error: 'Cle remove.bg manquante cote serveur.' });
 
   const body = parseBody(event);
-  const userId = getCreditUserId(event, body);
+  const userId = await resolveCreditUserId(event);
   const cost = Math.max(0, Math.round(Number(aiCreditCosts.removeBackground || 0)));
   if (!body.imageData) return json(400, { error: 'Image manquante.' });
 

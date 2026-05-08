@@ -1,0 +1,9 @@
+/* Reset and Base */
+
+*{box-sizing:border-box}
+
+body{margin:0;font-family:Inter,Arial,sans-serif;color:var(--text);background:radial-gradient(circle at top left,rgba(79,140,255,.14),transparent 28%),radial-gradient(circle at top right,rgba(59,130,246,.08),transparent 22%),linear-gradient(180deg,#08101c,#09111f)}
+
+button,input,select,textarea{font:inherit}
+
+body{font-size:14px}

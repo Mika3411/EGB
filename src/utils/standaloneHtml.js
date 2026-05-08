@@ -8,10 +8,46 @@
   sameNormalizedSet,
   shuffledIndices,
   usesImage,
+  createEnigmaRuntime,
+  enigmaHandlers,
+  miscAnswerHandlers,
+  validateEnigmaAnswer,
   validateMiscAnswer,
-} from '../lib/gameEngine';
+} from '../lib/enigmaEngine';
+import {
+  createAnime2dPreviewFrame,
+  createAnime2dPreviewModel,
+  getAnime2dNarrationAtTime,
+  getAnime2dStepStart,
+  getVisibleAnime2dLayers,
+  isAnime2dImageStep,
+  isAnime2dStepActive,
+  normalizeAnime2dLayer,
+  normalizeAnime2dSpec,
+  sortAnime2dStepsByTime,
+} from '../lib/anime2dEngine';
 import { COLOR_OPTIONS, POPUP_OVERLAY_GRADIENTS } from '../data/enigmaConfig';
 import { CODE_KEYPAD_KEYS } from '../data/playerConfig';
+import {
+  GAME_ACTIONS as SHARED_GAME_ACTIONS,
+  createSceneTransitionOverlay,
+  formatTimerSeconds as sharedFormatTimerSeconds,
+  gameActions as SHARED_GAME_ACTION_CREATORS,
+  getSceneAmbientSoundKey as sharedGetSceneAmbientSoundKey,
+  getSceneMusicKey as sharedGetSceneMusicKey,
+} from '../lib/gameEngine';
+import {
+  CINEMATIC_END_ACTIONS,
+  CINEMATIC_TYPES,
+  normalizeCinematicEndAction,
+  normalizeCinematicType,
+} from '../lib/cinematicEngine';
+import {
+  combineItems,
+  getCombinationItem1,
+  getCombinationItem2,
+  getCombinationResult,
+} from '../lib/combinationEngine';
 
 const escapeHtml = (value = '') => String(value)
   .replace(/&/g, '&amp;')
@@ -21,6 +57,49 @@ const escapeHtml = (value = '') => String(value)
 
 const serializeForScript = (value) => JSON.stringify(value).replace(/<\/script/gi, '<\\/script');
 
+const serializeFunctionMap = (name, handlers) => {
+  const entries = Object.entries(handlers).map(([key, handler]) => `${JSON.stringify(key)}: ${handler.toString()}`);
+  return `const ${name} = {\n${entries.join(',\n')}\n};`;
+};
+
+const serializeValueForScript = (value) => {
+  if (typeof value === 'function') return value.toString();
+  if (Array.isArray(value)) return `[${value.map(serializeValueForScript).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value).map(([key, entry]) => `${JSON.stringify(key)}:${serializeValueForScript(entry)}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+};
+
+function hasConditionToken(collection, condition) {
+  if (!collection) return false;
+  if (Array.isArray(collection)) return collection.includes(condition);
+  return Boolean(collection[condition]);
+}
+
+function isConditionMet(condition, context) {
+  if (!condition) return true;
+  if (typeof condition === 'function') return Boolean(condition(context));
+  if (hasConditionToken(context.conditions, condition)) return true;
+  if (hasConditionToken(context.flags, condition)) return true;
+  if (hasConditionToken(context.state, condition)) return true;
+  if (context.inventory?.includes(condition)) return true;
+  if (condition.startsWith('has_')) return context.inventory?.includes(condition.slice(4));
+  if (condition.startsWith('solved_')) return context.solvedEnigmaIds?.includes(condition.slice(7));
+  if (condition.startsWith('completed_hotspot_')) return context.completedHotspotIds?.includes(condition.slice(18));
+  if (condition.startsWith('completed_combination_')) return context.completedCombinationIds?.includes(condition.slice(22));
+  if (condition.startsWith('launched_cinematic_')) return context.launchedCinematicIds?.includes(condition.slice(19));
+  return false;
+}
+
+const getConfiguredPieceCount = (config = {}, state = {}) => (
+  Math.max(4, Number(state.pieceCount) || (Number(config.gridRows) || 3) * (Number(config.gridCols) || 3))
+);
+
+const getContextAnswer = (answer = {}, key, fallback = '') => (
+  answer && typeof answer === 'object' && !Array.isArray(answer) ? answer[key] : fallback
+);
+
 const buildStandaloneGameEngineScript = () => ([
   sameColorSequence,
   normalizeAnswer,
@@ -28,11 +107,39 @@ const buildStandaloneGameEngineScript = () => ([
   parseJsonValue,
   sameNormalizedList,
   sameNormalizedSet,
+  serializeFunctionMap('miscAnswerHandlers', miscAnswerHandlers),
   validateMiscAnswer,
+  `const getConfiguredPieceCount = ${getConfiguredPieceCount.toString()};`,
+  `const getContextAnswer = ${getContextAnswer.toString()};`,
+  `const enigmaHandlers = ${serializeValueForScript(enigmaHandlers)};`,
+  'function getEnigmaHandler(type) { return enigmaHandlers[type] || enigmaHandlers.default; }',
+  createEnigmaRuntime,
+  validateEnigmaAnswer,
   shuffledIndices,
   randomRotations,
   usesImage,
-].map((fn) => fn.toString()).join('\n\n'));
+  getAnime2dStepStart,
+  sortAnime2dStepsByTime,
+  normalizeAnime2dLayer,
+  normalizeAnime2dSpec,
+  isAnime2dStepActive,
+  isAnime2dImageStep,
+  getVisibleAnime2dLayers,
+  getAnime2dNarrationAtTime,
+  createAnime2dPreviewFrame,
+  createAnime2dPreviewModel,
+  `const CINEMATIC_END_ACTIONS = ${serializeForScript(CINEMATIC_END_ACTIONS)};`,
+  `const CINEMATIC_TYPES = ${serializeForScript(CINEMATIC_TYPES)};`,
+  `const normalizeCinematicEndAction = ${normalizeCinematicEndAction.toString()};`,
+  `const normalizeCinematicType = ${normalizeCinematicType.toString()};`,
+  createSceneTransitionOverlay,
+  hasConditionToken,
+  isConditionMet,
+  getCombinationItem1,
+  getCombinationItem2,
+  getCombinationResult,
+  combineItems,
+].map((entry) => (typeof entry === 'function' ? entry.toString() : entry)).join('\n\n'));
 
 export function buildStandaloneHtml(project) {
   const safeTitle = escapeHtml(project?.title || 'Escape Game');
@@ -40,6 +147,13 @@ export function buildStandaloneHtml(project) {
   const serializedColorOptions = serializeForScript(COLOR_OPTIONS);
   const serializedPopupOverlayGradients = serializeForScript(POPUP_OVERLAY_GRADIENTS);
   const serializedCodeKeypadKeys = serializeForScript(CODE_KEYPAD_KEYS);
+  const serializedGameActions = serializeForScript(SHARED_GAME_ACTIONS);
+  const serializedGameActionCreators = serializeFunctionMap('gameActions', SHARED_GAME_ACTION_CREATORS);
+  const serializedSceneAudioHelpers = [
+    `const getSharedSceneMusicKey = ${sharedGetSceneMusicKey.toString()};`,
+    `const getSharedSceneAmbientSoundKey = ${sharedGetSceneAmbientSoundKey.toString()};`,
+    `const getSharedFormatTimerSeconds = ${sharedFormatTimerSeconds.toString()};`,
+  ].join('\n');
   const standaloneGameEngineScript = buildStandaloneGameEngineScript();
 
   return `<!doctype html>
@@ -166,6 +280,7 @@ body.game-fullscreen .inventory-drawer__backdrop{position:fixed;inset:0;z-index:
 .player-scene-object:hover,.player-scene-object:focus,.player-scene-object:active{transform:translate(-50%,-50%)!important;padding:0!important;margin:0!important;border:0!important;outline:0!important;background:transparent!important;box-shadow:none!important}
 .player-scene-object-invisible,.player-scene-object-invisible:hover,.player-scene-object-invisible:focus,.player-scene-object-invisible:active{color:transparent!important;background:transparent!important}
 .player-scene-object img{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;object-fit:contain!important;object-position:center center!important;display:block!important;pointer-events:none!important;padding:0!important;margin:0!important;border:0!important;background:transparent!important;box-shadow:none!important}
+.interactive-block{position:absolute!important;inset:0!important;left:0!important;top:0!important;right:0!important;bottom:0!important;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;width:100%;height:100%;padding:8px 10px;border:1px solid rgba(226,232,240,.34);border-radius:8px;background:rgba(15,23,42,.82);color:#f8fafc;font-size:13px;line-height:1.25;text-align:center;box-sizing:border-box;overflow:hidden;pointer-events:none;transform:none!important}.interactive-block span{position:static!important;inset:auto!important;left:auto!important;top:auto!important;right:auto!important;bottom:auto!important;max-width:100%!important;background:transparent!important;padding:0!important;border-radius:0!important;transform:none!important;line-height:inherit!important}.interactive-block strong{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.interactive-block small{display:block;max-width:100%;color:#cbd5e1;font-size:11px;line-height:1.25}.interactive-block--text{align-items:flex-start;justify-content:flex-start;text-align:left;white-space:pre-wrap}.interactive-block--hint{border-color:rgba(250,204,21,.55);background:rgba(67,56,202,.82)}.interactive-block--button{border-color:rgba(96,165,250,.58);background:linear-gradient(135deg,rgba(37,99,235,.96),rgba(79,70,229,.96));font-weight:800}.interactive-block--field{align-items:stretch;background:rgba(248,250,252,.94);color:#0f172a}.interactive-block--field small{padding:6px 8px;border:1px solid rgba(15,23,42,.18);border-radius:6px;background:#fff;color:#64748b}.interactive-block--code span{font-size:20px;letter-spacing:2px}.interactive-block--image{border-style:dashed;background:rgba(30,41,59,.74)}
 .scene-visual-effect{position:absolute;inset:0;z-index:12;overflow:hidden;pointer-events:none}
 .scene-visual-effect-zone{inset:auto;transform:translate(-50%,-50%)}
 .scene-visual-effect--subtle{opacity:.48}.scene-visual-effect--normal{opacity:1}.scene-visual-effect--strong{opacity:1.45;filter:saturate(1.25) contrast(1.08)}
@@ -176,7 +291,7 @@ body.game-fullscreen .inventory-drawer__backdrop{position:fixed;inset:0;z-index:
 .scene-visual-effect--fog:before,.scene-visual-effect--fog:after{content:"";position:absolute;inset:-24%;background:radial-gradient(ellipse at 18% 48%,rgba(226,232,240,.24),transparent 34%),radial-gradient(ellipse at 56% 42%,rgba(203,213,225,.20),transparent 32%),radial-gradient(ellipse at 88% 58%,rgba(226,232,240,.18),transparent 36%),linear-gradient(90deg,transparent,rgba(226,232,240,.13),transparent);filter:blur(18px);opacity:.78;animation:sceneFogDrift 18s ease-in-out infinite alternate}.scene-visual-effect--fog:after{opacity:.45;animation-duration:26s;animation-delay:-7s;transform:scale(1.2)}@keyframes sceneFogDrift{from{transform:translate3d(-8%,2%,0) scale(1.05)}to{transform:translate3d(8%,-2%,0) scale(1.18)}}
 .scene-visual-effect--hearts:before,.scene-visual-effect--hearts:after{content:"";position:absolute;inset:-18% 0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='34' height='30' viewBox='0 0 34 30'%3E%3Cpath fill='%23fb7185' fill-opacity='.72' d='M17 28S2 19 2 9.6C2 4.7 5.4 2 9.2 2c2.6 0 5 1.5 6.3 3.8C16.9 3.5 19.3 2 21.9 2 25.7 2 29 4.7 29 9.6 29 19 17 28 17 28Z'/%3E%3C/svg%3E"),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='22' viewBox='0 0 34 30'%3E%3Cpath fill='%23f472b6' fill-opacity='.64' d='M17 28S2 19 2 9.6C2 4.7 5.4 2 9.2 2c2.6 0 5 1.5 6.3 3.8C16.9 3.5 19.3 2 21.9 2 25.7 2 29 4.7 29 9.6 29 19 17 28 17 28Z'/%3E%3C/svg%3E"),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='16' viewBox='0 0 34 30'%3E%3Cpath fill='%23fecdd3' fill-opacity='.78' d='M17 28S2 19 2 9.6C2 4.7 5.4 2 9.2 2c2.6 0 5 1.5 6.3 3.8C16.9 3.5 19.3 2 21.9 2 25.7 2 29 4.7 29 9.6 29 19 17 28 17 28Z'/%3E%3C/svg%3E");background-repeat:repeat;background-size:150px 130px,210px 180px,270px 220px;background-position:12px 10px,82px 46px,142px 88px;opacity:.72;animation:sceneHeartsFloat 10s linear infinite}.scene-visual-effect--hearts:after{background-size:230px 190px,310px 260px,360px 300px;opacity:.42;filter:blur(.15px);animation-duration:16s;animation-delay:-6s}@keyframes sceneHeartsFloat{from{transform:translate3d(-1%,20%,0)}to{transform:translate3d(2%,-24%,0)}}
 .scene-visual-effect--glow:before,.scene-visual-effect--glow:after{content:"";position:absolute;inset:-16%;background:radial-gradient(circle at 50% 48%,rgba(250,250,210,.56),transparent 18%),radial-gradient(circle at 50% 50%,rgba(96,165,250,.35),transparent 42%),radial-gradient(circle at 50% 50%,rgba(255,255,255,.24),transparent 66%);mix-blend-mode:screen;opacity:.78;animation:sceneGlowPulse 4.8s ease-in-out infinite alternate}.scene-visual-effect--glow:after{filter:blur(20px);opacity:.42;animation-duration:7s}@keyframes sceneGlowPulse{from{transform:scale(.92);opacity:.42}to{transform:scale(1.08);opacity:.88}}
-.scene-visual-effect--fireflies:before,.scene-visual-effect--fireflies:after{content:"";position:absolute;inset:-10%;background-image:radial-gradient(circle,rgba(254,240,138,.95) 0 2px,rgba(250,204,21,.34) 3px,transparent 8px),radial-gradient(circle,rgba(187,247,208,.9) 0 1.5px,rgba(74,222,128,.26) 3px,transparent 7px),radial-gradient(circle,rgba(255,255,255,.85) 0 1px,transparent 4px);background-size:160px 130px,230px 190px,310px 250px;background-position:24px 22px,95px 80px,180px 120px;filter:drop-shadow(0 0 8px rgba(250,204,21,.75));opacity:.62;animation:sceneFireflies 7s ease-in-out infinite alternate}.scene-visual-effect--fireflies:after{opacity:.36;animation-duration:11s;animation-delay:-4s}@keyframes sceneFireflies{from{transform:translate3d(-3%,2%,0);opacity:.24}45%{opacity:.82}to{transform:translate3d(4%,-3%,0);opacity:.52}}
+.scene-visual-effect--firefliés:before,.scene-visual-effect--firefliés:after{content:"";position:absolute;inset:-10%;background-image:radial-gradient(circle,rgba(254,240,138,.95) 0 2px,rgba(250,204,21,.34) 3px,transparent 8px),radial-gradient(circle,rgba(187,247,208,.9) 0 1.5px,rgba(74,222,128,.26) 3px,transparent 7px),radial-gradient(circle,rgba(255,255,255,.85) 0 1px,transparent 4px);background-size:160px 130px,230px 190px,310px 250px;background-position:24px 22px,95px 80px,180px 120px;filter:drop-shadow(0 0 8px rgba(250,204,21,.75));opacity:.62;animation:sceneFirefliés 7s ease-in-out infinite alternate}.scene-visual-effect--firefliés:after{opacity:.36;animation-duration:11s;animation-delay:-4s}@keyframes sceneFirefliés{from{transform:translate3d(-3%,2%,0);opacity:.24}45%{opacity:.82}to{transform:translate3d(4%,-3%,0);opacity:.52}}
 .scene-visual-effect--rain:before,.scene-visual-effect--rain:after{content:"";position:absolute;inset:-30% -10%;background-image:repeating-linear-gradient(105deg,rgba(191,219,254,0) 0 16px,rgba(191,219,254,.44) 17px 19px,rgba(191,219,254,0) 20px 34px);background-size:90px 90px;opacity:.42;transform:skewX(-14deg);animation:sceneRainFall .85s linear infinite}.scene-visual-effect--rain:after{opacity:.22;filter:blur(.7px);animation-duration:1.25s}@keyframes sceneRainFall{from{background-position:0 -90px}to{background-position:0 90px}}
 .scene-visual-effect--magic:before,.scene-visual-effect--magic:after{content:"";position:absolute;inset:-12%;background:radial-gradient(circle at 20% 26%,rgba(216,180,254,.9) 0 1px,transparent 7px),radial-gradient(circle at 72% 34%,rgba(125,211,252,.86) 0 2px,transparent 8px),radial-gradient(circle at 42% 72%,rgba(244,114,182,.78) 0 1.5px,transparent 7px),conic-gradient(from 90deg at 50% 50%,transparent,rgba(168,85,247,.18),transparent,rgba(14,165,233,.16),transparent);mix-blend-mode:screen;opacity:.72;animation:sceneMagicSwirl 8s ease-in-out infinite}.scene-visual-effect--magic:after{filter:blur(8px);opacity:.34;animation-duration:12s;animation-direction:reverse}@keyframes sceneMagicSwirl{0%{transform:rotate(0deg) scale(1)}50%{transform:rotate(9deg) scale(1.08)}100%{transform:rotate(0deg) scale(1)}}
 .scene-visual-effect--embers:before,.scene-visual-effect--embers:after{content:"";position:absolute;inset:-14% 0;background-image:radial-gradient(circle,rgba(251,146,60,.92) 0 2px,rgba(239,68,68,.26) 3px,transparent 8px),radial-gradient(circle,rgba(254,215,170,.82) 0 1px,transparent 5px),radial-gradient(circle,rgba(248,113,113,.78) 0 1.5px,transparent 6px);background-size:120px 150px,190px 210px,260px 260px;background-position:18px 120px,76px 180px,150px 220px;filter:drop-shadow(0 0 8px rgba(249,115,22,.7));opacity:.58;animation:sceneEmbersRise 12s linear infinite}.scene-visual-effect--embers:after{opacity:.32;filter:blur(.8px);animation-duration:18s;animation-delay:-7s}@keyframes sceneEmbersRise{from{transform:translate3d(0,18%,0)}to{transform:translate3d(4%,-26%,0)}}
@@ -204,7 +319,7 @@ body.game-fullscreen .inventory-drawer__backdrop{position:fixed;inset:0;z-index:
 .scene-inline-viewer__image{width:auto;max-width:min(82vw,720px);height:auto;max-height:68vh;object-fit:contain;border-radius:18px;background:transparent;box-shadow:0 20px 60px rgba(0,0,0,.35);display:block}
 .scene-inline-viewer__name{align-self:stretch;padding:12px 16px;border-radius:16px;background:rgba(15,23,42,.92);border:1px solid rgba(255,255,255,.08);font-weight:700;text-align:left;color:#fff}
 .inventory-actions{margin-top:14px;display:flex;gap:10px;flex-wrap:wrap}
-button,.button-like{border:1px solid transparent;background:linear-gradient(180deg, #4f8cff 0%, #2f6fe4 100%);color:white;padding:11px 16px;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;box-shadow:0 10px 24px rgba(47,111,228,.22)}
+button,.button-like{border:1px solid transparent;background:linear-gradient(180deg, #4f8cff 0%, #2f6fe4 100%);color:white;padding:11px 16px;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;text-décoration:none;box-shadow:0 10px 24px rgba(47,111,228,.22)}
 .secondary-button{background:rgba(18,31,56,.95)!important;border-color:rgba(148,163,184,.16)!important;box-shadow:none!important}
 .danger-button{background:linear-gradient(180deg, #d14b4b 0%, #a92c2c 100%)!important;color:#fff;border-color:rgba(255,255,255,.06)!important;box-shadow:0 12px 24px rgba(169,44,44,.24)!important}
 .badge-line{display:inline-flex;align-items:center;padding:8px 12px;border-radius:999px;background:rgba(37,99,235,.15);border:1px solid rgba(96,165,250,.3);color:#bfdbfe;margin-bottom:12px}
@@ -282,6 +397,8 @@ let controlsTimer = null;
 let anime2dTimer = null;
 let anime2dStartedAt = 0;
 let anime2dActiveCinematicId = '';
+let sceneAnime2dStartedAt = 0;
+let sceneAnime2dActiveSceneId = '';
 let activeSceneTimerKey = '';
 let expiredSceneTimerKey = '';
 let loadedActId = '';
@@ -328,6 +445,8 @@ const DEFAULT_STATE = () => {
     completedCombinationIds: [],
     usedLogicRuleIds: [],
     removedSceneObjectIds: [],
+    revealedSceneObjectIds: [],
+    sceneObjectTextOverrides: {},
     sceneTransitionOverlay: null,
     actPreload: { active: false, progress: 100, label: '' },
     sceneTimerRemaining: 0,
@@ -343,6 +462,34 @@ function updateSaveStatus(message = '') {
 }
 
 const state = DEFAULT_STATE();
+const ENGINE_VERSION = "1.0.0";
+const GAME_ACTIONS = ${serializedGameActions};
+${serializedGameActionCreators}
+${serializedSceneAudioHelpers}
+
+function createStandaloneEngine({ version, actions, handlers }) {
+  return {
+    version,
+    actions,
+    dispatch(action = {}) {
+      const handler = handlers[action.type];
+      return handler ? handler(action) : false;
+    },
+  };
+}
+
+const STANDALONE_ACTION_HANDLERS = {
+  [GAME_ACTIONS.COMBINE]: (action) => applyCombineAction(action.itemA, action.itemB),
+  [GAME_ACTIONS.SOLVE_ENIGMA]: (action) => applySolveEnigmaAction(action),
+  [GAME_ACTIONS.ENTER_SCENE]: (action) => applyEnterSceneAction(action.id, action.fallbackText),
+  [GAME_ACTIONS.TRIGGER_HOTSPOT]: (action) => applyTriggerHotspotAction(action.id),
+};
+
+const standaloneEngine = createStandaloneEngine({
+  version: ENGINE_VERSION,
+  actions: GAME_ACTIONS,
+  handlers: STANDALONE_ACTION_HANDLERS,
+});
 
 const SAVE_STORAGE_KEY = 'escapeGameSave:' + String(project?.id || project?.title || 'default');
 
@@ -362,6 +509,8 @@ function getSerializableState() {
     completedCombinationIds: Array.isArray(state.completedCombinationIds) ? state.completedCombinationIds : [],
     usedLogicRuleIds: Array.isArray(state.usedLogicRuleIds) ? state.usedLogicRuleIds : [],
     removedSceneObjectIds: Array.isArray(state.removedSceneObjectIds) ? state.removedSceneObjectIds : [],
+    revealedSceneObjectIds: Array.isArray(state.revealedSceneObjectIds) ? state.revealedSceneObjectIds : [],
+    sceneObjectTextOverrides: state.sceneObjectTextOverrides && typeof state.sceneObjectTextOverrides === 'object' ? state.sceneObjectTextOverrides : {},
   };
 }
 
@@ -410,6 +559,8 @@ function loadGame(manual = false) {
       completedCombinationIds: Array.isArray(savedState.completedCombinationIds) ? savedState.completedCombinationIds : [],
       usedLogicRuleIds: Array.isArray(savedState.usedLogicRuleIds) ? savedState.usedLogicRuleIds : [],
       removedSceneObjectIds: Array.isArray(savedState.removedSceneObjectIds) ? savedState.removedSceneObjectIds : [],
+      revealedSceneObjectIds: Array.isArray(savedState.revealedSceneObjectIds) ? savedState.revealedSceneObjectIds : [],
+      sceneObjectTextOverrides: savedState.sceneObjectTextOverrides && typeof savedState.sceneObjectTextOverrides === 'object' ? savedState.sceneObjectTextOverrides : {},
       inventoryDrawerOpen: false,
       activeEnigma: null,
       enigmaCodeInput: '',
@@ -744,12 +895,34 @@ function makePieceStyle(imageData, rows, cols, pieceIndex, rotation = 0) {
   ].join(';');
 }
 
-function getItemById(id) {
+function getProjectItem(id) {
   return project.items.find((item) => item.id === id) || null;
 }
 
-function getSceneById(id) {
+function findAssetById(assetId) {
+  return (project.assets || []).find((asset) => asset.id === assetId) || null;
+}
+
+function resolveAssetUrl(assetId, fallbackUrl = '') {
+  return findAssetById(assetId)?.url || fallbackUrl || '';
+}
+
+function resolveAnime2dLayerSrc(layer) {
+  if (!layer) return '';
+  const rawSrc = layer.src || layer.imageData || layer.layer?.src || layer.layer?.imageData || '';
+  return resolveAssetUrl(layer.assetId || layer.imageId || layer.srcId || (findAssetById(rawSrc) ? rawSrc : ''), rawSrc);
+}
+
+function getItemById(id) {
+  return getProjectItem(id);
+}
+
+function getProjectScene(id) {
   return project.scenes.find((scene) => scene.id === id) || null;
+}
+
+function getSceneById(id) {
+  return getProjectScene(id);
 }
 
 function getActById(id) {
@@ -758,25 +931,40 @@ function getActById(id) {
 
 function getSceneLabel(id) {
   const scene = getSceneById(id);
-  if (!scene) return 'Aucune scène';
+  if (!scene) return 'Aucune scene';
   const act = getActById(scene.actId);
-  return (act?.name ? act.name + ' · ' : '') + (scene.parentSceneId ? 'Sous-scène · ' : 'Scène · ') + scene.name;
+  return (act?.name ? act.name + ' · ' : '') + (scene.parentSceneId ? 'Sous-scene · ' : 'Scene · ') + scene.name;
 }
 
-function getCinematicById(id) {
+function getProjectCinematic(id) {
   return (project.cinematics || []).find((entry) => entry.id === id) || null;
 }
 
-function getEnigmaById(id) {
+function getCinematicById(id) {
+  return getProjectCinematic(id);
+}
+
+function getProjectEnigma(id) {
   return (project.enigmas || []).find((entry) => entry.id === id) || null;
+}
+
+function getEnigmaById(id) {
+  return getProjectEnigma(id);
+}
+
+function getCombinationContext() {
+  return {
+    inventory: state.inventory,
+    solvedEnigmaIds: state.solvedEnigmaIds,
+    completedHotspotIds: state.completedHotspotIds,
+    completedCombinationIds: state.completedCombinationIds,
+    launchedCinematicIds: state.launchedCinematicIds,
+  };
 }
 
 function getCombinationForItems(firstId, secondId) {
   if (!firstId || !secondId) return null;
-  return (project.combinations || []).find((combo) => (
-    (combo.itemAId === firstId && combo.itemBId === secondId)
-    || (combo.itemAId === secondId && combo.itemBId === firstId)
-  )) || null;
+  return combineItems(firstId, secondId, project.combinations, getCombinationContext());
 }
 
 function getPlayScene() {
@@ -792,57 +980,34 @@ function getCurrentSlide() {
   return cinematic?.slides?.[state.playingSlideIndex] || null;
 }
 
-function getAnimeStepStart(step) {
-  return Number(step?.at || 0);
-}
-
-function sortAnimeStepsByTime(steps = []) {
-  return [...steps].sort((a, b) => getAnimeStepStart(a) - getAnimeStepStart(b));
-}
-
-function normalizeAnime2dLayer(entry = {}) {
-  const source = entry.layer && typeof entry.layer === 'object' ? entry.layer : {};
-  return {
-    ...source,
-    ...entry,
-    id: entry.id || source.id || '',
-    name: entry.name || source.name || '',
-    src: entry.src || entry.imageData || source.src || source.imageData || '',
-    x: Number(entry.x ?? source.x ?? 50),
-    y: Number(entry.y ?? source.y ?? 50),
-    width: Number(entry.width ?? source.width ?? 28),
-    height: Number(entry.height ?? source.height ?? (Number(entry.width ?? source.width ?? 28) * 1.6)),
-    opacity: Number(entry.opacity ?? source.opacity ?? 100),
-    preset: entry.preset || source.preset || 'none',
-    duration: Number(entry.duration ?? source.duration ?? 1000),
-    delay: Number(entry.delay ?? source.delay ?? 0),
-    loop: entry.loop ?? source.loop ?? true,
-    visible: entry.visible ?? source.visible ?? true,
-    visibleAtStart: entry.visibleAtStart ?? source.visibleAtStart ?? false,
-  };
-}
-
-function isAnimeStepActive(step, time) {
-  const start = Number(step.at || 0);
-  const duration = Math.max(0, Number(step.duration || 0));
-  return time >= start && time < start + duration;
-}
-
 function getAnime2dSpec(cinematic) {
-  const spec = cinematic?.anime2dSpec || {};
-  const steps = sortAnimeStepsByTime(Array.isArray(spec.cinematicSteps) ? spec.cinematicSteps : []);
-  const layers = Array.isArray(spec.layers) ? spec.layers.map(normalizeAnime2dLayer) : [];
-  const duration = Math.max(1, ...steps.map((step) => Number(step.at || 0) + Number(step.duration || 0)));
-  return { steps, layers, duration };
+  const stepSpec = (cinematic?.steps || []).find((step) => step.type === 'anime2d' && step.spec)?.spec || null;
+  return createAnime2dPreviewModel(cinematic?.anime2dSpec || stepSpec);
 }
 
-function renderAnime2dEmbedded(spec) {
-  const layers = Array.isArray(spec?.layers) ? spec.layers.map(normalizeAnime2dLayer).filter((layer) => layer.visible !== false) : [];
+function getAnime2dTimelineMarkers(model) {
+  return [...new Set([
+    0,
+    ...model.steps.flatMap((step) => [
+      Number(step.at || 0),
+      Number(step.at || 0) + Math.max(0, Number(step.duration || 0)),
+    ]),
+    model.duration,
+  ])]
+    .filter((marker) => marker >= 0 && marker <= model.duration)
+    .sort((a, b) => a - b);
+}
+
+function renderAnime2dEmbedded(spec, time = 0) {
+  const model = createAnime2dPreviewModel(spec);
+  const { layers } = model;
+  const frameTime = model.duration > 0 ? time % model.duration : 0;
+  const { visibleLayers } = createAnime2dPreviewFrame(model, frameTime);
   if (!layers.length) return '<span class="anime2d-embedded"><span class="anime2d-embedded-empty">JSON 2D</span></span>';
   return '<span class="anime2d-embedded">'
-    + layers.map((layer) => '<span class="anime2d-embedded-layer" style="left:' + safeHtml(layer.x || 50) + '%;top:' + safeHtml(layer.y || 50) + '%;width:' + safeHtml(layer.width || 28) + '%;height:' + safeHtml(layer.height || ((layer.width || 28) * 1.6)) + '%;opacity:' + safeHtml((Number(layer.opacity || 100) / 100).toFixed(3)) + ';z-index:' + safeHtml(layers.length - layers.findIndex((entry) => entry.id === layer.id) + 2) + '">'
+    + visibleLayers.map((layer) => '<span class="anime2d-embedded-layer" style="left:' + safeHtml(layer.x || 50) + '%;top:' + safeHtml(layer.y || 50) + '%;width:' + safeHtml(layer.width || 28) + '%;height:' + safeHtml(layer.height || ((layer.width || 28) * 1.6)) + '%;opacity:' + safeHtml((Number(layer.opacity || 100) / 100).toFixed(3)) + ';z-index:' + safeHtml(layers.length - layers.findIndex((entry) => entry.id === layer.id) + 2) + '">'
       + '<span class="anime2d-embedded-animated anime2d-preset-' + safeHtml(layer.preset || 'none') + '" style="animation-duration:' + safeHtml(layer.duration || 1000) + 'ms;animation-delay:' + safeHtml(layer.delay || 0) + 'ms;animation-iteration-count:' + (layer.loop === false ? '1' : 'infinite') + '">'
-      + (layer.src ? '<img src="' + layer.src + '" alt="' + safeHtml(layer.name || '') + '" />' : '')
+      + (resolveAnime2dLayerSrc(layer) ? '<img src="' + resolveAnime2dLayerSrc(layer) + '" alt="' + safeHtml(layer.name || '') + '" />' : '')
       + '</span></span>').join('')
     + '</span>';
 }
@@ -865,6 +1030,44 @@ function clearAnime2dTimer() {
 function getAnime2dElapsed(cinematic) {
   ensureAnime2dStarted(cinematic);
   return Math.max(0, (Date.now() - anime2dStartedAt) / 1000);
+}
+
+function ensureSceneAnime2dStarted(scene) {
+  if (!scene) return;
+  if (sceneAnime2dActiveSceneId !== scene.id) {
+    sceneAnime2dActiveSceneId = scene.id;
+    sceneAnime2dStartedAt = Date.now();
+  }
+}
+
+function getSceneAnime2dElapsed(scene) {
+  ensureSceneAnime2dStarted(scene);
+  return Math.max(0, (Date.now() - sceneAnime2dStartedAt) / 1000);
+}
+
+function getNextAnime2dModelRenderDelay(model, elapsed, loop = true) {
+  if (!model.steps.some((step) => isAnime2dImageStep(step) || String(step.narration || '').trim())) return null;
+  const time = loop ? elapsed % model.duration : Math.min(model.duration, elapsed);
+  if (!loop && time >= model.duration) return null;
+  const nextMarker = getAnime2dTimelineMarkers(model).find((marker) => marker > time);
+  const secondsUntilNextMarker = nextMarker === undefined ? model.duration - time : nextMarker - time;
+  return Math.max(16, Math.round(secondsUntilNextMarker * 1000));
+}
+
+function getNextSceneAnime2dRenderDelay(scene) {
+  if (!scene || getCurrentCinematic()) return null;
+  const animeObjects = (scene.sceneObjects || []).filter((obj) => (
+    !state.removedSceneObjectIds.includes(obj.id)
+    && (!obj.isHidden || state.revealedSceneObjectIds.includes(obj.id))
+    && !obj.isInvisible
+    && obj.anime2dSpec
+  ));
+  if (!animeObjects.length) return null;
+  const elapsed = getSceneAnime2dElapsed(scene);
+  const delays = animeObjects
+    .map((obj) => getNextAnime2dModelRenderDelay(createAnime2dPreviewModel(obj.anime2dSpec), elapsed, true))
+    .filter((delay) => delay !== null);
+  return delays.length ? Math.min(...delays) : null;
 }
 
 function getNextAnime2dRenderDelay(cinematic) {
@@ -897,58 +1100,74 @@ function addPreloadUrl(set, value) {
   if (isPreloadableUrl(value)) set.add(value);
 }
 
-function collectSceneMedia(scene, imageUrls, audioUrls) {
+function collectSceneMediaUrls(scene, imageUrls, audioUrls) {
   if (!scene) return;
-  addPreloadUrl(imageUrls, scene.backgroundData);
-  addPreloadUrl(audioUrls, scene.musicData);
-  addPreloadUrl(audioUrls, scene.ambientSoundData);
+  addPreloadUrl(imageUrls, resolveAssetUrl(scene.backgroundId, scene.backgroundData));
+  addPreloadUrl(audioUrls, resolveAssetUrl(scene.musicId, scene.musicData));
+  addPreloadUrl(audioUrls, resolveAssetUrl(scene.ambientSoundId, scene.ambientSoundData));
   (scene.sceneObjects || []).forEach((object) => {
-    addPreloadUrl(imageUrls, object.imageData);
-    addPreloadUrl(imageUrls, object.popupImageData || object.popupImage);
-    addPreloadUrl(imageUrls, object.objectImageData);
-    addPreloadUrl(audioUrls, object.soundData);
+    addPreloadUrl(imageUrls, resolveAssetUrl(object.imageId, object.imageData));
+    addPreloadUrl(imageUrls, resolveAssetUrl(object.popupImageId, object.popupImageData || object.popupImage));
+    addPreloadUrl(imageUrls, resolveAssetUrl(object.objectImageId, object.objectImageData));
+    addPreloadUrl(audioUrls, resolveAssetUrl(object.soundId, object.soundData));
     (object.logicRules || []).forEach((rule) => {
-      addPreloadUrl(audioUrls, rule.successSoundData);
-      addPreloadUrl(audioUrls, rule.failureSoundData);
+      addPreloadUrl(audioUrls, resolveAssetUrl(rule.successSoundId, rule.successSoundData));
+      addPreloadUrl(audioUrls, resolveAssetUrl(rule.failureSoundId, rule.failureSoundData));
     });
-    (object.anime2dSpec?.layers || []).forEach((layer) => addPreloadUrl(imageUrls, normalizeAnime2dLayer(layer).src));
+    (object.anime2dSpec?.layers || []).forEach((layer) => addPreloadUrl(imageUrls, resolveAnime2dLayerSrc(normalizeAnime2dLayer(layer))));
   });
   (scene.hotspots || []).forEach((spot) => {
-    addPreloadUrl(imageUrls, spot.objectImageData);
-    addPreloadUrl(imageUrls, spot.secondObjectImageData);
-    addPreloadUrl(audioUrls, spot.soundData);
+    addPreloadUrl(imageUrls, resolveAssetUrl(spot.objectImageId, spot.objectImageData));
+    addPreloadUrl(imageUrls, resolveAssetUrl(spot.secondObjectImageId, spot.secondObjectImageData));
+    addPreloadUrl(audioUrls, resolveAssetUrl(spot.soundId, spot.soundData));
     (spot.logicRules || []).forEach((rule) => {
-      addPreloadUrl(audioUrls, rule.successSoundData);
-      addPreloadUrl(audioUrls, rule.failureSoundData);
+      addPreloadUrl(audioUrls, resolveAssetUrl(rule.successSoundId, rule.successSoundData));
+      addPreloadUrl(audioUrls, resolveAssetUrl(rule.failureSoundId, rule.failureSoundData));
     });
+  });
+}
+
+function collectSceneMedia(scene, imageUrls, audioUrls) {
+  return collectSceneMediaUrls(scene, imageUrls, audioUrls);
+}
+
+function collectCinematicMediaUrls(cinematic, imageUrls, audioUrls, videoUrls) {
+  if (!cinematic) return;
+  addPreloadUrl(videoUrls, resolveAssetUrl(cinematic.videoId, cinematic.videoData));
+  if (cinematic.cinematicType === 'anime2d') {
+    (cinematic.anime2dSpec?.layers || []).forEach((layer) => {
+      addPreloadUrl(imageUrls, resolveAnime2dLayerSrc(normalizeAnime2dLayer(layer)));
+    });
+    (cinematic.steps || []).forEach((step) => {
+      if (step.type !== 'anime2d') return;
+      (step.spec?.layers || []).forEach((layer) => {
+        addPreloadUrl(imageUrls, resolveAnime2dLayerSrc(normalizeAnime2dLayer(layer)));
+      });
+    });
+  }
+  (cinematic.slides || []).forEach((slide) => {
+    addPreloadUrl(imageUrls, resolveAssetUrl(slide.imageId, slide.imageData));
+    addPreloadUrl(audioUrls, resolveAssetUrl(slide.audioId, slide.audioData));
   });
 }
 
 function collectCinematicMedia(cinematic, imageUrls, audioUrls, videoUrls) {
-  if (!cinematic) return;
-  addPreloadUrl(videoUrls, cinematic.videoData);
-  if (cinematic.cinematicType === 'anime2d') {
-    (cinematic.anime2dSpec?.layers || []).forEach((layer) => {
-      addPreloadUrl(imageUrls, layer.src || layer.imageData || layer.layer?.src || layer.layer?.imageData);
-    });
-  }
-  (cinematic.slides || []).forEach((slide) => {
-    addPreloadUrl(imageUrls, slide.imageData);
-    addPreloadUrl(audioUrls, slide.audioData);
-  });
+  return collectCinematicMediaUrls(cinematic, imageUrls, audioUrls, videoUrls);
 }
 
-function collectActMedia(actId) {
+function collectActMediaUrls(projectOrActId, maybeActId) {
+  const sourceProject = maybeActId === undefined ? project : projectOrActId;
+  const actId = maybeActId === undefined ? projectOrActId : maybeActId;
   const imageUrls = new Set();
   const audioUrls = new Set();
   const videoUrls = new Set();
   const enigmaIds = new Set();
   const cinematicIds = new Set();
   const itemIds = new Set();
-  const scenes = (project.scenes || []).filter((scene) => (scene.actId || '') === (actId || ''));
+  const scenes = (sourceProject.scenes || []).filter((scene) => (scene.actId || '') === (actId || ''));
 
   scenes.forEach((scene) => {
-    collectSceneMedia(scene, imageUrls, audioUrls);
+    collectSceneMediaUrls(scene, imageUrls, audioUrls);
     if (scene.timerTargetCinematicId) cinematicIds.add(scene.timerTargetCinematicId);
     (scene.sceneObjects || []).forEach((object) => {
       if (object.linkedItemId) itemIds.add(object.linkedItemId);
@@ -968,17 +1187,17 @@ function collectActMedia(actId) {
     });
   });
 
-  (project.enigmas || []).forEach((enigma) => {
+  (sourceProject.enigmas || []).forEach((enigma) => {
     if (!enigmaIds.has(enigma.id)) return;
-    addPreloadUrl(imageUrls, enigma.imageData);
-    addPreloadUrl(imageUrls, enigma.popupBackgroundData);
+    addPreloadUrl(imageUrls, resolveAssetUrl(enigma.imageId, enigma.imageData));
+    addPreloadUrl(imageUrls, resolveAssetUrl(enigma.popupBackgroundId, enigma.popupBackgroundData));
     if (enigma.targetCinematicId) cinematicIds.add(enigma.targetCinematicId);
   });
-  (project.cinematics || []).forEach((cinematic) => {
-    if (cinematicIds.has(cinematic.id)) collectCinematicMedia(cinematic, imageUrls, audioUrls, videoUrls);
+  (sourceProject.cinematics || []).forEach((cinematic) => {
+    if (cinematicIds.has(cinematic.id)) collectCinematicMediaUrls(cinematic, imageUrls, audioUrls, videoUrls);
   });
-  (project.items || []).forEach((item) => {
-    if (itemIds.has(item.id) || scenes.length === 0) addPreloadUrl(imageUrls, item.imageData);
+  (sourceProject.items || []).forEach((item) => {
+    if (itemIds.has(item.id) || scenes.length === 0) addPreloadUrl(imageUrls, resolveAssetUrl(item.imageId, item.imageData));
   });
 
   return {
@@ -986,6 +1205,10 @@ function collectActMedia(actId) {
     audioUrls: Array.from(audioUrls),
     videoUrls: Array.from(videoUrls),
   };
+}
+
+function collectActMedia(actId) {
+  return collectActMediaUrls(actId);
 }
 
 function preloadImageUrl(url) {
@@ -1066,16 +1289,16 @@ function beginActPreload(scene) {
   return true;
 }
 
-function goToScene(sceneId, fallbackText = 'Nouvelle scène.') {
+function applyEnterSceneAction(sceneId, fallbackText = 'Nouvelle scene.') {
   const nextScene = getSceneById(sceneId);
   if (!nextScene) return false;
   const currentScene = getPlayScene();
-  const transition = currentScene?.sceneTransition || 'none';
-  if (currentScene?.id && currentScene.id !== nextScene.id && transition !== 'none') {
+  const transitionOverlay = createSceneTransitionOverlay(currentScene, nextScene);
+  if (transitionOverlay) {
     state.sceneTransitionOverlay = {
-      type: transition,
-      duration: Number(currentScene.sceneTransitionDuration) || 700,
-      scene: currentScene,
+      type: transitionOverlay.type,
+      duration: transitionOverlay.duration,
+      scene: transitionOverlay.previousScene,
     };
   }
   if (currentScene?.id !== nextScene.id) expiredSceneTimerKey = '';
@@ -1084,6 +1307,10 @@ function goToScene(sceneId, fallbackText = 'Nouvelle scène.') {
   state.dialogue = nextScene.introText || fallbackText;
   if (changesAct) beginActPreload(nextScene);
   return true;
+}
+
+function goToScene(sceneId, fallbackText = 'Nouvelle scene.') {
+  return dispatch({ ...gameActions.enterScene(sceneId), fallbackText });
 }
 
 function toggleInventorySelection(itemId) {
@@ -1100,18 +1327,16 @@ function toggleInventorySelection(itemId) {
 }
 
 function getSceneMusicKey(scene) {
-  if (!scene?.musicData) return '';
-  return scene.musicName || scene.musicData;
+  return getSharedSceneMusicKey(scene);
 }
 
 function getSceneAmbientSoundKey(scene) {
-  if (!scene?.ambientSoundData) return '';
-  return scene.ambientSoundName || scene.ambientSoundData;
+  return getSharedSceneAmbientSoundKey(scene);
 }
 
 function playSceneMusic() {
   const playScene = getPlayScene();
-  const nextMusicData = playScene?.musicData || '';
+  const nextMusicData = resolveAssetUrl(playScene?.musicId, playScene?.musicData);
   const nextMusicKey = getSceneMusicKey(playScene);
   if (!nextMusicData) {
     sceneAudio.pause();
@@ -1135,7 +1360,7 @@ function playSceneMusic() {
 
 function playSceneAmbientSound() {
   const playScene = getPlayScene();
-  const nextSoundData = playScene?.ambientSoundData || '';
+  const nextSoundData = resolveAssetUrl(playScene?.ambientSoundId, playScene?.ambientSoundData);
   const nextSoundKey = getSceneAmbientSoundKey(playScene);
   if (!nextSoundData) {
     ambientAudio.pause();
@@ -1158,20 +1383,18 @@ function playSceneAmbientSound() {
 }
 
 function playHotspotSound(spot) {
-  if (!spot?.soundData) return;
+  const soundUrl = resolveAssetUrl(spot?.soundId, spot?.soundData);
+  if (!soundUrl) return;
   hotspotAudio.pause();
   hotspotAudio.currentTime = 0;
   hotspotAudio.preload = 'auto';
-  hotspotAudio.src = spot.soundData;
+  hotspotAudio.src = soundUrl;
   hotspotAudio.volume = typeof spot.soundVolume === 'number' ? spot.soundVolume : 0.8;
   hotspotAudio.play().catch(() => {});
 }
 
 function formatSceneTimerSeconds(seconds = 0) {
-  const safeSeconds = Math.max(0, Math.round(Number(seconds) || 0));
-  const minutes = Math.floor(safeSeconds / 60);
-  const remaining = safeSeconds % 60;
-  return String(minutes).padStart(2, '0') + ':' + String(remaining).padStart(2, '0');
+  return getSharedFormatTimerSeconds(seconds);
 }
 
 function stopSceneTimer() {
@@ -1317,12 +1540,13 @@ function startSimonPlayback(enigma) {
 function launchCinematic(cinematicId) {
   const cinematic = getCinematicById(cinematicId);
   if (!cinematic) return;
+  const cinematicType = normalizeCinematicType(cinematic.cinematicType || 'slides');
   if (!state.launchedCinematicIds.includes(cinematic.id)) {
     state.launchedCinematicIds = [...state.launchedCinematicIds, cinematic.id];
   }
   state.playingCinematicId = cinematic.id;
   state.playingSlideIndex = 0;
-  if (cinematic.cinematicType === 'anime2d') {
+  if (cinematicType === 'anime2d') {
     anime2dActiveCinematicId = '';
     anime2dStartedAt = 0;
     clearAnime2dTimer();
@@ -1345,6 +1569,7 @@ function resolveHotspotInteraction(spot) {
   const isRuleAvailable = (rule) => !(rule.disableAfterUse && state.usedLogicRuleIds.includes(rule.id));
   const doesRuleMatch = (rule) => {
     if (!isRuleAvailable(rule)) return false;
+    if (rule.conditionType === 'always') return true;
     if (rule.conditionType === 'missing_item') return rule.itemId && !state.inventory.includes(rule.itemId);
     if (rule.conditionType === 'completed_hotspot') return rule.hotspotId && state.completedHotspotIds.includes(rule.hotspotId);
     if (rule.conditionType === 'solved_enigma') return rule.conditionEnigmaId && state.solvedEnigmaIds.includes(rule.conditionEnigmaId);
@@ -1357,6 +1582,7 @@ function resolveHotspotInteraction(spot) {
   };
   const isRuleConfigured = (rule) => {
     if (['has_item', 'missing_item'].includes(rule.conditionType || 'has_item')) return Boolean(rule.itemId);
+    if (rule.conditionType === 'always') return true;
     if (rule.conditionType === 'completed_hotspot') return Boolean(rule.hotspotId);
     if (rule.conditionType === 'solved_enigma') return Boolean(rule.conditionEnigmaId);
     if (rule.conditionType === 'completed_combination') return Boolean(rule.combinationId);
@@ -1375,9 +1601,13 @@ function resolveHotspotInteraction(spot) {
       rewardItemId: matchingRule.rewardItemId || (useDefaultAction ? spot.rewardItemId || '' : ''),
       targetSceneId: useDefaultAction ? spot.targetSceneId || '' : matchingRule.targetSceneId || '',
       targetCinematicId: useDefaultAction ? spot.targetCinematicId || '' : matchingRule.targetCinematicId || '',
-      enigmaId: useDefaultAction ? spot.enigmaId || '' : matchingRule.enigmaId || '',
-      objectImageData: useDefaultAction ? spot.objectImageData || '' : matchingRule.objectImageData || '',
+        enigmaId: useDefaultAction ? spot.enigmaId || '' : matchingRule.enigmaId || '',
+        blockActionType: matchingRule.blockActionType || 'show',
+        targetBlockId: matchingRule.targetBlockId || '',
+        targetBlockText: matchingRule.targetBlockText || '',
+        objectImageData: useDefaultAction ? spot.objectImageData || '' : matchingRule.objectImageData || '',
       objectImageName: useDefaultAction ? spot.objectImageName || '' : matchingRule.objectImageName || '',
+      soundId: matchingRule.successSoundId || (useDefaultAction ? spot.soundId || '' : ''),
       soundData: matchingRule.successSoundData || (useDefaultAction ? spot.soundData || '' : ''),
       soundName: matchingRule.successSoundName || (useDefaultAction ? spot.soundName || '' : ''),
       logicRuleId: matchingRule.id || '',
@@ -1388,7 +1618,7 @@ function resolveHotspotInteraction(spot) {
   const unmetRule = (spot.logicRules || []).find((rule) => (
     isRuleAvailable(rule)
     && isRuleConfigured(rule)
-    && (rule.failureDialogue || rule.failureSoundData)
+    && (rule.failureDialogue || rule.failureSoundData || rule.failureSoundId)
     && !doesRuleMatch(rule)
   ));
   if (unmetRule) {
@@ -1404,6 +1634,7 @@ function resolveHotspotInteraction(spot) {
       enigmaId: '',
       objectImageData: '',
       objectImageName: '',
+      soundId: unmetRule.failureSoundId || '',
       soundData: unmetRule.failureSoundData || '',
       soundName: unmetRule.failureSoundName || '',
     };
@@ -1415,6 +1646,7 @@ function resolveHotspotInteraction(spot) {
       ...spot,
       requiredItemId: '',
       consumeRequiredItemOnUse: false,
+      soundId: '',
       soundData: '',
       soundName: '',
     } : spot;
@@ -1429,6 +1661,7 @@ function resolveHotspotInteraction(spot) {
     targetSceneId: spot.secondTargetSceneId || '',
     targetCinematicId: spot.secondTargetCinematicId || '',
     enigmaId: spot.secondEnigmaId || '',
+    objectImageId: spot.secondObjectImageId || '',
     objectImageData: spot.secondObjectImageData || '',
     objectImageName: spot.secondObjectImageName || '',
   };
@@ -1448,16 +1681,45 @@ function applyHotspotSideEffects(spot, sourceHotspotId = spot?.id) {
     }
   }
 
-  if (spot.objectImageData) {
-    state.viewerImage = { src: spot.objectImageData, name: spot.objectImageName || spot.name };
+  const spotObjectImageUrl = resolveAssetUrl(spot.objectImageId, spot.objectImageData);
+  if (spotObjectImageUrl) {
+    state.viewerImage = {
+      src: spotObjectImageUrl,
+      name: spot.objectImageName || spot.name,
+      caption: spot.dialogue || spot.name || '',
+    };
   }
 
   if (spot.dialogue) state.dialogue = spot.dialogue;
 
-  if (spot.rewardItemId && !state.inventory.includes(spot.rewardItemId)) {
-    state.inventory = [...state.inventory, spot.rewardItemId];
-    if (!state.selectedInventoryIds.includes(spot.rewardItemId)) {
-      state.selectedInventoryIds = [...state.selectedInventoryIds, spot.rewardItemId].slice(-2);
+  const linkedInventoryItemId = ['inventory', 'both'].includes(spot.interactionMode) ? spot.linkedItemId : '';
+  const rewardItemId = spot.rewardItemId || linkedInventoryItemId;
+  if (rewardItemId && !state.inventory.includes(rewardItemId)) {
+    state.inventory = [...state.inventory, rewardItemId];
+    if (!state.selectedInventoryIds.includes(rewardItemId)) {
+      state.selectedInventoryIds = [...state.selectedInventoryIds, rewardItemId].slice(-2);
+    }
+  }
+
+  if (spot.actionType === 'block' && spot.targetBlockId) {
+    if ((spot.blockActionType || 'show') === 'hide') {
+      if (!state.removedSceneObjectIds.includes(spot.targetBlockId)) {
+        state.removedSceneObjectIds = [...state.removedSceneObjectIds, spot.targetBlockId];
+      }
+    } else if (spot.blockActionType === 'update_text') {
+      state.revealedSceneObjectIds = state.revealedSceneObjectIds.includes(spot.targetBlockId)
+        ? state.revealedSceneObjectIds
+        : [...state.revealedSceneObjectIds, spot.targetBlockId];
+      state.removedSceneObjectIds = state.removedSceneObjectIds.filter((id) => id !== spot.targetBlockId);
+      state.sceneObjectTextOverrides = {
+        ...(state.sceneObjectTextOverrides || {}),
+        [spot.targetBlockId]: spot.targetBlockText || '',
+      };
+    } else {
+      state.revealedSceneObjectIds = state.revealedSceneObjectIds.includes(spot.targetBlockId)
+        ? state.revealedSceneObjectIds
+        : [...state.revealedSceneObjectIds, spot.targetBlockId];
+      state.removedSceneObjectIds = state.removedSceneObjectIds.filter((id) => id !== spot.targetBlockId);
     }
   }
 
@@ -1486,7 +1748,7 @@ function applyEnigmaSuccess(enigma, hotspot) {
   if (enigma.successMessage) state.dialogue = enigma.successMessage;
 
   if (enigma.unlockType === 'scene' && enigma.targetSceneId) {
-    goToScene(enigma.targetSceneId, enigma.successMessage || 'Nouvelle scène débloquée.');
+    goToScene(enigma.targetSceneId, enigma.successMessage || 'Nouvelle scene débloquée.');
   } else if (enigma.unlockType === 'cinematic' && enigma.targetCinematicId) {
     launchCinematic(enigma.targetCinematicId);
   } else if (hotspot) {
@@ -1560,14 +1822,21 @@ function openEnigma(enigma, hotspot = null) {
   }
 }
 
-function submitEnigma() {
+function getActiveEnigmaAnswer() {
+  return {
+    codeInput: state.enigmaCodeInput,
+    colorAttempt: state.enigmaColorAttempt,
+    puzzleOrder: state.enigmaPuzzleOrder,
+    dragSlots: state.enigmaDragSlots,
+    rotationAngles: state.enigmaRotationAngles,
+  };
+}
+
+function applySolveEnigmaAction(action = {}) {
   if (!state.activeEnigma?.enigma) return false;
   const { enigma } = state.activeEnigma;
-  const isSuccess = enigma.type === 'colors' ?
-     sameColorSequence(state.enigmaColorAttempt, enigma.solutionColors || [])
-    : enigma.type === 'misc' ?
-       validateMiscAnswer(enigma, state.enigmaCodeInput)
-      : (state.enigmaCodeInput || '').trim().toLowerCase() === (enigma.solutionText || '').trim().toLowerCase();
+  if (action.id && action.id !== enigma.id) return false;
+  const isSuccess = validateEnigmaAnswer(enigma, action.answer || getActiveEnigmaAnswer());
 
   if (!isSuccess) {
     failActiveEnigma();
@@ -1578,6 +1847,10 @@ function submitEnigma() {
 
   solveActiveEnigma();
   return true;
+}
+
+function submitEnigma() {
+  return dispatch(gameActions.solveEnigma(state.activeEnigma?.enigma?.id));
 }
 
 function pushEnigmaColor(colorValue) {
@@ -1668,16 +1941,23 @@ function returnDragPieceToBank(slotIndex) {
 function openInventoryItem(itemId) {
   const item = getItemById(itemId);
   if (!item) return;
-  if (item.imageData) {
-    state.viewerImage = { id: item.id, src: item.imageData, name: item.name };
+  const itemImageUrl = resolveAssetUrl(item.imageId, item.imageData);
+  if (itemImageUrl) {
+    state.viewerImage = { id: item.id, src: itemImageUrl, name: item.name };
   }
   toggleInventorySelection(itemId);
   render();
 }
 
-function combineInventoryItems(firstId, secondId) {
+function applyCombineAction(firstId, secondId) {
   const combo = getCombinationForItems(firstId, secondId);
-  if (!combo?.resultItemId) {
+  const resultItemId = getCombinationResult(combo);
+  if (combo?.blocked) {
+    state.dialogue = combo.failMessage || 'Les conditions ne sont pas reunies.';
+    render();
+    return false;
+  }
+  if (!resultItemId) {
     state.dialogue = 'Ces deux objets ne peuvent pas être combinés.';
     render();
     return false;
@@ -1689,20 +1969,27 @@ function combineInventoryItems(firstId, secondId) {
     if (index >= 0) remaining.splice(index, 1);
   };
 
-  removeOne(firstId);
-  removeOne(secondId);
-  if (!remaining.includes(combo.resultItemId)) remaining.push(combo.resultItemId);
+  if (combo.consume ?? true) {
+    removeOne(firstId);
+    removeOne(secondId);
+  }
+  if (!remaining.includes(resultItemId)) remaining.push(resultItemId);
   state.inventory = remaining;
 
-  const resultItem = getItemById(combo.resultItemId);
+  const resultItem = getItemById(resultItemId);
   if (!state.completedCombinationIds.includes(combo.id)) {
     state.completedCombinationIds = [...state.completedCombinationIds, combo.id];
   }
   state.dialogue = combo.message || ('Tu obtiens ' + (resultItem?.name || 'un nouvel objet') + '.');
-  state.selectedInventoryIds = combo.resultItemId ? [combo.resultItemId] : [];
-  state.viewerImage = resultItem?.imageData ? { id: resultItem.id, src: resultItem.imageData, name: resultItem.name } : null;
+  state.selectedInventoryIds = resultItemId ? [resultItemId] : [];
+  const resultItemImageUrl = resolveAssetUrl(resultItem?.imageId, resultItem?.imageData);
+  state.viewerImage = resultItemImageUrl ? { id: resultItem.id, src: resultItemImageUrl, name: resultItem.name } : null;
   render();
   return true;
+}
+
+function combineInventoryItems(firstId, secondId) {
+  return dispatch(gameActions.combine(firstId, secondId));
 }
 
 function getSceneObjectClickMode(obj) {
@@ -1710,6 +1997,20 @@ function getSceneObjectClickMode(obj) {
   if (obj.clickMode) return obj.clickMode;
   if (obj.isClickable === false) return 'none';
   return 'object';
+}
+
+function getSceneObjectBlockType(obj) {
+  const value = obj?.blockType || 'object';
+  return ['object', 'text', 'image', 'button', 'input', 'code', 'hint'].includes(value) ? value : 'object';
+}
+
+function normalizeBlockAnswer(value) {
+  return String(value || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function getSceneObjectFontSize(obj) {
+  const value = Number(obj?.fontSize);
+  return Number.isFinite(value) ? Math.max(8, Math.min(48, value)) : 13;
 }
 
 function triggerSceneObject(objectId) {
@@ -1724,18 +2025,43 @@ function triggerSceneObject(objectId) {
   }
   playHotspotSound(obj);
 
+  const blockType = getSceneObjectBlockType(obj);
+  if (blockType === 'input' || blockType === 'code') {
+    const answer = window.prompt(obj.placeholder || (blockType === 'code' ? 'Entre le code.' : 'Entre ta réponse.'));
+    if (answer === null) return;
+    const isCorrect = normalizeBlockAnswer(answer) === normalizeBlockAnswer(obj.expectedAnswer);
+    state.dialogue = isCorrect
+      ? (obj.successDialogue || obj.dialogue || 'Bonne réponse.')
+      : (obj.failureDialogue || 'Ce n est pas la bonne réponse.');
+    if (isCorrect) markHotspotCompleted(obj.id);
+    if (isCorrect && (obj.logicRules || []).length) {
+      triggerHotspot(obj.id);
+    }
+    if (isCorrect && obj.removeAfterUse && !state.removedSceneObjectIds.includes(obj.id)) {
+      state.removedSceneObjectIds = [...state.removedSceneObjectIds, obj.id];
+    }
+    render();
+    return;
+  }
+
+  if ((obj.logicRules || []).length) {
+    triggerHotspot(obj.id);
+    return;
+  }
+
   const mode = obj.interactionMode || 'popup';
   const linkedItem = obj.linkedItemId ? getItemById(obj.linkedItemId) : null;
-  const popupSrc = obj.popupImageData || obj.popupImage || obj.imageData || linkedItem?.imageData || '';
+  const popupSrc = resolveAssetUrl(obj.popupImageId, obj.popupImageData || obj.popupImage)
+    || resolveAssetUrl(obj.imageId, obj.imageData)
+    || resolveAssetUrl(linkedItem?.imageId, linkedItem?.imageData);
 
   if (mode === 'popup' || mode === 'both') {
     if (popupSrc) {
       state.viewerImage = {
         id: obj.linkedItemId || obj.id,
         src: popupSrc,
-        // Ne jamais afficher le nom du fichier uploadé dans la pop-up.
-        // On affiche d'abord le dialogue, sinon le nom lisible de l'objet.
-        name: obj.dialogue || obj.name || linkedItem?.name || 'Objet',
+        name: obj.name || linkedItem?.name || obj.popupImageName || 'Objet',
+        caption: obj.dialogue || obj.name || linkedItem?.name || '',
       };
     }
   }
@@ -1755,14 +2081,15 @@ function triggerSceneObject(objectId) {
   if (obj.removeAfterUse && !state.removedSceneObjectIds.includes(obj.id)) {
     state.removedSceneObjectIds = [...state.removedSceneObjectIds, obj.id];
   }
+  markHotspotCompleted(obj.id);
 
   render();
 }
 
-function triggerHotspot(spotId) {
+function applyTriggerHotspotAction(spotId) {
   const scene = getPlayScene();
   const spot = scene?.hotspots?.find((entry) => entry.id === spotId)
-    || scene?.sceneObjects?.find((entry) => entry.id === spotId && getSceneObjectClickMode(entry) === 'action');
+    || scene?.sceneObjects?.find((entry) => entry.id === spotId);
   if (!spot) return;
   const activeSpot = resolveHotspotInteraction(spot);
   if (!activeSpot) return;
@@ -1795,21 +2122,26 @@ function triggerHotspot(spotId) {
   render();
 }
 
-function applyCinematicEnd(cinematic) {
-  if (!cinematic || !cinematic.onEndType || cinematic.onEndType === 'none') return;
+function triggerHotspot(spotId) {
+  return dispatch(gameActions.triggerHotspot(spotId));
+}
 
-  if (cinematic.onEndType === 'scene' && cinematic.targetSceneId) {
-    goToScene(cinematic.targetSceneId, 'Nouvelle scène débloquée.');
+function applyCinematicEnd(cinematic) {
+  const endType = normalizeCinematicEndAction(cinematic?.onEndType || 'none');
+  if (!cinematic || endType === 'none') return;
+
+  if (endType === 'scene' && cinematic.targetSceneId) {
+    goToScene(cinematic.targetSceneId, 'Nouvelle scene débloquée.');
     return;
   }
 
-  if (cinematic.onEndType === 'act' && cinematic.targetActId) {
+  if (endType === 'act' && cinematic.targetActId) {
     const actScene = getFirstSceneForAct(cinematic.targetActId);
     if (actScene) goToScene(actScene.id, 'Un nouvel acte commence.');
     return;
   }
 
-  if (cinematic.onEndType === 'item' && cinematic.rewardItemId) {
+  if (endType === 'item' && cinematic.rewardItemId) {
     const rewardItem = getItemById(cinematic.rewardItemId);
     if (!state.inventory.includes(cinematic.rewardItemId)) {
       state.inventory = [...state.inventory, cinematic.rewardItemId];
@@ -1817,11 +2149,16 @@ function applyCinematicEnd(cinematic) {
     if (!state.selectedInventoryIds.includes(cinematic.rewardItemId)) {
       state.selectedInventoryIds = [...state.selectedInventoryIds, cinematic.rewardItemId].slice(-2);
     }
-    if (rewardItem?.imageData) {
-      state.viewerImage = { id: rewardItem.id, src: rewardItem.imageData, name: rewardItem.name };
+    const rewardItemImageUrl = resolveAssetUrl(rewardItem?.imageId, rewardItem?.imageData);
+    if (rewardItemImageUrl) {
+      state.viewerImage = { id: rewardItem.id, src: rewardItemImageUrl, name: rewardItem.name };
     }
     state.dialogue = 'Tu obtiens ' + (rewardItem?.name || 'un nouvel objet') + '.';
   }
+}
+
+function dispatch(action = {}) {
+  return standaloneEngine.dispatch(action);
 }
 
 function closeCinematic() {
@@ -1862,6 +2199,8 @@ function resetPreview() {
   clearAnime2dTimer();
   anime2dActiveCinematicId = '';
   anime2dStartedAt = 0;
+  sceneAnime2dActiveSceneId = '';
+  sceneAnime2dStartedAt = 0;
   expiredSceneTimerKey = '';
   Object.assign(state, DEFAULT_STATE());
   state.inventoryDrawerOpen = false;
@@ -2018,7 +2357,7 @@ function bindEvents() {
   root.querySelectorAll('#combine-items').forEach((button) => {
     button.addEventListener('click', () => {
       if (state.selectedInventoryIds.length !== 2) {
-        state.dialogue = 'Sélectionne 2 objets à combiner.';
+        state.dialogue = 'Selectionne 2 objets à combiner.';
         render();
         return;
       }
@@ -2181,30 +2520,20 @@ function bindEvents() {
 function renderCinematic(cinematic, slide) {
   if (!cinematic) return '';
   if (cinematic.cinematicType === 'anime2d') {
-    const { steps, layers, duration } = getAnime2dSpec(cinematic);
+    const model = getAnime2dSpec(cinematic);
+    const { layers, duration } = model;
     const time = Math.min(duration, getAnime2dElapsed(cinematic));
-    const imageSteps = steps.filter((step) => ['add', 'replace'].includes(step.mode) && step.layerId && isAnimeStepActive(step, time));
-    const replaceStep = [...imageSteps].reverse().find((step) => step.mode === 'replace');
-    const eventLayerIds = new Set(steps.filter((step) => ['add', 'replace'].includes(step.mode) && step.layerId).map((step) => step.layerId));
-    const baseLayers = layers.filter((layer) => layer.visible !== false && !eventLayerIds.has(layer.id) && (layer.visibleAtStart === true || !layer.src));
-    const visibleLayers = replaceStep ?
-       layers.filter((layer) => layer.visible !== false && layer.id === replaceStep.layerId)
-      : [
-          ...baseLayers,
-          ...imageSteps
-            .filter((step) => step.mode === 'add')
-            .map((step) => layers.find((layer) => layer.visible !== false && layer.id === step.layerId))
-            .filter(Boolean),
-        ];
+    const { visibleLayers, narration: frameNarration } = createAnime2dPreviewFrame(model, time);
     const fallbackNarration = cinematic.slides?.find((entry) => String(entry?.narration || '').trim())?.narration || '';
-    const currentNarrationStep = [...steps].reverse().find((step) => String(step.narration || '').trim() && getAnimeStepStart(step) <= time) || null;
-    const narration = String(currentNarrationStep?.narration || '').trim() || fallbackNarration;
+    const narration = frameNarration || fallbackNarration;
 
     return '<div class="overlay" id="cinematic-overlay"><div class="overlay-card wide">'
       + '<div class="anime2d-player">'
-      + (!layers.some((layer) => layer.src) ? '<p class="anime2d-player-empty">Aucune image embarquée dans ce JSON 2D Anime.</p>' : '')
+      + (!layers.some((layer) => resolveAnime2dLayerSrc(layer)) ? '<p class="anime2d-player-empty">Aucune image embarquée dans ce JSON 2D Anime.</p>' : '')
       + visibleLayers.map((layer) => '<div class="anime2d-player-layer" style="left:' + safeHtml(layer.x || 50) + '%;top:' + safeHtml(layer.y || 50) + '%;width:' + safeHtml(layer.width || 28) + '%;height:' + safeHtml(layer.height || ((layer.width || 28) * 1.6)) + '%;opacity:' + safeHtml(Number(layer.opacity || 100) / 100) + ';z-index:' + safeHtml(layers.length - layers.findIndex((entry) => entry.id === layer.id) + 2) + '">'
-        + (layer.src ? '<img src="' + layer.src + '" alt="' + safeHtml(layer.name || '') + '" loading="eager" decoding="sync" />' : '')
+        + '<span class="anime2d-embedded-animated anime2d-preset-' + safeHtml(layer.preset || 'none') + '" style="animation-duration:' + safeHtml(layer.duration || 1000) + 'ms;animation-delay:' + safeHtml(layer.delay || 0) + 'ms;animation-iteration-count:' + (layer.loop === false ? '1' : 'infinite') + '">'
+        + (resolveAnime2dLayerSrc(layer) ? '<img src="' + resolveAnime2dLayerSrc(layer) + '" alt="' + safeHtml(layer.name || '') + '" loading="eager" decoding="sync" />' : '')
+        + '</span>'
         + '</div>').join('')
       + (narration ? '<p class="anime2d-player-narration">' + safeHtml(narration) + '</p>' : '')
       + '</div>'
@@ -2214,20 +2543,20 @@ function renderCinematic(cinematic, slide) {
   }
   if ((cinematic.cinematicType || 'slides') === 'video') {
     return '<div class="overlay" id="cinematic-overlay"><div class="overlay-card">'
-      + (cinematic.videoData ?
-         '<video id="cinematic-video" class="overlay-media" preload="auto" src="' + cinematic.videoData + '" '
+      + (resolveAssetUrl(cinematic.videoId, cinematic.videoData) ?
+         '<video id="cinematic-video" class="overlay-media" preload="auto" src="' + resolveAssetUrl(cinematic.videoId, cinematic.videoData) + '" '
           + (cinematic.videoControls === false ? '' : 'controls ') + (cinematic.videoAutoplay === false ? '' : 'autoplay ')
           + '></video>'
-        : '<p class="small-note">Ajoute une vidéo dans l’éditeur de cinématique.</p>')
-      + '<p class="narration">' + safeHtml(cinematic.name || 'Cinématique') + '</p>'
+        : '<p class="small-note">Ajoute une vidéo dans l’éditeur de cinematic.</p>')
+      + '<p class="narration">' + safeHtml(cinematic.name || 'Cinematic') + '</p>'
       + '<div class="panel-head"><span></span><button id="close-cinematic">Terminer</button></div></div></div>';
   }
 
   if (!slide) return '';
 
   return '<div class="overlay" id="cinematic-overlay"><div class="overlay-card">'
-    + (slide.imageData ? '<img class="overlay-media" loading="eager" decoding="async" src="' + slide.imageData + '" alt="' + safeHtml(slide.imageName || slide.narration || 'Cinématique') + '" />' : '')
-    + (slide.audioData ? '<audio id="cinematic-audio" class="overlay-media" controls autoplay src="' + slide.audioData + '"></audio>' : '')
+    + (resolveAssetUrl(slide.imageId, slide.imageData) ? '<img class="overlay-media" loading="eager" decoding="async" src="' + resolveAssetUrl(slide.imageId, slide.imageData) + '" alt="' + safeHtml(slide.imageName || slide.narration || 'Cinematic') + '" />' : '')
+    + (resolveAssetUrl(slide.audioId, slide.audioData) ? '<audio id="cinematic-audio" class="overlay-media" controls autoplay src="' + resolveAssetUrl(slide.audioId, slide.audioData) + '"></audio>' : '')
     + '<p class="narration">' + safeHtml(slide.narration || '') + '</p>'
     + '<div class="panel-head">'
     + '<button id="prev-cinematic" class="secondary-button">Précédent</button>'
@@ -2242,9 +2571,11 @@ function renderEnigma(enigma) {
   const rows = Number(enigma.gridRows) || 3;
   const cols = Number(enigma.gridCols) || 3;
   const pieceCount = rows * cols;
+  const enigmaImageUrl = resolveAssetUrl(enigma.imageId, enigma.imageData);
+  const enigmaPopupBackgroundUrl = resolveAssetUrl(enigma.popupBackgroundId, enigma.popupBackgroundData);
   const overlayGradient = POPUP_OVERLAY_GRADIENTS[enigma.popupBackgroundOverlay] || POPUP_OVERLAY_GRADIENTS.dark;
-  const overlayStyle = enigma.popupBackgroundData ?
-     ' style="background-image:' + overlayGradient + ', url(' + enigma.popupBackgroundData + ');background-size:' + Math.round((Number(enigma.popupBackgroundZoom) || 1) * 100) + '%;background-position:' + (Number(enigma.popupBackgroundX) || 50) + '% ' + (Number(enigma.popupBackgroundY) || 50) + '%;background-repeat:no-repeat"'
+  const overlayStyle = enigmaPopupBackgroundUrl ?
+     ' style="background-image:' + overlayGradient + ', url(' + enigmaPopupBackgroundUrl + ');background-size:' + Math.round((Number(enigma.popupBackgroundZoom) || 1) * 100) + '%;background-position:' + (Number(enigma.popupBackgroundX) || 50) + '% ' + (Number(enigma.popupBackgroundY) || 50) + '%;background-repeat:no-repeat"'
     : '';
 
   let body = '';
@@ -2261,25 +2592,25 @@ function renderEnigma(enigma) {
     if (codeSkin === 'safe-wheels') {
       body = '<div><label>Roulettes du coffre</label><div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:10px">'
         + codeSlots.map((char, index) => '<input data-code-index="' + index + '" data-code-length="' + codeLength + '" maxlength="1" value="' + safeHtml(char) + '" style="' + slotInputStyle + ';background:linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,.04))" />').join('')
-        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
+        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’enigme</button></div></div>';
     } else if (codeSkin === 'digicode') {
       body = '<div><label>Digicode</label><div style="display:flex;gap:8px;justify-content:center;margin:10px 0 14px">'
         + codeSlots.map((char) => '<span style="width:42px;height:46px;border-radius:10px;border:1px solid rgba(255,255,255,.22);display:grid;place-items:center;font-size:22px;font-weight:900;background:rgba(15,23,42,.68)">' + safeHtml(char || '?') + '</span>').join('')
         + '</div><div style="display:grid;grid-template-columns:repeat(3,64px);gap:10px;justify-content:center">'
         + keypadKeys.map((key) => '<button type="button" data-code-key="' + key + '" data-code-length="' + codeLength + '" style="height:52px;font-size:20px;font-weight:900;color:#f8fbff;background:linear-gradient(180deg, rgba(59,130,246,.32), rgba(30,41,59,.96));border:1px solid rgba(147,197,253,.34);box-shadow:0 10px 22px rgba(15,23,42,.28)">' + key + '</button>').join('')
-        + '</div><div class="inventory-actions"><button id="clear-code" style="color:#dbeafe;background:rgba(15,23,42,.92);border:1px solid rgba(147,197,253,.28)">Effacer</button><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
+        + '</div><div class="inventory-actions"><button id="clear-code" style="color:#dbeafe;background:rgba(15,23,42,.92);border:1px solid rgba(147,197,253,.28)">Effacer</button><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’enigme</button></div></div>';
     } else if (codeSkin === 'boxes') {
       body = '<div><label>Cases du code</label><div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:10px">'
         + codeSlots.map((char, index) => '<input data-code-index="' + index + '" data-code-length="' + codeLength + '" maxlength="1" value="' + safeHtml(char) + '" style="' + boxInputStyle + '" />').join('')
-        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
+        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’enigme</button></div></div>';
     } else if (codeSkin === 'paper-strip') {
       body = '<div><label>Bande papier</label><input id="enigma-input" value="' + safeHtml(state.enigmaCodeInput) + '" '
         + 'style="width:100%;padding:12px 14px;border-radius:8px;border:1px solid rgba(148,163,184,.16);background:rgba(255,255,255,.92);color:#0f172a;outline:none;text-align:center;font-family:monospace;font-size:24px;font-weight:900;letter-spacing:8px;text-transform:uppercase" />'
-        + '<div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
+        + '<div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’enigme</button></div></div>';
     } else {
       body = '<div><label>Code</label><input id="enigma-input" value="' + safeHtml(state.enigmaCodeInput) + '" '
         + 'style="width:100%;padding:12px 14px;border-radius:14px;border:1px solid rgba(148,163,184,.16);background:rgba(12,21,39,.9);color:white;outline:none" />'
-        + '<div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
+        + '<div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’enigme</button></div></div>';
     }
   }
 
@@ -2290,7 +2621,7 @@ function renderEnigma(enigma) {
         : '<span class="small-note">Aucune couleur choisie.</span>')
       + '</div><div class="color-picker-grid">'
       + PREVIEW_COLOR_OPTIONS.map(([value, label]) => '<button type="button" class="color-picker-button" data-enigma-color="' + value + '" title="' + label + '" style="background:' + value + '"></button>').join('')
-      + '</div><div class="panel-head"><button id="clear-colors" class="secondary-button">Effacer la suite</button><button id="submit-enigma">Valider l’énigme</button></div></div>';
+      + '</div><div class="panel-head"><button id="clear-colors" class="secondary-button">Effacer la suite</button><button id="submit-enigma">Valider l’enigme</button></div></div>';
   }
 
   if (enigma.type === 'misc') {
@@ -2300,11 +2631,11 @@ function renderEnigma(enigma) {
     if (miscMode === 'multiple-choice') {
       body = '<div><label>Choisis une réponse</label><div style="display:grid;gap:10px;margin-top:10px">'
         + (enigma.miscChoices || []).map((choice) => '<button type="button" data-misc-choice="' + safeHtml(choice) + '" style="' + (state.enigmaCodeInput === choice ? primaryButtonStyle : secondaryButtonStyle) + '">' + safeHtml(choice) + '</button>').join('')
-        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
+        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’enigme</button></div></div>';
     } else if (miscMode === 'true-false') {
       body = '<div><label>Choisis une réponse</label><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">'
         + ['vrai', 'faux'].map((choice) => '<button type="button" data-misc-choice="' + choice + '" style="' + (state.enigmaCodeInput === choice ? primaryButtonStyle : secondaryButtonStyle) + '">' + (choice === 'vrai' ? 'Vrai' : 'Faux') + '</button>').join('')
-        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
+        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’enigme</button></div></div>';
     } else if (miscMode === 'ordering') {
       const current = parseJsonValue(state.enigmaCodeInput, []);
       body = '<div><label>Remets dans l’ordre</label><div style="display:grid;gap:10px;margin-top:10px">'
@@ -2312,38 +2643,38 @@ function renderEnigma(enigma) {
         + (current.length ? current.map((choice, index) => '<button type="button" data-misc-order-remove="' + index + '" style="' + secondaryButtonStyle + '">' + (index + 1) + '. ' + safeHtml(choice) + '</button>').join('') : '<span class="small-note">Clique les éléments dans le bon ordre.</span>')
         + '</div>'
         + (enigma.miscChoices || []).filter((choice) => !current.includes(choice)).map((choice) => '<button type="button" data-misc-order="' + safeHtml(choice) + '" style="' + secondaryButtonStyle + '">' + safeHtml(choice) + '</button>').join('')
-        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
+        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’enigme</button></div></div>';
     } else if (miscMode === 'matching') {
       const answers = parseJsonValue(state.enigmaCodeInput, {});
       body = '<div><label>Associe les paires</label><div style="display:grid;gap:10px;margin-top:10px">'
         + (enigma.miscPairs || []).map((pair) => '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:center"><strong>' + safeHtml(pair.left || '') + '</strong><select data-misc-match-left="' + safeHtml(pair.left || '') + '"><option value="">Choisir</option>'
           + (enigma.miscPairs || []).map((entry) => '<option value="' + safeHtml(entry.right || '') + '"' + (answers[pair.left] === entry.right ? ' selected' : '') + '>' + safeHtml(entry.right || '') + '</option>').join('')
           + '</select></div>').join('')
-        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
+        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’enigme</button></div></div>';
     } else if (miscMode === 'numeric-range' || miscMode === 'exact-number') {
       body = '<div><label>' + (miscMode === 'exact-number' ? 'Nombre exact' : 'Nombre') + '</label><input id="enigma-input" type="number" value="' + safeHtml(state.enigmaCodeInput) + '" '
         + 'style="width:100%;padding:12px 14px;border-radius:14px;border:1px solid rgba(148,163,184,.16);background:rgba(12,21,39,.9);color:white;outline:none" />'
         + '<p class="small-note">' + (miscMode === 'exact-number' ? 'La réponse doit correspondre au nombre attendu.' : 'La réponse doit être comprise entre ' + safeHtml(enigma.miscMin ?? '') + ' et ' + safeHtml(enigma.miscMax ?? '') + '.') + '</p>'
-        + '<div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
+        + '<div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’enigme</button></div></div>';
     } else if (miscMode === 'item-select') {
       body = '<div><label>Choisis l’objet</label><div style="display:grid;gap:10px;margin-top:10px">'
         + (project.items || []).map((item) => '<button type="button" data-misc-choice="' + safeHtml(item.id) + '" style="' + (state.enigmaCodeInput === item.id ? primaryButtonStyle : secondaryButtonStyle) + '">' + safeHtml(item.name || 'Objet') + '</button>').join('')
-        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
+        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’enigme</button></div></div>';
     } else if (miscMode === 'multi-select') {
       const current = parseJsonValue(state.enigmaCodeInput, []);
-      body = '<div><label>Sélectionne toutes les bonnes réponses</label><div style="display:grid;gap:10px;margin-top:10px">'
+      body = '<div><label>Selectionne toutes les bonnes réponses</label><div style="display:grid;gap:10px;margin-top:10px">'
         + (enigma.miscChoices || []).map((choice) => '<button type="button" data-misc-toggle="' + safeHtml(choice) + '" style="' + (current.includes(choice) ? primaryButtonStyle : secondaryButtonStyle) + '">' + safeHtml(choice) + '</button>').join('')
-        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
+        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’enigme</button></div></div>';
     } else {
       body = '<div><label>' + (miscMode === 'fill-blank' ? 'Mot manquant' : 'Réponse') + '</label><input id="enigma-input" value="' + safeHtml(state.enigmaCodeInput) + '" placeholder="Écris ta réponse..." '
         + 'style="width:100%;padding:12px 14px;border-radius:14px;border:1px solid rgba(148,163,184,.16);background:rgba(12,21,39,.9);color:white;outline:none" />'
         + '<p class="small-note">La réponse est acceptée même avec des majuscules différentes ou des mots en plus.</p>'
-        + '<div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
+        + '<div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’enigme</button></div></div>';
     }
   }
 
   if (enigma.type === 'simon') {
-    body = '<div><p class="small-note">' + (state.simonPlayerTurn ? 'À toi de rejouer la séquence.' : 'Observe la séquence.') + '</p>'
+    body = '<div><p class="small-note">' + (state.simonPlayerTurn ? 'À toi de rejouer la sequence.' : 'Observe la sequence.') + '</p>'
       + '<div class="color-picker-grid simon-grid">'
       + PREVIEW_COLOR_OPTIONS.slice(0, 4).map(([value, label], index) => {
         const solutionColor = (enigma.solutionColors || [])[state.simonPlaybackIndex];
@@ -2352,44 +2683,44 @@ function renderEnigma(enigma) {
       }).join('')
       + '</div><div class="color-attempt-row" style="margin-top:14px">'
       + state.enigmaColorAttempt.map((color) => '<span class="color-chip" style="background:' + color + '"></span>').join('')
-      + '</div><div class="inventory-actions"><button id="replay-simon" class="secondary-button">Rejouer la séquence</button></div></div>';
+      + '</div><div class="inventory-actions"><button id="replay-simon" class="secondary-button">Rejouer la sequence</button></div></div>';
   }
 
-  if (enigma.type === 'puzzle' && enigma.imageData) {
-    body = '<div><p class="small-note">Clique une pièce, puis une deuxième pour les échanger.</p>'
+  if (enigma.type === 'puzzle' && enigmaImageUrl) {
+    body = '<div><p class="small-note">Clique une piece, puis une deuxième pour les échanger.</p>'
       + '<div class="enigma-grid" style="grid-template-columns:repeat(' + cols + ', 1fr)">'
       + state.enigmaPuzzleOrder.map((pieceIndex, index) => '<button type="button" data-puzzle-index="' + index + '" class="puzzle-piece'
-        + (state.enigmaPuzzleSelectedIndex === index ? ' selected' : '') + '" style="' + makePieceStyle(enigma.imageData, rows, cols, pieceIndex) + '"></button>').join('')
+        + (state.enigmaPuzzleSelectedIndex === index ? ' selected' : '') + '" style="' + makePieceStyle(enigmaImageUrl, rows, cols, pieceIndex) + '"></button>').join('')
       + '</div></div>';
   }
 
-  if (enigma.type === 'rotation' && enigma.imageData) {
-    body = '<div><p class="small-note">Clique sur chaque pièce pour la remettre à l’endroit.</p>'
+  if (enigma.type === 'rotation' && enigmaImageUrl) {
+    body = '<div><p class="small-note">Clique sur chaque piece pour la remettre à l’endroit.</p>'
       + '<div class="enigma-grid" style="grid-template-columns:repeat(' + cols + ', 1fr)">'
       + Array.from({ length: pieceCount }, (_, index) => '<button type="button" data-rotation-index="' + index + '" class="puzzle-piece" style="'
-        + makePieceStyle(enigma.imageData, rows, cols, index, state.enigmaRotationAngles[index] || 0) + '"></button>').join('')
+        + makePieceStyle(enigmaImageUrl, rows, cols, index, state.enigmaRotationAngles[index] || 0) + '"></button>').join('')
       + '</div></div>';
   }
 
-  if (enigma.type === 'dragdrop' && enigma.imageData) {
-    body = '<div><p class="small-note">Glisse les pièces vers la bonne case. Clique une case remplie pour renvoyer sa pièce dans la réserve.</p>'
+  if (enigma.type === 'dragdrop' && enigmaImageUrl) {
+    body = '<div><p class="small-note">Glisse les pieces vers la bonne case. Clique une case remplie pour renvoyer sa piece dans la réserve.</p>'
       + '<div class="dragdrop-layout"><div><h3>Plateau</h3><div class="enigma-grid" style="grid-template-columns:repeat(' + cols + ', 1fr)">'
       + state.enigmaDragSlots.map((pieceIndex, slotIndex) => '<button type="button" data-slot-index="' + slotIndex + '" class="puzzle-slot">'
         + (pieceIndex !== null && pieceIndex !== undefined ?
-           '<span class="puzzle-piece static" style="' + makePieceStyle(enigma.imageData, rows, cols, pieceIndex) + '"></span>'
+           '<span class="puzzle-piece static" style="' + makePieceStyle(enigmaImageUrl, rows, cols, pieceIndex) + '"></span>'
           : '<span class="slot-index">' + (slotIndex + 1) + '</span>') + '</button>').join('')
-      + '</div></div><div><h3>Pièces</h3><div class="bank-grid">'
+      + '</div></div><div><h3>Pieces</h3><div class="bank-grid">'
       + state.enigmaDragBank.map((pieceIndex) => '<button type="button" data-bank-piece="' + pieceIndex + '" class="puzzle-piece" draggable="true" style="'
-        + makePieceStyle(enigma.imageData, rows, cols, pieceIndex) + '"></button>').join('')
+        + makePieceStyle(enigmaImageUrl, rows, cols, pieceIndex) + '"></button>').join('')
       + '</div></div></div></div>';
   }
 
-  if (usesImage(enigma.type) && !enigma.imageData) {
-    body = '<p class="small-note">Ajoute une image dans l’éditeur d’énigmes pour jouer cette énigme.</p>';
+  if (usesImage(enigma.type) && !enigmaImageUrl) {
+    body = '<p class="small-note">Ajoute une image dans l’éditeur d’enigmes pour jouer cette enigme.</p>';
   }
 
   return '<div class="overlay" id="enigma-overlay"><div class="overlay-card"' + overlayStyle + '><div class="panel-head"><div><h2 style="margin:0">'
-    + safeHtml(enigma.name || 'énigme') + '</h2><p class="small-note" style="margin:6px 0 0">'
+    + safeHtml(enigma.name || 'enigme') + '</h2><p class="small-note" style="margin:6px 0 0">'
     + safeHtml(enigma.question || '') + '</p></div><button id="close-enigma" class="danger-button">Fermer</button></div>'
     + body + '</div></div>';
 }
@@ -2400,12 +2731,13 @@ function render(shouldSave = true) {
   const currentSlide = getCurrentSlide();
   const enigma = state.activeEnigma?.enigma || null;
   const sceneAspectRatio = Number(playScene?.backgroundAspectRatio) > 0 ? Number(playScene.backgroundAspectRatio) : 1.6;
+  const playSceneBackgroundUrl = resolveAssetUrl(playScene?.backgroundId, playScene?.backgroundData);
   if (!hasRenderedOnce && !loadedActId) loadedActId = playScene?.actId || '';
 
   root.innerHTML = '<div class="player-shell is-shared-player ' + (state.showInteractionHints ? 'show-hints' : 'hide-hints') + ' ' + (state.controlsVisible ? '' : 'controls-hidden') + '">'
     + '<section class="panel player-stage-panel">'
     + '<div class="player-topbar">'
-    + '<div><span class="eyebrow">Player</span><strong>' + safeHtml(playScene ? getSceneLabel(playScene.id) : 'Aucune scène') + '</strong></div>'
+    + '<div><span class="eyebrow">Player</span><strong>' + safeHtml(playScene ? getSceneLabel(playScene.id) : 'Aucune scene') + '</strong></div>'
     + '<div class="player-actions">'
     + '<button id="pause-game" type="button" class="secondary-action">Pause</button>'
     + '<button id="reset-preview" type="button" class="secondary-action player-reset-button">Recommencer</button>'
@@ -2415,20 +2747,47 @@ function render(shouldSave = true) {
     + '<button id="fullscreen-toggle" type="button" class="secondary-action">Plein écran</button>'
     + '</div></div>'
     + '<div class="scene-player" id="scene-layer" style="--scene-aspect:' + sceneAspectRatio + '">'
-    + (playScene?.backgroundData ?
-       '<img class="bg" src="' + playScene.backgroundData + '" alt="' + safeHtml(playScene.name || 'Scène') + '" onload="setSceneAspectFromImage(this)" />'
-      : '<div class="placeholder">Ajoute un fond pour jouer la scène.</div>')
+    + (playSceneBackgroundUrl ?
+       '<img class="bg" src="' + playSceneBackgroundUrl + '" alt="' + safeHtml(playScene.name || 'Scene') + '" onload="setSceneAspectFromImage(this)" />'
+      : '<div class="placeholder">Ajoute un fond pour jouer la scene.</div>')
     + (playScene?.visualEffect && playScene.visualEffect !== 'none' ? '<div class="scene-visual-effect scene-visual-effect--' + safeHtml(playScene.visualEffect) + ' scene-visual-effect--' + safeHtml(playScene.visualEffectIntensity || 'normal') + '"></div>' : '')
     + (playScene?.visualEffectZones || []).filter((zone) => !zone.isHidden).map((zone) => '<div class="scene-visual-effect scene-visual-effect-zone scene-visual-effect--' + safeHtml(zone.effect || 'sparkles') + ' scene-visual-effect--' + safeHtml(zone.intensity || 'normal') + '" style="left:' + zone.x + '%;top:' + zone.y + '%;width:' + zone.width + '%;height:' + zone.height + '%;z-index:' + getVisualEffectZoneZIndex(zone.layer) + ';' + getElementShapeStyle(zone) + '"></div>').join('')
     + (playScene?.hotspots || []).map((spot) => '<button type="button" class="player-hotspot" data-hotspot-id="' + spot.id + '" '
       + 'style="left:' + spot.x + '%;top:' + spot.y + '%;width:' + spot.width + '%;height:' + spot.height + '%;z-index:20;cursor:pointer;' + getElementShapeStyle(spot) + '" title="' + safeHtml(spot.name || '') + '"></button>').join('')
-    + (playScene?.sceneObjects || []).filter((obj) => !state.removedSceneObjectIds.includes(obj.id)).map((obj) => {
+    + (playScene?.sceneObjects || []).filter((obj) => !state.removedSceneObjectIds.includes(obj.id) && (!obj.isHidden || state.revealedSceneObjectIds.includes(obj.id))).map((obj) => {
+      const objectTextOverride = state.sceneObjectTextOverrides?.[obj.id];
+      const renderObject = objectTextOverride ? { ...obj, blockText: objectTextOverride, dialogue: objectTextOverride } : obj;
       const linkedItem = obj.linkedItemId ? getItemById(obj.linkedItemId) : null;
-      const displayImage = obj.imageData || linkedItem?.imageData || '';
-      const clickMode = getSceneObjectClickMode(obj);
+      const displayImage = resolveAssetUrl(obj.imageId, obj.imageData) || resolveAssetUrl(linkedItem?.imageId, linkedItem?.imageData);
+      const clickMode = getSceneObjectClickMode(renderObject);
+      const blockType = getSceneObjectBlockType(renderObject);
+      const title = renderObject.blockLabel || renderObject.name || linkedItem?.name || 'Bloc';
+      const text = renderObject.blockText || renderObject.dialogue || title;
+      const blockStyle = ' style="font-size:' + getSceneObjectFontSize(renderObject) + 'px"';
+      let content = '';
+      if (!renderObject.isInvisible && renderObject.anime2dSpec) {
+        content = renderAnime2dEmbedded(renderObject.anime2dSpec, getSceneAnime2dElapsed(playScene));
+      } else if (!renderObject.isInvisible && displayImage) {
+        content = '<img src="' + displayImage + '" alt="' + safeHtml(title) + '" />';
+      } else if (!renderObject.isInvisible && blockType === 'text') {
+        content = '<span class="interactive-block interactive-block--text"' + blockStyle + '>' + safeHtml(text) + '</span>';
+      } else if (!renderObject.isInvisible && blockType === 'hint') {
+        content = '<span class="interactive-block interactive-block--hint"' + blockStyle + '><strong>' + safeHtml(title || 'Indice') + '</strong><small>' + safeHtml(text || 'Un indice est disponible.') + '</small></span>';
+      } else if (!renderObject.isInvisible && blockType === 'button') {
+        content = '<span class="interactive-block interactive-block--button"' + blockStyle + '>' + safeHtml(renderObject.buttonLabel || title || 'Bouton') + '</span>';
+      } else if (!renderObject.isInvisible && blockType === 'input') {
+        content = '<span class="interactive-block interactive-block--field"' + blockStyle + '><strong>' + safeHtml(title || 'Reponse') + '</strong><small>' + safeHtml(renderObject.placeholder || 'Saisir une réponse...') + '</small></span>';
+      } else if (!renderObject.isInvisible && blockType === 'code') {
+        const slots = Math.max(3, Math.min(8, String(renderObject.expectedAnswer || '0000').length || 4));
+        content = '<span class="interactive-block interactive-block--code"' + blockStyle + '><strong>' + safeHtml(title || 'Code') + '</strong><span>' + Array.from({ length: slots }, () => '&bull;').join(' ') + '</span></span>';
+      } else if (!renderObject.isInvisible && blockType === 'image') {
+        content = '<span class="interactive-block interactive-block--image"' + blockStyle + '>' + safeHtml(title || 'Image') + '</span>';
+      } else if (!renderObject.isInvisible) {
+        content = '<span>' + safeHtml(title || 'Objet') + '</span>';
+      }
       return '<button type="button" class="player-scene-object' + (obj.isInvisible ? ' player-scene-object-invisible' : '') + (clickMode === 'none' ? ' player-scene-object-not-clickable' : '') + '" data-scene-object-id="' + obj.id + '" '
         + 'style="left:' + obj.x + '%;top:' + obj.y + '%;width:' + obj.width + '%;height:' + obj.height + '%;z-index:18;' + getElementShapeStyle(obj) + '" title="' + safeHtml(obj.name || 'Objet') + '" aria-label="' + safeHtml(obj.name || 'Objet invisible') + '">'
-        + (!obj.isInvisible && obj.anime2dSpec ? renderAnime2dEmbedded(obj.anime2dSpec) : (!obj.isInvisible && displayImage ? '<img src="' + displayImage + '" alt="' + safeHtml(obj.name || linkedItem?.name || 'Objet') + '" />' : (!obj.isInvisible ? '<span>' + safeHtml(obj.name || linkedItem?.name || 'Objet') + '</span>' : '')))
+        + content
         + '</button>';
     }).join('')
     + (playScene?.timerEnabled ? '<div class="scene-timer-hud"><strong id="scene-timer-count">' + formatSceneTimerSeconds(state.sceneTimerRemaining || playScene.timerSeconds || 0) + '</strong>'
@@ -2436,15 +2795,15 @@ function render(shouldSave = true) {
       + '</div>' : '')
     + (state.viewerImage ? '<div class="scene-inline-viewer"><div class="scene-inline-viewer__backdrop"></div><div class="scene-inline-viewer__card">'
       + '<img class="scene-inline-viewer__image" src="' + state.viewerImage.src + '" alt="' + safeHtml(state.viewerImage.name || 'Objet') + '" />'
-      + '<div class="scene-inline-viewer__name">' + safeHtml(state.viewerImage.name || 'Objet') + '</div></div></div>' : '')
+      + '<div class="scene-inline-viewer__name">' + safeHtml(state.viewerImage.caption || state.viewerImage.name || 'Objet') + '</div></div></div>' : '')
     + (state.sceneTransitionOverlay ? '<div class="scene-transition-overlay scene-transition-overlay--' + safeHtml(state.sceneTransitionOverlay.type || 'fade') + '" style="--scene-transition-duration:' + (Number(state.sceneTransitionOverlay.duration) || 700) + 'ms">'
-      + (state.sceneTransitionOverlay.scene?.backgroundData ?
-        '<img src="' + state.sceneTransitionOverlay.scene.backgroundData + '" alt="" />'
+      + (resolveAssetUrl(state.sceneTransitionOverlay.scene?.backgroundId, state.sceneTransitionOverlay.scene?.backgroundData) ?
+        '<img src="' + resolveAssetUrl(state.sceneTransitionOverlay.scene?.backgroundId, state.sceneTransitionOverlay.scene?.backgroundData) + '" alt="" />'
         : '<div class="placeholder">Scene precedente</div>')
       + '</div>' : '')
     + (state.actPreload?.active ? '<div class="act-preload-overlay" role="status" aria-live="polite"><div class="act-preload-card"><span class="eyebrow">Chargement</span><strong>'
       + safeHtml(state.actPreload.label || 'Acte suivant') + '</strong><div class="act-preload-bar" aria-label="Chargement ' + safeHtml(state.actPreload.progress || 0) + '%"><span style="width:'
-      + safeHtml(state.actPreload.progress || 0) + '%"></span></div><small>' + safeHtml(state.actPreload.progress || 0) + '% des medias de l\\'acte sont prets</small></div></div>' : '')
+      + safeHtml(state.actPreload.progress || 0) + '%"></span></div><small>' + safeHtml(state.actPreload.progress || 0) + '% des medias de l\\'acte sont prêts</small></div></div>' : '')
     + '<div class="player-narration-bar ' + (state.narrationCollapsed ? 'is-collapsed' : '') + '">'
     + (state.narrationCollapsed ?
        '<button id="open-narration" type="button" class="narration-discreet-button">Texte</button>'
@@ -2455,27 +2814,29 @@ function render(shouldSave = true) {
       + (state.inventory.length ? state.inventory.map((itemId) => {
         const item = getItemById(itemId);
         if (!item) return '';
+        const itemImageUrl = resolveAssetUrl(item.imageId, item.imageData);
         return '<button type="button" class="inventory-tile'
           + (state.selectedInventoryIds.includes(itemId) ? ' selected' : '') + '" data-item-id="' + itemId + '">'
           + '<div class="inventory-thumb">'
-          + (item.imageData ? '<img src="' + item.imageData + '" alt="' + safeHtml(item.name || '') + '" />' : '<span>' + safeHtml(item.icon || '📦') + '</span>')
+          + (itemImageUrl ? '<img src="' + itemImageUrl + '" alt="' + safeHtml(item.name || '') + '" />' : '<span>' + safeHtml(item.icon || '📦') + '</span>')
           + '</div><strong>' + safeHtml(item.name || '') + '</strong></button>';
       }).join('') : '<p>Aucun objet.</p>')
       + '</div></div>' : '')
     + '</div></section>'
 
     + '<section class="panel side player-side-panel">'
-    + '<div class="badge-line">' + safeHtml(playScene ? getSceneLabel(playScene.id) : 'Aucune scène') + '</div>'
+    + '<div class="badge-line">' + safeHtml(playScene ? getSceneLabel(playScene.id) : 'Aucune scene') + '</div>'
     + '<div class="dialogue-box"><p>' + safeHtml(state.dialogue || 'Aucun message.') + '</p></div>'
     + '<div class="panel-head"><h3>Inventaire</h3><button id="combine-items">Combiner les 2 objets</button></div>'
     + '<div class="inventory-grid">'
     + (state.inventory.length ? state.inventory.map((itemId) => {
       const item = getItemById(itemId);
       if (!item) return '';
+      const itemImageUrl = resolveAssetUrl(item.imageId, item.imageData);
       return '<button type="button" class="inventory-tile'
         + (state.selectedInventoryIds.includes(itemId) ? ' selected' : '') + '" data-item-id="' + itemId + '">'
         + '<div class="inventory-thumb">'
-        + (item.imageData ? '<img src="' + item.imageData + '" alt="' + safeHtml(item.name || '') + '" />' : '<span>' + safeHtml(item.icon || '📦') + '</span>')
+        + (itemImageUrl ? '<img src="' + itemImageUrl + '" alt="' + safeHtml(item.name || '') + '" />' : '<span>' + safeHtml(item.icon || '📦') + '</span>')
         + '</div><strong>' + safeHtml(item.name || '') + '</strong></button>';
     }).join('') : '<p>Aucun objet dans l’inventaire.</p>')
     + '</div><p class="small-note">Cliquer = voir l’image. Glisser-déposer un objet sur un autre = tenter une combinaison.</p></section>'
@@ -2488,10 +2849,11 @@ function render(shouldSave = true) {
     + (state.inventory.length ? state.inventory.map((itemId) => {
       const item = getItemById(itemId);
       if (!item) return '';
+      const itemImageUrl = resolveAssetUrl(item.imageId, item.imageData);
       return '<button type="button" class="inventory-tile'
         + (state.selectedInventoryIds.includes(itemId) ? ' selected' : '') + '" data-item-id="' + itemId + '">'
         + '<div class="inventory-thumb">'
-        + (item.imageData ? '<img src="' + item.imageData + '" alt="' + safeHtml(item.name || '') + '" />' : '<span>' + safeHtml(item.icon || '📦') + '</span>')
+        + (itemImageUrl ? '<img src="' + itemImageUrl + '" alt="' + safeHtml(item.name || '') + '" />' : '<span>' + safeHtml(item.icon || '📦') + '</span>')
         + '</div><strong>' + safeHtml(item.name || '') + '</strong></button>';
     }).join('') : '<p>Aucun objet dans l’inventaire.</p>')
     + '</div><p class="small-note">Cliquer = voir l’image. Glisser-déposer un objet sur un autre = tenter une combinaison.</p></aside>' : '')
@@ -2552,6 +2914,14 @@ function render(shouldSave = true) {
         render(false);
       }
     }, delay);
+  } else {
+    const delay = getNextSceneAnime2dRenderDelay(playScene);
+    if (delay !== null) {
+      anime2dTimer = setTimeout(() => {
+        if (getPlayScene()?.id !== playScene?.id || getCurrentCinematic()) return;
+        render(false);
+      }, delay);
+    }
   }
 
   if (shouldSave && hasRenderedOnce) saveGame(false);
@@ -2574,4 +2944,26 @@ if (!loadGame(false)) {
 </script>
 </body>
 </html>`;
+}
+
+export function buildStandaloneModuleFiles(project) {
+  const html = buildStandaloneHtml(project);
+  const scriptStart = html.indexOf('<script>');
+  const scriptEnd = html.lastIndexOf('</script>');
+
+  if (scriptStart < 0 || scriptEnd < scriptStart) {
+    return {
+      indexHtml: html,
+      engineJs: '',
+    };
+  }
+
+  const scriptOpenEnd = scriptStart + '<script>'.length;
+  const engineJs = `${html.slice(scriptOpenEnd, scriptEnd).trim()}\n`;
+  const indexHtml = `${html.slice(0, scriptStart)}<script src="./engine.js"></script>${html.slice(scriptEnd + '</script>'.length)}`;
+
+  return {
+    indexHtml,
+    engineJs,
+  };
 }

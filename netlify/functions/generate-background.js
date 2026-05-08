@@ -4,18 +4,19 @@ import {
   calculateTextCreditCost,
   ensureCreditAccount,
   extractOutputText,
-  getCreditUserId,
   getSupabaseAdminClient,
   json,
   openaiFetch,
   parseOpenAiProjectJson,
   parseBody,
   refundCredits,
+  resolveCreditUserId,
   spendCredits,
   writeAiJob,
+  withErrors,
 } from './_shared.js';
 
-export const handler = async (event) => {
+export const handler = async (event) => withErrors(event, async () => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Methode non autorisee.' });
 
   const payload = parseBody(event);
@@ -24,7 +25,7 @@ export const handler = async (event) => {
   if (!jobId) return json(400, { error: 'Job IA manquant.' });
 
   const supabase = getSupabaseAdminClient();
-  const userId = getCreditUserId(event, body);
+  const userId = await resolveCreditUserId(event);
   const cost = calculateTextCreditCost(body);
   const input = [
     'Tu dois repondre uniquement avec un JSON valide, sans Markdown ni commentaire.',
@@ -93,4 +94,4 @@ export const handler = async (event) => {
   }
 
   return json(202, { ok: true, jobId });
-};
+});

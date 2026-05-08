@@ -1,503 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-
-const formatDate = (value) => {
-  if (!value) return 'Jamais';
-  try {
-    return new Intl.DateTimeFormat('fr-FR', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(new Date(value));
-  } catch {
-    return 'Date inconnue';
-  }
-};
-
-const getProjectName = (project) =>
-  project?.name || project?.data?.title || project?.data?.name || 'Projet sans titre';
-
-const CREATION_TEMPLATES = [
-  ['empty', 'Projet vide'],
-  ['manor', 'Manoir hanté'],
-  ['investigation', 'Enquête policière'],
-  ['laboratory', 'Laboratoire'],
-  ['museum', 'Musée'],
-];
-
-const PUBLIC_CATEGORIES = ['Horreur', 'Enquete', 'Aventure', 'Science-fiction', 'Fantastique', 'Historique', 'Autre'];
-const AGE_RATINGS = ['Tout public', '+18 ans'];
-const PROFILE_TUTORIAL_OPTIONS = [
-  ['profile', 'Profil'],
-  ['scenes', 'Scenes'],
-  ['editor', 'Editeur'],
-  ['map', 'Plan'],
-  ['cinematics', 'Cinematiques'],
-  ['animation', 'Animation'],
-  ['combinations', 'Combinaisons'],
-  ['enigmas', 'Enigmes'],
-  ['logic', 'Logique'],
-  ['ai', 'IA'],
-];
-const THUMBNAIL_CROPS = {
-  wide: { label: '16:9', aspect: 16 / 9, width: 1280, height: 720 },
-  square: { label: 'Carré', aspect: 1, width: 900, height: 900 },
-};
-const SHOP_PURCHASES_KEY_PREFIX = 'escapeGameBuilder.shopPurchases';
-
-const getShopPurchasesKey = (userId) => `${SHOP_PURCHASES_KEY_PREFIX}.${userId || 'anonymous'}`;
-
-const readShopPurchases = (userId) => {
-  if (typeof window === 'undefined') return [];
-
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(getShopPurchasesKey(userId)) || '[]');
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-};
-
-const readImageFile = (file) => new Promise((resolve, reject) => {
-  const reader = new FileReader();
-  reader.onload = () => {
-    const image = new Image();
-    image.onload = () => resolve({
-      src: reader.result,
-      width: image.naturalWidth || image.width,
-      height: image.naturalHeight || image.height,
-    });
-    image.onerror = reject;
-    image.src = reader.result;
-  };
-  reader.onerror = reject;
-  reader.readAsDataURL(file);
-});
-
-const makeCroppedThumbnailFile = async ({ src, sourceName, sourceWidth, sourceHeight, cropMode, zoom, panX, panY }) => {
-  const crop = THUMBNAIL_CROPS[cropMode] || THUMBNAIL_CROPS.wide;
-  const image = await new Promise((resolve, reject) => {
-    const element = new Image();
-    element.onload = () => resolve(element);
-    element.onerror = reject;
-    element.src = src;
-  });
-
-  const naturalWidth = sourceWidth || image.naturalWidth || image.width;
-  const naturalHeight = sourceHeight || image.naturalHeight || image.height;
-  const imageAspect = naturalWidth / naturalHeight;
-  const baseWidth = imageAspect > crop.aspect ? naturalHeight * crop.aspect : naturalWidth;
-  const baseHeight = imageAspect > crop.aspect ? naturalHeight : naturalWidth / crop.aspect;
-  const sourceWidthCropped = Math.max(1, baseWidth / zoom);
-  const sourceHeightCropped = Math.max(1, baseHeight / zoom);
-  const maxOffsetX = Math.max(0, (naturalWidth - sourceWidthCropped) / 2);
-  const maxOffsetY = Math.max(0, (naturalHeight - sourceHeightCropped) / 2);
-  const sx = Math.max(0, Math.min(naturalWidth - sourceWidthCropped, (naturalWidth - sourceWidthCropped) / 2 + (panX / 100) * maxOffsetX));
-  const sy = Math.max(0, Math.min(naturalHeight - sourceHeightCropped, (naturalHeight - sourceHeightCropped) / 2 + (panY / 100) * maxOffsetY));
-
-  const canvas = document.createElement('canvas');
-  canvas.width = crop.width;
-  canvas.height = crop.height;
-  const context = canvas.getContext('2d');
-  if (!context) throw new Error('Recadrage impossible dans ce navigateur.');
-  context.drawImage(image, sx, sy, sourceWidthCropped, sourceHeightCropped, 0, 0, crop.width, crop.height);
-
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', 0.86));
-  if (!blob) throw new Error('Impossible de générer la miniature.');
-  const safeName = String(sourceName || 'miniature').replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9._-]+/g, '-').toLowerCase() || 'miniature';
-  return new File([blob], `${safeName}-${crop.label.replace(':', 'x')}.webp`, { type: 'image/webp' });
-};
-
-const getProjectStats = (project) => {
-  const data = project?.data || {};
-  return {
-    scenes: Array.isArray(data.scenes) ? data.scenes.length : 0,
-    enigmas: Array.isArray(data.enigmas) ? data.enigmas.length : 0,
-    cinematics: Array.isArray(data.cinematics) ? data.cinematics.length : 0,
-  };
-};
-
-const getProjectCompletion = (project) => {
-  const data = project?.data || {};
-  const scenes = Array.isArray(data.scenes) ? data.scenes : [];
-  const cinematics = Array.isArray(data.cinematics) ? data.cinematics : [];
-  const enigmas = Array.isArray(data.enigmas) ? data.enigmas : [];
-  const sceneIds = new Set(scenes.map((scene) => scene.id));
-  const cinematicIds = new Set(cinematics.map((cinematic) => cinematic.id));
-  const enigmaIds = new Set(enigmas.map((enigma) => enigma.id));
-
-  const isMissingLink = (hotspot, prefix = '') => {
-    const actionType = hotspot?.[`${prefix}ActionType`] || 'dialogue';
-    const sceneId = hotspot?.[`${prefix}TargetSceneId`] || '';
-    const cinematicId = hotspot?.[`${prefix}TargetCinematicId`] || '';
-    const enigmaId = hotspot?.[`${prefix}EnigmaId`] || '';
-
-    return (
-      (actionType === 'scene' && (!sceneId || !sceneIds.has(sceneId)))
-      || (actionType === 'cinematic' && (!cinematicId || !cinematicIds.has(cinematicId)))
-      || (enigmaId && !enigmaIds.has(enigmaId))
-    );
-  };
-
-  const unlinkedHotspots = scenes.reduce((count, scene) => (
-    count + (scene.hotspots || []).filter((hotspot) => (
-      isMissingLink(hotspot) || (hotspot.hasSecondAction && isMissingLink(hotspot, 'second'))
-    )).length
-  ), 0);
-
-  const enigmasWithoutSolution = enigmas.filter((enigma) => {
-    if (enigma.type === 'code') return !String(enigma.solutionText || '').trim();
-    if (enigma.type === 'misc') {
-      const miscMode = enigma.miscMode || 'free-answer';
-      if (['free-answer', 'multiple-choice', 'true-false', 'fill-blank', 'exact-number'].includes(miscMode)) return !String(enigma.solutionText || '').trim();
-      if (miscMode === 'numeric-range') return !String(enigma.miscMin ?? '').trim() || !String(enigma.miscMax ?? '').trim();
-      if (miscMode === 'item-select') return !enigma.miscTargetItemId;
-      if (miscMode === 'accepted-answers') return !Array.isArray(enigma.miscChoices) || enigma.miscChoices.length === 0;
-      if (miscMode === 'matching') return !Array.isArray(enigma.miscPairs) || enigma.miscPairs.length === 0;
-      if (miscMode === 'multi-select') return !Array.isArray(enigma.miscCorrectChoices) || enigma.miscCorrectChoices.length === 0;
-      if (miscMode === 'ordering') return !Array.isArray(enigma.miscChoices) || enigma.miscChoices.length === 0;
-    }
-    if (enigma.type === 'colors' || enigma.type === 'simon') return !Array.isArray(enigma.solutionColors) || enigma.solutionColors.length === 0;
-    if (['puzzle', 'rotation', 'dragdrop'].includes(enigma.type)) return !enigma.imageData;
-    return false;
-  }).length;
-
-  return {
-    scenes: scenes.length,
-    unlinkedHotspots,
-    enigmasWithoutSolution,
-  };
-};
-
-function ProjectCard({
-  project,
-  isActive,
-  syncStatus = 'offline',
-  onOpenProject,
-  onTestProject,
-  onCopyProjectLink,
-  onPublishProject,
-  onUnpublishProject,
-  onUpdatePublicSettings,
-  onUploadGalleryThumbnail,
-  onRenameProject,
-  onDuplicateProject,
-  onDeleteProject,
-}) {
-  const [isRenaming, setIsRenaming] = useState(false);
-  const [thumbnailError, setThumbnailError] = useState('');
-  const [thumbnailCrop, setThumbnailCrop] = useState(null);
-  const [thumbnailCropMode, setThumbnailCropMode] = useState('wide');
-  const [thumbnailZoom, setThumbnailZoom] = useState(1);
-  const [thumbnailPan, setThumbnailPan] = useState({ x: 0, y: 0 });
-  const [isThumbnailBusy, setIsThumbnailBusy] = useState(false);
-  const [name, setName] = useState(getProjectName(project));
-  const stats = getProjectStats(project);
-  const completion = getProjectCompletion(project);
-
-  const submitRename = async (event) => {
-    event.preventDefault();
-    const nextName = name.trim();
-    if (!nextName) return;
-    await onRenameProject?.(project.id, nextName);
-    setIsRenaming(false);
-  };
-
-  const handleDelete = () => {
-    const label = getProjectName(project);
-    const confirmed = window.confirm(`Supprimer "${label}" Cette action est irréversible.`);
-    if (confirmed) onDeleteProject?.(project.id);
-  };
-
-  const handlePublish = () => {
-    const category = project.shareState?.category || '';
-    const ageRating = project.shareState?.ageRating || '';
-
-    if (!category) {
-      window.alert('Choisis une catégorie avant de publier ce jeu.');
-      return;
-    }
-
-    if (!ageRating) {
-      window.alert('Choisis une mention d’âge avant de publier ce jeu.');
-      return;
-    }
-
-    if (ageRating === '+18 ans') {
-      const confirmed = window.confirm('Confirmer que ce jeu est réservé aux joueurs de 18 ans et plus ?');
-      if (!confirmed) return;
-    }
-
-    onPublishProject?.(project.id);
-  };
-
-  const handleGalleryThumbnail = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setThumbnailError('');
-
-    if (!file.type?.startsWith('image/')) {
-      setThumbnailError('Choisis une image valide.');
-      event.target.value = '';
-      return;
-    }
-
-    try {
-      const image = await readImageFile(file);
-      setThumbnailCrop({ ...image, name: file.name });
-      setThumbnailCropMode('wide');
-      setThumbnailZoom(1);
-      setThumbnailPan({ x: 0, y: 0 });
-    } catch {
-      setThumbnailError('Miniature impossible à charger.');
-    } finally {
-      event.target.value = '';
-    }
-  };
-
-  const confirmGalleryThumbnail = async () => {
-    if (!thumbnailCrop) return;
-    setThumbnailError('');
-    setIsThumbnailBusy(true);
-
-    try {
-      const croppedFile = await makeCroppedThumbnailFile({
-        src: thumbnailCrop.src,
-        sourceName: thumbnailCrop.name,
-        sourceWidth: thumbnailCrop.width,
-        sourceHeight: thumbnailCrop.height,
-        cropMode: thumbnailCropMode,
-        zoom: thumbnailZoom,
-        panX: thumbnailPan.x,
-        panY: thumbnailPan.y,
-      });
-      const uploadResult = await onUploadGalleryThumbnail?.(croppedFile);
-      const thumbnailUrl = uploadResult?.publicUrl;
-      if (!thumbnailUrl) throw new Error('Upload impossible.');
-
-      onUpdatePublicSettings?.(project.id, {
-        galleryThumbnail: thumbnailUrl,
-        galleryThumbnailName: croppedFile.name,
-        galleryThumbnailCrop: THUMBNAIL_CROPS[thumbnailCropMode].label,
-        galleryThumbnailStorage: uploadResult.storageMode || 'supabase',
-      });
-      setThumbnailCrop(null);
-    } catch (error) {
-      setThumbnailError(error.message || 'Miniature impossible à enregistrer.');
-    } finally {
-      setIsThumbnailBusy(false);
-    }
-  };
-
-  const galleryThumbnail = project.shareState?.galleryThumbnail || project.thumbnail;
-
-  const projectName = getProjectName(project);
-  const placeholderInitial = projectName.trim().charAt(0).toUpperCase() || 'P';
-  const syncLabel = syncStatus === 'syncing' ? 'Synchronisation...' : syncStatus === 'synced' ? 'Synchronisé' : 'Hors ligne';
-  const syncIcon = syncStatus === 'syncing' ? '⏳' : syncStatus === 'synced' ? '☁' : '⚠';
-  const copiedRecently = project.shareState?.copiedAt
-    && Date.now() - new Date(project.shareState.copiedAt).getTime() < 1000 * 60 * 15;
-  const linkStatus = copiedRecently ? 'Copié récemment' : project.shareState?.isPublic ? 'Lien actif' : 'Privé';
-
-  return (
-    <article className={`list-card ${isActive ? 'selected' : ''}`} data-tour="profile-project-card">
-      <div className="project-card-layout">
-        <div className="project-thumbnail" aria-hidden="true">
-          {galleryThumbnail ? <img src={galleryThumbnail} alt="" /> : <span>{placeholderInitial}</span>}
-        </div>
-
-        <div className="project-card-body">
-      <div className="inline-head">
-        <div>
-          {isRenaming ? (
-            <form onSubmit={submitRename} className="grid-two small-gap">
-              <input
-                autoFocus
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') {
-                    setName(getProjectName(project));
-                    setIsRenaming(false);
-                  }
-                }}
-              />
-              <button type="submit">Valider</button>
-            </form>
-          ) : (
-            <>
-              <strong>{projectName}</strong>
-              <span>
-                {isActive ? 'Projet actif · ' : ''}
-                Modifié le {formatDate(project.updatedAt)}
-              </span>
-            </>
-          )}
-        </div>
-
-        <div className="toolbar" data-tour="profile-project-actions">
-          <button type="button" className="profile-resume-button" onClick={() => onOpenProject?.(project.id)}>
-            <span aria-hidden="true">▶</span>
-            Reprendre
-          </button>
-          <button type="button" className="secondary-action" onClick={() => setIsRenaming(true)}>
-            Renommer
-          </button>
-          <button type="button" className="secondary-action" onClick={() => onDuplicateProject?.(project.id)}>
-            Dupliquer
-          </button>
-          <button type="button" className="danger-button" onClick={handleDelete}>
-            Supprimer
-          </button>
-        </div>
-      </div>
-
-      <p className="small-note">
-        {stats.scenes} scène{stats.scenes > 1 ? 's' : ''} · {stats.enigmas} énigme{stats.enigmas > 1 ? 's' : ''} ·{' '}
-        {stats.cinematics} cinématique{stats.cinematics > 1 ? 's' : ''}
-      </p>
-
-      <div className="project-completion-box" aria-label="Indicateur de complétion">
-        <div className="project-completion-row ok">
-          <span aria-hidden="true">✓</span>
-          <strong>{completion.scenes}</strong>
-          <em>scène{completion.scenes > 1 ? 's' : ''}</em>
-        </div>
-        <div className={`project-completion-row ${completion.unlinkedHotspots ? 'warn' : 'ok'}`}>
-          <span aria-hidden="true">{completion.unlinkedHotspots ? '⚠' : '✓'}</span>
-          <strong>{completion.unlinkedHotspots}</strong>
-          <em>hotspot{completion.unlinkedHotspots > 1 ? 's' : ''} non relié{completion.unlinkedHotspots > 1 ? 's' : ''}</em>
-        </div>
-        <div className={`project-completion-row ${completion.enigmasWithoutSolution ? 'danger' : 'ok'}`}>
-          <span aria-hidden="true">{completion.enigmasWithoutSolution ? '✕' : '✓'}</span>
-          <strong>{completion.enigmasWithoutSolution}</strong>
-          <em>énigme{completion.enigmasWithoutSolution > 1 ? 's' : ''} sans solution</em>
-        </div>
-      </div>
-
-      <div className="project-card-footer" data-tour="profile-project-publish">
-        <div className={`project-sync-badge ${syncStatus}`}>
-          <span aria-hidden="true">{syncIcon}</span>
-          <strong>{syncLabel}</strong>
-        </div>
-        <button type="button" className="secondary-action profile-test-button" onClick={() => onTestProject?.(project.id)}>
-          <span aria-hidden="true">▶</span>
-          Tester
-        </button>
-        <span className={`project-link-status ${copiedRecently ? 'copied' : project.shareState?.isPublic ? 'active' : 'private'}`}>
-          {linkStatus}
-        </span>
-        <button type="button" className="secondary-action profile-share-button" onClick={() => onCopyProjectLink?.(project.id)}>
-          <span aria-hidden="true">🔗</span>
-          Copier le lien
-        </button>
-        <button type="button" className="profile-publish-button" onClick={handlePublish}>
-          {project.shareState?.isPublic ? 'Mise à jour' : 'Publier'}
-        </button>
-        {project.shareState?.isPublic ? (
-          <button type="button" className="danger-button" onClick={() => onUnpublishProject?.(project.id)}>
-            Retirer de la galerie
-          </button>
-        ) : null}
-      </div>
-
-      <div className="project-public-settings" data-tour="profile-public-settings">
-        <label>
-          Catégorie
-          <select
-            value={project.shareState?.category || ''}
-            onChange={(event) => onUpdatePublicSettings?.(project.id, { category: event.target.value })}
-          >
-            <option value="">Choisir...</option>
-            {PUBLIC_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
-          </select>
-        </label>
-        <label>
-          Mention d’âge
-          <select
-            value={project.shareState?.ageRating || ''}
-            onChange={(event) => onUpdatePublicSettings?.(project.id, {
-              mature: event.target.value === '+18 ans',
-              ageRating: event.target.value,
-            })}
-          >
-            <option value="">Choisir...</option>
-            {AGE_RATINGS.map((rating) => <option key={rating} value={rating}>{rating}</option>)}
-          </select>
-        </label>
-        <label>
-          Miniature galerie
-          <span className="gallery-thumbnail-control">
-            {project.shareState?.galleryThumbnailName || 'Choisir une image'}
-            <input type="file" accept="image/*" hidden onChange={handleGalleryThumbnail} />
-          </span>
-        </label>
-        {project.shareState?.galleryThumbnail ? (
-          <button type="button" className="secondary-action" onClick={() => onUpdatePublicSettings?.(project.id, { galleryThumbnail: '', galleryThumbnailName: '' })}>
-            Miniature auto
-          </button>
-        ) : null}
-        {thumbnailError ? <p className="auth-error">{thumbnailError}</p> : null}
-      </div>
-      {thumbnailCrop ? (
-        <div className="thumbnail-crop-overlay" role="dialog" aria-modal="true" aria-label="Recadrer la miniature">
-          <div className="thumbnail-crop-panel">
-            <div className="panel-head">
-              <div>
-                <h3>Recadrer la miniature</h3>
-                <p className="small-note">Choisis un format propre avant publication.</p>
-              </div>
-              <button type="button" className="secondary-action" onClick={() => setThumbnailCrop(null)}>Fermer</button>
-            </div>
-            <div className={`thumbnail-crop-preview ${thumbnailCropMode}`}>
-              <img
-                src={thumbnailCrop.src}
-                alt=""
-                style={{
-                  transform: `translate(${thumbnailPan.x / 3}%, ${thumbnailPan.y / 3}%) scale(${thumbnailZoom})`,
-                }}
-              />
-            </div>
-            <div className="thumbnail-crop-controls">
-              <div className="segmented-control compact">
-                {Object.entries(THUMBNAIL_CROPS).map(([value, crop]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    className={thumbnailCropMode === value ? 'active' : ''}
-                    onClick={() => setThumbnailCropMode(value)}
-                  >
-                    {crop.label}
-                  </button>
-                ))}
-              </div>
-              <label>
-                Zoom
-                <input type="range" min="1" max="3" step="0.05" value={thumbnailZoom} onChange={(event) => setThumbnailZoom(Number(event.target.value))} />
-              </label>
-              <div className="grid-two small-gap">
-                <label>
-                  Horizontal
-                  <input type="range" min="-100" max="100" step="1" value={thumbnailPan.x} onChange={(event) => setThumbnailPan((pan) => ({ ...pan, x: Number(event.target.value) }))} />
-                </label>
-                <label>
-                  Vertical
-                  <input type="range" min="-100" max="100" step="1" value={thumbnailPan.y} onChange={(event) => setThumbnailPan((pan) => ({ ...pan, y: Number(event.target.value) }))} />
-                </label>
-              </div>
-              <button type="button" className="profile-publish-button" onClick={confirmGalleryThumbnail} disabled={isThumbnailBusy}>
-                {isThumbnailBusy ? 'Enregistrement...' : 'Valider la miniature'}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-        </div>
-      </div>
-    </article>
-  );
-}
+import React, { useEffect, useRef, useState } from 'react';
+import CreateProjectPanel from './profile/CreateProjectPanel';
+import OrdersPanel from './profile/OrdersPanel';
+import ProfileHeader from './profile/ProfileHeader';
+import ProfileMediaTab from './profile/ProfileMediaTab';
+import PublicationPanel from './profile/PublicationPanel';
+import ProjectList from './profile/ProjectList';
+import { readShopPurchases } from '../lib/shopPurchases';
 
 export default function ProfilePage({
   user,
@@ -519,19 +27,21 @@ export default function ProfilePage({
   onOpenAdmin,
   onStartTutorial,
   onRenameProject,
+  onUpdateProjectMode,
   onDuplicateProject,
   onDeleteProject,
+  onDeleteMedia,
   onImportProject,
+  onImportMediaFile,
+  mediaLibrary = [],
+  storageSummary = null,
+  aiCreditBalance = 0,
+  onBuyStorage,
   onLogout,
   isProfileTutorialActive = false,
 }) {
-  const [newProjectName, setNewProjectName] = useState('');
-  const [creationTemplate, setCreationTemplate] = useState('empty');
-  const [search, setSearch] = useState('');
-  const [sortMode, setSortMode] = useState('updated-desc');
-  const [importError, setImportError] = useState('');
+  const [activeProfileTab, setActiveProfileTab] = useState('projects');
   const [isOrdersOpen, setIsOrdersOpen] = useState(false);
-  const fileInputRef = useRef(null);
   const tutorialMenuRef = useRef(null);
   const shopUserId = user?.id || user?.email || 'anonymous';
   const [orders, setOrders] = useState(() => readShopPurchases(shopUserId));
@@ -571,278 +81,102 @@ export default function ProfilePage({
     };
   }, [shopUserId]);
 
-  const visibleProjects = useMemo(() => {
-    const query = search.trim().toLowerCase();
-
-    return [...projects]
-      .filter((project) => !query || getProjectName(project).toLowerCase().includes(query))
-      .sort((a, b) => {
-        if (sortMode === 'name-asc') return getProjectName(a).localeCompare(getProjectName(b), 'fr');
-        if (sortMode === 'created-desc') return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
-        return new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0);
-      });
-  }, [projects, search, sortMode]);
-
-  const handleCreate = async (event) => {
-    event.preventDefault();
-    const templateLabel = CREATION_TEMPLATES.find(([value]) => value === creationTemplate)?.[1] || 'Nouveau projet';
-    await onCreateProject?.(newProjectName.trim() || templateLabel, creationTemplate);
-    setNewProjectName('');
-  };
-
-  const handleImport = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setImportError('');
-
-    try {
-      await onImportProject?.(file);
-    } catch (error) {
-      console.error(error);
-      setImportError("Import impossible. Vérifie que c'est bien un fichier JSON de projet.");
-    } finally {
-      event.target.value = '';
-    }
-  };
-
   return (
     <main className="layout">
-      <section className="panel" data-tour="profile-header">
-        <div className="panel-head panel-head-stack">
-          <div>
-            <span className="eyebrow">Profil</span>
-            <h2>Salut {user?.name || user?.email || 'créateur'} 👋</h2>
-            <p className="small-note">
-              Gère tes jeux, reprends un projet Supabase existant ou importe une sauvegarde JSON.
-            </p>
-          </div>
-
-          <div className="toolbar">
-            <span className="status-badge soft" data-tour="profile-status">{statusMessage || 'Profil pret'}</span>
-            {canOpenAdmin ? (
-              <button type="button" className="secondary-action" onClick={onOpenAdmin}>
-                Admin
-              </button>
-            ) : null}
-            <button type="button" className="secondary-action" onClick={onOpenPublicGallery} data-tour="profile-gallery">
-              Galerie publique
-            </button>
-            <button
-              type="button"
-              className="secondary-action"
-              onClick={() => {
-                refreshOrders();
-                setIsOrdersOpen(true);
-              }}
-            >
-              Commandes{orders.length ? ` (${orders.length})` : ''}
-            </button>
-            <details
-              ref={tutorialMenuRef}
-              className="profile-tutorial-menu"
-              data-tour="profile-tutorial-menu"
-              onClickCapture={(event) => {
-                if (!isProfileTutorialActive) return;
-                event.preventDefault();
-                tutorialMenuRef.current.open = false;
-              }}
-              onToggle={() => {
-                if (isProfileTutorialActive && tutorialMenuRef.current) {
-                  tutorialMenuRef.current.open = false;
-                }
-              }}
-            >
-              <summary className="profile-action-button profile-tutorial-button">Didacticiel</summary>
-              <div className="profile-tutorial-popover">
-                {PROFILE_TUTORIAL_OPTIONS.map(([value, label]) => (
-                  <button key={value} type="button" onClick={() => onStartTutorial?.(value)} disabled={isBusy}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </details>
-            <button type="button" className="secondary-action" onClick={onLogout} data-tour="profile-logout">
-              Déconnexion
-            </button>
-          </div>
-        </div>
-      </section>
+      <ProfileHeader
+        user={user}
+        canOpenAdmin={canOpenAdmin}
+        statusMessage={statusMessage}
+        ordersCount={orders.length}
+        isBusy={isBusy}
+        isProfileTutorialActive={isProfileTutorialActive}
+        tutorialMenuRef={tutorialMenuRef}
+        onOpenAdmin={onOpenAdmin}
+        onOpenPublicGallery={onOpenPublicGallery}
+        onOpenOrders={() => {
+          refreshOrders();
+          setIsOrdersOpen(true);
+        }}
+        onStartTutorial={onStartTutorial}
+        onLogout={onLogout}
+      />
 
       {isOrdersOpen ? (
-        <div className="profile-orders-overlay" role="presentation" onClick={() => setIsOrdersOpen(false)}>
-          <section
-            className="profile-orders-panel"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="profile-orders-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="panel-head">
-              <div>
-                <span className="eyebrow">Commandes</span>
-                <h2 id="profile-orders-title">Suivi des achats</h2>
-                <p className="small-note">
-                  Tes packs achetes et leurs liens de telechargement disponibles.
-                </p>
-              </div>
-              <button type="button" className="secondary-action" onClick={() => setIsOrdersOpen(false)}>
-                Fermer
-              </button>
-            </div>
-
-            <div className="profile-orders-list">
-              {orders.length > 0 ? (
-                orders.map((order, index) => {
-                  const hasDownload = Boolean(order.downloadUrl);
-                  const orderKey = `${order.packId || order.title || 'order'}-${order.purchasedAt || index}`;
-
-                  return (
-                    <article key={orderKey} className="profile-order-card">
-                      <div className="profile-order-head">
-                        <div>
-                          <h3>{order.title || 'Pack boutique'}</h3>
-                          <p className="small-note">Commande du {formatDate(order.purchasedAt)}</p>
-                        </div>
-                        <span className={`profile-order-status ${hasDownload ? 'ready' : 'pending'}`}>
-                          {hasDownload ? 'Telechargement disponible' : 'En preparation'}
-                        </span>
-                      </div>
-
-                      <div className="profile-order-meta">
-                        <span>{Number(order.costCredits || 0)} credits</span>
-                        <span>Suivi: achat valide</span>
-                      </div>
-
-                      {hasDownload ? (
-                        <a
-                          className="profile-action-button profile-order-download"
-                          href={order.downloadUrl}
-                          download={order.downloadFileName || ''}
-                        >
-                          Telecharger le pack
-                        </a>
-                      ) : (
-                        <p className="small-note">Le lien apparaitra ici quand le fichier sera ajoute.</p>
-                      )}
-                    </article>
-                  );
-                })
-              ) : (
-                <div className="empty-state-inline">
-                  <div>
-                    <strong>Aucune commande</strong>
-                    <p className="small-note">Les packs achetes dans la boutique apparaitront ici.</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </section>
-        </div>
+        <OrdersPanel
+          orders={orders}
+          onClose={() => setIsOrdersOpen(false)}
+        />
       ) : null}
 
-      <section className="panel" data-tour="profile-create-section">
-        <div className="grid-two">
-          <form onSubmit={handleCreate}>
-            <label htmlFor="new-project-name">Nouveau projet</label>
-            <input
-              id="new-project-name"
-              value={newProjectName}
-              onChange={(event) => setNewProjectName(event.target.value)}
-              placeholder="Nom du jeu"
-              disabled={isBusy}
-            />
-            <label htmlFor="creation-template">Template</label>
-            <div className="template-picker" id="creation-template" data-tour="profile-template-picker">
-              {CREATION_TEMPLATES.map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  className={creationTemplate === value ? 'selected' : ''}
-                  onClick={() => setCreationTemplate(value)}
-                  disabled={isBusy}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <button type="submit" className="profile-action-button" disabled={isBusy} data-tour="profile-create-button">
-              + Créer
-            </button>
-          </form>
-
-          <div data-tour="profile-import-section">
-            <label>Importer</label>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/json,.json"
-              hidden
-              onChange={handleImport}
-            />
-            <button type="button" className="profile-action-button secondary-action" onClick={() => fileInputRef.current?.click()}>
-              Importer un projet JSON
-            </button>
-            {importError ? <p className="auth-error">{importError}</p> : null}
-          </div>
-        </div>
+      <section className="panel profile-section-tabs" aria-label="Navigation profil">
+        <button
+          type="button"
+          className={activeProfileTab === 'projects' ? 'active' : ''}
+          onClick={() => setActiveProfileTab('projects')}
+        >
+          Projets
+        </button>
+        <button
+          type="button"
+          className={activeProfileTab === 'media' ? 'active' : ''}
+          onClick={() => setActiveProfileTab('media')}
+        >
+          Medias
+        </button>
+        <button
+          type="button"
+          className={activeProfileTab === 'publication' ? 'active' : ''}
+          onClick={() => setActiveProfileTab('publication')}
+        >
+          Publication
+        </button>
       </section>
 
-      <section className="panel" data-tour="profile-projects-section">
-        <div className="panel-head">
-          <div>
-            <h2>Mes projets</h2>
-            <p className="small-note">
-              {projects.length} projet{projects.length > 1 ? 's' : ''} sauvegardé{projects.length > 1 ? 's' : ''}
-            </p>
-          </div>
-        </div>
-
-        <div className="grid-two small-gap" data-tour="profile-project-filters">
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Rechercher un projet"
+      {activeProfileTab === 'projects' ? (
+        <>
+          <CreateProjectPanel
+            isBusy={isBusy}
+            onCreateProject={onCreateProject}
+            onImportProject={onImportProject}
           />
-          <select value={sortMode} onChange={(event) => setSortMode(event.target.value)}>
-            <option value="updated-desc">Modifiés récemment</option>
-            <option value="created-desc">Créés récemment</option>
-            <option value="name-asc">Nom A → Z</option>
-          </select>
-        </div>
 
-        <div className="editor-stack" style={{ marginTop: 12 }} data-tour="profile-project-list">
-          {visibleProjects.length > 0 ? (
-            visibleProjects.map((project) => (
-              <ProjectCard
-                key={project.id}
-                project={project}
-                isActive={project.id === activeProjectId}
-                syncStatus={syncStatus}
-                onOpenProject={onOpenProject}
-                onTestProject={onTestProject}
-                onCopyProjectLink={onCopyProjectLink}
-                onPublishProject={onPublishProject}
-                onUnpublishProject={onUnpublishProject}
-                onUpdatePublicSettings={onUpdatePublicSettings}
-                onUploadGalleryThumbnail={onUploadGalleryThumbnail}
-                onRenameProject={onRenameProject}
-                onDuplicateProject={onDuplicateProject}
-                onDeleteProject={onDeleteProject}
-              />
-            ))
-          ) : (
-            <div className="empty-state-inline">
-              <div>
-                <strong>Aucun projet trouvé</strong>
-                <p className="small-note">
-                  Si ton ancien projet est sur Supabase, le hook corrigé le récupère automatiquement au chargement.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-      </section>
+          <ProjectList
+            projects={projects}
+            activeProjectId={activeProjectId}
+            syncStatus={syncStatus}
+            onOpenProject={onOpenProject}
+            onTestProject={onTestProject}
+            onRenameProject={onRenameProject}
+            onUpdateProjectMode={onUpdateProjectMode}
+            onDuplicateProject={onDuplicateProject}
+            onDeleteProject={onDeleteProject}
+          />
+        </>
+      ) : null}
+
+      {activeProfileTab === 'media' ? (
+        <ProfileMediaTab
+          projects={projects}
+          mediaLibrary={mediaLibrary}
+          onImportMediaFile={onImportMediaFile}
+          onDeleteMedia={onDeleteMedia}
+          storageSummary={storageSummary}
+          aiCreditBalance={aiCreditBalance}
+          onBuyStorage={onBuyStorage}
+          mediaOrganizationKey={shopUserId}
+        />
+      ) : null}
+
+      {activeProfileTab === 'publication' ? (
+        <PublicationPanel
+          projects={projects}
+          onCopyProjectLink={onCopyProjectLink}
+          onPublishProject={onPublishProject}
+          onUnpublishProject={onUnpublishProject}
+          onUpdatePublicSettings={onUpdatePublicSettings}
+          onUploadGalleryThumbnail={onUploadGalleryThumbnail}
+        />
+      ) : null}
     </main>
   );
 }

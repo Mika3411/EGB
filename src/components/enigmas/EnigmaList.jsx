@@ -10,13 +10,13 @@ export default function EnigmaList({
   return (
     <section className="panel side">
       <div className="panel-head">
-        <h2>Énigmes</h2>
+        <h2>Enigmes</h2>
         <div className="label-with-help">
-          <button onClick={addEnigma}>+ Énigme</button>
+          <button onClick={addEnigma}>+ Enigme</button>
           <span className="help-dot" data-help={FIELD_HELP.addEnigma} aria-label={FIELD_HELP.addEnigma} tabIndex={0}>?</span>
         </div>
       </div>
-      <HelpLabel help={FIELD_HELP.list}>Énigme à configurer</HelpLabel>
+      <HelpLabel help={FIELD_HELP.list}>Enigme à configurer</HelpLabel>
       {enigmas.length ? enigmas.map((enigma) => (
         <button
           key={enigma.id}
@@ -26,7 +26,7 @@ export default function EnigmaList({
           <strong>{enigma.name}</strong>
           <span>{TYPE_LABELS[enigma.type] || enigma.type}</span>
         </button>
-      )) : <p>Aucune énigme pour l'instant.</p>}
+      )) : <p>Aucune enigme pour l'instant.</p>}
     </section>
   );
 }

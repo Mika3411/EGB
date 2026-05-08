@@ -1,0 +1,67 @@
+/* Panels */
+
+.panel{padding:var(--component-panel-padding)}
+
+.panel{border-radius:28px}
+
+.panel-nav-pro,.panel-context-pro{overflow-x:clip!important;position:sticky;top:24px}
+
+.panel-main-pro{min-height:auto}
+
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+
+.panel-head-stack{align-items:flex-start}
+
+.panel-head h2,.panel-head h3,.subpanel-head h3{margin:8px 0 0}
+
+.panel-main-header{margin-bottom:18px}
+
+.subpanel-grid{display:grid;grid-template-columns:1fr;gap:10px}
+
+.subpanel{background:#0d1729d1;border:1px solid var(--line);border-radius:22px;padding:18px}
+
+.subpanel-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px}
+
+.subpanel-head p{margin:6px 0 0}
+
+.panel-context-pro.side-editor-pro{overflow:visible!important}
+
+.panel-head-spaced{margin-top:10px}
+
+.panel-head-loose{margin-top:16px}
+
+.shop-tab .panel.main{align-content:start}
+
+.subpanel-head{margin-bottom:8px}
+
+.subpanel-head h3{margin:0;font-size:18px}
+
+.panel{padding:8px;border-radius:12px;box-shadow:0 10px 32px #0000003d}
+
+.panel-nav-pro,.panel-context-pro{overflow-x:clip!important;top:10px;max-height:calc(100vh - 22px);overflow:auto}
+
+.panel-head{gap:8px;margin-bottom:8px}
+
+.panel-main-header{margin-bottom:8px}
+
+.panel-head h2{margin:4px 0 0;font-size:24px;line-height:1.05}
+
+.panel-head h3,.subpanel-head h3{font-size:17px;line-height:1.1}
+
+.subpanel{padding:10px;border-radius:12px;background:#0b1425a3}
+
+.panel-context-pro .panel-head h2{font-size:22px}
+
+.panel-context-pro .grid-two.small-gap{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+
+.panel-context-pro .small-note{font-size:12px;line-height:1.35;margin:6px 0}
+
+.three-cols>.panel,.three-cols>.panel-main-pro,.three-cols>.panel-nav-pro,.three-cols>.panel-context-pro{overflow-x:clip!important;position:relative;overflow:visible!important}
+
+.panel-nav-pro{z-index:5}
+
+.panel-main-pro{z-index:10}
+
+.panel-context-pro{overflow-x:clip!important;z-index:2000}
+
+.panel,.overlay-card,.project-actions-card,.user-chip{background:var(--surface-panel);border:1px solid var(--line);box-shadow:var(--shadow)}

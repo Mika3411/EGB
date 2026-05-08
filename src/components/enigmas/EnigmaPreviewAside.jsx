@@ -12,14 +12,8 @@ import {
   IMAGE_PUZZLE_LOGIC_OPTIONS,
   MISC_MODE_OPTIONS,
 } from '../../data/enigmaConfig';
-import { usesEditorImageEnigma } from '../../lib/enigmaDefaults';
+import { normalizeAnswer, usesEditorImageEnigma } from '../../lib/enigmaEngine';
 import HelpLabel from '../forms/HelpLabel';
-
-const normalizePreviewText = (value = '') => String(value)
-  .normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '')
-  .toLowerCase()
-  .trim();
 
 export default function EnigmaPreviewAside({
   selectedEnigma,
@@ -80,7 +74,7 @@ export default function EnigmaPreviewAside({
                     ) : null}
                   </div>
 
-                  <p className="small-note">Cette valeur est sauvegardée dans l’énigme via <code>codeSkin</code>. Le preview joueur pourra ensuite lire ce champ pour afficher la bonne interface.</p>
+                  <p className="small-note">Cette valeur est sauvegardée dans l’enigme via <code>codeSkin</code>. Le preview joueur pourra ensuite lire ce champ pour afficher la bonne interface.</p>
                 </aside>
               ) : null}
 
@@ -133,7 +127,7 @@ export default function EnigmaPreviewAside({
                         <div style={{ marginTop: 14, padding: 12, borderRadius: 10, background: 'rgba(255,255,255,.9)', color: '#0f172a', fontWeight: 800, textAlign: 'center' }}>
                           Affiche / objet : suivre exactement cet ordre ?
                         </div>
-                        <p className="small-note" style={{ marginBottom: 0 }}>Logique : le joueur trouve le code complet ailleurs et le recopie tel quel.</p>
+                        <p className="small-note" style={{ marginBottom: 0 }}>Logique : le joueur trouvé le code complet ailleurs et le recopie tel quel.</p>
                       </>
                     ) : null}
 
@@ -172,7 +166,7 @@ export default function EnigmaPreviewAside({
                             <span className="small-note">couleur correcte</span>
                           </div>
                         </div>
-                        <p className="small-note" style={{ marginBottom: 0 }}>Logique : chaque essai donne un retour, jusqu’à trouver la combinaison exacte.</p>
+                        <p className="small-note" style={{ marginBottom: 0 }}>Logique : chaque essai donné un retour, jusqu’à trouvér la combinaison exacte.</p>
                       </>
                     ) : null}
 
@@ -186,7 +180,7 @@ export default function EnigmaPreviewAside({
                             </div>
                           ))}
                         </div>
-                        <p className="small-note" style={{ marginBottom: 0 }}>Logique : les objets colorés de la scène donnent l’ordre du code.</p>
+                        <p className="small-note" style={{ marginBottom: 0 }}>Logique : les objets colorés de la scene donnént l’ordre du code.</p>
                       </>
                     ) : null}
 
@@ -249,7 +243,7 @@ export default function EnigmaPreviewAside({
                     ) : null}
                   </div>
 
-                  <p className="small-note">Sauvegardé dans l’énigme via <code>colorLogic</code>. La combinaison reste dans <code>solutionColors</code>.</p>
+                  <p className="small-note">Sauvegardé dans l’enigme via <code>colorLogic</code>. La combinaison reste dans <code>solutionColors</code>.</p>
                 </aside>
               ) : null}
 
@@ -288,7 +282,7 @@ export default function EnigmaPreviewAside({
                       <>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                           {['Vrai', 'Faux'].map((choice) => (
-                            <div key={choice} style={{ height: 70, borderRadius: 12, border: '1px solid rgba(147,197,253,.26)', background: normalizePreviewText(selectedEnigma.solutionText) === normalizePreviewText(choice) ? 'rgba(59,130,246,.32)' : 'rgba(15,23,42,.72)', display: 'grid', placeItems: 'center', fontWeight: 900 }}>
+                            <div key={choice} style={{ height: 70, borderRadius: 12, border: '1px solid rgba(147,197,253,.26)', background: normalizeAnswer(selectedEnigma.solutionText) === normalizeAnswer(choice) ? 'rgba(59,130,246,.32)' : 'rgba(15,23,42,.72)', display: 'grid', placeItems: 'center', fontWeight: 900 }}>
                               {choice}
                             </div>
                           ))}
@@ -367,7 +361,7 @@ export default function EnigmaPreviewAside({
                     ) : null}
                   </div>
 
-                  <p className="small-note">Sauvegardé dans l’énigme via <code>miscMode</code> et les champs Divers associés.</p>
+                  <p className="small-note">Sauvegardé dans l’enigme via <code>miscMode</code> et les champs Divers associés.</p>
                 </aside>
               ) : null}
 
@@ -429,7 +423,7 @@ export default function EnigmaPreviewAside({
                             </div>
                           ))}
                         </div>
-                        <p className="small-note" style={{ marginBottom: 0 }}>Logique : l’image est découpée en grille. Le joueur remet les pièces dans le bon ordre, en drag & drop ou avec une case vide.</p>
+                        <p className="small-note" style={{ marginBottom: 0 }}>Logique : l’image est découpée en grille. Le joueur remet les pieces dans le bon ordre, en drag & drop ou avec une case vide.</p>
                       </>
                     ) : null}
                   </div>
@@ -462,11 +456,11 @@ export default function EnigmaPreviewAside({
                       )) : null}
                     </div>
                     <p className="small-note" style={{ marginBottom: 0 }}>
-                      Ce style pourra être utilisé par le rendu joueur pour afficher les pièces avec la bonne forme.
+                      Ce style pourra être utilisé par le rendu joueur pour afficher les pieces avec la bonne forme.
                     </p>
                   </div>
 
-                  <p className="small-note">Sauvegardé dans l’énigme via <code>imagePuzzleLogic</code> et <code>imageCutStyle</code>. L’image et la grille restent configurées plus bas.</p>
+                  <p className="small-note">Sauvegardé dans l’enigme via <code>imagePuzzleLogic</code> et <code>imageCutStyle</code>. L’image et la grille restent configurées plus bas.</p>
                 </aside>
               ) : null}
     </>

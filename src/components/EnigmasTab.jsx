@@ -1,20 +1,24 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import {
   COLOR_LOGIC_LABELS,
   COLOR_OPTIONS,
   DEPRECATED_ENIGMA_TYPES,
   FIELD_HELP,
-  IMAGE_CUT_STYLE_LABELS,
-  IMAGE_PUZZLE_LOGIC_LABELS,
   MISC_MODE_OPTIONS,
   POPUP_OVERLAY_GRADIENTS,
   POPUP_OVERLAY_OPTIONS,
   TYPE_LABELS,
 } from '../data/enigmaConfig';
-import { ensureEnigmaTypeDefaults, usesColorSequence, usesEditorImageEnigma } from '../lib/enigmaDefaults';
+import {
+  createEnigmaEditorModel,
+  ensureEnigmaTypeDefaults,
+  usesColorSequence,
+  usesEditorImageEnigma,
+} from '../lib/enigmaEngine';
 import HelpLabel from './forms/HelpLabel';
 import EnigmaList from './enigmas/EnigmaList';
 import EnigmaPreviewAside from './enigmas/EnigmaPreviewAside';
+import MediaSourcePicker from './MediaSourcePicker.jsx';
 
 export default function EnigmasTab({
   project,
@@ -26,11 +30,9 @@ export default function EnigmasTab({
   patchProject,
   getSceneLabel,
   handleUpload,
+  mediaLibrary = [],
   previewEnigma,
 }) {
-  const imageInputRef = useRef(null);
-  const popupBackgroundInputRef = useRef(null);
-
   const updateEnigma = (enigmaId, updater) => {
     patchProject((draft) => {
       const enigma = (draft.enigmas || []).find((entry) => entry.id === enigmaId);
@@ -46,16 +48,16 @@ export default function EnigmasTab({
     });
   }, [selectedEnigma?.id, selectedEnigma?.type]);
 
-  const solutionPreview = String(selectedEnigma?.solutionText || '1990').slice(0, 8).split('');
-  const selectedCodeSkin = selectedEnigma?.codeSkin || 'safe-wheels';
-  const colorPreview = (selectedEnigma?.solutionColors?.length ? selectedEnigma.solutionColors : ['red', 'blue', 'yellow', 'green']).slice(0, 8);
-  const selectedColorLogic = COLOR_LOGIC_LABELS[selectedEnigma?.colorLogic] ? selectedEnigma.colorLogic : 'sequence';
-  const selectedImagePuzzleLogic = IMAGE_PUZZLE_LOGIC_LABELS[selectedEnigma?.imagePuzzleLogic] ?
-     selectedEnigma.imagePuzzleLogic
-    : 'classic-grid';
-  const selectedImageCutStyle = IMAGE_CUT_STYLE_LABELS[selectedEnigma?.imageCutStyle] ? selectedEnigma.imageCutStyle : 'straight';
-  const hasRightPreview = selectedEnigma?.type === 'code' || selectedEnigma?.type === 'colors' || selectedEnigma?.type === 'misc' || usesEditorImageEnigma(selectedEnigma?.type);
-  const selectedMiscMode = selectedEnigma?.miscMode || 'free-answer';
+  const {
+    solutionPreview,
+    selectedCodeSkin,
+    colorPreview,
+    selectedColorLogic,
+    selectedImagePuzzleLogic,
+    selectedImageCutStyle,
+    hasRightPreview,
+    selectedMiscMode,
+  } = createEnigmaEditorModel(selectedEnigma);
   const imagePreviewBackground = selectedEnigma?.imageData ?
      { backgroundImage: `url(${selectedEnigma.imageData})`, backgroundSize: 'cover', backgroundPosition: 'center' }
     : {};
@@ -73,7 +75,7 @@ export default function EnigmasTab({
 
       <section className="panel main">
         <div className="panel-head">
-          <h2>Éditeur d’énigme</h2>
+          <h2>Éditeur d’enigme</h2>
           {selectedEnigma && (
             <div className="inline-actions end">
               <button type="button" className="secondary-action" data-tour="enigma-preview-button" onClick={() => previewEnigma?.(selectedEnigma.id)}>
@@ -275,29 +277,29 @@ export default function EnigmasTab({
               <div className="panel-head">
                 <HelpLabel className="compact-section-title" help={FIELD_HELP.popupBackground}>Fond de pop-up</HelpLabel>
                 <div className="inline-actions">
-                  <input
-                    ref={popupBackgroundInputRef}
-                    type="file"
+                  <MediaSourcePicker
+                    className="button like"
                     accept="image/*"
-                    className="hidden-input"
-                    onChange={(event) => handleUpload(event, (dataUrl, fileName) => updateEnigma(selectedEnigma.id, (enigma) => {
+                    handleUpload={handleUpload}
+                    mediaLibrary={mediaLibrary}
+                    onSelect={(dataUrl, fileName) => updateEnigma(selectedEnigma.id, (enigma) => {
                       enigma.popupBackgroundData = dataUrl;
                       enigma.popupBackgroundName = fileName;
                       enigma.popupBackgroundZoom = Number(enigma.popupBackgroundZoom) || 1;
                       enigma.popupBackgroundX = Number.isFinite(Number(enigma.popupBackgroundX)) ? Number(enigma.popupBackgroundX) : 50;
                       enigma.popupBackgroundY = Number.isFinite(Number(enigma.popupBackgroundY)) ? Number(enigma.popupBackgroundY) : 50;
                       enigma.popupBackgroundOverlay = ['light', 'medium', 'dark'].includes(enigma.popupBackgroundOverlay) ? enigma.popupBackgroundOverlay : 'dark';
-                    }))}
-                  />
-                  <button type="button" data-tour="enigma-popup-background-button" onClick={() => popupBackgroundInputRef.current?.click()}>
+                    })}
+                    tourId="enigma-popup-background-button"
+                  >
                     {selectedEnigma.popupBackgroundData ? 'Remplacer le fond' : 'Importer un fond'}
-                  </button>
+                  </MediaSourcePicker>
                   <button
                     type="button"
                     className="danger-button"
                     disabled={!selectedEnigma.popupBackgroundData}
                     onClick={() => {
-                      if (!window.confirm('Supprimer le fond de cette énigme ?')) return;
+                      if (!window.confirm('Supprimer le fond de cette enigme ?')) return;
                       updateEnigma(selectedEnigma.id, (enigma) => {
                       enigma.popupBackgroundData = '';
                       enigma.popupBackgroundName = '';
@@ -351,7 +353,7 @@ export default function EnigmasTab({
                   </div>
                 </>
               ) : (
-                <p className="small-note">Aucun fond personnalisé. La pop-up utilisera le style sombre par défaut.</p>
+                <p className="small-note">Aucun fond personnalisé. La pop-up utiliserau style sombre par défaut.</p>
               )}
             </div>
 
@@ -386,25 +388,24 @@ export default function EnigmasTab({
                 <div className="panel-head panel-head-spaced">
                   <HelpLabel className="compact-section-title" help={FIELD_HELP.imageSource}>Image source</HelpLabel>
                   <div className="inline-actions">
-                    <input
-                      ref={imageInputRef}
-                      type="file"
+                    <MediaSourcePicker
+                      className="button like"
                       accept="image/*"
-                      className="hidden-input"
-                      onChange={(event) => handleUpload(event, (dataUrl, fileName) => updateEnigma(selectedEnigma.id, (enigma) => {
+                      handleUpload={handleUpload}
+                      mediaLibrary={mediaLibrary}
+                      onSelect={(dataUrl, fileName) => updateEnigma(selectedEnigma.id, (enigma) => {
                         enigma.imageData = dataUrl;
                         enigma.imageName = fileName;
-                      }))}
-                    />
-                    <button type="button" onClick={() => imageInputRef.current?.click()}>
+                      })}
+                    >
                       {selectedEnigma.imageData ? 'Remplacer l’image' : 'Importer une image'}
-                    </button>
+                    </MediaSourcePicker>
                     <button
                       type="button"
                       className="danger-button"
                       disabled={!selectedEnigma.imageData}
                       onClick={() => {
-                        if (!window.confirm("Supprimer l'image de cette énigme ?")) return;
+                        if (!window.confirm("Supprimer l'image de cette enigme ?")) return;
                         updateEnigma(selectedEnigma.id, (enigma) => {
                         enigma.imageData = '';
                         enigma.imageName = '';
@@ -418,7 +419,7 @@ export default function EnigmasTab({
                 {selectedEnigma.imageData ? (
                   <img className="thumb" src={selectedEnigma.imageData} alt={selectedEnigma.imageName || selectedEnigma.name} />
                 ) : (
-                  <p className="small-note">L’image sera découpée automatiquement en pièces au moment du jeu.</p>
+                  <p className="small-note">L’image sera découpée automatiquement en pieces au moment du jeu.</p>
                 )}
                 <div className="grid-two">
                   <div>
@@ -435,7 +436,7 @@ export default function EnigmasTab({
                   </div>
                 </div>
                 <p className="small-note">
-                  Les pièces sont mélangées automatiquement. Le joueur clique sur 2 pièces pour les échanger.
+                  Les pieces sont mélangées automatiquement. Le joueur clique sur 2 pieces pour les échanger.
                 </p>
               </>
             ) : null}
@@ -457,19 +458,19 @@ export default function EnigmasTab({
 
             <div className="grid-two">
               <div>
-                <HelpLabel help={FIELD_HELP.unlockType}>Débloque</HelpLabel>
+                <HelpLabel help={FIELD_HELP.unlockType}>Débloqué</HelpLabel>
                 <select value={selectedEnigma.unlockType || 'none'} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                   enigma.unlockType = e.target.value;
                   if (e.target.value !== 'scene') enigma.targetSceneId = '';
                   if (e.target.value !== 'cinematic') enigma.targetCinematicId = '';
                 })}>
                   <option value="none">Rien / juste valider</option>
-                  <option value="scene">Accès à une scène</option>
-                  <option value="cinematic">Lancer une cinématique</option>
+                  <option value="scene">Accès à une scene</option>
+                  <option value="cinematic">Lancer une cinematic</option>
                 </select>
               </div>
               <div>
-                <HelpLabel help={FIELD_HELP.targetScene}>Scène à débloquer</HelpLabel>
+                <HelpLabel help={FIELD_HELP.targetScene}>Scene à débloquér</HelpLabel>
                 <select value={selectedEnigma.targetSceneId || ''} disabled={(selectedEnigma.unlockType || 'none') !== 'scene'} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                   enigma.targetSceneId = e.target.value;
                 })}>
@@ -478,7 +479,7 @@ export default function EnigmasTab({
                 </select>
               </div>
               <div>
-                <HelpLabel help={FIELD_HELP.targetCinematic}>Cinématique à lancer</HelpLabel>
+                <HelpLabel help={FIELD_HELP.targetCinematic}>Cinematic à lancer</HelpLabel>
                 <select value={selectedEnigma.targetCinematicId || ''} disabled={(selectedEnigma.unlockType || 'none') !== 'cinematic'} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                   enigma.targetCinematicId = e.target.value;
                 })}>
@@ -505,7 +506,7 @@ export default function EnigmasTab({
               />
             </div>
           </div>
-        ) : <p>Sélectionne une énigme à gauche, ou crée-en une nouvelle.</p>}
+        ) : <p>Selectionne une enigme à gauche, ou crée-en une nouvelle.</p>}
       </section>
     </div>
   );

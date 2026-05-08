@@ -1,8 +1,8 @@
 import {
-  getCreditUserId,
   getSupabaseAdminClient,
   json,
   readAiJob,
+  resolveCreditUserId,
   withErrors,
 } from './_shared.js';
 
@@ -15,8 +15,8 @@ export const handler = async (event) => withErrors(event, async () => {
 
   const supabase = getSupabaseAdminClient();
   const job = await readAiJob(supabase, jobId);
-  const userId = getCreditUserId(event, { userId: query.userId });
-  if (job.userId && userId !== 'anonymous' && job.userId !== userId) {
+  const userId = await resolveCreditUserId(event);
+  if (job.userId && job.userId !== userId) {
     return json(403, { error: 'Job IA refuse.' });
   }
 

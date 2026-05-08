@@ -1,924 +1,388 @@
-import React, { useEffect, useRef, useState } from 'react';
-import Header from './components/Header';
-import Tabs from './components/Tabs';
-import ScenesTab from './components/ScenesTab';
-import MediaTab from './components/MediaTab';
-import RouteMapTab from './components/RouteMapTab';
-import CinematicsTab from './components/CinematicsTab';
-import CombinationsTab from './components/CombinationsTab';
-import EnigmasTab from './components/EnigmasTab';
-import LogicTab from './components/LogicTab';
-import ScoreTab from './components/ScoreTab';
-import AiTab from './components/AiTab';
-import ShopTab from './components/ShopTab';
-import HelpTab from './components/HelpTab';
-import PreviewPlayerPanel from './components/PreviewPlayerPanel';
-import TwoDAnimeEditor from './components/TwoDAnimeEditor.jsx';
-import BuilderTutorial from './components/BuilderTutorial';
-import AuthPanel from './components/AuthPanel';
-import LandingPage from './components/LandingPage';
-import ProfilePage from './components/ProfilePage';
-import AdminPage from './components/AdminPage';
-import PublicGallery from './components/PublicGallery';
-import { createInitialProject, normalizeProject } from './data/projectData';
-import {
-  BUILDER_TUTORIAL_STEPS,
-  BUILDER_TUTORIAL_TABS,
-  getFakeWindowImageOptions,
-  getTutorialName,
-  getTutorialStepIndexes,
-  prepareProjectForTutorial,
-} from './data/tutorialSteps';
-import { fileToDataURL, uploadFileToSupabase } from './utils/fileHelpers';
-import { exportProjectJson, exportStandalone } from './utils/exporters';
-import { mergeProjectPatch, validateProject } from './utils/projectValidation';
-import { calculateProjectScore } from './utils/projectScore';
-import { useProjectEditor } from './hooks/useProjectEditor.jsx';
-import { usePreviewPlayer } from './hooks/usePreviewPlayer';
-import { useSharedPlayableRoute } from './hooks/useSharedPlayableRoute';
-import { collectDescendantSceneIds } from './lib/sceneHelpers';
-import { applyCreationTemplate } from './lib/projectTemplates';
+import React, { Suspense, useCallback, useMemo, useState } from 'react';
+import { useAccessibleDialog } from './components/AccessibleDialog';
+import { useAccountStorage } from './hooks/useAccountStorage';
 import { useLocalAuth } from './hooks/useLocalAuth';
-import { normalizeEmail } from './lib/authStorage';
-import { buildStoragePath, hasSupabaseConfig, uploadToStorage } from './supabaseStorage';
+import { collectProjectAssets, upsertProjectAsset } from './lib/assetManager';
+import { isAdminAccount } from './lib/authStorage';
+import { hasSupabaseConfig } from './supabaseStorage';
 
-const ADMIN_EMAIL = 'thorez.m@hotmail.fr';
-const PROFILE_TUTORIAL_SEEN_KEY_PREFIX = 'escapeGameBuilder.profileTutorialSeen';
-const BUILDER_UI_STATE_KEY_PREFIX = 'escapeGameBuilder.builderUiState';
-const BUILDER_TABS = ['scenes', 'media', 'map', 'cinematics', 'combinations', 'enigmas', 'logic', 'ai', 'shop', 'preview', 'animation', 'help', 'score'];
+const LandingPage = React.lazy(() => import('./components/LandingPage'));
+const AuthPanel = React.lazy(() => import('./components/AuthPanel'));
+const ProfilePage = React.lazy(() => import('./components/ProfilePage'));
+const AdminPage = React.lazy(() => import('./components/AdminPage'));
+const PublicGallery = React.lazy(() => import('./components/PublicGallery'));
+const BuilderApp = React.lazy(() => import('./BuilderApp.jsx'));
+const BuilderTutorial = React.lazy(() => import('./components/BuilderTutorial'));
 
-const isAdminUser = (user) => normalizeEmail(user?.email) === ADMIN_EMAIL;
-const getProfileTutorialSeenKey = (userId) => `${PROFILE_TUTORIAL_SEEN_KEY_PREFIX}.${userId}`;
-const getBuilderUiStateKey = (userId, projectId) => `${BUILDER_UI_STATE_KEY_PREFIX}.${userId || 'anonymous'}.${projectId || 'default'}`;
-const isBuilderTab = (tab) => BUILDER_TABS.includes(tab);
-const getAnime2dStorageId = (projectId, project = {}) => (
-  project?.isTemporaryTutorial
-    ? `temporary:${project.title || 'tutorial'}`
-    : `project:${projectId || 'unsaved'}`
+const TabLoadingFallback = () => (
+  <section className="panel">
+    <p className="small-note">Chargement...</p>
+  </section>
 );
-const getAnime2dDraftMeta = (draft) => draft ? {
-  savedAt: draft.savedAt || new Date().toISOString(),
-  title: draft.sceneName || draft.projectName || 'Projet 2D Anime',
-  layerCount: Array.isArray(draft.layers) ? draft.layers.length : 0,
-  stepCount: Array.isArray(draft.cinematicSteps) ? draft.cinematicSteps.length : 0,
-} : null;
-const stripAnime2dDraftFromProject = (project = {}) => {
-  const { anime2dDraft, ...projectWithoutDraft } = project || {};
-  if (!anime2dDraft) return projectWithoutDraft;
-  return {
-    ...projectWithoutDraft,
-    anime2dDraftMeta: getAnime2dDraftMeta(anime2dDraft),
-  };
-};
-const readBuilderUiState = (userId, projectId) => {
-  if (!userId || !projectId || typeof window === 'undefined') return {};
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(getBuilderUiStateKey(userId, projectId)) || '{}');
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
-};
-const writeBuilderUiState = (userId, projectId, state) => {
-  if (!userId || !projectId || typeof window === 'undefined') return;
-  window.localStorage.setItem(getBuilderUiStateKey(userId, projectId), JSON.stringify({
-    ...state,
-    updatedAt: new Date().toISOString(),
-  }));
+
+const LandingLoadingFallback = () => (
+  <main
+    style={{
+      minHeight: '100vh',
+      display: 'grid',
+      placeItems: 'center',
+      padding: '24px',
+      background: '#030712',
+      color: '#f8fbff',
+    }}
+  >
+    <section
+      style={{
+        width: 'min(420px, 100%)',
+        display: 'grid',
+        gap: '10px',
+        padding: '22px',
+        border: '1px solid rgba(96, 165, 250, .28)',
+        borderRadius: '18px',
+        background: 'rgba(8, 16, 30, .94)',
+        boxShadow: '0 24px 70px rgba(0, 0, 0, .42)',
+        textAlign: 'center',
+      }}
+    >
+      <strong style={{ fontSize: '18px' }}>Escape Game Studio</strong>
+      <span style={{ color: '#a9bdd8', fontSize: '14px' }}>Chargement...</span>
+    </section>
+  </main>
+);
+
+const createShellInitialScreen = () => {
+  if (typeof window === 'undefined') return 'profile';
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('playUser') && params.get('playProject')) return 'shared-preview';
+  if (params.get('gallery') === '1' || window.__escapeInitialGalleryGame) return 'gallery';
+  return 'profile';
 };
 
-const dataUrlToBlob = (dataUrl) => {
-  const match = String(dataUrl || '').match(/^data:([^;]+);base64,(.+)$/);
-  if (!match) return null;
-  const [, mimeType, base64] = match;
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-  return new Blob([bytes], { type: mimeType });
-};
-
-const extensionFromMime = (mimeType = '') => {
-  if (mimeType.includes('jpeg')) return 'jpg';
-  if (mimeType.includes('webp')) return 'webp';
-  if (mimeType.includes('svg')) return 'svg';
-  return 'png';
-};
-
-function App() {
-  const editor = useProjectEditor();
-  const preview = usePreviewPlayer(editor.project, { getItemById: editor.getItemById });
-  const projectScore = calculateProjectScore(editor.project);
+function ShellApp() {
   const auth = useLocalAuth();
-  const [saveStatus, setSaveStatus] = useState('');
-  const [screen, setScreen] = useState('profile');
+  const {
+    alert: alertDialog,
+    confirm: confirmDialog,
+    dialog: accessibleDialog,
+  } = useAccessibleDialog();
+  const [screen, setScreen] = useState(createShellInitialScreen);
   const [showAuthPanel, setShowAuthPanel] = useState(false);
   const [authEntryMode, setAuthEntryMode] = useState('login');
-  const [sharedLoadStatus, setSharedLoadStatus] = useState('');
-  const [tutorialStepIndex, setTutorialStepIndex] = useState(null);
-  const [selectedTutorialTab, setSelectedTutorialTab] = useState('scenes');
-  const hydratedProjectRef = useRef('');
-  const profileTutorialAutoStartedRef = useRef('');
-  const sharedRouteRef = useSharedPlayableRoute({
-    editor,
-    preview,
-    setScreen,
-    setSharedLoadStatus,
+  const [saveStatus, setSaveStatus] = useState('');
+  const [aiCreditBalance] = useState(0);
+  const [profileTutorialSteps, setProfileTutorialSteps] = useState([]);
+  const [profileTutorialStepIndex, setProfileTutorialStepIndex] = useState(null);
+  const [builderLaunch, setBuilderLaunch] = useState({
+    projectId: '',
+    tab: '',
+    tutorialTab: '',
+    screen: createShellInitialScreen() === 'shared-preview' ? 'shared-preview' : 'editor',
+    key: 0,
   });
-  const builderResumeAttemptedRef = useRef(false);
-  const anime2dSaveBeforeLeaveRef = useRef(null);
-  const [anime2dHasUnsavedChanges, setAnime2dHasUnsavedChanges] = useState(false);
-  const activeTutorialIndexes = tutorialStepIndex === null ? [] : getTutorialStepIndexes(selectedTutorialTab);
-  const activeTutorialPosition = activeTutorialIndexes.indexOf(tutorialStepIndex);
-  const activeTutorialStep = tutorialStepIndex === null ? null : BUILDER_TUTORIAL_STEPS[tutorialStepIndex];
-  const tutorialUserName = getTutorialName(auth.user);
 
-  useEffect(() => {
-    const placeHelpTooltip = (target) => {
-      if (!(target instanceof HTMLElement) || !target.classList.contains('help-dot')) return;
-      const rect = target.getBoundingClientRect();
-      const margin = 12;
-      const width = Math.min(280, Math.max(180, window.innerWidth - margin * 2));
-      let left = rect.right + 10;
-      if (left + width + margin > window.innerWidth) left = rect.left - width - 10;
-      if (left < margin) {
-        left = rect.left + (rect.width / 2) - (width / 2);
-      }
-      left = Math.max(margin, Math.min(left, window.innerWidth - width - margin));
+  const {
+    getCurrentStorageUsageBytes,
+    invalidateStorageUsage,
+    storageSummary,
+    updateStorageQuotaBytes,
+  } = useAccountStorage({
+    activeProject: auth.activeProject?.data,
+    activeProjectId: auth.activeProjectId,
+    projects: auth.projects,
+  });
 
-      const estimatedHeight = 112;
-      let top = rect.top + (rect.height / 2) - (estimatedHeight / 2);
-      top = Math.max(margin, Math.min(top, window.innerHeight - estimatedHeight - margin));
-
-      target.style.setProperty('--help-left', `${Math.round(left)}px`);
-      target.style.setProperty('--help-top', `${Math.round(top)}px`);
-      target.style.setProperty('--help-width', `${Math.round(width)}px`);
-    };
-
-    const handlePointer = (event) => placeHelpTooltip(event.target);
-    const handleScrollOrResize = () => {
-      const activeHelp = document.querySelector('.help-dot:hover, .help-dot:focus');
-      if (activeHelp) placeHelpTooltip(activeHelp);
-    };
-
-    document.addEventListener('pointerover', handlePointer);
-    document.addEventListener('focusin', handlePointer);
-    window.addEventListener('scroll', handleScrollOrResize, true);
-    window.addEventListener('resize', handleScrollOrResize);
-
-    return () => {
-      document.removeEventListener('pointerover', handlePointer);
-      document.removeEventListener('focusin', handlePointer);
-      window.removeEventListener('scroll', handleScrollOrResize, true);
-      window.removeEventListener('resize', handleScrollOrResize);
-    };
+  const openLoginPanel = useCallback(() => {
+    setAuthEntryMode('login');
+    setShowAuthPanel(true);
   }, []);
 
-  useEffect(() => {
-    if (tutorialStepIndex === null) return;
-    const step = BUILDER_TUTORIAL_STEPS[tutorialStepIndex];
-    if (step?.tab && step.tab !== 'profile' && editor.tab !== step.tab) editor.setTab(step.tab);
-    if (selectedTutorialTab === 'editor' && step?.tab === 'preview') {
-      const scene = editor.project.scenes.find((entry) => entry.id === editor.selectedSceneId) || editor.project.scenes[0];
-      if (!scene) return;
-      preview.setPlayingCinematic(null);
-      preview.setViewerImage(null);
-      preview.setPlaySceneId(scene.id);
-      preview.setDialogue(scene.introText || '');
-    }
-  }, [tutorialStepIndex, selectedTutorialTab, editor, preview]);
+  const openRegisterPanel = useCallback(() => {
+    setAuthEntryMode('register');
+    setShowAuthPanel(true);
+  }, []);
 
-  useEffect(() => {
-    if (sharedRouteRef.current) return;
-    if (!auth.user) {
-      hydratedProjectRef.current = '';
-      setScreen('profile');
-    }
-  }, [auth.user]);
+  const closeAuthPanel = useCallback(() => {
+    setShowAuthPanel(false);
+  }, []);
 
-  useEffect(() => {
-    if (!auth.isReady || !auth.user) return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('admin') !== '1') return;
-    setScreen(isAdminUser(auth.user) ? 'admin' : 'profile');
-  }, [auth.isReady, auth.user]);
+  const openProfileScreen = useCallback(() => {
+    setScreen('profile');
+  }, []);
 
-  useEffect(() => {
-    if (screen === 'admin' && auth.user && !isAdminUser(auth.user)) {
-      setScreen('profile');
-    }
-  }, [screen, auth.user]);
+  const openGalleryScreen = useCallback(() => {
+    setScreen('gallery');
+  }, []);
 
-  useEffect(() => {
-    if (!auth.isReady || !auth.user?.id) return;
-    if (screen !== 'profile') return;
-    if (tutorialStepIndex !== null) return;
-    if (profileTutorialAutoStartedRef.current === auth.user.id) return;
+  const openAdminScreen = useCallback(() => {
+    setScreen('admin');
+  }, []);
 
-    const seenKey = getProfileTutorialSeenKey(auth.user.id);
-    if (window.localStorage.getItem(seenKey) === '1') return;
+  const openPublicGalleryWindow = useCallback(() => {
+    const url = new URL(window.location.href);
+    url.search = '';
+    url.hash = '';
+    url.searchParams.set('gallery', '1');
+    window.open(url.toString(), '_blank', 'noopener,noreferrer');
+  }, []);
 
-    profileTutorialAutoStartedRef.current = auth.user.id;
-    window.localStorage.setItem(seenKey, '1');
-    setSelectedTutorialTab('profile');
-    setTutorialStepIndex(getTutorialStepIndexes('profile')[0] ?? null);
-  }, [auth.isReady, auth.user, screen, tutorialStepIndex]);
+  const startProfileTutorial = useCallback(async () => {
+    const { BUILDER_TUTORIAL_STEPS, getTutorialStepIndexes } = await import('./data/tutorialStepData');
+    setProfileTutorialSteps(BUILDER_TUTORIAL_STEPS);
+    setProfileTutorialStepIndex(getTutorialStepIndexes('profile')[0] ?? null);
+  }, []);
 
-  useEffect(() => {
-    if (screen === 'editor' && auth.user?.id && auth.activeProjectId && isBuilderTab(editor.tab)) {
-      writeBuilderUiState(auth.user.id, auth.activeProjectId, {
-        screen: 'editor',
-        tab: editor.tab,
-        selectedSceneId: editor.selectedSceneId,
-      });
-    }
+  const closeProfileTutorial = useCallback(() => {
+    setProfileTutorialStepIndex(null);
+  }, []);
 
-    let isCancelled = false;
-    let saveTimer = null;
+  const openBuilder = useCallback((projectId = '', tab = '', builderScreen = 'editor', tutorialTab = '') => {
+    setBuilderLaunch((current) => ({
+      projectId,
+      tab,
+      tutorialTab,
+      screen: builderScreen,
+      key: current.key + 1,
+    }));
+    setScreen(builderScreen === 'shared-preview' ? 'shared-preview' : 'builder');
+  }, []);
 
-    async function persistProject() {
-      if (!auth.user?.id) return;
-      if (screen !== 'editor') return;
-      if (!auth.activeProjectId) return;
-      if (hydratedProjectRef.current !== auth.activeProjectId) return;
-
-      try {
-        await auth.saveProject(editor.project, auth.activeProjectId, {
-          tab: editor.tab,
-          selectedSceneId: editor.selectedSceneId,
-        });
-        if (!isCancelled) {
-          setSaveStatus('Sauvegardé localement');
-        }
-      } catch (error) {
-        console.error('Erreur de sauvegarde du projet', error);
-        if (!isCancelled) {
-          setSaveStatus('Erreur de sauvegarde');
-        }
-      }
-    }
-
-    saveTimer = window.setTimeout(persistProject, 900);
-
-    return () => {
-      isCancelled = true;
-      if (saveTimer) window.clearTimeout(saveTimer);
-    };
-  }, [auth.user, auth.activeProjectId, editor.project, editor.tab, editor.selectedSceneId, screen]);
-
-  const handleUpload = async (event, callback) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    try {
-      const { publicUrl } = await uploadFileToSupabase(file, {
-        userId: auth.user?.id,
-        folder: file.type?.startsWith('image/') ?
-           'images'
-          : file.type?.startsWith('audio/') ?
-             'audio'
-            : file.type?.startsWith('video/') ?
-               'video'
-              : 'files',
-        optimizeImage: file.type?.startsWith('image/'),
-        imageOptions: {
-          maxDimension: 1600,
-          quality: 0.82,
-        },
-      });
-
-      callback(publicUrl, file.name);
-      setSaveStatus(`${file.type?.startsWith('video/') ? 'Vidéo' : file.type?.startsWith('audio/') ? 'Son' : 'Média'} importé${file.type?.startsWith('image/') ? 'e' : ''} dans Supabase : ${file.name}`);
-    } catch (error) {
-      console.error('Erreur import média', error);
-      alert(
-        hasSupabaseConfig() ?
-           "Impossible d'envoyer ce fichier vers Supabase Storage. Vérifie le bucket et les policies."
-          : 'Configuration Supabase manquante. Ajoute VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY (ou VITE_SUPABASE_ANON_KEY) et éventuellement VITE_SUPABASE_STORAGE_BUCKET.',
-      );
-    } finally {
-      event.target.value = '';
-    }
-  };
-
-  const uploadGalleryThumbnail = async (file) => {
-    if (!file) throw new Error('Aucune miniature à envoyer.');
-
-    if (!hasSupabaseConfig()) {
-      return {
-        publicUrl: await fileToDataURL(file),
-        storageMode: 'local',
-      };
-    }
-
-    const result = await uploadFileToSupabase(file, {
-      userId: auth.user?.id,
-      folder: 'gallery-thumbnails',
-      optimizeImage: false,
-    });
-
-    return {
-      publicUrl: result.publicUrl,
-      storageMode: 'supabase',
-    };
-  };
-
-  const handleDeleteItem = (itemId) => {
-    const item = editor.project.items.find((entry) => entry.id === itemId);
-    if (!window.confirm(`Supprimer l'objet "${item?.name || 'sélectionné'}" ?`)) return;
-    preview.removeInventoryItemReferences(itemId);
-    editor.deleteItem(itemId);
-  };
-
-  const handleDeleteScene = (sceneId) => {
-    const deletedSceneIds = collectDescendantSceneIds(editor.project.scenes, sceneId);
-    const scene = editor.project.scenes.find((entry) => entry.id === sceneId);
-    const suffix = deletedSceneIds.size > 1 ? ` et ses ${deletedSceneIds.size - 1} sous-scène(s)` : '';
-    if (!window.confirm(`Supprimer la scène "${scene?.name || 'sélectionnée'}"${suffix} ?`)) return;
-    const remainingScenes = editor.project.scenes.filter((scene) => !deletedSceneIds.has(scene.id));
-    const fallbackScene = remainingScenes[0] || null;
-    editor.deleteScene(sceneId);
-    preview.removeDeletedSceneReferences(deletedSceneIds, fallbackScene);
-  };
-
-  const handleDeleteEnigma = (enigmaId) => {
-    const enigma = editor.project.enigmas.find((entry) => entry.id === enigmaId);
-    if (!window.confirm(`Supprimer l'énigme "${enigma?.name || 'sélectionnée'}" ?`)) return;
-    editor.deleteEnigma(enigmaId);
-  };
-
-  const handlePreviewScene = (sceneId) => {
-    const scene = editor.project.scenes.find((entry) => entry.id === sceneId);
-    if (!scene) return;
-
-    preview.setPlayingCinematic(null);
-    preview.setViewerImage(null);
-    preview.setPlaySceneId(scene.id);
-    preview.setDialogue(scene.introText || '');
-    editor.setTab('preview');
-  };
-
-  const handlePreviewEnigma = (enigmaId) => {
-    const enigma = editor.project.enigmas.find((entry) => entry.id === enigmaId);
-    if (!enigma) return;
-
-    preview.setPlayingCinematic(null);
-    preview.setViewerImage(null);
-    preview.openEnigma(enigma);
-    editor.setTab('preview');
-  };
-
-  const handlePreviewCinematic = (cinematicId) => {
-    const cinematic = editor.project.cinematics.find((entry) => entry.id === cinematicId);
-    if (!cinematic) return;
-    preview.setViewerImage(null);
-    preview.closeEnigma();
-    preview.launchCinematic(cinematic.id);
-    editor.setTab('preview');
-  };
-
-  const handleExportProjectJson = () => exportProjectJson(editor.project);
-  const handleExportStandalone = async () => exportStandalone(editor.project);
-
-  const openProjectInEditor = async (projectId, options = {}) => {
-    try {
-      const savedProject = await auth.loadProject(projectId);
-      const savedRecord = auth.projects.find((project) => project.id === projectId);
-      const normalizedSavedProject = normalizeProject(savedProject || createInitialProject());
-      if (normalizedSavedProject.isTemporaryTutorial && !options.tutorialTab) {
-        delete normalizedSavedProject.isTemporaryTutorial;
-        if (normalizedSavedProject.title === 'Projet didacticiel temporaire') {
-          normalizedSavedProject.title = savedRecord?.name || 'Projet';
-        }
-        if (projectId) {
-          await auth.saveProject(normalizedSavedProject, projectId, {
-            tab: 'animation',
-            selectedSceneId: normalizedSavedProject.scenes?.[0]?.id || '',
-          });
-        }
-        setSaveStatus('Projet récupéré');
-      }
-      const projectToLoad = prepareProjectForTutorial(
-        normalizedSavedProject,
-        options.tutorialTab,
-      );
-      const resumeState = auth.getProjectResumeState(projectId);
-      const localResumeState = readBuilderUiState(auth.user?.id, projectId);
-      const requestedTab = options.tab || localResumeState?.tab || resumeState?.tab;
-      const resumeTab = isBuilderTab(requestedTab) ?
-         requestedTab
-        : 'scenes';
-      const requestedSceneId = localResumeState?.selectedSceneId || resumeState?.selectedSceneId;
-      const resumeSceneId = projectToLoad.scenes?.some((scene) => scene.id === requestedSceneId) ?
-         requestedSceneId
-        : projectToLoad.scenes?.[0]?.id || '';
-      editor.loadProject(projectToLoad);
-      editor.setTab(resumeTab);
-      if (resumeSceneId) editor.setSelectedSceneId(resumeSceneId);
-      preview.syncWithProject(projectToLoad);
-      hydratedProjectRef.current = projectId || auth.activeProjectId;
-      setScreen('editor');
-      setSaveStatus(savedProject ? 'Projet chargé' : 'Nouveau projet');
-      if (options.tutorialTab && projectId) {
-        await auth.saveProject(projectToLoad, projectId, {
-          tab: resumeTab,
-          selectedSceneId: resumeSceneId,
-        });
-      }
-    } catch (error) {
-      console.error('Erreur de chargement du projet', error);
-      setSaveStatus('Erreur de chargement');
-    }
-  };
-
-  useEffect(() => {
-    if (builderResumeAttemptedRef.current) return;
-    if (sharedRouteRef.current) return;
-    if (!auth.isReady || !auth.user?.id || !auth.activeProjectId) return;
-
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('admin') === '1') return;
-
-    const lastBuilderState = readBuilderUiState(auth.user.id, auth.activeProjectId);
-    if (lastBuilderState.screen !== 'editor' || !isBuilderTab(lastBuilderState.tab)) return;
-
-    builderResumeAttemptedRef.current = true;
-    openProjectInEditor(auth.activeProjectId, { tab: lastBuilderState.tab });
-  }, [auth.isReady, auth.user, auth.activeProjectId]);
-
-  const createProjectFromProfile = async (name, templateId = 'empty') => {
+  const createProjectFromProfile = useCallback(async (name, templateId = 'empty', creationMode = 'beginner') => {
+    const [{ createInitialProject }, { applyCreationTemplate }] = await Promise.all([
+      import('./data/projectData'),
+      import('./lib/projectTemplates'),
+    ]);
     const project = applyCreationTemplate(createInitialProject(), templateId, name);
+    project.creationMode = ['beginner', 'intermediate', 'expert'].includes(creationMode) ? creationMode : 'beginner';
     const record = await auth.createProject(project, name || project.title);
-    if (record?.id) await openProjectInEditor(record.id);
-  };
+    if (record?.id) openBuilder(record.id);
+  }, [auth.createProject, openBuilder]);
 
-  const startBuilderTutorialFromProfile = async (requestedTab = 'scenes') => {
-    const tutorialTab = BUILDER_TUTORIAL_TABS.includes(requestedTab) ? requestedTab : 'scenes';
-    if (tutorialTab === 'profile') {
-      if (auth.user?.id) {
-        window.localStorage.setItem(getProfileTutorialSeenKey(auth.user.id), '1');
-      }
-      setScreen('profile');
-      setSelectedTutorialTab('profile');
-      setTutorialStepIndex(getTutorialStepIndexes('profile')[0] ?? null);
-      return;
-    }
-    const startTab = tutorialTab === 'editor' ? 'scenes' : tutorialTab;
-    const sourceRecord = auth.projects.find((project) => project.id === auth.activeProjectId) || auth.projects[0];
-    const sourceProject = sourceRecord?.data ? normalizeProject(sourceRecord.data) : normalizeProject(createInitialProject());
-    const tutorialProject = prepareProjectForTutorial({
-      ...structuredClone(sourceProject),
-      title: 'Projet didacticiel temporaire',
-      isTemporaryTutorial: true,
-    }, tutorialTab);
-    const tutorialSceneId = tutorialProject.scenes?.[0]?.id || '';
-    editor.loadProject(tutorialProject);
-    editor.setTab(startTab);
-    if (tutorialSceneId) editor.setSelectedSceneId(tutorialSceneId);
-    preview.syncWithProject(tutorialProject);
-    hydratedProjectRef.current = '';
-    setScreen('editor');
-    setSaveStatus('Didacticiel temporaire : non enregistre');
-    setSelectedTutorialTab(tutorialTab);
-    setTutorialStepIndex(getTutorialStepIndexes(tutorialTab)[0] ?? 0);
-  };
+  const openProjectInEditor = useCallback(async (projectId, options = {}) => {
+    await auth.loadProject(projectId);
+    openBuilder(projectId, options.tab || '');
+  }, [auth.loadProject, openBuilder]);
 
-  const applyFakeTutorialImage = ({ name, dataUrl, target = 'object' }) => {
-    editor.patchProject((draft) => {
-      if (target === 'scene-background') {
-        const scene = draft.scenes.find((entry) => entry.id === editor.selectedSceneId) || draft.scenes[0];
-        if (!scene) return;
-        scene.backgroundData = dataUrl;
-        scene.backgroundName = name;
-        scene.backgroundAspectRatio = 1.6;
-        return;
-      }
-      if (target === 'scene-music') {
-        const scene = draft.scenes.find((entry) => entry.id === editor.selectedSceneId) || draft.scenes[0];
-        if (!scene) return;
-        scene.musicData = dataUrl;
-        scene.musicName = name;
-        scene.musicLoop = true;
-        return;
-      }
-      const itemId = editor.selectedItemId || draft.items?.[draft.items.length - 1]?.id || draft.items?.[0]?.id || '';
-      const item = draft.items?.find((entry) => entry.id === itemId);
-      if (!item) return;
-      item.imageData = dataUrl;
-      item.imageName = name;
-    });
-  };
+  const testProjectFromProfile = useCallback(async (projectId) => {
+    await openProjectInEditor(projectId, { tab: 'preview' });
+  }, [openProjectInEditor]);
 
-  const renameProjectFromProfile = async (projectId, name) => {
+  const renameProjectFromProfile = useCallback(async (projectId, name) => {
     await auth.renameProject(projectId, name);
-    if (projectId === auth.activeProjectId) {
-      editor.patchProject((draft) => {
-        draft.title = name;
-      });
-    }
     setSaveStatus('Projet renommé');
-  };
+  }, [auth.renameProject]);
 
-  const duplicateProjectFromProfile = async (projectId) => {
+  const updateProjectModeFromProfile = useCallback(async (projectId, creationMode) => {
+    await auth.updateProjectMode(projectId, creationMode);
+    setSaveStatus('Mode du projet mis à jour');
+  }, [auth.updateProjectMode]);
+
+  const duplicateProjectFromProfile = useCallback(async (projectId) => {
     const copy = await auth.duplicateProject(projectId);
     setSaveStatus(copy ? 'Projet dupliqué' : 'Duplication impossible');
-  };
+  }, [auth.duplicateProject]);
 
-  const deleteProjectFromProfile = async (projectId) => {
+  const deleteProjectFromProfile = useCallback(async (projectId, label = '') => {
+    const confirmed = await confirmDialog({
+      title: 'Supprimer le projet',
+      message: `Supprimer "${label || 'ce projet'}" ? Cette action est irréversible.`,
+      confirmLabel: 'Supprimer',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     await auth.deleteProject(projectId);
-    if (hydratedProjectRef.current === projectId) {
-      hydratedProjectRef.current = '';
-      setScreen('profile');
-    }
     setSaveStatus('Projet supprimé');
-  };
+  }, [auth.deleteProject, confirmDialog]);
 
-  const testProjectFromProfile = async (projectId) => {
-    await openProjectInEditor(projectId, { tab: 'preview' });
-  };
-
-  const shareProjectFromProfile = async (projectId) => {
+  const shareProjectFromProfile = useCallback(async (projectId) => {
     if (!auth.user?.id || !projectId) return;
     const url = new URL(window.location.href);
     url.search = '';
     url.hash = '';
     url.searchParams.set('playUser', auth.user.id);
     url.searchParams.set('playProject', projectId);
-
     try {
-      if (projectId === auth.activeProjectId && hydratedProjectRef.current === projectId) {
-        await auth.saveProject(editor.project, projectId, {
-          tab: editor.tab,
-          selectedSceneId: editor.selectedSceneId,
-        });
-      }
       await auth.markProjectLinkCopied(projectId);
       await navigator.clipboard.writeText(url.toString());
       setSaveStatus('Lien joueur public copié');
-    } catch (error) {
-      console.error('Erreur de génération du lien jouable', error);
+    } catch {
       window.prompt('Lien jouable', url.toString());
       setSaveStatus('Lien joueur public généré');
     }
-  };
+  }, [auth.markProjectLinkCopied, auth.user?.id]);
 
-  const publishProjectFromProfile = async (projectId) => {
-    if (projectId === auth.activeProjectId && hydratedProjectRef.current === projectId) {
-      await auth.saveProject(editor.project, projectId, {
-        tab: editor.tab,
-        selectedSceneId: editor.selectedSceneId,
-      });
-    }
+  const publishProjectFromProfile = useCallback(async (projectId) => {
     await auth.publishProject(projectId);
     setSaveStatus('Jeu publié dans la galerie');
-  };
+  }, [auth.publishProject]);
 
-  const unpublishProjectFromProfile = async (projectId) => {
+  const unpublishProjectFromProfile = useCallback(async (projectId) => {
     const confirmed = window.confirm('Retirer ce jeu de la galerie publique ? Le projet restera dans ton profil.');
     if (!confirmed) return;
     await auth.unpublishProject(projectId);
-    setSaveStatus('Jeu retirÃ© de la galerie');
-  };
+    setSaveStatus('Jeu retiré de la galerie');
+  }, [auth.unpublishProject]);
 
-  const updatePublicSettingsFromProfile = async (projectId, settings) => {
+  const updatePublicSettingsFromProfile = useCallback(async (projectId, settings) => {
     await auth.updateProjectShareSettings(projectId, settings);
     setSaveStatus('Paramètres publics mis à jour');
-  };
+  }, [auth.updateProjectShareSettings]);
 
-  const updateAuthorProfileFromProfile = async (profile) => {
-    await auth.updateAuthorProfile(profile);
-    setSaveStatus('Profil auteur mis à jour');
-  };
-
-  const openPublicGalleryWindow = () => {
-    const url = new URL(window.location.href);
-    url.search = '';
-    url.hash = '';
-    url.searchParams.set('gallery', '1');
-    window.open(url.toString(), '_blank', 'noopener,noreferrer');
-  };
-
-  const openProfileFromBuilder = () => {
-    if (auth.user?.id && auth.activeProjectId) {
-      writeBuilderUiState(auth.user.id, auth.activeProjectId, {
-        screen: 'profile',
-        tab: editor.tab,
-        selectedSceneId: editor.selectedSceneId,
-      });
+  const uploadGalleryThumbnail = useCallback(async (file) => {
+    if (!file) throw new Error('Aucune miniature à envoyer.');
+    const { fileToDataURL, uploadFileToSupabase } = await import('./utils/fileHelpers');
+    if (!hasSupabaseConfig()) {
+      return {
+        publicUrl: await fileToDataURL(file),
+        storageMode: 'local',
+      };
     }
-    setScreen('profile');
-  };
+    const result = await uploadFileToSupabase(file, {
+      userId: auth.user?.id,
+      folder: 'gallery-thumbnails',
+      optimizeImage: false,
+    });
+    return {
+      publicUrl: result.publicUrl,
+      storageMode: 'supabase',
+    };
+  }, [auth.user?.id]);
 
-  const importProjectFromProfile = async (file) => {
+  const importProjectFromProfile = useCallback(async (file) => {
+    const { normalizeProject } = await import('./data/projectData');
     const text = await file.text();
     const parsed = normalizeProject(JSON.parse(text));
     const record = await auth.importProject(parsed, parsed.title || file.name.replace(/\.json$/i, ''));
-    if (record?.id) await openProjectInEditor(record.id);
     setSaveStatus('Projet importé');
-  };
+    if (record?.id) openBuilder(record.id);
+  }, [auth.importProject, openBuilder]);
 
-  const importProjectJson = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const text = await file.text();
-    const parsed = normalizeProject(JSON.parse(text));
-    editor.loadProject(parsed);
-    preview.syncWithProject(parsed);
-    if (auth.activeProjectId) await auth.saveProject(parsed, auth.activeProjectId);
-    setSaveStatus('Projet importé et sauvegardé');
-    event.target.value = '';
-  };
+  const importProfileMediaFile = useCallback(async (file) => {
+    if (!file) return null;
+    const { fileToDataURL } = await import('./utils/fileHelpers');
+    const projectRecord = auth.projects.find((project) => project.id === auth.activeProjectId) || auth.projects[0];
+    if (!projectRecord?.data) return null;
+    const dataUrl = await fileToDataURL(file);
+    const nextProject = structuredClone(projectRecord.data);
+    const asset = upsertProjectAsset(nextProject, {
+      url: dataUrl,
+      name: file.name,
+      type: file.type?.startsWith('audio/') ? 'audio' : 'image',
+      size: file.size || 0,
+      storageMode: 'local',
+    });
+    await auth.saveProject(nextProject, projectRecord.id, projectRecord.uiState || {});
+    invalidateStorageUsage();
+    setSaveStatus('Média importé');
+    return asset || collectProjectAssets(nextProject).find((item) => item.url === dataUrl) || null;
+  }, [auth.activeProjectId, auth.projects, auth.saveProject, invalidateStorageUsage]);
 
-  const applyAiProject = async (generatedProject, options = {}) => {
-    const candidateProject = options.isPatch || options.mode === 'improve' ?
-       mergeProjectPatch(editor.project, generatedProject)
-      : generatedProject;
-    const validation = validateProject(candidateProject);
-    if (!validation.ok) {
-      const error = new Error(validation.errors.slice(0, 5).join('\n') || 'JSON IA invalide.');
-      error.validation = validation;
-      setSaveStatus('Projet IA invalide');
-      throw error;
-    }
+  const deleteMediaFromProfile = useCallback(async (asset) => {
+    if (!asset?.url) return;
+    const confirmed = await confirmDialog({
+      title: 'Supprimer ce média',
+      message: 'Supprimer ce média des projets où il est référencé ?',
+      confirmLabel: 'Supprimer',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+    const { removeMediaAssetsFromProject } = await import('./utils/mediaProjectHelpers');
+    const urlsToDelete = [...new Set([asset.url, ...(asset.urls || [])].filter(Boolean))];
+    const assetIdsToDelete = [...new Set([asset.assetId, ...(asset.assetIds || [])].filter(Boolean))];
+    const nextProjects = auth.projects.map((projectRecord) => ({
+      ...projectRecord,
+      data: removeMediaAssetsFromProject(projectRecord.data, { urls: urlsToDelete, assetIds: assetIdsToDelete }),
+    }));
+    await auth.saveProjects(nextProjects, auth.activeProjectId);
+    invalidateStorageUsage();
+    setSaveStatus('Média supprimé');
+  }, [auth.activeProjectId, auth.projects, auth.saveProjects, confirmDialog, invalidateStorageUsage]);
 
-    const projectToLoad = {
-      ...validation.project,
-      ...(options.aiDraft ? { aiDraft: options.aiDraft } : {}),
-    };
-    const selectedSceneId = projectToLoad.scenes?.some((scene) => scene.id === options.selectedSceneId) ?
-       options.selectedSceneId
-      : projectToLoad.scenes?.[0]?.id || '';
-    editor.loadProject(projectToLoad);
-    editor.setSelectedSceneId(selectedSceneId);
-    editor.setSelectedHotspotId(projectToLoad.scenes?.find((scene) => scene.id === selectedSceneId)?.hotspots?.[0]?.id || '');
-    preview.syncWithProject(projectToLoad);
-    editor.setTab('ai');
-    if (auth.activeProjectId) {
-      await auth.saveProject(projectToLoad, auth.activeProjectId, {
-        tab: 'ai',
-        selectedSceneId,
-      });
-    }
-    setSaveStatus(options.isPatch || options.mode === 'improve' ? 'Amélioration IA appliquée' : 'Projet IA appliqué');
-    return validation;
-  };
+  const updateAuthorProfileFromProfile = useCallback(async (profile) => {
+    await auth.updateAuthorProfile(profile);
+    setSaveStatus('Profil auteur mis à jour');
+  }, [auth.updateAuthorProfile]);
 
-  const saveAiDraft = async (draft) => {
-    if (!draft) {
-      const nextProject = structuredClone(editor.project);
-      delete nextProject.aiDraft;
-      delete nextProject.__aiDraft;
-      editor.patchProject((current) => {
-        delete current.aiDraft;
-        delete current.__aiDraft;
-      }, { rememberHistory: false });
-      if (auth.activeProjectId) {
-        await auth.saveProject(nextProject, auth.activeProjectId, {
-          tab: 'ai',
-          selectedSceneId: editor.selectedSceneId,
-        });
-      }
-      setSaveStatus('Brouillon IA effacé');
-      return null;
-    }
-    const nextProject = structuredClone(editor.project);
-    nextProject.aiDraft = draft;
-    editor.patchProject((current) => {
-      current.aiDraft = draft;
-    }, { rememberHistory: false });
+  const buyStorageFromProfile = useCallback(async () => {
+    const usageBytes = await getCurrentStorageUsageBytes();
+    updateStorageQuotaBytes(usageBytes + 100 * 1024 * 1024);
+    setSaveStatus('Stockage mis à jour');
+  }, [getCurrentStorageUsageBytes, updateStorageQuotaBytes]);
 
-    if (auth.activeProjectId) {
-      await auth.saveProject(nextProject, auth.activeProjectId, {
-        tab: 'ai',
-        selectedSceneId: editor.selectedSceneId,
-      });
-    }
-    setSaveStatus('Brouillon IA sauvegardé');
-    return draft;
-  };
+  const mediaLibrary = useMemo(() => [
+    ...new Map((auth.projects || [])
+      .flatMap((projectRecord) => collectProjectAssets(projectRecord.data).map((asset) => [
+        asset.url || asset.assetId,
+        {
+          ...asset,
+          projectId: projectRecord.id,
+          projectName: projectRecord.name || projectRecord.data?.title,
+        },
+      ]))
+      .filter(([key]) => Boolean(key))).values(),
+  ], [auth.projects]);
 
-  const saveAnime2dDraft = async (draft) => {
-    const { anime2dDraft, anime2dDraftMeta, ...projectWithoutAnimeDraft } = editor.project || {};
-    const isTemporaryProject = Boolean(editor.project?.isTemporaryTutorial);
-    const nextMeta = getAnime2dDraftMeta(draft);
-    const nextProject = nextMeta
-      ? { ...projectWithoutAnimeDraft, anime2dDraft: draft, anime2dDraftMeta: nextMeta }
-      : projectWithoutAnimeDraft;
-    const fallbackProjectDraft = anime2dDraft;
-    if (draft) {
-      nextProject.anime2dDraft = draft;
-      nextProject.anime2dDraftMeta = nextMeta;
-    } else {
-      delete nextProject.anime2dDraft;
-      delete nextProject.anime2dDraftMeta;
-    }
-    editor.patchProject((current) => {
-      if (draft) {
-        current.anime2dDraft = draft;
-        current.anime2dDraftMeta = nextMeta;
-      } else {
-        delete current.anime2dDraft;
-        delete current.anime2dDraftMeta;
-      }
-    }, { rememberHistory: false });
-
-    if (isTemporaryProject) {
-      setSaveStatus(draft ? 'Brouillon 2D temporaire sauvegardé' : 'Brouillon 2D temporaire effacé');
-      return draft;
-    }
-
-    if (auth.activeProjectId) {
-      try {
-        await auth.saveProject(nextProject, auth.activeProjectId, {
-          tab: 'animation',
-          selectedSceneId: editor.selectedSceneId,
-        });
-      } catch (error) {
-        console.warn('Sauvegarde projet sans brouillon 2D Anime impossible.', error);
-        if (fallbackProjectDraft) {
-          editor.patchProject((current) => {
-            current.anime2dDraft = draft || fallbackProjectDraft;
-            if (nextMeta) current.anime2dDraftMeta = nextMeta;
-          }, { rememberHistory: false });
-        }
-      }
-    }
-    setSaveStatus(draft ? 'Brouillon 2D Anime sauvegardé' : 'Brouillon 2D Anime effacé');
-    return draft;
-  };
-
-  const confirmAnimationExit = async () => {
-    if (editor.tab !== 'animation' || !anime2dHasUnsavedChanges) return true;
-    const shouldSave = window.confirm(
-      "Des modifications 2D Anime ne sont pas sauvegardees. Voulez-vous sauvegarder avant de changer d'onglet ?",
-    );
-    if (!shouldSave) return false;
-
-    try {
-      await anime2dSaveBeforeLeaveRef.current?.();
-      setAnime2dHasUnsavedChanges(false);
-      return true;
-    } catch (error) {
-      console.warn('Sauvegarde 2D Anime avant sortie impossible.', error);
-      window.alert("La sauvegarde 2D Anime a echoue. Vous restez sur l'onglet Animation.");
-      return false;
-    }
-  };
-
-  const handleBuilderTabChange = async (nextTab) => {
-    if (nextTab === editor.tab) return;
-    if (!(await confirmAnimationExit())) return;
-    editor.setTab(nextTab);
-  };
-
-  const handleBuilderProfileOpen = async () => {
-    if (!(await confirmAnimationExit())) return;
-    openProfileFromBuilder();
-  };
-
-  const persistAiImage = async ({ type, id, patch }) => {
-    if (!type || !id || !patch) return null;
-    let nextPatch = { ...patch };
-
-    const imageField = type === 'scene' ? 'backgroundData' : 'imageData';
-    const imageNameField = type === 'scene' ? 'backgroundName' : 'imageName';
-    const imageData = nextPatch[imageField];
-
-    if (auth.activeProjectId && hasSupabaseConfig() && typeof imageData === 'string' && imageData.startsWith('data:image/')) {
-      try {
-        const blob = dataUrlToBlob(imageData);
-        if (blob) {
-          const extension = extensionFromMime(blob.type);
-          const storageId = type === 'cinematicSlide' && nextPatch.slideId ? `${id}-${nextPatch.slideId}` : id;
-          const version = Date.now().toString(36);
-          const path = buildStoragePath('users', auth.user?.id, 'projects', auth.activeProjectId, 'ai-images', type, `${storageId}-${version}.${extension}`);
-          const uploaded = await uploadToStorage(path, blob, {
-            contentType: blob.type,
-            cacheControl: '3600',
-          });
-          const publicUrl = `${uploaded.publicUrl}${uploaded.publicUrl.includes('?') ? '&' : '?'}v=${version}`;
-          const imageVariants = Array.isArray(nextPatch.aiImageVariants) ?
-            nextPatch.aiImageVariants.map((variant) => (
-              variant?.imageData === imageData ? { ...variant, imageData: publicUrl, imageName: variant.imageName || nextPatch[imageNameField] } : variant
-            ))
-            : nextPatch.aiImageVariants;
-          nextPatch = {
-            ...nextPatch,
-            [imageField]: publicUrl,
-            [imageNameField]: nextPatch[imageNameField] || `${type}-${id}.${extension}`,
-            imageStoragePath: uploaded.path,
-            ...(imageVariants ? { aiImageVariants: imageVariants } : {}),
-          };
-        }
-      } catch (error) {
-        setSaveStatus(`Image générée, mais upload Supabase impossible: ${error.message}`);
-      }
-    }
-
-    const nextProject = structuredClone(editor.project);
-
-    if (type === 'scene') {
-      nextProject.scenes = (nextProject.scenes || []).map((scene) => (
-        scene.id === id ? { ...scene, ...nextPatch } : scene
-      ));
-    }
-
-    if (type === 'item') {
-      nextProject.items = (nextProject.items || []).map((item) => (
-        item.id === id ? { ...item, ...nextPatch } : item
-      ));
-    }
-
-    if (type === 'cinematicSlide') {
-      nextProject.cinematics = (nextProject.cinematics || []).map((cinematic) => (
-        cinematic.id === id ? {
-          ...cinematic,
-          slides: (cinematic.slides || []).map((slide) => (
-            slide.id === nextPatch.slideId ? { ...slide, ...nextPatch } : slide
-          )),
-        } : cinematic
-      ));
-    }
-
-    editor.patchProject((draft) => {
-      if (type === 'scene') {
-        const scene = draft.scenes.find((entry) => entry.id === id);
-        if (scene) Object.assign(scene, nextPatch);
-      }
-      if (type === 'item') {
-        const item = draft.items.find((entry) => entry.id === id);
-        if (item) Object.assign(item, nextPatch);
-      }
-      if (type === 'cinematicSlide') {
-        const slide = draft.cinematics
-          .find((entry) => entry.id === id)
-          ?.slides
-          ?.find((entry) => entry.id === nextPatch.slideId);
-        if (slide) Object.assign(slide, nextPatch);
-      }
-    }, { rememberHistory: false });
-
-    if (auth.activeProjectId) {
-      await auth.saveProject(nextProject, auth.activeProjectId, {
-        tab: 'ai',
-        selectedSceneId: type === 'scene' ? id : editor.selectedSceneId,
-      });
-    }
-
-    setSaveStatus(type === 'scene' ? 'Image de scène sauvegardée' : "Image d'objet sauvegardée");
-    return { project: nextProject, patch: nextPatch };
-  };
-
-  const previewPanel = (
-    <PreviewPlayerPanel editor={editor} preview={preview} sharedPlayerMode={screen === 'shared-preview'} />
-  );
-
-  const handleTutorialNext = () => setTutorialStepIndex((index) => (
-    index === null || activeTutorialPosition >= activeTutorialIndexes.length - 1 ? null : activeTutorialIndexes[activeTutorialPosition + 1]
-  ));
-
-  const renderTutorialOverlay = () => activeTutorialStep ? (
-    <BuilderTutorial
-      step={activeTutorialStep}
-      stepNumber={Math.max(0, activeTutorialPosition) + 1}
-      totalSteps={activeTutorialIndexes.length || 1}
-      canPrevious={activeTutorialPosition > 0}
-      userName={tutorialUserName}
-      project={editor.project}
-      fakeFileOptions={getFakeWindowImageOptions(editor.project, activeTutorialStep?.completeWhen?.target)}
-      onFakeFileChosen={applyFakeTutorialImage}
-      onNext={handleTutorialNext}
-      onPrevious={() => setTutorialStepIndex(activeTutorialIndexes[Math.max(0, activeTutorialPosition - 1)] ?? null)}
-      onClose={() => setTutorialStepIndex(null)}
-    />
+  const profileTutorialIndexes = useMemo(() => profileTutorialSteps
+    .map((step, index) => ({ step, index }))
+    .filter(({ step }) => (step.tutorial || step.tab) === 'profile')
+    .map(({ index }) => index), [profileTutorialSteps]);
+  const profileTutorialPosition = profileTutorialIndexes.indexOf(profileTutorialStepIndex);
+  const activeProfileTutorialStep = profileTutorialStepIndex === null ? null : profileTutorialSteps[profileTutorialStepIndex];
+  const tutorialUserName = auth.user?.name || auth.user?.pseudo || auth.user?.username || auth.user?.email?.split('@')?.[0] || '';
+  const profileTutorialOverlay = activeProfileTutorialStep ? (
+    <Suspense fallback={null}>
+      <BuilderTutorial
+        step={activeProfileTutorialStep}
+        stepNumber={Math.max(0, profileTutorialPosition) + 1}
+        totalSteps={profileTutorialIndexes.length || 1}
+        canPrevious={profileTutorialPosition > 0}
+        userName={tutorialUserName}
+        project={null}
+        fakeFileOptions={[]}
+        onFakeFileChosen={() => {}}
+        onNext={() => {
+          setProfileTutorialStepIndex((index) => (
+            index === null || profileTutorialPosition >= profileTutorialIndexes.length - 1
+              ? null
+              : profileTutorialIndexes[profileTutorialPosition + 1]
+          ));
+        }}
+        onPrevious={() => {
+          setProfileTutorialStepIndex(profileTutorialIndexes[Math.max(0, profileTutorialPosition - 1)] ?? null);
+        }}
+        onClose={closeProfileTutorial}
+      />
+    </Suspense>
   ) : null;
 
-  if (screen === 'shared-preview') {
+  if (screen === 'builder' || screen === 'shared-preview') {
     return (
-      <div className="shared-player-shell">
-        {sharedLoadStatus ? (
-          <div className="shared-player-loading">
-            <span className="eyebrow">Lien jouable</span>
-            <h2>{editor.project.title || 'Escape game'}</h2>
-            <p>{sharedLoadStatus}</p>
-          </div>
-        ) : previewPanel}
-      </div>
+      <Suspense fallback={<LandingLoadingFallback />}>
+        <BuilderApp
+          key={builderLaunch.key}
+          auth={auth}
+          initialProjectId={builderLaunch.projectId}
+          initialTab={builderLaunch.tab}
+          initialTutorialTab={builderLaunch.tutorialTab}
+          initialScreen={builderLaunch.screen}
+          onExitToProfile={openProfileScreen}
+        />
+      </Suspense>
     );
   }
 
   if (screen === 'gallery') {
     return (
-      <PublicGallery
-        user={auth.user}
-        authorProfile={auth.authorProfile}
-        initialGameKey={window.__escapeInitialGalleryGame || ''}
-        initialCreatorId={window.__escapeInitialGalleryCreator || ''}
-        onUpdateAuthorProfile={updateAuthorProfileFromProfile}
-        onSignup={() => setScreen('profile')}
-        onClose={auth.user ? () => setScreen('profile') : null}
-      />
+      <Suspense fallback={<TabLoadingFallback />}>
+        <PublicGallery
+          user={auth.user}
+          authorProfile={auth.authorProfile}
+          initialGameKey={window.__escapeInitialGalleryGame || ''}
+          initialCreatorId={window.__escapeInitialGalleryCreator || ''}
+          onUpdateAuthorProfile={updateAuthorProfileFromProfile}
+          onSignup={openProfileScreen}
+          onClose={auth.user ? openProfileScreen : null}
+        />
+      </Suspense>
     );
   }
 
@@ -929,43 +393,79 @@ function App() {
   if (!auth.user) {
     if (!showAuthPanel && !auth.isPasswordRecovery) {
       return (
-        <LandingPage
-          onLogin={() => {
-            setAuthEntryMode('login');
-            setShowAuthPanel(true);
-          }}
-          onRegister={() => {
-            setAuthEntryMode('register');
-            setShowAuthPanel(true);
-          }}
-          onOpenGallery={() => setScreen('gallery')}
-        />
+        <Suspense fallback={<LandingLoadingFallback />}>
+          <LandingPage
+            onLogin={openLoginPanel}
+            onRegister={openRegisterPanel}
+            onOpenGallery={openGalleryScreen}
+          />
+        </Suspense>
       );
     }
 
     return (
       <div className="app-shell">
-        <AuthPanel
-          onLogin={auth.login}
-          onRegister={auth.register}
-          onRequestPasswordReset={auth.requestPasswordReset}
-          onUpdatePassword={auth.updatePassword}
-          onBack={() => setShowAuthPanel(false)}
-          initialMode={authEntryMode}
-          isPasswordRecovery={auth.isPasswordRecovery}
-          isBusy={auth.isBusy}
-          errorMessage={auth.authError}
-        />
+        <Suspense fallback={<TabLoadingFallback />}>
+          <AuthPanel
+            onLogin={auth.login}
+            onRegister={auth.register}
+            onRequestPasswordReset={auth.requestPasswordReset}
+            onUpdatePassword={auth.updatePassword}
+            onBack={closeAuthPanel}
+            initialMode={authEntryMode}
+            isPasswordRecovery={auth.isPasswordRecovery}
+            isBusy={auth.isBusy}
+            errorMessage={auth.authError}
+          />
+        </Suspense>
+        {accessibleDialog}
       </div>
     );
   }
 
-  if (screen === 'profile') {
+  if (screen === 'admin') {
+    if (!isAdminAccount(auth.user)) {
+      return (
+        <div className="app-shell">
+          <section className="panel">
+            <div className="panel-head">
+              <div>
+                <span className="eyebrow">Admin</span>
+                <h2>Accès admin refusé</h2>
+                <p className="small-note">Reconnecte-toi avec un compte admin pour ouvrir cette zone.</p>
+              </div>
+              <button type="button" className="secondary-action" onClick={openProfileScreen}>
+                Retour profil
+              </button>
+            </div>
+          </section>
+          {accessibleDialog}
+        </div>
+      );
+    }
+
     return (
       <div className="app-shell">
+        <Suspense fallback={<TabLoadingFallback />}>
+          <AdminPage
+            user={auth.user}
+            projects={auth.projects}
+            onBack={openProfileScreen}
+            onLogout={auth.logout}
+            onOpenProject={openProjectInEditor}
+          />
+        </Suspense>
+        {accessibleDialog}
+      </div>
+    );
+  }
+
+  return (
+    <div className="app-shell">
+      <Suspense fallback={<TabLoadingFallback />}>
         <ProfilePage
           user={auth.user}
-          canOpenAdmin={isAdminUser(auth.user)}
+          canOpenAdmin={isAdminAccount(auth.user)}
           projects={auth.projects}
           activeProjectId={auth.activeProjectId}
           isBusy={auth.isBusy}
@@ -980,208 +480,33 @@ function App() {
           onUpdatePublicSettings={updatePublicSettingsFromProfile}
           onUploadGalleryThumbnail={uploadGalleryThumbnail}
           onOpenPublicGallery={openPublicGalleryWindow}
-          onOpenAdmin={() => setScreen('admin')}
-          onStartTutorial={startBuilderTutorialFromProfile}
+          onOpenAdmin={openAdminScreen}
+          onStartTutorial={(tab) => {
+            if (tab === 'profile') {
+              startProfileTutorial();
+              return;
+            }
+            openBuilder(auth.activeProjectId || auth.projects[0]?.id || '', '', 'editor', tab);
+          }}
           onRenameProject={renameProjectFromProfile}
+          onUpdateProjectMode={updateProjectModeFromProfile}
           onDuplicateProject={duplicateProjectFromProfile}
           onDeleteProject={deleteProjectFromProfile}
+          onDeleteMedia={deleteMediaFromProfile}
           onImportProject={importProjectFromProfile}
+          onImportMediaFile={importProfileMediaFile}
+          mediaLibrary={mediaLibrary}
+          storageSummary={storageSummary}
+          aiCreditBalance={aiCreditBalance}
+          onBuyStorage={buyStorageFromProfile}
           onLogout={auth.logout}
-          isProfileTutorialActive={selectedTutorialTab === 'profile' && Boolean(activeTutorialStep)}
+          isProfileTutorialActive={Boolean(activeProfileTutorialStep)}
         />
-        {selectedTutorialTab === 'profile' ? renderTutorialOverlay() : null}
-      </div>
-    );
-  }
-
-  if (screen === 'admin') {
-    if (!isAdminUser(auth.user)) {
-      return null;
-    }
-
-    return (
-      <div className="app-shell">
-        <AdminPage
-          user={auth.user}
-          projects={auth.projects}
-          onBack={() => setScreen('profile')}
-          onLogout={auth.logout}
-          onOpenProject={openProjectInEditor}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="app-shell">
-      <Header
-        projectTitle={editor.project.title}
-        onExportJson={handleExportProjectJson}
-        onImportJson={importProjectJson}
-        onExportStandalone={handleExportStandalone}
-        user={auth.user}
-        onLogout={auth.logout}
-        saveStatus={saveStatus || 'Sauvegarde active'}
-      />
-
-      <Tabs value={editor.tab} onChange={handleBuilderTabChange} onProfile={handleBuilderProfileOpen} projectScore={projectScore} />
-
-      {editor.tab === 'scenes' && (
-        <ScenesTab
-          project={editor.project}
-          actsWithScenes={editor.actsWithScenes}
-          renderSceneTree={editor.renderSceneTree}
-          addAct={editor.addAct}
-          deleteAct={editor.deleteAct}
-          addScene={editor.addScene}
-          addItem={editor.addItem}
-          selectedItemId={editor.selectedItemId}
-          setSelectedItemId={editor.setSelectedItemId}
-          selectedItem={editor.selectedItem}
-          selectedScene={editor.selectedScene}
-          selectedSceneId={editor.selectedSceneId}
-          setSelectedSceneId={editor.setSelectedSceneId}
-          setTab={editor.setTab}
-          deleteScene={handleDeleteScene}
-          previewScene={handlePreviewScene}
-          patchProject={editor.patchProject}
-          rememberProjectState={editor.rememberProjectState}
-          undoProjectChange={editor.undoProjectChange}
-          redoProjectChange={editor.redoProjectChange}
-          canUndoProjectChange={editor.canUndoProjectChange}
-          canRedoProjectChange={editor.canRedoProjectChange}
-          selectedHotspotId={editor.selectedHotspotId}
-          setSelectedHotspotId={editor.setSelectedHotspotId}
-          handleUpload={handleUpload}
-          getActById={editor.getActById}
-          getSceneById={editor.getSceneById}
-          getSceneDepth={editor.getSceneDepth}
-          addSubsceneToSelectedScene={editor.addSubsceneToSelectedScene}
-          childScenes={editor.childScenes}
-          addHotspot={editor.addHotspot}
-          selectedHotspot={editor.selectedHotspot}
-          deleteItem={handleDeleteItem}
-          deleteHotspot={editor.deleteHotspot}
-          getSceneLabel={editor.getSceneLabel}
-        />
-      )}
-
-      {editor.tab === 'media' && (
-        <MediaTab
-          project={editor.project}
-          selectedScene={editor.selectedScene}
-          selectedSceneId={editor.selectedSceneId}
-          setSelectedSceneId={editor.setSelectedSceneId}
-          setSelectedHotspotId={editor.setSelectedHotspotId}
-          patchProject={editor.patchProject}
-          handleUpload={handleUpload}
-          getSceneLabel={editor.getSceneLabel}
-        />
-      )}
-
-      {editor.tab === 'map' && (
-        <RouteMapTab
-          project={editor.project}
-          patchProject={editor.patchProject}
-          getSceneLabel={editor.getSceneLabel}
-        />
-      )}
-
-      {editor.tab === 'cinematics' && (
-        <CinematicsTab
-          project={editor.project}
-          selectedCinematicId={editor.selectedCinematicId}
-          setSelectedCinematicId={editor.setSelectedCinematicId}
-          selectedCinematic={editor.selectedCinematic}
-          addCinematic={editor.addCinematic}
-          addSlide={editor.addSlide}
-          patchProject={editor.patchProject}
-          handleUpload={handleUpload}
-          previewCinematic={handlePreviewCinematic}
-        />
-      )}
-
-      {editor.tab === 'combinations' && (
-        <CombinationsTab
-          project={editor.project}
-          addCombination={editor.addCombination}
-          getItemById={editor.getItemById}
-          patchProject={editor.patchProject}
-        />
-      )}
-
-      {editor.tab === 'enigmas' && (
-        <EnigmasTab
-          project={editor.project}
-          selectedEnigmaId={editor.selectedEnigmaId}
-          setSelectedEnigmaId={editor.setSelectedEnigmaId}
-          selectedEnigma={editor.selectedEnigma}
-          addEnigma={editor.addEnigma}
-          deleteEnigma={handleDeleteEnigma}
-          patchProject={editor.patchProject}
-          getSceneLabel={editor.getSceneLabel}
-          handleUpload={handleUpload}
-          previewEnigma={handlePreviewEnigma}
-        />
-      )}
-
-      {editor.tab === 'logic' && (
-        <LogicTab
-          project={editor.project}
-          patchProject={editor.patchProject}
-          handleUpload={handleUpload}
-          getSceneLabel={editor.getSceneLabel}
-          selectedSceneId={editor.selectedSceneId}
-        />
-      )}
-
-      {editor.tab === 'score' && (
-        <ScoreTab project={editor.project} />
-      )}
-
-      {editor.tab === 'ai' && (
-        <AiTab
-          project={editor.project}
-          user={auth.user}
-          getSceneLabel={editor.getSceneLabel}
-          onApplyProject={applyAiProject}
-          onSaveAiDraft={saveAiDraft}
-          onPersistAiImage={persistAiImage}
-          projectStorageKey={auth.activeProjectId || editor.project?.title || 'default'}
-        />
-      )}
-
-      {editor.tab === 'shop' && (
-        <ShopTab user={auth.user} />
-      )}
-
-      {editor.tab === 'help' && (
-        <HelpTab onStartTutorial={startBuilderTutorialFromProfile} />
-      )}
-
-      {editor.tab === 'preview' && (
-        <PreviewPlayerPanel editor={editor} preview={preview} />
-      )}
-
-      {editor.tab === 'animation' && (
-        <TwoDAnimeEditor
-          key={getAnime2dStorageId(auth.activeProjectId, editor.project)}
-          user={auth.user}
-          projectName={editor.project.title}
-          projectDraft={editor.project.anime2dDraft}
-          draftStorageKey={getAnime2dStorageId(auth.activeProjectId, editor.project)}
-          onSaveDraft={saveAnime2dDraft}
-          onDirtyChange={setAnime2dHasUnsavedChanges}
-          onRegisterSaveBeforeLeave={(saveHandler) => {
-            anime2dSaveBeforeLeaveRef.current = saveHandler;
-          }}
-          onBackToBuilder={() => editor.setTab('preview')}
-        />
-      )}
-
-      {selectedTutorialTab !== 'profile' ? renderTutorialOverlay() : null}
+      </Suspense>
+      {accessibleDialog}
+      {profileTutorialOverlay}
     </div>
   );
 }
 
-export default App;
+export default ShellApp;

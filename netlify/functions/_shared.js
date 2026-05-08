@@ -113,6 +113,28 @@ export const verifyAdmin = async (event) => {
   return data.user;
 };
 
+export const sanitizeCreditUserId = (value = '') =>
+  String(value).trim().replace(/[^a-zA-Z0-9._:@-]/g, '-') || 'anonymous';
+
+export const verifyUser = async (event) => {
+  const token = getBearerToken(event);
+  if (!token) {
+    const error = new Error('Session manquante.');
+    error.statusCode = 401;
+    throw error;
+  }
+
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data.user?.id) {
+    const accessError = new Error('Session invalide.');
+    accessError.statusCode = 401;
+    throw accessError;
+  }
+
+  return data.user;
+};
+
 export const parseBody = (event) => {
   if (!event.body) return {};
   try {
@@ -126,7 +148,12 @@ export const parseBody = (event) => {
 
 export const getCreditUserId = (event, body = {}) => {
   const raw = event.headers['x-ai-user-id'] || event.headers['X-AI-User-Id'] || body.userId || 'anonymous';
-  return String(raw).trim().replace(/[^a-zA-Z0-9._:@-]/g, '-') || 'anonymous';
+  return sanitizeCreditUserId(raw);
+};
+
+export const resolveCreditUserId = async (event) => {
+  const user = await verifyUser(event);
+  return sanitizeCreditUserId(user.id || user.email);
 };
 
 export const normalizeCreditAccount = (account = {}) => ({
@@ -244,27 +271,43 @@ export const updateCreditAccount = async (supabase, userId, patch = {}) => {
 };
 
 export const spendCredits = async (supabase, userId, amount, reason) => {
-  const account = await ensureCreditAccount(supabase, userId);
   const cost = Math.max(0, Math.round(Number(amount || 0)));
-  if (cost <= 0) return account;
-  if (Number(account.balance || 0) < cost) {
-    const error = new Error('Credits IA insuffisants.');
-    error.statusCode = 402;
-    error.code = 'AI_CREDITS_INSUFFICIENT';
-    error.balance = Number(account.balance || 0);
-    error.required = cost;
-    throw error;
+  if (cost <= 0) return ensureCreditAccount(supabase, userId);
+
+  let lastBalance = 0;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const account = await ensureCreditAccount(supabase, userId);
+    lastBalance = Number(account.balance || 0);
+    if (lastBalance < cost) break;
+
+    const { data: updated, error } = await supabase
+      .from('ai_credits')
+      .update({
+        balance: lastBalance - cost,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('user_id', userId)
+      .eq('balance', lastBalance)
+      .select('*')
+      .maybeSingle();
+
+    if (error) throw error;
+    if (updated) {
+      await addCreditTransaction(supabase, userId, {
+        type: 'spend',
+        amount: -cost,
+        reason,
+      });
+      return updated;
+    }
   }
 
-  const updated = await updateCreditAccount(supabase, userId, {
-    balance: Number(account.balance || 0) - cost,
-  });
-  await addCreditTransaction(supabase, userId, {
-    type: 'spend',
-    amount: -cost,
-    reason,
-  });
-  return updated;
+  const error = new Error('Credits IA insuffisants.');
+  error.statusCode = 402;
+  error.code = 'AI_CREDITS_INSUFFICIENT';
+  error.balance = lastBalance;
+  error.required = cost;
+  throw error;
 };
 
 export const refundCredits = async (supabase, userId, amount, reason) => {

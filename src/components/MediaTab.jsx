@@ -1,8 +1,24 @@
 import { useEffect, useMemo, useState } from 'react';
 import SceneVisualEffect, { VISUAL_EFFECT_INTENSITY_OPTIONS, getVisualEffectZoneZIndex } from './SceneVisualEffect.jsx';
 import VisualEffectCascadeMenu from './VisualEffectCascadeMenu.jsx';
+import MediaSourcePicker from './MediaSourcePicker.jsx';
 import { HelpLabel } from './scenes/SceneEditorChrome.jsx';
 import { getElementShapeStyle, getLayerZIndex, getSceneObjectImageStyle, getSceneObjectStyle } from './scenes/sceneEditorUtils.js';
+import {
+  calculateImageAspectRatio,
+  calculateImageDimensions,
+  clearSceneAmbientSoundAsset,
+  clearSceneMusicAsset,
+  getSceneAspectRatio,
+  getSceneMediaStatus,
+  getSceneObjectAssetSource,
+  resolveAssetUrl,
+  setSceneAmbientSoundAsset,
+  setSceneBackgroundAspectRatio,
+  setSceneBackgroundAsset,
+  setSceneBackgroundDimensions,
+  setSceneMusicAsset,
+} from '../lib/assetManager.js';
 
 const SCENE_TRANSITION_OPTIONS = [
   { value: 'none', label: 'Aucune' },
@@ -28,7 +44,7 @@ const SCENE_TRANSITION_OPTIONS = [
   { value: 'cinematic-bars', label: 'Bandes cinema' },
   { value: 'glitch', label: 'Glitch' },
   { value: 'pixel', label: 'Pixel' },
-  { value: 'burn', label: 'Brulure lumiere' },
+  { value: 'burn', label: 'Brulure lumière' },
   { value: 'flash', label: 'Flash' },
 ];
 
@@ -41,12 +57,12 @@ const SCENE_TRANSITION_DURATION_OPTIONS = [
 
 const SCENE_TIMER_ACTION_OPTIONS = [
   { value: 'none', label: 'Rien' },
-  { value: 'scene', label: 'Aller a une scene' },
+  { value: 'scene', label: 'Aller à une scene' },
   { value: 'restart-scene', label: 'Relancer cette scene' },
   { value: 'restart-preview', label: 'Recommencer le jeu' },
   { value: 'damage-life', label: 'Perdre des vies' },
   { value: 'dialogue', label: 'Afficher un message' },
-  { value: 'cinematic', label: 'Lancer une cinematique' },
+  { value: 'cinematic', label: 'Lancer une cinematic' },
 ];
 
 const formatTimerSeconds = (seconds = 0) => {
@@ -64,15 +80,24 @@ export default function MediaTab({
   setSelectedHotspotId,
   patchProject,
   handleUpload,
+  mediaLibrary = [],
   getSceneLabel,
 }) {
-  const sceneAspectRatio = Number(selectedScene?.backgroundAspectRatio) > 0 ? Number(selectedScene.backgroundAspectRatio) : 1.6;
-  const getSceneObjectDisplayImage = (obj) => obj?.imageData || project.items?.find((item) => item.id === obj?.linkedItemId)?.imageData || '';
+  const sceneAspectRatio = getSceneAspectRatio(selectedScene);
+  const getSceneObjectDisplayImage = (obj) => getSceneObjectAssetSource(obj, project.items || []);
+  const selectedBackgroundUrl = resolveAssetUrl(project, selectedScene?.backgroundId, selectedScene?.backgroundData);
+  const selectedMusicUrl = resolveAssetUrl(project, selectedScene?.musicId, selectedScene?.musicData);
+  const selectedAmbientSoundUrl = resolveAssetUrl(project, selectedScene?.ambientSoundId, selectedScene?.ambientSoundData);
   const [transitionPreviewTargetId, setTransitionPreviewTargetId] = useState('');
   const [transitionPreviewKey, setTransitionPreviewKey] = useState(0);
   const transitionPreviewTarget = useMemo(
     () => project.scenes.find((scene) => scene.id === transitionPreviewTargetId) || null,
     [project.scenes, transitionPreviewTargetId],
+  );
+  const transitionPreviewTargetBackgroundUrl = resolveAssetUrl(
+    project,
+    transitionPreviewTarget?.backgroundId,
+    transitionPreviewTarget?.backgroundData,
   );
   const transitionPreviewTargets = useMemo(
     () => project.scenes.filter((scene) => scene.id !== selectedSceneId),
@@ -81,13 +106,7 @@ export default function MediaTab({
   const selectedTransition = selectedScene?.sceneTransition || 'none';
   const selectedTransitionDuration = Number(selectedScene?.sceneTransitionDuration) || 700;
   const selectedTimerAction = selectedScene?.timerEndAction || 'none';
-  const mediaStatusItems = [
-    { label: 'Fond', ready: Boolean(selectedScene?.backgroundData) },
-    { label: 'Effet', ready: Boolean(selectedScene?.visualEffect && selectedScene.visualEffect !== 'none') },
-    { label: 'Musique', ready: Boolean(selectedScene?.musicData) },
-    { label: 'Son', ready: Boolean(selectedScene?.ambientSoundData) },
-    { label: 'Timer', ready: Boolean(selectedScene?.timerEnabled) },
-  ];
+  const mediaStatusItems = getSceneMediaStatus(selectedScene);
 
   useEffect(() => {
     if (!transitionPreviewTargets.length) {
@@ -100,23 +119,20 @@ export default function MediaTab({
   }, [transitionPreviewTargetId, transitionPreviewTargets]);
 
   const rememberSceneBackgroundAspectRatio = (image, sceneId = selectedSceneId) => {
-    if (!image?.naturalWidth || !image?.naturalHeight || !sceneId) return;
-    const nextRatio = Number((image.naturalWidth / image.naturalHeight).toFixed(4));
-    if (!Number.isFinite(nextRatio) || nextRatio <= 0) return;
+    const nextRatio = calculateImageAspectRatio(image);
+    const dimensions = calculateImageDimensions(image);
+    if (!nextRatio || !sceneId) return;
     patchProject((draft) => {
       const scene = draft.scenes.find((entry) => entry.id === sceneId);
-      if (scene) scene.backgroundAspectRatio = nextRatio;
+      setSceneBackgroundAspectRatio(scene, nextRatio);
+      if (dimensions) setSceneBackgroundDimensions(scene, dimensions.width, dimensions.height, draft);
     }, { rememberHistory: false });
   };
 
   const updateSceneBackground = (data, name) => {
     patchProject((draft) => {
       const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
-      if (scene) {
-        scene.backgroundData = data;
-        scene.backgroundName = name;
-        scene.backgroundAspectRatio = 1.6;
-      }
+      setSceneBackgroundAsset(scene, data, name, draft);
     });
 
     const image = new Image();
@@ -129,7 +145,7 @@ export default function MediaTab({
       <section className="panel main panel-main-pro">
         <div className="media-topline">
           <div>
-            <span className="section-kicker">Media</span>
+            <span className="section-kicker">Média</span>
             <h2>{selectedScene?.name || 'Aucune scene'}</h2>
           </div>
           <div className="media-scene-picker">
@@ -156,16 +172,23 @@ export default function MediaTab({
         </div>
 
         {selectedScene ? (
-          <div className="media-editor-grid">
-            <div className="editor-stack">
+          <>
+            <div className="media-editor-grid">
+              <div className="editor-stack">
               <div className="subpanel media-visuals-card">
                 <div className="subpanel-head"><h3>Visuels</h3></div>
                 <div className="media-background-line">
                   <strong>{selectedScene.backgroundName || 'Aucune image de fond'}</strong>
-                  <label className="button like secondary-action">
-                    {selectedScene.backgroundData ? 'Remplacer le fond' : 'Importer une image'}
-                    <input type="file" accept="image/*" hidden onChange={(event) => handleUpload(event, updateSceneBackground)} />
-                  </label>
+                  <MediaSourcePicker
+                    className="button like secondary-action"
+                    accept="image/*"
+                    assetScope="scene-background"
+                    handleUpload={handleUpload}
+                    mediaLibrary={mediaLibrary}
+                    onSelect={updateSceneBackground}
+                  >
+                    {selectedBackgroundUrl ? 'Remplacer le fond' : 'Importer une image'}
+                  </MediaSourcePicker>
                 </div>
                 <div className="compact-form-grid">
                   <div data-tour="media-visual-effect">
@@ -191,7 +214,7 @@ export default function MediaTab({
                     </select>
                   </div>
                   <div>
-                    <HelpLabel help="Transition jouee quand le joueur quitte cette scene vers une autre scene.">Transition de sortie</HelpLabel>
+                    <HelpLabel help="Transition jouée quand le joueur quitte cette scene vers une autre scene.">Transition de sortie</HelpLabel>
                     <select value={selectedTransition} onChange={(event) => patchProject((draft) => {
                       const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
                       if (scene) scene.sceneTransition = event.target.value;
@@ -213,7 +236,7 @@ export default function MediaTab({
                     </select>
                   </div>
                   <div>
-                    <HelpLabel help="Scene utilisee uniquement pour rejouer la transition dans l'apercu Media.">Scene d'arrivee test</HelpLabel>
+                    <HelpLabel help="Scene utilisée uniquement pour rejouer la transition dans l'aperçu Média.">Scene d'arrivée test</HelpLabel>
                     <select
                       value={transitionPreviewTargetId}
                       disabled={!transitionPreviewTargets.length}
@@ -240,20 +263,22 @@ export default function MediaTab({
               <div className="subpanel media-audio-panel">
                 <div className="subpanel-head"><h3>Musique</h3></div>
                 <div className="music-compact-row media-audio-card" data-tour="media-music">
-                  <label className="button like full secondary-action">
-                    {selectedScene.musicName || 'Importer une musique'}
-                    <input type="file" accept="audio/*" hidden onChange={(event) => handleUpload(event, (data, name) => patchProject((draft) => {
+                  <MediaSourcePicker
+                    className="button like full secondary-action"
+                    accept="audio/*"
+                    assetScope="scene-music"
+                    handleUpload={handleUpload}
+                    mediaLibrary={mediaLibrary}
+                    onSelect={(data, name) => patchProject((draft) => {
                       const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
-                      if (scene) {
-                        scene.musicData = data;
-                        scene.musicName = name;
-                        if (typeof scene.musicLoop !== 'boolean') scene.musicLoop = true;
-                      }
-                    }))} />
-                  </label>
-                  {selectedScene.musicData ? (
+                      setSceneMusicAsset(scene, data, name, draft);
+                    })}
+                  >
+                    {selectedScene.musicName || 'Importer une musique'}
+                  </MediaSourcePicker>
+                  {selectedMusicUrl ? (
                     <>
-                      <audio controls preload="metadata" src={selectedScene.musicData} />
+                      <audio controls preload="metadata" src={selectedMusicUrl} />
                       <div className="music-compact-actions">
                         <label className="checkbox-row">
                           <input
@@ -264,17 +289,13 @@ export default function MediaTab({
                               if (scene) scene.musicLoop = event.target.checked;
                             })}
                           />
-                          Boucle
+                          Bouclé
                         </label>
                         <button type="button" className="danger-button" onClick={() => {
-                          if (!window.confirm('Supprimer la musique de cette scène ?')) return;
+                          if (!window.confirm('Supprimer la musique de cette scene ?')) return;
                           patchProject((draft) => {
-                          const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
-                          if (scene) {
-                            scene.musicData = '';
-                            scene.musicName = '';
-                            scene.musicLoop = true;
-                          }
+                            const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
+                            clearSceneMusicAsset(scene, draft);
                           });
                         }}>
                           Supprimer
@@ -288,20 +309,22 @@ export default function MediaTab({
               <div className="subpanel media-audio-panel">
                 <div className="subpanel-head"><h3>Son secondaire</h3></div>
                 <div className="music-compact-row media-audio-card">
-                  <label className="button like full secondary-action">
-                    {selectedScene.ambientSoundName || 'Importer un son'}
-                    <input type="file" accept="audio/*" hidden onChange={(event) => handleUpload(event, (data, name) => patchProject((draft) => {
+                  <MediaSourcePicker
+                    className="button like full secondary-action"
+                    accept="audio/*"
+                    assetScope="scene-ambient"
+                    handleUpload={handleUpload}
+                    mediaLibrary={mediaLibrary}
+                    onSelect={(data, name) => patchProject((draft) => {
                       const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
-                      if (scene) {
-                        scene.ambientSoundData = data;
-                        scene.ambientSoundName = name;
-                        if (typeof scene.ambientSoundLoop !== 'boolean') scene.ambientSoundLoop = false;
-                      }
-                    }))} />
-                  </label>
-                  {selectedScene.ambientSoundData ? (
+                      setSceneAmbientSoundAsset(scene, data, name, draft);
+                    })}
+                  >
+                    {selectedScene.ambientSoundName || 'Importer un son'}
+                  </MediaSourcePicker>
+                  {selectedAmbientSoundUrl ? (
                     <>
-                      <audio controls preload="metadata" src={selectedScene.ambientSoundData} />
+                      <audio controls preload="metadata" src={selectedAmbientSoundUrl} />
                       <div className="music-compact-actions">
                         <label className="checkbox-row">
                           <input
@@ -312,17 +335,13 @@ export default function MediaTab({
                               if (scene) scene.ambientSoundLoop = event.target.checked;
                             })}
                           />
-                          Boucle
+                          Bouclé
                         </label>
                         <button type="button" className="danger-button" onClick={() => {
                           if (!window.confirm('Supprimer le son secondaire de cette scene ?')) return;
                           patchProject((draft) => {
                             const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
-                            if (scene) {
-                              scene.ambientSoundData = '';
-                              scene.ambientSoundName = '';
-                              scene.ambientSoundLoop = false;
-                            }
+                            clearSceneAmbientSoundAsset(scene, draft);
                           });
                         }}>
                           Supprimer
@@ -363,7 +382,7 @@ export default function MediaTab({
                     />
                   </div>
                   <div>
-                    <HelpLabel help="Action declenchee quand le temps arrive a zero.">Fin du temps</HelpLabel>
+                    <HelpLabel help="Action déclénchée quand le temps arrive a zéro.">Fin du temps</HelpLabel>
                     <select
                       value={selectedTimerAction}
                       disabled={!selectedScene.timerEnabled}
@@ -379,7 +398,7 @@ export default function MediaTab({
                   </div>
                   {selectedTimerAction === 'scene' || selectedTimerAction === 'damage-life' ? (
                     <div>
-                      <HelpLabel help="Scene ouverte a la fin du temps, ou quand les vies tombent a zero.">Scene cible</HelpLabel>
+                      <HelpLabel help="Scene ouverte à la fin du temps, ou quand les vies tombent a zéro.">Scene cible</HelpLabel>
                       <select
                         value={selectedScene.timerTargetSceneId || ''}
                         disabled={!selectedScene.timerEnabled}
@@ -397,7 +416,7 @@ export default function MediaTab({
                   ) : null}
                   {selectedTimerAction === 'cinematic' ? (
                     <div>
-                      <HelpLabel help="Cinematique lancee automatiquement quand le temps arrive a zero.">Cinematique cible</HelpLabel>
+                      <HelpLabel help="Cinematic lancee automatiquement quand le temps arrive a zéro.">Cinematic cible</HelpLabel>
                       <select
                         value={selectedScene.timerTargetCinematicId || ''}
                         disabled={!selectedScene.timerEnabled}
@@ -415,7 +434,7 @@ export default function MediaTab({
                   ) : null}
                   {selectedTimerAction === 'damage-life' ? (
                     <div>
-                      <HelpLabel help="Nombre de vies perdues quand le temps expire. Le joueur commence avec 3 vies dans l'apercu.">Vies perdues</HelpLabel>
+                      <HelpLabel help="Nombre de vies perdues quand le temps expire. Le joueur commence avec 3 vies dans l'aperçu.">Vies perdues</HelpLabel>
                       <input
                         type="number"
                         min="1"
@@ -430,7 +449,7 @@ export default function MediaTab({
                     </div>
                   ) : null}
                   <div className="media-timer-message-field">
-                    <HelpLabel help="Texte affiche si l'action de fin a besoin d'un message.">Message de fin</HelpLabel>
+                    <HelpLabel help="Texte affiché si l'action de fin a besoin d'un message.">Message de fin</HelpLabel>
                     <input
                       value={selectedScene.timerEndMessage || ''}
                       disabled={!selectedScene.timerEnabled}
@@ -473,12 +492,12 @@ export default function MediaTab({
               </div>
             </div>
 
-            <div className="subpanel media-preview-panel">
-              <div className="subpanel-head"><h3>Apercu de la scene</h3></div>
+              <div className="subpanel media-preview-panel">
+              <div className="subpanel-head"><h3>Aperçu de la scene</h3></div>
               <div className="editor-canvas editor-canvas-pro media-scene-preview" data-tour="media-preview" style={{ aspectRatio: sceneAspectRatio }}>
-                {selectedScene.backgroundData ? (
-                  <img loading="eager" decoding="async" fetchPriority="high" src={selectedScene.backgroundData} alt="fond" onLoad={(event) => rememberSceneBackgroundAspectRatio(event.currentTarget)} />
-                ) : <div className="placeholder">Ajoute une image dans Media</div>}
+                {selectedBackgroundUrl ? (
+                  <img loading="eager" decoding="async" fetchPriority="high" src={selectedBackgroundUrl} alt="fond" onLoad={(event) => rememberSceneBackgroundAspectRatio(event.currentTarget)} />
+                ) : <div className="placeholder">Ajoute une image dans Média</div>}
                 <SceneVisualEffect effect={selectedScene.visualEffect} intensity={selectedScene.visualEffectIntensity} />
                 {(selectedScene.visualEffectZones || []).filter((zone) => !zone.isHidden).map((zone) => (
                   <SceneVisualEffect
@@ -518,17 +537,18 @@ export default function MediaTab({
                     className={`scene-transition-demo scene-transition-demo--${selectedTransition}`}
                     style={{ '--scene-transition-duration': `${selectedTransitionDuration}ms` }}
                   >
-                    {selectedScene.backgroundData ? (
-                      <img loading="lazy" decoding="async" src={selectedScene.backgroundData} alt="" />
+                    {selectedBackgroundUrl ? (
+                      <img loading="lazy" decoding="async" src={selectedBackgroundUrl} alt="" />
                     ) : <div className="placeholder">Scene de depart</div>}
-                    {transitionPreviewTarget.backgroundData ? (
-                      <img loading="lazy" decoding="async" src={transitionPreviewTarget.backgroundData} alt="" />
-                    ) : <div className="placeholder">Scene d'arrivee</div>}
+                    {transitionPreviewTargetBackgroundUrl ? (
+                      <img loading="lazy" decoding="async" src={transitionPreviewTargetBackgroundUrl} alt="" />
+                    ) : <div className="placeholder">Scene d'arrivée</div>}
                   </div>
                 ) : null}
               </div>
+              </div>
             </div>
-          </div>
+          </>
         ) : <div className="empty-state-inline">Cree une scene pour gerer ses medias.</div>}
       </section>
     </div>

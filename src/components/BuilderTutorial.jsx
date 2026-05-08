@@ -70,8 +70,8 @@ export default function BuilderTutorial({ step, stepNumber, totalSteps, canPrevi
           width: (focusRect.right - focusRect.left) + 16,
           height: (focusRect.bottom - focusRect.top) + 16,
         });
-        if (step.completeWhen?.type === 'input-min') {
-          const field = getTutorialInputField(step.completeWhen.selector);
+        if (step.completedWhen?.type === 'input-min') {
+          const field = getTutorialInputField(step.completedWhen.selector);
           if (field instanceof HTMLElement) {
             field.focus({ preventScroll: true });
             if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
@@ -112,7 +112,7 @@ export default function BuilderTutorial({ step, stepNumber, totalSteps, canPrevi
         event.preventDefault();
         event.stopPropagation();
       }
-      if (step.completeWhen?.type === 'fake-file') {
+      if (step.completedWhen?.type === 'fake-file') {
         event.preventDefault();
         event.stopPropagation();
         setIsFakeWindowOpen(true);
@@ -122,7 +122,7 @@ export default function BuilderTutorial({ step, stepNumber, totalSteps, canPrevi
         next.add(step.selector);
         return next;
       });
-      if (step.completeWhen?.type === 'interact') {
+      if (step.completedWhen?.type === 'interact') {
         window.setTimeout(onNext, 140);
       }
     };
@@ -140,8 +140,8 @@ export default function BuilderTutorial({ step, stepNumber, totalSteps, canPrevi
     };
 
     const handleEnterToContinue = (event) => {
-      if (event.key !== 'Enter' || step.completeWhen?.type !== 'input-min') return;
-      const field = getTutorialInputField(step.completeWhen.selector);
+      if (event.key !== 'Enter' || step.completedWhen?.type !== 'input-min') return;
+      const field = getTutorialInputField(step.completedWhen.selector);
       if (!(field instanceof HTMLElement) || event.target !== field) return;
       const isCompleteNow = isTutorialStepComplete(step, interactedSteps, project);
       setIsStepComplete(isCompleteNow);
@@ -196,16 +196,16 @@ export default function BuilderTutorial({ step, stepNumber, totalSteps, canPrevi
   if (!step) return null;
 
   const margin = 14;
-  const isWritingStep = step.completeWhen?.type === 'input-min';
+  const isWritingStep = step.completedWhen?.type === 'input-min';
   const bubbleWidth = Math.min(isWritingStep ? 320 : 340, Math.max(260, window.innerWidth - 24));
   const isLastStep = stepNumber === totalSteps;
-  const resultSelector = step.completeWhen?.selector;
-  const currentResult = step.completeWhen?.type === 'input-min' ? getTutorialInputValue(resultSelector).trim() : '';
-  const showFakeWindow = step.completeWhen?.type === 'fake-file' && isFakeWindowOpen;
+  const resultSelector = step.completedWhen?.selector;
+  const currentResult = step.completedWhen?.type === 'input-min' ? getTutorialInputValue(resultSelector).trim() : '';
+  const showFakeWindow = step.completedWhen?.type === 'fake-file' && isFakeWindowOpen;
   const isTabTarget = String(step.selector || '').includes('data-tour-tab');
   const isSceneCanvasTarget = step.selector === '[data-tour="scene-canvas"]';
   const isMapBoardTarget = step.selector === '[data-tour="map-board"]';
-  const estimatedBubbleHeight = step.completeWhen?.type === 'fake-file'
+  const estimatedBubbleHeight = step.completedWhen?.type === 'fake-file'
     ? (showFakeWindow ? 620 : 430)
     : isWritingStep
       ? 360
@@ -213,7 +213,7 @@ export default function BuilderTutorial({ step, stepNumber, totalSteps, canPrevi
   const measuredHeight = bubbleSize.height && bubbleSize.height < window.innerHeight - 80
     ? bubbleSize.height
     : estimatedBubbleHeight;
-  const minimumPlacementHeight = step.completeWhen?.type === 'fake-file'
+  const minimumPlacementHeight = step.completedWhen?.type === 'fake-file'
     ? (showFakeWindow ? 560 : 420)
     : 360;
   const bubbleHeight = Math.min(Math.max(measuredHeight || estimatedBubbleHeight, minimumPlacementHeight), window.innerHeight - 24);
@@ -363,21 +363,21 @@ export default function BuilderTutorial({ step, stepNumber, totalSteps, canPrevi
         ) : null}
         {isStepComplete && currentResult ? (
           <div className="tutorial-result-box">
-            <span>Resultat</span>
+            <span>Result</span>
             <strong>{currentResult}</strong>
           </div>
         ) : null}
-        {step.completeWhen?.type === 'fake-file' && !isFakeWindowOpen ? (
-          <p className="tutorial-click-hint">Clique sur le bouton importeÌ en surbrillance. La fausse fenÃªtre sâ€™ouvrira ensuite.</p>
+        {step.completedWhen?.type === 'fake-file' && !isFakeWindowOpen ? (
+          <p className="tutorial-click-hint">Clique sur le bouton importé en surbrillance. La fausse fenêtre s’ouvrira ensuite.</p>
         ) : null}
         {showFakeWindow ? (
-          <div className="fake-windows-picker" role="group" aria-label="Fausse fenetre Windows">
+          <div className="fake-windows-picker" role="group" aria-label="Fausse fenêtre Windows">
             <div className="fake-windows-titlebar">
-              <span>{step.completeWhen?.target === 'scene-music' ? 'Choisir une musique' : 'Choisir une image'}</span>
-              <span aria-hidden="true">_ â–¡ Ã—</span>
+              <span>{step.completedWhen?.target === 'scene-music' ? 'Choisir une musique' : 'Choisir une image'}</span>
+              <span aria-hidden="true">_ □ ×</span>
             </div>
             <div className="fake-windows-path">
-              {step.completeWhen?.target === 'scene-music' ? 'Ce PC > Musique > Exemples' : 'Ce PC > Images > Exemples'}
+              {step.completedWhen?.target === 'scene-music' ? 'Ce PC > Musique > Exemples' : 'Ce PC > Images > Exemples'}
             </div>
             <div className="fake-windows-files">
               {(fakeFileOptions?.length ? fakeFileOptions : getFakeWindowImageOptions()).map((file) => (
@@ -395,12 +395,12 @@ export default function BuilderTutorial({ step, stepNumber, totalSteps, canPrevi
                     onFakeFileChosen?.({
                       name: file.name,
                       dataUrl: file.dataUrl || makeTutorialImageDataUrl(file.label, file.color),
-                      target: step.completeWhen?.target || 'object',
+                      target: step.completedWhen?.target || 'object',
                     });
                   }}
                 >
                   <img
-                    src={step.completeWhen?.target === 'scene-music' ? makeTutorialFileIconDataUrl('Audio', '#0f766e') : (file.dataUrl || makeTutorialImageDataUrl(file.label, file.color))}
+                    src={step.completedWhen?.target === 'scene-music' ? makeTutorialFileIconDataUrl('Audio', '#0f766e') : (file.dataUrl || makeTutorialImageDataUrl(file.label, file.color))}
                     alt=""
                   />
                   <span>{file.name}</span>

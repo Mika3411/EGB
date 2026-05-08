@@ -18,6 +18,20 @@ function MenuItem({ children, shortcut = '', onClick, disabled = false, active =
   );
 }
 
+function SubMenuItem({ label, children }) {
+  return (
+    <div className="editor-submenu-item">
+      <button type="button" className="editor-menu-item editor-submenu-trigger">
+        <span>{label}</span>
+        <kbd>›</kbd>
+      </button>
+      <div className="editor-submenu-popover">
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export function HelpLabel({ children, help }) {
   return (
     <label className="label-with-help">
@@ -53,6 +67,7 @@ export function EditorToolbarMenus({
   addSceneObject,
   addAnimationObject,
   addInvisibleSceneObject,
+  addInteractiveBlock,
   addVisualEffectZone,
 }) {
   const menuBarRef = useRef(null);
@@ -96,12 +111,12 @@ export function EditorToolbarMenus({
   };
 
   return (
-    <nav ref={menuBarRef} className="editor-menu-bar" aria-label="Menus de l'éditeur de scène">
+    <nav ref={menuBarRef} className="editor-menu-bar" aria-label="Menus de l'éditeur de scene">
       <details className="editor-menu" data-tour="scene-toolbar-add" onToggle={closeSiblingMenus}>
         <summary>Fichier</summary>
         <div className="editor-menu-popover">
           <MenuItem onClick={() => previewScene?.(selectedSceneId)}>Prévisualiser</MenuItem>
-          <MenuItem danger onClick={() => deleteScene(selectedSceneId)}>Supprimer la scène</MenuItem>
+          <MenuItem danger onClick={() => deleteScene(selectedSceneId)}>Supprimer la scene</MenuItem>
           {fullscreen ? <MenuItem shortcut="Esc" onClick={closeEditorFullscreen}>Fermer le plein écran</MenuItem> : null}
         </div>
       </details>
@@ -112,8 +127,8 @@ export function EditorToolbarMenus({
           <MenuItem shortcut="Ctrl+Z" onClick={undoProjectChange} disabled={!canUndoProjectChange}>Annuler</MenuItem>
           <MenuItem shortcut="Ctrl+Y" onClick={redoProjectChange} disabled={!canRedoProjectChange}>Rétablir</MenuItem>
           <MenuItem shortcut="Ctrl+D" disabled={!activeSelectionCount} onClick={duplicateSelectedEditorItems}>Dupliquer</MenuItem>
-          <MenuItem shortcut="M" active={multiSelectEnabled} onClick={() => setMultiSelectEnabled((value) => !value)}>Sélection multiple</MenuItem>
-          <MenuItem shortcut="Suppr" danger disabled={!activeSelectionCount} onClick={deleteSelectedEditorItems}>Supprimer la sélection</MenuItem>
+          <MenuItem shortcut="M" active={multiSelectEnabled} onClick={() => setMultiSelectEnabled((value) => !value)}>Selection multiple</MenuItem>
+          <MenuItem shortcut="Suppr" danger disabled={!activeSelectionCount} onClick={deleteSelectedEditorItems}>Supprimer la selection</MenuItem>
           <MenuItem disabled={activeSelectionCount < 2} onClick={() => alignSelectedEditorItems('left')}>Aligner à gauche</MenuItem>
           <MenuItem disabled={activeSelectionCount < 2} onClick={() => alignSelectedEditorItems('center')}>Aligner au centre</MenuItem>
           <MenuItem disabled={activeSelectionCount < 2} onClick={() => alignSelectedEditorItems('right')}>Aligner à droite</MenuItem>
@@ -135,8 +150,8 @@ export function EditorToolbarMenus({
           <div className="editor-menu-popover">
             <MenuItem shortcut="-" onClick={() => setFullscreenZoom((value) => clampFullscreenZoom(value - 0.1))}>Zoom -</MenuItem>
             <MenuItem shortcut="+" onClick={() => setFullscreenZoom((value) => clampFullscreenZoom(value + 0.1))}>Zoom +</MenuItem>
-            <MenuItem onClick={resetFullscreenView}>Reinitialiser la vue</MenuItem>
-            <MenuItem shortcut="G" active={snapGridEnabled} onClick={() => setSnapGridEnabled((value) => !value)}>Grille magnetique</MenuItem>
+            <MenuItem onClick={resetFullscreenView}>Réinitialiser la vue</MenuItem>
+            <MenuItem shortcut="G" active={snapGridEnabled} onClick={() => setSnapGridEnabled((value) => !value)}>Grille magnétique</MenuItem>
           </div>
         </details>
       )}
@@ -147,6 +162,14 @@ export function EditorToolbarMenus({
         <div className="editor-menu-popover">
           <MenuItem tour="scene-add-hotspot" onClick={addHotspot}>Zone d'action</MenuItem>
           <MenuItem tour="scene-add-visible-object" onClick={addSceneObject}>Objet visible</MenuItem>
+          <SubMenuItem label="Bloc">
+            <MenuItem onClick={() => addInteractiveBlock?.('text')}>Texte</MenuItem>
+            <MenuItem onClick={() => addInteractiveBlock?.('image')}>Image</MenuItem>
+            <MenuItem onClick={() => addInteractiveBlock?.('button')}>Bouton</MenuItem>
+            <MenuItem onClick={() => addInteractiveBlock?.('input')}>Champ de saisie</MenuItem>
+            <MenuItem onClick={() => addInteractiveBlock?.('code')}>Code</MenuItem>
+            <MenuItem onClick={() => addInteractiveBlock?.('hint')}>Indice</MenuItem>
+          </SubMenuItem>
           <MenuItem onClick={addAnimationObject}>Animation</MenuItem>
           <MenuItem onClick={addInvisibleSceneObject}>Objet invisible</MenuItem>
           <MenuItem tour="scene-add-visual-zone" onClick={addVisualEffectZone}>Zone visuelle</MenuItem>
@@ -179,14 +202,14 @@ export function MiniMap({
     );
   }
   return (
-    <div className="editor-minimap" aria-label="Mini-map de la scène">
+    <div className="editor-minimap" aria-label="Mini-map de la scene">
       <button
         type="button"
         className="editor-minimap-collapse"
         aria-label="Réduire la mini-map"
         onClick={() => setIsCollapsed?.(true)}
       >
-        –
+        -
       </button>
       <div className="editor-minimap-stage">
         {selectedScene.backgroundData ? <img src={selectedScene.backgroundData} alt="" /> : null}
@@ -284,7 +307,7 @@ export function LayersPanel({
               <button type="button" title="Verrouiller / déverrouiller" onClick={() => patchLayerItem(layer.type, layer.entry.id, (item) => { item.isLocked = !item.isLocked; })}>
                 {layer.entry.isLocked ? 'Verrouillé' : 'Libre'}
               </button>
-              <button type="button" title="Reculer" onClick={() => nudgeLayerZIndex(layer.type, layer.entry.id, -1)}>−</button>
+              <button type="button" title="Reculer" onClick={() => nudgeLayerZIndex(layer.type, layer.entry.id, -1)}>-</button>
               <button type="button" title="Avancer" onClick={() => nudgeLayerZIndex(layer.type, layer.entry.id, 1)}>+</button>
               <button type="button" title="Tout devant" onClick={() => sendLayerToEdge(layer.type, layer.entry.id, 'front')}>Haut</button>
               <button type="button" title="Tout derrière" onClick={() => sendLayerToEdge(layer.type, layer.entry.id, 'back')}>Bas</button>

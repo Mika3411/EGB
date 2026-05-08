@@ -1,13 +1,16 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { makeLogicRule } from '../data/projectData';
-import { getSceneObjectClickMode } from './scenes/SceneObjectInspector.jsx';
+import { resolveAssetUrl } from '../lib/assetManager';
+import { getSceneObjectBlockType, getSceneObjectClickMode } from './scenes/SceneObjectInspector.jsx';
+import MediaSourcePicker from './MediaSourcePicker.jsx';
 
 const ACTION_LABELS = {
   default: 'Action normale de la zone',
   dialogue: 'Dialogue',
   dialogue_item: 'Dialogue + objet',
-  scene: 'Changer de scène',
-  cinematic: 'Lancer une cinématique',
+  scene: 'Changer de scene',
+  cinematic: 'Lancer une cinematic',
+  block: 'Agir sur un bloc',
 };
 
 const OBJECT_MODES = {
@@ -17,48 +20,59 @@ const OBJECT_MODES = {
 };
 
 const CONDITION_LABELS = {
+  always: 'Quand cette zone ou ce bloc est utilisé',
   has_item: 'Si le joueur possède l’objet',
   missing_item: 'Si le joueur ne possède pas l’objet',
-  completed_hotspot: 'Si une zone d’action ou image-zone est franchie entièrement',
-  solved_enigma: 'Si une énigme est réussie',
-  launched_cinematic: 'Si une cinématique est lancée',
+  completed_hotspot: 'Si une zone ou un bloc est franchi entièrement',
+  solved_enigma: 'Si une enigme est réussie',
+  launched_cinematic: 'Si une cinematic est lancée',
   completed_combination: 'Si une combinaison est réalisée',
   second_click: 'En cas de deuxième clic sur cette zone',
 };
 
 const FIELD_HELP = {
-  sceneTree: "Choisis la scène dont tu veux régler les conditions. Les règles affichées à droite ne concernent que cette scène.",
-  actionZones: "Zones cliquables de la scène sélectionnée, y compris les objets visibles réglés en Zone d'action. Une règle conditionnelle peut remplacer leur action normale selon l’état de la partie.",
+  sceneTree: "Choisis la scene dont tu veux régler les conditions. Les règles affichées à droite ne concernent que cette scene.",
+  actionZones: "Zones cliquables de la scene selectionnée, y compris les objets visibles réglés en Zone d'action. Une règle conditionnelle peut remplacer leur action normale selon l’état de la partie.",
   addRule: "Ajoute une condition spéciale sur cette zone. La règle s’active seulement si sa condition est vraie pendant la partie.",
-  visibleObjects: "Objets placés directement dans l’image de la scène. Leur comportement peut être réglé ici sans passer par les zones d’action.",
+  visibleObjects: "Objets placés directement dans l’image de la scene. Leur comportement peut être réglé ici sans passer par les zones d’action.",
   consumeRequiredItem: "Retire l’objet testé de l’inventaire après activation. Utile pour une clé utilisée une seule fois, un ticket donné, une pile consommée.",
   disableRuleAfterUse: "Désactive cette règle après sa première activation. Utile pour ouvrir une porte une fois, puis laisser la zone suivre sa logique normale même si l’objet a été consommé.",
-  removeVisibleObject: "Cache l’objet dans la scène après son utilisation. Pratique pour un objet ramassé ou un élément qui disparaît.",
+  removeVisibleObject: "Cache l’objet dans la scene après son utilisation. Pratique pour un objet ramassé ou un élément qui disparaît.",
 };
+
+const getBlockTargets = (project) => (project.scenes || []).flatMap((scene) => (
+  (scene.sceneObjects || [])
+    .filter((object) => getSceneObjectBlockType(object) !== 'object')
+    .map((target) => ({ scene, target }))
+));
 
 const getRuleSummary = (rule, project) => {
   const testedItem = project.items?.find((item) => item.id === rule.itemId);
   const testedHotspot = (project.scenes || []).flatMap((scene) => [
     ...(scene.hotspots || []),
-    ...(scene.sceneObjects || []).filter((object) => getSceneObjectClickMode(object) === 'action'),
+    ...(scene.sceneObjects || []),
   ]).find((hotspot) => hotspot.id === rule.hotspotId);
+  const testedBlock = getBlockTargets(project).find((entry) => entry.target.id === rule.targetBlockId);
   const testedEnigma = project.enigmas?.find((enigma) => enigma.id === rule.conditionEnigmaId);
   const testedCinematic = project.cinematics?.find((cinematic) => cinematic.id === rule.cinematicId);
   const testedCombination = project.combinations?.find((combo) => combo.id === rule.combinationId);
   const rewardItem = project.items?.find((item) => item.id === rule.rewardItemId);
   let condition = {
+    always: 'À l’utilisation',
     missing_item: `Sans ${testedItem?.name || 'objet'}`,
     completed_hotspot: `Zone franchie: ${testedHotspot?.name || 'zone'}`,
-    solved_enigma: `Énigme réussie: ${testedEnigma?.name || 'énigme'}`,
-    launched_cinematic: `Cinématique lancée: ${testedCinematic?.name || 'cinématique'}`,
+    solved_enigma: `Enigme réussie: ${testedEnigma?.name || 'enigme'}`,
+    launched_cinematic: `Cinematic lancée: ${testedCinematic?.name || 'cinematic'}`,
     completed_combination: `Combinaison réalisée: ${testedCombination?.message || 'combinaison'}`,
     second_click: 'Deuxième clic',
   }[rule.conditionType] || `Avec ${testedItem?.name || 'objet'}`;
   if (rule.conditionType === 'launched_cinematic' && !rule.cinematicId) {
-    condition = 'Une cinématique est lancée';
+    condition = 'Une cinematic est lancée';
   }
-  const action = ACTION_LABELS[rule.actionType] || 'Dialogue';
-  const reward = rewardItem ? ` · donne ${rewardItem.name}` : '';
+  const action = rule.actionType === 'block'
+    ? `${ACTION_LABELS.block}: ${testedBlock?.target.name || 'bloc'}`
+    : ACTION_LABELS[rule.actionType] || 'Dialogue';
+  const reward = rewardItem ? ` · donné ${rewardItem.name}` : '';
   return `${condition} · ${action}${reward}`;
 };
 
@@ -69,7 +83,16 @@ const HelpLabel = ({ children, help, className = '' }) => (
   </label>
 );
 
-export default function LogicTab({ project, patchProject, handleUpload, getSceneLabel, selectedSceneId: editorSelectedSceneId = '' }) {
+export default function LogicTab({
+  project,
+  patchProject,
+  handleUpload,
+  mediaLibrary = [],
+  getSceneLabel,
+  selectedSceneId: editorSelectedSceneId = '',
+  collapsedSceneIds = new Set(),
+  setSceneCollapsed,
+}) {
   const scenes = project.scenes || [];
   const acts = project.acts || [];
   const [selectedSceneId, setSelectedSceneId] = useState(editorSelectedSceneId || scenes[0]?.id || '');
@@ -86,11 +109,10 @@ export default function LogicTab({ project, patchProject, handleUpload, getScene
   );
   const getSceneActionTargets = (scene) => [
     ...(scene.hotspots || []).map((hotspot) => ({ scene, target: hotspot, type: 'hotspot' })),
-    ...(scene.sceneObjects || [])
-      .filter((object) => getSceneObjectClickMode(object) === 'action')
-      .map((object) => ({ scene, target: object, type: 'sceneObject' })),
+    ...(scene.sceneObjects || []).map((object) => ({ scene, target: object, type: 'sceneObject' })),
   ];
   const allActionTargets = useMemo(() => scenes.flatMap((scene) => getSceneActionTargets(scene)), [scenes]);
+  const allBlockTargets = useMemo(() => getBlockTargets(project), [project]);
 
   const totalRules = scenes.reduce((count, scene) => (
     count + getSceneActionTargets(scene).reduce((sceneCount, { target }) => sceneCount + (target.logicRules || []).length, 0)
@@ -140,8 +162,15 @@ export default function LogicTab({ project, patchProject, handleUpload, getScene
     updateRule(targetId, targetType, ruleId, (draftRule) => {
       draftRule[`${kind}SoundData`] = '';
       draftRule[`${kind}SoundName`] = '';
+      draftRule[`${kind}SoundId`] = '';
     });
   };
+
+  const getRuleSoundUrl = (rule, kind) => resolveAssetUrl(
+    project,
+    rule?.[`${kind}SoundId`],
+    rule?.[`${kind}SoundData`],
+  );
 
   const updateSceneObject = (objectId, updater) => {
     updateScene((scene) => {
@@ -157,8 +186,14 @@ export default function LogicTab({ project, patchProject, handleUpload, getScene
       {sceneList.map((scene) => {
         const children = scenes.filter((candidate) => candidate.parentSceneId === scene.id && candidate.actId === scene.actId);
         const hasChildren = children.length > 0;
+        const collapsed = collapsedSceneIds.has(scene.id);
         return (
-          <details key={scene.id} className={`scene-tree-node ${hasChildren ? 'has-children' : ''}`} open>
+          <details
+            key={scene.id}
+            className={`scene-tree-node ${hasChildren ? 'has-children' : ''}`}
+            open={!collapsed}
+            onToggle={(event) => setSceneCollapsed?.(scene.id, !event.currentTarget.open)}
+          >
             <summary className={`scene-summary ${scene.id === selectedScene?.id ? 'selected' : ''}`} style={{ '--scene-depth': depth }}>
               {hasChildren ? <span className="scene-collapse-button">▾</span> : <span className="scene-collapse-spacer" />}
               <button type="button" className="scene-select-button" onClick={(event) => {
@@ -182,10 +217,10 @@ export default function LogicTab({ project, patchProject, handleUpload, getScene
     <div className="layout two-cols-wide">
       <section className="panel side" data-tour="logic-scene-tree">
         <div className="panel-head">
-          <h2>Actes et scènes</h2>
+          <h2>Actes et scenes</h2>
           <span className="status-badge soft">{totalRules} règle{totalRules > 1 ? 's' : ''}</span>
         </div>
-        <HelpLabel help={FIELD_HELP.sceneTree}>Scène à configurer</HelpLabel>
+        <HelpLabel help={FIELD_HELP.sceneTree}>Scene à configurer</HelpLabel>
 
         {acts.map((act) => {
           const actScenes = scenes.filter((scene) => scene.actId === act.id);
@@ -193,7 +228,7 @@ export default function LogicTab({ project, patchProject, handleUpload, getScene
             <div className="act-group" key={act.id}>
               <div className="act-heading">
                 <strong>{act.name}</strong>
-                <span>{actScenes.length} scène{actScenes.length > 1 ? 's' : ''}</span>
+                <span>{actScenes.length} scene{actScenes.length > 1 ? 's' : ''}</span>
               </div>
               {renderSceneTree(actScenes.filter((scene) => !scene.parentSceneId))}
             </div>
@@ -205,7 +240,7 @@ export default function LogicTab({ project, patchProject, handleUpload, getScene
         <div className="panel-head">
           <div>
             <span className="section-kicker">Logique</span>
-            <h2>{selectedScene?.name || 'Aucune scène'}</h2>
+            <h2>{selectedScene?.name || 'Aucune scene'}</h2>
           </div>
         </div>
 
@@ -290,11 +325,11 @@ export default function LogicTab({ project, patchProject, handleUpload, getScene
 
                       {rule.conditionType === 'solved_enigma' ? (
                         <>
-                          <HelpLabel help="Énigme qui doit avoir été réussie pendant la partie.">Énigme réussie</HelpLabel>
+                          <HelpLabel help="Enigme qui doit avoir été réussie pendant la partie.">Enigme réussie</HelpLabel>
                           <select value={rule.conditionEnigmaId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                             draftRule.conditionEnigmaId = event.target.value;
                           })}>
-                            <option value="">Choisir une énigme</option>
+                            <option value="">Choisir une enigme</option>
                             {(project.enigmas || []).map((enigma) => <option key={enigma.id} value={enigma.id}>{enigma.name}</option>)}
                           </select>
                         </>
@@ -302,11 +337,11 @@ export default function LogicTab({ project, patchProject, handleUpload, getScene
 
                       {rule.conditionType === 'launched_cinematic' ? (
                         <>
-                          <HelpLabel help="Cinématique qui doit avoir été lancée au moins une fois pendant la partie.">Cinématique lancée</HelpLabel>
+                          <HelpLabel help="Cinematic qui doit avoir été lancée au moins une fois pendant la partie.">Cinematic lancée</HelpLabel>
                           <select value={rule.cinematicId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                             draftRule.cinematicId = event.target.value;
                           })}>
-                            <option value="">N’importe quelle cinématique lancée</option>
+                            <option value="">N’importe quelle cinematic lancée</option>
                             {(project.cinematics || []).map((cinematic) => <option key={cinematic.id} value={cinematic.id}>{cinematic.name}</option>)}
                           </select>
                         </>
@@ -323,7 +358,7 @@ export default function LogicTab({ project, patchProject, handleUpload, getScene
                               const itemA = project.items.find((item) => item.id === combo.itemAId);
                               const itemB = project.items.find((item) => item.id === combo.itemBId);
                               const result = project.items.find((item) => item.id === combo.resultItemId);
-                              return <option key={combo.id} value={combo.id}>{itemA?.name || 'Objet 1'} + {itemB?.name || 'Objet 2'} → {result?.name || 'Résultat'}</option>;
+                              return <option key={combo.id} value={combo.id}>{itemA?.name || 'Objet 1'} + {itemB?.name || 'Objet 2'} → {result?.name || 'Result'}</option>;
                             })}
                           </select>
                         </>
@@ -331,7 +366,7 @@ export default function LogicTab({ project, patchProject, handleUpload, getScene
 
                       <div className="grid-two">
                         <div>
-                          <HelpLabel help="Action exécutée à la place de l’action normale de la zone quand la condition est vraie.">Action déclenchée</HelpLabel>
+                          <HelpLabel help="Action exécutée à la place de l’action normale de la zone quand la condition est vraie.">Action déclénchée</HelpLabel>
                           <select data-tour="logic-action" value={rule.actionType || 'dialogue'} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                             draftRule.actionType = event.target.value;
                           })}>
@@ -339,7 +374,7 @@ export default function LogicTab({ project, patchProject, handleUpload, getScene
                           </select>
                         </div>
                         <div>
-                          <HelpLabel help="Objet ajouté à l’inventaire quand cette règle s’active. Laisse Aucun si la règle ne donne rien.">Objet donné</HelpLabel>
+                          <HelpLabel help="Objet ajouté à l’inventaire quand cette règle s’active. Laisse Aucun si la règle ne donné rien.">Objet donné</HelpLabel>
                           <select data-tour="logic-reward-item" value={rule.rewardItemId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                             draftRule.rewardItemId = event.target.value;
                           })}>
@@ -378,7 +413,7 @@ export default function LogicTab({ project, patchProject, handleUpload, getScene
                           })} />
                         </div>
                         <div>
-                          <HelpLabel help="Message affiché si cette règle ne peut pas s’activer parce que sa condition n’est pas remplie. Exemple : il manque une clé, une énigme n’est pas encore réussie, ou une cinématique n’a pas encore été lancée.">Dialogue si condition non remplie</HelpLabel>
+                          <HelpLabel help="Message affiché si cette règle ne peut pas s’activer parce que sa condition n’est pas remplie. Exemple : il manque une clé, une enigme n’est pas encore réussie, ou une cinematic n’a pas encore été lancée.">Dialogue si condition non remplie</HelpLabel>
                           <textarea value={rule.failureDialogue || ''} placeholder="Exemple : La porte reste verrouillée. Il te manque la clé." onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                             draftRule.failureDialogue = event.target.value;
                           })} />
@@ -388,32 +423,42 @@ export default function LogicTab({ project, patchProject, handleUpload, getScene
                       <div className="grid-two">
                         <div className="logic-sound-field">
                           <HelpLabel help="Son joué quand la condition est remplie et que l’action de cette règle se lance.">Son si condition réussie</HelpLabel>
-                          <label className="button like full secondary-action">
-                            {rule.successSoundName || 'Importer un son de réussite'}
-                            <input type="file" accept="audio/*" hidden onChange={(event) => handleUpload?.(event, (data, name) => updateRule(target.id, type, rule.id, (draftRule) => {
+                          <MediaSourcePicker
+                            className="button like full secondary-action"
+                            accept="audio/*"
+                            handleUpload={handleUpload}
+                            mediaLibrary={mediaLibrary}
+                            onSelect={(data, name) => updateRule(target.id, type, rule.id, (draftRule) => {
                               draftRule.successSoundData = data;
                               draftRule.successSoundName = name;
-                            }))} />
-                          </label>
-                          {rule.successSoundData ? (
+                            })}
+                          >
+                            {rule.successSoundName || 'Importer un son de réussite'}
+                          </MediaSourcePicker>
+                          {getRuleSoundUrl(rule, 'success') ? (
                             <div className="logic-sound-preview">
-                              <audio controls preload="metadata" src={rule.successSoundData} />
+                              <audio controls preload="metadata" src={getRuleSoundUrl(rule, 'success')} />
                               <button type="button" className="danger-button" onClick={() => clearRuleSound(target.id, type, rule.id, 'success')}>Supprimer</button>
                             </div>
                           ) : null}
                         </div>
                         <div className="logic-sound-field">
                           <HelpLabel help="Son joué quand cette règle est configurée mais que sa condition n’est pas remplie.">Son si condition échouée</HelpLabel>
-                          <label className="button like full secondary-action">
-                            {rule.failureSoundName || "Importer un son d'échec"}
-                            <input type="file" accept="audio/*" hidden onChange={(event) => handleUpload?.(event, (data, name) => updateRule(target.id, type, rule.id, (draftRule) => {
+                          <MediaSourcePicker
+                            className="button like full secondary-action"
+                            accept="audio/*"
+                            handleUpload={handleUpload}
+                            mediaLibrary={mediaLibrary}
+                            onSelect={(data, name) => updateRule(target.id, type, rule.id, (draftRule) => {
                               draftRule.failureSoundData = data;
                               draftRule.failureSoundName = name;
-                            }))} />
-                          </label>
-                          {rule.failureSoundData ? (
+                            })}
+                          >
+                            {rule.failureSoundName || "Importer un son d'échec"}
+                          </MediaSourcePicker>
+                          {getRuleSoundUrl(rule, 'failure') ? (
                             <div className="logic-sound-preview">
-                              <audio controls preload="metadata" src={rule.failureSoundData} />
+                              <audio controls preload="metadata" src={getRuleSoundUrl(rule, 'failure')} />
                               <button type="button" className="danger-button" onClick={() => clearRuleSound(target.id, type, rule.id, 'failure')}>Supprimer</button>
                             </div>
                           ) : null}
@@ -422,11 +467,11 @@ export default function LogicTab({ project, patchProject, handleUpload, getScene
 
                       {rule.actionType === 'scene' ? (
                         <>
-                          <HelpLabel help="Scène ouverte si l’action déclenchée est un changement de scène.">Scène cible</HelpLabel>
+                          <HelpLabel help="Scene ouverte si l’action déclénchée est un changement de scene.">Scene cible</HelpLabel>
                           <select data-tour="logic-target-scene" value={rule.targetSceneId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                             draftRule.targetSceneId = event.target.value;
                           })}>
-                            <option value="">Choisir une scène</option>
+                            <option value="">Choisir une scene</option>
                             {scenes.map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
                           </select>
                         </>
@@ -434,14 +479,47 @@ export default function LogicTab({ project, patchProject, handleUpload, getScene
 
                       {rule.actionType === 'cinematic' ? (
                         <>
-                          <HelpLabel help="Cinématique lancée si l’action déclenchée est une cinématique.">Cinématique cible</HelpLabel>
+                          <HelpLabel help="Cinematic lancée si l’action déclénchée est une cinematic.">Cinematic cible</HelpLabel>
                           <select data-tour="logic-target-cinematic" value={rule.targetCinematicId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                             draftRule.targetCinematicId = event.target.value;
                           })}>
-                            <option value="">Choisir une cinématique</option>
+                            <option value="">Choisir une cinematic</option>
                             {(project.cinematics || []).map((cinematic) => <option key={cinematic.id} value={cinematic.id}>{cinematic.name}</option>)}
                           </select>
                         </>
+                      ) : null}
+                      {rule.actionType === 'block' ? (
+                        <div className="grid-two">
+                          <div>
+                            <HelpLabel help="Bloc affiché, masque ou modifié quand cette règle réussit.">Bloc cible</HelpLabel>
+                            <select value={rule.targetBlockId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+                              draftRule.targetBlockId = event.target.value;
+                            })}>
+                              <option value="">Choisir un bloc</option>
+                              {allBlockTargets.map(({ scene, target: block }) => (
+                                <option key={block.id} value={block.id}>{getSceneLabel(scene.id)} - {block.name || block.blockLabel || 'Bloc'}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <HelpLabel help="Action appliquée au bloc cible.">Action bloc</HelpLabel>
+                            <select value={rule.blockActionType || 'show'} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+                              draftRule.blockActionType = event.target.value;
+                            })}>
+                              <option value="show">Afficher le bloc</option>
+                              <option value="hide">Masquer le bloc</option>
+                              <option value="update_text">Modifier son texte</option>
+                            </select>
+                          </div>
+                          {rule.blockActionType === 'update_text' ? (
+                            <div style={{ gridColumn: '1 / -1' }}>
+                              <HelpLabel help="Nouveau texte affiché dans le bloc cible.">Nouveau texte du bloc</HelpLabel>
+                              <textarea value={rule.targetBlockText || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+                                draftRule.targetBlockText = event.target.value;
+                              })} />
+                            </div>
+                          ) : null}
+                        </div>
                       ) : null}
                       </div>
                     </details>
@@ -459,7 +537,7 @@ export default function LogicTab({ project, patchProject, handleUpload, getScene
                 <div className="combo-card" key={object.id}>
                   <div className="grid-two">
                     <div>
-                      <HelpLabel help="Nom de l’objet visible dans cette scène. Il sert à l’identifier dans l’éditeur et peut apparaître dans certains messages.">Nom</HelpLabel>
+                      <HelpLabel help="Nom de l’objet visible dans cette scene. Il sert à l’identifier dans l’éditeur et peut apparaître dans certains messages.">Nom</HelpLabel>
                       <input value={object.name || ''} onChange={(event) => updateSceneObject(object.id, (draftObject) => {
                         draftObject.name = event.target.value;
                       })} />
@@ -492,11 +570,11 @@ export default function LogicTab({ project, patchProject, handleUpload, getScene
                     <span className="help-dot" data-help={FIELD_HELP.removeVisibleObject} aria-label={FIELD_HELP.removeVisibleObject} tabIndex={0}>?</span>
                   </label>
                 </div>
-              )) : <p className="small-note">Aucun objet visible cliquable dans cette scène.</p>}
+              )) : <p className="small-note">Aucun objet visible cliquable dans cette scene.</p>}
             </section>
           </div>
         ) : (
-          <div className="empty-state-inline">Crée d’abord une scène pour gérer sa logique.</div>
+          <div className="empty-state-inline">Crée d’abord une scene pour gérer sa logique.</div>
         )}
       </section>
     </div>

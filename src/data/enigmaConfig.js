@@ -10,7 +10,7 @@ export const COLOR_OPTIONS = [
 ];
 
 export const TYPE_LABELS = {
-  code: 'Code lettres / chiffres',
+  code: 'Code lettrès / chiffres',
   colors: 'Combinaison de couleurs',
   puzzle: 'Puzzle d’image',
   misc: 'Divers',
@@ -49,7 +49,7 @@ export const MISC_MODE_OPTIONS = [
   ['numeric-range', 'Nombre approximatif'],
   ['multi-select', 'Plusieurs bonnes réponses'],
   ['accepted-answers', 'Réponses alternatives acceptées'],
-  ['item-select', 'Objet à sélectionner'],
+  ['item-select', 'Objet à selectionner'],
   ['exact-number', 'Nombre exact'],
 ];
 
@@ -65,7 +65,7 @@ export const IMAGE_PUZZLE_LOGIC_LABELS = Object.fromEntries(IMAGE_PUZZLE_LOGIC_O
 
 export const IMAGE_CUT_STYLE_OPTIONS = [
   ['straight', 'Lignes droites'],
-  ['jigsaw', 'Pièces de puzzle'],
+  ['jigsaw', 'Pieces de puzzle'],
   ['torn', 'Papier déchiré'],
   ['crumpled', 'Papier chiffonné'],
   ['shards', 'Éclats irréguliers'],
@@ -91,7 +91,7 @@ export const COLOR_LOGIC_OPTIONS = [
   ['position-color', 'Position + couleur'],
   ['mastermind', 'Logique Mastermind'],
   ['hidden-clues', 'Indices cachés dans l’environnement'],
-  ['color-map', 'Couleurs → chiffres / lettres'],
+  ['color-map', 'Couleurs → chiffres / lettrès'],
   ['timing', 'Couleurs + timing'],
   ['mixing', 'Mélange de couleurs'],
 ];
@@ -99,31 +99,31 @@ export const COLOR_LOGIC_OPTIONS = [
 export const COLOR_LOGIC_LABELS = Object.fromEntries(COLOR_LOGIC_OPTIONS);
 
 export const FIELD_HELP = {
-  list: "Liste des énigmes du projet. Sélectionne une énigme pour modifier sa question, sa solution et ce qu’elle débloque.",
-  addEnigma: "Crée une nouvelle énigme à configurer. Elle pourra ensuite être liée à une zone d’action dans l’éditeur de scène.",
-  name: "Nom interne de l’énigme. Il sert à la retrouver dans les listes et dans les choix de zones d’action.",
+  list: "Liste des enigmes du projet. Selectionne une enigme pour modifiér sa question, sa solution et ce qu’elle débloqué.",
+  addEnigma: "Crée une nouvelle enigme à configurer. Elle pourra ensuite être liée à une zone d’action dans l’éditeur de scene.",
+  name: "Nom interne de l’enigme. Il sert à la retrouver dans les listes et dans les choix de zones d’action.",
   type: "Détermine l’interface joueur: code à saisir, combinaison de couleurs ou puzzle d’image.",
   question: "Consigne affichée au joueur. Elle doit expliquer quoi faire sans forcément donner la solution.",
-  solution: "Réponse exacte attendue pour les énigmes de code. Tu peux utiliser des chiffres, des lettres ou un mélange court.",
-  miscMode: "Détermine si l’énigme Divers attend une réponse libre ou propose plusieurs choix.",
-  miscChoices: "Liste utilisée comme choix proposés, ordre attendu, ou réponses sélectionnables selon le mode Divers.",
-  miscPairs: "Paires attendues pour une énigme d’association.",
+  solution: "Réponse exacte attendue pour les enigmes de code. Tu peux utiliser des chiffres, des lettrès ou un mélange court.",
+  miscMode: "Détermine si l’enigme Divers attend une réponse libre ou propose plusieurs choix.",
+  miscChoices: "Liste utilisée comme choix proposés, ordre attendu, ou réponses selectionnables selon le mode Divers.",
+  miscPairs: "Paires attendues pour une enigme d’association.",
   miscRange: "Plage numérique acceptée. Le nombre saisi doit être compris entre le minimum et le maximum inclus.",
-  miscTargetItem: "Objet que le joueur doit sélectionner pour valider l’énigme.",
-  popupBackground: "Image de fond affichée derrière le contenu de la pop-up joueur pour cette énigme.",
+  miscTargetItem: "Objet que le joueur doit selectionner pour valider l’enigme.",
+  popupBackground: "Image de fond affichée derrière le contenu de la pop-up joueur pour cette enigme.",
   popupBackgroundCrop: "Recadrage du fond de pop-up: zoom et position de l’image derrière la zone d’écriture.",
   popupBackgroundOverlay: "Intensité du voile sombre placé sur l’image pour garder le texte lisible.",
   codeSkin: "Apparence visuelle du code côté joueur. La solution reste la même, seule l’interface change.",
   colorLogic: "Détermine comment le joueur découvre ou vérifie la combinaison de couleurs.",
   colorSequence: "Suite de couleurs à reproduire. L’ordre est important pour les combinaisons.",
   imagePuzzleLogic: "Détermine la mécanique principale du puzzle image: zones à cliquer, révélation ou grille classique.",
-  imageCutStyle: "Détermine la forme visuelle du découpage de l’image: lignes droites, pièces de puzzle, papier déchiré, chiffonné ou fragments.",
+  imageCutStyle: "Détermine la forme visuelle du découpage de l’image: lignes droites, pieces de puzzle, papier déchiré, chiffonné ou fragments.",
   imageSource: "Image utilisée comme base pour les puzzles. Elle sera découpée pendant le jeu.",
-  gridRows: "Nombre de lignes du découpage. Plus il y en a, plus l’énigme devient difficile.",
-  gridCols: "Nombre de colonnes du découpage. Plus il y en a, plus le joueur manipule de pièces.",
-  successMessage: "Texte affiché quand le joueur réussit l’énigme. Idéal pour confirmer la découverte ou donner un nouvel indice.",
+  gridRows: "Nombre de lignes du découpage. Plus il y en a, plus l’enigme devient difficile.",
+  gridCols: "Nombre de colonnes du découpage. Plus il y en a, plus le joueur manipule de pieces.",
+  successMessage: "Texte affiché quand le joueur réussit l’enigme. Idéal pour confirmer la découverte ou donner un nouvel indice.",
   failMessage: "Texte affiché quand la réponse est incorrecte. Il peut guider le joueur sans révéler directement la solution.",
-  unlockType: "Action déclenchée après réussite: simplement valider l’énigme, ouvrir une scène ou lancer une cinématique.",
-  targetScene: "Scène rendue accessible après réussite si le déblocage choisi est un accès à une scène.",
-  targetCinematic: "Cinématique lancée après réussite si le déblocage choisi est une cinématique.",
+  unlockType: "Action déclénchée après réussite: simplement valider l’enigme, ouvrir une scene ou lancer une cinematic.",
+  targetScene: "Scene rendue accessible après réussite si le déblocage choisi est un accès à une scene.",
+  targetCinematic: "Cinematic lancée après réussite si le déblocage choisi est une cinematic.",
 };

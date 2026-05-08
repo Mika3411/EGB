@@ -3,12 +3,12 @@ import {
   calculateImageCreditCost,
   commitImageCreditUsage,
   ensureCreditAccount,
-  getCreditUserId,
   getSupabaseAdminClient,
   json,
   openaiFetch,
   parseBody,
   refundCredits,
+  resolveCreditUserId,
   spendCredits,
   withErrors,
 } from './_shared.js';
@@ -17,7 +17,7 @@ export const handler = async (event) => withErrors(event, async () => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Methode non autorisee.' });
 
   const body = parseBody(event);
-  const userId = getCreditUserId(event, body);
+  const userId = await resolveCreditUserId(event);
   const supabase = getSupabaseAdminClient();
   const accountBeforeImage = await ensureCreditAccount(supabase, userId);
   const cost = calculateImageCreditCost(accountBeforeImage, body);

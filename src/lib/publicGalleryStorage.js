@@ -77,8 +77,8 @@ const detectCategory = (project = {}, record = {}) => {
   const text = getProjectSearchText(project, record);
   const rules = [
     ['Horreur', ['horreur', 'hante', 'manoir', 'fantome', 'demon', 'cauchemar', 'sang']],
-    ['Enquete', ['enquete', 'police', 'inspecteur', 'crime', 'preuve', 'suspect', 'archives']],
-    ['Aventure', ['temple', 'tresor', 'exploration', 'jungle', 'ile', 'pirate']],
+    ['Enquête', ['enquête', 'police', 'inspecteur', 'crime', 'preuve', 'suspect', 'archives']],
+    ['Aventure', ['temple', 'trèsor', 'exploration', 'jungle', 'ile', 'pirate']],
     ['Science-fiction', ['laboratoire', 'reacteur', 'station', 'vaisseau', 'robot', 'futur']],
     ['Fantastique', ['magie', 'artefact', 'sort', 'royaume', 'musee', 'relique']],
     ['Historique', ['chateau', 'medieval', 'antique', 'histoire', 'guerre']],

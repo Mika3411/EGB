@@ -36,11 +36,11 @@ export function validateProject(rawProject) {
     if (item.id) itemIds.add(item.id);
   });
   (project.cinematics || []).forEach((cinematic) => {
-    addId(allIds, errors, cinematic.id, `Cinématique "${cinematic.name || 'sans nom'}"`);
+    addId(allIds, errors, cinematic.id, `Cinematic "${cinematic.name || 'sans nom'}"`);
     if (cinematic.id) cinematicIds.add(cinematic.id);
   });
   (project.enigmas || []).forEach((enigma) => {
-    addId(allIds, errors, enigma.id, `Énigme "${enigma.name || 'sans nom'}"`);
+    addId(allIds, errors, enigma.id, `Enigme "${enigma.name || 'sans nom'}"`);
     if (enigma.id) enigmaIds.add(enigma.id);
   });
   (project.combinations || []).forEach((combo) => {
@@ -48,7 +48,7 @@ export function validateProject(rawProject) {
     if (combo.id) combinationIds.add(combo.id);
   });
   (project.scenes || []).forEach((scene) => {
-    addId(allIds, errors, scene.id, `Scène "${scene.name || 'sans nom'}"`);
+    addId(allIds, errors, scene.id, `Scene "${scene.name || 'sans nom'}"`);
     if (scene.id) sceneIds.add(scene.id);
     (scene.hotspots || []).forEach((hotspot) => {
       addId(allIds, errors, hotspot.id, `Zone "${hotspot.name || 'sans nom'}"`);
@@ -56,40 +56,40 @@ export function validateProject(rawProject) {
     });
   });
 
-  if (!project.scenes?.length) errors.push('Le projet doit contenir au moins une scène.');
+  if (!project.scenes?.length) errors.push('Le projet doit contenir au moins une scene.');
   requireRef(sceneIds, errors, project.start?.targetSceneId, 'Départ du projet');
-  requireRef(cinematicIds, errors, project.start?.targetCinematicId, 'Cinématique de départ');
+  requireRef(cinematicIds, errors, project.start?.targetCinematicId, 'Cinematic de départ');
 
   (project.scenes || []).forEach((scene) => {
-    requireRef(actIds, errors, scene.actId, `Acte de la scène "${scene.name}"`);
-    requireRef(sceneIds, errors, scene.parentSceneId, `Scène parente de "${scene.name}"`);
-    if (scene.parentSceneId === scene.id) errors.push(`La scène "${scene.name}" ne peut pas être sa propre parente.`);
+    requireRef(actIds, errors, scene.actId, `Acte de la scene "${scene.name}"`);
+    requireRef(sceneIds, errors, scene.parentSceneId, `Scene parente de "${scene.name}"`);
+    if (scene.parentSceneId === scene.id) errors.push(`La scene "${scene.name}" ne peut pas être sa propre parente.`);
 
     (scene.hotspots || []).forEach((hotspot) => {
       const prefix = `Zone "${hotspot.name}"`;
       requireRef(itemIds, errors, hotspot.requiredItemId, `${prefix} objet requis`);
       requireRef(itemIds, errors, hotspot.rewardItemId, `${prefix} objet donné`);
-      requireRef(sceneIds, errors, hotspot.targetSceneId, `${prefix} scène cible`);
-      requireRef(cinematicIds, errors, hotspot.targetCinematicId, `${prefix} cinématique cible`);
-      requireRef(enigmaIds, errors, hotspot.enigmaId, `${prefix} énigme liée`);
+      requireRef(sceneIds, errors, hotspot.targetSceneId, `${prefix} scene cible`);
+      requireRef(cinematicIds, errors, hotspot.targetCinematicId, `${prefix} cinematic cible`);
+      requireRef(enigmaIds, errors, hotspot.enigmaId, `${prefix} enigme liée`);
       requireRef(hotspotIds, errors, hotspot.requiredHotspotId, `${prefix} zone requise`);
       requireRef(itemIds, errors, hotspot.secondRequiredItemId, `${prefix} second objet requis`);
       requireRef(itemIds, errors, hotspot.secondRewardItemId, `${prefix} second objet donné`);
-      requireRef(sceneIds, errors, hotspot.secondTargetSceneId, `${prefix} seconde scène cible`);
-      requireRef(cinematicIds, errors, hotspot.secondTargetCinematicId, `${prefix} seconde cinématique cible`);
-      requireRef(enigmaIds, errors, hotspot.secondEnigmaId, `${prefix} seconde énigme liée`);
+      requireRef(sceneIds, errors, hotspot.secondTargetSceneId, `${prefix} seconde scene cible`);
+      requireRef(cinematicIds, errors, hotspot.secondTargetCinematicId, `${prefix} seconde cinematic cible`);
+      requireRef(enigmaIds, errors, hotspot.secondEnigmaId, `${prefix} seconde enigme liée`);
 
       (hotspot.logicRules || []).forEach((rule) => {
         const rulePrefix = `${prefix} règle "${rule.name || rule.id}"`;
         requireRef(itemIds, errors, rule.itemId, `${rulePrefix} objet testé`);
         requireRef(hotspotIds, errors, rule.hotspotId, `${rulePrefix} zone franchie`);
-        requireRef(enigmaIds, errors, rule.conditionEnigmaId, `${rulePrefix} énigme réussie`);
-        requireRef(cinematicIds, errors, rule.cinematicId, `${rulePrefix} cinématique lancée`);
+        requireRef(enigmaIds, errors, rule.conditionEnigmaId, `${rulePrefix} enigme réussie`);
+        requireRef(cinematicIds, errors, rule.cinematicId, `${rulePrefix} cinematic lancée`);
         requireRef(combinationIds, errors, rule.combinationId, `${rulePrefix} combinaison réalisée`);
         requireRef(itemIds, errors, rule.rewardItemId, `${rulePrefix} objet donné`);
-        requireRef(sceneIds, errors, rule.targetSceneId, `${rulePrefix} scène cible`);
-        requireRef(cinematicIds, errors, rule.targetCinematicId, `${rulePrefix} cinématique cible`);
-        requireRef(enigmaIds, errors, rule.enigmaId, `${rulePrefix} énigme liée`);
+        requireRef(sceneIds, errors, rule.targetSceneId, `${rulePrefix} scene cible`);
+        requireRef(cinematicIds, errors, rule.targetCinematicId, `${rulePrefix} cinematic cible`);
+        requireRef(enigmaIds, errors, rule.enigmaId, `${rulePrefix} enigme liée`);
       });
     });
   });
@@ -97,30 +97,30 @@ export function validateProject(rawProject) {
   (project.combinations || []).forEach((combo) => {
     requireRef(itemIds, errors, combo.itemAId, 'Combinaison objet 1');
     requireRef(itemIds, errors, combo.itemBId, 'Combinaison objet 2');
-    requireRef(itemIds, errors, combo.resultItemId, 'Combinaison résultat');
+    requireRef(itemIds, errors, combo.resultItemId, 'Combinaison result');
   });
 
   (project.enigmas || []).forEach((enigma) => {
-    requireRef(sceneIds, errors, enigma.targetSceneId, `Énigme "${enigma.name}" scène cible`);
-    requireRef(cinematicIds, errors, enigma.targetCinematicId, `Énigme "${enigma.name}" cinématique cible`);
+    requireRef(sceneIds, errors, enigma.targetSceneId, `Enigme "${enigma.name}" scene cible`);
+    requireRef(cinematicIds, errors, enigma.targetCinematicId, `Enigme "${enigma.name}" cinematic cible`);
     const miscMode = enigma.miscMode || 'free-answer';
     const miscUsesTextSolution = ['free-answer', 'multiple-choice', 'true-false', 'fill-blank', 'exact-number'].includes(miscMode);
     if ((enigma.type === 'code' || (enigma.type === 'misc' && miscUsesTextSolution)) && !String(enigma.solutionText || '').trim()) {
-      warnings.push(`Énigme "${enigma.name}": solution vide.`);
+      warnings.push(`Enigme "${enigma.name}": solution vide.`);
     }
     if (enigma.type === 'misc' && miscMode === 'numeric-range' && (!String(enigma.miscMin ?? '').trim() || !String(enigma.miscMax ?? '').trim())) {
-      warnings.push(`Énigme "${enigma.name}": plage numérique incomplète.`);
+      warnings.push(`Enigme "${enigma.name}": plage numérique incomplète.`);
     }
     if (enigma.type === 'misc' && miscMode === 'item-select' && !enigma.miscTargetItemId) {
-      warnings.push(`Énigme "${enigma.name}": objet attendu non sélectionné.`);
+      warnings.push(`Enigme "${enigma.name}": objet attendu non selectionné.`);
     }
   });
 
   (project.cinematics || []).forEach((cinematic) => {
-    requireRef(sceneIds, errors, cinematic.targetSceneId, `Cinématique "${cinematic.name}" scène cible`);
-    requireRef(itemIds, errors, cinematic.rewardItemId, `Cinématique "${cinematic.name}" objet donné`);
+    requireRef(sceneIds, errors, cinematic.targetSceneId, `Cinematic "${cinematic.name}" scene cible`);
+    requireRef(itemIds, errors, cinematic.rewardItemId, `Cinematic "${cinematic.name}" objet donné`);
     if (!cinematic.slides?.length && cinematic.cinematicType !== 'video') {
-      warnings.push(`Cinématique "${cinematic.name}": aucune slide.`);
+      warnings.push(`Cinematic "${cinematic.name}": aucune slide.`);
     }
   });
 

@@ -265,6 +265,37 @@
   background: transparent !important;
 }
 
+.editor-canvas .editor-scene-object .interactive-block,
+.fullscreen-scene-stage .editor-scene-object .interactive-block,
+.scene-player .player-scene-object .interactive-block {
+  position: absolute !important;
+  inset: 0 !important;
+  left: 0 !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  max-width: none !important;
+  transform: none !important;
+  line-height: 1.25 !important;
+}
+
+.editor-canvas .editor-scene-object .interactive-block span,
+.fullscreen-scene-stage .editor-scene-object .interactive-block span,
+.scene-player .player-scene-object .interactive-block span {
+  position: static !important;
+  inset: auto !important;
+  left: auto !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  max-width: 100% !important;
+  background: transparent !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  transform: none !important;
+  line-height: inherit !important;
+}
+
 .editor-canvas .editor-scene-object img,
 .scene-player .player-scene-object img,
 .scene-player .scene-object {
@@ -350,6 +381,58 @@
   padding-inline: 10px;
   white-space: nowrap;
   align-self: flex-start;
+}
+.secondary-action.full {
+  width: 100%;
+  justify-content: center;
+}
+.quick-logic-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 26000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 22px;
+  background: rgba(2, 6, 23, 0.72);
+  backdrop-filter: blur(8px);
+}
+.quick-logic-modal {
+  width: min(980px, calc(100vw - 32px));
+  max-height: calc(100vh - 44px);
+  overflow: auto;
+  border-radius: 18px;
+}
+.quick-logic-head,
+.quick-logic-actions {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.quick-logic-head {
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.quick-logic-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.quick-logic-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.quick-logic-rule .logic-rule-body {
+  display: grid;
+  gap: 10px;
+}
+@media (max-width: 820px) {
+  .quick-logic-head {
+    display: grid;
+  }
+  .quick-logic-grid {
+    grid-template-columns: 1fr;
+  }
 }
 .subpanel-head { margin-bottom: 8px; }
 .subpanel-head h3 { margin: 0; font-size: 18px; }

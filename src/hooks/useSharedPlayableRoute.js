@@ -32,14 +32,13 @@ export function useSharedPlayableRoute({ editor, preview, setScreen, setSharedLo
       setSharedLoadStatus('Chargement du jeu...');
 
       try {
-        const records = await loadProjectRecordsForUser(playUserId);
+        const publicProject = await loadPublicProject(playUserId, playProjectId);
+        const records = publicProject ? [] : await loadProjectRecordsForUser(playUserId);
         const record = (records || []).find((entry) => entry.id === playProjectId);
-        const publicProject = record ?
-           record.data || record.project || record
-          : await loadPublicProject(playUserId, playProjectId);
-        if (!publicProject) throw new Error('Projet introuvable.');
+        const sharedProject = publicProject || record?.shareState?.publishedData || record?.data || record?.project || record;
+        if (!sharedProject) throw new Error('Projet introuvable.');
 
-        const projectToLoad = normalizeProject(publicProject);
+        const projectToLoad = normalizeProject(sharedProject);
         if (isCancelled) return;
         editor.loadProject(projectToLoad);
         preview.syncWithProject(projectToLoad);

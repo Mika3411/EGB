@@ -10,31 +10,31 @@ const TEMPLATE_TITLES = {
 
 const SCENE_THEMES = {
   manor: ['Hall du manoir', 'Bibliothèque interdite', 'Chambre verrouillée'],
-  investigation: ['Bureau de l’inspecteur', 'Scène de crime', 'Archives du commissariat'],
+  investigation: ['Bureau de l’inspecteur', 'Scene de crime', 'Archives du commissariat'],
   laboratory: ['Sas d’entrée', 'Salle des expériences', 'Réacteur instable'],
   museum: ['Galerie principale', 'Réserve secrète', 'Salle des artefacts'],
 };
 
 const SCENE_INTROS = {
   manor: [
-    'La porte du manoir grince derrière toi. Quelque chose t’observe.',
+    'La porte du manoir grince derrière toi. Quelque chose t’observé.',
     'Des livres anciens cachent peut-être le premier indice.',
     'La chambre semble intacte, mais la serrure raconte autre chose.',
   ],
   investigation: [
     'Un dossier urgent t’attend sur le bureau.',
-    'Chaque détail de la pièce peut devenir une preuve.',
+    'Chaque détail de la piece peut devenir une preuve.',
     'Les archives contiennent des noms que personne ne veut revoir.',
   ],
   laboratory: [
     'Les néons clignotent. Le protocole d’urgence est actif.',
-    'Des instruments bourdonnent autour d’une expérience inachevée.',
+    'Des instruments bourdonnént autour d’une expérience inachevée.',
     'Le réacteur pulse lentement, comme un compte à rebours.',
   ],
   museum: [
     'Le musée est fermé, mais une vitrine vient de s’ouvrir.',
-    'La réserve conserve les pièces que le public ne doit jamais voir.',
-    'Un artefact manque. Sa place vide semble presque lumineuse.',
+    'La réserve conserve les pieces que le public ne doit jamais voir.',
+    'Un artefact manque. Sa place vide semble prèsque lumineuse.',
   ],
 };
 
@@ -46,7 +46,7 @@ export function applyCreationTemplate(baseProject, templateId, name) {
     project.acts = [{ ...project.acts[0], name: 'Acte I' }];
     project.scenes = project.scenes.slice(0, 1).map((scene) => ({
       ...scene,
-      name: 'Scène de départ',
+      name: 'Scene de départ',
       parentSceneId: '',
       introText: 'Décris ici le point de départ de ton escape game.',
       hotspots: [],

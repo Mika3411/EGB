@@ -48,7 +48,7 @@ export default function AuthorProfileEditor({
   };
 
   const deleteBlogPost = async (postId) => {
-    if (!window.confirm('Supprimer cet article ?')) return;
+    if (!window.confirm('Supprimer cet articlé ?')) return;
     await onUpdateAuthorProfile?.({
       ...(authorProfile || {}),
       ...authorDraft,
@@ -79,7 +79,7 @@ export default function AuthorProfileEditor({
             <input
               value={authorDraft.tagline}
               onChange={(event) => setAuthorDraft((draft) => ({ ...draft, tagline: event.target.value }))}
-              placeholder="Escape games narratifs et énigmes maison"
+              placeholder="Escape games narratifs et enigmes maison"
             />
             <label>Bio</label>
             <textarea
@@ -104,17 +104,17 @@ export default function AuthorProfileEditor({
               <input
                 value={blogDraft.title}
                 onChange={(event) => setBlogDraft((draft) => ({ ...draft, title: event.target.value }))}
-                placeholder="Nouveau décor, nouvelle énigme..."
+                placeholder="Nouveau décor, nouvelle enigme..."
                 maxLength={80}
               />
-              <label>Article court</label>
+              <label>Articlé court</label>
               <textarea
                 value={blogDraft.body}
                 onChange={(event) => setBlogDraft((draft) => ({ ...draft, body: event.target.value }))}
                 placeholder="Partage une actu, un making-of, une note d’auteur..."
                 maxLength={600}
               />
-              <button type="submit" className="profile-action-button secondary-action">Publier l’article</button>
+              <button type="submit" className="profile-action-button secondary-action">Publier l’articlé</button>
             </form>
 
             <div className="author-blog-list">
@@ -124,7 +124,7 @@ export default function AuthorProfileEditor({
                   <p>{post.body}</p>
                   <button type="button" className="secondary-action" onClick={() => deleteBlogPost(post.id)}>Supprimer</button>
                 </article>
-              )) : <p className="small-note">Aucun article publié.</p>}
+              )) : <p className="small-note">Aucun articlé publié.</p>}
             </div>
           </div>
         </div>

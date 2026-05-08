@@ -10,13 +10,14 @@ import {
   makeScene,
   normalizeProject,
 } from '../data/projectData';
+import { getAiAuthHeaders } from './aiAuthHeaders';
 
 const endpoint = import.meta.env.VITE_AI_GENERATION_ENDPOINT || '/api/generate';
 const jobEndpoint = import.meta.env.VITE_AI_JOB_ENDPOINT || '/api/ai-job';
 
-const makeAiHeaders = (userId) => ({
+const makeAiHeaders = async () => ({
   'Content-Type': 'application/json',
-  ...(userId ? { 'X-AI-User-Id': userId } : {}),
+  ...(await getAiAuthHeaders()),
 });
 
 const clampNumber = (value, min, max, fallback) => {
@@ -202,20 +203,20 @@ const compactProjectForExtendPrompt = (project = {}, continuationSceneId = '') =
 
 const PLAYABILITY_AND_COHERENCE_RULES = `
 Règles de logique et de jouabilité à respecter dans toutes les générations:
-- Évite le parcours en ligne droite: une création complète, progressive ou ajoutée doit proposer des branches, des scènes pivot, des liens multiples et des retours utiles quand le volume demandé le permet.
+- Évite le parcours en ligne droite: une création complète, progressive ou ajoutée doit proposer des branches, des scenes pivot, des liens multiples et des retours utiles quand le volume demandé le permet.
 - Le retour arrière doit servir à quelque chose: nouvel usage d'objet, nouvelle lecture d'indice, nouvel état, passage débloqué ou dialogue modifié.
 - Les actes doivent rester séparés: après une transition vers un acte suivant, aucun hotspot ni aucune règle ne doit permettre de revenir à un acte précédent.
 - Toute transition inter-acte doit être à sens unique et signalée dans routeMap.connections avec allowOneWay: true quand routeMap est renvoyé.
-- Dans routeMap, relie toutes les scènes qui partagent une zone d'action, une transition directe ou un passage à sens unique. Marque locked: true si le lien dépend d'un objet, d'une énigme, d'une cinématique, d'une combinaison ou d'une logicRule.
-- Aucune impasse bloquante: tout objet requis doit être obtenable avant son usage; toute énigme doit avoir ses indices avant sa résolution; aucun objet consommé ne doit être nécessaire plus tard sauf solution alternative explicite.
-- Les indices d'une énigme ne doivent pas être dans la même scène que l'énigme. Place-les dans une ou plusieurs autres scènes et renseigne clueSceneIds et logicNotes quand tu crées ou modifies une énigme.
-- Interdit aux énigmes évidentes: pas de solution écrite telle quelle dans le décor puis répétée dans la narration; pas de question qui donne directement le code ou l'ordre. Les indices doivent demander déduction, comparaison, ordre, transformation ou croisement entre scènes.
-- Les scènes créées ou enrichies doivent avoir des consignes concrètes dans instructions quand le champ est renvoyé.
-- Les prompts de scène doivent être en français et décrire lieu, ambiance, zones d'action et indices non-inventaire visibles.
-- Très important: les prompts d'image de scène ne doivent pas citer ni montrer les objets d'inventaire, car l'utilisateur les cachera lui-même dans l'image.
+- Dans routeMap, relie toutes les scenes qui partagent une zone d'action, une transition directe ou un passage à sens unique. Marque locked: true si le lien dépend d'un objet, d'une enigme, d'une cinematic, d'une combinaison ou d'une logicRule.
+- Aucune impasse bloquante: tout objet requis doit être obtenable avant son usage; toute enigme doit avoir ses indices avant sa résolution; aucun objet consommé ne doit être nécessaire plus tard sauf solution alternative explicite.
+- Les indices d'une enigme ne doivent pas être dans la même scene que l'enigme. Place-les dans une ou plusieurs autres scenes et renseigne clueSceneIds et logicNotes quand tu crées ou modifiés une enigme.
+- Interdit aux enigmes évidentes: pas de solution écrite telle quelle dans le décor puis répétée dans la narration; pas de question qui donne directement le code ou l'ordre. Les indices doivent demander déduction, comparaison, ordre, transformation ou croisement entre scenes.
+- Les scenes créées ou enrichies doivent avoir des consignes concrètes dans instructions quand le champ est renvoyé.
+- Les prompts de scene doivent être en français et décrire lieu, ambiance, zones d'action et indices non-inventaire visibles.
+- Très important: les prompts d'image de scene ne doivent pas citer ni montrer les objets d'inventaire, car l'utilisateur les cachera lui-même dans l'image.
 - Les objets créés doivent avoir imagePrompt en français, isolé sur fond transparent ou neutre.
-- Les slides de cinématique créées doivent avoir imagePrompt en français, cohérent avec les scènes et sans contradiction narrative.
-- Tout doit rester cohérent entre scènes, cinématiques, objets, énigmes, routeMap, combinations et logicRules.
+- Les slides de cinematic créées doivent avoir imagePrompt en français, cohérent avec les scenes et sans contradiction narrative.
+- Tout doit rester cohérent entre scenes, cinematics, objets, enigmes, routeMap, combinations et logicRules.
 `.trim();
 
 const makeGeneratePrompt = (brief) => `
@@ -301,33 +302,33 @@ Contraintes:
 - Thème: ${brief.theme}
 - Difficulté: ${difficultyLabel[brief.difficulty] || brief.difficulty}
 - Actes: exactement ${brief.actCount}
-- Scènes totales maximum: ${brief.sceneCount}. Ne dépasse jamais ce nombre, car chaque scène peut coûter des crédits image à l'utilisateur.
-- Sous-scènes: maximum ${brief.subsceneCount}, incluses dans le total de scènes si tu en utilises.
+- Scenes totales maximum: ${brief.sceneCount}. Ne dépasse jamais ce nombre, car chaque scene peut coûter des credits image à l'utilisateur.
+- Sous-scenes: maximum ${brief.subsceneCount}, incluses dans le total de scenes si tu en utilises.
 - Objets: maximum ${brief.itemCount}. Ne crée pas d'objets supplémentaires.
-- Énigmes: maximum ${brief.enigmaCount}. Ne crée pas d'énigmes supplémentaires.
-- Cinématiques: maximum ${brief.cinematicCount}. Ne crée pas de cinématiques supplémentaires.
+- Enigmes: maximum ${brief.enigmaCount}. Ne crée pas d'enigmes supplémentaires.
+- Cinematics: maximum ${brief.cinematicCount}. Ne crée pas de cinematics supplémentaires.
 - Les quantités demandées sont un contrat de coût: les dépasser est interdit.
 - Ton: ${brief.tone || 'immersif'}
-- Durée visée: ${brief.duration || '30 minutes'}
+- Duree visée: ${brief.duration || '30 minutes'}
 - Les IDs doivent être stables, simples, uniques, sans espaces.
 - Les noms visibles des objets doivent être des noms français naturels et concrets. Interdit d'utiliser un ID, une chaîne aléatoire ou un code technique comme name.
 - Chaque item doit avoir un name lisible par un joueur et une icon cohérente.
-- Les zones doivent relier les scènes, objets, énigmes et cinématiques.
+- Les zones doivent relier les scenes, objets, enigmes et cinematics.
 - Les conditions de déblocage doivent utiliser logicRules si une interaction dépend d'un état de jeu.
-- Si Actes = 3 et Scènes totales maximum = 24, produis au plus 8 scènes par acte. Plus généralement, répartis les scènes de façon équilibrée entre les actes sans dépasser le total demandé.
-- Structure chaque acte comme un mini-labyrinthe logique non linéaire: au moins une scène pivot, au moins deux branches, au moins deux scènes reliées à plusieurs autres scènes, et au moins un retour utile vers une scène déjà visitée.
+- Si Actes = 3 et Scenes totales maximum = 24, produis au plus 8 scenes par acte. Plus généralement, répartis les scenes de façon équilibrée entre les actes sans dépasser le total demandé.
+- Structure chaque acte comme un mini-labyrinthe logique non linéaire: au moins une scene pivot, au moins deux branches, au moins deux scenes reliées à plusieurs autres scenes, et au moins un retour utile vers une scene déjà visitée.
 - Le joueur doit parfois revenir en arrière dans le même acte pour utiliser un objet, une information ou un état obtenu ailleurs.
 - Sépare strictement les actes: une fois l'acte suivant atteint, aucune zone ne doit permettre de revenir à un acte précédent. Les transitions inter-actes doivent être à sens unique dans routeMap.connections avec allowOneWay: true.
-- Dans routeMap, relie toutes les scènes qui ont une zone d'action commune ou une transition directe. Marque locked: true si le lien dépend d'un objet, d'une énigme, d'une cinématique ou d'une règle logique.
-- Aucune impasse bloquante: tout objet requis doit être obtenable avant son usage, toute énigme doit avoir ses indices avant d'être résolue, et aucune ressource consommée ne doit être indispensable plus tard sauf si une autre solution existe.
-- Les indices d'une énigme ne doivent jamais être dans la même scène que l'énigme. Utilise clueSceneIds et explique la logique dans logicNotes.
-- Interdit aux énigmes évidentes: pas de code écrit tel quel dans le décor puis redonné par la narration; pas de solution immédiatement visible dans la question. Les indices doivent demander déduction, comparaison, ordre, transformation ou croisement entre scènes.
-- Chaque scène doit avoir instructions: 2 à 5 consignes de gameplay concrètes pour le créateur, scène par scène.
-- Chaque scène doit avoir imagePrompt en français. Le prompt doit décrire le lieu, l'ambiance, les zones d'action visibles et les indices non-inventaire visibles.
-- Très important: les prompts d'image de scène ne doivent pas citer ni montrer les objets d'inventaire à cacher par l'utilisateur. N'inclus donc pas les noms des items dans scene.imagePrompt.
+- Dans routeMap, relie toutes les scenes qui ont une zone d'action commune ou une transition directe. Marque locked: true si le lien dépend d'un objet, d'une enigme, d'une cinematic ou d'une règle logique.
+- Aucune impasse bloquante: tout objet requis doit être obtenable avant son usage, toute enigme doit avoir ses indices avant d'être résolue, et aucune ressource consommée ne doit être indispensable plus tard sauf si une autre solution existe.
+- Les indices d'une enigme ne doivent jamais être dans la même scene que l'enigme. Utilise clueSceneIds et explique la logique dans logicNotes.
+- Interdit aux enigmes évidentes: pas de code écrit tel quel dans le décor puis redonné par la narration; pas de solution immédiatement visible dans la question. Les indices doivent demander déduction, comparaison, ordre, transformation ou croisement entre scenes.
+- Chaque scene doit avoir instructions: 2 à 5 consignes de gameplay concrètes pour le créateur, scene par scene.
+- Chaque scene doit avoir imagePrompt en français. Le prompt doit décrire le lieu, l'ambiance, les zones d'action visibles et les indices non-inventaire visibles.
+- Très important: les prompts d'image de scene ne doivent pas citer ni montrer les objets d'inventaire à cacher par l'utilisateur. N'inclus donc pas les noms des items dans scene.imagePrompt.
 - Chaque objet doit avoir item.imagePrompt en français, isolé sur fond transparent ou neutre.
-- Chaque slide de cinématique doit avoir imagePrompt en français, cohérent avec la révélation et sans contradiction avec les scènes.
-- Tout doit être cohérent entre scènes, cinématiques, objets, énigmes, routeMap et logicRules.
+- Chaque slide de cinematic doit avoir imagePrompt en français, cohérent avec la révélation et sans contradiction avec les scenes.
+- Tout doit être cohérent entre scenes, cinematics, objets, enigmes, routeMap et logicRules.
 ${PLAYABILITY_AND_COHERENCE_RULES}
 - Réponds uniquement avec le JSON, sans Markdown.
 `.trim();
@@ -339,30 +340,30 @@ Tu es un concepteur d'escape game narratif.
 Tu dois AMÉLIORER uniquement une petite partie d'un projet existant.
 
 Instruction utilisateur:
-${instruction || 'Améliore la scène ciblée.'}
+${instruction || 'Améliore la scene ciblée.'}
 
-Scène cible:
+Scene cible:
 ${JSON.stringify(targetScene || target || {}, null, 2)}
 
 Règles strictes:
 - Réponds uniquement avec un JSON partiel, sans Markdown.
 - Ne renvoie pas tout le projet.
-- Ne modifie que la scène cible.
-- Tu peux modifier uniquement:
+- Ne modifié que la scene cible.
+- Tu peux modifiér uniquement:
   - introText pour l'ambiance
   - dialogues des hotspots existants
-  - objets d'inventaire liés à cette scène, si nécessaire
+  - objets d'inventaire liés à cette scene, si nécessaire
 - Ne déplace aucune zone: conserve x, y, width, height.
-- Ne change pas les actions, les scènes cibles, les énigmes ou les cinématiques liées.
+- Ne change pas les actions, les scenes cibles, les enigmes ou les cinematics liées.
 - Conserve les IDs existants.
 - Ne crée pas de nouvelle zone.
-- Ne crée pas de référence vers une scène, un objet, une énigme, une cinématique ou une combinaison qui n'existe pas.
-- Si tu ajoutes ou modifies un objet dans items, ajoute aussi imagePrompt.
+- Ne crée pas de référence vers une scene, un objet, une enigme, une cinematic ou une combinaison qui n'existe pas.
+- Si tu ajoutes ou modifiés un objet dans items, ajoute aussi imagePrompt.
 - Si tu enrichis un texte ou un dialogue, ne transforme jamais un indice subtil en solution directe.
-- Préserve la logique existante: ne place pas l'indice d'une énigme dans la même scène que l'énigme et ne casse pas les retours arrière déjà prévus.
+- Préserve la logique existante: ne place pas l'indice d'une enigme dans la même scene que l'enigme et ne casse pas les retours arrière déjà prévus.
 ${PLAYABILITY_AND_COHERENCE_RULES}
 - Format attendu: {"scenes":[{"id":"id_scene_existante","introText":"...","hotspots":[{"id":"id_zone_existante","dialogue":"..."}]}],"items":[...optionnel]}
-- Si tu modifies les hotspots, renvoie seulement leurs IDs et leurs nouveaux dialogues.
+- Si tu modifiés les hotspots, renvoie seulement leurs IDs et leurs nouveaux dialogues.
 `.trim();
 };
 
@@ -375,22 +376,22 @@ Brief global:
 - Thème: ${brief.theme}
 - Difficulté: ${difficultyLabel[brief.difficulty] || brief.difficulty}
 - Ton: ${brief.tone || 'immersif'}
-- Durée visée: ${brief.duration || '30 minutes'}
-- Plafonds de coût à respecter strictement: ${brief.actCount} acte(s), ${brief.sceneCount} scène(s) maximum, ${brief.itemCount} objet(s) maximum, ${brief.enigmaCount} énigme(s) maximum, ${brief.cinematicCount} cinématique(s) maximum.
-- Ne crée jamais plus de contenu que ces plafonds, car l'utilisateur paiera les images associées.
+- Duree visée: ${brief.duration || '30 minutes'}
+- Plafonds de coût à respecter strictement: ${brief.actCount} acte(s), ${brief.sceneCount} scene(s) maximum, ${brief.itemCount} objet(s) maximum, ${brief.enigmaCount} enigme(s) maximum, ${brief.cinematicCount} cinematic(s) maximum.
+- Ne crée jamais plus de contenu que ces plafonds, car l'utilisateur paieraus images associées.
 
   Projet actuel:
   ${JSON.stringify(compactProjectForPrompt(currentProject || {}), null, 2)}
   
   Règles:
-  - Étape act1: crée uniquement l'Acte 1 comme projet jouable de départ.
-  - Étape act2, act3, act4, etc.: ajoute uniquement l'acte demandé et ses scènes, objets, énigmes, cinématiques utiles.
+  - Step act1: crée uniquement l'Acte 1 comme projet jouable de départ.
+  - Step act2, act3, act4, etc.: ajoute uniquement l'acte demandé et ses scenes, objets, enigmes, cinematics utiles.
   - Pour tout acte après l'Acte 1, réponds avec un JSON partiel compatible patch.
-  - Chaque acte doit avoir une structure non linéaire: scène pivot, branches, retour utile, objets et indices placés avant leurs usages.
+  - Chaque acte doit avoir une structure non linéaire: scene pivot, branches, retour utile, objets et indices placés avant leurs usages.
   - Le passage depuis l'acte précédent doit être à sens unique: ne crée aucun lien de retour vers l'acte précédent.
-  - Si tu ajoutes routeMap ou modifies des zones de navigation, mets à jour les connexions concernées.
-  - Si tu ajoutes une scène, donne-lui imagePrompt et instructions.
-  - Si tu ajoutes un objet ou une cinématique, donne aussi item.imagePrompt ou slide.imagePrompt.
+  - Si tu ajoutes routeMap ou modifiés des zones de navigation, mets à jour les connexions concernées.
+  - Si tu ajoutes une scene, donne-lui imagePrompt et instructions.
+  - Si tu ajoutes un objet ou une cinematic, donné aussi item.imagePrompt ou slide.imagePrompt.
   - Conserve les IDs existants et ne crée aucune référence invalide.
 ${PLAYABILITY_AND_COHERENCE_RULES}
 - Réponds uniquement avec le JSON, sans Markdown.
@@ -417,14 +418,14 @@ Action demandée: ${stage}
 Résumé de l'histoire déjà posée:
 ${storySummary || 'Aucun résumé fourni: déduis la continuité depuis le projet existant.'}
 
-Chronologie canonique des scènes, fournie ou validée par l'utilisateur:
+Chronologie canonique des scenes, fournie ou validée par l'utilisateur:
 ${sceneChronology || 'Aucune chronologie fournie.'}
 
-Scène de départ OBLIGATOIRE pour la suite:
+Scene de départ OBLIGATOIRE pour la suite:
 ${JSON.stringify(continuationScene || {}, null, 2)}
 
 Direction souhaitée par l'utilisateur:
-${continuationWish || instruction || 'Aucune direction imposée: propose une suite aléatoire mais cohérente avec la scène de départ et le résumé.'}
+${continuationWish || instruction || 'Aucune direction imposée: propose une suite aléatoire mais cohérente avec la scene de départ et le résumé.'}
 
 Projet existant:
 ${JSON.stringify(compactProjectForExtendPrompt(currentProject || {}, continuationSceneId), null, 2)}
@@ -432,36 +433,36 @@ ${JSON.stringify(compactProjectForExtendPrompt(currentProject || {}, continuatio
 Règles strictes:
 - Réponds uniquement avec un JSON partiel compatible patch, sans Markdown.
 - Conserve les IDs existants.
-- Ne supprime aucun acte, scène, objet, énigme, cinématique ou zone existante.
+- Ne supprime aucun acte, scene, objet, enigme, cinematic ou zone existante.
 - Ne change la structure existante que si l'action le demande explicitement.
 - Toutes les nouvelles références doivent pointer vers des IDs existants ou créés dans ce patch.
 - Tous les nouveaux objets doivent avoir un name français naturel et concret, jamais un ID ou une chaîne aléatoire.
 - Continue l'histoire avec cohérence: mêmes lieux, mêmes enjeux, même style.
-- Pour continue_story et add_scenes, la première nouvelle scène doit être reliée depuis la scène de départ obligatoire.
-- La chronologie canonique prime sur l'ordre technique du tableau scenes. La suite doit partir de la dernière scène numérotée, ou de la scène de départ obligatoire si elle est fournie.
-- Ajoute ou modifie une zone dans la scène de départ obligatoire pour pointer vers la nouvelle scène.
-- Ne pars pas d'une autre scène, sauf si l'utilisateur le demande explicitement.
+- Pour continue_story et add_scenes, la première nouvelle scene doit être reliée depuis la scene de départ obligatoire.
+- La chronologie canonique prime sur l'ordre technique du tableau scenes. La suite doit partir de la dernière scene numérotée, ou de la scene de départ obligatoire si elle est fournie.
+- Ajoute ou modifié une zone dans la scene de départ obligatoire pour pointer vers la nouvelle scene.
+- Ne pars pas d'une autre scene, sauf si l'utilisateur le demande explicitement.
 - Utilise le résumé comme canon narratif: la suite doit répondre à ce qui vient de se passer, pas inventer un nouveau départ.
 - La suite doit apporter un vrai nouvel événement narratif: révélation, choix, menace, objectif ou retournement.
-- Interdit de nommer une scène "Suite de ...", "Suite - ...", "Nouvelle pièce", "Pièce secrète" ou un objet "Indice ...".
+- Interdit de nommer une scene "Suite de ...", "Suite - ...", "Nouvelle piece", "Piece secrète" ou un objet "Indice ...".
 - Interdit d'utiliser des zones génériques comme "Indice caché", "Nouvelle piste" ou "Passage verrouillé" sans détail narratif concret.
-- Interdit de répondre avec une scène générique qui dit seulement que la suite reprend les enjeux.
-- Les dialogues et introText doivent contenir des détails concrets liés au résumé, à la chronologie et à la scène de départ.
-- Pour continue_story, crée au moins une nouvelle scène avec un nom spécifique de lieu ou d'événement, un enjeu clair, 2 zones interactives concrètes minimum, et une interaction qui fait avancer l'histoire.
-- Pour continue_story, ne renvoie pas les scènes existantes sauf la scène de départ obligatoire si tu lui ajoutes une zone vers la nouvelle scène.
-- Toute nouvelle scène doit avoir imagePrompt en français et instructions.
+- Interdit de répondre avec une scene générique qui dit seulement que la suite reprend les enjeux.
+- Les dialogues et introText doivent contenir des détails concrets liés au résumé, à la chronologie et à la scene de départ.
+- Pour continue_story, crée au moins une nouvelle scene avec un nom spécifique de lieu ou d'événement, un enjeu clair, 2 zones interactives concrètes minimum, et une interaction qui fait avancer l'histoire.
+- Pour continue_story, ne renvoie pas les scenes existantes sauf la scene de départ obligatoire si tu lui ajoutes une zone vers la nouvelle scene.
+- Toute nouvelle scene doit avoir imagePrompt en français et instructions.
 - Tout nouvel objet doit avoir imagePrompt en français.
-- Toute nouvelle cinématique ou slide doit avoir imagePrompt en français.
-- Toute nouvelle énigme doit renseigner clueSceneIds et logicNotes si ces champs sont utiles; les indices doivent être placés hors de la scène de résolution.
-- Si tu ajoutes ou modifies des passages entre scènes, ajoute ou complète routeMap.rooms et routeMap.connections pour les scènes concernées.
+- Toute nouvelle cinematic ou slide doit avoir imagePrompt en français.
+- Toute nouvelle enigme doit renseigner clueSceneIds et logicNotes si ces champs sont utiles; les indices doivent être placés hors de la scene de résolution.
+- Si tu ajoutes ou modifiés des passages entre scenes, ajoute ou complète routeMap.rooms et routeMap.connections pour les scenes concernées.
 - Si la suite passe dans un nouvel acte, le passage doit être à sens unique et aucune nouvelle zone ne doit revenir vers l'acte précédent.
-- Si tu ajoutes 2 ou 3 scènes, ne les aligne pas simplement A -> B -> C: crée au moins une branche, un lien de retour utile ou une scène qui connecte plusieurs chemins.
+- Si tu ajoutes 2 ou 3 scenes, ne les aligne pas simplement A -> B -> C: crée au moins une branche, un lien de retour utile ou une scene qui connecte plusieurs chemins.
 ${PLAYABILITY_AND_COHERENCE_RULES}
 
 Actions:
-- continue_story: ajoute obligatoirement 1 à 3 nouvelles scènes de suite, avec au moins une zone de navigation depuis une scène existante vers une nouvelle scène. Ne te contente jamais de réécrire les scènes existantes.
-- add_scenes: ajoute obligatoirement 1 à 3 nouvelles scènes et les zones de navigation nécessaires. Ne renvoie pas seulement les scènes existantes.
-- add_enigmas: ajoute obligatoirement au moins une nouvelle énigme reliée à une zone ou scène existante.
+- continue_story: ajoute obligatoirement 1 à 3 nouvelles scenes de suite, avec au moins une zone de navigation depuis une scene existante vers une nouvelle scene. Ne te contente jamais de réécrire les scenes existantes.
+- add_scenes: ajoute obligatoirement 1 à 3 nouvelles scenes et les zones de navigation nécessaires. Ne renvoie pas seulement les scenes existantes.
+- add_enigmas: ajoute obligatoirement au moins une nouvelle enigme reliée à une zone ou scene existante.
 - enrich_interactions: enrichis zones, objets, dialogues et conditions sans changer l'architecture globale.
 `.trim();
 };
@@ -485,14 +486,14 @@ const assertProjectHasScenes = (project, mode = 'generate') => {
   const sceneCount = Array.isArray(project?.scenes) ? project.scenes.length : 0;
   if (mode === 'improve' || mode === 'extend') return;
   if (sceneCount > 0) return;
-  const error = new Error('La génération IA a renvoyé un projet sans scène. Les crédits doivent être remboursés automatiquement.');
+  const error = new Error('La génération IA a renvoyé un projet sans scene. Les credits doivent être remboursés automatiquement.');
   error.code = 'AI_PROJECT_WITHOUT_SCENES';
   throw error;
 };
 
 const wait = (delay) => new Promise((resolve) => setTimeout(resolve, delay));
 
-const waitForAiJob = async (jobId, userId = '') => {
+const waitForAiJob = async (jobId) => {
   const startedAt = Date.now();
   const timeout = Number(import.meta.env.VITE_AI_JOB_TIMEOUT_MS || 20 * 60 * 1000);
   const interval = Number(import.meta.env.VITE_AI_JOB_POLL_INTERVAL_MS || 2500);
@@ -501,11 +502,10 @@ const waitForAiJob = async (jobId, userId = '') => {
     await wait(interval);
     const url = new URL(jobEndpoint, window.location.origin);
     url.searchParams.set('id', jobId);
-    if (userId) url.searchParams.set('userId', userId);
 
     const response = await fetch(url.toString(), {
       method: 'GET',
-      headers: userId ? { 'X-AI-User-Id': userId } : {},
+      headers: await getAiAuthHeaders(),
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -516,7 +516,7 @@ const waitForAiJob = async (jobId, userId = '') => {
 
     if (payload.status === 'complete') return payload;
     if (payload.status === 'error') {
-      const error = new Error(payload.error || 'Generation IA echouee.');
+      const error = new Error(payload.error || 'Generation IA échouée.');
       error.code = payload.code;
       throw error;
     }
@@ -554,7 +554,7 @@ const inferItemNameFromProjectUse = (project, itemId) => {
       ].includes(itemId);
       if (!usesItem) return;
       if (hotspot.name && !isBadGeneratedName(hotspot.name)) candidates.push(hotspot.name);
-      const dialogueMatch = String(hotspot.dialogue || '').match(/(?:trouves?|ramasses?|obtiens?|découvres?|utilises?)\s+(?:un|une|le|la|l['’])?\s*([^,.!?;:]+)/i);
+      const dialogueMatch = String(hotspot.dialogue || '').match(/(?:trouvés?|ramasses?|obtiens?|découvres?|utilises?)\s+(?:un|une|le|la|l['’])?\s*([^,.!?;:]+)/i);
       if (dialogueMatch?.[1]) candidates.push(dialogueMatch[1].trim());
     });
   });
@@ -603,7 +603,7 @@ const getBadItemUsages = (project = {}, itemId) => {
     const usedAs = [];
     if (combo.itemAId === itemId) usedAs.push('combinaison objet A');
     if (combo.itemBId === itemId) usedAs.push('combinaison objet B');
-    if (combo.resultItemId === itemId) usedAs.push('résultat de combinaison');
+    if (combo.resultItemId === itemId) usedAs.push('result de combinaison');
     if (usedAs.length) usages.push({ combinationId: combo.id, message: combo.message, usedAs });
   });
   return usages.slice(0, 8);
@@ -638,11 +638,10 @@ Format attendu:
 
   const response = await fetch(endpoint, {
     method: 'POST',
-    headers: makeAiHeaders(options.userId),
+    headers: await makeAiHeaders(),
     body: JSON.stringify({
       prompt,
       mode: 'repair_item_names',
-      userId: options.userId,
       responseFormat: 'item-name-map-json',
     }),
   });
@@ -720,7 +719,7 @@ const repairMissingItemReferences = (rawProject) => {
 const sceneNameFromId = (id) => String(id || '')
   .replace(/^sc[_-]/, '')
   .replace(/[_-]+/g, ' ')
-  .replace(/\b\w/g, (letter) => letter.toUpperCase()) || 'Scène IA';
+  .replace(/\b\w/g, (letter) => letter.toUpperCase()) || 'Scene IA';
 
 const getNarrativeEndScene = (project = {}) => {
   const scenes = project.scenes || [];
@@ -754,11 +753,11 @@ const repairMissingSceneReferences = (rawProject) => {
       id,
       name: label ? `Suite - ${label}` : sceneNameFromId(id),
       introText: sourceScene?.name ?
-         `Cette nouvelle scène prolonge directement "${sourceScene.name}".`
-        : 'Cette scène a été ajoutée pour réparer une référence de navigation générée par l’IA.',
+         `Cette nouvelle scene prolonge directement "${sourceScene.name}".`
+        : 'Cette scene a été ajoutée pour réparer une référence de navigation générée par l’IA.',
       hotspots: [],
       aiGenerated: true,
-      aiActionLabel: 'Scène référencée par IA',
+      aiActionLabel: 'Scene référencée par IA',
     });
   };
 
@@ -955,7 +954,7 @@ const assertExtendPatchAddsRequestedContent = (patch, options = {}) => {
   if (stage === 'continue_story' || stage === 'add_scenes') {
     const newScenes = patchScenes.filter((scene) => scene?.id && !currentSceneIds.has(scene.id));
     if (!newScenes.length) {
-      throw new Error('La réponse IA ne crée aucune nouvelle scène.');
+      throw new Error('La réponse IA ne crée aucune nouvelle scene.');
     }
     const genericScene = newScenes.find((scene) => (
       /^suite\b/i.test(String(scene.name || '').trim())
@@ -968,7 +967,7 @@ const assertExtendPatchAddsRequestedContent = (patch, options = {}) => {
     }
     const genericHotspot = newScenes.find((scene) => (scene.hotspots || []).some((hotspot) => (
       /^(indice cach[eé]|nouvelle piste|passage verrouill[eé])$/i.test(String(hotspot.name || '').trim())
-      || /trouvent un indice li[eé] à/i.test(String(hotspot.dialogue || ''))
+      || /trouvént un indice li[eé] à/i.test(String(hotspot.dialogue || ''))
       || /m[eè]ne vers suite/i.test(String(hotspot.dialogue || ''))
     )));
     if (genericHotspot) {
@@ -984,7 +983,7 @@ const assertExtendPatchAddsRequestedContent = (patch, options = {}) => {
         return intro.length >= 80 && concreteHotspots.length >= 2;
       });
       if (!hasPlayableScene) {
-        throw new Error('La réponse IA ne crée pas une vraie scène jouable pour continuer l’histoire.');
+        throw new Error('La réponse IA ne crée pas une vraie scene jouable pour continuer l’histoire.');
       }
     }
     const anchorSceneId = options.continuationSceneId || getNarrativeEndScene(currentProject)?.id || '';
@@ -992,14 +991,14 @@ const assertExtendPatchAddsRequestedContent = (patch, options = {}) => {
     const patchedAnchorScene = patchScenes.find((scene) => scene?.id === anchorSceneId);
     const anchorLinksToNewScene = (patchedAnchorScene?.hotspots || []).some((hotspot) => newSceneIds.has(hotspot.targetSceneId));
     if (anchorSceneId && !anchorLinksToNewScene) {
-      throw new Error('La réponse IA ne relie pas la scène de départ à une nouvelle scène.');
+      throw new Error('La réponse IA ne relie pas la scene de départ à une nouvelle scene.');
     }
   }
 
   if (stage === 'add_enigmas') {
     const newEnigmas = patchEnigmas.filter((enigma) => enigma?.id && !currentEnigmaIds.has(enigma.id));
     if (!newEnigmas.length) {
-      throw new Error('La réponse IA ne crée aucune nouvelle énigme.');
+      throw new Error('La réponse IA ne crée aucune nouvelle enigme.');
     }
   }
 };
@@ -1066,12 +1065,11 @@ export async function generateProjectWithApi(brief, options = {}) {
 
   const response = await fetch(endpoint, {
     method: 'POST',
-    headers: makeAiHeaders(options.userId),
+    headers: await makeAiHeaders(),
     body: JSON.stringify({
       prompt,
       brief,
       mode,
-      userId: options.userId,
       currentProject: mode === 'extend' ?
          compactProjectForExtendPrompt(options.currentProject || {}, options.continuationSceneId)
         : compactProjectForPrompt(options.currentProject || {}),
@@ -1099,7 +1097,7 @@ export async function generateProjectWithApi(brief, options = {}) {
 
   let payload = await response.json();
   if (payload.jobId) {
-    payload = await waitForAiJob(payload.jobId, options.userId);
+    payload = await waitForAiJob(payload.jobId);
   }
   const parsed = trimProjectToBriefCounts(
     repairDuplicateIds(repairMissingSceneReferences(repairMissingItemReferences(parseProjectResponse(payload)))),
@@ -1148,7 +1146,7 @@ export function generateProjectLocally(brief) {
     const parent = scenes[index % scenes.length];
     const scene = makeScene({ actId: parent.actId, parentSceneId: parent.id });
     scene.name = `${parent.name} · détail ${index + 1}`;
-    scene.introText = `Cette sous-scène révèle une facette plus précise du mystère: ${theme}.`;
+    scene.introText = `Cette sous-scene révèle une facette plus précise du mystère: ${theme}.`;
     scene.hotspots = [];
     scenes.push(scene);
     return scene;
@@ -1157,10 +1155,10 @@ export function generateProjectLocally(brief) {
   const enigmas = Array.from({ length: enigmaCount }, (_, index) => {
     const targetScene = scenes[(index + 1) % scenes.length];
     return makeEnigma({
-      name: `Énigme ${index + 1} - ${theme}`,
+      name: `Enigme ${index + 1} - ${theme}`,
       type: index % 2 ? 'colors' : 'code',
       question: index % 2 ?
-         `Reproduis la séquence liée à ${theme}.`
+         `Reproduis la sequence liée à ${theme}.`
         : `Entre le code découvert dans les indices de ${theme}.`,
       solutionText: `${(index + 2) * 137}`.slice(0, 4),
       solutionColors: ['red', 'blue', 'green', 'yellow'].slice(0, 3 + (index % 2)),
@@ -1173,7 +1171,7 @@ export function generateProjectLocally(brief) {
 
   const cinematics = Array.from({ length: cinematicCount }, (_, index) => {
     const cinematic = makeCinematic();
-    cinematic.name = `Cinématique ${index + 1} - révélation`;
+    cinematic.name = `Cinematic ${index + 1} - révélation`;
     cinematic.slides = [makeCinematicSlide()];
     cinematic.slides[0].narration = `Une révélation fait avancer l'histoire de ${theme}.`;
     cinematic.onEndType = scenes[index + 1] ? 'scene' : 'none';
@@ -1192,7 +1190,7 @@ export function generateProjectLocally(brief) {
     inspectSpot.x = 24 + ((index * 13) % 45);
     inspectSpot.y = 38 + ((index * 9) % 32);
     inspectSpot.actionType = rewardItem ? 'dialogue_item' : 'dialogue';
-    inspectSpot.dialogue = `Les joueurs trouvent un indice important sur ${theme}.`;
+    inspectSpot.dialogue = `Les joueurs trouvént un indice important sur ${theme}.`;
     inspectSpot.rewardItemId = rewardItem?.id || '';
 
     const progressSpot = makeHotspot();
@@ -1202,18 +1200,18 @@ export function generateProjectLocally(brief) {
     progressSpot.actionType = nextScene ? 'scene' : 'dialogue';
     progressSpot.dialogue = nextScene ?
        'Le passage s’ouvre grâce aux indices déjà collectés.'
-      : `Le fil narratif de ${theme} trouve sa résolution.`;
+      : `Le fil narratif de ${theme} trouvé sa résolution.`;
     progressSpot.targetSceneId = nextScene?.id || '';
     progressSpot.requiredItemId = rewardItem?.id || '';
     progressSpot.enigmaId = enigma?.id || '';
 
     if (cinematic && index % 3 === 0) {
       const rule = makeLogicRule();
-      rule.name = 'Après cinématique';
+      rule.name = 'Après cinematic';
       rule.conditionType = 'launched_cinematic';
       rule.cinematicId = cinematic.id;
       rule.actionType = nextScene ? 'scene' : 'dialogue';
-      rule.dialogue = 'La révélation précédente donne un nouveau sens à cette zone.';
+      rule.dialogue = 'La révélation précédente donné un nouveau sens à cette zone.';
       rule.targetSceneId = nextScene?.id || '';
       progressSpot.logicRules = [rule];
     }
@@ -1246,14 +1244,14 @@ export function generateProjectLocally(brief) {
 export function improveProjectLocally(currentProject, target, instruction) {
   const scene = currentProject?.scenes?.find((entry) => entry.id === target?.id) || currentProject?.scenes?.[0];
   if (!scene) {
-    throw new Error('Aucune scène disponible à améliorer.');
+    throw new Error('Aucune scene disponible à améliorer.');
   }
 
   const lowerInstruction = String(instruction || '').toLowerCase();
   const stressMode = lowerInstruction.includes('stress') || lowerInstruction.includes('angoiss') || lowerInstruction.includes('tension');
   const moodText = stressMode ?
      'L’air semble plus lourd, les sons se rapprochent, et chaque détail donne l’impression que quelque chose vient de bouger hors champ.'
-    : `La scène gagne en intensité: ${instruction || 'les indices deviennent plus lisibles et la progression plus nette.'}`;
+    : `La scene gagne en intensité: ${instruction || 'les indices deviennent plus lisibles et la progression plus nette.'}`;
 
   const hotspots = (scene.hotspots || []).map((hotspot, index) => ({
     id: hotspot.id,
@@ -1318,7 +1316,7 @@ export function extendProjectLocally(brief, options = {}) {
         hotspots: (scene.hotspots || []).map((hotspot) => ({
           ...hotspot,
           dialogue: hotspot.dialogue ?
-             `${hotspot.dialogue} ${instruction || 'Un détail supplémentaire donne plus de poids à cette interaction.'}`
+             `${hotspot.dialogue} ${instruction || 'Un détail supplémentaire donné plus de poids à cette interaction.'}`
             : instruction || 'Cette zone révèle un nouvel indice utile.',
         })),
       })),
@@ -1327,11 +1325,11 @@ export function extendProjectLocally(brief, options = {}) {
 
   const newScene = makeScene({ actId: defaultActId });
   newScene.name = stage === 'add_scenes' ?
-     (instruction || 'Nouvelle pièce secrète')
+     (instruction || 'Nouvelle piece secrète')
     : instruction || `Suite de ${anchorScene?.name || theme}`;
   newScene.introText = stage === 'continue_story' ?
-     `Depuis ${anchorScene?.name || 'la scène précédente'}, la suite reprend directement les enjeux établis. ${storySummary ? `Résumé à respecter: ${storySummary.split('\n').slice(0, 3).join(' ')}` : `Nouvelle ? piste: ${instruction || theme}.`}`
-    : `Une nouvelle zone s'ajoute à l'exploration depuis ${anchorScene?.name || 'la scène choisie'}: ${instruction || theme}.`;
+     `Depuis ${anchorScene?.name || 'la scene précédente'}, la suite reprend directement les enjeux établis. ${storySummary ? `Résumé à respecter: ${storySummary.split('\n').slice(0, 3).join(' ')}` : `Nouvelle ? piste: ${instruction || theme}.`}`
+    : `Une nouvelle zone s'ajoute à l'exploration depuis ${anchorScene?.name || 'la scene choisie'}: ${instruction || theme}.`;
   newScene.hotspots = [];
 
   const bridgeHotspot = makeHotspot();
@@ -1348,7 +1346,7 @@ export function extendProjectLocally(brief, options = {}) {
   const clueHotspot = makeHotspot();
   clueHotspot.name = 'Indice caché';
   clueHotspot.actionType = 'dialogue_item';
-  clueHotspot.dialogue = `Les joueurs trouvent un indice lié à ${newScene.name}.`;
+  clueHotspot.dialogue = `Les joueurs trouvént un indice lié à ${newScene.name}.`;
   clueHotspot.rewardItemId = clueItem.id;
   clueHotspot.x = 42;
   clueHotspot.y = 58;
@@ -1365,10 +1363,10 @@ export function extendProjectLocally(brief, options = {}) {
 
   if (stage === 'add_enigmas') {
     const enigma = makeEnigma({
-      name: instruction || `Énigme de ${newScene.name}`,
+      name: instruction || `Enigme de ${newScene.name}`,
       question: `Résous le mécanisme découvert dans ${newScene.name}.`,
       solutionText: '2413',
-      successMessage: 'Le mécanisme se débloque.',
+      successMessage: 'Le mécanisme se débloqué.',
       failMessage: 'Le mécanisme reste immobile.',
       unlockType: 'scene',
       targetSceneId: newScene.id,

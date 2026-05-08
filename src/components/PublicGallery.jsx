@@ -299,7 +299,7 @@ export default function PublicGallery({
                   {filterOptions.difficulties.map((difficulty) => <option key={difficulty} value={difficulty}>{difficulty}</option>)}
                 </select>
                 <select value={ageFilter} onChange={(event) => setAgeFilter(event.target.value)}>
-                  {AGE_FILTERS.map(([value, label]) => <option key={value} value={value}>Âge : {label}</option>)}
+                  {AGE_FILTERS.map(([value, label]) => <option key={value} value={value}>Age : {label}</option>)}
                 </select>
               </div>
             </div>
@@ -354,7 +354,7 @@ export default function PublicGallery({
                 fallback={<span>{selectedGame.title.charAt(0).toUpperCase()}</span>}
               />
             </div>
-            <div className="public-game-details">
+            <div className="public-game-détails">
               <div>
                 <span className="eyebrow">Page jeu</span>
                 <h2>{selectedGame.title}</h2>
@@ -401,7 +401,7 @@ export default function PublicGallery({
                   id="public-comment"
                   value={commentText}
                   onChange={(event) => setCommentText(event.target.value)}
-                  placeholder="énigmes cool mais un peu facile"
+                  placeholder="enigmes cool mais un peu facile"
                   maxLength={180}
                 />
                 <button type="submit">Envoyer l’avis</button>

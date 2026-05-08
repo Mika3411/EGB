@@ -7,7 +7,12 @@ export default function Header({
   user,
   onLogout,
   saveStatus,
+  projectMode = 'expert',
 }) {
+  const isBeginnerMode = projectMode === 'beginner';
+  const isIntermediateMode = projectMode === 'intermediate';
+  const modeLabel = isBeginnerMode ? 'Mode debutant' : isIntermediateMode ? 'Mode intermediaire' : 'Mode expert';
+
   return (
     <header className="topbar topbar-pro">
       <div className="brand-block brand-block-banner">
@@ -26,16 +31,23 @@ export default function Header({
             <strong>Projet</strong>
             <small>{saveStatus || 'Sauvegarde active'}</small>
           </div>
+          <span className={`mode-badge ${projectMode}`}>
+            {modeLabel}
+          </span>
         </div>
-        <div className="toolbar project-actions">
-          <label className="button like secondary-action">
-            Importer JSON
-            <input type="file" accept="application/json" onChange={onImportJson} hidden />
-          </label>
-          <button className="ghost-action" onClick={onExportStandalone}>
-            Exporter jeu
-          </button>
-        </div>
+        {!isBeginnerMode ? (
+          <div className="toolbar project-actions">
+            {!isIntermediateMode ? (
+              <label className="button like secondary-action">
+                Importer JSON
+                <input type="file" accept="application/json" onChange={onImportJson} hidden />
+              </label>
+            ) : null}
+            <button className="ghost-action" onClick={onExportStandalone}>
+              Exporter jeu
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {user ? (

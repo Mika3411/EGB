@@ -1,4 +1,11 @@
-import { buildStoragePath, downloadTextFile, getSupabaseClient, hasSupabaseConfig, uploadToStorage } from '../supabaseStorage';
+import {
+  buildStoragePath,
+  downloadTextFile,
+  getSupabaseClient,
+  hasSupabaseConfig,
+  isStorageNotFoundError,
+  uploadToStorage,
+} from '../supabaseStorage';
 
 const ACCOUNTS_KEY = 'escape_builder_accounts_v1';
 const SESSION_KEY = 'escape_builder_session_v1';
@@ -134,26 +141,59 @@ export function getSessionUserId() {
   return window.localStorage.getItem(SESSION_KEY) || '';
 }
 
-const supabaseUserToAccount = (user) => {
+export const supabaseUserToAccount = (user) => {
   if (!user) return null;
+  const metadata = {
+    ...(user.app_metadata || {}),
+    ...(user.user_metadata || {}),
+  };
+  const roles = Array.isArray(metadata.roles)
+    ? metadata.roles
+    : [metadata.role || (metadata.isAdmin || metadata.is_admin ? 'admin' : 'user')].filter(Boolean);
+  const isAdmin = Boolean(
+    metadata.isAdmin
+    || metadata.is_admin
+    || roles.includes('admin')
+    || normalizeEmail(user.email || '') === normalizeEmail(import.meta.env.VITE_ADMIN_EMAIL || 'thorez.m@hotmail.fr')
+  );
   return {
     id: user.id,
     name: user.user_metadata?.name || user.email?.split('@')[0] || 'Utilisateur',
     email: user.email || '',
     createdAt: user.created_at || new Date().toISOString(),
     provider: 'supabase',
+    role: isAdmin ? 'admin' : 'user',
+    roles: isAdmin ? Array.from(new Set([...roles, 'admin'])) : Array.from(new Set(roles.length ? roles : ['user'])),
+    isAdmin,
   };
 };
+
+export const getAccountRole = (account) => {
+  const safeAccount = account || {};
+  return safeAccount.isAdmin || safeAccount.role === 'admin' || safeAccount.roles?.includes?.('admin') ? 'admin' : 'user';
+};
+
+export const isAdminAccount = (account = {}) => getAccountRole(account) === 'admin';
 
 const getEmailRedirectUrl = () => {
   if (typeof window === 'undefined') return undefined;
   return `${window.location.origin}${window.location.pathname}`;
 };
 
+const withTimeout = (promise, milliseconds, fallback = null) => new Promise((resolve) => {
+  const timer = setTimeout(() => resolve(fallback), milliseconds);
+  promise
+    .then((value) => resolve(value))
+    .catch(() => resolve(fallback))
+    .finally(() => clearTimeout(timer));
+});
+
 export async function getSessionUser() {
   if (hasSupabaseConfig()) {
     const client = getSupabaseClient();
-    const { data, error } = await client.auth.getSession();
+    const session = await withTimeout(client.auth.getSession(), 10000, null);
+    if (!session) return null;
+    const { data, error } = session;
     if (error) return null;
     const account = supabaseUserToAccount(data.session?.user);
     return account ? rememberAccount(account) : null;
@@ -230,10 +270,13 @@ export async function registerUser({
     marketingConsent: Boolean(marketingConsent),
     acceptedTerms: Boolean(acceptedTerms),
     acceptedTermsAt: acceptedTerms ? new Date().toISOString() : '',
+    role: normalizeEmail(email) === normalizeEmail(import.meta.env.VITE_ADMIN_EMAIL || 'thorez.m@hotmail.fr') ? 'admin' : 'user',
     salt,
     passwordHash,
     createdAt: new Date().toISOString(),
   };
+  account.roles = [account.role];
+  account.isAdmin = account.role === 'admin';
 
   accounts.push(account);
   writeJson(ACCOUNTS_KEY, accounts);
@@ -278,7 +321,12 @@ export async function loginUser({ email, password }) {
   }
 
   window.localStorage.setItem(SESSION_KEY, account.id);
-  return account;
+  return rememberAccount({
+    ...account,
+    role: account.role || (normalizeEmail(account.email) === normalizeEmail(import.meta.env.VITE_ADMIN_EMAIL || 'thorez.m@hotmail.fr') ? 'admin' : 'user'),
+    roles: account.roles || [account.role || 'user'],
+    isAdmin: Boolean(account.isAdmin || account.role === 'admin'),
+  });
 }
 
 export async function sendPasswordResetEmail(email) {
@@ -339,6 +387,8 @@ export async function saveProjectRecordsForUser(userId, projects = [], options =
   await uploadToStorage(getProjectsStoragePath(userId), blob, {
     contentType: 'application/json',
     cacheControl: '0',
+    visibility: 'private',
+    upsert: true,
   });
 
   if (options.requirePublicIndex) {
@@ -356,13 +406,11 @@ export async function loadPublicProjectIndex() {
   if (!hasSupabaseConfig()) return [];
 
   try {
-    const text = await downloadTextFile(getPublicProjectsStoragePath());
+    const text = await downloadTextFile(getPublicProjectsStoragePath(), { visibility: 'public' });
     const projects = JSON.parse(text);
     return Array.isArray(projects) ? projects : [];
   } catch (error) {
-    const message = String(error?.message || '');
-    const isMissingFile = /not found|object not found|status code 400|status code 404/i.test(message);
-    if (isMissingFile) return [];
+    if (isStorageNotFoundError(error)) return [];
     throw error;
   }
 }
@@ -373,6 +421,8 @@ async function savePublicProjectIndex(projects = []) {
   await uploadToStorage(getPublicProjectsStoragePath(), blob, {
     contentType: 'application/json',
     cacheControl: '0',
+    visibility: 'public',
+    upsert: true,
   });
   return projects;
 }
@@ -397,13 +447,11 @@ export async function loadProjectRecordsForUser(userId) {
   if (!userId || !hasSupabaseConfig()) return null;
 
   try {
-    const text = await downloadTextFile(getProjectsStoragePath(userId));
+    const text = await downloadTextFile(getProjectsStoragePath(userId), { visibility: 'private' });
     const projects = JSON.parse(text);
     return Array.isArray(projects) ? projects : [];
   } catch (error) {
-    const message = String(error?.message || '');
-    const isMissingFile = /not found|object not found|status code 400|status code 404/i.test(message);
-    if (isMissingFile) return null;
+    if (isStorageNotFoundError(error)) return null;
     throw error;
   }
 }
@@ -416,7 +464,7 @@ export async function loadProjectForUser(userId) {
   }
 
   try {
-    const text = await downloadTextFile(getProjectStoragePath(userId));
+    const text = await downloadTextFile(getProjectStoragePath(userId), { visibility: 'private' });
     const project = JSON.parse(text);
     updateLocalProjectCache(userId, project);
     return project;
@@ -424,9 +472,7 @@ export async function loadProjectForUser(userId) {
     const fallback = getLocalProjects()[userId]?.project || null;
     if (fallback) return fallback;
 
-    const message = String(error?.message || '');
-    const isMissingFile = /not found|object not found|status code 400|status code 404/i.test(message);
-    if (isMissingFile) return null;
+    if (isStorageNotFoundError(error)) return null;
     throw error;
   }
 }

@@ -80,6 +80,25 @@ export function buildExportProjectWithAssets(project, zip) {
     target[dataKey] = assetPath;
   };
 
+  const exportAnime2dSpecMedia = (spec, folder, fallbackName) => {
+    if (!spec || typeof spec !== 'object' || !Array.isArray(spec.layers)) return;
+    spec.layers.forEach((layer, layerIndex) => {
+      const layerName = `${fallbackName || 'anime2d'}-${layer.name || `layer-${layerIndex + 1}`}`;
+      exportMediaField(layer, 'src', 'name', folder, layerName);
+      exportMediaField(layer, 'imageData', 'name', folder, layerName);
+      exportMediaField(layer, 'originalSrc', 'name', folder, `${layerName}-original`);
+      if (layer.layer && typeof layer.layer === 'object') {
+        exportMediaField(layer.layer, 'src', 'name', folder, layerName);
+        exportMediaField(layer.layer, 'imageData', 'name', folder, layerName);
+        exportMediaField(layer.layer, 'originalSrc', 'name', folder, `${layerName}-original`);
+      }
+    });
+  };
+
+  (nextProject.assets || []).forEach((asset, assetIndex) => {
+    exportMediaField(asset, 'url', 'name', asset.type === 'image' ? 'images' : asset.type === 'audio' ? 'audio' : asset.type === 'video' ? 'video' : 'assets', asset.name || asset.id || `asset-${assetIndex + 1}`);
+  });
+
   (nextProject.scenes || []).forEach((scene, sceneIndex) => {
     exportMediaField(scene, 'backgroundData', 'backgroundName', 'scenes', scene.name || `scene-${sceneIndex + 1}-background`);
     exportMediaField(scene, 'musicData', 'musicName', 'audio', scene.name || `scene-${sceneIndex + 1}-music`);
@@ -103,6 +122,7 @@ export function buildExportProjectWithAssets(project, zip) {
       exportMediaField(obj, 'popupImage', 'popupImageName', 'scene-objects', `${scene.name || `scene-${sceneIndex + 1}`}-object-popup-${objIndex + 1}`);
       exportMediaField(obj, 'popupImageData', 'popupImageName', 'scene-objects', `${scene.name || `scene-${sceneIndex + 1}`}-object-popup-${objIndex + 1}`);
       exportMediaField(obj, 'soundData', 'soundName', 'audio', `${objectName}-sound`);
+      exportAnime2dSpecMedia(obj.anime2dSpec, 'animations', `${objectName}-anime2d`);
       (obj.logicRules || []).forEach((rule, ruleIndex) => {
         const ruleName = `${objectName}-${rule.name || `rule-${ruleIndex + 1}`}`;
         exportMediaField(rule, 'successSoundData', 'successSoundName', 'audio', `${ruleName}-success`);
@@ -116,7 +136,14 @@ export function buildExportProjectWithAssets(project, zip) {
   });
 
   (nextProject.cinematics || []).forEach((cinematic, cinematicIndex) => {
+    const cinematicName = cinematic.name || `cinematic-${cinematicIndex + 1}`;
     exportMediaField(cinematic, 'videoData', 'videoName', 'video', cinematic.name || `cinematic-${cinematicIndex + 1}`);
+    exportAnime2dSpecMedia(cinematic.anime2dSpec, 'animations', `${cinematicName}-anime2d`);
+
+    (cinematic.steps || []).forEach((step, stepIndex) => {
+      exportMediaField(step, 'src', 'name', step.type === 'audio' ? 'audio' : step.type === 'video' ? 'video' : 'cinematics', `${cinematicName}-step-${stepIndex + 1}`);
+      exportAnime2dSpecMedia(step.spec, 'animations', `${cinematicName}-step-${stepIndex + 1}-anime2d`);
+    });
 
     (cinematic.slides || []).forEach((slide, slideIndex) => {
       const slideName = `${cinematic.name || `cinematic-${cinematicIndex + 1}`}-slide-${slideIndex + 1}`;

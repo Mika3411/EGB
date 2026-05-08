@@ -71,6 +71,15 @@ const getConnectionStatus = (project, rooms, connection, transitions) => {
   return 'missing';
 };
 
+const getRouteMapRoomsAndConnections = (routeMap = {}) => {
+  const actMaps = routeMap.actMaps && typeof routeMap.actMaps === 'object' ? Object.values(routeMap.actMaps) : [];
+  const maps = actMaps.length ? actMaps : [routeMap];
+  return {
+    rooms: maps.flatMap((map) => map.rooms || []),
+    connections: maps.flatMap((map) => map.connections || []),
+  };
+};
+
 export function calculateProjectScore(project = {}) {
   const acts = project.acts || [];
   const scenes = project.scenes || [];
@@ -78,8 +87,7 @@ export function calculateProjectScore(project = {}) {
   const enigmas = project.enigmas || [];
   const cinematics = project.cinematics || [];
   const routeMap = project.routeMap || {};
-  const rooms = routeMap.rooms || [];
-  const connections = routeMap.connections || [];
+  const { rooms, connections } = getRouteMapRoomsAndConnections(routeMap);
   const transitions = getSceneTransitions(project);
 
   const structurePoints =
@@ -141,26 +149,26 @@ export function calculateProjectScore(project = {}) {
   const advice = [];
 
   if (!acts.length) advice.push('Crée au moins un acte pour structurer le parcours.');
-  if (scenes.length < 4) advice.push('Ajoute quelques scènes pour donner plus de matière au parcours.');
+  if (scenes.length < 4) advice.push('Ajoute quelques scenes pour donner plus de matière au parcours.');
   if (items.length < 3) advice.push('Ajoute des objets d’inventaire pour enrichir les interactions.');
-  if (enigmas.length < 2) advice.push('Ajoute des énigmes pour renforcer la progression du joueur.');
-  if (!cinematics.length) advice.push('Ajoute une cinématique d’introduction, de transition ou de fin.');
+  if (enigmas.length < 2) advice.push('Ajoute des enigmes pour renforcer la progression du joueur.');
+  if (!cinematics.length) advice.push('Ajoute une cinematic d’introduction, de transition ou de fin.');
   if (!startValid) advice.push('Vérifie le point de départ du jeu.');
-  if (mappedRatio < 1 && scenes.length) advice.push('Associe toutes les scènes importantes à une pièce du plan.');
-  if (!hasStartRoom) advice.push('Marque une pièce comme départ dans le plan.');
-  if (connectionCounts.missing) advice.push('Corrige les liaisons rouges: aucune zone d’action ne relie ces pièces.');
+  if (mappedRatio < 1 && scenes.length) advice.push('Associe toutes les scenes importantes à une piece du plan.');
+  if (!hasStartRoom) advice.push('Marque une piece comme départ dans le plan.');
+  if (connectionCounts.missing) advice.push('Corrige les liaisons rouges: aucune zone d’action ne relie ces pieces.');
   if (connectionCounts.partial) advice.push('Valide les allers simples voulus ou ajoute la zone d’action de retour.');
-  if (actionRatio < 0.75 && scenes.length) advice.push('Ajoute des zones d’action utiles dans les scènes encore peu interactives.');
-  if (enigmaRatio < 1) advice.push('Complète les solutions des énigmes incomplètes.');
+  if (actionRatio < 0.75 && scenes.length) advice.push('Ajoute des zones d’action utiles dans les scenes encore peu interactives.');
+  if (enigmaRatio < 1) advice.push('Complète les solutions des enigmes incomplètes.');
   if (!advice.length) advice.push('Le projet est cohérent. Les dernières améliorations seront surtout du polish: ambiance, médias, rythme et tests joueur.');
 
   const conclusion = score >= 9
-    ? 'Projet très solide: le parcours est lisible, cohérent et presque prêt à être testé en conditions réelles.'
+    ? 'Projet très solide: le parcours est lisible, cohérent et prèsque prêt à être testé en conditions réelles.'
     : score >= 7
       ? 'Bonne base: le jeu est jouable, avec quelques points de cohérence ou de contenu à renforcer.'
       : score >= 5
         ? 'Projet prometteur: la structure existe, mais le plan et les interactions doivent encore être consolidés.'
-        : 'Projet encore en construction: commence par relier les scènes, poser le départ et ajouter des interactions clés.';
+        : 'Projet encore en construction: commence par relier les scenes, poser le départ et ajouter des interactions clés.';
 
   return {
     score,
@@ -191,7 +199,7 @@ export function calculateProjectScore(project = {}) {
       `Structure: ${structurePoints.toFixed(1)}/4`,
       `Plan: ${mapPoints.toFixed(1)}/3,7`,
       `Contenu: ${contentPoints.toFixed(1)}/2`,
-      `${acts.length} acte(s), ${scenes.length} scène(s), ${items.length} objet(s), ${enigmas.length} énigme(s), ${cinematics.length} cinématique(s)`,
+      `${acts.length} acte(s), ${scenes.length} scene(s), ${items.length} objet(s), ${enigmas.length} enigme(s), ${cinematics.length} cinematic(s)`,
     ].join(' · '),
   };
 }

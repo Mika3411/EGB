@@ -1,8 +1,8 @@
 import {
-  getCreditUserId,
   getSupabaseAdminClient,
   json,
   parseBody,
+  resolveCreditUserId,
   spendCredits,
   withErrors,
 } from './_shared.js';
@@ -11,7 +11,7 @@ export const handler = async (event) => withErrors(event, async () => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Methode non autorisee.' });
 
   const body = parseBody(event);
-  const userId = getCreditUserId(event, body);
+  const userId = await resolveCreditUserId(event);
   const packId = String(body.packId || '').trim().replace(/[^a-zA-Z0-9._:-]/g, '-');
   const costCredits = Math.max(0, Math.round(Number(body.costCredits || 0)));
   const title = String(body.title || 'Pack boutique').trim().slice(0, 120);

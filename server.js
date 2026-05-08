@@ -7,7 +7,7 @@ import { createClient } from '@supabase/supabase-js';
 const rootDir = fileURLToPath(new URL('.', import.meta.url));
 const publicDir = resolve(rootDir, 'dist');
 const port = Number(process.env.PORT || 8787);
-const ADMIN_EMAIL = 'thorez.m@hotmail.fr';
+const ADMIN_EMAIL = String(process.env.ADMIN_EMAIL || process.env.VITE_ADMIN_EMAIL || 'thorez.m@hotmail.fr').trim().toLowerCase();
 
 const loadEnvFile = () => {
   const envPath = join(rootDir, '.env');
@@ -31,6 +31,9 @@ let supabaseAdminClient = null;
 
 const creditStorePath = process.env.AI_CREDITS_FILE || join(rootDir, '.data', 'ai-credits.json');
 const defaultAiCredits = Number(process.env.AI_DEFAULT_CREDITS || 20);
+const storageBucket = process.env.SUPABASE_STORAGE_BUCKET || process.env.VITE_SUPABASE_STORAGE_BUCKET || 'escape-game-assets';
+const shopPacksStoragePath = 'public/shop-packs.json';
+const publicProjectsStoragePath = 'public/projects.json';
 const aiJobs = new Map();
 const aiCreditCosts = {
   text: Number(process.env.AI_TEXT_CREDIT_COST || 2),
@@ -167,7 +170,23 @@ const getCreditUserId = (req, body = {}) => {
   return String(raw).trim().replace(/[^a-zA-Z0-9._:@-]/g, '-') || 'anonymous';
 };
 
+const sanitizeCreditUserId = (value = '') =>
+  String(value).trim().replace(/[^a-zA-Z0-9._:@-]/g, '-') || 'anonymous';
+
 const normalizeEmail = (value = '') => String(value).trim().toLowerCase();
+
+const sanitizeStorageSegment = (value = '') =>
+  String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase() || 'asset';
+
+const buildStoragePath = (...segments) => segments
+  .filter(Boolean)
+  .map((segment) => sanitizeStorageSegment(segment))
+  .join('/');
 
 const getSupabaseAdminClient = () => {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
@@ -188,6 +207,20 @@ const getBearerToken = (req) => {
   return String(value).replace(/^Bearer\s+/i, '').trim();
 };
 
+const isAdminUser = (user = {}) => {
+  const metadata = {
+    ...(user.app_metadata || {}),
+    ...(user.user_metadata || {}),
+  };
+  return Boolean(
+    metadata.isAdmin
+    || metadata.is_admin
+    || metadata.role === 'admin'
+    || metadata.roles?.includes?.('admin')
+    || normalizeEmail(user.email || '') === ADMIN_EMAIL,
+  );
+};
+
 const verifySupabaseAdminRequest = async (req) => {
   const client = getSupabaseAdminClient();
   if (!client) {
@@ -204,13 +237,103 @@ const verifySupabaseAdminRequest = async (req) => {
   }
 
   const { data, error } = await client.auth.getUser(token);
-  if (error || normalizeEmail(data.user?.email) !== ADMIN_EMAIL) {
+  const user = data.user || null;
+  if (error || !user) {
+    const accessError = new Error('Session admin invalide.');
+    accessError.status = 401;
+    throw accessError;
+  }
+
+  user.isAdmin = isAdminUser(user);
+  if (!user.isAdmin) {
     const accessError = new Error('Acces admin refuse.');
     accessError.status = 403;
     throw accessError;
   }
 
+  return user;
+};
+
+const verifySupabaseUserRequest = async (req) => {
+  const client = getSupabaseAdminClient();
+  if (!client) {
+    const error = new Error('Configuration Supabase manquante.');
+    error.status = 500;
+    throw error;
+  }
+
+  const token = getBearerToken(req);
+  if (!token) {
+    const error = new Error('Session manquante.');
+    error.status = 401;
+    throw error;
+  }
+
+  const { data, error } = await client.auth.getUser(token);
+  if (error || !data.user?.id) {
+    const accessError = new Error('Session invalide.');
+    accessError.status = 401;
+    throw accessError;
+  }
+
   return data.user;
+};
+
+const resolveCreditUserId = async (req, body = {}) => {
+  const requestedUserId = getCreditUserId(req, body);
+  if (!getSupabaseAdminClient()) return requestedUserId;
+
+  const authUser = await verifySupabaseUserRequest(req);
+  const userId = sanitizeCreditUserId(authUser.id || authUser.email || requestedUserId);
+  if (requestedUserId !== 'anonymous' && requestedUserId !== userId && requestedUserId !== authUser.email) {
+    const error = new Error('Compte credits invalide.');
+    error.status = 403;
+    throw error;
+  }
+  return userId;
+};
+
+const isStorageNotFoundError = (error) => {
+  const status = Number(error?.statusCode || error?.status || 0);
+  const code = String(error?.code || error?.statusCode || '').toLowerCase();
+  return status === 404 || code === '404' || code === 'not_found' || code === 'not-found';
+};
+
+const downloadStorageJson = async (path, fallback) => {
+  const client = getSupabaseAdminClient();
+  if (!client) return fallback;
+
+  const { data, error } = await client.storage.from(storageBucket).download(path);
+  if (error) {
+    if (isStorageNotFoundError(error)) return fallback;
+    throw error;
+  }
+
+  const text = await data.text();
+  try {
+    const parsed = JSON.parse(text);
+    return parsed ?? fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const uploadStorageJson = async (path, value) => {
+  const client = getSupabaseAdminClient();
+  if (!client) {
+    const error = new Error('Configuration Supabase manquante.');
+    error.status = 500;
+    throw error;
+  }
+
+  const buffer = Buffer.from(JSON.stringify(value, null, 2), 'utf8');
+  const { error } = await client.storage.from(storageBucket).upload(path, buffer, {
+    upsert: true,
+    contentType: 'application/json',
+    cacheControl: '0',
+  });
+  if (error) throw error;
+  return value;
 };
 
 const ensureCreditAccount = (store, userId) => {
@@ -280,12 +403,7 @@ const normalizeCreditAccount = (userId, account = {}) => ({
   transactions: (account.transactions || []).slice(-10).reverse(),
 });
 
-const requireCreditAdmin = async (req, body = {}) => {
-  const adminKey = process.env.AI_CREDIT_ADMIN_KEY || '';
-  const headerKey = req.headers.authorization?.replace(/^Bearer\s+/i, '') || req.headers['x-admin-key'];
-  const providedKey = Array.isArray(headerKey) ? headerKey[0] : headerKey || body.adminKey || '';
-  if (adminKey && providedKey === adminKey) return true;
-
+const requireCreditAdmin = async (req) => {
   await verifySupabaseAdminRequest(req);
   return true;
 };
@@ -343,7 +461,7 @@ const grantCredits = (userId, amount, reason) => {
 
 const handleCredits = async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
-  const userId = getCreditUserId(req, { userId: url.searchParams.get('userId') });
+  const userId = await resolveCreditUserId(req, { userId: url.searchParams.get('userId') });
   const account = getCreditAccount(userId);
   const objectImageBatchSize = Math.max(1, toCount(aiCreditCosts.objectImageBatchSize) || 1);
   sendJson(res, 200, {
@@ -360,7 +478,7 @@ const handleCredits = async (req, res) => {
 
 const handleCreditTopUp = async (req, res) => {
   const body = await readJsonBody(req);
-  await requireCreditAdmin(req, body);
+  await requireCreditAdmin(req);
 
   const userId = getCreditUserId(req, body);
   const amount = Math.max(0, Math.round(Number(body.amount || 0)));
@@ -390,7 +508,7 @@ const handleCreditsAdminList = async (req, res) => {
 
 const handleCreditsAdminUpdate = async (req, res) => {
   const body = await readJsonBody(req);
-  await requireCreditAdmin(req, body);
+  await requireCreditAdmin(req);
 
   const userId = getCreditUserId(req, body);
   if (!userId || userId === 'anonymous') {
@@ -440,12 +558,166 @@ const handleCreditsAdminUpdate = async (req, res) => {
   });
 };
 
+const handleAdminCredits = async (req, res) => {
+  await verifySupabaseAdminRequest(req);
+  if (req.method === 'GET') {
+    await handleCreditsAdminList(req, res);
+    return;
+  }
+  if (req.method === 'POST') {
+    await handleCreditsAdminUpdate(req, res);
+    return;
+  }
+  sendJson(res, 405, { error: 'Methode non autorisee.' });
+};
+
+const createEmptyShopPack = () => ({
+  id: '',
+  title: '',
+  costCredits: 50,
+  description: '',
+  rating: 8,
+  actsCount: 1,
+  scenesCount: 5,
+  objectsCount: 5,
+  enigmasCount: 3,
+  cinematicsCount: 1,
+  combinationsCount: 1,
+  screenshots: [],
+  downloadUrl: '',
+  downloadFileName: '',
+  downloadStoragePath: '',
+  downloadMode: '',
+  archived: false,
+  archivedAt: '',
+  archivedReason: '',
+  soldAt: '',
+  soldTo: '',
+  createdAt: '',
+  updatedAt: '',
+});
+
+const normalizeNumber = (value, fallback = 0) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, number) : fallback;
+};
+
+const createShopPackId = () => `pack_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+const normalizeShopPack = (pack = {}) => ({
+  ...createEmptyShopPack(),
+  ...pack,
+  id: String(pack.id || createShopPackId()).trim().replace(/[^a-zA-Z0-9._:-]/g, '-'),
+  title: String(pack.title || '').trim(),
+  costCredits: normalizeNumber(pack.costCredits, 50),
+  description: String(pack.description || '').trim(),
+  rating: Math.min(10, normalizeNumber(pack.rating, 8)),
+  actsCount: normalizeNumber(pack.actsCount, 0),
+  scenesCount: normalizeNumber(pack.scenesCount, 0),
+  objectsCount: normalizeNumber(pack.objectsCount, 0),
+  enigmasCount: normalizeNumber(pack.enigmasCount, 0),
+  cinematicsCount: normalizeNumber(pack.cinematicsCount, 0),
+  combinationsCount: normalizeNumber(pack.combinationsCount, 0),
+  screenshots: Array.isArray(pack.screenshots) ? pack.screenshots.filter((entry) => entry?.src) : [],
+  downloadUrl: String(pack.downloadUrl || '').trim(),
+  downloadFileName: String(pack.downloadFileName || '').trim(),
+  downloadStoragePath: String(pack.downloadStoragePath || '').trim(),
+  downloadMode: String(pack.downloadMode || '').trim(),
+  archived: Boolean(pack.archived),
+  archivedAt: String(pack.archivedAt || '').trim(),
+  archivedReason: String(pack.archivedReason || '').trim(),
+  soldAt: String(pack.soldAt || '').trim(),
+  soldTo: String(pack.soldTo || '').trim(),
+  createdAt: pack.createdAt || new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+});
+
+const loadServerShopPacks = async () => {
+  const packs = await downloadStorageJson(shopPacksStoragePath, []);
+  return Array.isArray(packs) ? packs.map(normalizeShopPack) : [];
+};
+
+const saveServerShopPacks = async (packs = []) => {
+  const normalized = Array.isArray(packs) ? packs.map(normalizeShopPack) : [];
+  await uploadStorageJson(shopPacksStoragePath, normalized);
+  return normalized;
+};
+
+const handleShopPacks = async (req, res) => {
+  if (req.method === 'GET') {
+    sendJson(res, 200, { packs: await loadServerShopPacks() });
+    return;
+  }
+
+  const adminUser = await verifySupabaseAdminRequest(req);
+  const body = await readJsonBody(req);
+  const action = String(body.action || '').trim();
+  const packs = await loadServerShopPacks();
+
+  if (action === 'replace') {
+    const nextPacks = await saveServerShopPacks(Array.isArray(body.packs) ? body.packs : []);
+    sendJson(res, 200, { packs: nextPacks, admin: adminUser.email || '' });
+    return;
+  }
+
+  if (action === 'upsert') {
+    const pack = normalizeShopPack(body.pack || {});
+    if (!pack.title) {
+      sendJson(res, 400, { error: 'Nom du pack manquant.' });
+      return;
+    }
+    const nextPacks = await saveServerShopPacks([
+      pack,
+      ...packs.filter((entry) => entry.id !== pack.id),
+    ]);
+    sendJson(res, 200, { packs: nextPacks, pack, admin: adminUser.email || '' });
+    return;
+  }
+
+  const packId = String(body.packId || '').trim().replace(/[^a-zA-Z0-9._:-]/g, '-');
+  if (!packId) {
+    sendJson(res, 400, { error: 'Pack manquant.' });
+    return;
+  }
+
+  if (action === 'delete') {
+    sendJson(res, 200, { packs: await saveServerShopPacks(packs.filter((entry) => entry.id !== packId)) });
+    return;
+  }
+
+  if (action === 'archive' || action === 'relist') {
+    const now = new Date().toISOString();
+    const nextPacks = await saveServerShopPacks(packs.map((pack) => {
+      if (pack.id !== packId) return pack;
+      return action === 'archive'
+        ? normalizeShopPack({
+          ...pack,
+          archived: true,
+          archivedAt: body.archivedAt || now,
+          archivedReason: body.archivedReason || 'admin',
+          soldAt: body.soldAt || pack.soldAt || '',
+          soldTo: body.soldTo || pack.soldTo || '',
+        })
+        : normalizeShopPack({
+          ...pack,
+          archived: false,
+          archivedAt: '',
+          archivedReason: '',
+          soldAt: '',
+          soldTo: '',
+        });
+    }));
+    sendJson(res, 200, { packs: nextPacks });
+    return;
+  }
+
+  sendJson(res, 400, { error: 'Action boutique inconnue.' });
+};
+
 const handleShopPurchase = async (req, res) => {
   const body = await readJsonBody(req);
-  const userId = getCreditUserId(req, body);
+  const userId = await resolveCreditUserId(req, body);
   const packId = String(body.packId || '').trim().replace(/[^a-zA-Z0-9._:-]/g, '-');
-  const costCredits = Math.max(0, Math.round(Number(body.costCredits || 0)));
-  const title = String(body.title || 'Pack boutique').trim().slice(0, 120);
 
   if (!packId) {
     sendJson(res, 400, { error: 'Pack manquant.' });
@@ -455,16 +727,48 @@ const handleShopPurchase = async (req, res) => {
     sendJson(res, 400, { error: 'Utilisateur manquant.' });
     return;
   }
+
+  const packs = await loadServerShopPacks();
+  const pack = packs.find((entry) => entry.id === packId);
+  if (!pack || pack.archived) {
+    sendJson(res, 404, { error: 'Pack indisponible.' });
+    return;
+  }
+  if (!pack.downloadUrl) {
+    sendJson(res, 400, { error: 'Pack sans fichier telechargeable.' });
+    return;
+  }
+
+  const costCredits = Math.max(0, Math.round(Number(pack.costCredits || 0)));
+  const title = String(pack.title || 'Pack boutique').trim().slice(0, 120);
   if (!costCredits) {
     sendJson(res, 400, { error: 'Cout en credits invalide.' });
     return;
   }
 
   const account = spendCredits(userId, costCredits, `shop_pack:${packId}:${title}`);
+  const purchasedAt = new Date().toISOString();
+  await saveServerShopPacks(packs.map((entry) => (
+    entry.id === packId ? normalizeShopPack({
+      ...entry,
+      archived: true,
+      archivedAt: purchasedAt,
+      archivedReason: 'sold',
+      soldAt: purchasedAt,
+      soldTo: userId,
+    }) : entry
+  )));
+
   sendJson(res, 200, {
     ok: true,
-    packId,
-    costCredits,
+    purchase: {
+      packId,
+      title,
+      costCredits,
+      downloadUrl: pack.downloadUrl,
+      downloadFileName: pack.downloadFileName || `${title || 'pack'}.zip`,
+      purchasedAt,
+    },
     balance: account.balance || 0,
   });
 };
@@ -532,6 +836,53 @@ const handleAdminUserUpdate = async (req, res) => {
   sendJson(res, 200, { user: supabaseUserToAdminRecord(data.user) });
 };
 
+const getAdminProjectPayload = (record = {}) => {
+  const shareState = record.shareState || record.share_state || {};
+  const data = shareState.publishedData || record.data || record.project || {};
+  const projectId = record.id || record.projectId || '';
+  const userId = record.userId || '';
+  const key = record.publicKey || (userId && projectId ? `${userId}:${projectId}` : projectId);
+  const scenes = Array.isArray(data.scenes) ? data.scenes.length : 0;
+  const enigmas = Array.isArray(data.enigmas) ? data.enigmas.length : 0;
+
+  return {
+    key,
+    userId,
+    projectId,
+    title: getProjectTitle(data, record),
+    author: record.authorName || record.author || record.authorEmail || 'Créateur',
+    authorEmail: record.authorEmail || '',
+    category: shareState.category || data.category || 'Autre',
+    ageRating: shareState.ageRating || data.ageRating || 'Tout public',
+    thumbnail: shareState.galleryThumbnail || shareState.publishedThumbnail || record.thumbnail || getProjectThumbnail(data, record),
+    publishedAt: shareState.publishedAt || shareState.copiedAt || record.updatedAt || '',
+    plays: Number(record.plays || 0),
+    scenes,
+    enigmas,
+    feedback: record.feedback || { votes: 0, average: 0, comments: [] },
+    authorProfile: record.authorProfile || { blogPosts: [] },
+    shareState,
+  };
+};
+
+const handleAdminProjects = async (req, res) => {
+  await verifySupabaseAdminRequest(req);
+
+  if (req.method !== 'GET') {
+    sendJson(res, 405, { error: 'Methode non autorisee.' });
+    return;
+  }
+
+  const records = await downloadStorageJson(publicProjectsStoragePath, []);
+  const projects = Array.isArray(records) ? records.map(getAdminProjectPayload) : [];
+  sendJson(res, 200, { projects });
+};
+
+const handleAdminModeration = async (req, res) => {
+  await verifySupabaseAdminRequest(req);
+  await handleModeration(req, res);
+};
+
 const handleModeration = async (req, res) => {
   const client = getSupabaseAdminClient();
 
@@ -587,6 +938,172 @@ const handleModeration = async (req, res) => {
   }
 
   sendJson(res, 405, { error: 'Methode non autorisee.' });
+};
+
+const cloneProjectData = (data) => JSON.parse(JSON.stringify(data || {}));
+
+const getProjectTitle = (project = {}, record = {}) =>
+  record?.name || project?.title || project?.name || 'Escape game sans titre';
+
+const getProjectThumbnail = (project = {}, record = {}) => {
+  const startScene = Array.isArray(project.scenes)
+    ? project.scenes.find((scene) => scene.id === project.start?.targetSceneId)
+    : null;
+  const candidates = [
+    record.shareState?.galleryThumbnail,
+    record.shareState?.publishedThumbnail,
+    record.thumbnail,
+    startScene?.backgroundData,
+    ...(project.scenes || []).map((scene) => scene.backgroundData),
+    ...(project.cinematics || []).flatMap((cinematic) => [
+      cinematic.videoPoster,
+      ...(cinematic.slides || []).map((slide) => slide.imageData),
+    ]),
+  ];
+
+  return candidates.find((value) => typeof value === 'string' && value.trim()) || '';
+};
+
+const normalizeProjectRecord = (record = {}) => ({
+  ...record,
+  shareState: record.shareState || record.share_state || { isPublic: false, copiedAt: '' },
+});
+
+const PUBLIC_SETTINGS_KEYS = new Set([
+  'category',
+  'ageRating',
+  'mature',
+  'galleryThumbnail',
+  'galleryThumbnailName',
+  'galleryThumbnailCrop',
+  'galleryThumbnailStorage',
+  'durationMinutes',
+  'difficulty',
+]);
+
+const sanitizePublicSettings = (settings = {}) => Object.fromEntries(
+  Object.entries(settings || {}).filter(([key]) => PUBLIC_SETTINGS_KEYS.has(key)),
+);
+
+const getProjectsStoragePath = (userId) => buildStoragePath('users', userId, 'projects.json');
+
+const loadServerProjectsForUser = async (userId) => {
+  const projects = await downloadStorageJson(getProjectsStoragePath(userId), []);
+  return Array.isArray(projects) ? projects.map(normalizeProjectRecord) : [];
+};
+
+const savePublicProjectIndexForUser = async (userId, projects = []) => {
+  const publicRecords = projects
+    .filter((project) => project?.id && project.shareState?.isPublic)
+    .map((project) => ({
+      ...project,
+      userId,
+      publicKey: `${userId}:${project.id}`,
+    }));
+
+  const existingIndex = await downloadStorageJson(publicProjectsStoragePath, []);
+  const safeIndex = Array.isArray(existingIndex) ? existingIndex : [];
+  const withoutUser = safeIndex.filter((project) => project.userId !== userId);
+  return uploadStorageJson(publicProjectsStoragePath, [...withoutUser, ...publicRecords]);
+};
+
+const saveServerProjectsForUser = async (userId, projects = []) => {
+  const normalized = Array.isArray(projects) ? projects.map(normalizeProjectRecord) : [];
+  await uploadStorageJson(getProjectsStoragePath(userId), normalized);
+  await savePublicProjectIndexForUser(userId, normalized);
+  return normalized;
+};
+
+const handleProjectPublication = async (req, res) => {
+  const user = await verifySupabaseUserRequest(req);
+  const body = await readJsonBody(req);
+  const action = String(body.action || '').trim();
+  const projectId = String(body.projectId || body.project?.id || '').trim();
+  const settings = sanitizePublicSettings(body.settings && typeof body.settings === 'object' ? body.settings : {});
+
+  if (!projectId) {
+    sendJson(res, 400, { error: 'Projet manquant.' });
+    return;
+  }
+  if (!['markCopied', 'publish', 'unpublish', 'settings'].includes(action)) {
+    sendJson(res, 400, { error: 'Action de publication inconnue.' });
+    return;
+  }
+
+  const timestamp = new Date().toISOString();
+  const projects = await loadServerProjectsForUser(user.id);
+  const existing = projects.find((project) => project.id === projectId);
+  if (!existing) {
+    sendJson(res, 404, { error: 'Projet introuvable.' });
+    return;
+  }
+
+  const sourceProject = normalizeProjectRecord(existing);
+
+  const nextProject = (() => {
+    if (action === 'settings') {
+      return {
+        ...sourceProject,
+        shareState: {
+          ...(sourceProject.shareState || {}),
+          ...settings,
+        },
+        updatedAt: timestamp,
+      };
+    }
+
+    if (action === 'unpublish') {
+      return {
+        ...sourceProject,
+        shareState: {
+          ...(sourceProject.shareState || {}),
+          isPublic: false,
+          unpublishedAt: timestamp,
+        },
+        updatedAt: timestamp,
+      };
+    }
+
+    if (action === 'markCopied') {
+      return {
+        ...sourceProject,
+        shareState: {
+          ...(sourceProject.shareState || {}),
+          isPublic: true,
+          copiedAt: timestamp,
+          publishedAt: sourceProject.shareState?.publishedAt || timestamp,
+          durationMinutes: sourceProject.shareState?.durationMinutes || Math.max(15, Math.min(90, 15 + (sourceProject.data?.scenes?.length || 0) * 8 + (sourceProject.data?.enigmas?.length || 0) * 5)),
+          difficulty: sourceProject.shareState?.difficulty || ((sourceProject.data?.enigmas?.length || 0) >= 5 ? 'difficile' : (sourceProject.data?.enigmas?.length || 0) >= 2 ? 'intermédiaire' : 'facile'),
+        },
+        updatedAt: timestamp,
+      };
+    }
+
+    const snapshot = cloneProjectData(sourceProject.data);
+    return {
+      ...sourceProject,
+      shareState: {
+        ...(sourceProject.shareState || {}),
+        isPublic: true,
+        copiedAt: sourceProject.shareState?.copiedAt || timestamp,
+        publishedAt: timestamp,
+        publishedData: snapshot,
+        publishedName: sourceProject.name || getProjectTitle(sourceProject.data),
+        publishedThumbnail: sourceProject.shareState?.galleryThumbnail || sourceProject.thumbnail || getProjectThumbnail(snapshot) || '',
+        durationMinutes: Math.max(15, Math.min(90, 15 + (snapshot?.scenes?.length || 0) * 8 + (snapshot?.enigmas?.length || 0) * 5)),
+        difficulty: (snapshot?.enigmas?.length || 0) >= 5 ? 'difficile' : (snapshot?.enigmas?.length || 0) >= 2 ? 'intermédiaire' : 'facile',
+      },
+      updatedAt: timestamp,
+    };
+  })();
+
+  const nextProjects = [
+    nextProject,
+    ...projects.filter((project) => project.id !== projectId),
+  ];
+
+  await saveServerProjectsForUser(user.id, nextProjects);
+  sendJson(res, 200, { project: nextProject });
 };
 
 const gumroadPacks = [
@@ -864,7 +1381,7 @@ const startAiJob = (body, userId, cost) => {
 
 const handleGenerate = async (req, res) => {
   const body = await readJsonBody(req);
-  const userId = getCreditUserId(req, body);
+  const userId = await resolveCreditUserId(req, body);
   const cost = calculateTextCreditCost(body);
   const shouldRunAsync = body.responseFormat === 'escape-game-project-json'
     && body.mode !== 'repair_item_names'
@@ -899,7 +1416,7 @@ const handleAiJob = async (req, res) => {
     return;
   }
 
-  const userId = getCreditUserId(req, { userId: url.searchParams.get('userId') });
+  const userId = await resolveCreditUserId(req, { userId: url.searchParams.get('userId') });
   if (job.userId && userId !== 'anonymous' && job.userId !== userId) {
     sendJson(res, 403, { error: 'Job IA refuse.' });
     return;
@@ -910,7 +1427,7 @@ const handleAiJob = async (req, res) => {
 
 const handleImage = async (req, res) => {
   const body = await readJsonBody(req);
-  const userId = getCreditUserId(req, body);
+  const userId = await resolveCreditUserId(req, body);
   const accountBeforeImage = getCreditAccount(userId);
   const cost = calculateImageCreditCost(accountBeforeImage, body);
   spendCredits(userId, cost, `image:${body.type || 'image'}`);
@@ -979,7 +1496,7 @@ const handleRemoveBackground = async (req, res) => {
   }
 
   const body = await readJsonBody(req);
-  const userId = getCreditUserId(req, body);
+  const userId = await resolveCreditUserId(req, body);
   const cost = Math.max(0, Math.round(Number(aiCreditCosts.removeBackground || 0)));
   if (!body.imageData) {
     sendJson(res, 400, { error: 'Image manquante.' });
@@ -1076,8 +1593,33 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if ((req.method === 'GET' || req.method === 'POST') && req.url.startsWith('/api/admin/credits')) {
+      await handleAdminCredits(req, res);
+      return;
+    }
+
+    if (req.method === 'GET' && req.url.startsWith('/api/admin/projects')) {
+      await handleAdminProjects(req, res);
+      return;
+    }
+
+    if ((req.method === 'GET' || req.method === 'POST') && req.url.startsWith('/api/admin/moderation')) {
+      await handleAdminModeration(req, res);
+      return;
+    }
+
     if ((req.method === 'GET' || req.method === 'POST') && req.url.startsWith('/api/moderation')) {
       await handleModeration(req, res);
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/api/projects/publication') {
+      await handleProjectPublication(req, res);
+      return;
+    }
+
+    if ((req.method === 'GET' || req.method === 'POST') && req.url.startsWith('/api/shop/packs')) {
+      await handleShopPacks(req, res);
       return;
     }
 

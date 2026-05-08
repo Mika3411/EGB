@@ -1,9 +1,27 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { COLOR_OPTIONS, POPUP_OVERLAY_GRADIENTS } from '../data/enigmaConfig';
 import { CODE_KEYPAD_KEYS } from '../data/playerConfig';
-import { parseJsonValue } from '../lib/gameEngine';
+import {
+  createAnime2dPreviewFrame,
+  createAnime2dPreviewModel,
+} from '../lib/anime2dEngine';
+import {
+  collectActMediaUrls,
+  collectNearbySceneMediaUrls,
+  createSceneTransitionOverlay,
+  formatTimerSeconds,
+  getSceneAmbientSoundUrl,
+  getSceneBackgroundUrl,
+  getSceneAmbientSoundKey,
+  getSceneMusicUrl,
+  getSceneMusicKey,
+  getSceneTimerConfig,
+} from '../lib/gameEngine';
+import { getCinematicPlaybackModel } from '../lib/cinematicEngine';
+import { parseJsonValue } from '../lib/enigmaEngine';
+import { findAssetById, resolveAssetUrl } from '../lib/assetManager';
 import { getElementShapeStyle, getLayerZIndex } from './scenes/sceneEditorUtils';
-import { getSceneObjectClickMode } from './scenes/SceneObjectInspector.jsx';
+import { SceneObjectBlockContent, getSceneObjectBlockType, getSceneObjectClickMode } from './scenes/SceneObjectInspector.jsx';
 import Anime2DPreview from './Anime2DPreview.jsx';
 import SceneVisualEffect, { getVisualEffectZoneZIndex } from './SceneVisualEffect';
 
@@ -18,45 +36,17 @@ const makePieceStyle = (imageData, rows, cols, pieceIndex, rotation = 0) => {
   };
 };
 
-const formatTimerSeconds = (seconds = 0) => {
-  const safeSeconds = Math.max(0, Math.round(Number(seconds) || 0));
-  const minutes = Math.floor(safeSeconds / 60);
-  const remaining = safeSeconds % 60;
-  return `${String(minutes).padStart(2, '0')}:${String(remaining).padStart(2, '0')}`;
+const resolveAnime2dLayerSrc = (project, layer) => {
+  const rawSrc = layer?.src || layer?.imageData || layer?.layer?.src || layer?.layer?.imageData || '';
+  const sourceProject = project || {};
+  const assetId = layer?.assetId || layer?.imageId || layer?.srcId || (findAssetById(sourceProject, rawSrc) ? rawSrc : '');
+  return resolveAssetUrl(sourceProject, assetId, rawSrc);
 };
 
-const isAnimeStepActive = (step, time) => {
-  const start = Number(step.at || 0);
-  const duration = Math.max(0, Number(step.duration || 0));
-  return time >= start && time < start + duration;
-};
-
-const getAnimeStepStart = (step) => Number(step?.at || 0);
-const sortAnimeStepsByTime = (steps = []) => [...steps].sort((a, b) => getAnimeStepStart(a) - getAnimeStepStart(b));
-
-const normalizeAnime2dLayer = (entry = {}) => {
-  const source = entry.layer && typeof entry.layer === 'object' ? entry.layer : {};
-  return {
-    ...source,
-    ...entry,
-    id: entry.id || source.id || '',
-    name: entry.name || source.name || '',
-    src: entry.src || entry.imageData || source.src || source.imageData || '',
-    x: Number(entry.x ?? source.x ?? 50),
-    y: Number(entry.y ?? source.y ?? 50),
-    width: Number(entry.width ?? source.width ?? 28),
-    height: Number(entry.height ?? source.height ?? (Number(entry.width ?? source.width ?? 28) * 1.6)),
-    opacity: Number(entry.opacity ?? source.opacity ?? 100),
-    visible: entry.visible ?? source.visible ?? true,
-    visibleAtStart: entry.visibleAtStart ?? source.visibleAtStart ?? false,
-  };
-};
-
-function Anime2DCinematicPlayer({ cinematic, onEnd }) {
-  const spec = cinematic?.anime2dSpec || {};
-  const steps = sortAnimeStepsByTime(Array.isArray(spec.cinematicSteps) ? spec.cinematicSteps : []);
-  const layers = Array.isArray(spec.layers) ? spec.layers.map(normalizeAnime2dLayer) : [];
-  const duration = Math.max(1, ...steps.map((step) => Number(step.at || 0) + Number(step.duration || 0)));
+function Anime2DCinematicPlayer({ cinematic, spec, project, onEnd }) {
+  const previewModel = useMemo(() => createAnime2dPreviewModel(spec || cinematic?.anime2dSpec), [cinematic?.anime2dSpec, spec]);
+  const { layers, duration } = previewModel;
+  const layerZIndexes = useMemo(() => new Map(layers.map((layer, index) => [layer.id, layers.length - index + 2])), [layers]);
   const [time, setTime] = useState(0);
   const onEndRef = useRef(onEnd);
 
@@ -80,161 +70,50 @@ function Anime2DCinematicPlayer({ cinematic, onEnd }) {
     return () => window.clearInterval(timer);
   }, [duration]);
 
-  const imageSteps = steps.filter((step) => ['add', 'replace'].includes(step.mode) && step.layerId && isAnimeStepActive(step, time));
-  const replaceStep = [...imageSteps].reverse().find((step) => step.mode === 'replace');
-  const eventLayerIds = new Set(steps.filter((step) => ['add', 'replace'].includes(step.mode) && step.layerId).map((step) => step.layerId));
-  const baseLayers = layers.filter((layer) => layer.visible !== false && !eventLayerIds.has(layer.id) && (layer.visibleAtStart === true || !layer.src));
-  const visibleLayers = replaceStep
-    ? layers.filter((layer) => layer.visible !== false && layer.id === replaceStep.layerId)
-    : [
-        ...baseLayers,
-        ...imageSteps
-          .filter((step) => step.mode === 'add')
-          .map((step) => layers.find((layer) => layer.visible !== false && layer.id === step.layerId))
-          .filter(Boolean),
-      ];
+  const { visibleLayers, narration: frameNarration } = useMemo(() => createAnime2dPreviewFrame(previewModel, time), [previewModel, time]);
   const fallbackNarration = cinematic?.slides?.find((slide) => String(slide?.narration || '').trim())?.narration || '';
-  const currentNarrationStep = [...steps]
-    .reverse()
-    .find((step) => String(step.narration || '').trim() && getAnimeStepStart(step) <= time)
-    || null;
-  const narration = String(currentNarrationStep?.narration || '').trim() || fallbackNarration;
+  const narration = frameNarration || fallbackNarration;
 
   return (
     <>
       <div className="anime2d-player">
-        {!layers.some((layer) => layer.src) ? (
+        {!layers.some((layer) => resolveAnime2dLayerSrc(project, layer)) ? (
           <p className="anime2d-player-empty">Aucune image embarquee dans ce JSON 2D Anime.</p>
         ) : null}
-        {visibleLayers.map((layer) => (
-          <div
-            key={layer.id}
-            className="anime2d-player-layer"
-            style={{
-              left: `${layer.x || 50}%`,
-              top: `${layer.y || 50}%`,
-              width: `${layer.width || 28}%`,
-              height: `${layer.height || ((layer.width || 28) * 1.6)}%`,
-              opacity: Number(layer.opacity || 100) / 100,
-              zIndex: layers.length - layers.findIndex((entry) => entry.id === layer.id) + 2,
-            }}
-          >
-            {layer.src ? <img src={layer.src} alt={layer.name || ''} /> : null}
-          </div>
-        ))}
+        {visibleLayers.map((layer) => {
+          const layerSrc = resolveAnime2dLayerSrc(project, layer);
+          return (
+            <div
+              key={layer.id}
+              className="anime2d-player-layer"
+              style={{
+                left: `${layer.x || 50}%`,
+                top: `${layer.y || 50}%`,
+                width: `${layer.width || 28}%`,
+                height: `${layer.height || ((layer.width || 28) * 1.6)}%`,
+                opacity: Number(layer.opacity || 100) / 100,
+                zIndex: layerZIndexes.get(layer.id) || 2,
+              }}
+            >
+              <span
+                className={`anime2d-embedded-animated anime2d-preset-${layer.preset || 'none'}`}
+                style={{
+                  animationDuration: `${layer.duration || 1000}ms`,
+                  animationDelay: `${layer.delay || 0}ms`,
+                  animationIterationCount: layer.loop === false ? 1 : 'infinite',
+                }}
+              >
+                {layerSrc ? <img src={layerSrc} alt={layer.name || ''} /> : null}
+              </span>
+            </div>
+          );
+        })}
         {narration ? <p className="anime2d-player-narration">{narration}</p> : null}
       </div>
       <p className="small-note">{Math.min(duration, time).toFixed(1)}s / {duration.toFixed(1)}s</p>
     </>
   );
 }
-
-const isPreloadableUrl = (value) => typeof value === 'string' && value.trim() && !value.startsWith('#');
-
-const addUrl = (set, value) => {
-  if (isPreloadableUrl(value)) set.add(value);
-};
-
-const collectSceneMediaUrls = (scene, imageUrls, audioUrls) => {
-  if (!scene) return;
-  addUrl(imageUrls, scene.backgroundData);
-  addUrl(audioUrls, scene.musicData);
-  addUrl(audioUrls, scene.ambientSoundData);
-  (scene.sceneObjects || []).forEach((object) => {
-    addUrl(imageUrls, object.imageData);
-    addUrl(imageUrls, object.popupImageData || object.popupImage);
-    addUrl(imageUrls, object.objectImageData);
-    addUrl(audioUrls, object.soundData);
-    (object.logicRules || []).forEach((rule) => {
-      addUrl(audioUrls, rule.successSoundData);
-      addUrl(audioUrls, rule.failureSoundData);
-    });
-    (object.anime2dSpec?.layers || []).forEach((layer) => addUrl(imageUrls, normalizeAnime2dLayer(layer).src));
-  });
-  (scene.hotspots || []).forEach((spot) => {
-    addUrl(imageUrls, spot.objectImageData);
-    addUrl(imageUrls, spot.secondObjectImageData);
-    addUrl(audioUrls, spot.soundData);
-    (spot.logicRules || []).forEach((rule) => {
-      addUrl(audioUrls, rule.successSoundData);
-      addUrl(audioUrls, rule.failureSoundData);
-    });
-  });
-};
-
-const collectCinematicMediaUrls = (cinematic, imageUrls, audioUrls, videoUrls) => {
-  if (!cinematic) return;
-  addUrl(videoUrls, cinematic.videoData);
-  if (cinematic.cinematicType === 'anime2d') {
-    (cinematic.anime2dSpec?.layers || []).forEach((layer) => addUrl(imageUrls, normalizeAnime2dLayer(layer).src));
-  }
-  (cinematic.slides || []).forEach((slide) => {
-    addUrl(imageUrls, slide.imageData);
-    addUrl(audioUrls, slide.audioData);
-  });
-};
-
-const collectActMediaUrls = (project, actId) => {
-  const imageUrls = new Set();
-  const audioUrls = new Set();
-  const videoUrls = new Set();
-  const enigmaIds = new Set();
-  const cinematicIds = new Set();
-  const itemIds = new Set();
-  const scenes = (project.scenes || []).filter((scene) => (scene.actId || '') === (actId || ''));
-
-  scenes.forEach((scene) => {
-    collectSceneMediaUrls(scene, imageUrls, audioUrls);
-    if (scene.timerTargetCinematicId) cinematicIds.add(scene.timerTargetCinematicId);
-    (scene.sceneObjects || []).forEach((object) => {
-      if (object.linkedItemId) itemIds.add(object.linkedItemId);
-    });
-    (scene.hotspots || []).forEach((spot) => {
-      if (spot.enigmaId) enigmaIds.add(spot.enigmaId);
-      if (spot.targetCinematicId) cinematicIds.add(spot.targetCinematicId);
-      if (spot.secondEnigmaId) enigmaIds.add(spot.secondEnigmaId);
-      if (spot.secondTargetCinematicId) cinematicIds.add(spot.secondTargetCinematicId);
-      if (spot.rewardItemId) itemIds.add(spot.rewardItemId);
-      if (spot.secondRewardItemId) itemIds.add(spot.secondRewardItemId);
-      (spot.logicRules || []).forEach((rule) => {
-        if (rule.enigmaId) enigmaIds.add(rule.enigmaId);
-        if (rule.targetCinematicId) cinematicIds.add(rule.targetCinematicId);
-        if (rule.rewardItemId) itemIds.add(rule.rewardItemId);
-      });
-    });
-  });
-
-  (project.enigmas || []).forEach((enigma) => {
-    if (!enigmaIds.has(enigma.id)) return;
-    addUrl(imageUrls, enigma.imageData);
-    addUrl(imageUrls, enigma.popupBackgroundData);
-    if (enigma.targetCinematicId) cinematicIds.add(enigma.targetCinematicId);
-  });
-
-  (project.cinematics || []).forEach((cinematic) => {
-    if (cinematicIds.has(cinematic.id)) collectCinematicMediaUrls(cinematic, imageUrls, audioUrls, videoUrls);
-  });
-
-  (project.items || []).forEach((item) => {
-    if (itemIds.has(item.id) || scenes.length === 0) addUrl(imageUrls, item.imageData);
-  });
-
-  return {
-    imageUrls: Array.from(imageUrls),
-    audioUrls: Array.from(audioUrls),
-    videoUrls: Array.from(videoUrls),
-  };
-};
-
-const getSceneMusicKey = (scene) => {
-  if (!scene?.musicData) return '';
-  return scene.musicName || scene.musicData;
-};
-
-const getSceneAmbientSoundKey = (scene) => {
-  if (!scene?.ambientSoundData) return '';
-  return scene.ambientSoundName || scene.ambientSoundData;
-};
 
 const preloadImage = (url) => new Promise((resolve) => {
   const image = new Image();
@@ -277,6 +156,7 @@ export default function PreviewTab(props) {
     viewerImage,
     setViewerImage,
     playingCinematic,
+    playingSlideIndex,
     currentSlide,
     setPlayingCinematic,
     setPlayingSlideIndex,
@@ -291,12 +171,17 @@ export default function PreviewTab(props) {
     getSceneLabel,
     dialogue,
     inventory,
+    addInventoryItem,
+    removeInventoryItem,
     playerLives = 3,
     sceneTimerResetKey = 0,
     setInventory,
     setSelectedInventoryIds,
     usedSceneObjectIds = [],
+    revealedSceneObjectIds = [],
+    sceneObjectTextOverrides = {},
     markSceneObjectUsed,
+    markHotspotCompleted,
     project,
     selectedInventoryIds,
     openInventoryItem,
@@ -357,6 +242,14 @@ export default function PreviewTab(props) {
   const sceneAspectRatio = Number(loadedSceneAspectRatio || playScene?.backgroundAspectRatio) > 0 ?
      Number(loadedSceneAspectRatio || playScene.backgroundAspectRatio)
     : 1.6;
+  const cinematicPlayback = useMemo(
+    () => (playingCinematic ? getCinematicPlaybackModel(playingCinematic, playingSlideIndex || 0) : null),
+    [playingCinematic, playingSlideIndex],
+  );
+  const playSceneBackgroundUrl = getSceneBackgroundUrl(project, playScene);
+  const playSceneMusicUrl = getSceneMusicUrl(project, playScene);
+  const playSceneAmbientSoundUrl = getSceneAmbientSoundUrl(project, playScene);
+  const transitionPreviousBackgroundUrl = getSceneBackgroundUrl(project, sceneTransitionOverlay?.previousScene);
 
   useEffect(() => {
     onSceneTimerEndRef.current = onSceneTimerEnd;
@@ -364,7 +257,7 @@ export default function PreviewTab(props) {
 
   useEffect(() => {
     setLoadedSceneAspectRatio(0);
-  }, [playScene?.id, playScene?.backgroundData]);
+  }, [playScene?.id, playSceneBackgroundUrl]);
 
   useLayoutEffect(() => {
     const nextActId = playScene?.actId || '';
@@ -421,29 +314,16 @@ export default function PreviewTab(props) {
       return undefined;
     }
 
-    const scenesById = new Map((project.scenes || []).map((scene) => [scene.id, scene]));
-    const nearbySceneIds = new Set([
-      playScene.id,
-      playScene.timerTargetSceneId,
-      ...(playScene.hotspots || []).flatMap((spot) => [
-        spot.targetSceneId,
-        spot.secondTargetSceneId,
-      ]),
-    ].filter(Boolean));
+    const { imageUrls, audioUrls } = collectNearbySceneMediaUrls(project, playScene);
 
-    const imageUrls = new Set();
-    const audioUrls = new Set();
-    nearbySceneIds.forEach((sceneId) => collectSceneMediaUrls(scenesById.get(sceneId), imageUrls, audioUrls));
-    collectSceneMediaUrls(playScene, imageUrls, audioUrls);
-
-    const images = Array.from(imageUrls).slice(0, 16).map((url) => {
+    const images = imageUrls.slice(0, 16).map((url) => {
       const image = new Image();
       image.decoding = 'async';
       image.src = url;
       return image;
     });
 
-    const audios = Array.from(audioUrls).slice(0, 5).map((url) => {
+    const audios = audioUrls.slice(0, 5).map((url) => {
       const audio = new Audio();
       audio.preload = 'auto';
       audio.src = url;
@@ -467,16 +347,16 @@ export default function PreviewTab(props) {
       sceneTimerIntervalRef.current = null;
     }
 
-    const timerSeconds = Number(playScene?.timerSeconds) || 0;
-    if (actPreloadStatus.isLoading || !playScene?.timerEnabled || timerSeconds <= 0) {
+    const timerConfig = getSceneTimerConfig(playScene);
+    if (actPreloadStatus.isLoading || !timerConfig.isEnabled) {
       setSceneTimerRemaining(0);
       expiredSceneTimerKeyRef.current = '';
       return undefined;
     }
 
-    const timerKey = `${playScene.id}:${timerSeconds}:${playScene.timerEndAction || 'none'}:${playScene.timerTargetSceneId || ''}:${playScene.timerTargetCinematicId || ''}`;
+    const timerKey = timerConfig.key;
     expiredSceneTimerKeyRef.current = '';
-    setSceneTimerRemaining(timerSeconds);
+    setSceneTimerRemaining(timerConfig.seconds);
 
     sceneTimerIntervalRef.current = window.setInterval(() => {
       setSceneTimerRemaining((remaining) => {
@@ -519,20 +399,14 @@ export default function PreviewTab(props) {
       return undefined;
     }
 
-    const transition = previousScene.sceneTransition || 'none';
-    const duration = Number(previousScene.sceneTransitionDuration) || 700;
-    if (transition !== 'none') {
+    const overlay = createSceneTransitionOverlay(previousScene, playScene);
+    if (overlay) {
       if (transitionTimerRef.current) window.clearTimeout(transitionTimerRef.current);
-      setSceneTransitionOverlay({
-        key: `${previousScene.id}-${playScene.id}-${Date.now()}`,
-        type: transition,
-        duration,
-        previousScene,
-      });
+      setSceneTransitionOverlay(overlay);
       transitionTimerRef.current = window.setTimeout(() => {
         setSceneTransitionOverlay(null);
         transitionTimerRef.current = null;
-      }, duration + 80);
+      }, overlay.duration + 80);
     }
 
     previousSceneRef.current = playScene;
@@ -554,25 +428,31 @@ export default function PreviewTab(props) {
     if (!debugInventoryItemId) return;
     const item = project.items.find((entry) => entry.id === debugInventoryItemId);
     if (!item) return;
-    setInventory?.((prev) => (prev.includes(debugInventoryItemId) ? prev : [...prev, debugInventoryItemId]));
-    setSelectedInventoryIds?.((prev) => (
-      prev.includes(debugInventoryItemId) ? prev : [...prev, debugInventoryItemId].slice(-2)
-    ));
+    if (addInventoryItem) addInventoryItem(debugInventoryItemId);
+    else {
+      setInventory?.((prev) => (prev.includes(debugInventoryItemId) ? prev : [...prev, debugInventoryItemId]));
+      setSelectedInventoryIds?.((prev) => (
+        prev.includes(debugInventoryItemId) ? prev : [...prev, debugInventoryItemId].slice(-2)
+      ));
+    }
     setDialogue?.(`${item.name || 'Objet'} ajouté à l’inventaire de test.`);
   };
 
   const removeDebugInventoryItem = () => {
     if (!debugInventoryItemId) return;
     const item = project.items.find((entry) => entry.id === debugInventoryItemId);
-    setInventory?.((prev) => prev.filter((itemId) => itemId !== debugInventoryItemId));
-    setSelectedInventoryIds?.((prev) => prev.filter((itemId) => itemId !== debugInventoryItemId));
+    if (removeInventoryItem) removeInventoryItem(debugInventoryItemId);
+    else {
+      setInventory?.((prev) => prev.filter((itemId) => itemId !== debugInventoryItemId));
+      setSelectedInventoryIds?.((prev) => prev.filter((itemId) => itemId !== debugInventoryItemId));
+    }
     if (viewerImage?.id === debugInventoryItemId) setViewerImage?.(null);
     setDialogue?.(`${item?.name || 'Objet'} retiré de l’inventaire de test.`);
   };
 
   useEffect(() => {
-    const nextMusicKey = getSceneMusicKey(playScene);
-    const nextAmbientKey = getSceneAmbientSoundKey(playScene);
+    const nextMusicKey = getSceneMusicKey(playScene) || playSceneMusicUrl;
+    const nextAmbientKey = getSceneAmbientSoundKey(playScene) || playSceneAmbientSoundUrl;
 
     if (actPreloadStatus.isLoading) {
       const isSameTrack = Boolean(
@@ -601,7 +481,7 @@ export default function PreviewTab(props) {
       return undefined;
     }
 
-    const nextMusicData = playScene?.musicData || '';
+    const nextMusicData = playSceneMusicUrl;
     const nextLoop = playScene?.musicLoop !== false;
     const nextVolume = typeof playScene?.musicVolume === 'number' ? playScene.musicVolume : 0.5;
 
@@ -638,14 +518,14 @@ export default function PreviewTab(props) {
     sceneAudioSourceRef.current = nextMusicKey;
 
     return undefined;
-  }, [playScene?.musicData, playScene?.musicLoop, playScene?.musicVolume, actPreloadStatus.isLoading]);
+  }, [playSceneMusicUrl, playScene?.musicLoop, playScene?.musicVolume, actPreloadStatus.isLoading]);
 
   useEffect(() => {
-    const nextAmbientKey = getSceneAmbientSoundKey(playScene);
+    const nextAmbientKey = getSceneAmbientSoundKey(playScene) || playSceneAmbientSoundUrl;
 
     if (actPreloadStatus.isLoading) return undefined;
 
-    const nextSoundData = playScene?.ambientSoundData || '';
+    const nextSoundData = playSceneAmbientSoundUrl;
     const nextLoop = Boolean(playScene?.ambientSoundLoop);
     const nextVolume = typeof playScene?.ambientSoundVolume === 'number' ? playScene.ambientSoundVolume : 0.75;
 
@@ -682,7 +562,7 @@ export default function PreviewTab(props) {
     ambientAudioSourceRef.current = nextAmbientKey;
 
     return undefined;
-  }, [playScene?.ambientSoundData, playScene?.ambientSoundLoop, playScene?.ambientSoundVolume, actPreloadStatus.isLoading]);
+  }, [playSceneAmbientSoundUrl, playScene?.ambientSoundLoop, playScene?.ambientSoundVolume, actPreloadStatus.isLoading]);
 
   useEffect(() => () => {
     if (transitionTimerRef.current) {
@@ -815,17 +695,44 @@ export default function PreviewTab(props) {
       handleHotspotClick(event, obj);
       return;
     }
-    if (obj.soundData) {
+    const objectSoundUrl = resolveAssetUrl(project, obj.soundId, obj.soundData);
+    if (objectSoundUrl) {
       if (hotspotAudioRef.current) {
         hotspotAudioRef.current.pause();
         hotspotAudioRef.current.currentTime = 0;
       }
       const audio = new Audio();
       audio.preload = 'auto';
-      audio.src = obj.soundData;
+      audio.src = objectSoundUrl;
       audio.volume = typeof obj.soundVolume === 'number' ? obj.soundVolume : 0.8;
       audio.play().catch(() => {});
       hotspotAudioRef.current = audio;
+    }
+
+    const blockType = getSceneObjectBlockType(obj);
+    if (['input', 'code'].includes(blockType)) {
+      const answer = window.prompt(obj.placeholder || (blockType === 'code' ? 'Entre le code.' : 'Entre ta réponse.'));
+      if (answer === null) return;
+      const normalize = (value) => String(value || '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+      const isCorrect = normalize(answer) === normalize(obj.expectedAnswer);
+      setDialogue(isCorrect
+        ? (obj.successDialogue || obj.dialogue || 'Bonne réponse.')
+        : (obj.failureDialogue || 'Ce n est pas la bonne réponse.'));
+      if (isCorrect) markHotspotCompleted?.(obj.id);
+      if (isCorrect && (obj.logicRules || []).length) {
+        triggerHotspot(obj);
+      }
+      if (isCorrect && obj.removeAfterUse) markSceneObjectUsed?.(obj.id);
+      return;
+    }
+
+    if ((obj.logicRules || []).length) {
+      triggerHotspot(obj);
+      return;
     }
 
     const mode = obj.interactionMode || 'popup';
@@ -833,6 +740,19 @@ export default function PreviewTab(props) {
        project.items.find((entry) => entry.id === obj.linkedItemId)
       : null;
     const popupSrc = obj.popupImageData || obj.popupImage || obj.imageData || linkedItem?.imageData || '';
+
+    if ((mode === 'inventory' || mode === 'both') && obj.linkedItemId) {
+      if (addInventoryItem) addInventoryItem(obj.linkedItemId);
+      else {
+        setInventory?.((prev) => (prev.includes(obj.linkedItemId) ? prev : [...prev, obj.linkedItemId]));
+        setSelectedInventoryIds?.((prev) => (
+          prev.includes(obj.linkedItemId) ? prev : [...prev, obj.linkedItemId].slice(-2)
+        ));
+      }
+      setDialogue(obj.dialogue || `Tu obtiens ${linkedItem?.name || obj.name || 'un objet'}.`);
+    } else if (obj.dialogue) {
+      setDialogue(obj.dialogue);
+    }
 
     if ((mode === 'popup' || mode === 'both') && popupSrc) {
       setViewerImage({
@@ -843,19 +763,10 @@ export default function PreviewTab(props) {
       });
     }
 
-    if ((mode === 'inventory' || mode === 'both') && obj.linkedItemId) {
-      setInventory?.((prev) => (prev.includes(obj.linkedItemId) ? prev : [...prev, obj.linkedItemId]));
-      setSelectedInventoryIds?.((prev) => (
-        prev.includes(obj.linkedItemId) ? prev : [...prev, obj.linkedItemId].slice(-2)
-      ));
-      setDialogue(obj.dialogue || `Tu obtiens ${linkedItem?.name || obj.name || 'un objet'}.`);
-    } else if (obj.dialogue) {
-      setDialogue(obj.dialogue);
-    }
-
     if (obj.removeAfterUse) {
       markSceneObjectUsed?.(obj.id);
     }
+    markHotspotCompleted?.(obj.id);
   };
 
   const enigma = activeEnigma?.enigma || null;
@@ -926,7 +837,7 @@ export default function PreviewTab(props) {
         <div className="player-topbar">
           <div>
             <span className="eyebrow">Player</span>
-            <strong>{playScene ? getSceneLabel(playScene.id) : 'Aucune scène'}</strong>
+            <strong>{playScene ? getSceneLabel(playScene.id) : 'Aucune scene'}</strong>
           </div>
           <div className="player-actions">
             <button type="button" className="secondary-action" onClick={() => setIsPauseOpen(true)}>Pause</button>
@@ -941,10 +852,10 @@ export default function PreviewTab(props) {
         </div>
 
         <div className="scene-player" style={{ aspectRatio: sceneAspectRatio, '--scene-aspect': sceneAspectRatio }} onClick={() => viewerImage && setViewerImage(null)}>
-          {playScene?.backgroundData ? (
+          {playSceneBackgroundUrl ? (
             <img
               className="scene-background"
-              src={playScene.backgroundData}
+              src={playSceneBackgroundUrl}
               alt={playScene.name}
               loading="eager"
               decoding="async"
@@ -957,7 +868,7 @@ export default function PreviewTab(props) {
               }}
             />
           ) : (
-            <div className="placeholder">Ajoute un fond pour jouer la scène.</div>
+            <div className="placeholder">Ajoute un fond pour jouer la scene.</div>
           )}
           <SceneVisualEffect effect={playScene?.visualEffect} intensity={playScene?.visualEffectIntensity} />
           {(playScene?.visualEffectZones || []).filter((zone) => !zone.isHidden).map((zone) => (
@@ -978,8 +889,11 @@ export default function PreviewTab(props) {
           ))}
 
           {(playScene?.sceneObjects || [])
-            .filter((obj) => !usedSceneObjectIds.includes(obj.id))
+            .filter((obj) => !usedSceneObjectIds.includes(obj.id) && (!obj.isHidden || revealedSceneObjectIds.includes(obj.id)))
             .map((obj) => {
+              const objectForRender = sceneObjectTextOverrides[obj.id]
+                ? { ...obj, blockText: sceneObjectTextOverrides[obj.id], dialogue: sceneObjectTextOverrides[obj.id] }
+                : obj;
               const linkedItem = obj.linkedItemId ? project.items.find((entry) => entry.id === obj.linkedItemId) : null;
               const displayImage = obj.imageData || linkedItem?.imageData || '';
               return (
@@ -989,15 +903,15 @@ export default function PreviewTab(props) {
                   className={`player-scene-object ${obj.isInvisible ? 'player-scene-object-invisible' : ''} ${getSceneObjectClickMode(obj) === 'none' ? 'player-scene-object-not-clickable' : ''}`}
                   style={getSceneObjectStyle(obj)}
                   onClick={(event) => handleSceneObjectClick(event, obj)}
-                  title={obj.name}
-                  aria-label={obj.name || 'Objet invisible'}
+                  title={objectForRender.name}
+                  aria-label={objectForRender.name || 'Objet invisible'}
                 >
-                  {!obj.isInvisible && obj.anime2dSpec ? (
-                    <Anime2DPreview spec={obj.anime2dSpec} />
+                  {!objectForRender.isInvisible && objectForRender.anime2dSpec ? (
+                    <Anime2DPreview spec={objectForRender.anime2dSpec} project={project} />
                   ) : !obj.isInvisible && displayImage ? (
-                    <img src={displayImage} alt={obj.name || linkedItem?.name || 'Objet'} />
-                  ) : !obj.isInvisible ? (
-                    <span>{obj.name || linkedItem?.name || 'Objet'}</span>
+                    <SceneObjectBlockContent object={objectForRender} displayImage={displayImage} linkedItem={linkedItem} />
+                  ) : !objectForRender.isInvisible ? (
+                    <SceneObjectBlockContent object={objectForRender} displayImage="" linkedItem={linkedItem} />
                   ) : null}
                 </button>
               );
@@ -1039,7 +953,7 @@ export default function PreviewTab(props) {
                 <div className="act-preload-bar" aria-label={`Chargement ${actPreloadStatus.progress}%`}>
                   <span style={{ width: `${actPreloadStatus.progress}%` }} />
                 </div>
-                <small>{actPreloadStatus.progress}% des medias de l'acte sont prets</small>
+                <small>{actPreloadStatus.progress}% des medias de l'acte sont prêts</small>
               </div>
             </div>
           ) : null}
@@ -1050,9 +964,9 @@ export default function PreviewTab(props) {
               className={`scene-transition-overlay scene-transition-overlay--${sceneTransitionOverlay.type}`}
               style={{ '--scene-transition-duration': `${sceneTransitionOverlay.duration}ms` }}
             >
-              {sceneTransitionOverlay.previousScene?.backgroundData ? (
+              {transitionPreviousBackgroundUrl ? (
                 <img
-                  src={sceneTransitionOverlay.previousScene.backgroundData}
+                  src={transitionPreviousBackgroundUrl}
                   alt=""
                 />
               ) : <div className="placeholder">Scene precedente</div>}
@@ -1115,7 +1029,7 @@ export default function PreviewTab(props) {
                 className="secondary-action player-combine-button"
                 onClick={() => {
                   if (selectedInventoryIds.length !== 2) {
-                    setDialogue('Sélectionne 2 objets à combiner.');
+                    setDialogue('Selectionne 2 objets à combiner.');
                     return;
                   }
                   combineInventoryItems(selectedInventoryIds[0], selectedInventoryIds[1]);
@@ -1178,7 +1092,7 @@ export default function PreviewTab(props) {
       </section>
 
       <section className="panel side player-side-panel">
-        <div className="badge-line">{playScene ? getSceneLabel(playScene.id) : 'Aucune scène'}</div>
+        <div className="badge-line">{playScene ? getSceneLabel(playScene.id) : 'Aucune scene'}</div>
         <div className="dialogue-box"><p>{dialogue || 'Aucun message.'}</p></div>
 
         <div className="panel-head panel-head-spaced">
@@ -1186,7 +1100,7 @@ export default function PreviewTab(props) {
           <button
             onClick={() => {
               if (selectedInventoryIds.length !== 2) {
-                setDialogue('Sélectionne 2 objets à combiner.');
+                setDialogue('Selectionne 2 objets à combiner.');
                 return;
               }
               combineInventoryItems(selectedInventoryIds[0], selectedInventoryIds[1]);
@@ -1251,35 +1165,35 @@ export default function PreviewTab(props) {
       {playingCinematic && (
         <div className="overlay" onClick={(event) => { if (event.target === event.currentTarget) closeCinematic(); }}>
           <div className="overlay-card wide">
-            {playingCinematic.cinematicType === 'anime2d' ? (
+            {cinematicPlayback?.type === 'anime2d' ? (
               <>
-                <Anime2DCinematicPlayer cinematic={playingCinematic} onEnd={closeCinematic} />
+                <Anime2DCinematicPlayer cinematic={playingCinematic} spec={cinematicPlayback.anime2d?.spec} project={project} onEnd={closeCinematic} />
                 <div className="panel-head">
                   <button className="secondary-button" onClick={closeCinematic}>Terminer</button>
                 </div>
               </>
-            ) : (playingCinematic.cinematicType || 'slides') === 'video' ? (
+            ) : cinematicPlayback?.type === 'video' ? (
               <>
-                {playingCinematic.videoData ? (
+                {cinematicPlayback.video?.src ? (
                   <video
                     className="overlay-media"
-                    src={playingCinematic.videoData}
-                    controls={playingCinematic.videoControls !== false}
-                    autoPlay={playingCinematic.videoAutoplay !== false}
+                    src={cinematicPlayback.video.src}
+                    controls={cinematicPlayback.video.controls}
+                    autoPlay={cinematicPlayback.video.autoplay}
                     preload="auto"
                     onEnded={closeCinematic}
                   />
-                ) : <p className="small-note">Ajoute une vidéo dans l’éditeur de cinématique.</p>}
-                <p className="narration">{playingCinematic.name}</p>
+                ) : <p className="small-note">Ajoute une vidéo dans l’éditeur de cinematic.</p>}
+                <p className="narration">{cinematicPlayback.video?.name || playingCinematic.name}</p>
                 <div className="panel-head">
                   <button onClick={closeCinematic}>Terminer</button>
                 </div>
               </>
-            ) : currentSlide && (
+            ) : (cinematicPlayback?.currentSlide || currentSlide) && (
               <>
-                {currentSlide.imageData ? <img className="overlay-media" loading="eager" decoding="async" src={currentSlide.imageData} alt={currentSlide.imageName || currentSlide.narration || 'Cinématique'} /> : null}
-                {currentSlide.audioData ? <audio ref={audioRef} className="overlay-media" controls autoPlay src={currentSlide.audioData} /> : null}
-                <p className="narration">{currentSlide.narration}</p>
+                {(cinematicPlayback?.currentSlide || currentSlide).imageData ? <img className="overlay-media" loading="eager" decoding="async" src={(cinematicPlayback?.currentSlide || currentSlide).imageData} alt={(cinematicPlayback?.currentSlide || currentSlide).imageName || (cinematicPlayback?.currentSlide || currentSlide).narration || 'Cinematic'} /> : null}
+                {(cinematicPlayback?.currentSlide || currentSlide).audioData ? <audio ref={audioRef} className="overlay-media" controls autoPlay src={(cinematicPlayback?.currentSlide || currentSlide).audioData} /> : null}
+                <p className="narration">{(cinematicPlayback?.currentSlide || currentSlide).narration}</p>
                 <div className="panel-head">
                   <button className="secondary-button" onClick={() => setPlayingSlideIndex((index) => Math.max(0, index - 1))}>Précédent</button>
                   <button onClick={advanceCinematic}>Suivant</button>
@@ -1396,7 +1310,7 @@ export default function PreviewTab(props) {
 
                 <div className="enigma-actions inline-actions">
                   {codeSkin === 'digicode' ? <button type="button" className="secondary-button code-secondary-button" onClick={() => setEnigmaCodeInput('')}>Effacer</button> : null}
-                  <button className="code-primary-button" onClick={submitEnigma}>Valider l’énigme</button>
+                  <button className="code-primary-button" onClick={submitEnigma}>Valider l’enigme</button>
                 </div>
               </div>
             )}
@@ -1520,7 +1434,7 @@ export default function PreviewTab(props) {
 
                 {miscMode === 'multi-select' ? (
                   <>
-                    <label>Sélectionne toutes les bonnes réponses</label>
+                    <label>Selectionne toutes les bonnes réponses</label>
                     <div className="stack-10">
                       {(enigma.miscChoices || []).map((choice) => (
                         <button
@@ -1551,7 +1465,7 @@ export default function PreviewTab(props) {
                   </>
                 ) : null}
                 <div className="enigma-actions">
-                  <button className="code-primary-button" onClick={submitEnigma}>Valider l’énigme</button>
+                  <button className="code-primary-button" onClick={submitEnigma}>Valider l’enigme</button>
                 </div>
               </div>
             )}
@@ -1571,14 +1485,14 @@ export default function PreviewTab(props) {
                 </div>
                 <div className="panel-head panel-head-loose">
                   <button className="secondary-button" onClick={() => setEnigmaColorAttempt([])}>Effacer la suite</button>
-                  <button onClick={submitEnigma}>Valider l’énigme</button>
+                  <button onClick={submitEnigma}>Valider l’enigme</button>
                 </div>
               </div>
             )}
 
             {enigma.type === 'simon' && (
               <div>
-                <p className="small-note">{simonPlayerTurn ? 'À toi de rejouer la séquence.' : 'Observe la séquence…'}</p>
+                <p className="small-note">{simonPlayerTurn ? 'À toi de rejouer la sequence.' : 'Observe la sequence…'}</p>
                 <div className="color-picker-grid simon-grid">
                   {COLOR_OPTIONS.slice(0, 4).map(([value, label], index) => {
                     const solutionColor = (enigma.solutionColors || [])[simonPlaybackIndex];
@@ -1602,14 +1516,14 @@ export default function PreviewTab(props) {
                   {enigmaColorAttempt.map((color, index) => <span key={`${color}-${index}`} className="color-chip" style={{ background: color }} />)}
                 </div>
                 <div className="inventory-actions">
-                  <button className="secondary-button" onClick={() => startSimonPlayback(enigma)}>Rejouer la séquence</button>
+                  <button className="secondary-button" onClick={() => startSimonPlayback(enigma)}>Rejouer la sequence</button>
                 </div>
               </div>
             )}
 
             {enigma.type === 'puzzle' && enigma.imageData && (
               <div>
-                <p className="small-note">Clique une pièce, puis une deuxième pour les échanger.</p>
+                <p className="small-note">Clique une piece, puis une deuxième pour les échanger.</p>
                 <div className="enigma-grid" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
                   {enigmaPuzzleOrder.map((pieceIndex, index) => (
                     <button
@@ -1626,7 +1540,7 @@ export default function PreviewTab(props) {
 
             {enigma.type === 'rotation' && enigma.imageData && (
               <div>
-                <p className="small-note">Clique sur chaque pièce pour la remettre à l’endroit.</p>
+                <p className="small-note">Clique sur chaque piece pour la remettre à l’endroit.</p>
                 <div className="enigma-grid" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
                   {Array.from({ length: pieceCount }, (_, index) => (
                     <button
@@ -1643,7 +1557,7 @@ export default function PreviewTab(props) {
 
             {enigma.type === 'dragdrop' && enigma.imageData && (
               <div>
-                <p className="small-note">Glisse les pièces vers la bonne case. Clique une case remplie pour renvoyer sa pièce dans la réserve.</p>
+                <p className="small-note">Glisse les pieces vers la bonne case. Clique une case remplie pour renvoyer sa piece dans la réserve.</p>
                 <div className="dragdrop-layout">
                   <div>
                     <h3>Plateau</h3>
@@ -1669,7 +1583,7 @@ export default function PreviewTab(props) {
                     </div>
                   </div>
                   <div>
-                    <h3>Pièces</h3>
+                    <h3>Pieces</h3>
                     <div className="bank-grid">
                       {enigmaDragBank.map((pieceIndex) => (
                         <button
@@ -1689,7 +1603,7 @@ export default function PreviewTab(props) {
             )}
 
             {['puzzle', 'rotation', 'dragdrop'].includes(enigma.type) && !enigma.imageData && (
-              <p className="small-note">Ajoute une image dans l’onglet Énigmes pour jouer cette énigme.</p>
+              <p className="small-note">Ajoute une image dans l’onglet Enigmes pour jouer cette enigme.</p>
             )}
           </div>
         </div>

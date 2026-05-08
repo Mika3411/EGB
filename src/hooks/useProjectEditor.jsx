@@ -10,6 +10,8 @@ import {
   makeCinematicSlide,
   makeEnigma,
 } from '../data/projectData';
+import { normalizeCinematicSteps } from '../lib/cinematicEngine';
+import { migrateProjectAssetReferences } from '../lib/assetManager';
 import {
   getActById as selectActById,
   getItemById as selectItemById,
@@ -56,6 +58,8 @@ export function useProjectEditor() {
   const [selectedItemId, setSelectedItemId] = useState(initialProject.items[0]?.id || '');
   const [selectedEnigmaId, setSelectedEnigmaId] = useState(initialProject.enigmas?.[0]?.id || '');
   const [selectedSceneObjectId, setSelectedSceneObjectId] = useState(initialProject.scenes[0]?.sceneObjects?.[0]?.id || '');
+  const [collapsedNavigationActIds, setCollapsedNavigationActIds] = useState(() => new Set());
+  const [collapsedNavigationSceneIds, setCollapsedNavigationSceneIds] = useState(() => new Set());
 
   useEffect(() => {
     projectRef.current = project;
@@ -71,6 +75,7 @@ export function useProjectEditor() {
     setProject((prev) => {
       const next = structuredClone(prev);
       updater(next);
+      migrateProjectAssetReferences(next);
       projectRef.current = next;
       return next;
     });
@@ -128,6 +133,35 @@ export function useProjectEditor() {
   const getSceneLabel = useCallback((sceneId) => buildSceneLabel(sceneId, getSceneById, getActById), [getActById, getSceneById]);
   const getSceneDepth = useCallback((scene) => computeSceneDepth(scene, getSceneById), [getSceneById]);
 
+  const setNavigationActCollapsed = useCallback((actId, collapsed) => {
+    setCollapsedNavigationActIds((previous) => {
+      if (previous.has(actId) === collapsed) return previous;
+      const next = new Set(previous);
+      if (collapsed) next.add(actId);
+      else next.delete(actId);
+      return next;
+    });
+  }, []);
+
+  const toggleNavigationSceneCollapsed = useCallback((sceneId) => {
+    setCollapsedNavigationSceneIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(sceneId)) next.delete(sceneId);
+      else next.add(sceneId);
+      return next;
+    });
+  }, []);
+
+  const setNavigationSceneCollapsed = useCallback((sceneId, collapsed) => {
+    setCollapsedNavigationSceneIds((previous) => {
+      if (previous.has(sceneId) === collapsed) return previous;
+      const next = new Set(previous);
+      if (collapsed) next.add(sceneId);
+      else next.delete(sceneId);
+      return next;
+    });
+  }, []);
+
   const addAct = useCallback(() => {
     const act = makeAct(`Acte ${project.acts.length + 1}`);
     patchProject((draft) => draft.acts.push(act));
@@ -160,7 +194,7 @@ export function useProjectEditor() {
     const scene = makeScene({
       actId: selectedScene.actId,
       parentSceneId: selectedScene.id,
-      name: `Sous-scène de ${selectedScene.name}`,
+      name: `Sous-scene de ${selectedScene.name}`,
     });
     scene.sceneObjects = scene.sceneObjects || [];
     patchProject((draft) => draft.scenes.push(scene));
@@ -301,7 +335,10 @@ export function useProjectEditor() {
   const addSlide = useCallback(() => {
     patchProject((draft) => {
       const cinematic = draft.cinematics.find((entry) => entry.id === selectedCinematicId);
-      if (cinematic) cinematic.slides.push(makeCinematicSlide());
+      if (cinematic) {
+        cinematic.slides.push(makeCinematicSlide());
+        cinematic.steps = normalizeCinematicSteps([], cinematic);
+      }
     });
   }, [patchProject, selectedCinematicId]);
 
@@ -349,7 +386,7 @@ export function useProjectEditor() {
               >
                 <span className="scene-title-line" style={{ paddingLeft: `${depth * 14}px` }}>
                   <strong>{scene.name}</strong>
-                  <small>{children.length ? `${children.length} sous-scène(s)` : 'Aucune sous-scène'}</small>
+                  <small>{children.length ? `${children.length} sous-scene(s)` : 'Aucune sous-scene'}</small>
                 </span>
               </button>
             </summary>
@@ -370,6 +407,8 @@ export function useProjectEditor() {
     setSelectedCinematicId(nextProject.cinematics?.[0]?.id || '');
     setSelectedItemId(nextProject.items?.[0]?.id || '');
     setSelectedEnigmaId(nextProject.enigmas?.[0]?.id || '');
+    setCollapsedNavigationActIds(new Set());
+    setCollapsedNavigationSceneIds(new Set());
   }, []);
 
   return {
@@ -402,6 +441,11 @@ export function useProjectEditor() {
     selectedEnigmaId,
     setSelectedEnigmaId,
     selectedEnigma,
+    collapsedNavigationActIds,
+    setNavigationActCollapsed,
+    collapsedNavigationSceneIds,
+    toggleNavigationSceneCollapsed,
+    setNavigationSceneCollapsed,
     actsWithScenes,
     childScenes,
     getActById,

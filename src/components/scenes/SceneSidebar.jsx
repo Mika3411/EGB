@@ -63,6 +63,8 @@ export default function SceneSidebar({
   setSelectedItemId,
   selectedItem,
   selectedSceneId,
+  collapsedActIds,
+  setActCollapsed,
   collapsedSceneIds,
   toggleSceneChildren,
   selectSceneFromTree,
@@ -84,8 +86,14 @@ export default function SceneSidebar({
         {actsWithScenes.map((act) => {
           const rootScenes = act.scenes.filter((scene) => !scene.parentSceneId);
           const canDeleteAct = act.scenes.length === 0 && project.acts.length > 1;
+          const collapsed = collapsedActIds?.has(act.id);
           return (
-            <details key={act.id} className="act-group" open>
+            <details
+              key={act.id}
+              className="act-group"
+              open={!collapsed}
+              onToggle={(event) => setActCollapsed?.(act.id, !event.currentTarget.open)}
+            >
               <summary className="act-heading">
                 <strong>{act.name}</strong>
                 <span className="act-heading-meta">{act.scenes.length} scene(s)</span>

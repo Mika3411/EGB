@@ -1,38 +1,39 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { generateAiProject } from '../utils/aiProjectGenerator';
 import { buildGlobalSceneLayout, generateAiImage, getConnectedScenes } from '../utils/aiImageGenerator';
+import { getAiAuthHeaders } from '../utils/aiAuthHeaders';
 import { mergeProjectPatch, validateProject } from '../utils/projectValidation';
 import { downloadBlob } from '../utils/fileHelpers';
 
 const FIELD_HELP = {
   theme: "Thème principal de l'histoire: manoir, station spatiale, enquête policière, laboratoire, musée...",
-  difficulty: "Influence la complexité des énigmes, le nombre de dépendances et les conditions de déblocage.",
-  actCount: "Grandes parties de l'histoire. Un acte contient plusieurs scènes.",
-  sceneCount: "Nombre de scènes principales à générer.",
-  subsceneCount: "Nombre de sous-scènes rattachées à des scènes principales.",
+  difficulty: "Influence la complexité des enigmes, le nombre de dépendances et les conditions de déblocage.",
+  actCount: "Grandes parties de l'histoire. Un acte contient plusieurs scenes.",
+  sceneCount: "Nombre de scenes principales à générer.",
+  subsceneCount: "Nombre de sous-scenes rattachées à des scenes principales.",
   itemCount: "Objets d'inventaire qui pourront être trouvés, requis ou combinés.",
-  enigmaCount: "Énigmes créées et reliées aux zones d'action.",
-  cinematicCount: "Cinématiques narratives créées avec des slides textuelles.",
-  improve: "L'IA garde la structure de la scène et modifie seulement ambiance, dialogues et objets.",
-  mode: "Choisit le type d'aide IA: créer un récit complet, avancer acte par acte, continuer un projet existant ou améliorer une scène précise.",
+  enigmaCount: "Enigmes créées et reliées aux zones d'action.",
+  cinematicCount: "Cinematics narratives créées avec des slides textuelles.",
+  improve: "L'IA garde la structure de la scene et modifié seulement ambiance, dialogues et objets.",
+  mode: "Choisit le type d'aide IA: créer un récit complet, avancer acte par acte, continuer un projet existant ou améliorer une scene précise.",
   tone: "Ambiance d'écriture utilisée pour les textes, dialogues et descriptions. Exemple: mystérieux, drôle, horrifique, poétique, réaliste.",
-  duration: "Temps de jeu visé. L'IA s'en sert pour doser le nombre d'étapes, d'indices et de détours narratifs.",
-  enrichmentType: "Définit ce que l'étape d'enrichissement doit renforcer en priorité: textes, descriptions visuelles, zones d'action ou tout ensemble.",
+  duration: "Temps de jeu visé. L'IA s'en sert pour doser le nombre d'steps, d'indices et de détours narratifs.",
+  enrichmentType: "Définit ce que l'step d'enrichissement doit renforcer en priorité: textes, descriptions visuelles, zones d'action ou tout ensemble.",
   source: "Projet utilisé comme base pour la continuation. Le projet actuel vient de l'éditeur, le JSON importé permet de repartir d'une sauvegarde externe.",
   importJson: "Charge un projet JSON existant pour que l'IA puisse le continuer sans dépendre du projet actuellement ouvert.",
-  instruction: "Consigne libre pour guider l'IA. Plus elle est concrète, plus le résultat respectera ton intention.",
+  instruction: "Consigne libre pour guider l'IA. Plus elle est concrète, plus le result respecterà ton intention.",
   storySummary: "Résumé de l'histoire déjà jouée. Il sert à garder la suite cohérente avec les révélations et enjeux actuels.",
-  sceneChronology: "Ordre chronologique canonique. Numérote les scènes dans l'ordre de l'histoire; la suite partira de la dernière ligne.",
+  sceneChronology: "Ordre chronologique canonique. Numérote les scenes dans l'ordre de l'histoire; la suite partira de la dernière ligne.",
   continuationWish: "Direction souhaitée pour la suite. Laisse vide pour demander une suite aléatoire mais cohérente.",
-  continuationScene: "Scène exacte depuis laquelle l'histoire doit continuer. La nouvelle scène doit être reliée à celle-ci.",
-  extendInstruction: "Ajoute une contrainte ou une idée à la continuation: nouveau lieu, type d'énigme, objet important, révélation, ton souhaité...",
-  visualConstraints: "Contraintes données au générateur d'image pour cette scène. Liste les éléments qui doivent être visibles et leur placement approximatif.",
+  continuationScene: "Scene exacte depuis laquelle l'histoire doit continuer. La nouvelle scene doit être reliée à celle-ci.",
+  extendInstruction: "Ajoute une contrainte ou une idée à la continuation: nouveau lieu, type d'enigme, objet important, révélation, ton souhaité...",
+  visualConstraints: "Contraintes données au générateur d'image pour cette scene. Liste les éléments qui doivent être visibles et leur placement approximatif.",
 };
 
 const IMAGE_STYLE_PRESETS = {
   realistic: {
     label: 'Réaliste',
-    description: 'cinématique photoréaliste, textures naturelles, lumière de film, profondeur et détails réalistes',
+    description: 'cinematic photoréaliste, textures naturelles, lumière de film, profondeur et détails réalistes',
   },
   illustrated: {
     label: 'BD / manga',
@@ -184,10 +185,10 @@ const getStepMeta = (status, locked, doneLabel, availableLabel, lockedLabel = 'v
 
 const getProjectDiff = (before = {}, after = {}) => {
   const keys = [
-    ['scenes', 'scènes'],
+    ['scenes', 'scenes'],
     ['items', 'objets'],
-    ['enigmas', 'énigmes'],
-    ['cinematics', 'cinématiques'],
+    ['enigmas', 'enigmes'],
+    ['cinematics', 'cinematics'],
     ['combinations', 'combinaisons'],
   ];
   return keys.map(([key, label]) => {
@@ -221,17 +222,17 @@ const markAiChanges = (before = {}, after = {}, actionLabel = 'IA') => {
 
 const getActionEstimate = (mode, action) => {
   const estimates = {
-    generate: ['+ projet complet', '+ scènes', '+ objets', '+ énigmes'],
+    generate: ['+ projet complet', '+ scenes', '+ objets', '+ enigmes'],
     progressive: ['+ Acte 1', '+ Acte 2 ensuite', '~ enrichissement contrôlé'],
     extend: ['+ ajouts ciblés', '~ projet existant conservé', '+ références validées'],
-    improve: ['~ 1 scène modifiée', '~ dialogues', '~ ambiance', '~ objets si utile'],
-    act1: ['+ 1 acte', '+ 3 à 6 scènes', '+ objets', '+ énigmes'],
+    improve: ['~ 1 scene modifiée', '~ dialogues', '~ ambiance', '~ objets si utile'],
+    act1: ['+ 1 acte', '+ 3 à 6 scenes', '+ objets', '+ enigmes'],
     improveAct1: ['~ Acte 1', '~ dialogues', '~ ambiance'],
-    act2_continuity: ['+ 1 acte', '+ 2 à 5 scènes', '+ objets', '+ énigmes'],
+    act2_continuity: ['+ 1 acte', '+ 2 à 5 scenes', '+ objets', '+ enigmes'],
     enrich: ['~ dialogues', '~ détails visuels', '~ interactions'],
-    continue_story: ['+ scènes de suite', '+ objets', '+ zones de liaison'],
-    add_scenes: ['+ 1 à 3 scènes', '+ zones de navigation'],
-    add_enigmas: ['+ 1 à 3 énigmes', '+ zones liées'],
+    continue_story: ['+ scenes de suite', '+ objets', '+ zones de liaison'],
+    add_scenes: ['+ 1 à 3 scenes', '+ zones de navigation'],
+    add_enigmas: ['+ 1 à 3 enigmes', '+ zones liées'],
     enrich_interactions: ['~ zones', '~ dialogues', '~ objets'],
   };
   return estimates[action] || estimates[mode] || [];
@@ -240,9 +241,9 @@ const getActionEstimate = (mode, action) => {
 const makeIdeaSuggestions = (theme, projectTitle) => [
   `Ajouter une cave secrète liée à ${theme || projectTitle || 'l’histoire'}`,
   'Introduire un fantôme lié à la famille',
-  'Créer une énigme sonore',
+  'Créer une enigme sonore',
   'Ajouter une clé rouillée et une serrure mécanique',
-  'Révéler une pièce cachée derrière un tableau',
+  'Révéler une piece cachée derrière un tableau',
 ];
 
 const makeProjectStorySummary = (project = {}) => {
@@ -256,7 +257,7 @@ const makeProjectStorySummary = (project = {}) => {
   return [
     `Titre: ${project.title || 'Projet sans titre'}`,
     startScene ? `Départ: ${startScene.name}` : '',
-    lastScene ? `Dernière scène actuelle: ${lastScene.name}` : '',
+    lastScene ? `Dernière scene actuelle: ${lastScene.name}` : '',
     sceneLines.length ? 'Derniers événements:' : '',
     ...sceneLines,
   ].filter(Boolean).join('\n');
@@ -284,7 +285,7 @@ const makeSceneChronology = (project = {}) => {
   });
 
   return ordered.map((scene, index) => (
-    `${index + 1}. [${scene.id}] ${scene.name || 'Scène sans nom'}`
+    `${index + 1}. [${scene.id}] ${scene.name || 'Scene sans nom'}`
   )).join('\n');
 };
 
@@ -322,8 +323,8 @@ const parseChronologyEntries = (chronology = '', project = {}) => {
 
 const formatChronologyEntries = (entries = []) => entries.map((entry, index) => (
   entry.sceneId ?
-     `${index + 1}. [${entry.sceneId}] ${entry.name || 'Scène sans nom'}`
-    : `${index + 1}. ${entry.name || entry.raw || 'Étape manuelle'}`
+     `${index + 1}. [${entry.sceneId}] ${entry.name || 'Scene sans nom'}`
+    : `${index + 1}. ${entry.name || entry.raw || 'Step manuelle'}`
 )).join('\n');
 
 const getNarrativeEndScene = (project = {}) => {
@@ -372,14 +373,14 @@ const makeSceneVisualConstraints = (scene, project = {}) => {
   const scenes = project?.scenes || [];
   const enigmas = project?.enigmas || [];
 
-  lines.push(`- lieu principal clairement identifiable: ${scene?.name || 'scène'}`);
+  lines.push(`- lieu principal clairement identifiable: ${scene?.name || 'scene'}`);
 
   if (text.includes('vestibule') || text.includes('hall')) lines.push('- grand vestibule avec entrée, sol visible et profondeur vers le reste du lieu');
   if (text.includes('bibliothèque')) lines.push('- bibliothèques hautes, livres nombreux et au moins un rayon manipulable');
   if (text.includes('bureau')) lines.push('- bureau visible au centre ou sur un côté, avec documents et tiroirs lisibles');
   if (text.includes('cuisine')) lines.push('- cuisine ancienne avec plan de travail, placards et objets manipulables visibles');
   if (text.includes('cave')) lines.push('- cave sombre avec murs bruts, stockage et passage lisible vers la suite');
-  if (text.includes('grenier')) lines.push('- grenier encombré avec poutres, malles et zones de fouille distinctes');
+  if (text.includes('grenier')) lines.push('- grenier encombré avec poutrès, malles et zones de fouille distinctes');
   if (text.includes('jardin')) lines.push('- extérieur lisible avec chemin, végétation et point d’accès vers le bâtiment');
   if (text.includes('chambre')) lines.push('- lit, table de chevet et éléments personnels clairement séparés');
   if (text.includes('salon')) lines.push('- salon avec assises, cheminée ou meuble central utilisable');
@@ -389,19 +390,19 @@ const makeSceneVisualConstraints = (scene, project = {}) => {
     const name = hotspot.name || 'zone interactive';
     if (hotspot.targetSceneId) {
       const target = scenes.find((entry) => entry.id === hotspot.targetSceneId);
-      lines.push(`- sortie ou passage visible pour "${name}" vers ${target?.name || 'une autre scène'}`);
+      lines.push(`- sortie ou passage visible pour "${name}" vers ${target?.name || 'une autre scene'}`);
     } else if (hotspot.enigmaId) {
       const enigma = enigmas.find((entry) => entry.id === hotspot.enigmaId);
-      lines.push(`- mécanisme ou support d’énigme visible pour "${name}"${enigma?.name ? ` (${enigma.name})` : ''}`);
+      lines.push(`- mécanisme ou support d’enigme visible pour "${name}"${enigma?.name ? ` (${enigma.name})` : ''}`);
     } else {
       lines.push(`- élément interactif distinct pour "${name}"`);
     }
   });
 
   if (!hotspots.length) lines.push('- décor large et lisible avec plusieurs zones interactives potentielles');
-  lines.push('- composition en caméra large, sans texte incrusté, utilisable comme scène cliquable');
+  lines.push('- composition en camérà large, sans texte incrusté, utilisable comme scene cliquable');
   lines.push('- exposition claire pour le jeu: ombres détaillées, aucun centre noir bouché, passages et objets inspectables');
-  lines.push('- ne pas afficher les objets d’inventaire dans l’image: ils seront ajoutés manuellement par l’utilisateur dans la scène');
+  lines.push('- ne pas afficher les objets d’inventaire dans l’image: ils seront ajoutés manuellement par l’utilisateur dans la scene');
 
   return uniqueLines(lines).join('\n');
 };
@@ -436,7 +437,6 @@ const getCoherenceLabel = (score) => {
 
 export default function AiTab({
   project,
-  user,
   getSceneLabel,
   onApplyProject,
   onSaveAiDraft,
@@ -456,7 +456,7 @@ export default function AiTab({
     tone: 'mystérieux et cinématographique',
     duration: '45 minutes',
   });
-  const [instruction, setInstruction] = useState('Améliore cette scène pour la rendre plus stressante.');
+  const [instruction, setInstruction] = useState('Améliore cette scene pour la rendre plus stressante.');
   const [targetSceneId, setTargetSceneId] = useState(project?.scenes?.[0]?.id || '');
   const [generatedProject, setGeneratedProject] = useState(null);
   const [isPatch, setIsPatch] = useState(false);
@@ -485,7 +485,7 @@ export default function AiTab({
   const [enrichmentType, setEnrichmentType] = useState('all');
   const [sceneVisualConstraints, setSceneVisualConstraints] = useState({});
   const [imageStylePreset, setImageStylePreset] = useState('realistic');
-  const [globalVisualStyle, setGlobalVisualStyle] = useState('réaliste, mystérieux mais clairement éclairé, manoir ancien, caméra large, zones interactives visibles, ombres détaillées non bouchées');
+  const [globalVisualStyle, setGlobalVisualStyle] = useState('réaliste, mystérieux mais clairement éclairé, manoir ancien, camérà large, zones interactives visibles, ombres détaillées non bouchées');
   const [imageReadabilityLevel, setImageReadabilityLevel] = useState('balanced');
   const [visualInheritance, setVisualInheritance] = useState('même type de poignée de porte, même parquet, même lumière, mêmes matériaux');
   const [storySummary, setStorySummary] = useState(() => makeProjectStorySummary(project));
@@ -504,14 +504,13 @@ export default function AiTab({
   const aiDraftKey = useMemo(() => (
     `ai-draft:${projectStorageKey || project?.title || project?.start?.targetSceneId || 'default'}`
   ), [projectStorageKey, project?.title, project?.start?.targetSceneId]);
-  const aiUserId = user?.id || 'anonymous';
   const refreshAiCredits = useCallback(async () => {
     setAiCredits((previous) => ({ ...previous, isLoading: true, error: '' }));
     try {
-      const response = await fetch(`${AI_CREDITS_ENDPOINT}?userId=${encodeURIComponent(aiUserId)}`, {
-        headers: aiUserId ? { 'X-AI-User-Id': aiUserId } : {},
+      const response = await fetch(AI_CREDITS_ENDPOINT, {
+        headers: await getAiAuthHeaders(),
       });
-      if (!response.ok) throw new Error(`Crédits indisponibles (${response.status}).`);
+      if (!response.ok) throw new Error(`Credits indisponibles (${response.status}).`);
       const payload = await response.json();
       setAiCredits({
         balance: Number(payload.balance || 0),
@@ -523,9 +522,9 @@ export default function AiTab({
         error: '',
       });
     } catch (error) {
-      setAiCredits((previous) => ({ ...previous, isLoading: false, error: error.message || 'Crédits indisponibles.' }));
+      setAiCredits((previous) => ({ ...previous, isLoading: false, error: error.message || 'Credits indisponibles.' }));
     }
-  }, [aiUserId]);
+  }, []);
   const countCreditUnits = (value) => Math.max(0, Math.round(Number(value) || 0));
   const calculateBriefCreditCost = (targetBrief = brief) => {
     const units = aiCredits.costs?.projectGeneration || {
@@ -575,7 +574,7 @@ export default function AiTab({
   const getProgressiveStageSummary = (stage) => {
     const stageBrief = getProgressiveStageBrief(stage);
     if (!stageBrief) return '';
-    return `${stageBrief.sceneCount} scènes, ${stageBrief.itemCount} objets, ${stageBrief.enigmaCount} énigmes, ${stageBrief.cinematicCount} cinématiques`;
+    return `${stageBrief.sceneCount} scenes, ${stageBrief.itemCount} objets, ${stageBrief.enigmaCount} enigmes, ${stageBrief.cinematicCount} cinematics`;
   };
   const progressiveActStages = Array.from(
     { length: Math.max(1, countCreditUnits(brief.actCount) || 1) },
@@ -604,7 +603,7 @@ export default function AiTab({
   );
   const aiCreditMessage = (kind, costOverride = null) => {
     const cost = costOverride ?? getAiCreditCost(kind);
-    return `Crédits IA insuffisants: ${aiCredits.balance || 0}/${cost}.`;
+    return `Credits IA insuffisants: ${aiCredits.balance || 0}/${cost}.`;
   };
   const currentTextGenerationCost = getTextGenerationCreditCost(
     mode,
@@ -614,7 +613,7 @@ export default function AiTab({
   const canRunImageAi = !aiCredits.isLoading && hasEnoughAiCredits('image');
   const canRunObjectImageAi = !aiCredits.isLoading && hasEnoughAiCredits('objectImage');
   const canRunObjectThumbnailAi = !aiCredits.isLoading && hasEnoughAiCredits('objectThumbnail');
-  const formatCreditCost = (cost) => `${cost} crédit${Number(cost) > 1 ? 's' : ''}`;
+  const formatCreditCost = (cost) => `${cost} credit${Number(cost) > 1 ? 's' : ''}`;
   const selectedImageStyle = IMAGE_STYLE_PRESETS[imageStylePreset] || IMAGE_STYLE_PRESETS.realistic;
   const effectiveVisualStyle = `${selectedImageStyle.description}. ${globalVisualStyle}`;
   const briefForm = (
@@ -635,11 +634,11 @@ export default function AiTab({
           <input type="number" min="1" max="6" value={brief.actCount} onChange={(event) => updateBrief('actCount', event.target.value)} />
         </div>
         <div>
-          <HelpLabel help={FIELD_HELP.sceneCount}>Scènes</HelpLabel>
+          <HelpLabel help={FIELD_HELP.sceneCount}>Scenes</HelpLabel>
           <input type="number" min="1" max="24" value={brief.sceneCount} onChange={(event) => updateBrief('sceneCount', event.target.value)} />
         </div>
         <div>
-          <HelpLabel help={FIELD_HELP.subsceneCount}>Sous-scènes</HelpLabel>
+          <HelpLabel help={FIELD_HELP.subsceneCount}>Sous-scenes</HelpLabel>
           <input type="number" min="0" max="24" value={brief.subsceneCount} onChange={(event) => updateBrief('subsceneCount', event.target.value)} />
         </div>
         <div>
@@ -647,11 +646,11 @@ export default function AiTab({
           <input type="number" min="1" max="40" value={brief.itemCount} onChange={(event) => updateBrief('itemCount', event.target.value)} />
         </div>
         <div>
-          <HelpLabel help={FIELD_HELP.enigmaCount}>Énigmes</HelpLabel>
+          <HelpLabel help={FIELD_HELP.enigmaCount}>Enigmes</HelpLabel>
           <input type="number" min="0" max="20" value={brief.enigmaCount} onChange={(event) => updateBrief('enigmaCount', event.target.value)} />
         </div>
         <div>
-          <HelpLabel help={FIELD_HELP.cinematicCount}>Cinématiques</HelpLabel>
+          <HelpLabel help={FIELD_HELP.cinematicCount}>Cinematics</HelpLabel>
           <input type="number" min="0" max="12" value={brief.cinematicCount} onChange={(event) => updateBrief('cinematicCount', event.target.value)} />
         </div>
       </div>
@@ -659,7 +658,7 @@ export default function AiTab({
       <HelpLabel help={FIELD_HELP.tone}>Ton</HelpLabel>
       <input value={brief.tone} onChange={(event) => updateBrief('tone', event.target.value)} />
 
-      <HelpLabel help={FIELD_HELP.duration}>Durée visée</HelpLabel>
+      <HelpLabel help={FIELD_HELP.duration}>Duree visée</HelpLabel>
       <input value={brief.duration} onChange={(event) => updateBrief('duration', event.target.value)} />
     </>
   );
@@ -688,7 +687,7 @@ export default function AiTab({
       setGeneratedProject(draft.generatedProject);
       setIsPatch(Boolean(draft.isPatch));
       setSceneVisualConstraints(draft.sceneVisualConstraints || {});
-      setGlobalVisualStyle(draft.globalVisualStyle || 'réaliste, mystérieux mais clairement éclairé, manoir ancien, caméra large, zones interactives visibles, ombres détaillées non bouchées');
+      setGlobalVisualStyle(draft.globalVisualStyle || 'réaliste, mystérieux mais clairement éclairé, manoir ancien, camérà large, zones interactives visibles, ombres détaillées non bouchées');
       setImageReadabilityLevel(draft.imageReadabilityLevel || 'balanced');
       setVisualInheritance(draft.visualInheritance || 'même type de poignée de porte, même parquet, même lumière, mêmes matériaux');
       setStorySummary(draft.storySummary || makeProjectStorySummary(project));
@@ -850,7 +849,7 @@ export default function AiTab({
         const scene = { ...(previousScene || {}), ...patchedScene };
         return {
           id: scene.id,
-          name: scene.name || previousScene?.name || 'Scène modifiée',
+          name: scene.name || previousScene?.name || 'Scene modifiée',
           introText: scene.introText || '',
           backgroundData: scene.backgroundData || '',
           aiVisualElements: scene.aiVisualElements || [],
@@ -860,7 +859,7 @@ export default function AiTab({
 
       return {
         title: 'Amélioration proposée',
-        subtitle: `${patchedScenes.length} scène(s) touchée(s), le reste du projet reste intact.`,
+        subtitle: `${patchedScenes.length} scene(s) touchée(s), le reste du projet reste intact.`,
         scenes: patchedScenes,
         items: [],
         enigmas: [],
@@ -870,7 +869,7 @@ export default function AiTab({
 
     return {
       title: previewCandidate?.title || 'Projet généré',
-      subtitle: `${counts.acts} acte(s), ${counts.scenes} scène(s), ${counts.items} objet(s), ${counts.enigmas} énigme(s).`,
+      subtitle: `${counts.acts} acte(s), ${counts.scenes} scene(s), ${counts.items} objet(s), ${counts.enigmas} enigme(s).`,
       scenes: previewCandidate?.scenes || [],
       items: (previewCandidate?.items || []).slice(0, 8),
       enigmas: (previewCandidate?.enigmas || []).slice(0, 5),
@@ -934,7 +933,7 @@ export default function AiTab({
 
   const assertPlayableAiCandidate = (candidate) => {
     if (!Array.isArray(candidate?.scenes) || candidate.scenes.length < 1) {
-      const error = new Error('Le brouillon IA ne contient aucune scène exploitable. Relance la génération.');
+      const error = new Error('Le brouillon IA ne contient aucune scene exploitable. Relance la génération.');
       error.code = 'AI_PROJECT_WITHOUT_SCENES';
       throw error;
     }
@@ -956,12 +955,11 @@ export default function AiTab({
         currentProject: project,
         target: { type: 'scene', id: targetSceneId },
         instruction,
-        userId: aiUserId,
       });
       const baseline = mode === 'improve' ? project : {};
       const nextProject = result.isPatch ? mergeProjectPatch(project, result.project) : result.project;
       assertPlayableAiCandidate(nextProject);
-      setGeneratedWithHistory(nextProject, mode === 'improve' ? 'Amélioration scène' : 'Génération initiale', baseline);
+      setGeneratedWithHistory(nextProject, mode === 'improve' ? 'Amélioration scene' : 'Génération initiale', baseline);
       setIsPatch(false);
       validateCandidate(nextProject, false);
       setStatus(result.source === 'api' ?
@@ -995,7 +993,6 @@ export default function AiTab({
         stage,
         enrichmentType,
         currentProject: previewCandidate || project,
-        userId: aiUserId,
       });
       const nextProject = result.isPatch ?
          mergeProjectPatch(previewCandidate || project, result.project)
@@ -1044,8 +1041,8 @@ export default function AiTab({
     setGeneratedProject(null);
     const labels = {
       continue_story: 'Continuer l’histoire',
-      add_scenes: 'Ajouter des scènes',
-      add_enigmas: 'Ajouter des énigmes',
+      add_scenes: 'Ajouter des scenes',
+      add_enigmas: 'Ajouter des enigmes',
       enrich_interactions: 'Enrichir les interactions',
     };
     setStatus(`${labels[stage]} (${formatCreditCost(generationCost)})...`);
@@ -1059,7 +1056,6 @@ export default function AiTab({
         sceneChronology,
         continuationWish,
         continuationSceneId: continuationScene?.id || getLastSceneIdFromChronology(sceneChronology, extensionSourceProject),
-        userId: aiUserId,
       });
       const nextProject = mergeProjectPatch(extensionSourceProject, result.project);
       if (extendSource === 'current') {
@@ -1329,7 +1325,6 @@ export default function AiTab({
         visualContext,
         regenerate: Boolean(scene.backgroundData),
         readabilityLevel: imageReadabilityLevel,
-        userId: aiUserId,
       });
       const hotspots = placeHotspotsFromElements(scene.hotspots || [], result.elements || []);
       const previousVariant = scene.backgroundData ? makeImageVariant({
@@ -1388,7 +1383,6 @@ export default function AiTab({
         },
         regenerate: Boolean(item.imageData),
         variant,
-        userId: aiUserId,
       });
       const previousVariant = item.imageData ? makeImageVariant({
         imageData: item.imageData,
@@ -1429,7 +1423,7 @@ export default function AiTab({
     }
     const key = `cinematic:${cinematic.id}:${targetSlide.id}`;
     setGeneratingImageKey(key);
-    setImageStatus(`Génération de l’image de la cinématique "${cinematic.name}" (${formatCreditCost(generationCost)})...`);
+    setImageStatus(`Génération de l’image de la cinematic "${cinematic.name}" (${formatCreditCost(generationCost)})...`);
     try {
       const result = await generateAiImage({
         type: 'cinematic',
@@ -1449,7 +1443,6 @@ export default function AiTab({
         },
         regenerate: Boolean(targetSlide.imageData),
         readabilityLevel: imageReadabilityLevel,
-        userId: aiUserId,
       });
       const slidePatch = {
         slideId: targetSlide.id,
@@ -1476,7 +1469,7 @@ export default function AiTab({
       if (persisted?.patch) patchGeneratedCinematicSlide(cinematic.id, targetSlide.id, persisted.patch);
       setImageStatus(result.warning || `Image de "${cinematic.name}" prête.`);
     } catch (error) {
-      setImageStatus(`Erreur image cinématique: ${error.message}`);
+      setImageStatus(`Erreur image cinematic: ${error.message}`);
     } finally {
       setGeneratingImageKey('');
       refreshAiCredits();
@@ -1527,7 +1520,7 @@ export default function AiTab({
                     <span>{variant.label || `Image ${index + 1}`}</span>
                     <div>
                       <button type="button" className="secondary-action" disabled={selected} onClick={() => selectImageVariant(variant)}>
-                        {selected ? 'Sélectionnée' : 'Choisir'}
+                        {selected ? 'Selectionnée' : 'Choisir'}
                       </button>
                       <button type="button" className="secondary-action" onClick={() => downloadImage(variant.imageData, variant.imageName || `${imageCompare.title}-${index + 1}.png`)}>
                         Télécharger
@@ -1547,25 +1540,25 @@ export default function AiTab({
         </div>
         <div data-tour="ai-credits" className={`ai-credit-panel ${aiCredits.balance != null && aiCredits.balance < currentTextGenerationCost ? 'low' : ''}`}>
           <div>
-            <span className="section-kicker">Crédits IA</span>
+            <span className="section-kicker">Credits IA</span>
             <strong>{aiCredits.isLoading ? '...' : `${aiCredits.balance ?? 0}`}</strong>
           </div>
           <button type="button" className="secondary-action" onClick={refreshAiCredits} disabled={aiCredits.isLoading}>
             Actualiser
           </button>
           <p>
-            Projet: {calculateProjectGenerationCreditCost()} crédits · Texte: {Number(aiCredits.costs?.text ?? 2)} crédits · Scène: {getAiCreditCost('image')} crédits · Objet détaillé: {formatCreditCost(getAiCreditCost('objectImage'))} · Miniature éco: {formatCreditCost(getAiCreditCost('objectThumbnail'))}
+            Projet: {calculateProjectGenerationCreditCost()} credits · Texte: {Number(aiCredits.costs?.text ?? 2)} credits · Scene: {getAiCreditCost('image')} credits · Objet détaillé: {formatCreditCost(getAiCreditCost('objectImage'))} · Miniature éco: {formatCreditCost(getAiCreditCost('objectThumbnail'))}
           </p>
           <p className="ai-current-cost">
-            Prochaine génération ({mode === 'generate' ? 'projet complet' : mode === 'progressive' ? 'étape progressive' : mode === 'extend' ? 'continuer/enrichir' : 'amélioration'}): <strong>{formatCreditCost(currentTextGenerationCost)}</strong>
+            Prochaine génération ({mode === 'generate' ? 'projet complet' : mode === 'progressive' ? 'step progressive' : mode === 'extend' ? 'continuer/enrichir' : 'amélioration'}): <strong>{formatCreditCost(currentTextGenerationCost)}</strong>
           </p>
           {aiCredits.error ? <p className="small-note">{aiCredits.error}</p> : null}
         </div>
         <p className="small-note">
-          Génère un projet complet ou améliore une scène existante avec un JSON partiel validé avant application.
+          Génère un projet complet ou améliore une scene existante avec un JSON partiel validé avant application.
         </p>
 
-        <HelpLabel help="Choisis le rendu utilisé par les prochaines images IA: scènes, objets et cinématiques.">Style d'image</HelpLabel>
+        <HelpLabel help="Choisis le rendu utilisé par les prochaines images IA: scenes, objets et cinematics.">Style d'image</HelpLabel>
         <div className="segmented-control compact ai-style-choice" data-tour="ai-image-style">
           {Object.entries(IMAGE_STYLE_PRESETS).map(([value, preset]) => (
             <button
@@ -1579,7 +1572,7 @@ export default function AiTab({
           ))}
         </div>
 
-        <HelpLabel help="Style partagé par les images de scènes pour éviter que chaque pièce parte dans une direction visuelle différente.">Style visuel global</HelpLabel>
+        <HelpLabel help="Style partagé par les images de scenes pour éviter que chaque piece parte dans une direction visuelle différente.">Style visuel global</HelpLabel>
         <input data-tour="ai-visual-style" value={globalVisualStyle} onChange={(event) => setGlobalVisualStyle(event.target.value)} />
 
         <HelpLabel help="Ajuste automatiquement la luminosité après génération pour garder une image jouable sans trop délaver l'ambiance.">Lisibilité des images</HelpLabel>
@@ -1590,7 +1583,7 @@ export default function AiTab({
           <option value="none">Aucune correction</option>
         </select>
 
-        <HelpLabel help="Détails récurrents à conserver entre les pièces: portes, parquet, lumière, époque, matériaux.">Héritage visuel</HelpLabel>
+        <HelpLabel help="Détails récurrents à conserver entre les pieces: portes, parquet, lumière, époque, matériaux.">Héritage visuel</HelpLabel>
         <textarea data-tour="ai-visual-inheritance" value={visualInheritance} onChange={(event) => setVisualInheritance(event.target.value)} />
 
         <HelpLabel help={FIELD_HELP.mode}>Mode</HelpLabel>
@@ -1611,7 +1604,7 @@ export default function AiTab({
 
         {mode === 'improve' ? (
           <>
-            <HelpLabel help={FIELD_HELP.improve}>Scène à améliorer</HelpLabel>
+            <HelpLabel help={FIELD_HELP.improve}>Scene à améliorer</HelpLabel>
             <select value={targetSceneId} onChange={(event) => setTargetSceneId(event.target.value)}>
               {scenes.map((scene) => (
                 <option key={scene.id} value={scene.id}>{getSceneLabel?.(scene) || scene.name}</option>
@@ -1622,7 +1615,7 @@ export default function AiTab({
             <textarea
               value={instruction}
               onChange={(event) => setInstruction(event.target.value)}
-              placeholder="Ex: Améliore cette scène pour la rendre plus stressante."
+              placeholder="Ex: Améliore cette scene pour la rendre plus stressante."
             />
             <p className="small-note">Structure protégée: seules l’ambiance, les dialogues et les objets peuvent être raffinés.</p>
             <button type="button" className="secondary-action full" onClick={proposeIdeas}>Proposer des idées</button>
@@ -1684,7 +1677,7 @@ export default function AiTab({
               Refaire le résumé depuis le projet
             </button>
 
-            <HelpLabel help={FIELD_HELP.sceneChronology}>Chronologie des scènes</HelpLabel>
+            <HelpLabel help={FIELD_HELP.sceneChronology}>Chronologie des scenes</HelpLabel>
             <div className="ai-chronology-list">
               {parseChronologyEntries(sceneChronology, extensionSourceProject).map((entry, index, entries) => (
                 <div className="ai-chronology-row" key={`${entry.id}:${index}`}>
@@ -1702,9 +1695,9 @@ export default function AiTab({
                 setContinuationSceneId(getLastSceneIdFromChronology(event.target.value, extensionSourceProject));
               }}
               placeholder={[
-                '1. [id_scene] Première scène',
-                '2. [id_scene] Deuxième scène',
-                '3. [id_scene] Dernière scène actuelle',
+                '1. [id_scene] Première scene',
+                '2. [id_scene] Deuxième scene',
+                '3. [id_scene] Dernière scene actuelle',
               ].join('\n')}
             />
             <button type="button" className="secondary-action full" onClick={() => {
@@ -1715,7 +1708,7 @@ export default function AiTab({
               Reconstruire la chronologie depuis le projet
             </button>
 
-            <HelpLabel help={FIELD_HELP.continuationScene}>Scène de départ détectée</HelpLabel>
+            <HelpLabel help={FIELD_HELP.continuationScene}>Scene de départ détectée</HelpLabel>
             <select value={continuationScene?.id || ''} onChange={(event) => setContinuationSceneId(event.target.value)}>
               {extensionScenes.map((scene) => (
                 <option key={scene.id} value={scene.id}>{getSceneLabel?.(scene.id) || scene.name}</option>
@@ -1732,7 +1725,7 @@ export default function AiTab({
                 setContinuationWish(event.target.value);
                 setExtendInstruction(event.target.value);
               }}
-              placeholder="Vide = suite aléatoire mais cohérente. Ex: révéler une cave secrète avec une énigme mécanique."
+              placeholder="Vide = suite aléatoire mais cohérente. Ex: révéler une cave secrète avec une enigme mécanique."
             />
             <button type="button" className="secondary-action full" onClick={proposeIdeas}>Proposer des idées</button>
             {ideaSuggestions.length ? (
@@ -1763,7 +1756,7 @@ export default function AiTab({
 
         {mode !== 'progressive' && mode !== 'extend' ? (
           <button type="button" data-tour="ai-generate-button" disabled={isGenerating || !canRunTextAi || (mode === 'improve' && !targetSceneId)} onClick={generate}>
-            {isGenerating ? 'Traitement...' : `${mode === 'improve' ? 'Améliorer la scène' : 'Générer le récit'} · ${formatCreditCost(currentTextGenerationCost)}`}
+            {isGenerating ? 'Traitement...' : `${mode === 'improve' ? 'Améliorer la scene' : 'Générer le récit'} · ${formatCreditCost(currentTextGenerationCost)}`}
           </button>
         ) : null}
       </section>
@@ -1840,13 +1833,13 @@ export default function AiTab({
         {narrativePreview ? (
           <div className="ai-narrative-preview" data-tour="ai-result-preview">
             <section className="combo-card">
-              <span className="section-kicker">{isPatch ? 'Résultat narratif' : 'Projet proposé'}</span>
+              <span className="section-kicker">{isPatch ? 'Result narratif' : 'Projet proposé'}</span>
               <h3>{narrativePreview.title}</h3>
               <p className="small-note">{narrativePreview.subtitle}</p>
             </section>
 
             <section className="combo-card">
-              <h3>Scènes</h3>
+              <h3>Scenes</h3>
               <div className="ai-narrative-list">
                 {narrativePreview.scenes.map((scene) => (
                   <article key={scene.id} className="ai-narrative-card">
@@ -1855,7 +1848,7 @@ export default function AiTab({
                     ) : null}
                     <strong>{scene.name}</strong>
                     {scene.introText ? <p>{scene.introText}</p> : null}
-                    <HelpLabel className="ai-visual-label" help={FIELD_HELP.visualConstraints}>Contraintes visuelles de la scène</HelpLabel>
+                    <HelpLabel className="ai-visual-label" help={FIELD_HELP.visualConstraints}>Contraintes visuelles de la scene</HelpLabel>
                     <textarea
                       className="ai-visual-constraints"
                       data-tour="ai-scene-visual-constraints"
@@ -1877,7 +1870,7 @@ export default function AiTab({
                     >
                       {generatingImageKey === `scene:${scene.id}` ?
                          'Génération...'
-                        : `${scene.backgroundData ? 'Regénérer uniquement cette image' : 'Générer l’image de cette scène'} · ${formatCreditCost(getAiCreditCost('image'))}`}
+                        : `${scene.backgroundData ? 'Regénérer uniquement cette image' : 'Générer l’image de cette scene'} · ${formatCreditCost(getAiCreditCost('image'))}`}
                     </button>
                     {scene.aiImageVariants?.length > 1 ? (
                       <button
@@ -1989,18 +1982,18 @@ export default function AiTab({
                   ) : <p>Aucun objet.</p>}
                 </div>
                 <div>
-                  <h3>Énigmes</h3>
-                  <p>{narrativePreview.enigmas.map((enigma) => enigma.name).join(', ') || 'Aucune énigme.'}</p>
+                  <h3>Enigmes</h3>
+                  <p>{narrativePreview.enigmas.map((enigma) => enigma.name).join(', ') || 'Aucune enigme.'}</p>
                 </div>
                 <div>
-                  <h3>Cinématiques</h3>
+                  <h3>Cinematics</h3>
                   {narrativePreview.cinematics.length ? (
                     <div className="ai-cinematic-list">
                       {narrativePreview.cinematics.map((cinematic) => (
                         <article key={cinematic.id} className="ai-cinematic-card">
                           <strong>{cinematic.name}</strong>
                           <div className="ai-cinematic-slide-list">
-                            {(cinematic.slides?.length ? cinematic.slides : [{ id: `${cinematic.id}-slide-1`, narration: 'Cinématique sans narration.' }]).map((slide, index) => {
+                            {(cinematic.slides?.length ? cinematic.slides : [{ id: `${cinematic.id}-slide-1`, narration: 'Cinematic sans narration.' }]).map((slide, index) => {
                               const imageKey = `cinematic:${cinematic.id}:${slide.id}`;
                               return (
                                 <div key={slide.id || index} className="ai-cinematic-slide-card">
@@ -2016,7 +2009,7 @@ export default function AiTab({
                                   ) : (
                                     <span>Image {index + 1}</span>
                                   )}
-                                  <p>{slide.narration || `Prompt cinématique ${index + 1}`}</p>
+                                  <p>{slide.narration || `Prompt cinematic ${index + 1}`}</p>
                                   <button
                                     type="button"
                                     className="secondary-action ai-image-action"
@@ -2050,22 +2043,22 @@ export default function AiTab({
                         </article>
                       ))}
                     </div>
-                  ) : <p>Aucune cinématique.</p>}
+                  ) : <p>Aucune cinematic.</p>}
                 </div>
               </section>
             ) : null}
           </div>
         ) : (
           <div className="ai-narrative-preview">
-            <div className="empty-state-inline">Aucun résultat narratif pour le moment.</div>
+            <div className="empty-state-inline">Aucun result narratif pour le moment.</div>
             <section className="combo-card ai-image-empty-panel" data-tour="ai-images-info">
               <span className="section-kicker">Images à la demande</span>
-              <h3>Scènes et objets</h3>
+              <h3>Scenes et objets</h3>
               <p className="small-note">
-                Génère d’abord le récit ou améliore une scène. Les boutons d’image apparaîtront ensuite sur chaque scène et chaque objet.
+                Génère d’abord le récit ou améliore une scene. Les boutons d’image apparaîtront ensuite sur chaque scene et chaque objet.
               </p>
               <div className="ai-disabled-actions">
-                <button type="button" className="secondary-action" disabled>Générer l’image de cette scène</button>
+                <button type="button" className="secondary-action" disabled>Générer l’image de cette scene</button>
                 <button type="button" className="secondary-action" disabled>Générer l’image de cet objet</button>
                 <button type="button" className="secondary-action" disabled>Regénérer uniquement cette image</button>
               </div>

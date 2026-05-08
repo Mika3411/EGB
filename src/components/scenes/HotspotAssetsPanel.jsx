@@ -1,4 +1,5 @@
 import { HelpLabel } from './SceneEditorChrome.jsx';
+import MediaSourcePicker from '../MediaSourcePicker.jsx';
 
 export default function HotspotAssetsPanel({
   selectedHotspot,
@@ -6,6 +7,7 @@ export default function HotspotAssetsPanel({
   selectedHotspotId,
   patchProject,
   handleUpload,
+  mediaLibrary = [],
   className = '',
 }) {
   if (!selectedHotspot) return null;
@@ -22,19 +24,20 @@ export default function HotspotAssetsPanel({
   return (
     <div className={`hotspot-assets-card ${className}`.trim()}>
       <div className="hotspot-assets-field">
-        <HelpLabel help="Son joue au moment ou cette zone est utilisee. Garde-le court pour ne pas couvrir la musique ou les dialogues.">Son de la zone</HelpLabel>
-        <label className="button like full secondary-action" data-tour="hotspot-sound">
+        <HelpLabel help="Son joué au moment ou cette zone est utilisée. Garde-le court pour ne pas couvrir la musique ou les dialogues.">Son de la zone</HelpLabel>
+        <MediaSourcePicker
+          className="button like full secondary-action"
+          accept="audio/*"
+          handleUpload={handleUpload}
+          mediaLibrary={mediaLibrary}
+          onSelect={(data, name) => patchSelectedHotspot((spot) => {
+            spot.soundData = data;
+            spot.soundName = name;
+          })}
+          tourId="hotspot-sound"
+        >
           {selectedHotspot.soundName || 'Importer un son unique'}
-          <input
-            type="file"
-            accept="audio/*"
-            hidden
-            onChange={(event) => handleUpload(event, (data, name) => patchSelectedHotspot((spot) => {
-              spot.soundData = data;
-              spot.soundName = name;
-            }))}
-          />
-        </label>
+        </MediaSourcePicker>
         {selectedHotspot.soundData && (
           <div className="hotspot-audio-compact">
             <audio controls preload="metadata" src={selectedHotspot.soundData} />
@@ -56,19 +59,20 @@ export default function HotspotAssetsPanel({
       </div>
 
       <div className="hotspot-assets-field">
-        <HelpLabel help="Image associee a l'action principale de cette zone, souvent utilisee pour montrer un objet trouve ou un indice visuel.">Image objet</HelpLabel>
-        <label className="button like full secondary-action" data-tour="hotspot-object-image">
+        <HelpLabel help="Image associee a l'action principale de cette zone, souvent utilisée pour montrer un objet trouvé ou un indice visuel.">Image objet</HelpLabel>
+        <MediaSourcePicker
+          className="button like full secondary-action"
+          accept="image/*"
+          handleUpload={handleUpload}
+          mediaLibrary={mediaLibrary}
+          onSelect={(data, name) => patchSelectedHotspot((spot) => {
+            spot.objectImageData = data;
+            spot.objectImageName = name;
+          })}
+          tourId="hotspot-object-image"
+        >
           {selectedHotspot.objectImageName ? "Remplacer l'image objet" : 'Importer une image objet'}
-          <input
-            type="file"
-            accept="image/*"
-            hidden
-            onChange={(event) => handleUpload(event, (data, name) => patchSelectedHotspot((spot) => {
-              spot.objectImageData = data;
-              spot.objectImageName = name;
-            }))}
-          />
-        </label>
+        </MediaSourcePicker>
         {selectedHotspot.objectImageData && (
           <button
             type="button"

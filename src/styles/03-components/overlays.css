@@ -1,0 +1,31 @@
+/* Overlays */
+
+.overlay{position:fixed;top:0;right:0;bottom:0;left:0;background:#000000c2;display:flex;align-items:center;justify-content:center;padding:20px;z-index:20}
+
+.overlay-card{width:min(88vw,760px);max-height:90vh;overflow:auto;border-radius:24px;padding:18px}
+
+.overlay-card.wide{width:min(92vw,980px)}
+
+.overlay-media{width:100%;max-height:62vh;object-fit:contain;display:block;border-radius:16px;background:#020617}
+
+.accessible-dialog-overlay{position:fixed;top:0;right:0;bottom:0;left:0;z-index:30000;display:grid;place-items:center;padding:20px;background:#020617c7;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+
+.accessible-dialog-panel{width:min(460px,calc(100vw - 32px));display:grid;gap:16px;padding:18px;border:1px solid rgba(148,163,184,.24);border-radius:10px;background:#08101efa;box-shadow:var(--shadow-xl);color:#f8fbff}
+
+.accessible-dialog-copy{display:grid;gap:8px}
+
+.accessible-dialog-copy h2{margin:0;font-size:20px;line-height:1.2}
+
+.accessible-dialog-message{display:grid;gap:4px;color:#cfe2ff}
+
+.accessible-dialog-message p{margin:0;line-height:1.5}
+
+.accessible-dialog-field{display:grid;gap:8px}
+
+.accessible-dialog-field span{font-size:13px;color:#cbd5e1;font-weight:800}
+
+.accessible-dialog-field input{width:100%}
+
+.accessible-dialog-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+
+.accessible-dialog-panel.is-danger{border-color:rgba(248,113,113,.4)}

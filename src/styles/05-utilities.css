@@ -1,0 +1,49 @@
+/* Utilities */
+
+.state-info,.is-active{border-color:var(--state-info-border);background:var(--state-info-bg);color:var(--text-info)}
+
+.state-muted{border-color:var(--state-muted-border);background:var(--state-muted-bg);color:var(--state-muted-text)}
+
+.is-disabled{color:#9fb3d1;background:#0f172ad1;border-color:#94a3b82e;opacity:.72;cursor:not-allowed}
+
+.small-note{color:var(--muted);font-size:13px;line-height:1.55}
+
+.inline-note{margin-top:14px}
+
+.inline-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+
+.inline-actions{display:flex;gap:10px;flex-wrap:wrap}
+
+.inline-actions.end{justify-content:flex-end}
+
+.inline-actions.center{justify-content:center}
+
+.small-note.tight{margin:6px 0 0}
+
+.help-panel-head .small-note{max-width:1040px;margin:0}
+
+.player-narration-bar p:focus-visible{outline:2px solid rgba(226,232,240,.55);outline-offset:3px}
+
+.player-narration-bar.is-collapsed{justify-content:flex-end}
+
+.inventory-test-tools .inline-actions{gap:8px}
+
+.player-shell:is(.is-fullscreen,.is-shared-player){width:100vw;grid-template-columns:1fr;gap:0;padding:0;background:#020617;place-items:center}
+
+.player-shell.is-fullscreen{height:100vh}
+
+.player-shell.is-shared-player{min-height:100vh}
+
+.player-shell:is(.is-fullscreen,.is-shared-player) .player-stage-panel{border-radius:0;border:0;padding:0;background:#020617}
+
+.player-shell.is-shared-player .player-stage-panel{box-shadow:none}
+
+.player-shell:is(.is-fullscreen,.is-shared-player) .player-topbar{position:fixed;top:14px;left:14px;right:14px;z-index:35;padding:10px 12px;border-radius:16px;background:#02061752;border:1px solid rgba(255,255,255,.08);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);pointer-events:none}
+
+.player-shell.is-shared-player .player-topbar{display:flex}
+
+.player-shell:is(.is-fullscreen,.is-shared-player) .player-narration-bar{left:24px;right:24px;bottom:24px}
+
+.player-shell:is(.is-fullscreen,.is-shared-player) .player-narration-bar p{font-size:20px;max-width:min(860px,72vw)}
+
+.inline-note{margin-top:6px;font-size:11.5px;line-height:1.3}

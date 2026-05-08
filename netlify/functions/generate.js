@@ -4,13 +4,13 @@ import {
   calculateTextCreditCost,
   ensureCreditAccount,
   extractOutputText,
-  getCreditUserId,
   getSupabaseAdminClient,
   json,
   openaiFetch,
   parseOpenAiProjectJson,
   parseBody,
   refundCredits,
+  resolveCreditUserId,
   spendCredits,
   writeAiJob,
   withErrors,
@@ -30,7 +30,10 @@ const invokeBackgroundGeneration = async (event, jobId, body) => {
 
   const response = await fetch(`${baseUrl}/.netlify/functions/generate-background`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: event.headers.authorization || event.headers.Authorization || '',
+    },
     body: JSON.stringify({ jobId, body }),
   });
 
@@ -45,7 +48,7 @@ export const handler = async (event) => withErrors(event, async () => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Methode non autorisee.' });
 
   const body = parseBody(event);
-  const userId = getCreditUserId(event, body);
+  const userId = await resolveCreditUserId(event);
   const cost = calculateTextCreditCost(body);
   const supabase = getSupabaseAdminClient();
   const shouldRunAsync = body.responseFormat === 'escape-game-project-json' && body.mode !== 'repair_item_names' && !body.runInline;

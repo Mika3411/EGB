@@ -1,8 +1,16 @@
-import { buildStoragePath, downloadTextFile, hasSupabaseConfig, uploadToStorage } from '../supabaseStorage';
+import {
+  buildStoragePath,
+  downloadTextFile,
+  getSupabaseClient,
+  hasSupabaseConfig,
+  isStorageNotFoundError,
+  uploadToStorage,
+} from '../supabaseStorage';
 
 const SHOP_PACKS_KEY = 'escapeGameBuilder.shopPacks.v1';
 const SHOP_PACKS_STORAGE_PATH = buildStoragePath('public', 'shop-packs.json');
 const SHOP_PACKS_PUBLIC_MANIFEST = '/boutique/shop-packs.json';
+const SHOP_PACKS_ENDPOINT = import.meta.env.VITE_SHOP_PACKS_ENDPOINT || '/api/shop/packs';
 
 const canUseStorage = () => typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
 
@@ -108,7 +116,55 @@ const mergeShopPacks = (...groups) => {
   return Array.from(byId.values());
 };
 
+const readJsonResponse = async (response, fallbackMessage) => {
+  const text = await response.text();
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(fallbackMessage);
+  }
+};
+
+const getAdminAuthHeaders = async () => {
+  if (!hasSupabaseConfig()) return {};
+  const { data } = await getSupabaseClient().auth.getSession();
+  const token = data.session?.access_token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+const requestShopPacksApi = async (body) => {
+  const response = await fetch(SHOP_PACKS_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(await getAdminAuthHeaders()),
+    },
+    body: JSON.stringify(body),
+  });
+  const payload = await readJsonResponse(response, 'API boutique indisponible.');
+  if (!response.ok) throw new Error(payload.error || 'Operation boutique impossible.');
+  const packs = Array.isArray(payload.packs) ? payload.packs.map(normalizeShopPack) : [];
+  if (canUseStorage()) window.localStorage.setItem(SHOP_PACKS_KEY, JSON.stringify(packs));
+  window.dispatchEvent(new CustomEvent('shop-packs-updated'));
+  return packs;
+};
+
 export async function loadSharedShopPacks() {
+  if (typeof fetch === 'function') {
+    try {
+      const response = await fetch(`${SHOP_PACKS_ENDPOINT}?v=${Date.now()}`, { cache: 'no-store' });
+      if (response.ok) {
+        const payload = await readJsonResponse(response, 'API boutique indisponible.');
+        const apiPacks = Array.isArray(payload.packs) ? payload.packs.map(normalizeShopPack) : [];
+        const merged = mergeShopPacks(apiPacks, await loadBundledShopPacks());
+        if (canUseStorage()) window.localStorage.setItem(SHOP_PACKS_KEY, JSON.stringify(merged));
+        return merged;
+      }
+    } catch {
+      // Fallback local ci-dessous pour le mode dev/offline.
+    }
+  }
+
   if (!hasSupabaseConfig()) {
     const bundled = await loadBundledShopPacks();
     const local = getShopPacks();
@@ -117,21 +173,35 @@ export async function loadSharedShopPacks() {
 
   try {
     const bundled = await loadBundledShopPacks();
-    const text = await downloadTextFile(SHOP_PACKS_STORAGE_PATH);
+    const text = await downloadTextFile(SHOP_PACKS_STORAGE_PATH, { visibility: 'public' });
     const packs = safeParse(text, []);
     const normalized = Array.isArray(packs) ? packs.map(normalizeShopPack) : [];
     const merged = mergeShopPacks(normalized, bundled);
     if (canUseStorage()) window.localStorage.setItem(SHOP_PACKS_KEY, JSON.stringify(merged));
     return merged;
   } catch (error) {
-    const message = String(error?.message || '');
-    const isMissingFile = /not found|object not found|status code 400|status code 404/i.test(message);
-    if (isMissingFile) return mergeShopPacks(getShopPacks(), await loadBundledShopPacks());
+    if (isStorageNotFoundError(error)) return mergeShopPacks(getShopPacks(), await loadBundledShopPacks());
     throw error;
   }
 }
 
 export async function saveSharedShopPacks(packs = []) {
+  if (hasSupabaseConfig()) {
+    const normalized = Array.isArray(packs) ? packs.map(normalizeShopPack) : [];
+    const response = await fetch(SHOP_PACKS_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(await getAdminAuthHeaders()),
+      },
+      body: JSON.stringify({ action: 'replace', packs: normalized }),
+    });
+    if (response.ok) {
+      const payload = await readJsonResponse(response, 'API boutique indisponible.');
+      return Array.isArray(payload.packs) ? saveShopPacks(payload.packs) : normalized;
+    }
+  }
+
   const normalized = saveShopPacks(packs);
   if (!hasSupabaseConfig()) return normalized;
 
@@ -139,6 +209,8 @@ export async function saveSharedShopPacks(packs = []) {
   await uploadToStorage(SHOP_PACKS_STORAGE_PATH, blob, {
     contentType: 'application/json',
     cacheControl: '0',
+    visibility: 'public',
+    upsert: true,
   });
   return normalized;
 }
@@ -154,6 +226,8 @@ export function upsertShopPack(pack) {
 }
 
 export async function upsertSharedShopPack(pack) {
+  if (hasSupabaseConfig()) return requestShopPacksApi({ action: 'upsert', pack });
+
   const normalized = normalizeShopPack(pack);
   const existing = await loadSharedShopPacks();
   return saveSharedShopPacks([
@@ -167,11 +241,18 @@ export function deleteShopPack(packId) {
 }
 
 export async function deleteSharedShopPack(packId) {
+  if (hasSupabaseConfig()) return requestShopPacksApi({ action: 'delete', packId });
+
   const existing = await loadSharedShopPacks();
   return saveSharedShopPacks(existing.filter((entry) => entry.id !== packId));
 }
 
 export async function updateSharedShopPackStatus(packId, patch = {}) {
+  if (hasSupabaseConfig()) {
+    const action = patch.archived === false ? 'relist' : 'archive';
+    return requestShopPacksApi({ action, packId, ...patch });
+  }
+
   const existing = await loadSharedShopPacks();
   return saveSharedShopPacks(existing.map((pack) => (
     pack.id === packId ? normalizeShopPack({ ...pack, ...patch }) : pack

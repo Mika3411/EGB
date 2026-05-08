@@ -8,12 +8,12 @@ export const VISUAL_EFFECT_OPTIONS = [
   { value: 'sparkles', label: 'Etoiles scintillantes' },
   { value: 'stars', label: 'Champ d etoiles' },
   { value: 'snow', label: 'Neige douce' },
-  { value: 'blizzard', label: 'Tempete de neige' },
+  { value: 'blizzard', label: 'Tempété de neige' },
   { value: 'fog', label: 'Brume' },
   { value: 'smoke', label: 'Fumee' },
   { value: 'hearts', label: 'Coeurs flottants' },
   { value: 'glow', label: 'Halo lumineux' },
-  { value: 'fireflies', label: 'Lucioles' },
+  { value: 'firefliés', label: 'Lucioles' },
   { value: 'rain', label: 'Pluie fine' },
   { value: 'storm', label: 'Orage' },
   { value: 'magic', label: 'Poussiere magique' },
@@ -37,10 +37,10 @@ export const VISUAL_EFFECT_OPTIONS = [
 export const VISUAL_EFFECT_GROUPS = [
   {
     label: 'Lumiere et magie',
-    options: ['sparkles', 'stars', 'glow', 'fireflies', 'magic', 'aurora'],
+    options: ['sparkles', 'stars', 'glow', 'firefliés', 'magic', 'aurora'],
   },
   {
-    label: 'Meteo et ambiance',
+    label: 'Météo et ambiance',
     options: ['snow', 'blizzard', 'rain', 'storm', 'fog', 'smoke'],
   },
   {
@@ -48,7 +48,7 @@ export const VISUAL_EFFECT_GROUPS = [
     options: ['embers', 'flames'],
   },
   {
-    label: 'Romantique et fete',
+    label: 'Romantique et fété',
     options: ['hearts', 'bubbles', 'confetti'],
   },
   {
@@ -56,7 +56,7 @@ export const VISUAL_EFFECT_GROUPS = [
     options: ['vignette', 'scanlines', 'glitch'],
   },
   {
-    label: 'Filtres lens',
+    label: 'Filtrès lens',
     options: ['beauty-lens', 'dream-lens', 'neon-lens', 'night-vision', 'thermal', 'comic-lens', 'noir-lens'],
   },
 ];

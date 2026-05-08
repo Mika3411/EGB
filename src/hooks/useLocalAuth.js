@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   getProjectMetaForUser,
   getSessionUser,
+  isAdminAccount,
   isPasswordRecoverySession,
   loadProjectForUser,
   loadProjectRecordsForUser,
@@ -10,16 +11,25 @@ import {
   registerUser,
   saveProjectRecordsForUser,
   sendPasswordResetEmail,
+  supabaseUserToAccount,
   updateCurrentUserPassword,
 } from '../lib/authStorage';
 import { getAuthorProfile, saveAuthorProfile } from '../lib/authorProfiles';
+import { getSupabaseClient, hasSupabaseConfig } from '../supabaseStorage';
+import { migrateProjectAssetReferences } from '../lib/assetManager';
 
 const PROJECTS_KEY_PREFIX = 'escapeGameBuilder.projects';
 const ACTIVE_PROJECT_KEY_PREFIX = 'escapeGameBuilder.activeProject';
 const PROJECTS_DB_NAME = 'escape-game-builder-projects';
 const PROJECTS_DB_STORE = 'project-lists';
+const PROJECT_PUBLICATION_ENDPOINT = import.meta.env.VITE_PROJECT_PUBLICATION_ENDPOINT || '/api/projects/publication';
 
 const nowIso = () => new Date().toISOString();
+const PROJECT_MODE_RANKS = {
+  beginner: 0,
+  intermediate: 1,
+  expert: 2,
+};
 
 const createId = () => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
@@ -261,6 +271,17 @@ const persistProjects = async (userId, projects, options = {}) => {
   return fullProjects;
 };
 
+const cacheProjectsLocally = async (userId, projects) => {
+  const fullProjects = Array.isArray(projects) ? projects.map(normalizeProjectRecord) : [];
+  const storableProjects = fullProjects.map(sanitizeProjectRecordForStorage);
+  const cacheProjects = storableProjects.some((project) => hasLargeEmbeddedMedia(project.data))
+    ? storableProjects.map(slimProjectForLocalCache)
+    : storableProjects;
+  await writeProjectsToIndexedDb(userId, fullProjects);
+  writeProjects(userId, cacheProjects);
+  return fullProjects;
+};
+
 const readActiveProjectId = (userId) => localStorage.getItem(getActiveProjectKey(userId)) || '';
 const writeActiveProjectId = (userId, projectId) => {
   if (!projectId) localStorage.removeItem(getActiveProjectKey(userId));
@@ -277,11 +298,16 @@ export function useLocalAuth() {
   const [activeProjectId, setActiveProjectId] = useState('');
   const [authorProfile, setAuthorProfile] = useState(null);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+  const projectsRef = useRef(projects);
 
   const activeProject = useMemo(
     () => projects.find((project) => project.id === activeProjectId) || null,
     [projects, activeProjectId],
   );
+
+  useEffect(() => {
+    projectsRef.current = projects;
+  }, [projects]);
 
   const refreshProjects = async (userId = user?.id) => {
     if (!userId) {
@@ -308,17 +334,45 @@ export function useLocalAuth() {
     let isMounted = true;
 
     async function hydrateSession() {
-      const sessionUser = await getSessionUser();
-      if (!isMounted) return;
-      setIsPasswordRecovery(isPasswordRecoverySession());
-      setUser(sessionUser);
-      if (sessionUser?.id) setAuthorProfile(getAuthorProfile(sessionUser.id, sessionUser));
-      setIsReady(true);
+      try {
+        const sessionUser = await getSessionUser();
+        if (!isMounted) return;
+        setIsPasswordRecovery(isPasswordRecoverySession());
+        setUser(sessionUser);
+        if (sessionUser?.id) setAuthorProfile(getAuthorProfile(sessionUser.id, sessionUser));
+      } catch (error) {
+        console.warn('Session indisponible au démarrage.', error);
+        if (isMounted) {
+          setIsPasswordRecovery(isPasswordRecoverySession());
+          setUser(null);
+        }
+      } finally {
+        if (isMounted) setIsReady(true);
+      }
     }
 
     hydrateSession();
+
+    let subscription = null;
+    if (hasSupabaseConfig()) {
+      const { data } = getSupabaseClient().auth.onAuthStateChange((_event, session) => {
+        if (!isMounted) return;
+        const sessionUser = supabaseUserToAccount(session?.user);
+        if (!sessionUser && _event !== 'SIGNED_OUT') return;
+        setUser(sessionUser);
+        if (sessionUser?.id) setAuthorProfile(getAuthorProfile(sessionUser.id, sessionUser));
+        if (_event === 'SIGNED_OUT') {
+          setProjects([]);
+          setActiveProjectId('');
+          setAuthorProfile(null);
+        }
+      });
+      subscription = data?.subscription;
+    }
+
     return () => {
       isMounted = false;
+      subscription?.unsubscribe?.();
     };
   }, []);
 
@@ -504,6 +558,7 @@ export function useLocalAuth() {
     const nextProjects = [record, ...(await readPersistedProjects(user.id))];
     await persistProjects(user.id, nextProjects);
     writeActiveProjectId(user.id, record.id);
+    projectsRef.current = nextProjects;
     setProjects(nextProjects);
     setActiveProjectId(record.id);
     setProjectMeta({ id: record.id, name: record.name, updatedAt: record.updatedAt });
@@ -514,9 +569,15 @@ export function useLocalAuth() {
     if (!user?.id) return null;
 
     const storableProject = project || {};
-    const existingProjects = projects.length ? projects.map(normalizeProjectRecord) : await readPersistedProjects(user.id);
+    const currentProjects = projectsRef.current || [];
+    const existingProjects = currentProjects.length ? currentProjects.map(normalizeProjectRecord) : await readPersistedProjects(user.id);
     const currentProjectId = projectId || existingProjects[0]?.id || createId();
     const existing = existingProjects.find((item) => item.id === currentProjectId);
+    const incomingAutosaveRevision = Number(uiState.autosaveRevision || 0);
+    const existingAutosaveRevision = Number(existing?.uiState?.autosaveRevision || 0);
+    if (incomingAutosaveRevision > 0 && existingAutosaveRevision > incomingAutosaveRevision) {
+      return existing ? { id: existing.id, name: existing.name, updatedAt: existing.updatedAt } : null;
+    }
     const timestamp = nowIso();
     const record = normalizeProjectRecord({
       ...existing,
@@ -533,12 +594,32 @@ export function useLocalAuth() {
     const nextProjects = [record, ...existingProjects.filter((item) => item.id !== currentProjectId)];
     await persistProjects(user.id, nextProjects);
     writeActiveProjectId(user.id, record.id);
+    projectsRef.current = nextProjects;
     setProjects(nextProjects);
     setActiveProjectId(record.id);
 
     const nextMeta = { id: record.id, name: record.name, updatedAt: record.updatedAt };
     setProjectMeta(nextMeta);
     return nextMeta;
+  };
+
+  const saveProjects = async (projectRecords = [], nextActiveProjectId = activeProjectId) => {
+    if (!user?.id) return [];
+    const normalizedProjects = Array.isArray(projectRecords)
+      ? projectRecords.map(normalizeProjectRecord)
+      : [];
+    await persistProjects(user.id, normalizedProjects);
+    projectsRef.current = normalizedProjects;
+    setProjects(normalizedProjects);
+    if (nextActiveProjectId) {
+      writeActiveProjectId(user.id, nextActiveProjectId);
+      setActiveProjectId(nextActiveProjectId);
+    }
+    const activeRecord = normalizedProjects.find((project) => project.id === nextActiveProjectId) || normalizedProjects[0];
+    if (activeRecord) {
+      setProjectMeta({ id: activeRecord.id, name: activeRecord.name, updatedAt: activeRecord.updatedAt });
+    }
+    return normalizedProjects;
   };
 
   const loadProject = async (projectId = activeProjectId) => {
@@ -570,6 +651,30 @@ export function useLocalAuth() {
       || {};
   };
 
+  const requestBackendPublication = async ({ action, projectId, project, settings }) => {
+    if (!hasSupabaseConfig()) return null;
+    const { data } = await getSupabaseClient().auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) throw new Error('Session requise pour publier.');
+
+    const response = await fetch(PROJECT_PUBLICATION_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        action,
+        projectId,
+        project: project ? sanitizeProjectRecordForStorage(project) : undefined,
+        settings,
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || 'Publication serveur impossible.');
+    return payload.project ? normalizeProjectRecord(payload.project) : null;
+  };
+
   const markProjectLinkCopied = async (projectId) => {
     if (!user?.id || !projectId) return null;
     const timestamp = nowIso();
@@ -590,9 +695,14 @@ export function useLocalAuth() {
         }
         : project
     ));
-    await persistProjects(user.id, nextProjects, { requirePublicIndex: true });
-    setProjects(nextProjects);
-    return nextProjects.find((project) => project.id === projectId) || null;
+    const localProject = nextProjects.find((project) => project.id === projectId) || null;
+    const serverProject = await requestBackendPublication({ action: 'markCopied', projectId, project: localProject });
+    const finalProjects = serverProject
+      ? nextProjects.map((project) => (project.id === projectId ? serverProject : project))
+      : await persistProjects(user.id, nextProjects, { requirePublicIndex: true });
+    if (serverProject) await cacheProjectsLocally(user.id, finalProjects);
+    setProjects(finalProjects);
+    return finalProjects.find((project) => project.id === projectId) || null;
   };
 
   const publishProject = async (projectId) => {
@@ -601,7 +711,7 @@ export function useLocalAuth() {
     const sourceProjects = projects.length ? projects.map(normalizeProjectRecord) : await readPersistedProjects(user.id);
     const nextProjects = sourceProjects.map((project) => {
       if (project.id !== projectId) return project;
-      const snapshot = cloneProjectData(project.data);
+      const snapshot = migrateProjectAssetReferences(cloneProjectData(project.data));
       return {
         ...project,
         shareState: {
@@ -618,9 +728,14 @@ export function useLocalAuth() {
         updatedAt: timestamp,
       };
     });
-    await persistProjects(user.id, nextProjects, { requirePublicIndex: true });
-    setProjects(nextProjects);
-    return nextProjects.find((project) => project.id === projectId) || null;
+    const localProject = nextProjects.find((project) => project.id === projectId) || null;
+    const serverProject = await requestBackendPublication({ action: 'publish', projectId, project: localProject });
+    const finalProjects = serverProject
+      ? nextProjects.map((project) => (project.id === projectId ? serverProject : project))
+      : await persistProjects(user.id, nextProjects, { requirePublicIndex: true });
+    if (serverProject) await cacheProjectsLocally(user.id, finalProjects);
+    setProjects(finalProjects);
+    return finalProjects.find((project) => project.id === projectId) || null;
   };
 
   const unpublishProject = async (projectId) => {
@@ -640,9 +755,14 @@ export function useLocalAuth() {
         }
         : project
     ));
-    await persistProjects(user.id, nextProjects, { requirePublicIndex: true });
-    setProjects(nextProjects);
-    return nextProjects.find((project) => project.id === projectId) || null;
+    const localProject = nextProjects.find((project) => project.id === projectId) || null;
+    const serverProject = await requestBackendPublication({ action: 'unpublish', projectId, project: localProject });
+    const finalProjects = serverProject
+      ? nextProjects.map((project) => (project.id === projectId ? serverProject : project))
+      : await persistProjects(user.id, nextProjects, { requirePublicIndex: true });
+    if (serverProject) await cacheProjectsLocally(user.id, finalProjects);
+    setProjects(finalProjects);
+    return finalProjects.find((project) => project.id === projectId) || null;
   };
 
   const updateProjectShareSettings = async (projectId, settings = {}) => {
@@ -678,6 +798,37 @@ export function useLocalAuth() {
     await persistProjects(user.id, nextProjects);
     setProjects(nextProjects);
     return nextProjects.find((project) => project.id === projectId) || null;
+  };
+
+  const updateProjectMode = async (projectId, creationMode) => {
+    if (!user?.id || !projectId) return null;
+    if (!Object.prototype.hasOwnProperty.call(PROJECT_MODE_RANKS, creationMode)) return null;
+
+    const timestamp = nowIso();
+    const sourceProjects = projects.length ? projects.map(normalizeProjectRecord) : await readPersistedProjects(user.id);
+    const source = sourceProjects.find((project) => project.id === projectId);
+    if (!source) return null;
+
+    const currentMode = Object.prototype.hasOwnProperty.call(PROJECT_MODE_RANKS, source.data?.creationMode) ?
+       source.data.creationMode
+      : 'beginner';
+    if (PROJECT_MODE_RANKS[creationMode] <= PROJECT_MODE_RANKS[currentMode]) return source;
+
+    const nextProjects = sourceProjects.map((project) =>
+      project.id === projectId ?
+         {
+          ...project,
+          data: {
+            ...project.data,
+            creationMode,
+          },
+          updatedAt: timestamp,
+        }
+        : project,
+    );
+    const finalProjects = await persistProjects(user.id, nextProjects);
+    setProjects(finalProjects);
+    return finalProjects.find((project) => project.id === projectId) || null;
   };
 
   const duplicateProject = async (projectId) => {
@@ -726,6 +877,8 @@ export function useLocalAuth() {
 
   return {
     user,
+    role: user ? (isAdminAccount(user) ? 'admin' : 'user') : '',
+    isAdmin: isAdminAccount(user),
     isReady,
     isBusy,
     authError,
@@ -737,6 +890,7 @@ export function useLocalAuth() {
     isPasswordRecovery,
     logout,
     saveProject,
+    saveProjects,
     loadProject,
     projectMeta,
     authorProfile,
@@ -753,6 +907,7 @@ export function useLocalAuth() {
     refreshProjects,
     createProject,
     renameProject,
+    updateProjectMode,
     duplicateProject,
     deleteProject,
     importProject,

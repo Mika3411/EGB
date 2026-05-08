@@ -1,9 +1,12 @@
 const FIELD_HELP = {
-  addCombination: "Crée une nouvelle recette d’inventaire. Le joueur devra combiner deux objets pour obtenir un résultat.",
+  addCombination: "Crée une nouvelle recette d’inventaire. Le joueur devra combiner deux objets pour obtenir un result.",
   itemA: "Premier objet nécessaire à la combinaison. L’ordre avec l’objet 2 sert surtout à organiser la recette dans l’éditeur.",
   itemB: "Deuxième objet nécessaire à la combinaison. Choisis un objet différent si tu veux éviter les recettes ambiguës.",
-  result: "Objet obtenu quand la combinaison réussit. Il peut ensuite servir dans une zone, une énigme ou une autre combinaison.",
-  message: "Texte affiché au joueur après une combinaison réussie. Il confirme le résultat ou donne un indice sur la suite.",
+  result: "Objet obtenu quand la combinaison réussit. Il peut ensuite servir dans une zone, une enigme ou une autre combinaison.",
+  message: "Texte affiché au joueur après une combinaison réussie. Il confirme le result ou donne un indice sur la suite.",
+  consume: "Retire les deux objets sources de l'inventaire quand la combinaison reussit.",
+  conditions: "Conditions a valider avant la combinaison, separees par des virgules. Exemple : has_oil.",
+  failMessage: "Texte affiche si la recette existe mais que ses conditions ne sont pas remplies.",
 };
 
 const HelpLabel = ({ children, help, className = '' }) => (
@@ -31,7 +34,7 @@ export default function CombinationsTab({ project, addCombination, getItemById, 
           return (
             <div className="list-card" key={combo.id}>
               <strong>{itemA?.name || 'Objet 1'} + {itemB?.name || 'Objet 2'}</strong>
-              <span>→ {result?.name || 'Résultat'}</span>
+              <span>→ {result?.name || 'Result'}</span>
             </div>
           );
         }) : <p>Aucune combinaison pour l'instant.</p>}
@@ -61,7 +64,7 @@ export default function CombinationsTab({ project, addCombination, getItemById, 
                 </select>
               </div>
             </div>
-            <HelpLabel help={FIELD_HELP.result}>Résultat</HelpLabel>
+            <HelpLabel help={FIELD_HELP.result}>Result</HelpLabel>
             <select data-tour="combination-result" value={combo.resultItemId} onChange={(e) => patchProject((draft) => {
               const target = (draft.combinations || []).find((c) => c.id === combo.id); if (target) target.resultItemId = e.target.value;
             })}>
@@ -71,6 +74,30 @@ export default function CombinationsTab({ project, addCombination, getItemById, 
             <HelpLabel help={FIELD_HELP.message}>Message affiché</HelpLabel>
             <textarea data-tour="combination-message" value={combo.message} onChange={(e) => patchProject((draft) => {
               const target = (draft.combinations || []).find((c) => c.id === combo.id); if (target) target.message = e.target.value;
+            })} />
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={combo.consume ?? true}
+                onChange={(e) => patchProject((draft) => {
+                  const target = (draft.combinations || []).find((c) => c.id === combo.id); if (target) target.consume = e.target.checked;
+                })}
+              />
+              <span>Consommer les objets sources</span>
+              <span className="help-dot" data-help={FIELD_HELP.consume} aria-label={FIELD_HELP.consume} tabIndex={0}>?</span>
+            </label>
+            <HelpLabel help={FIELD_HELP.conditions}>Conditions</HelpLabel>
+            <input
+              value={(combo.conditions || []).join(', ')}
+              placeholder="has_oil"
+              onChange={(e) => patchProject((draft) => {
+                const target = (draft.combinations || []).find((c) => c.id === combo.id);
+                if (target) target.conditions = e.target.value.split(',').map((entry) => entry.trim()).filter(Boolean);
+              })}
+            />
+            <HelpLabel help={FIELD_HELP.failMessage}>Message d'echec</HelpLabel>
+            <textarea value={combo.failMessage || ''} onChange={(e) => patchProject((draft) => {
+              const target = (draft.combinations || []).find((c) => c.id === combo.id); if (target) target.failMessage = e.target.value;
             })} />
           </div>
         ))}

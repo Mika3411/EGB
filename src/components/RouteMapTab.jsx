@@ -1,14 +1,50 @@
-import { useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, DoorOpen, Link, MapPin, Plus, Trash2, XCircle } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AlertTriangle, Brain, CheckCircle2, Clapperboard, DoorOpen, ExternalLink, EyeOff, Gamepad2, Link, Lock, MapPin, Maximize2, Minimize2, MousePointerClick, Pencil, Play, Plus, RotateCcw, Trash2, XCircle } from 'lucide-react';
 
 const makeId = (prefix) => `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 const getDefaultMap = () => ({ rows: 16, cols: 24, cells: [], rooms: [], connections: [], notes: '' });
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
+const cloneRouteMap = (routeMap = getDefaultMap()) => ({
+  rows: routeMap.rows || 16,
+  cols: routeMap.cols || 24,
+  cells: Array.isArray(routeMap.cells) ? routeMap.cells.map((cell) => ({ ...cell })) : [],
+  rooms: Array.isArray(routeMap.rooms) ? routeMap.rooms.map((room) => ({ ...room })) : [],
+  connections: Array.isArray(routeMap.connections) ? routeMap.connections.map((connection) => ({ ...connection })) : [],
+  notes: routeMap.notes || '',
+});
+
+const getSceneActId = (project, sceneId) => (
+  (project.scenes || []).find((scene) => scene.id === sceneId)?.actId || ''
+);
+
+const getRouteMapForAct = (project, routeMap, actId) => {
+  const actMap = routeMap?.actMaps?.[actId];
+  if (actMap) return cloneRouteMap(actMap);
+
+  const sourceMap = routeMap || getDefaultMap();
+  const rooms = (sourceMap.rooms || [])
+    .filter((room) => room.sceneId && getSceneActId(project, room.sceneId) === actId)
+    .map((room) => ({ ...room }));
+  const roomIds = new Set(rooms.map((room) => room.id));
+  const connections = (sourceMap.connections || [])
+    .filter((connection) => roomIds.has(connection.fromRoomId) && roomIds.has(connection.toRoomId))
+    .map((connection) => ({ ...connection }));
+
+  return {
+    rows: sourceMap.rows || 16,
+    cols: sourceMap.cols || 24,
+    cells: [],
+    rooms,
+    connections,
+    notes: sourceMap.notes || '',
+  };
+};
+
 const roomLabel = (room, project, getSceneLabel) => {
   if (room.sceneId) return getSceneLabel(room.sceneId);
-  return room.name || 'Pièce sans nom';
+  return room.name || 'Piece sans nom';
 };
 
 const getActStartSceneId = (project, actId) => {
@@ -60,6 +96,7 @@ const getSceneTransitions = (project) => (
           targetSceneId: hotspot.targetSceneId,
           targetCinematicId: hotspot.targetCinematicId,
           enigmaId: hotspot.enigmaId,
+          requiredItemId: hotspot.requiredItemId,
         },
         hotspot.hasSecondAction ? {
           label: `${hotspot.name || 'Zone'} (2e action)`,
@@ -67,6 +104,7 @@ const getSceneTransitions = (project) => (
           targetSceneId: hotspot.secondTargetSceneId,
           targetCinematicId: hotspot.secondTargetCinematicId,
           enigmaId: hotspot.secondEnigmaId,
+          requiredItemId: hotspot.secondRequiredItemId,
         } : null,
         ...(hotspot.logicRules || []).map((rule) => (
           rule.actionType === 'default'
@@ -76,6 +114,7 @@ const getSceneTransitions = (project) => (
               targetSceneId: hotspot.targetSceneId,
               targetCinematicId: hotspot.targetCinematicId,
               enigmaId: hotspot.enigmaId,
+              requiredItemId: rule.itemId || hotspot.requiredItemId,
             }
             : {
               label: `${hotspot.name || 'Zone'} · ${rule.name || 'Règle'}`,
@@ -83,6 +122,7 @@ const getSceneTransitions = (project) => (
               targetSceneId: rule.targetSceneId,
               targetCinematicId: rule.targetCinematicId,
               enigmaId: rule.enigmaId,
+              requiredItemId: rule.itemId,
             }
         )),
       ].filter(Boolean);
@@ -94,10 +134,41 @@ const getSceneTransitions = (project) => (
             fromSceneId: scene.id,
             toSceneId: targetSceneId,
             label: action.label,
+            actionType: action.actionType,
+            enigmaId: action.enigmaId,
+            targetCinematicId: action.targetCinematicId,
+            requiredItemId: action.requiredItemId,
           }))
       ));
     })
   ))
+);
+
+const getSceneMechanics = (project, sceneId) => {
+  const scene = (project.scenes || []).find((entry) => entry.id === sceneId);
+  if (!scene) return { enigma: false, cinematic: false, logic: false };
+  return (scene.hotspots || []).reduce((flags, hotspot) => {
+    const actions = [
+      hotspot,
+      hotspot.hasSecondAction ? {
+        actionType: hotspot.secondActionType,
+        targetCinematicId: hotspot.secondTargetCinematicId,
+        enigmaId: hotspot.secondEnigmaId,
+      } : null,
+      ...(hotspot.logicRules || []),
+    ].filter(Boolean);
+
+    actions.forEach((action) => {
+      if (action.enigmaId) flags.enigma = true;
+      if (action.actionType === 'cinematic' || action.targetCinematicId) flags.cinematic = true;
+    });
+    if ((hotspot.logicRules || []).length) flags.logic = true;
+    return flags;
+  }, { enigma: false, cinematic: false, logic: false });
+};
+
+const getRoomMechanics = (project, room) => (
+  room?.sceneId ? getSceneMechanics(project, room.sceneId) : { enigma: false, cinematic: false, logic: false }
 );
 
 const scenePairKey = (sceneA = '', sceneB = '') => [sceneA, sceneB].sort().join('<>');
@@ -114,7 +185,7 @@ const getConnectionActionStatus = (project, rooms, connection, getSceneLabel) =>
     return {
       connectionId: connection.id,
       status: 'neutral',
-      message: 'Lie les deux pièces à des scènes pour vérifier les zones d’action.',
+      message: 'Lie les deux pieces à des scenes pour vérifier les zones d’action.',
     };
   }
 
@@ -149,7 +220,7 @@ const getConnectionActionStatus = (project, rooms, connection, getSceneLabel) =>
   return {
     connectionId: connection.id,
     status: 'missing',
-    message: `${fromLabel} ↔ ${toLabel}: aucune zone d’action ne relie ces deux pièces.`,
+    message: `${fromLabel} ↔ ${toLabel}: aucune zone d’action ne relie ces deux pieces.`,
   };
 };
 
@@ -165,18 +236,18 @@ const buildDiagnostics = (project, routeMap, getSceneLabel) => {
     .map((connection) => getConnectionActionStatus(project, rooms, connection, getSceneLabel))
     .filter(Boolean);
 
-  if (!rooms.length) problems.push('Aucune pièce créée dans le plan.');
+  if (!rooms.length) problems.push('Aucune piece créée dans le plan.');
 
   const starts = rooms.filter((room) => room.type === 'start');
   const ends = rooms.filter((room) => room.type === 'end');
-  if (starts.length !== 1) problems.push(starts.length ? 'Le plan doit avoir un seul départ.' : 'Ajoute une pièce de départ.');
-  if (ends.length !== 1) warnings.push(ends.length ? 'Le plan a plusieurs arrivées.' : 'Ajoute une arrivée si le parcours a une fin prévue.');
+  if (starts.length !== 1) problems.push(starts.length ? 'Le plan doit avoir un seul départ.' : 'Ajoute une piece de départ.');
+  if (ends.length !== 1) warnings.push(ends.length ? 'Le plan a plusieurs arrivées.' : 'Ajoute une arrivée si le parcours à une fin prévue.');
 
   rooms.forEach((room) => {
     const degree = connections.filter((connection) => (
       connection.fromRoomId === room.id || connection.toRoomId === room.id
     )).length;
-    if (!degree && rooms.length > 1) problems.push(`${roomLabel(room, project, getSceneLabel)} n’est reliée à aucune autre pièce.`);
+    if (!degree && rooms.length > 1) problems.push(`${roomLabel(room, project, getSceneLabel)} n’est reliée à aucune autre piece.`);
   });
 
   if (starts.length === 1) {
@@ -226,52 +297,331 @@ const buildDiagnostics = (project, routeMap, getSceneLabel) => {
   };
 };
 
-export default function RouteMapTab({ project, patchProject, getSceneLabel }) {
-  const routeMap = project.routeMap || getDefaultMap();
+const getTransitionLabel = (transitions, fromSceneId, toSceneId) => (
+  transitions.find((transition) => (
+    transition.fromSceneId === fromSceneId && transition.toSceneId === toSceneId
+  ))?.label || ''
+);
+
+const getTransitionBetweenScenes = (transitions, fromSceneId, toSceneId) => (
+  transitions.find((transition) => (
+    transition.fromSceneId === fromSceneId && transition.toSceneId === toSceneId
+  )) || null
+);
+
+const findScenePath = (project, fromSceneId, toSceneId) => {
+  if (!fromSceneId || !toSceneId) return null;
+  if (fromSceneId === toSceneId) return [];
+  const transitions = getSceneTransitions(project);
+  const visited = new Set([fromSceneId]);
+  const queue = [{ sceneId: fromSceneId, path: [] }];
+
+  while (queue.length) {
+    const current = queue.shift();
+    const nextTransitions = transitions.filter((transition) => transition.fromSceneId === current.sceneId);
+    for (const transition of nextTransitions) {
+      if (visited.has(transition.toSceneId)) continue;
+      const nextPath = [...current.path, transition];
+      if (transition.toSceneId === toSceneId) return nextPath;
+      visited.add(transition.toSceneId);
+      queue.push({ sceneId: transition.toSceneId, path: nextPath });
+    }
+  }
+
+  return null;
+};
+
+const normalizeSearchText = (value = '') => (
+  String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+);
+
+const getSceneRewardItemIds = (project, sceneId) => {
+  const scene = (project.scenes || []).find((entry) => entry.id === sceneId);
+  if (!scene) return [];
+  return (scene.hotspots || []).flatMap((hotspot) => [
+    hotspot.rewardItemId,
+    hotspot.secondRewardItemId,
+    ...(hotspot.logicRules || []).map((rule) => rule.rewardItemId),
+  ]).filter(Boolean);
+};
+
+const getRoomRewardItemIds = (project, room) => (
+  room?.sceneId ? getSceneRewardItemIds(project, room.sceneId) : []
+);
+
+const getRequiredItemForConnection = (project, connection) => {
+  const conditionText = normalizeSearchText(`${connection.condition || ''} ${connection.label || ''}`);
+  if (!conditionText.trim()) return null;
+  const conditionWords = conditionText.split(/[^a-z0-9]+/).filter((word) => word.length >= 3);
+  return (project.items || []).find((item) => (
+    item?.name && (
+      conditionText.includes(normalizeSearchText(item.name))
+      || conditionWords.some((word) => normalizeSearchText(item.name).includes(word))
+    )
+  )) || null;
+};
+
+const buildGameplayState = (project, routeMap, currentRoomId, playerPath, playerItemIds, getSceneLabel) => {
+  const rooms = routeMap.rooms || [];
+  const connections = routeMap.connections || [];
+  const transitions = getSceneTransitions(project);
+  const startRoom = rooms.find((room) => room.type === 'start') || rooms[0] || null;
+  const activeRoom = rooms.find((room) => room.id === currentRoomId) || startRoom;
+  const visitedRoomIds = new Set((playerPath || []).filter(Boolean));
+  if (activeRoom?.id) visitedRoomIds.add(activeRoom.id);
+
+  const getMoveForConnection = (connection, fromRoomId) => {
+    const fromRoom = rooms.find((room) => room.id === fromRoomId);
+    const toRoomId = connection.fromRoomId === fromRoomId
+      ? connection.toRoomId
+      : connection.toRoomId === fromRoomId
+        ? connection.fromRoomId
+        : '';
+    const toRoom = rooms.find((room) => room.id === toRoomId);
+    if (!fromRoom || !toRoom) return null;
+    const directTransition = fromRoom.sceneId && toRoom.sceneId
+      ? getTransitionBetweenScenes(transitions, fromRoom.sceneId, toRoom.sceneId)
+      : null;
+    const reverseTransition = fromRoom.sceneId && toRoom.sceneId
+      ? getTransitionBetweenScenes(transitions, toRoom.sceneId, fromRoom.sceneId)
+      : null;
+    const directLabel = directTransition?.label || '';
+    const indirectPath = !directLabel && fromRoom.sceneId && toRoom.sceneId
+      ? findScenePath(project, fromRoom.sceneId, toRoom.sceneId)
+      : null;
+    const hasTransition = Boolean(directLabel || indirectPath?.length);
+    const indirectLabel = indirectPath?.length
+      ? `Chemin indirect via ${indirectPath.map((transition) => transition.label).filter(Boolean).slice(0, 2).join(' + ') || 'actions du jeu'}`
+      : '';
+    const isLocked = Boolean(connection.locked);
+    const missingScene = !fromRoom.sceneId || !toRoom.sceneId;
+    const transitionRequiredItemId = directTransition?.requiredItemId
+      || reverseTransition?.requiredItemId
+      || indirectPath?.find((transition) => transition.requiredItemId)?.requiredItemId
+      || '';
+    const transitionRequiredItem = transitionRequiredItemId
+      ? (project.items || []).find((item) => item.id === transitionRequiredItemId)
+      : null;
+    const requiredItem = getRequiredItemForConnection(project, connection) || transitionRequiredItem;
+    const hasCondition = Boolean(isLocked || String(connection.condition || '').trim() || transitionRequiredItemId);
+    const needsMissingItem = Boolean(hasCondition && requiredItem && !playerItemIds.includes(requiredItem.id));
+    const needsManualCondition = Boolean(hasCondition && !requiredItem);
+    const reason = needsMissingItem
+      ? `Objet requis: ${requiredItem.name}`
+      : needsManualCondition
+        ? (connection.condition || 'Condition non resolue')
+        : '';
+    const mapOnlyLabel = !hasTransition
+      ? `Liaison plan - action ${getSceneLabel(fromRoom.sceneId)} -> ${getSceneLabel(toRoom.sceneId)} non detectee`
+      : '';
+    return {
+      connection,
+      fromRoom,
+      toRoom,
+      label: directLabel || indirectLabel || connection.label || connection.condition || mapOnlyLabel || 'Liaison',
+      condition: connection.condition || '',
+      requiredItem,
+      indirect: Boolean(indirectPath?.length && !directLabel),
+      mapOnly: !hasTransition && !missingScene,
+      locked: isLocked,
+      blocked: needsMissingItem || needsManualCondition,
+      reason,
+    };
+  };
+
+  const getMovesFromRoom = (roomId) => connections
+    .filter((connection) => connection.fromRoomId === roomId || connection.toRoomId === roomId)
+    .map((connection) => getMoveForConnection(connection, roomId))
+    .filter(Boolean);
+
+  const currentMoves = activeRoom ? getMovesFromRoom(activeRoom.id) : [];
+  const availableMoves = currentMoves.filter((move) => !move.blocked);
+  const blockedMoves = currentMoves.filter((move) => move.blocked);
+  const reachableRoomIds = new Set(activeRoom?.id ? [activeRoom.id] : []);
+  const queue = activeRoom?.id ? [activeRoom.id] : [];
+  while (queue.length) {
+    const roomId = queue.shift();
+    getMovesFromRoom(roomId).forEach((move) => {
+      if (move.blocked || reachableRoomIds.has(move.toRoom.id)) return;
+      reachableRoomIds.add(move.toRoom.id);
+      queue.push(move.toRoom.id);
+    });
+  }
+
+  const pathConnectionIds = new Set();
+  (playerPath || []).forEach((roomId, index) => {
+    const nextRoomId = playerPath[index + 1];
+    if (!nextRoomId) return;
+    const connection = connections.find((entry) => (
+      (entry.fromRoomId === roomId && entry.toRoomId === nextRoomId)
+      || (entry.fromRoomId === nextRoomId && entry.toRoomId === roomId)
+    ));
+    if (connection) pathConnectionIds.add(connection.id);
+  });
+
+  const deadEndRoomIds = new Set(rooms
+    .filter((room) => room.type !== 'end' && getMovesFromRoom(room.id).every((move) => move.blocked))
+    .map((room) => room.id));
+
+  return {
+    activeRoom,
+    startRoom,
+    availableMoves,
+    blockedMoves,
+    visitedRoomIds,
+    reachableRoomIds,
+    pathConnectionIds,
+    deadEndRoomIds,
+    reachedEnd: Boolean(activeRoom?.type === 'end'),
+    blockedCount: connections.reduce((count, connection) => {
+      const fromMove = getMoveForConnection(connection, connection.fromRoomId);
+      return count + (fromMove?.blocked ? 1 : 0);
+    }, 0),
+  };
+};
+
+export default function RouteMapTab({ project, patchProject, getSceneLabel, setSelectedSceneId, setTab }) {
+  const sourceRouteMap = project.routeMap || getDefaultMap();
+  const acts = project.acts || [];
+  const fallbackActId = acts[0]?.id || '';
+  const [selectedActId, setSelectedActId] = useState(fallbackActId);
+  const activeActId = acts.some((act) => act.id === selectedActId) ? selectedActId : fallbackActId;
+  const activeActScenes = (project.scenes || []).filter((scene) => scene.actId === activeActId);
+  const routeMap = useMemo(
+    () => getRouteMapForAct(project, sourceRouteMap, activeActId),
+    [project, sourceRouteMap, activeActId]
+  );
   const [selectedRoomId, setSelectedRoomId] = useState(routeMap.rooms?.[0]?.id || '');
+  const [selectedConnectionId, setSelectedConnectionId] = useState('');
   const [connectFromId, setConnectFromId] = useState('');
   const [draggingRoomId, setDraggingRoomId] = useState('');
+  const [contextMenu, setContextMenu] = useState(null);
+  const [mapMode, setMapMode] = useState('edit');
+  const [hideSelection, setHideSelection] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [playerRoomId, setPlayerRoomId] = useState('');
+  const [playerPath, setPlayerPath] = useState([]);
+  const [playerItemIds, setPlayerItemIds] = useState([]);
+  const dragRef = useRef(null);
 
   const rooms = routeMap.rooms || [];
   const connections = routeMap.connections || [];
   const selectedRoom = rooms.find((room) => room.id === selectedRoomId) || null;
+  const selectedConnection = connections.find((connection) => connection.id === selectedConnectionId) || null;
   const diagnostics = useMemo(() => buildDiagnostics(project, routeMap, getSceneLabel), [project, routeMap, getSceneLabel]);
   const connectionChecksById = useMemo(() => (
     new Map((diagnostics.connectionChecks || []).map((check) => [check.connectionId, check]))
   ), [diagnostics.connectionChecks]);
+  const gameplay = useMemo(
+    () => buildGameplayState(project, routeMap, playerRoomId, playerPath, playerItemIds, getSceneLabel),
+    [project, routeMap, playerRoomId, playerPath, playerItemIds, getSceneLabel]
+  );
+  const isGameplayMode = mapMode === 'gameplay';
+  const showSelection = !hideSelection;
+
+  useEffect(() => {
+    if (selectedActId && acts.some((act) => act.id === selectedActId)) return;
+    setSelectedActId(fallbackActId);
+  }, [acts, fallbackActId, selectedActId]);
+
+  useEffect(() => {
+    if (!selectedRoomId || rooms.some((room) => room.id === selectedRoomId)) return;
+    setSelectedRoomId(rooms[0]?.id || '');
+    setConnectFromId('');
+  }, [rooms, selectedRoomId]);
+
+  useEffect(() => {
+    if (!selectedConnectionId || connections.some((connection) => connection.id === selectedConnectionId)) return;
+    setSelectedConnectionId('');
+  }, [connections, selectedConnectionId]);
+
+  useEffect(() => {
+    if (!gameplay.startRoom) {
+      setPlayerRoomId('');
+      setPlayerPath([]);
+      return;
+    }
+    if (playerRoomId && rooms.some((room) => room.id === playerRoomId)) return;
+    setPlayerRoomId(gameplay.startRoom.id);
+    setPlayerPath([gameplay.startRoom.id]);
+    setPlayerItemIds(getRoomRewardItemIds(project, gameplay.startRoom));
+  }, [gameplay.startRoom, playerRoomId, rooms]);
+
+  useEffect(() => {
+    if (!gameplay.activeRoom) return;
+    const rewardItemIds = getRoomRewardItemIds(project, gameplay.activeRoom);
+    if (!rewardItemIds.some((itemId) => !playerItemIds.includes(itemId))) return;
+    setPlayerItemIds((itemIds) => [...new Set([...itemIds, ...rewardItemIds])]);
+  }, [gameplay.activeRoom, playerItemIds, project]);
+
+  useEffect(() => {
+    if (!isFullscreen) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setIsFullscreen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreen]);
 
   const patchRouteMap = (updater, options) => {
     patchProject((draft) => {
       if (!draft.routeMap) draft.routeMap = getDefaultMap();
-      if (!Array.isArray(draft.routeMap.rooms)) draft.routeMap.rooms = [];
-      if (!Array.isArray(draft.routeMap.connections)) draft.routeMap.connections = [];
-      updater(draft.routeMap);
+      if (!draft.routeMap.actMaps || typeof draft.routeMap.actMaps !== 'object') draft.routeMap.actMaps = {};
+      if (!draft.routeMap.actMaps[activeActId]) {
+        draft.routeMap.actMaps[activeActId] = getRouteMapForAct(draft, draft.routeMap, activeActId);
+      }
+      if (!Array.isArray(draft.routeMap.actMaps[activeActId].rooms)) draft.routeMap.actMaps[activeActId].rooms = [];
+      if (!Array.isArray(draft.routeMap.actMaps[activeActId].connections)) draft.routeMap.actMaps[activeActId].connections = [];
+      updater(draft.routeMap.actMaps[activeActId]);
     }, options);
   };
 
-  const addRoom = (sceneId = '') => {
+  const addRoom = (sceneId = '', position = {}) => {
     const room = {
       id: makeId('room'),
-      name: sceneId ? getSceneLabel(sceneId) : `Pièce ${rooms.length + 1}`,
+      name: sceneId ? getSceneLabel(sceneId) : `Piece ${rooms.length + 1}`,
       sceneId,
-      x: clamp(18 + rooms.length * 9, 8, 86),
-      y: clamp(20 + rooms.length * 7, 10, 84),
+      x: clamp(position.x ?? 18 + rooms.length * 9, 8, 86),
+      y: clamp(position.y ?? 20 + rooms.length * 7, 10, 84),
       type: rooms.some((entry) => entry.type === 'start') ? 'room' : 'start',
     };
     patchRouteMap((draftMap) => {
       draftMap.rooms.push(room);
     });
     setSelectedRoomId(room.id);
+    setSelectedConnectionId('');
+  };
+
+  const duplicateRoom = (roomId) => {
+    const sourceRoom = rooms.find((room) => room.id === roomId);
+    if (!sourceRoom) return;
+    const room = {
+      ...sourceRoom,
+      id: makeId('room'),
+      name: `${sourceRoom.name || 'Piece'} copie`,
+      x: clamp((sourceRoom.x || 50) + 6, 8, 86),
+      y: clamp((sourceRoom.y || 50) + 6, 10, 84),
+      type: 'room',
+    };
+    patchRouteMap((draftMap) => {
+      draftMap.rooms.push(room);
+    });
+    setSelectedRoomId(room.id);
+    setSelectedConnectionId('');
+    setContextMenu(null);
   };
 
   const addMissingSceneRooms = () => {
     const mappedSceneIds = new Set(rooms.map((room) => room.sceneId).filter(Boolean));
-    const scenesToAdd = (project.scenes || []).filter((scene) => !mappedSceneIds.has(scene.id));
+    const scenesToAdd = activeActScenes.filter((scene) => !mappedSceneIds.has(scene.id));
     patchRouteMap((draftMap) => {
       scenesToAdd.forEach((scene, index) => {
         draftMap.rooms.push({
           id: makeId('room'),
-          name: scene.name || `Pièce ${draftMap.rooms.length + 1}`,
+          name: scene.name || `Piece ${draftMap.rooms.length + 1}`,
           sceneId: scene.id,
           x: clamp(16 + (index % 5) * 16, 8, 90),
           y: clamp(18 + Math.floor(index / 5) * 18, 10, 86),
@@ -288,9 +638,16 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel }) {
     }, options);
   };
 
+  const updateConnection = (connectionId, updater, options) => {
+    patchRouteMap((draftMap) => {
+      const connection = draftMap.connections.find((entry) => entry.id === connectionId);
+      if (connection) updater(connection, draftMap);
+    }, options);
+  };
+
   const deleteRoom = (roomId) => {
-    const room = routeMap.rooms.find((entry) => entry.id === roomId);
-    if (!window.confirm(`Supprimer la pièce "${room?.name || 'sélectionnée'}" et ses liaisons ?`)) return;
+    const room = rooms.find((entry) => entry.id === roomId);
+    if (!window.confirm(`Supprimer la piece "${room?.name || 'selectionnée'}" et ses liaisons ?`)) return;
     patchRouteMap((draftMap) => {
       draftMap.rooms = draftMap.rooms.filter((room) => room.id !== roomId);
       draftMap.connections = draftMap.connections.filter((connection) => (
@@ -306,6 +663,8 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel }) {
     patchRouteMap((draftMap) => {
       draftMap.connections = draftMap.connections.filter((connection) => connection.id !== connectionId);
     });
+    setSelectedConnectionId('');
+    setContextMenu(null);
   };
 
   const toggleConnectionOneWayApproval = (connectionId) => {
@@ -313,6 +672,12 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel }) {
       const connection = draftMap.connections.find((entry) => entry.id === connectionId);
       if (connection) connection.allowOneWay = !connection.allowOneWay;
     });
+  };
+
+  const openRoomScene = (room) => {
+    if (!room?.sceneId || !setSelectedSceneId || !setTab) return;
+    setSelectedSceneId(room.sceneId);
+    setTab('scenes');
   };
 
   const toggleConnection = (toRoomId) => {
@@ -344,10 +709,11 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel }) {
     });
     setConnectFromId('');
     setSelectedRoomId(toRoomId);
+    setSelectedConnectionId('');
   };
 
   const clearMap = () => {
-    if (!window.confirm('Effacer tout le plan de route ?')) return;
+    if (!window.confirm('Effacer le plan de cet acte ?')) return;
     patchRouteMap((draftMap) => {
       draftMap.rooms = [];
       draftMap.connections = [];
@@ -356,17 +722,74 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel }) {
     setConnectFromId('');
   };
 
-  const handleRoomPointerMove = (event, roomId) => {
-    if (draggingRoomId !== roomId) return;
+  const getBoardPosition = (event) => {
     const board = event.currentTarget.closest('.route-room-board');
-    if (!board) return;
+    if (!board) return null;
     const rect = board.getBoundingClientRect();
-    const x = clamp(((event.clientX - rect.left) / rect.width) * 100, 5, 95);
-    const y = clamp(((event.clientY - rect.top) / rect.height) * 100, 7, 93);
+    return {
+      board,
+      rect,
+      x: clamp(((event.clientX - rect.left) / rect.width) * 100, 5, 95),
+      y: clamp(((event.clientY - rect.top) / rect.height) * 100, 7, 93),
+    };
+  };
+
+  const handleRoomPointerMove = (event, roomId) => {
+    if (draggingRoomId !== roomId || dragRef.current?.roomId !== roomId) return;
+    const distance = Math.hypot(event.clientX - dragRef.current.startX, event.clientY - dragRef.current.startY);
+    if (distance > 3) dragRef.current.moved = true;
+    const position = getBoardPosition(event);
+    if (!position) return;
     updateRoom(roomId, (room) => {
-      room.x = x;
-      room.y = y;
+      room.x = position.x;
+      room.y = position.y;
     }, { rememberHistory: false });
+  };
+
+  const openContextMenu = (event, options) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const position = getBoardPosition(event);
+    if (!position) return;
+    setContextMenu({
+      ...options,
+      x: event.clientX - position.rect.left,
+      y: event.clientY - position.rect.top,
+      boardX: position.x,
+      boardY: position.y,
+    });
+  };
+
+  const selectConnection = (connectionId) => {
+    setSelectedConnectionId(connectionId);
+    setSelectedRoomId('');
+    setConnectFromId('');
+    setContextMenu(null);
+  };
+
+  const resetGameplay = () => {
+    const startRoom = gameplay.startRoom || rooms[0] || null;
+    const startRoomId = startRoom?.id || '';
+    setPlayerRoomId(startRoomId);
+    setPlayerPath(startRoomId ? [startRoomId] : []);
+    setPlayerItemIds(startRoom ? getRoomRewardItemIds(project, startRoom) : []);
+  };
+
+  const movePlayerToRoom = (roomId) => {
+    const move = gameplay.availableMoves.find((entry) => entry.toRoom.id === roomId);
+    if (!move) return;
+    setPlayerRoomId(roomId);
+    const targetRoom = rooms.find((room) => room.id === roomId);
+    const rewardItemIds = getRoomRewardItemIds(project, targetRoom);
+    if (rewardItemIds.length) {
+      setPlayerItemIds((itemIds) => [...new Set([...itemIds, ...rewardItemIds])]);
+    }
+    setPlayerPath((path) => {
+      const basePath = path.length ? path : (gameplay.activeRoom?.id ? [gameplay.activeRoom.id] : []);
+      return [...basePath, roomId];
+    });
+    setSelectedRoomId(roomId);
+    setSelectedConnectionId('');
   };
 
   return (
@@ -375,37 +798,92 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel }) {
         <div className="panel-head">
           <div>
             <span className="section-kicker">Plan</span>
-            <h2>Pièces</h2>
+            <h2>Pieces</h2>
           </div>
           <span className={`status-badge ${diagnostics.ok ? '' : 'soft'}`}>{diagnostics.ok ? 'OK' : `${diagnostics.problems.length} souci(s)`}</span>
         </div>
 
-        <div className="inline-actions" data-tour="map-add-room">
-          <button type="button" onClick={() => addRoom()}>
-            <Plus size={16} aria-hidden="true" />
-            Pièce
+        <label>
+          Acte
+          <select value={activeActId} onChange={(event) => {
+            setSelectedActId(event.target.value);
+            setSelectedRoomId('');
+            setConnectFromId('');
+            setPlayerRoomId('');
+            setPlayerPath([]);
+            setPlayerItemIds([]);
+          }}>
+            {acts.map((act) => (
+              <option key={act.id} value={act.id}>{act.name}</option>
+            ))}
+          </select>
+        </label>
+
+        <div className="route-mode-switch" role="group" aria-label="Mode carte">
+          <button type="button" className={mapMode === 'edit' ? 'active' : ''} onClick={() => setMapMode('edit')}>
+            <Pencil size={15} aria-hidden="true" />
+            Edition
           </button>
-          <button type="button" className="secondary-action" onClick={addMissingSceneRooms}>
-            <DoorOpen size={16} aria-hidden="true" />
-            Depuis scènes
+          <button type="button" className={mapMode === 'gameplay' ? 'active' : ''} onClick={() => {
+            setMapMode('gameplay');
+            if (!playerRoomId) resetGameplay();
+          }}>
+            <Gamepad2 size={15} aria-hidden="true" />
+            Parcours joueur
           </button>
         </div>
 
-        <p className="small-note">Clique une pièce, puis “Relier”, puis une autre pièce pour créer ou retirer une connexion orientée.</p>
+        {isGameplayMode ? (
+          <div className="route-gameplay-card">
+            <strong>{gameplay.activeRoom ? roomLabel(gameplay.activeRoom, project, getSceneLabel) : 'Aucun depart'}</strong>
+            <span>{gameplay.reachedEnd ? 'Arrivee atteinte' : `${gameplay.availableMoves.length} sortie(s) jouable(s)`}</span>
+            <p>Clique une sortie bleue dans Detail, un node voisin sur la carte, ou une piece marquee dans la liste pour avancer.</p>
+            <div className="inline-actions">
+              <button type="button" onClick={resetGameplay}>
+                <RotateCcw size={15} aria-hidden="true" />
+                Rejouer
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {!isGameplayMode ? <div className="inline-actions" data-tour="map-add-room">
+          <button type="button" onClick={() => addRoom()}>
+            <Plus size={16} aria-hidden="true" />
+            Piece
+          </button>
+          <button type="button" className="secondary-action" onClick={addMissingSceneRooms}>
+            <DoorOpen size={16} aria-hidden="true" />
+            Depuis scenes
+          </button>
+        </div> : null}
+
+        <p className="small-note">{isGameplayMode ? 'Astuce: les sorties jouables sont des boutons. Clique dessus pour faire avancer le joueur.' : 'Double-clic pour ouvrir une scene, glisse les pieces, clique une liaison pour sa condition, clic droit pour les actions rapides.'}</p>
 
         <div className="route-room-list">
-          {rooms.map((room) => (
+          {rooms.map((room) => {
+            const isCurrentPlayerRoom = gameplay.activeRoom?.id === room.id;
+            const isNextPlayerRoom = gameplay.availableMoves.some((move) => move.toRoom.id === room.id);
+            return (
             <button
               key={room.id}
               type="button"
-              className={`list-card ${selectedRoomId === room.id ? 'selected' : ''}`}
-              onClick={() => setSelectedRoomId(room.id)}
+              className={`list-card ${showSelection && selectedRoomId === room.id ? 'selected' : ''} ${isGameplayMode && isCurrentPlayerRoom ? 'gameplay-current' : ''} ${isGameplayMode && isNextPlayerRoom ? 'gameplay-next' : ''}`}
+              onClick={() => {
+                if (isGameplayMode) {
+                  movePlayerToRoom(room.id);
+                  return;
+                }
+                setSelectedRoomId(room.id);
+              }}
+              title={isGameplayMode ? (isNextPlayerRoom ? 'Aller vers cette piece' : isCurrentPlayerRoom ? 'Position actuelle' : 'Piece non voisine') : ''}
             >
-              <strong>{room.name || 'Pièce'}</strong>
-              <span>{room.sceneId ? getSceneLabel(room.sceneId) : 'Aucune scène liée'}</span>
+              <strong>{isGameplayMode && isCurrentPlayerRoom ? 'Position - ' : isGameplayMode && isNextPlayerRoom ? 'Cliquer - ' : ''}{room.name || 'Piece'}</strong>
+              <span>{room.sceneId ? getSceneLabel(room.sceneId) : 'Aucune scene liée'}</span>
             </button>
-          ))}
-          {!rooms.length ? <div className="empty-state-inline">Ajoute les pièces du parcours.</div> : null}
+            );
+          })}
+          {!rooms.length ? <div className="empty-state-inline">Ajoute les pieces du parcours.</div> : null}
         </div>
 
         <label>
@@ -425,17 +903,33 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel }) {
         </button>
       </section>
 
-      <section className="panel main route-map-main">
+      <section className={`panel main route-map-main ${isFullscreen ? 'fullscreen' : ''}`}>
         <div className="panel-head">
           <div>
             <span className="section-kicker">Connexions</span>
-            <h2>Carte des pièces</h2>
+            <h2>Carte des pieces</h2>
           </div>
-          <span className="small-note">{connections.length} liaison{connections.length > 1 ? 's' : ''}</span>
+          <div className="route-map-head-actions">
+            <span className="small-note">{connections.length} liaison{connections.length > 1 ? 's' : ''}</span>
+            <button type="button" className="icon-button route-fullscreen-button" onClick={() => setIsFullscreen((value) => !value)} title={isFullscreen ? 'Quitter le plein ecran' : 'Mode plein ecran'}>
+              {isFullscreen ? <Minimize2 size={16} aria-hidden="true" /> : <Maximize2 size={16} aria-hidden="true" />}
+            </button>
+          </div>
         </div>
 
-        <div className="route-room-board" data-tour="map-board">
-          <svg className="route-connection-layer" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <div
+          className={`route-room-board ${isGameplayMode ? 'gameplay-mode' : ''}`}
+          data-tour="map-board"
+          onClick={() => setContextMenu(null)}
+          onContextMenu={(event) => {
+            if (isGameplayMode) {
+              event.preventDefault();
+              return;
+            }
+            openContextMenu(event, { kind: 'board' });
+          }}
+        >
+          <svg className="route-connection-layer" viewBox="0 0 100 100" preserveAspectRatio="none">
             <defs>
               <marker id="route-arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
                 <path d="M0,0 L6,3 L0,6 Z" fill="rgba(191, 219, 254, .82)" />
@@ -457,42 +951,226 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel }) {
               const check = connectionChecksById.get(connection.id);
               const status = check?.status || 'neutral';
               const markerId = ['missing', 'partial', 'ok'].includes(status) ? `route-arrow-${status}` : 'route-arrow';
+              const gameplayConnectionClass = isGameplayMode
+                ? [
+                  gameplay.pathConnectionIds.has(connection.id) ? 'gameplay-path' : '',
+                  gameplay.availableMoves.some((move) => move.connection.id === connection.id) ? 'gameplay-available' : '',
+                  gameplay.blockedMoves.some((move) => move.connection.id === connection.id) ? 'gameplay-blocked' : '',
+                ].filter(Boolean).join(' ')
+                : '';
               return (
-                <line
-                  key={connection.id}
-                  x1={fromRoom.x}
-                  y1={fromRoom.y}
-                  x2={toRoom.x}
-                  y2={toRoom.y}
-                  className={`status-${status} ${connection.locked ? 'locked' : ''}`}
-                  markerEnd={`url(#${markerId})`}
-                />
+                <g key={connection.id} className={`route-connection-hitbox ${showSelection && selectedConnectionId === connection.id ? 'selected' : ''}`}>
+                  <line
+                    x1={fromRoom.x}
+                    y1={fromRoom.y}
+                    x2={toRoom.x}
+                    y2={toRoom.y}
+                    className={`route-connection-visible status-${status} ${connection.locked ? 'locked' : ''} ${gameplayConnectionClass}`}
+                    markerEnd={`url(#${markerId})`}
+                  />
+                  <line
+                    x1={fromRoom.x}
+                    y1={fromRoom.y}
+                    x2={toRoom.x}
+                    y2={toRoom.y}
+                    className="route-connection-click-target"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (isGameplayMode) {
+                        const move = gameplay.availableMoves.find((entry) => entry.connection.id === connection.id);
+                        if (move) movePlayerToRoom(move.toRoom.id);
+                        return;
+                      }
+                      selectConnection(connection.id);
+                    }}
+                    onContextMenu={(event) => {
+                      if (isGameplayMode) {
+                        event.preventDefault();
+                        return;
+                      }
+                      openContextMenu(event, { kind: 'connection', connectionId: connection.id });
+                    }}
+                  />
+                </g>
               );
             })}
           </svg>
 
-          {rooms.map((room) => (
+          {rooms.map((room) => {
+            const mechanics = getRoomMechanics(project, room);
+            const roomGameplayClass = isGameplayMode
+              ? [
+                gameplay.activeRoom?.id === room.id ? 'gameplay-current' : '',
+                gameplay.visitedRoomIds.has(room.id) ? 'gameplay-visited' : '',
+                gameplay.reachableRoomIds.has(room.id) ? 'gameplay-reachable' : '',
+                gameplay.deadEndRoomIds.has(room.id) ? 'gameplay-dead-end' : '',
+                gameplay.availableMoves.some((move) => move.toRoom.id === room.id) ? 'gameplay-next' : '',
+              ].filter(Boolean).join(' ')
+              : '';
+            return (
             <button
               key={room.id}
               type="button"
-              className={`route-room-node type-${room.type || 'room'} ${selectedRoomId === room.id ? 'selected' : ''} ${connectFromId === room.id ? 'connecting' : ''}`}
+              className={`route-room-node type-${room.type || 'room'} ${showSelection && selectedRoomId === room.id ? 'selected' : ''} ${showSelection && connectFromId === room.id ? 'connecting' : ''} ${roomGameplayClass}`}
               style={{ left: `${room.x}%`, top: `${room.y}%` }}
-              onClick={() => {
+              onClick={(event) => {
+                event.stopPropagation();
+                if (isGameplayMode) {
+                  movePlayerToRoom(room.id);
+                  return;
+                }
+                if (dragRef.current?.moved) return;
                 if (connectFromId) toggleConnection(room.id);
-                else setSelectedRoomId(room.id);
+                else {
+                  setSelectedRoomId(room.id);
+                  setSelectedConnectionId('');
+                }
+              }}
+              onDoubleClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                openRoomScene(room);
               }}
               onPointerDown={(event) => {
+                if (isGameplayMode) return;
+                if (event.button === 2) return;
                 event.currentTarget.setPointerCapture?.(event.pointerId);
+                dragRef.current = {
+                  roomId: room.id,
+                  startX: event.clientX,
+                  startY: event.clientY,
+                  moved: false,
+                };
                 setDraggingRoomId(room.id);
                 setSelectedRoomId(room.id);
+                setSelectedConnectionId('');
+                setContextMenu(null);
               }}
               onPointerMove={(event) => handleRoomPointerMove(event, room.id)}
-              onPointerUp={() => setDraggingRoomId('')}
+              onPointerUp={() => {
+                setDraggingRoomId('');
+                window.setTimeout(() => {
+                  dragRef.current = null;
+                }, 0);
+              }}
+              onContextMenu={(event) => {
+                if (isGameplayMode) {
+                  event.preventDefault();
+                  return;
+                }
+                openContextMenu(event, { kind: 'room', roomId: room.id });
+              }}
+              title={isGameplayMode ? 'Mode parcours joueur' : room.sceneId ? 'Double-clic: ouvrir la scene' : 'Piece sans scene liee'}
             >
               <MapPin size={15} aria-hidden="true" />
-              <span>{room.name || 'Pièce'}</span>
+              <span>{room.name || 'Piece'}</span>
+              {(mechanics.enigma || mechanics.cinematic || mechanics.logic) ? (
+                <span className="route-node-badges" aria-label="Mecaniques de scene">
+                  {mechanics.enigma ? <Lock size={12} aria-label="Enigme" /> : null}
+                  {mechanics.cinematic ? <Clapperboard size={12} aria-label="Cinematique" /> : null}
+                  {mechanics.logic ? <Brain size={12} aria-label="Logique" /> : null}
+                </span>
+              ) : null}
             </button>
-          ))}
+          );
+          })}
+
+          {contextMenu && !isGameplayMode ? (
+            <div
+              className="route-context-menu"
+              style={{ left: contextMenu.x, top: contextMenu.y }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              {contextMenu.kind === 'board' ? (
+                <button type="button" onClick={() => {
+                  addRoom('', { x: contextMenu.boardX, y: contextMenu.boardY });
+                  setContextMenu(null);
+                }}>
+                  <Plus size={14} aria-hidden="true" />
+                  Ajouter ici
+                </button>
+              ) : null}
+
+              {contextMenu.kind === 'room' ? (() => {
+                const room = rooms.find((entry) => entry.id === contextMenu.roomId);
+                if (!room) return null;
+                return (
+                  <>
+                    <button type="button" disabled={!room.sceneId || !setTab} onClick={() => {
+                      openRoomScene(room);
+                      setContextMenu(null);
+                    }}>
+                      <ExternalLink size={14} aria-hidden="true" />
+                      Ouvrir scene
+                    </button>
+                    <button type="button" onClick={() => {
+                      setConnectFromId(room.id);
+                      setSelectedRoomId(room.id);
+                      setSelectedConnectionId('');
+                      setContextMenu(null);
+                    }}>
+                      <Link size={14} aria-hidden="true" />
+                      Relier depuis
+                    </button>
+                    <button type="button" onClick={() => duplicateRoom(room.id)}>
+                      <Plus size={14} aria-hidden="true" />
+                      Dupliquer
+                    </button>
+                    <button type="button" onClick={() => {
+                      updateRoom(room.id, (entry, draftMap) => {
+                        draftMap.rooms.forEach((candidate) => {
+                          if (candidate.id !== entry.id && candidate.type === 'start') candidate.type = 'room';
+                        });
+                        entry.type = 'start';
+                      });
+                      setContextMenu(null);
+                    }}>
+                      <MapPin size={14} aria-hidden="true" />
+                      Definir depart
+                    </button>
+                    <button type="button" className="danger-action" onClick={() => deleteRoom(room.id)}>
+                      <Trash2 size={14} aria-hidden="true" />
+                      Supprimer
+                    </button>
+                  </>
+                );
+              })() : null}
+
+              {contextMenu.kind === 'connection' ? (
+                <>
+                  <button type="button" onClick={() => selectConnection(contextMenu.connectionId)}>
+                    <Pencil size={14} aria-hidden="true" />
+                    Editer condition
+                  </button>
+                  <button type="button" onClick={() => {
+                    toggleConnectionOneWayApproval(contextMenu.connectionId);
+                    setContextMenu(null);
+                  }}>
+                    <MousePointerClick size={14} aria-hidden="true" />
+                    Basculer aller simple
+                  </button>
+                  <button type="button" className="danger-action" onClick={() => deleteConnection(contextMenu.connectionId)}>
+                    <Trash2 size={14} aria-hidden="true" />
+                    Supprimer liaison
+                  </button>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="route-map-below-canvas">
+          <label className="checkbox-line route-hide-selection">
+            <input type="checkbox" checked={hideSelection} onChange={(event) => setHideSelection(event.target.checked)} />
+            <EyeOff size={14} aria-hidden="true" />
+            Masquer la selection
+          </label>
+
+          <div className="route-mechanic-legend">
+            <span><Lock size={13} aria-hidden="true" /> Enigme</span>
+            <span><Clapperboard size={13} aria-hidden="true" /> Cinematique</span>
+            <span><Brain size={13} aria-hidden="true" /> Logique</span>
+          </div>
         </div>
       </section>
 
@@ -501,21 +1179,121 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel }) {
           <h2>Détail</h2>
         </div>
 
-        {selectedRoom ? (
-          <div className="editor-stack" data-tour="map-room-detail">
+        {isGameplayMode ? (
+          <div className="editor-stack route-gameplay-inspector">
+            <div className={`route-selected-connection ${gameplay.reachedEnd ? 'status-ok' : gameplay.availableMoves.length ? 'status-partial' : 'status-missing'}`}>
+              <strong>{gameplay.activeRoom ? roomLabel(gameplay.activeRoom, project, getSceneLabel) : 'Aucune position'}</strong>
+              <span>{gameplay.reachedEnd ? 'Le joueur a atteint une arrivee.' : gameplay.availableMoves.length ? 'Sorties disponibles depuis cette position.' : 'Blocage: aucune sortie jouable.'}</span>
+            </div>
+
+            <div className="route-gameplay-stats">
+              <span><strong>{Math.max(0, playerPath.length - 1)}</strong> pas</span>
+              <span><strong>{gameplay.reachableRoomIds.size}</strong> atteignables</span>
+              <span><strong>{gameplay.blockedMoves.length}</strong> blocages ici</span>
+            </div>
+
+            <div className="route-connection-list">
+              <strong>Inventaire simule</strong>
+              {playerItemIds.map((itemId) => {
+                const item = (project.items || []).find((entry) => entry.id === itemId);
+                return <span key={itemId}>{item?.name || 'Objet inconnu'}</span>;
+              })}
+              {!playerItemIds.length ? <span>Aucun objet ramasse.</span> : null}
+            </div>
+
+            <div className="route-connection-list">
+              <strong>Sorties jouables</strong>
+              {gameplay.availableMoves.map((move) => (
+                <button key={`${move.connection.id}:${move.toRoom.id}`} type="button" className="route-gameplay-move" onClick={() => movePlayerToRoom(move.toRoom.id)}>
+                  <Play size={13} aria-hidden="true" />
+                  <span>{roomLabel(move.toRoom, project, getSceneLabel)}</span>
+                  <small>{move.mapOnly ? 'Plan - ' : move.indirect ? 'Indirect - ' : ''}{move.locked ? 'Condition - ' : ''}{move.label}{move.condition ? ` - ${move.condition}` : ''}</small>
+                </button>
+              ))}
+              {!gameplay.availableMoves.length ? <span>Aucune sortie jouable depuis cette piece.</span> : null}
+            </div>
+
+            <div className="route-connection-list">
+              <strong>Blocages visibles</strong>
+              {gameplay.blockedMoves.map((move) => (
+                <span key={`${move.connection.id}:blocked:${move.toRoom.id}`} className="route-connection-status status-missing">
+                  <span>{roomLabel(move.toRoom, project, getSceneLabel)} - {move.reason}</span>
+                </span>
+              ))}
+              {!gameplay.blockedMoves.length ? <span>Aucun blocage immediat.</span> : null}
+            </div>
+
+            <div className="route-connection-list">
+              <strong>Chemin reel</strong>
+              {playerPath.map((roomId, index) => {
+                const room = rooms.find((entry) => entry.id === roomId);
+                return (
+                  <span key={`${roomId}:${index}`} className="route-connection-status status-ok">
+                    <span>{index + 1}. {room ? roomLabel(room, project, getSceneLabel) : 'Piece supprimee'}</span>
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        ) : selectedConnection ? (() => {
+          const fromRoom = rooms.find((room) => room.id === selectedConnection.fromRoomId);
+          const toRoom = rooms.find((room) => room.id === selectedConnection.toRoomId);
+          const check = connectionChecksById.get(selectedConnection.id);
+          return (
+            <div className="editor-stack" data-tour="map-connection-detail">
+              <div className={`route-selected-connection status-${check?.status || 'neutral'}`}>
+                <strong>{fromRoom ? roomLabel(fromRoom, project, getSceneLabel) : 'Piece supprimee'} {'->'} {toRoom ? roomLabel(toRoom, project, getSceneLabel) : 'Piece supprimee'}</strong>
+                <span>{check?.message || 'Liaison manuelle.'}</span>
+              </div>
+              <label>
+                Nom / action attendue
+                <input value={selectedConnection.label || ''} onChange={(event) => updateConnection(selectedConnection.id, (connection) => {
+                  connection.label = event.target.value;
+                })} placeholder="Ex: porte verte, code valide, objet requis..." />
+              </label>
+              <label>
+                Condition
+                <textarea
+                  value={selectedConnection.condition || ''}
+                  placeholder="Condition d'acces, item requis, enigme resolue..."
+                  onChange={(event) => updateConnection(selectedConnection.id, (connection) => {
+                    connection.condition = event.target.value;
+                  })}
+                />
+              </label>
+              <label className="checkbox-line">
+                <input type="checkbox" checked={!!selectedConnection.locked} onChange={(event) => updateConnection(selectedConnection.id, (connection) => {
+                  connection.locked = event.target.checked;
+                })} />
+                Liaison verrouillee par condition
+              </label>
+              <label className="checkbox-line">
+                <input type="checkbox" checked={!!selectedConnection.allowOneWay} onChange={(event) => updateConnection(selectedConnection.id, (connection) => {
+                  connection.allowOneWay = event.target.checked;
+                })} />
+                Aller simple valide
+              </label>
+              <button type="button" className="danger-button" onClick={() => deleteConnection(selectedConnection.id)}>
+                <Trash2 size={16} aria-hidden="true" />
+                Supprimer la liaison
+              </button>
+            </div>
+          );
+        })() : selectedRoom ? (
+          <div className="editor-stack" data-tour="map-room-détail">
             <label>
-              Nom de la pièce
+              Nom de la piece
               <input value={selectedRoom.name || ''} onChange={(event) => updateRoom(selectedRoom.id, (room) => {
                 room.name = event.target.value;
               })} />
             </label>
             <label>
-              Scène liée
+              Scene liée
               <select value={selectedRoom.sceneId || ''} onChange={(event) => updateRoom(selectedRoom.id, (room) => {
                 room.sceneId = event.target.value;
               })}>
-                <option value="">Aucune scène</option>
-                {(project.scenes || []).map((scene) => (
+                <option value="">Aucune scene</option>
+                {activeActScenes.map((scene) => (
                   <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>
                 ))}
               </select>
@@ -530,7 +1308,7 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel }) {
                 }
                 room.type = event.target.value;
               })}>
-                <option value="room">Pièce normale</option>
+                <option value="room">Piece normale</option>
                 <option value="start">Départ</option>
                 <option value="end">Arrivée</option>
               </select>
@@ -558,7 +1336,7 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel }) {
                 const isAcceptedOneWay = check?.status === 'partial' && connection.allowOneWay;
                 return (
                   <span key={connection.id} className={`route-connection-status status-${check?.status || 'neutral'} ${isAcceptedOneWay ? 'accepted' : ''}`}>
-                    <span>{connection.fromRoomId === selectedRoom.id ? '→' : '←'} {target ? roomLabel(target, project, getSceneLabel) : 'Pièce supprimée'}</span>
+                    <span>{connection.fromRoomId === selectedRoom.id ? '→' : '←'} {target ? roomLabel(target, project, getSceneLabel) : 'Piece supprimée'}</span>
                     {check?.status === 'partial' ? (
                       <button
                         type="button"
@@ -576,12 +1354,12 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel }) {
                 );
               })}
               {!connections.some((connection) => connection.fromRoomId === selectedRoom.id || connection.toRoomId === selectedRoom.id) ? (
-                <span>Aucune liaison pour cette pièce.</span>
+                <span>Aucune liaison pour cette piece.</span>
               ) : null}
             </div>
           </div>
         ) : (
-          <div className="empty-state-inline">Sélectionne une pièce pour la nommer, la lier à une scène ou créer une connexion.</div>
+          <div className="empty-state-inline">Selectionne une piece pour la nommer, la lier à une scene ou créer une connexion.</div>
         )}
 
         <div className="divider-line" />
@@ -604,7 +1382,7 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel }) {
               ))}
             </>
           ) : (
-            <p className="route-check ok"><CheckCircle2 size={15} aria-hidden="true" />Toutes les pièces sont connectées depuis le départ.</p>
+            <p className="route-check ok"><CheckCircle2 size={15} aria-hidden="true" />Toutes les pieces sont connectées depuis le départ.</p>
           )}
         </div>
       </section>
