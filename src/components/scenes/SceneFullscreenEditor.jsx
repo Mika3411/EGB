@@ -246,7 +246,7 @@ export default function SceneFullscreenEditor({
                       <div className="panel-head panel-head-stack">
                         <div>
                           <span className="section-kicker">Contexte</span>
-                          <h2>{selectedItem ? 'Objet selectionné' : selectedSceneObject ? ((selectedSceneObject.anime2dSpec || selectedSceneObject.anime2dName || selectedSceneObject.name === 'Animation') ? 'Animation selectionnée' : (getSceneObjectClickMode(selectedSceneObject) === 'action' ? "Zone d'action selectionnée" : 'Objet visible selectionné')) : 'Zone selectionnée'}</h2>
+                          <h2>{selectedItem ? 'Objet selectionné' : selectedSceneObject ? ((selectedSceneObject.anime2dSpec || selectedSceneObject.anime2dName || selectedSceneObject.name === 'Animation') ? 'Animation selectionnée' : selectedSceneObject.isInvisible ? 'Objet invisible selectionné' : (getSceneObjectClickMode(selectedSceneObject) === 'action' ? "Zone d'action selectionnée" : 'Objet visible selectionné')) : 'Zone selectionnée'}</h2>
                         </div>
                       </div>
 

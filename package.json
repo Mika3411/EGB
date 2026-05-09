@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "api": "node server.js",
-    "dev": "vite",
+    "dev": "node scripts/dev-with-api.mjs",
+    "dev:ui": "vite",
     "build": "vite build && node scripts/generate-seo-files.mjs",
     "check": "node scripts/check-release.mjs",
     "preview": "vite preview",

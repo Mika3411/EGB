@@ -1192,7 +1192,7 @@ export default function PreviewTab(props) {
             ) : (cinematicPlayback?.currentSlide || currentSlide) && (
               <>
                 {(cinematicPlayback?.currentSlide || currentSlide).imageData ? <img className="overlay-media" loading="eager" decoding="async" src={(cinematicPlayback?.currentSlide || currentSlide).imageData} alt={(cinematicPlayback?.currentSlide || currentSlide).imageName || (cinematicPlayback?.currentSlide || currentSlide).narration || 'Cinematic'} /> : null}
-                {(cinematicPlayback?.currentSlide || currentSlide).audioData ? <audio ref={audioRef} className="overlay-media" controls autoPlay src={(cinematicPlayback?.currentSlide || currentSlide).audioData} /> : null}
+                {(cinematicPlayback?.currentSlide || currentSlide).audioData ? <audio ref={audioRef} autoPlay src={(cinematicPlayback?.currentSlide || currentSlide).audioData} style={{ display: 'none' }} /> : null}
                 <p className="narration">{(cinematicPlayback?.currentSlide || currentSlide).narration}</p>
                 <div className="panel-head">
                   <button className="secondary-button" onClick={() => setPlayingSlideIndex((index) => Math.max(0, index - 1))}>Précédent</button>

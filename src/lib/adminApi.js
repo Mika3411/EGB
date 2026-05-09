@@ -23,6 +23,12 @@ const readJsonResponse = async (response, fallbackMessage) => {
   return payload;
 };
 
+const fallbackAdminPayload = (result, fallback, warning) => {
+  if (result.status === 'fulfilled') return { payload: result.value, warning: '' };
+  console.warn(warning, result.reason);
+  return { payload: fallback, warning };
+};
+
 const readLocalProjects = (userId) => {
   if (!userId || typeof window === 'undefined') return [];
   return safeParse(window.localStorage.getItem(`${LOCAL_PROJECTS_KEY_PREFIX}.${userId}`), []);
@@ -111,7 +117,7 @@ export const loadAdminDashboard = async () => {
   const localAccounts = getAllAccounts()
     .filter((account) => normalizeEmail(account.email) !== normalizeEmail(ADMIN_EMAIL));
 
-  const [usersPayload, creditsPayload, projectsPayload, moderationPayload] = await Promise.all([
+  const [usersResult, creditsResult, projectsResult, moderationResult] = await Promise.allSettled([
     hasSupabaseConfig()
       ? fetch(ADMIN_USERS_ENDPOINT, { headers: authHeaders })
         .then((response) => readJsonResponse(response, `Utilisateurs Supabase indisponibles (${response.status}).`))
@@ -123,9 +129,30 @@ export const loadAdminDashboard = async () => {
     fetch(ADMIN_MODERATION_ENDPOINT, { headers: authHeaders })
       .then((response) => readJsonResponse(response, `Moderation indisponible (${response.status}).`)),
   ]);
+  const { payload: usersPayload, warning: usersWarning } = fallbackAdminPayload(
+    usersResult,
+    { users: [] },
+    'Utilisateurs Supabase indisponibles.',
+  );
+  const { payload: creditsPayload } = fallbackAdminPayload(
+    creditsResult,
+    { users: [] },
+    'Credits indisponibles.',
+  );
+  const { payload: projectsPayload } = fallbackAdminPayload(
+    projectsResult,
+    { projects: [] },
+    'Projets admin indisponibles.',
+  );
+  const { payload: moderationPayload } = fallbackAdminPayload(
+    moderationResult,
+    { actions: [] },
+    'Moderation indisponible.',
+  );
 
   return {
     accounts: localAccounts,
+    warning: usersWarning,
     supabaseUsers: Array.isArray(usersPayload.users) ? usersPayload.users : [],
     creditUsers: Array.isArray(creditsPayload.users) ? creditsPayload.users : [],
     publicGames: (projectsPayload.projects || []).filter((game) => normalizeEmail(game.authorEmail) !== normalizeEmail(ADMIN_EMAIL)),

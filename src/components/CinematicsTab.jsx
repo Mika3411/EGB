@@ -1,13 +1,9 @@
-import { useState } from 'react';
 import { fileToDataURL } from '../utils/fileHelpers';
 import MediaSourcePicker from './MediaSourcePicker.jsx';
 import {
   applyProjectStartType,
-  createCinematicStep,
   createCinematicFromAnime2dPayload,
-  createCinematicTimeline,
   deleteCinematicFromProject,
-  getCinematicDebugState,
   normalizeAnime2dSpecForCinematic,
   normalizeCinematicSteps,
 } from '../lib/cinematicEngine';
@@ -45,20 +41,6 @@ const syncCinematicSteps = (cinematic) => {
   cinematic.steps = normalizeCinematicSteps([], cinematic);
 };
 
-const getStepLabel = (step = {}) => {
-  if (step.type === 'text') return step.content || 'Texte';
-  if (step.type === 'image') return step.name || 'Image';
-  if (step.type === 'audio') return step.name || 'Audio';
-  if (step.type === 'video') return step.name || 'Video';
-  if (step.type === 'animation') return `${step.target || 'cible'}:${step.action || 'action'}`;
-  if (step.type === 'wait') return `${Math.round((Number(step.duration) || 0) / 1000)}s`;
-  if (step.type === 'transition') return step.toScene || step.toAct || step.rewardItem || 'Transition';
-  if (step.type === 'anime2d') return step.name || '2D Anime';
-  return step.type || 'Step';
-};
-
-const formatMs = (ms = 0) => `${(Math.max(0, Number(ms) || 0) / 1000).toFixed(1)}s`;
-
 export default function CinematicsTab({
   project,
   selectedCinematicId,
@@ -72,62 +54,6 @@ export default function CinematicsTab({
   previewCinematic,
 }) {
   const rootSceneOptions = project.scenes.filter((scene) => !scene.parentSceneId);
-  const selectedTimeline = selectedCinematic ? createCinematicTimeline(selectedCinematic) : null;
-  const [selectedStepId, setSelectedStepId] = useState('');
-  const [draggedStepId, setDraggedStepId] = useState('');
-
-  const patchSelectedCinematic = (callback) => {
-    patchProject((draft) => {
-      const cine = draft.cinematics.find((entry) => entry.id === selectedCinematicId);
-      if (!cine) return;
-      if (!Array.isArray(cine.steps) || !cine.steps.length) cine.steps = normalizeCinematicSteps(cine.steps, cine);
-      callback(cine);
-    });
-  };
-
-  const addTimelineStep = (type) => {
-    const step = createCinematicStep(type, {
-      id: makeId(`step-${type}`),
-      content: type === 'text' ? 'Nouveau texte' : '',
-      target: type === 'animation' ? 'character' : '',
-      action: type === 'animation' ? 'fadeIn' : '',
-      duration: type === 'wait' ? 2000 : 450,
-    });
-    patchSelectedCinematic((cine) => {
-      cine.steps.push(step);
-    });
-    setSelectedStepId(step.id);
-  };
-
-  const moveTimelineStep = (fromStepId, toStepId) => {
-    if (!fromStepId || !toStepId || fromStepId === toStepId) return;
-    patchSelectedCinematic((cine) => {
-      const fromIndex = cine.steps.findIndex((step) => step.id === fromStepId);
-      const toIndex = cine.steps.findIndex((step) => step.id === toStepId);
-      if (fromIndex < 0 || toIndex < 0) return;
-      const [moved] = cine.steps.splice(fromIndex, 1);
-      cine.steps.splice(toIndex, 0, moved);
-    });
-  };
-
-  const updateTimelineStep = (stepId, patch) => {
-    patchSelectedCinematic((cine) => {
-      const step = cine.steps.find((entry) => entry.id === stepId);
-      if (step) Object.assign(step, patch);
-    });
-  };
-
-  const deleteTimelineStep = (stepId) => {
-    patchSelectedCinematic((cine) => {
-      cine.steps = cine.steps.filter((step) => step.id !== stepId);
-    });
-    if (selectedStepId === stepId) setSelectedStepId('');
-  };
-
-  const timelineSteps = selectedCinematic ? normalizeCinematicSteps(selectedCinematic.steps, selectedCinematic) : [];
-  const selectedStep = timelineSteps.find((step) => step.id === selectedStepId) || timelineSteps[0] || null;
-  const selectedTrack = selectedStep ? selectedTimeline?.tracks.find((track) => track.id === selectedStep.id) : null;
-  const cinematicDebug = selectedCinematic ? getCinematicDebugState(selectedCinematic, selectedTrack?.startMs || 0) : null;
 
   const import2dAnimeJson = async (event) => {
     const file = event.target.files?.[0];
@@ -310,84 +236,6 @@ export default function CinematicsTab({
               <option value="video">Video importee</option>
               <option value="anime2d">2D Anime</option>
             </select>
-            {selectedTimeline ? (
-              <p className="small-note">
-                Timeline: {selectedTimeline.tracks.length} piste(s), {selectedTimeline.events.length} evenement(s),
-                {' '}{(selectedTimeline.durationMs / 1000).toFixed(1)}s.
-              </p>
-            ) : null}
-
-            <div className="cinematic-timeline-panel">
-              <div className="cinematic-timeline-head">
-                <div>
-                  <h3>Timeline</h3>
-                  <p className="small-note">Blocs glissables, lus de gauche a droite par le cinematic engine.</p>
-                </div>
-                <div className="cinematic-step-tools">
-                  <button type="button" onClick={() => addTimelineStep('text')}>+ Texte</button>
-                  <button type="button" onClick={() => addTimelineStep('animation')}>+ Anim</button>
-                  <button type="button" onClick={() => addTimelineStep('wait')}>+ Wait</button>
-                  <button type="button" onClick={() => addTimelineStep('transition')}>+ Transition</button>
-                </div>
-              </div>
-
-              <div className="cinematic-timeline-rail" role="list" aria-label="Timeline cinematic">
-                {timelineSteps.map((step, index) => {
-                  const track = selectedTimeline?.tracks.find((entry) => entry.id === step.id);
-                  const isDebugCurrent = cinematicDebug?.currentStepId === step.id;
-                  return (
-                    <button
-                      type="button"
-                      key={step.id}
-                      role="listitem"
-                      draggable
-                      aria-current={isDebugCurrent ? 'step' : undefined}
-                      className={`cinematic-step-block cinematic-step-block--${step.type} ${selectedStep?.id === step.id ? 'selected' : ''} ${isDebugCurrent ? 'debug-current' : ''}`}
-                      onClick={() => setSelectedStepId(step.id)}
-                      onDragStart={() => setDraggedStepId(step.id)}
-                      onDragOver={(event) => event.preventDefault()}
-                      onDrop={(event) => {
-                        event.preventDefault();
-                        moveTimelineStep(draggedStepId, step.id);
-                        setDraggedStepId('');
-                      }}
-                      onDragEnd={() => setDraggedStepId('')}
-                    >
-                      <span>{String(index + 1).padStart(2, '0')}</span>
-                      <strong>{step.type}</strong>
-                      <small>{getStepLabel(step)}</small>
-                      {track ? <em>{formatMs(track.startMs)} - {formatMs(track.endMs)}</em> : null}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {cinematicDebug ? (
-                <div className="cinematic-debug-panel" aria-label="Debug cinematic">
-                  <div className="cinematic-debug-cell">
-                    <span>Etat</span>
-                    <strong>{cinematicDebug.state}</strong>
-                    <small>{Math.round(cinematicDebug.progress * 100)}% timeline</small>
-                  </div>
-                  <div className="cinematic-debug-cell">
-                    <span>Step actuel</span>
-                    <strong>{cinematicDebug.currentStep?.type || 'aucun'}</strong>
-                    <small>{getStepLabel(cinematicDebug.currentStep || {})}</small>
-                  </div>
-                  <div className="cinematic-debug-cell">
-                    <span>Duree</span>
-                    <strong>{formatMs(cinematicDebug.timeMs)} / {formatMs(cinematicDebug.durationMs)}</strong>
-                    <small>{cinematicDebug.trackCount} piste(s)</small>
-                  </div>
-                  <div className="cinematic-debug-cell">
-                    <span>Prochain event</span>
-                    <strong>{cinematicDebug.nextEvent?.type || 'fin'}</strong>
-                    <small>{cinematicDebug.nextEvent ? formatMs(cinematicDebug.nextEvent.atMs) : `${cinematicDebug.eventCount} event(s)`}</small>
-                  </div>
-                </div>
-              ) : null}
-
-            </div>
 
             {(selectedCinematic.cinematicType || 'slides') === 'video' ? (
               <div className="stack" style={{ marginBottom: 18 }}>

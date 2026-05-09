@@ -75,6 +75,7 @@ export default function AdminPage({
     setCreditUsers(dashboard.creditUsers);
     setPublicGames(dashboard.publicGames);
     setModeration(dashboard.moderation);
+    if (dashboard.warning) setStatus(dashboard.warning);
     loadSharedShopPacks()
       .then(setShopPacks)
       .catch(() => {});
@@ -85,7 +86,7 @@ export default function AdminPage({
     setStatus('Chargement admin...');
     refreshAdminData()
       .then(() => {
-        if (isMounted) setStatus('');
+        if (isMounted) setStatus((current) => (current === 'Chargement admin...' ? '' : current));
       })
       .catch((error) => {
         if (isMounted) setStatus(error.message || 'Chargement admin impossible.');

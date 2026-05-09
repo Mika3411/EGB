@@ -7,16 +7,62 @@ export const acceptToMediaType = (accept = '') => {
   return '';
 };
 
+const AUDIO_EXTENSION_PATTERN = /\.(mp3|wav|ogg|m4a|aac|flac|opus|webm)(?:[?#].*)?$/i;
+const IMAGE_EXTENSION_PATTERN = /\.(png|jpe?g|webp|gif|svg|avif)(?:[?#].*)?$/i;
+const VIDEO_EXTENSION_PATTERN = /\.(mp4|webm|mov|m4v|avi)(?:[?#].*)?$/i;
+
+const getAssetText = (asset = {}) => `${asset.url || ''} ${asset.name || ''}`;
+
+export const assetMatchesMediaType = (asset = {}, mediaType = '') => {
+  if (!mediaType) return true;
+  if (asset.type === mediaType) return true;
+
+  const text = getAssetText(asset);
+  if (mediaType === 'audio') return AUDIO_EXTENSION_PATTERN.test(text) || /^data:audio\//i.test(asset.url || '');
+  if (mediaType === 'image') return IMAGE_EXTENSION_PATTERN.test(text) || /^data:image\//i.test(asset.url || '');
+  if (mediaType === 'video') return VIDEO_EXTENSION_PATTERN.test(text) || /^data:video\//i.test(asset.url || '');
+  return false;
+};
+
+const normalizeLibraryName = (value = '') => String(value)
+  .trim()
+  .toLowerCase()
+  .replace(/\s+/g, ' ')
+  .replace(/\s*\(\d+\)(?=\.[a-z0-9]+$)/i, '');
+
+const getLibraryDedupeKey = (asset = {}, mediaType = '') => {
+  const type = mediaType || asset.type || 'unknown';
+  const normalizedName = normalizeLibraryName(asset.name || '');
+  if ((type === 'audio' || type === 'video') && normalizedName) {
+    return `name:${type}:${normalizedName}`;
+  }
+  return `url:${type}:${asset.url || asset.id || normalizedName}`;
+};
+
+export const dedupeLibraryItems = (items = [], mediaType = '') => {
+  const seen = new Set();
+  return items.filter((asset) => {
+    const key = getLibraryDedupeKey(asset, mediaType);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 export const matchesAssetScope = (asset = {}, scope = '') => {
   if (!scope) return true;
   if (scope === 'scene-background') {
     return asset.meta?.role === 'background' || /^asset_scene_.*_background$/.test(asset.id || '');
   }
   if (scope === 'scene-music') {
-    return asset.meta?.role === 'music' || /^asset_scene_.*_music$/.test(asset.id || '');
+    return assetMatchesMediaType(asset, 'audio')
+      || asset.meta?.role === 'music'
+      || /^asset_scene_.*_music$/.test(asset.id || '');
   }
   if (scope === 'scene-ambient') {
-    return asset.meta?.role === 'ambientSound' || /^asset_scene_.*_ambient$/.test(asset.id || '');
+    return assetMatchesMediaType(asset, 'audio')
+      || asset.meta?.role === 'ambientSound'
+      || /^asset_scene_.*_ambient$/.test(asset.id || '');
   }
   return true;
 };
@@ -33,11 +79,11 @@ export function useMediaSourcePicker({
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const mediaType = acceptToMediaType(accept);
   const libraryItems = useMemo(() => (
-    mediaLibrary.filter((asset) => (
+    dedupeLibraryItems(mediaLibrary.filter((asset) => (
       asset.url
-      && (!mediaType || asset.type === mediaType)
+      && assetMatchesMediaType(asset, mediaType)
       && matchesAssetScope(asset, assetScope)
-    ))
+    )), mediaType)
   ), [assetScope, mediaLibrary, mediaType]);
 
   const openPicker = useCallback(() => {

@@ -4,7 +4,7 @@ import {
   HelpLabel,
   LayersPanel,
 } from './scenes/SceneEditorChrome.jsx';
-import Anime2DPreview, { readAnime2dJsonFile } from './Anime2DPreview.jsx';
+import Anime2DPreview from './Anime2DPreview.jsx';
 import MediaSourcePicker from './MediaSourcePicker.jsx';
 import SceneSidebar from './scenes/SceneSidebar.jsx';
 import SceneFullscreenEditor from './scenes/SceneFullscreenEditor.jsx';
@@ -13,6 +13,11 @@ import SceneObjectInspector, { SceneObjectBlockContent, getSceneObjectClickMode 
 import QuickLogicModal from './scenes/QuickLogicModal.jsx';
 import SceneVisualEffect, { VISUAL_EFFECT_INTENSITY_OPTIONS, getVisualEffectZoneZIndex } from './SceneVisualEffect.jsx';
 import VisualEffectCascadeMenu from './VisualEffectCascadeMenu.jsx';
+import { useSceneEditorCreation } from './scenes/useSceneEditorCreation.js';
+import { useSceneEditorSceneState } from './scenes/useSceneEditorSceneState.js';
+import { useSceneEditorShapes } from './scenes/useSceneEditorShapes.js';
+import { useSceneFullscreenEditor } from './scenes/useSceneFullscreenEditor.js';
+import { useSceneEditorSelection } from './scenes/useSceneEditorSelection.js';
 import {
   clampFullscreenZoom,
   clampPercent,
@@ -23,112 +28,8 @@ import {
   getLayerZIndex,
   getSceneObjectStyle,
   gridOverlayStyle,
-  makeRegularShapePoints,
   shouldIgnoreEditorShortcut,
 } from './scenes/sceneEditorUtils.js';
-
-function useSceneEditorSelection({
-  dragMovedRef,
-  multiSelectEnabled,
-  selectedHotspotId,
-  setSelectedHotspotId,
-  setSelectedItemId,
-}) {
-  const [selectedSceneObjectId, setSelectedSceneObjectId] = useState('');
-  const [selectedVisualEffectZoneId, setSelectedVisualEffectZoneId] = useState('');
-  const [selectedHotspotIds, setSelectedHotspotIds] = useState([]);
-  const [selectedSceneObjectIds, setSelectedSceneObjectIds] = useState([]);
-
-  const activeHotspotIds = selectedHotspotIds.length ? selectedHotspotIds : (selectedHotspotId ? [selectedHotspotId] : []);
-  const activeSceneObjectIds = selectedSceneObjectIds.length ? selectedSceneObjectIds : (selectedSceneObjectId ? [selectedSceneObjectId] : []);
-  const activeVisualEffectZoneIds = selectedVisualEffectZoneId ? [selectedVisualEffectZoneId] : [];
-  const activeSelectionCount = activeHotspotIds.length + activeSceneObjectIds.length + activeVisualEffectZoneIds.length;
-
-  const toggleHotspotSelection = (id, event) => {
-    if (!multiSelectEnabled && !event?.shiftKey) {
-      setSelectedHotspotIds([id]);
-      setSelectedSceneObjectIds([]);
-      setSelectedVisualEffectZoneId('');
-      return;
-    }
-    setSelectedHotspotIds((previous) => (
-      previous.includes(id) ? previous.filter((entry) => entry !== id) : [...previous, id]
-    ));
-    setSelectedSceneObjectIds([]);
-    setSelectedVisualEffectZoneId('');
-  };
-
-  const toggleSceneObjectSelection = (id, event) => {
-    if (!multiSelectEnabled && !event?.shiftKey) {
-      setSelectedSceneObjectIds([id]);
-      setSelectedHotspotIds([]);
-      setSelectedVisualEffectZoneId('');
-      return;
-    }
-    setSelectedSceneObjectIds((previous) => (
-      previous.includes(id) ? previous.filter((entry) => entry !== id) : [...previous, id]
-    ));
-    setSelectedHotspotIds([]);
-    setSelectedVisualEffectZoneId('');
-  };
-
-  const selectSceneObject = (objId, event) => {
-    if (dragMovedRef.current) {
-      dragMovedRef.current = false;
-      return;
-    }
-    setSelectedSceneObjectId(objId);
-    setSelectedHotspotId('');
-    setSelectedVisualEffectZoneId('');
-    setSelectedItemId('');
-    toggleSceneObjectSelection(objId, event);
-  };
-
-  const selectHotspot = (spotId, event) => {
-    if (dragMovedRef.current) {
-      dragMovedRef.current = false;
-      return;
-    }
-    setSelectedHotspotId(spotId);
-    setSelectedSceneObjectId('');
-    setSelectedVisualEffectZoneId('');
-    setSelectedItemId('');
-    toggleHotspotSelection(spotId, event);
-  };
-
-  const selectVisualEffectZone = (zoneId) => {
-    if (dragMovedRef.current) {
-      dragMovedRef.current = false;
-      return;
-    }
-    setSelectedVisualEffectZoneId(zoneId);
-    setSelectedSceneObjectId('');
-    setSelectedHotspotId('');
-    setSelectedItemId('');
-    setSelectedHotspotIds([]);
-    setSelectedSceneObjectIds([]);
-  };
-
-  return {
-    selectedSceneObjectId,
-    setSelectedSceneObjectId,
-    selectedVisualEffectZoneId,
-    setSelectedVisualEffectZoneId,
-    selectedHotspotIds,
-    setSelectedHotspotIds,
-    selectedSceneObjectIds,
-    setSelectedSceneObjectIds,
-    activeHotspotIds,
-    activeSceneObjectIds,
-    activeVisualEffectZoneIds,
-    activeSelectionCount,
-    selectHotspot,
-    selectSceneObject,
-    selectVisualEffectZone,
-    toggleHotspotSelection,
-    toggleSceneObjectSelection,
-  };
-}
 
 function useSceneEditorDragResize({
   canvasRef,
@@ -152,19 +53,146 @@ function useSceneEditorDragResize({
   getAbsoluteShapeCorners,
   getAbsoluteShapePoints,
   applyShapePoints,
+  getResizeHandleStyle,
 }) {
   const draggingHotspotIdRef = useRef('');
   const draggingSceneObjectIdRef = useRef('');
   const draggingVisualEffectZoneIdRef = useRef('');
   const resizingElementRef = useRef(null);
   const dragSourceRef = useRef('main');
+  const dragFrameRef = useRef(0);
+  const pendingDragUpdateRef = useRef(null);
+  const dragPreviewRef = useRef(null);
   const [draggingHotspotId, setDraggingHotspotId] = useState('');
   const [draggingSceneObjectId, setDraggingSceneObjectId] = useState('');
   const [draggingVisualEffectZoneId, setDraggingVisualEffectZoneId] = useState('');
   const [resizingElement, setResizingElement] = useState(null);
   const [isDragLocked, setIsDragLocked] = useState(false);
 
+  const getCanvasPointerPosition = (clientX, clientY, source = 'main') => {
+    const activeRef = source === 'fullscreen' ? fullscreenCanvasRef : canvasRef;
+    if (!activeRef.current) return null;
+
+    const rect = activeRef.current.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+
+    return {
+      x: clampPercent(snapValue(((clientX - rect.left) / rect.width) * 100)),
+      y: clampPercent(snapValue(((clientY - rect.top) / rect.height) * 100)),
+    };
+  };
+
+  const startDragPreview = (event, type, id, source, entry) => {
+    dragPreviewRef.current = {
+      type,
+      id,
+      source,
+      element: event.currentTarget,
+      latest: {
+        x: Number(entry?.x) || 0,
+        y: Number(entry?.y) || 0,
+      },
+    };
+  };
+
+  const previewDragPosition = (clientX, clientY, source = 'main') => {
+    const preview = dragPreviewRef.current;
+    if (!preview) return;
+    const position = getCanvasPointerPosition(clientX, clientY, source);
+    if (!position) return;
+    dragMovedRef.current = true;
+    preview.latest = position;
+    if (preview.element?.style) {
+      preview.element.style.left = `${Number(position.x.toFixed(2))}%`;
+      preview.element.style.top = `${Number(position.y.toFixed(2))}%`;
+    }
+  };
+
+  const commitDragPreview = () => {
+    const preview = dragPreviewRef.current;
+    dragPreviewRef.current = null;
+    if (!preview?.latest || !selectedSceneId) return;
+    const x = Number(preview.latest.x.toFixed(2));
+    const y = Number(preview.latest.y.toFixed(2));
+
+    patchProject((draft) => {
+      const scene = draft.scenes.find((s) => s.id === selectedSceneId);
+      if (!scene) return;
+
+      if (preview.type === 'hotspot') {
+        const spot = scene.hotspots?.find((h) => h.id === preview.id);
+        if (!spot) return;
+        const deltaX = x - spot.x;
+        const deltaY = y - spot.y;
+        const movedIds = multiSelectEnabled && selectedHotspotIds.includes(spot.id) ? selectedHotspotIds : [spot.id];
+        scene.hotspots
+          .filter((entry) => movedIds.includes(entry.id))
+          .forEach((entry) => {
+            entry.x = Number(clampPercent(entry.id === spot.id ? x : snapValue(entry.x + deltaX)).toFixed(2));
+            entry.y = Number(clampPercent(entry.id === spot.id ? y : snapValue(entry.y + deltaY)).toFixed(2));
+          });
+        return;
+      }
+
+      if (preview.type === 'sceneObject') {
+        const sceneObject = scene.sceneObjects?.find((obj) => obj.id === preview.id);
+        if (!sceneObject) return;
+        const deltaX = x - sceneObject.x;
+        const deltaY = y - sceneObject.y;
+        const movedIds = multiSelectEnabled && selectedSceneObjectIds.includes(sceneObject.id) ? selectedSceneObjectIds : [sceneObject.id];
+        scene.sceneObjects
+          .filter((entry) => movedIds.includes(entry.id))
+          .forEach((entry) => {
+            entry.x = Number(clampPercent(entry.id === sceneObject.id ? x : snapValue(entry.x + deltaX)).toFixed(2));
+            entry.y = Number(clampPercent(entry.id === sceneObject.id ? y : snapValue(entry.y + deltaY)).toFixed(2));
+          });
+        return;
+      }
+
+      if (preview.type === 'visualEffectZone') {
+        const visualZone = scene.visualEffectZones?.find((zone) => zone.id === preview.id);
+        if (visualZone) {
+          visualZone.x = x;
+          visualZone.y = y;
+        }
+      }
+    }, { rememberHistory: false });
+  };
+
+  const flushPendingDragUpdate = () => {
+    if (dragFrameRef.current) {
+      window.cancelAnimationFrame(dragFrameRef.current);
+      dragFrameRef.current = 0;
+    }
+    const pending = pendingDragUpdateRef.current;
+    pendingDragUpdateRef.current = null;
+    if (!pending) return;
+    if (pending.isResize) {
+      updateElementSize(pending.clientX, pending.clientY);
+      return;
+    }
+    previewDragPosition(pending.clientX, pending.clientY, pending.source);
+  };
+
+  const scheduleDragUpdate = (pending) => {
+    pendingDragUpdateRef.current = pending;
+    if (dragFrameRef.current) return;
+    dragFrameRef.current = window.requestAnimationFrame(() => {
+      dragFrameRef.current = 0;
+      const nextPending = pendingDragUpdateRef.current;
+      pendingDragUpdateRef.current = null;
+      if (!nextPending) return;
+      if (nextPending.isResize) {
+        updateElementSize(nextPending.clientX, nextPending.clientY);
+        return;
+      }
+      previewDragPosition(nextPending.clientX, nextPending.clientY, nextPending.source);
+    });
+  };
+
   const stopDragging = () => {
+    flushPendingDragUpdate();
+    commitDragPreview();
     draggingHotspotIdRef.current = '';
     draggingSceneObjectIdRef.current = '';
     draggingVisualEffectZoneIdRef.current = '';
@@ -175,6 +203,7 @@ function useSceneEditorDragResize({
   };
 
   const stopResizing = () => {
+    flushPendingDragUpdate();
     resizingElementRef.current = null;
     setResizingElement(null);
     setIsDragLocked(false);
@@ -342,23 +371,6 @@ function useSceneEditorDragResize({
     setIsDragLocked(true);
   };
 
-  const getResizeHandleStyle = (entry, handle) => {
-    const corners = getElementShapeCorners(entry);
-    if (corners[handle]) return { left: `${corners[handle].x}%`, top: `${corners[handle].y}%` };
-
-    const edgeCorners = {
-      n: [corners.nw, corners.ne],
-      e: [corners.ne, corners.se],
-      s: [corners.sw, corners.se],
-      w: [corners.nw, corners.sw],
-    }[handle];
-
-    return {
-      left: `${(edgeCorners[0].x + edgeCorners[1].x) / 2}%`,
-      top: `${(edgeCorners[0].y + edgeCorners[1].y) / 2}%`,
-    };
-  };
-
   const renderResizeHandles = (type, id, isSelected, source = 'main') => {
     if (!isSelected) return null;
     const entry = getEditorElementByType(selectedScene, type, id);
@@ -412,9 +424,11 @@ function useSceneEditorDragResize({
     setSelectedHotspotId('');
     setSelectedVisualEffectZoneId('');
     setSelectedItemId('');
+    startDragPreview(event, 'sceneObject', objectId, source, object);
   };
 
   const beginVisualEffectZoneDrag = (event, zoneId, source = 'main') => {
+    const zone = selectedScene?.visualEffectZones?.find((entry) => entry.id === zoneId);
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -434,6 +448,7 @@ function useSceneEditorDragResize({
     setSelectedItemId('');
     setSelectedHotspotIds([]);
     setSelectedSceneObjectIds([]);
+    startDragPreview(event, 'visualEffectZone', zoneId, source, zone);
   };
 
   const beginDrag = (event, spotId, source = 'main') => {
@@ -459,6 +474,7 @@ function useSceneEditorDragResize({
     setSelectedSceneObjectId('');
     setSelectedVisualEffectZoneId('');
     setSelectedItemId('');
+    startDragPreview(event, 'hotspot', spotId, source, spot);
   };
 
   useEffect(() => {
@@ -466,16 +482,18 @@ function useSceneEditorDragResize({
 
     const handlePointerMove = (event) => {
       event.preventDefault();
-      if (resizingElementRef.current) {
-        updateElementSize(event.clientX, event.clientY);
-        return;
-      }
-      updateHotspotPosition(event.clientX, event.clientY, dragSourceRef.current);
+      scheduleDragUpdate({
+        clientX: event.clientX,
+        clientY: event.clientY,
+        source: dragSourceRef.current,
+        isResize: Boolean(resizingElementRef.current),
+      });
     };
 
     const handlePointerEnd = () => {
-      stopResizing();
-      stopDragging();
+      flushPendingDragUpdate();
+      if (resizingElementRef.current) stopResizing();
+      else stopDragging();
     };
 
     window.addEventListener('pointermove', handlePointerMove, { passive: false });
@@ -485,6 +503,7 @@ function useSceneEditorDragResize({
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerEnd);
       window.removeEventListener('pointercancel', handlePointerEnd);
+      flushPendingDragUpdate();
     };
   }, [draggingHotspotId, draggingSceneObjectId, draggingVisualEffectZoneId, resizingElement]);
 
@@ -503,173 +522,6 @@ function useSceneEditorDragResize({
     updateElementSize,
     renderResizeHandles,
     renderShapePointHandles,
-  };
-}
-
-function useSceneFullscreenEditor({
-  fullscreenViewportRef,
-  fullscreenCanvasRef,
-}) {
-  const [isEditorFullscreen, setIsEditorFullscreen] = useState(false);
-  const [fullscreenZoom, setFullscreenZoom] = useState(1);
-  const [fullscreenPan, setFullscreenPan] = useState({ x: 0, y: 0 });
-  const [isPanningFullscreen, setIsPanningFullscreen] = useState(false);
-  const [fullscreenPanStart, setFullscreenPanStart] = useState({ x: 0, y: 0, panX: 0, panY: 0 });
-  const [minimapViewport, setMinimapViewport] = useState({ x: 0, y: 0, width: 100, height: 100 });
-
-  useEffect(() => {
-    if (!isEditorFullscreen) return undefined;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [isEditorFullscreen]);
-
-  useEffect(() => {
-    const handleNativeFullscreenChange = () => {
-      if (!document.fullscreenElement) {
-        setIsEditorFullscreen(false);
-      }
-    };
-
-    document.addEventListener('fullscreenchange', handleNativeFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleNativeFullscreenChange);
-  }, []);
-
-  useEffect(() => {
-    if (!isEditorFullscreen) return undefined;
-
-    const updateMinimapViewport = () => {
-      const viewport = fullscreenViewportRef.current;
-      const stage = fullscreenCanvasRef.current;
-      if (!viewport || !stage) return;
-      const viewportRect = viewport.getBoundingClientRect();
-      const stageRect = stage.getBoundingClientRect();
-      if (!viewportRect.width || !viewportRect.height || !stageRect.width || !stageRect.height) return;
-
-      const left = clampPercent(((viewportRect.left - stageRect.left) / stageRect.width) * 100);
-      const top = clampPercent(((viewportRect.top - stageRect.top) / stageRect.height) * 100);
-      const right = clampPercent(((viewportRect.right - stageRect.left) / stageRect.width) * 100);
-      const bottom = clampPercent(((viewportRect.bottom - stageRect.top) / stageRect.height) * 100);
-      setMinimapViewport({
-        x: left,
-        y: top,
-        width: Math.max(4, right - left),
-        height: Math.max(4, bottom - top),
-      });
-    };
-
-    const frame = requestAnimationFrame(updateMinimapViewport);
-    window.addEventListener('resize', updateMinimapViewport);
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener('resize', updateMinimapViewport);
-    };
-  }, [isEditorFullscreen, fullscreenZoom, fullscreenPan]);
-
-  const resetFullscreenView = () => {
-    setFullscreenZoom(1);
-    setFullscreenPan({ x: 0, y: 0 });
-  };
-
-  const clampFullscreenPan = (pan, zoom = fullscreenZoom) => {
-    const viewport = fullscreenViewportRef.current;
-    const stage = fullscreenCanvasRef.current;
-    if (!viewport || !stage) return pan;
-
-    const viewportRect = viewport.getBoundingClientRect();
-    const stageWidth = stage.offsetWidth || 0;
-    const stageHeight = stage.offsetHeight || 0;
-    if (!viewportRect.width || !viewportRect.height || !stageWidth || !stageHeight) return pan;
-
-    const scaledWidth = stageWidth * zoom;
-    const scaledHeight = stageHeight * zoom;
-    const maxX = Math.max(0, (scaledWidth - viewportRect.width) / 2);
-    const maxY = Math.max(0, (scaledHeight - viewportRect.height) / 2);
-
-    return {
-      x: Math.max(-maxX, Math.min(maxX, pan.x)),
-      y: Math.max(-maxY, Math.min(maxY, pan.y)),
-    };
-  };
-
-  const setClampedFullscreenZoom = (updater) => {
-    setFullscreenZoom((previous) => {
-      const requested = typeof updater === 'function' ? updater(previous) : updater;
-      const nextZoom = clampFullscreenZoom(requested);
-      setFullscreenPan((pan) => clampFullscreenPan(pan, nextZoom));
-      return nextZoom;
-    });
-  };
-
-  const enterEditorFullscreen = () => {
-    setIsEditorFullscreen(true);
-    const root = document.documentElement;
-    if (document.fullscreenElement || !root.requestFullscreen) return;
-    root.requestFullscreen().catch(() => {
-      // The in-app fullscreen overlay still works if the browser refuses native fullscreen.
-    });
-  };
-
-  const closeEditorFullscreen = () => {
-    setIsEditorFullscreen(false);
-    if (!document.fullscreenElement || !document.exitFullscreen) return;
-    document.exitFullscreen().catch(() => {});
-  };
-
-  const handleFullscreenWheel = (event) => {
-    if (!isEditorFullscreen) return;
-    if (!event.ctrlKey && !event.metaKey) return;
-    event.preventDefault();
-    const delta = event.deltaY > 0 ? -0.08 : 0.08;
-    setClampedFullscreenZoom((previous) => previous + delta);
-  };
-
-  const beginFullscreenPan = (event) => {
-    if (!isEditorFullscreen) return;
-    const isViewportBackground = event.target === event.currentTarget;
-    const isSceneCanvas = fullscreenCanvasRef.current?.contains(event.target);
-    const isInteractiveSceneElement = event.target?.closest?.('.editor-hotspot, button, input, select, textarea, a');
-    const canPanZoomedScene = fullscreenZoom > 1 && isSceneCanvas && !isInteractiveSceneElement;
-    if (event.button !== 1 && !event.altKey && !isViewportBackground && !canPanZoomedScene) return;
-    event.preventDefault();
-    setIsPanningFullscreen(true);
-    setFullscreenPanStart({
-      x: event.clientX,
-      y: event.clientY,
-      panX: fullscreenPan.x,
-      panY: fullscreenPan.y,
-    });
-  };
-
-  const moveFullscreenPan = (event) => {
-    if (!isPanningFullscreen) return;
-    event.preventDefault();
-    setFullscreenPan(clampFullscreenPan({
-      x: fullscreenPanStart.panX + event.clientX - fullscreenPanStart.x,
-      y: fullscreenPanStart.panY + event.clientY - fullscreenPanStart.y,
-    }));
-  };
-
-  const stopFullscreenPan = () => {
-    setIsPanningFullscreen(false);
-  };
-
-  return {
-    isEditorFullscreen,
-    fullscreenZoom,
-    fullscreenPan,
-    minimapViewport,
-    isPanningFullscreen,
-    setClampedFullscreenZoom,
-    enterEditorFullscreen,
-    closeEditorFullscreen,
-    resetFullscreenView,
-    handleFullscreenWheel,
-    beginFullscreenPan,
-    moveFullscreenPan,
-    stopFullscreenPan,
   };
 }
 
@@ -968,437 +820,6 @@ function useSceneEditorCommands({
   };
 }
 
-function useSceneEditorSceneState({
-  project,
-  selectedScene,
-  selectedSceneId,
-  selectedSceneObjectId,
-  selectedVisualEffectZoneId,
-  selectedHotspotId,
-  setSelectedSceneId,
-  setSelectedHotspotId,
-  setSelectedSceneObjectId,
-  setSelectedVisualEffectZoneId,
-  setSelectedHotspotIds,
-  setSelectedSceneObjectIds,
-  setSelectedItemId,
-  patchProject,
-  toggleNavigationSceneCollapsed,
-}) {
-  const selectedSceneObject = selectedScene?.sceneObjects?.find((obj) => obj.id === selectedSceneObjectId) || null;
-  const selectedVisualEffectZone = selectedScene?.visualEffectZones?.find((zone) => zone.id === selectedVisualEffectZoneId) || null;
-  const sceneAspectRatio = Number(selectedScene?.backgroundAspectRatio) > 0 ? Number(selectedScene.backgroundAspectRatio) : 1.6;
-  const getLinkedItem = (itemId) => project.items?.find((item) => item.id === itemId) || null;
-  const getSceneObjectDisplayImage = (obj) => obj?.imageData || getLinkedItem(obj?.linkedItemId)?.imageData || '';
-  const [quickLogicTarget, setQuickLogicTarget] = useState(null);
-
-  const openQuickLogicForTarget = (type, id) => {
-    if (!id) return;
-    setQuickLogicTarget({ type, id });
-  };
-
-  const importSceneObjectAnime2d = async (event, objectId = selectedSceneObjectId) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file || !objectId) return;
-    try {
-      const anime2dSpec = await readAnime2dJsonFile(file);
-      patchProject((draft) => {
-        const obj = draft.scenes.find((s) => s.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === objectId);
-        if (!obj) return;
-        obj.anime2dSpec = anime2dSpec;
-        obj.anime2dName = file.name;
-        obj.imageData = '';
-        obj.imageName = '';
-        obj.linkedItemId = '';
-        obj.isInvisible = false;
-        obj.name = obj.name || anime2dSpec.sceneName || 'Animation 2D';
-      });
-    } catch (error) {
-      window.alert(error.message || 'Import JSON 2D Anime impossible.');
-    }
-  };
-
-  const toggleSceneChildren = (event, sceneId) => {
-    event.preventDefault();
-    event.stopPropagation();
-    toggleNavigationSceneCollapsed?.(sceneId);
-  };
-
-  const selectSceneFromTree = (scene) => {
-      setSelectedSceneId(scene.id);
-      setSelectedHotspotId(scene.hotspots?.[0]?.id || '');
-      setSelectedSceneObjectId('');
-      setSelectedVisualEffectZoneId('');
-      setSelectedSceneObjectIds([]);
-    setSelectedHotspotIds(scene.hotspots?.[0]?.id ? [scene.hotspots[0].id] : []);
-    setSelectedItemId('');
-  };
-
-  const selectSceneInFullscreen = (sceneId) => {
-    const scene = project.scenes.find((entry) => entry.id === sceneId);
-    if (!scene) return;
-    setSelectedSceneId(scene.id);
-    setSelectedHotspotId(scene.hotspots?.[0]?.id || '');
-    setSelectedSceneObjectId('');
-    setSelectedVisualEffectZoneId('');
-    setSelectedItemId('');
-  };
-
-  const selectActInFullscreen = (actId) => {
-    const scene = project.scenes.find((entry) => entry.actId === actId && !entry.parentSceneId)
-      || project.scenes.find((entry) => entry.actId === actId);
-    if (scene) selectSceneInFullscreen(scene.id);
-  };
-
-  const rememberSceneBackgroundAspectRatio = (image, sceneId = selectedSceneId) => {
-    if (!image?.naturalWidth || !image?.naturalHeight || !sceneId) return;
-    const nextRatio = Number((image.naturalWidth / image.naturalHeight).toFixed(4));
-    if (!Number.isFinite(nextRatio) || nextRatio <= 0) return;
-    const currentRatio = Number(project.scenes.find((scene) => scene.id === sceneId)?.backgroundAspectRatio);
-    if (Math.abs((currentRatio || 0) - nextRatio) < 0.0001) return;
-    patchProject((draft) => {
-      const scene = draft.scenes.find((entry) => entry.id === sceneId);
-      if (scene) scene.backgroundAspectRatio = nextRatio;
-    }, { rememberHistory: false });
-  };
-
-  const updateSceneBackground = (data, name) => {
-    patchProject((draft) => {
-      const scene = draft.scenes.find((s) => s.id === selectedSceneId);
-      if (scene) {
-        scene.backgroundData = data;
-        scene.backgroundName = name;
-        scene.backgroundAspectRatio = 1.6;
-      }
-    });
-
-    const image = new Image();
-    image.onload = () => rememberSceneBackgroundAspectRatio(image);
-    image.src = data;
-  };
-
-  return {
-    quickLogicTarget,
-    setQuickLogicTarget,
-    selectedSceneObject,
-    selectedVisualEffectZone,
-    sceneAspectRatio,
-    getLinkedItem,
-    getSceneObjectDisplayImage,
-    openQuickLogicForTarget,
-    importSceneObjectAnime2d,
-    toggleSceneChildren,
-    selectSceneFromTree,
-    selectSceneInFullscreen,
-    selectActInFullscreen,
-    rememberSceneBackgroundAspectRatio,
-    updateSceneBackground,
-  };
-}
-
-function useSceneEditorShapes({
-  selectedScene,
-  selectedSceneId,
-  patchProject,
-}) {
-  const getEditorElementByType = (scene, type, id) => {
-    const collections = {
-      hotspot: scene?.hotspots,
-      sceneObject: scene?.sceneObjects,
-      visualEffectZone: scene?.visualEffectZones,
-    };
-    return collections[type]?.find((item) => item.id === id) || null;
-  };
-
-  const getAbsoluteShapeCorners = (entry) => {
-    const corners = getElementShapeCorners(entry);
-    const left = Number(entry.x) - Number(entry.width) / 2;
-    const top = Number(entry.y) - Number(entry.height) / 2;
-    return Object.fromEntries(Object.entries(corners).map(([key, corner]) => ([
-      key,
-      {
-        x: left + (Number(entry.width) * corner.x) / 100,
-        y: top + (Number(entry.height) * corner.y) / 100,
-      },
-    ])));
-  };
-
-  const getAbsoluteShapePoints = (entry) => {
-    const points = getElementShapePoints(entry);
-    const left = Number(entry.x) - Number(entry.width) / 2;
-    const top = Number(entry.y) - Number(entry.height) / 2;
-    return points.map((point) => ({
-      x: left + (Number(entry.width) * point.x) / 100,
-      y: top + (Number(entry.height) * point.y) / 100,
-    }));
-  };
-
-  const applyShapePoints = (entry, absolutePoints) => {
-    const xs = absolutePoints.map((point) => point.x);
-    const ys = absolutePoints.map((point) => point.y);
-    const minSize = 2;
-    let left = clampPercent(Math.min(...xs));
-    let right = clampPercent(Math.max(...xs));
-    let top = clampPercent(Math.min(...ys));
-    let bottom = clampPercent(Math.max(...ys));
-
-    if (right - left < minSize) right = Math.min(100, left + minSize);
-    if (right - left < minSize) left = Math.max(0, right - minSize);
-    if (bottom - top < minSize) bottom = Math.min(100, top + minSize);
-    if (bottom - top < minSize) top = Math.max(0, bottom - minSize);
-
-    const width = right - left;
-    const height = bottom - top;
-    entry.x = Number(((left + right) / 2).toFixed(2));
-    entry.y = Number(((top + bottom) / 2).toFixed(2));
-    entry.width = Number(width.toFixed(2));
-    entry.height = Number(height.toFixed(2));
-    entry.shapeType = 'free';
-    entry.shapePointCount = absolutePoints.length;
-    entry.shapePoints = absolutePoints.map((point) => ({
-      x: Number(clampPercent(((point.x - left) / width) * 100).toFixed(2)),
-      y: Number(clampPercent(((point.y - top) / height) * 100).toFixed(2)),
-    }));
-    delete entry.shapeCorners;
-  };
-
-  const renderShapeOutline = (entry, isSelected) => {
-    if (getElementShapeType(entry) !== 'free') return null;
-    const points = getElementShapePoints(entry);
-    return (
-      <svg className={`editor-shape-outline ${isSelected ? 'selected' : ''}`} viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-        <polygon points={points.map((point) => `${point.x},${point.y}`).join(' ')} />
-      </svg>
-    );
-  };
-
-  const getShapeClassName = (entry) => `editor-shape-${getElementShapeType(entry)}`;
-
-  const patchEditorElementShape = (type, id, updater) => {
-    patchProject((draft) => {
-      const scene = draft.scenes.find((s) => s.id === selectedSceneId);
-      const entry = getEditorElementByType(scene, type, id);
-      if (entry) updater(entry);
-    });
-  };
-
-  const setEditorElementShapeType = (type, id, shapeType) => {
-    patchEditorElementShape(type, id, (entry) => {
-      entry.shapeType = shapeType;
-      if (shapeType === 'free') {
-        const count = Math.max(3, Number(entry.shapePointCount) || getElementShapePoints(entry).length || 4);
-        entry.shapePointCount = count;
-        entry.shapePoints = makeRegularShapePoints(count);
-        delete entry.shapeCorners;
-      } else {
-        delete entry.shapePoints;
-        delete entry.shapeCorners;
-      }
-    });
-  };
-
-  const setEditorElementShapePointCount = (type, id, count) => {
-    const nextCount = Math.max(3, Math.min(16, Math.round(Number(count) || 3)));
-    patchEditorElementShape(type, id, (entry) => {
-      entry.shapeType = 'free';
-      entry.shapePointCount = nextCount;
-      entry.shapePoints = makeRegularShapePoints(nextCount);
-      delete entry.shapeCorners;
-    });
-  };
-
-  const renderShapeControls = (type, id) => {
-    const entry = getEditorElementByType(selectedScene, type, id);
-    if (!entry) return null;
-    const shapeType = getElementShapeType(entry);
-    return (
-      <div className="shape-editor-controls">
-        <HelpLabel help="Forme de la zone interactive. Rectangle est le comportement classique, ronde devient une ellipse et libre permet de tirer chaque point.">Forme</HelpLabel>
-        <select value={shapeType} onChange={(event) => setEditorElementShapeType(type, id, event.target.value)}>
-          <option value="rectangle">Rectangle</option>
-          <option value="ellipse">Ronde / ovale</option>
-          <option value="free">Libre</option>
-        </select>
-        {shapeType === 'free' ? (
-          <div>
-            <HelpLabel help="Nombre de points de la forme libre. Minimum 3. Changer ce nombre recrée une forme régulière que tu peux ensuite déformer.">Nombre d'angles</HelpLabel>
-            <input
-              type="number"
-              min="3"
-              max="16"
-              value={Number(entry.shapePointCount) || getElementShapePoints(entry).length}
-              onChange={(event) => setEditorElementShapePointCount(type, id, event.target.value)}
-            />
-          </div>
-        ) : null}
-      </div>
-    );
-  };
-
-  return {
-    getEditorElementByType,
-    getAbsoluteShapeCorners,
-    getAbsoluteShapePoints,
-    applyShapePoints,
-    renderShapeOutline,
-    getShapeClassName,
-    renderShapeControls,
-  };
-}
-
-function useSceneEditorCreation({
-  project,
-  selectedSceneId,
-  selectedItem,
-  selectedItemId,
-  setSelectedSceneObjectId,
-  setSelectedVisualEffectZoneId,
-  setSelectedHotspotId,
-  setSelectedItemId,
-  setSelectedHotspotIds,
-  setSelectedSceneObjectIds,
-  patchProject,
-}) {
-  const addSceneObject = ({ invisible = false, animation = false, blockType = 'object' } = {}) => {
-    if (!selectedSceneId) return;
-    const nextId = `scene-object-${Math.random().toString(36).slice(2, 10)}`;
-    const sourceItem = selectedItem || project.items?.find((item) => item.id === selectedItemId) || project.items?.[0];
-    const isTutorialObject = Boolean(document.body.classList.contains('tutorial-active'));
-    const blockDefaults = {
-      text: {
-        name: 'Texte',
-        blockLabel: 'Texte',
-        blockText: 'Un message apparait dans la scene.',
-        dialogue: 'Un message apparait dans la scene.',
-        width: 28,
-        height: 12,
-        clickMode: 'none',
-      },
-      image: {
-        name: 'Image',
-        blockLabel: 'Image',
-        dialogue: 'Tu observes cette image.',
-        width: 18,
-        height: 18,
-        clickMode: 'object',
-      },
-      button: {
-        name: 'Bouton',
-        blockLabel: 'Bouton',
-        buttonLabel: 'Action',
-        dialogue: 'Le bouton réagit.',
-        width: 18,
-        height: 10,
-        clickMode: 'object',
-      },
-      input: {
-        name: 'Champ de saisie',
-        blockLabel: 'Reponse',
-        placeholder: 'Saisir une réponse...',
-        expectedAnswer: 'secret',
-        successDialogue: 'Bonne réponse.',
-        failureDialogue: 'Ce n est pas la bonne réponse.',
-        width: 26,
-        height: 12,
-        clickMode: 'object',
-      },
-      code: {
-        name: 'Code',
-        blockLabel: 'Code',
-        placeholder: 'Entrer le code...',
-        expectedAnswer: '1234',
-        successDialogue: 'Le code est correct.',
-        failureDialogue: 'Le code est incorrect.',
-        width: 22,
-        height: 12,
-        clickMode: 'object',
-      },
-      hint: {
-        name: 'Indice',
-        blockLabel: 'Indice',
-        blockText: 'Un indice utile se cache ici.',
-        dialogue: 'Un indice utile se cache ici.',
-        width: 24,
-        height: 13,
-        clickMode: 'object',
-      },
-    }[blockType] || {};
-    patchProject((draft) => {
-      const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
-      if (!scene) return;
-      if (!Array.isArray(scene.sceneObjects)) scene.sceneObjects = [];
-      scene.sceneObjects.push({
-        id: nextId,
-        name: animation ? 'Animation' : (invisible ? 'Objet invisible' : (sourceItem?.name || 'Nouvel objet visible')),
-        blockType,
-        imageData: '',
-        imageName: '',
-        popupImage: '',
-        popupImageName: '',
-        x: 50,
-        y: 50,
-        width: 14,
-        height: 14,
-        isInvisible: invisible,
-        clickMode: 'object',
-        interactionMode: animation ? 'popup' : (sourceItem?.id ? 'inventory' : 'popup'),
-        linkedItemId: animation ? '' : (sourceItem?.id || ''),
-        removeAfterUse: !animation,
-        dialogue: animation ? '' : (sourceItem?.name ? `Tu as trouvé ${sourceItem.name}.` : ''),
-        tutorialCreated: isTutorialObject,
-        fontSize: 13,
-        ...blockDefaults,
-      });
-    });
-    setSelectedSceneObjectId(nextId);
-    setSelectedHotspotId('');
-    setSelectedItemId('');
-  };
-
-  const addInvisibleSceneObject = () => addSceneObject({ invisible: true });
-  const addAnimationObject = () => addSceneObject({ animation: true });
-  const addInteractiveBlock = (blockType) => addSceneObject({ blockType });
-
-  const addVisualEffectZone = () => {
-    if (!selectedSceneId) return;
-    const nextId = `visual-zone-${Math.random().toString(36).slice(2, 10)}`;
-    const isTutorialZone = Boolean(document.body.classList.contains('tutorial-active'));
-    patchProject((draft) => {
-      const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
-      if (!scene) return;
-      if (!Array.isArray(scene.visualEffectZones)) scene.visualEffectZones = [];
-      scene.visualEffectZones.push({
-        id: nextId,
-        name: 'Zone scintillante',
-        effect: 'sparkles',
-        intensity: 'normal',
-        x: 50,
-        y: 50,
-        width: 24,
-        height: 18,
-        layer: 'behind',
-        isHidden: false,
-        tutorialCreated: isTutorialZone,
-      });
-    });
-    setSelectedVisualEffectZoneId(nextId);
-    setSelectedSceneObjectId('');
-    setSelectedHotspotId('');
-    setSelectedItemId('');
-    setSelectedHotspotIds([]);
-    setSelectedSceneObjectIds([]);
-  };
-
-  return {
-    addSceneObject,
-    addInvisibleSceneObject,
-    addAnimationObject,
-    addInteractiveBlock,
-    addVisualEffectZone,
-  };
-}
-
 export default function ScenesTab(props) {
   const {
     project,
@@ -1534,6 +955,7 @@ export default function ScenesTab(props) {
     applyShapePoints,
     renderShapeOutline,
     getShapeClassName,
+    getResizeHandleStyle,
     renderShapeControls,
   } = useSceneEditorShapes({
     selectedScene,
@@ -1578,6 +1000,7 @@ export default function ScenesTab(props) {
     getAbsoluteShapeCorners,
     getAbsoluteShapePoints,
     applyShapePoints,
+    getResizeHandleStyle,
   });
 
   const {
@@ -1861,7 +1284,7 @@ export default function ScenesTab(props) {
                   <div className="panel-head panel-head-stack">
                     <div>
                       <span className="section-kicker">Contexte</span>
-                      <h2>{selectedItem ? 'Objet selectionné' : selectedSceneObject ? ((selectedSceneObject.anime2dSpec || selectedSceneObject.anime2dName || selectedSceneObject.name === 'Animation') ? 'Animation selectionnée' : (getSceneObjectClickMode(selectedSceneObject) === 'action' ? "Zone d'action selectionnée" : 'Objet visible selectionné')) : selectedVisualEffectZone ? 'Zone visuelle selectionnée' : 'Zone selectionnée'}</h2>
+                      <h2>{selectedItem ? 'Objet selectionné' : selectedSceneObject ? ((selectedSceneObject.anime2dSpec || selectedSceneObject.anime2dName || selectedSceneObject.name === 'Animation') ? 'Animation selectionnée' : selectedSceneObject.isInvisible ? 'Objet invisible selectionné' : (getSceneObjectClickMode(selectedSceneObject) === 'action' ? "Zone d'action selectionnée" : 'Objet visible selectionné')) : selectedVisualEffectZone ? 'Zone visuelle selectionnée' : 'Zone selectionnée'}</h2>
                     </div>
                   </div>
 

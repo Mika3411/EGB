@@ -2556,7 +2556,7 @@ function renderCinematic(cinematic, slide) {
 
   return '<div class="overlay" id="cinematic-overlay"><div class="overlay-card">'
     + (resolveAssetUrl(slide.imageId, slide.imageData) ? '<img class="overlay-media" loading="eager" decoding="async" src="' + resolveAssetUrl(slide.imageId, slide.imageData) + '" alt="' + safeHtml(slide.imageName || slide.narration || 'Cinematic') + '" />' : '')
-    + (resolveAssetUrl(slide.audioId, slide.audioData) ? '<audio id="cinematic-audio" class="overlay-media" controls autoplay src="' + resolveAssetUrl(slide.audioId, slide.audioData) + '"></audio>' : '')
+    + (resolveAssetUrl(slide.audioId, slide.audioData) ? '<audio id="cinematic-audio" autoplay src="' + resolveAssetUrl(slide.audioId, slide.audioData) + '" style="display:none"></audio>' : '')
     + '<p class="narration">' + safeHtml(slide.narration || '') + '</p>'
     + '<div class="panel-head">'
     + '<button id="prev-cinematic" class="secondary-button">Précédent</button>'

@@ -89,6 +89,7 @@ export default function SceneObjectInspector({
   const clickMode = getSceneObjectClickMode(selectedSceneObject);
   const blockType = getSceneObjectBlockType(selectedSceneObject);
   const isBlockObject = blockType !== 'object';
+  const isInvisibleObject = Boolean(selectedSceneObject.isInvisible);
   const isAnimationObject = Boolean(
     selectedSceneObject.anime2dSpec
     || selectedSceneObject.anime2dName
@@ -99,7 +100,8 @@ export default function SceneObjectInspector({
     if (obj) updater(obj);
   });
   const removeObject = () => {
-    if (!window.confirm(`Supprimer l'objet visible "${selectedSceneObject.name}" ?`)) return;
+    const objectKind = isInvisibleObject ? 'invisible' : 'visible';
+    if (!window.confirm(`Supprimer l'objet ${objectKind} "${selectedSceneObject.name}" ?`)) return;
     patchProject((draft) => {
       const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
       if (!scene?.sceneObjects) return;
@@ -109,7 +111,7 @@ export default function SceneObjectInspector({
   };
 
   return (
-    <>
+    <div className="scene-object-inspector-card">
       <HelpLabel help="Nom interne de cet element. Il aide au retrouver dans les calques et les listes de l'éditeur.">Nom</HelpLabel>
       <input value={selectedSceneObject.name} onChange={(event) => patchObject((obj) => { obj.name = event.target.value; })} />
       <HelpLabel help="Type de bloc affiché dans la scene. Objet visible garde le comportement historique, les autres types ajoutent des blocs interactifs plus lisibles.">Type de bloc</HelpLabel>
@@ -121,7 +123,11 @@ export default function SceneObjectInspector({
         obj.clickMode = ['text', 'image'].includes(event.target.value) ? 'none' : 'object';
         obj.blockLabel = obj.blockLabel || obj.name;
       })}>
-        {SCENE_OBJECT_BLOCK_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+        {SCENE_OBJECT_BLOCK_TYPES.map((type) => (
+          <option key={type.value} value={type.value}>
+            {type.value === 'object' && isInvisibleObject ? 'Objet invisible' : type.label}
+          </option>
+        ))}
       </select>
       <div className="grid-two small-gap">
         <div><HelpLabel help="Position horizontale du centre de l'objet, en pourcentage de la largeur de l'image.">X</HelpLabel><input type="number" value={selectedSceneObject.x} onChange={(event) => patchObject((obj) => { obj.x = Number(event.target.value); })} /></div>
@@ -182,7 +188,7 @@ export default function SceneObjectInspector({
         </>
       ) : null}
 
-      {!isAnimationObject && blockType !== 'text' && blockType !== 'hint' && blockType !== 'button' && blockType !== 'input' && blockType !== 'code' ? (
+      {!isInvisibleObject && !isAnimationObject && blockType !== 'text' && blockType !== 'hint' && blockType !== 'button' && blockType !== 'input' && blockType !== 'code' ? (
         <MediaSourcePicker
           className="button like full secondary-action"
           accept="image/*"
@@ -234,7 +240,7 @@ export default function SceneObjectInspector({
           </label>
         </>
       ) : null}
-      {(selectedSceneObject.imageData || selectedSceneObject.anime2dSpec) ? (
+      {!isInvisibleObject && (selectedSceneObject.imageData || selectedSceneObject.anime2dSpec) ? (
         <button
           type="button"
           className="danger-button"
@@ -374,8 +380,8 @@ export default function SceneObjectInspector({
       ) : null}
 
       <button className="danger-button" style={{ marginTop: 12 }} onClick={removeObject}>
-        {isAnimationObject ? "Supprimer l'animation" : "Supprimer l'objet visible"}
+        {isAnimationObject ? "Supprimer l'animation" : `Supprimer l'objet ${isInvisibleObject ? 'invisible' : 'visible'}`}
       </button>
-    </>
+    </div>
   );
 }
