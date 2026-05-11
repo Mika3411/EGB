@@ -46,7 +46,10 @@ const getProjectThumbnail = (project = {}, record = {}) => {
     ]),
   ];
 
-  return candidates.find((value) => typeof value === 'string' && value.trim()) || '';
+  return candidates.find((value) => (
+    typeof value === 'string'
+    && (value.startsWith('data:') ? value.length > 0 : value.trim())
+  )) || '';
 };
 
 const getAdminProjectPayload = (record = {}) => {

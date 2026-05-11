@@ -46,13 +46,50 @@ const writeMediaOrganization = (userKey, organization) => {
   window.localStorage.setItem(getMediaOrganizationKey(userKey), JSON.stringify(organization));
 };
 
-const makeStableMediaKey = ({ type = 'unknown', url = '', name = '' } = {}) => {
-  const source = `${type}:${url}:${name}`;
-  let hash = 0;
-  for (let index = 0; index < source.length; index += 1) {
-    hash = ((hash << 5) - hash + source.charCodeAt(index)) | 0;
+const LARGE_MEDIA_KEY_LENGTH = 200_000;
+const HASH_SAMPLE_LENGTH = 4096;
+const INITIAL_VISIBLE_MEDIA_LIMIT = 24;
+const VISIBLE_MEDIA_INCREMENT = 24;
+
+const mixHash = (hash, value) => Math.imul(hash ^ value, 16777619) >>> 0;
+
+const hashText = (text = '') => {
+  const value = String(text || '');
+  const length = value.length;
+  let hash = mixHash(2166136261, length);
+
+  if (length <= HASH_SAMPLE_LENGTH * 3) {
+    for (let index = 0; index < length; index += 1) {
+      hash = mixHash(hash, value.charCodeAt(index));
+    }
+    return hash.toString(36);
   }
-  return `media_${Math.abs(hash).toString(36)}`;
+
+  for (let index = 0; index < HASH_SAMPLE_LENGTH; index += 1) {
+    hash = mixHash(hash, value.charCodeAt(index));
+  }
+  const middleStart = Math.max(0, Math.floor((length - HASH_SAMPLE_LENGTH) / 2));
+  for (let index = middleStart; index < middleStart + HASH_SAMPLE_LENGTH; index += 1) {
+    hash = mixHash(hash, value.charCodeAt(index));
+  }
+  for (let index = length - HASH_SAMPLE_LENGTH; index < length; index += 1) {
+    hash = mixHash(hash, value.charCodeAt(index));
+  }
+  return hash.toString(36);
+};
+
+const compactMediaKeyPart = (value = '') => {
+  const text = String(value || '');
+  if (!text) return '';
+  if (text.length > LARGE_MEDIA_KEY_LENGTH || text.startsWith('data:')) {
+    return `hash:${text.length}:${hashText(text)}`;
+  }
+  return text;
+};
+
+const makeStableMediaKey = ({ type = 'unknown', url = '', name = '' } = {}) => {
+  const source = `${type}:${compactMediaKeyPart(url)}:${name}`;
+  return `media_${hashText(source)}`;
 };
 
 const splitTags = (value = '') => String(value)
@@ -90,8 +127,9 @@ const getMediaDedupeKey = ({ type, url, name }) => {
   if ((type === 'audio' || type === 'video') && normalizedName && normalizedName !== 'media') {
     return `name:${type}:${normalizedName}`;
   }
-  const normalizedUrl = String(url || '').split('?')[0].split('#')[0];
-  return `url:${type || 'unknown'}:${normalizedUrl || url}`;
+  const rawUrl = String(url || '');
+  const normalizedUrl = rawUrl.startsWith('data:') ? rawUrl : rawUrl.split('?')[0].split('#')[0];
+  return `url:${type || 'unknown'}:${compactMediaKeyPart(normalizedUrl || rawUrl)}`;
 };
 
 const getAssetFolderId = (asset = {}) => {
@@ -506,6 +544,7 @@ export default function ProfileMediaTab({
   const [dragOverFolderId, setDragOverFolderId] = useState('');
   const [isImportingDrop, setIsImportingDrop] = useState(false);
   const [collapsedProjectFolders, setCollapsedProjectFolders] = useState({});
+  const [visibleMediaLimit, setVisibleMediaLimit] = useState(INITIAL_VISIBLE_MEDIA_LIMIT);
   const [organization, setOrganization] = useState(() => readMediaOrganization(mediaOrganizationKey));
   useEffect(() => {
     setOrganization(readMediaOrganization(mediaOrganizationKey));
@@ -604,6 +643,14 @@ export default function ProfileMediaTab({
       ].join(' ').toLowerCase().includes(query))
     ));
   }, [activeFolderId, decoratedMedia, search]);
+  useEffect(() => {
+    setVisibleMediaLimit(INITIAL_VISIBLE_MEDIA_LIMIT);
+  }, [activeFolderId, search]);
+  const limitedVisibleMedia = useMemo(
+    () => visibleMedia.slice(0, visibleMediaLimit),
+    [visibleMedia, visibleMediaLimit],
+  );
+  const hiddenMediaCount = Math.max(0, visibleMedia.length - limitedVisibleMedia.length);
   const addCustomFolder = () => {
     const label = newFolderName.trim();
     if (!label) return;
@@ -836,8 +883,9 @@ export default function ProfileMediaTab({
         </aside>
 
         {visibleMedia.length ? (
+          <div className="profile-media-results">
           <div className="profile-media-grid">
-            {visibleMedia.map((asset) => (
+            {limitedVisibleMedia.map((asset) => (
               <article
                 key={asset.id}
                 className={[
@@ -907,6 +955,16 @@ export default function ProfileMediaTab({
                 </div>
               </article>
             ))}
+          </div>
+          {hiddenMediaCount ? (
+            <button
+              type="button"
+              className="secondary-action profile-media-load-more"
+              onClick={() => setVisibleMediaLimit((limit) => limit + VISIBLE_MEDIA_INCREMENT)}
+            >
+              Afficher {Math.min(VISIBLE_MEDIA_INCREMENT, hiddenMediaCount)} mÃ©dia{hiddenMediaCount > 1 ? 's' : ''} de plus
+            </button>
+          ) : null}
           </div>
         ) : (
           <div className="empty-state-inline">

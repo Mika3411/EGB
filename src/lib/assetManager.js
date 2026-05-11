@@ -2,6 +2,7 @@ export const DEFAULT_SCENE_ASPECT_RATIO = 1.6;
 export const ASSET_TYPES = ['image', 'audio', 'video', 'json', 'unknown'];
 
 const DATA_URL_TYPE_PATTERN = /^data:([^/;]+)\/([^;,]+)[;,]/;
+const ASSET_ID_HASH_SAMPLE = 4096;
 
 const getAssetTypeFromUrl = (url = '') => {
   const match = String(url).match(DATA_URL_TYPE_PATTERN);
@@ -14,13 +15,38 @@ const compactList = (items = []) => [...new Set(items.filter(Boolean))];
 
 export const makeAssetId = (...parts) => `asset_${parts.filter(Boolean).join('_')}`.replace(/[^a-zA-Z0-9_:-]/g, '_');
 
-const makeStableAssetId = (type = 'unknown', url = '', name = '') => {
-  const source = `${type}:${url}:${name}`;
-  let hash = 0;
-  for (let index = 0; index < source.length; index += 1) {
-    hash = ((hash << 5) - hash + source.charCodeAt(index)) | 0;
+const mixHash = (hash, value) => Math.imul(hash ^ value, 16777619) >>> 0;
+
+const hashStableText = (text = '') => {
+  const value = String(text || '');
+  const length = value.length;
+  let hash = mixHash(2166136261, length);
+
+  if (length <= ASSET_ID_HASH_SAMPLE * 3) {
+    for (let index = 0; index < length; index += 1) {
+      hash = mixHash(hash, value.charCodeAt(index));
+    }
+    return hash.toString(36);
   }
-  return makeAssetId('library', type, Math.abs(hash).toString(36));
+
+  for (let index = 0; index < ASSET_ID_HASH_SAMPLE; index += 1) {
+    hash = mixHash(hash, value.charCodeAt(index));
+  }
+  const middleStart = Math.max(0, Math.floor((length - ASSET_ID_HASH_SAMPLE) / 2));
+  for (let index = middleStart; index < middleStart + ASSET_ID_HASH_SAMPLE; index += 1) {
+    hash = mixHash(hash, value.charCodeAt(index));
+  }
+  for (let index = length - ASSET_ID_HASH_SAMPLE; index < length; index += 1) {
+    hash = mixHash(hash, value.charCodeAt(index));
+  }
+  return hash.toString(36);
+};
+
+const makeStableAssetId = (type = 'unknown', url = '', name = '') => {
+  const urlKey = String(url || '').startsWith('data:')
+    ? `data:${String(url || '').length}:${hashStableText(url)}`
+    : String(url || '');
+  return makeAssetId('library', type, hashStableText(`${type}:${urlKey}:${name}`));
 };
 
 export function normalizeAsset(asset = {}) {

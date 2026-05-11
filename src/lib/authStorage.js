@@ -515,11 +515,15 @@ async function updatePublicProjectIndexForUser(userId, projects = []) {
 
   const publicRecords = projects
     .filter((project) => project?.id && project.shareState?.isPublic)
-    .map((project) => ({
-      ...project,
-      userId,
-      publicKey: `${userId}:${project.id}`,
-    }));
+    .map((project) => {
+      const { publishedData, ...shareState } = project.shareState || {};
+      return {
+        ...project,
+        shareState,
+        userId,
+        publicKey: `${userId}:${project.id}`,
+      };
+    });
 
   const existingIndex = await loadPublicProjectIndex();
   const withoutUser = existingIndex.filter((project) => project.userId !== userId);

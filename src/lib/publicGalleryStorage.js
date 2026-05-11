@@ -37,7 +37,10 @@ const getProjectThumbnail = (project = {}, record = {}) => {
     ]),
   ];
 
-  return candidates.find((value) => typeof value === 'string' && value.trim()) || '';
+  return candidates.find((value) => (
+    typeof value === 'string'
+    && (value.startsWith('data:') ? value.length > 0 : value.trim())
+  )) || '';
 };
 
 const normalizeText = (value = '') => String(value)
@@ -262,7 +265,6 @@ export async function getPublicGames(options = {}) {
         completions: Number(projectStats.completions || 0),
         badges,
         feedback: visibleSummary,
-        project: data,
       });
     });
   };
@@ -289,8 +291,8 @@ export async function loadPublicProject(userId, projectId) {
   const publicIndex = await loadPublicProjectIndex().catch(() => []);
   const indexedRecords = publicIndex.filter((record) => record.userId === userId);
   const records = [
-    ...(Array.isArray(remoteRecords) && remoteRecords.length ? remoteRecords : localRecords),
     ...indexedRecords,
+    ...(Array.isArray(remoteRecords) && remoteRecords.length ? remoteRecords : localRecords),
   ];
   const record = records.map(normalizeRecord).find((entry) => entry.id === projectId);
 

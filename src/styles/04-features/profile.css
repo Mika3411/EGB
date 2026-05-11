@@ -154,6 +154,10 @@
 
 .profile-media-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
 
+.profile-media-results{display:grid;gap:10px;min-width:0}
+
+.profile-media-load-more{justify-self:center}
+
 .profile-media-card{min-width:0;overflow:hidden;border:1px solid var(--border-soft);border-radius:var(--radius-sm);background:#080f1d94}
 
 .profile-media-card[draggable=true]{cursor:grab}

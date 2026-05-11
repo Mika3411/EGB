@@ -61,6 +61,7 @@ const countEmbeddedMediaBytes = (value, key = '') => {
 
 const getUndoHistoryLimit = (project) => {
   const embeddedMediaBytes = countEmbeddedMediaBytes(project);
+  if (embeddedMediaBytes > 24 * 1024 * 1024) return 0;
   if (embeddedMediaBytes > 8 * 1024 * 1024) return 1;
   if (embeddedMediaBytes > 3 * 1024 * 1024) return 3;
   return 25;
@@ -71,7 +72,7 @@ const keepUndoHistoryRoomForNextSnapshot = (stack, limit) => (
 );
 
 const keepUndoHistoryWithinLimit = (stack, limit) => (
-  stack.slice(Math.max(0, stack.length - Math.max(1, limit)))
+  limit <= 0 ? [] : stack.slice(Math.max(0, stack.length - limit))
 );
 
 
@@ -95,8 +96,13 @@ export function useProjectEditor() {
   }, [project]);
 
   const rememberProjectState = useCallback(() => {
+    const undoLimit = getUndoHistoryLimit(projectRef.current);
+    if (undoLimit <= 0) {
+      setUndoStack([]);
+      setRedoStack([]);
+      return;
+    }
     const snapshot = structuredClone(projectRef.current);
-    const undoLimit = getUndoHistoryLimit(snapshot);
     setUndoStack((previous) => [...keepUndoHistoryRoomForNextSnapshot(previous, undoLimit), snapshot]);
     setRedoStack([]);
   }, []);
@@ -117,9 +123,13 @@ export function useProjectEditor() {
       if (!previous.length) return previous;
       const nextUndoStack = previous.slice(0, -1);
       const previousProject = previous[previous.length - 1];
-      const currentProject = structuredClone(projectRef.current);
-      const redoLimit = getUndoHistoryLimit(currentProject);
-      setRedoStack((nextRedoStack) => [...keepUndoHistoryRoomForNextSnapshot(nextRedoStack, redoLimit), currentProject]);
+      const redoLimit = getUndoHistoryLimit(projectRef.current);
+      if (redoLimit > 0) {
+        const currentProject = structuredClone(projectRef.current);
+        setRedoStack((nextRedoStack) => [...keepUndoHistoryRoomForNextSnapshot(nextRedoStack, redoLimit), currentProject]);
+      } else {
+        setRedoStack([]);
+      }
       projectRef.current = previousProject;
       setProject(previousProject);
       return nextUndoStack;
@@ -131,9 +141,13 @@ export function useProjectEditor() {
       if (!previous.length) return previous;
       const nextRedoStack = previous.slice(0, -1);
       const nextProject = previous[previous.length - 1];
-      const currentProject = structuredClone(projectRef.current);
-      const undoLimit = getUndoHistoryLimit(currentProject);
-      setUndoStack((nextUndoStack) => [...keepUndoHistoryRoomForNextSnapshot(nextUndoStack, undoLimit), currentProject]);
+      const undoLimit = getUndoHistoryLimit(projectRef.current);
+      if (undoLimit > 0) {
+        const currentProject = structuredClone(projectRef.current);
+        setUndoStack((nextUndoStack) => [...keepUndoHistoryRoomForNextSnapshot(nextUndoStack, undoLimit), currentProject]);
+      } else {
+        setUndoStack([]);
+      }
       projectRef.current = nextProject;
       setProject(nextProject);
       return keepUndoHistoryWithinLimit(nextRedoStack, getUndoHistoryLimit(nextProject));

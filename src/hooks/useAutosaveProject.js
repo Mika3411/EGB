@@ -6,6 +6,9 @@ const AUTOSAVE_REMOTE_IDLE_DELAY_MS = 10_000;
 const AUTOSAVE_REMOTE_MAX_DELAY_MS = 30_000;
 const AUTOSAVE_BACKOFF_BASE_MS = 2_000;
 const AUTOSAVE_BACKOFF_MAX_MS = 60_000;
+const LARGE_STRING_FINGERPRINT_LENGTH = 200_000;
+const STRING_HASH_SAMPLE = 4096;
+const LARGE_MEDIA_FIELD_PATTERN = /^(backgroundData|imageData|objectImageData|popupImageData|popupBackgroundData|musicData|soundData|videoData|videoPoster|audioData|responseImageData|responseSoundData|ambienceSoundData|setupMusicData|setupBackgroundImageData|characterImageData|backgroundImageData|src|originalSrc|url)$/i;
 
 const registerAutosaveBackoff = (failedSaveCountRef, nextSaveAllowedAtRef) => {
   const failedSaveCount = Math.min(failedSaveCountRef.current + 1, 6);
@@ -16,10 +19,59 @@ const registerAutosaveBackoff = (failedSaveCountRef, nextSaveAllowedAtRef) => {
   );
 };
 
+const mixHash = (hash, value) => Math.imul(hash ^ value, 16777619) >>> 0;
+
+const hashTextInto = (hash, text = '') => {
+  const value = String(text || '');
+  const length = value.length;
+  hash = mixHash(hash, length);
+
+  if (length <= STRING_HASH_SAMPLE * 3) {
+    for (let index = 0; index < length; index += 1) {
+      hash = mixHash(hash, value.charCodeAt(index));
+    }
+    return hash;
+  }
+
+  for (let index = 0; index < STRING_HASH_SAMPLE; index += 1) {
+    hash = mixHash(hash, value.charCodeAt(index));
+  }
+  const middleStart = Math.max(0, Math.floor((length - STRING_HASH_SAMPLE) / 2));
+  for (let index = middleStart; index < middleStart + STRING_HASH_SAMPLE; index += 1) {
+    hash = mixHash(hash, value.charCodeAt(index));
+  }
+  for (let index = length - STRING_HASH_SAMPLE; index < length; index += 1) {
+    hash = mixHash(hash, value.charCodeAt(index));
+  }
+  return hash;
+};
+
+const getValueFingerprint = (value, key = '', seen = new WeakSet()) => {
+  if (value === null) return 'null';
+  const type = typeof value;
+  if (type === 'undefined') return 'undefined';
+  if (type === 'number' || type === 'boolean' || type === 'bigint') return `${type}:${String(value)}`;
+  if (type === 'string') {
+    const isLargeMediaString = value.length > LARGE_STRING_FINGERPRINT_LENGTH
+      || value.startsWith('data:')
+      || LARGE_MEDIA_FIELD_PATTERN.test(key);
+    if (!isLargeMediaString) return `s:${value.length}:${value}`;
+    return `m:${key}:${value.length}:${hashTextInto(2166136261, value).toString(36)}`;
+  }
+  if (type !== 'object') return `${type}:${String(value)}`;
+  if (seen.has(value)) return '[Circular]';
+  seen.add(value);
+  if (Array.isArray(value)) {
+    return `a:${value.length}:[${value.map((entry) => getValueFingerprint(entry, key, seen)).join(',')}]`;
+  }
+  const keys = Object.keys(value).sort();
+  return `o:{${keys.map((entryKey) => `${entryKey}:${getValueFingerprint(value[entryKey], entryKey, seen)}`).join(',')}}`;
+};
+
 const getProjectSaveFingerprint = (project) => {
   if (!project) return '';
   try {
-    return JSON.stringify(project);
+    return getValueFingerprint(project);
   } catch {
     return '';
   }

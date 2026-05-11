@@ -190,7 +190,11 @@ const writeProjectsToIndexedDb = async (userId, projects) => {
 const getProjectTitle = (project, fallback = 'Projet sans titre') =>
   project?.title?.trim?.() || project?.name?.trim?.() || fallback;
 
-const cloneProjectData = (data) => JSON.parse(JSON.stringify(data || {}));
+const cloneProjectData = (data) => (
+  typeof structuredClone === 'function'
+    ? structuredClone(data || {})
+    : JSON.parse(JSON.stringify(data || {}))
+);
 
 const LARGE_MEDIA_FIELD_PATTERN = /^(backgroundData|imageData|objectImageData|popupImageData|popupBackgroundData|musicData|soundData|videoData|videoPoster|audioData)$/i;
 const LARGE_EMBEDDED_MEDIA_LENGTH = 200_000;
@@ -198,7 +202,7 @@ const MAX_INLINE_PROJECT_THUMBNAIL_LENGTH = 180_000;
 
 const normalizeProjectThumbnail = (thumbnail = '') => {
   if (typeof thumbnail !== 'string') return '';
-  const cleanThumbnail = thumbnail.trim();
+  const cleanThumbnail = thumbnail.startsWith('data:') ? thumbnail : thumbnail.trim();
   if (!cleanThumbnail) return '';
   if (/^https?:\/\//i.test(cleanThumbnail)) return cleanThumbnail;
   if (cleanThumbnail.startsWith('data:') && cleanThumbnail.length <= MAX_INLINE_PROJECT_THUMBNAIL_LENGTH) return cleanThumbnail;
@@ -277,7 +281,16 @@ const getProjectThumbnail = (project = {}) => {
     ...(project.items || []).map((item) => item.imageData),
   ];
 
-  return candidates.map(normalizeProjectThumbnail).find(Boolean) || '';
+  for (const candidate of candidates) {
+    const thumbnail = normalizeProjectThumbnail(candidate);
+    if (thumbnail) return thumbnail;
+  }
+  return '';
+};
+
+const normalizeShareState = (shareState = {}) => {
+  const { publishedData, ...rest } = shareState || {};
+  return rest;
 };
 
 const normalizeProjectRecord = (record) => {
@@ -290,7 +303,7 @@ const normalizeProjectRecord = (record) => {
     name: record?.name || getProjectTitle(data),
     thumbnail: normalizeProjectThumbnail(record?.thumbnail || record?.thumbnailUrl || record?.thumbnail_url) || getProjectThumbnail(data),
     uiState: record?.uiState || record?.ui_state || {},
-    shareState: record?.shareState || record?.share_state || { isPublic: false, copiedAt: '' },
+    shareState: normalizeShareState(record?.shareState || record?.share_state || { isPublic: false, copiedAt: '' }),
     storagePath: record?.storagePath || record?.storage_path || '',
     createdAt,
     updatedAt,
@@ -373,6 +386,24 @@ const applyRemoteStoragePaths = (projects = [], remoteProjects = []) => {
     if (storedProject) storedProject.storagePath = entry.storagePath;
   });
   return projects;
+};
+
+const mergeProjectRecords = (localProjects = [], remoteProjects = []) => {
+  const byId = new Map();
+  remoteProjects.map(normalizeProjectRecord).forEach((project) => {
+    byId.set(project.id, project);
+  });
+  localProjects.map(normalizeProjectRecord).forEach((project) => {
+    const remoteProject = byId.get(project.id);
+    if (!remoteProject) {
+      byId.set(project.id, project);
+      return;
+    }
+    const localTime = new Date(project.updatedAt || 0).getTime() || 0;
+    const remoteTime = new Date(remoteProject.updatedAt || 0).getTime() || 0;
+    byId.set(project.id, localTime >= remoteTime ? project : remoteProject);
+  });
+  return Array.from(byId.values());
 };
 
 const persistStoragePathsLocally = async (userId, projects = []) => {
@@ -605,12 +636,18 @@ export function useLocalAuth() {
         if (isMounted) setProjectMeta(nextMeta);
 
         if (localProjects.length > 0) {
-          localProjects = await persistProjects(user.id, localProjects);
+          const remoteProjects = await loadProjectRecordsForUser(user.id).catch(() => null);
+          localProjects = Array.isArray(remoteProjects) && remoteProjects.length
+            ? mergeProjectRecords(localProjects, remoteProjects)
+            : localProjects.map(normalizeProjectRecord);
+          await cacheProjectsLocally(user.id, localProjects).catch((error) => {
+            console.warn('Cache local des projets indisponible.', error);
+          });
         } else {
           const remoteProjects = await loadProjectRecordsForUser(user.id);
           if (Array.isArray(remoteProjects) && remoteProjects.length > 0) {
             localProjects = remoteProjects.map(sanitizeProjectRecordForStorage);
-            localProjects = await persistProjects(user.id, localProjects);
+            localProjects = await cacheProjectsLocally(user.id, localProjects);
           }
         }
 
@@ -631,7 +668,7 @@ export function useLocalAuth() {
             });
 
             localProjects = [migratedProject];
-            localProjects = await persistProjects(user.id, localProjects);
+            localProjects = await cacheProjectsLocally(user.id, localProjects);
           }
         }
 
@@ -933,7 +970,6 @@ export function useLocalAuth() {
           isPublic: true,
           copiedAt: project.shareState?.copiedAt || timestamp,
           publishedAt: timestamp,
-          publishedData: snapshot,
           publishedName: project.name || getProjectTitle(project.data),
           publishedThumbnail: project.shareState?.galleryThumbnail || project.thumbnail || getProjectThumbnail(snapshot) || '',
           durationMinutes: Math.max(15, Math.min(90, 15 + (snapshot?.scenes?.length || 0) * 8 + (snapshot?.enigmas?.length || 0) * 5)),

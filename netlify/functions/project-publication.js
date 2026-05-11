@@ -56,7 +56,11 @@ const uploadStorageJson = async (supabase, path, value) => {
   return value;
 };
 
-const cloneProjectData = (data) => JSON.parse(JSON.stringify(data || {}));
+const cloneProjectData = (data) => (
+  typeof structuredClone === 'function'
+    ? structuredClone(data || {})
+    : JSON.parse(JSON.stringify(data || {}))
+);
 
 const getProjectTitle = (project = {}, record = {}) =>
   record?.name || project?.title || project?.name || 'Escape game sans titre';
@@ -77,13 +81,19 @@ const getProjectThumbnail = (project = {}, record = {}) => {
     ]),
   ];
 
-  return candidates.find((value) => typeof value === 'string' && value.trim()) || '';
+  return candidates.find((value) => (
+    typeof value === 'string'
+    && (value.startsWith('data:') ? value.length > 0 : value.trim())
+  )) || '';
 };
 
-const normalizeProjectRecord = (record = {}) => ({
-  ...record,
-  shareState: record.shareState || record.share_state || { isPublic: false, copiedAt: '' },
-});
+const normalizeProjectRecord = (record = {}) => {
+  const { publishedData, ...shareState } = record.shareState || record.share_state || { isPublic: false, copiedAt: '' };
+  return {
+    ...record,
+    shareState,
+  };
+};
 
 const PUBLIC_SETTINGS_KEYS = new Set([
   'category',
@@ -133,11 +143,15 @@ const loadProjectsForUser = async (supabase, userId) => {
 const savePublicProjectIndexForUser = async (supabase, userId, projects = []) => {
   const publicRecords = projects
     .filter((project) => project?.id && project.shareState?.isPublic)
-    .map((project) => ({
-      ...project,
-      userId,
-      publicKey: `${userId}:${project.id}`,
-    }));
+    .map((project) => {
+      const { publishedData, ...shareState } = project.shareState || {};
+      return {
+        ...project,
+        shareState,
+        userId,
+        publicKey: `${userId}:${project.id}`,
+      };
+    });
 
   const existingIndex = await downloadStorageJson(supabase, publicProjectsStoragePath, []);
   const safeIndex = Array.isArray(existingIndex) ? existingIndex : [];
@@ -208,7 +222,6 @@ const applyPublicationAction = (sourceProject, action, settings, timestamp) => {
       isPublic: true,
       copiedAt: sourceProject.shareState?.copiedAt || timestamp,
       publishedAt: timestamp,
-      publishedData: snapshot,
       publishedName: sourceProject.name || getProjectTitle(sourceProject.data),
       publishedThumbnail: sourceProject.shareState?.galleryThumbnail || sourceProject.thumbnail || getProjectThumbnail(snapshot) || '',
       durationMinutes: Math.max(15, Math.min(90, 15 + scenes * 8 + enigmas * 5)),
