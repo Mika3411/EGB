@@ -2,10 +2,32 @@ import { normalizeCinematicSteps } from '../lib/cinematicEngine';
 import { migrateProjectAssetReferences } from '../lib/assetManager';
 
 const uid = () => Math.random().toString(36).slice(2, 10);
-const VISUAL_EFFECT_VALUES = ['sparkles', 'stars', 'snow', 'blizzard', 'fog', 'smoke', 'hearts', 'glow', 'firefliés', 'rain', 'storm', 'magic', 'embers', 'flames', 'bubbles', 'aurora', 'vignette', 'scanlines', 'glitch', 'confetti', 'beauty-lens', 'dream-lens', 'neon-lens', 'night-vision', 'thermal', 'comic-lens', 'noir-lens'];
+const VISUAL_EFFECT_VALUES = ['sparkles', 'stars', 'snow', 'blizzard', 'fog', 'smoke', 'hearts', 'glow', 'fireflies', 'rain', 'storm', 'magic', 'embers', 'flames', 'bubbles', 'aurora', 'vignette', 'scanlines', 'glitch', 'confetti', 'beauty-lens', 'dream-lens', 'neon-lens', 'night-vision', 'thermal', 'comic-lens', 'noir-lens'];
 const VISUAL_EFFECT_INTENSITY_VALUES = ['subtle', 'normal', 'strong'];
 const SCENE_TRANSITION_VALUES = ['none', 'fade', 'blur', 'dissolve', 'slide-left', 'slide-right', 'slide-up', 'slide-down', 'wipe-left', 'wipe-right', 'wipe-up', 'wipe-down', 'zoom', 'zoom-spin', 'iris', 'flip', 'rotate', 'curtain', 'split-horizontal', 'split-vertical', 'cinematic-bars', 'glitch', 'pixel', 'burn', 'flash'];
 const SCENE_TIMER_ACTION_VALUES = ['none', 'scene', 'restart-scene', 'restart-preview', 'damage-life', 'dialogue', 'cinematic'];
+const ADVANCED_CONDITION_VALUES = ['has_item', 'visited_scene', 'completed_hotspot', 'solved_enigma', 'chose_reply', 'story_variable'];
+const CONVERSATION_EFFECT_VALUES = ['message', 'add_item', 'remove_item', 'set_variable', 'increment_variable', 'decrement_variable', 'journal', 'next_node', 'scene', 'cinematic', 'enigma', 'ending'];
+const CONVERSATION_REPLY_ACTION_VALUES = ['node', 'dialogue', 'item', 'multiple', 'skill_check', 'hero_combat', 'scene', 'cinematic', 'enigma', 'ending', 'end'];
+const CONVERSATION_CONDITION_VALUES = ['none', 'has_item', 'visited_scene', 'completed_hotspot', 'solved_enigma', 'chose_reply', 'story_variable', 'advanced'];
+const HOTSPOT_ACTION_VALUES = ['dialogue', 'conversation', 'skill_check', 'hero_combat', 'dialogue_item', 'scene', 'cinematic'];
+const LOGIC_RULE_CONDITION_VALUES = ['always', 'has_item', 'missing_item', 'visited_scene', 'completed_hotspot', 'solved_enigma', 'launched_cinematic', 'completed_combination', 'chose_reply', 'story_variable', 'advanced', 'second_click', 'hero_health_below', 'hero_mana_at_least', 'hero_last_roll_success', 'hero_skill_used'];
+const LOGIC_RULE_ACTION_VALUES = ['default', 'dialogue', 'dialogue_item', 'scene', 'cinematic', 'block'];
+const BLOCK_ACTION_VALUES = ['show', 'hide', 'update_text'];
+const CINEMATIC_END_VALUES = ['none', 'act', 'scene', 'item'];
+const ENIGMA_UNLOCK_VALUES = ['none', 'scene', 'cinematic'];
+const LEGACY_TECHNICAL_VALUE_MAP = {
+  ['sc\u00e8ne']: 'scene',
+  ['restart-sc\u00e8ne']: 'restart-scene',
+  ['visited_sc\u00e8ne']: 'visited_scene',
+  ['firefli\u00e9s']: 'fireflies',
+};
+
+const normalizeLegacyTechnicalValue = (value) => LEGACY_TECHNICAL_VALUE_MAP[value] || value;
+const normalizeAllowedValue = (value, allowedValues, fallback) => {
+  const normalizedValue = normalizeLegacyTechnicalValue(value);
+  return allowedValues.includes(normalizedValue) ? normalizedValue : fallback;
+};
 
 const makeItem = (name = 'Nouvel objet', icon = '📦') => ({ id: uid(), name, icon, imageData: '', imageName: '' });
 const makeCombination = () => ({
@@ -18,15 +40,35 @@ const makeCombination = () => ({
   conditions: [],
   failMessage: '',
 });
+const makeStoryVariable = (overrides = {}) => ({
+  id: uid(),
+  key: 'nouvelle_variable',
+  type: 'boolean',
+  defaultValue: false,
+  description: '',
+  journalLabel: '',
+  journalVisible: true,
+  ...overrides,
+});
 const makeLogicRule = () => ({
   id: uid(),
   name: 'Nouvelle règle',
   conditionType: 'always',
   itemId: '',
+  conditionSceneId: '',
   hotspotId: '',
   conditionEnigmaId: '',
+  conditionReplyId: '',
+  conditionVariableKey: '',
+  conditionVariableOperator: 'equals',
+  conditionVariableValue: '',
+  advancedConditionMode: 'all',
+  advancedConditions: [],
   cinematicId: '',
   combinationId: '',
+  heroHealthThreshold: 5,
+  heroManaThreshold: 1,
+  heroSkillId: '',
   actionType: 'dialogue',
   dialogue: 'La zone réagit autrement.',
   failureDialogue: '',
@@ -74,12 +116,31 @@ const makeHotspot = () => ({
   secondEnigmaId: '',
   secondObjectImageData: '',
   secondObjectImageName: '',
+  conversation: {
+    startNodeId: 'start',
+    nodes: [{
+      id: 'start',
+      speaker: 'PNJ',
+      text: 'Bonjour. Que veux-tu savoir ?',
+      replies: [
+        { id: uid(), label: 'Qui es-tu ?', nextNodeId: 'identity', actionType: 'node', dialogue: '' },
+        { id: uid(), label: 'Au revoir.', nextNodeId: '', actionType: 'end', dialogue: 'La conversation se termine.' },
+      ],
+    }, {
+      id: 'identity',
+      speaker: 'PNJ',
+      text: 'Je garde cet endroit depuis longtemps.',
+      replies: [
+        { id: uid(), label: 'Retour', nextNodeId: 'start', actionType: 'node', dialogue: '' },
+      ],
+    }],
+  },
   logicRules: [],
 });
 const makeAct = (name = 'Acte I') => ({ id: uid(), name });
 const makeEnigma = (overrides = {}) => ({
   id: uid(),
-  name: 'Nouvelle enigme',
+  name: 'Nouvelle énigme',
   type: 'code',
   question: 'Entre le bon code pour continuer.',
   solutionText: '1234',
@@ -113,7 +174,7 @@ const makeEnigma = (overrides = {}) => ({
 });
 const makeScene = (overrides = {}) => ({
   id: uid(),
-  name: 'Nouvelle scene',
+  name: 'Nouvelle scène',
   actId: '',
   parentSceneId: '',
   backgroundId: '',
@@ -141,7 +202,7 @@ const makeScene = (overrides = {}) => ({
   ambientSoundData: '',
   ambientSoundName: '',
   ambientSoundLoop: false,
-  introText: 'Décris l’ambiance de cette scene.',
+  introText: 'Décris l’ambiance de cette scène.',
   hotspots: [makeHotspot()],
   sceneObjects: [],
   ...overrides,
@@ -179,6 +240,7 @@ const makeRouteMap = () => ({
   cells: [],
   rooms: [],
   connections: [],
+  canvases: [{ id: 'route_canvas_1', name: 'Canvas 1' }],
   actMaps: {},
   notes: '',
 });
@@ -213,8 +275,9 @@ const normalizeRouteMapShape = (rawRouteMap = makeRouteMap()) => {
       }),
     rooms: (Array.isArray(rawRouteMap.rooms) ? rawRouteMap.rooms : []).map((room, index) => ({
       id: room?.id || uid(),
-      name: room?.name || `Piece ${index + 1}`,
+      name: room?.name || `Pièce ${index + 1}`,
       sceneId: room?.sceneId || '',
+      canvasId: room?.canvasId || `route_canvas_${Math.floor(index / 15) + 1}`,
       x: Number.isFinite(Number(room?.x)) ? Math.max(4, Math.min(96, Number(room.x))) : Math.min(84, 16 + index * 10),
       y: Number.isFinite(Number(room?.y)) ? Math.max(6, Math.min(94, Number(room.y))) : Math.min(82, 18 + index * 8),
       type: ['start', 'end', 'room'].includes(room?.type) ? room.type : 'room',
@@ -228,6 +291,12 @@ const normalizeRouteMapShape = (rawRouteMap = makeRouteMap()) => {
       locked: Boolean(connection?.locked),
       allowOneWay: Boolean(connection?.allowOneWay),
     })),
+    canvases: Array.isArray(rawRouteMap.canvases) && rawRouteMap.canvases.length
+      ? rawRouteMap.canvases.map((canvas, index) => ({
+        id: canvas?.id || `route_canvas_${index + 1}`,
+        name: canvas?.name || `Canvas ${index + 1}`,
+      }))
+      : [{ id: 'route_canvas_1', name: 'Canvas 1' }],
   };
 };
 
@@ -264,6 +333,129 @@ const makeImportedHotspot = ({
   lockedMessage,
 });
 
+const normalizeAdvancedCondition = (condition = {}) => ({
+  id: condition.id || uid(),
+  type: normalizeAllowedValue(condition.type, ADVANCED_CONDITION_VALUES, 'has_item'),
+  itemId: condition.itemId || '',
+  sceneId: condition.sceneId || '',
+  hotspotId: condition.hotspotId || '',
+  enigmaId: condition.enigmaId || '',
+  replyId: condition.replyId || '',
+  variableKey: condition.variableKey || '',
+  operator: ['equals', 'not_equals', 'greater_or_equal', 'less_or_equal', 'truthy', 'falsy'].includes(condition.operator) ? condition.operator : 'equals',
+  value: condition.value ?? '',
+});
+
+const normalizeBranchTags = (tags = []) => (
+  Array.isArray(tags)
+    ? tags.map((tag) => String(tag || '').trim()).filter(Boolean)
+    : String(tags || '').split(',').map((tag) => tag.trim()).filter(Boolean)
+);
+
+const normalizeConversationEffect = (effect = {}) => ({
+  id: effect.id || uid(),
+  type: normalizeAllowedValue(effect.type, CONVERSATION_EFFECT_VALUES, 'message'),
+  message: effect.message || '',
+  itemId: effect.itemId || '',
+  variableKey: effect.variableKey || '',
+  value: effect.value ?? '',
+  journalTitle: effect.journalTitle || '',
+  journalDetail: effect.journalDetail || '',
+  nextNodeId: effect.nextNodeId || '',
+  targetSceneId: effect.targetSceneId || '',
+  targetCinematicId: effect.targetCinematicId || '',
+  enigmaId: effect.enigmaId || '',
+  endingType: ['good', 'bad', 'secret', 'neutral'].includes(effect.endingType) ? effect.endingType : 'neutral',
+  endingTitle: effect.endingTitle || '',
+  endingSummary: effect.endingSummary || '',
+});
+
+const normalizeConversationReply = (reply = {}) => ({
+  id: reply.id || uid(),
+  label: reply.label || 'Réponse',
+  hideAfterChosen: Boolean(reply.hideAfterChosen),
+  hideReplyIdsAfterChosen: Array.isArray(reply.hideReplyIdsAfterChosen)
+    ? reply.hideReplyIdsAfterChosen.filter(Boolean)
+    : [],
+  branchTags: normalizeBranchTags(reply.branchTags),
+  authorNote: reply.authorNote || '',
+  nextNodeId: reply.nextNodeId || '',
+  actionType: normalizeAllowedValue(reply.actionType, CONVERSATION_REPLY_ACTION_VALUES, 'node'),
+  dialogue: reply.dialogue || '',
+  responseImageData: reply.responseImageData || '',
+  responseImageName: reply.responseImageName || '',
+  responseSoundData: reply.responseSoundData || '',
+  responseSoundName: reply.responseSoundName || '',
+  npcPortraitData: reply.npcPortraitData || '',
+  npcPortraitName: reply.npcPortraitName || '',
+  ambienceSoundData: reply.ambienceSoundData || '',
+  ambienceSoundName: reply.ambienceSoundName || '',
+  showWhenLocked: Boolean(reply.showWhenLocked),
+  lockedLabel: reply.lockedLabel || '',
+  rewardItemId: reply.rewardItemId || '',
+  targetSceneId: reply.targetSceneId || '',
+  targetCinematicId: reply.targetCinematicId || '',
+  enigmaId: reply.enigmaId || '',
+  endingType: ['good', 'bad', 'secret', 'neutral'].includes(reply.endingType) ? reply.endingType : 'neutral',
+  endingTitle: reply.endingTitle || '',
+  endingSummary: reply.endingSummary || '',
+  conditionType: normalizeAllowedValue(reply.conditionType, CONVERSATION_CONDITION_VALUES, 'none'),
+  conditionItemId: reply.conditionItemId || '',
+  conditionSceneId: reply.conditionSceneId || '',
+  conditionHotspotId: reply.conditionHotspotId || '',
+  conditionEnigmaId: reply.conditionEnigmaId || '',
+  conditionReplyId: reply.conditionReplyId || '',
+  conditionVariableKey: reply.conditionVariableKey || '',
+  conditionVariableOperator: ['equals', 'not_equals', 'greater_or_equal', 'less_or_equal', 'truthy', 'falsy'].includes(reply.conditionVariableOperator) ? reply.conditionVariableOperator : 'equals',
+  conditionVariableValue: reply.conditionVariableValue ?? '',
+  advancedConditionMode: ['all', 'any'].includes(reply.advancedConditionMode) ? reply.advancedConditionMode : 'all',
+  advancedConditions: Array.isArray(reply.advancedConditions) ? reply.advancedConditions.map(normalizeAdvancedCondition) : [],
+  storyVariableKey: reply.storyVariableKey || '',
+  storyVariableOperation: ['none', 'set', 'increment', 'decrement'].includes(reply.storyVariableOperation) ? reply.storyVariableOperation : 'none',
+  storyVariableValue: reply.storyVariableValue ?? '',
+  effects: Array.isArray(reply.effects) ? reply.effects.map(normalizeConversationEffect) : [],
+});
+
+const normalizeConversation = (conversation = {}) => {
+  const rawNodes = Array.isArray(conversation.nodes) && conversation.nodes.length
+    ? conversation.nodes
+    : [{
+      id: 'start',
+      speaker: 'PNJ',
+      text: 'Bonjour. Que veux-tu savoir ?',
+      replies: [{ label: 'Au revoir.', actionType: 'end', dialogue: 'La conversation se termine.' }],
+    }];
+const nodes = rawNodes.map((node, index) => ({
+  id: node.id || (index === 0 ? 'start' : uid()),
+  speaker: node.speaker || '',
+  text: node.text || '',
+  askOnce: Boolean(node.askOnce),
+  authorNote: node.authorNote || '',
+  replies: (Array.isArray(node.replies) ? node.replies : []).map(normalizeConversationReply),
+}));
+  return {
+    startNodeId: conversation.startNodeId || nodes[0]?.id || 'start',
+    nodes,
+  };
+};
+
+const normalizeLogicRule = (rule = {}) => ({
+  ...makeLogicRule(),
+  ...rule,
+  conditionType: normalizeAllowedValue(rule.conditionType, LOGIC_RULE_CONDITION_VALUES, 'always'),
+  actionType: normalizeAllowedValue(rule.actionType, LOGIC_RULE_ACTION_VALUES, 'dialogue'),
+  blockActionType: normalizeAllowedValue(rule.blockActionType, BLOCK_ACTION_VALUES, 'show'),
+});
+
+const normalizeHotspot = (spot = {}) => ({
+  ...makeHotspot(),
+  ...spot,
+  actionType: normalizeAllowedValue(spot.actionType, HOTSPOT_ACTION_VALUES, 'dialogue'),
+  secondActionType: normalizeAllowedValue(spot.secondActionType, HOTSPOT_ACTION_VALUES, 'dialogue'),
+  conversation: normalizeConversation(spot.conversation),
+  logicRules: Array.isArray(spot.logicRules) ? spot.logicRules.map(normalizeLogicRule) : [],
+});
+
 const makeImportedScene = ({ id, name, actId, introText, hotspots, visualEffect = 'none' }) => ({
   ...makeScene({ actId, hotspots }),
   id,
@@ -286,17 +478,17 @@ const ensureSewerAct2 = (draft) => {
 
   const act2Id = 'act2_egouts_sous_sols';
   const watchId = 'bfh2n8m8';
-  const rustKeyId = 'act2_clé_rouillée';
+  const rustKeyId = 'act2_cle_rouillee';
   const mapId = 'act2_plan_egouts';
   const valveId = 'act2_manivelle';
   const redBadgeId = 'act2_badge_rouge';
   const ratCinematicId = 'act2_cine_rat_temps';
   const finalCinematicId = 'act2_cine_porte_rouge';
 
-  draft.acts.push({ id: act2Id, name: 'Acte II - Les egouts figes' });
+  draft.acts.push({ id: act2Id, name: 'Acte II - Les égouts figés' });
 
   [
-    makeItem('clé rouillée des egouts', '[]'),
+    makeItem('clé rouillée des égouts', '[]'),
     makeItem('plan humide des sous-sols', '[]'),
     makeItem('manivelle froide', '[]'),
     makeItem('badge de la porte rouge', '[]'),
@@ -312,7 +504,7 @@ const ensureSewerAct2 = (draft) => {
     act2Entry.targetActId = act2Id;
     act2Entry.targetSceneId = '';
     if (act2Entry.slides?.[0]) {
-      act2Entry.slides[0].narration = "La torche traversé l'endroit sombre de la cave. Le mur du fond n'est pas un mur: c'est une ouverture humide qui descend vers les egouts. Le silence est trop parfait. La montre arrêtée indique toujours 10h09.";
+      act2Entry.slides[0].narration = "La torche traverse l'endroit sombre de la cave. Le mur du fond n'est pas un mur: c'est une ouverture humide qui descend vers les égouts. Le silence est trop parfait. La montre arrêtée indique toujours 10h09.";
     }
   }
 
@@ -323,18 +515,18 @@ const ensureSewerAct2 = (draft) => {
     slides: [{
       ...makeCinematicSlide(),
       id: `${ratCinematicId}_slide_01`,
-      narration: "Elle s'approche d'un rat fige au milieu d'une flaque noire. Pendant une seconde, rien ne bouge. Puis ses moustaches fremissent, ses pattes grattent le beton, et il detale dans un tuyau comme si le temps venait de reprendre son cours autour d'elle.",
+      narration: "Elle s'approche d'un rat figé au milieu d'une flaque noire. Pendant une seconde, rien ne bouge. Puis ses moustaches frémissent, ses pattes grattent le béton, et il détale dans un tuyau comme si le temps venait de reprendre son cours autour d'elle.",
     }],
     onEndType: 'scene',
     targetSceneId: 'act2_scene_bouche_egout',
   }, {
     ...makeCinematic(),
     id: finalCinematicId,
-    name: 'La porte rouge metallique',
+    name: 'La porte rouge métallique',
     slides: [{
       ...makeCinematicSlide(),
       id: `${finalCinematicId}_slide_01`,
-      narration: "La porte rouge metallique s'ouvre dans un grincement lourd. Derriere, il n'y a ni cave ni maison: seulement un couloir impossible, baigne dans une lumière immobile. Elle franchit le seuil. A 10h09, quelque chose l'attend.",
+      narration: "La porte rouge métallique s'ouvre dans un grincement lourd. Derrière, il n'y a ni cave ni maison: seulement un couloir impossible, baigné dans une lumière immobile. Elle franchit le seuil. À 10h09, quelque chose l'attend.",
     }],
     onEndType: 'none',
   });
@@ -365,7 +557,7 @@ const ensureSewerAct2 = (draft) => {
     name: 'Verrou rouge',
     question: "Le verrou rouge exige l'heure morte, mais seulement si le badge est en place.",
     solutionText: '1009',
-    successMessage: 'Le verrou reconnait l heure. La porte rouge metallique peut être franchie.',
+    successMessage: 'Le verrou reconnaît l’heure. La porte rouge métallique peut être franchie.',
     failMessage: "Le rouge reste éteint. Sans le badge et l'heure, le passage refuse de s'ouvrir.",
     unlockType: 'cinematic',
     targetCinematicId: finalCinematicId,
@@ -388,7 +580,7 @@ const ensureSewerAct2 = (draft) => {
       id: 'act2_scene_collecteur',
       name: 'Collecteur principal',
       actId: act2Id,
-      introText: "Un long collecteur traversé les egouts. L'eau ne coule prèsque pas, puis repart par petites secousses quand elle avance.",
+      introText: "Un long collecteur traverse les égouts. L'eau ne coule presque pas, puis repart par petites secousses quand elle avance.",
       visualEffect: 'rain',
       hotspots: [
         makeImportedHotspot({ id: 'act2_h_retour_bouche', name: 'Retour vers la bouche', x: 10, y: 78, width: 14, height: 12, actionType: 'scene', dialogue: "Revenir près de l'ouverture de la cave.", targetSceneId: 'act2_scene_bouche_egout' }),
@@ -398,50 +590,50 @@ const ensureSewerAct2 = (draft) => {
     }),
     makeImportedScene({
       id: 'act2_scene_canal_est',
-      name: 'Canal est des egouts',
+      name: 'Canal est des égouts',
       actId: act2Id,
       introText: 'Le canal devient plus bas. Des marques rouges apparaissent sur les tuyaux, mais elles semblent peintes depuis des annees.',
       visualEffect: 'fog',
       hotspots: [
         makeImportedHotspot({ id: 'act2_h_collecteur', name: 'Retour collecteur', x: 8, y: 78, width: 14, height: 12, actionType: 'scene', dialogue: 'Retourner au collecteur.', targetSceneId: 'act2_scene_collecteur' }),
-        makeImportedHotspot({ id: 'act2_h_vannes', name: 'Salle des vannes', x: 78, y: 48, width: 15, height: 18, actionType: 'scene', dialogue: 'Une salle de vannes coupe le passage.', targetSceneId: 'act2_scene_vannes', requiredItemId: mapId, lockedMessage: 'Sans plan, elle risque de tourner en rond dans les conduites.' }),
+        makeImportedHotspot({ id: 'act2_h_vannes', name: 'Salle dés vannes', x: 78, y: 48, width: 15, height: 18, actionType: 'scene', dialogue: 'Une salle dé vannes coupe le passage.', targetSceneId: 'act2_scene_vannes', requiredItemId: mapId, lockedMessage: 'Sans plan, elle risque de tourner en rond dans les conduites.' }),
         makeImportedHotspot({ id: 'act2_h_ombre', name: "Ombre dans l'eau", x: 46, y: 65, width: 18, height: 10, dialogue: "L'ombre file a contre-courant. Le rat a ouvert quelque chose plus loin." }),
       ],
     }),
     makeImportedScene({
       id: 'act2_scene_vannes',
-      name: 'Salle des vannes',
+      name: 'Salle dés vannes',
       actId: act2Id,
       introText: "Quatre volants de metal bloquént la pression. Un tic-tac se fait entendre, mais aucune horloge ne bouge.",
       visualEffect: 'smoke',
       hotspots: [
         makeImportedHotspot({ id: 'act2_h_canal_retour', name: 'Retour canal est', x: 8, y: 78, width: 14, height: 12, actionType: 'scene', dialogue: 'Revenir au canal est.', targetSceneId: 'act2_scene_canal_est' }),
         makeImportedHotspot({ id: 'act2_h_manivelle', name: 'Manivelle tombee', x: 38, y: 64, width: 12, height: 10, actionType: 'dialogue_item', dialogue: 'Une manivelle froide roule sous la grille.', rewardItemId: valveId }),
-        makeImportedHotspot({ id: 'act2_h_pression', name: 'Panneau de pression', x: 58, y: 42, width: 20, height: 16, dialogue: "Les vannes doivent suivre l'ordre du plan humide.", enigmaId: 'act2_enig_pression', requiredItemId: valveId, lockedMessage: 'Il manque une manivelle pour regler les vannes.' }),
+        makeImportedHotspot({ id: 'act2_h_pression', name: 'Panneau dé pression', x: 58, y: 42, width: 20, height: 16, dialogue: "Les vannes doivent suivre l'ordre du plan humide.", enigmaId: 'act2_enig_pression', requiredItemId: valveId, lockedMessage: 'Il manque une manivelle pour régler les vannes.' }),
       ],
     }),
     makeImportedScene({
       id: 'act2_scene_sous_sol_technique',
       name: 'Sous-sol technique',
       actId: act2Id,
-      introText: 'Les egouts debouchent sous la maison. Ici, les murs sont en beton, les portes en acier, et chaque lampe tremble a 10h09.',
+      introText: 'Les égouts débouchent sous la maison. Ici, les murs sont en béton, les portes en acier, et chaque lampe tremble à 10h09.',
       visualEffect: 'glow',
       hotspots: [
-        makeImportedHotspot({ id: 'act2_h_vannes_retour', name: 'Retour salle des vannes', x: 8, y: 78, width: 14, height: 12, actionType: 'scene', dialogue: 'Retourner vers les vannes.', targetSceneId: 'act2_scene_vannes' }),
-        makeImportedHotspot({ id: 'act2_h_local', name: 'Local electrique', x: 46, y: 50, width: 16, height: 18, actionType: 'scene', dialogue: 'Un local electrique bourdonné derriere une porte basse.', targetSceneId: 'act2_scene_local_electrique' }),
+        makeImportedHotspot({ id: 'act2_h_vannes_retour', name: 'Retour salle dés vannes', x: 8, y: 78, width: 14, height: 12, actionType: 'scene', dialogue: 'Retourner vers les vannes.', targetSceneId: 'act2_scene_vannes' }),
+        makeImportedHotspot({ id: 'act2_h_local', name: 'Local électrique', x: 46, y: 50, width: 16, height: 18, actionType: 'scene', dialogue: 'Un local électrique bourdonne derrière une porte basse.', targetSceneId: 'act2_scene_local_electrique' }),
         makeImportedHotspot({ id: 'act2_h_couloir_rouge', name: 'Couloir rouge', x: 82, y: 48, width: 14, height: 18, actionType: 'scene', dialogue: "Un couloir peint de traces rouges s'enfonce plus bas.", targetSceneId: 'act2_scene_couloir_rouge' }),
       ],
     }),
     makeImportedScene({
       id: 'act2_scene_local_electrique',
-      name: 'Local electrique',
+      name: 'Local électrique',
       actId: act2Id,
-      introText: "Les fusibles sont intacts, mais un voyant rouge pulse comme un coeur. Quelqu'un alimente encore la porte finale.",
+      introText: "Les fusibles sont intacts, mais un voyant rouge pulse comme un cœur. Quelqu'un alimente encore la porte finale.",
       visualEffect: 'glow',
       hotspots: [
         makeImportedHotspot({ id: 'act2_h_retour_soussol', name: 'Retour sous-sol', x: 8, y: 78, width: 14, height: 12, actionType: 'scene', dialogue: 'Revenir au sous-sol technique.', targetSceneId: 'act2_scene_sous_sol_technique' }),
-        makeImportedHotspot({ id: 'act2_h_badge_rouge', name: 'Boitier rouge', x: 54, y: 45, width: 16, height: 16, actionType: 'dialogue_item', dialogue: "Le boitier s'ouvre avec la clé rouillée. A l'interieur: un badge rouge metallique.", requiredItemId: rustKeyId, rewardItemId: redBadgeId, lockedMessage: 'Le boitier est ferme par une serrure rouillée.' }),
-        makeImportedHotspot({ id: 'act2_h_note', name: 'Etiquette de maintenance', x: 68, y: 62, width: 14, height: 10, dialogue: "L'etiquette indique: alimentation maintenue tant que l'heure reste 10h09." }),
+        makeImportedHotspot({ id: 'act2_h_badge_rouge', name: 'Boîtier rouge', x: 54, y: 45, width: 16, height: 16, actionType: 'dialogue_item', dialogue: "Le boîtier s'ouvre avec la clé rouillée. À l'intérieur: un badge rouge métallique.", requiredItemId: rustKeyId, rewardItemId: redBadgeId, lockedMessage: 'Le boîtier est fermé par une serrure rouillée.' }),
+        makeImportedHotspot({ id: 'act2_h_note', name: 'Étiquette de maintenance', x: 68, y: 62, width: 14, height: 10, dialogue: "L'étiquette indique: alimentation maintenue tant que l'heure reste 10h09." }),
       ],
     }),
     makeImportedScene({
@@ -452,15 +644,15 @@ const ensureSewerAct2 = (draft) => {
       visualEffect: 'vignette',
       hotspots: [
         makeImportedHotspot({ id: 'act2_h_retour_soussol2', name: 'Retour sous-sol', x: 8, y: 78, width: 14, height: 12, actionType: 'scene', dialogue: 'Revenir au sous-sol technique.', targetSceneId: 'act2_scene_sous_sol_technique' }),
-        makeImportedHotspot({ id: 'act2_h_porte_finale', name: 'Porte rouge metallique', x: 78, y: 38, width: 18, height: 34, actionType: 'scene', dialogue: 'La porte rouge attend au bout du couloir.', targetSceneId: 'act2_scene_porte_rouge', requiredItemId: redBadgeId, lockedMessage: 'Le lecteur de la porte reste noir. Il faut le badge rouge.' }),
+        makeImportedHotspot({ id: 'act2_h_porte_finale', name: 'Porte rouge métallique', x: 78, y: 38, width: 18, height: 34, actionType: 'scene', dialogue: 'La porte rouge attend au bout du couloir.', targetSceneId: 'act2_scene_porte_rouge', requiredItemId: redBadgeId, lockedMessage: 'Le lecteur de la porte reste noir. Il faut le badge rouge.' }),
         makeImportedHotspot({ id: 'act2_h_rat_trace', name: 'Trace du rat', x: 36, y: 66, width: 14, height: 10, dialogue: "Les petites pattes s'arrétént net devant la porte rouge, puis reprennent de l'autre côté." }),
       ],
     }),
     makeImportedScene({
       id: 'act2_scene_porte_rouge',
-      name: 'Porte rouge metallique',
+      name: 'Porte rouge métallique',
       actId: act2Id,
-      introText: 'La porte rouge metallique ferme tout le sous-sol. Elle est chaude au toucher. La montre arrêtée vibre enfin dans sa poche.',
+      introText: 'La porte rouge métallique ferme tout le sous-sol. Elle est chaude au toucher. La montre arrêtée vibre enfin dans sa poche.',
       visualEffect: 'glow',
       hotspots: [
         makeImportedHotspot({ id: 'act2_h_retour_couloir', name: 'Retour couloir', x: 8, y: 78, width: 14, height: 12, actionType: 'scene', dialogue: 'Revenir dans le couloir rouge.', targetSceneId: 'act2_scene_couloir_rouge' }),
@@ -472,12 +664,12 @@ const ensureSewerAct2 = (draft) => {
   draft.routeMap.rooms.push(
     { id: 'room_act2_scene_bouche_egout', name: "Bouche d'egout sous la cave", sceneId: 'act2_scene_bouche_egout', x: 58, y: 28, type: 'room' },
     { id: 'room_act2_scene_collecteur', name: 'Collecteur principal', sceneId: 'act2_scene_collecteur', x: 70, y: 28, type: 'room' },
-    { id: 'room_act2_scene_canal_est', name: 'Canal est des egouts', sceneId: 'act2_scene_canal_est', x: 82, y: 28, type: 'room' },
-    { id: 'room_act2_scene_vannes', name: 'Salle des vannes', sceneId: 'act2_scene_vannes', x: 82, y: 46, type: 'room' },
+    { id: 'room_act2_scene_canal_est', name: 'Canal est des égouts', sceneId: 'act2_scene_canal_est', x: 82, y: 28, type: 'room' },
+    { id: 'room_act2_scene_vannes', name: 'Salle dés vannes', sceneId: 'act2_scene_vannes', x: 82, y: 46, type: 'room' },
     { id: 'room_act2_scene_sous_sol_technique', name: 'Sous-sol technique', sceneId: 'act2_scene_sous_sol_technique', x: 70, y: 58, type: 'room' },
-    { id: 'room_act2_scene_local_electrique', name: 'Local electrique', sceneId: 'act2_scene_local_electrique', x: 56, y: 58, type: 'room' },
+    { id: 'room_act2_scene_local_electrique', name: 'Local électrique', sceneId: 'act2_scene_local_electrique', x: 56, y: 58, type: 'room' },
     { id: 'room_act2_scene_couloir_rouge', name: 'Couloir des sous-sols', sceneId: 'act2_scene_couloir_rouge', x: 82, y: 66, type: 'room' },
-    { id: 'room_act2_scene_porte_rouge', name: 'Porte rouge metallique', sceneId: 'act2_scene_porte_rouge', x: 92, y: 82, type: 'end' },
+    { id: 'room_act2_scene_porte_rouge', name: 'Porte rouge métallique', sceneId: 'act2_scene_porte_rouge', x: 92, y: 82, type: 'end' },
   );
   draft.routeMap.connections.push(
     { id: 'connection_act2_01', fromRoomId: 'room_kuvbonw8', toRoomId: 'room_act2_scene_bouche_egout', label: 'Endroit sombre: passage acte II', locked: false, allowOneWay: true },
@@ -489,13 +681,40 @@ const ensureSewerAct2 = (draft) => {
     { id: 'connection_act2_07', fromRoomId: 'room_act2_scene_sous_sol_technique', toRoomId: 'room_act2_scene_couloir_rouge', label: '', locked: false, allowOneWay: false },
     { id: 'connection_act2_08', fromRoomId: 'room_act2_scene_couloir_rouge', toRoomId: 'room_act2_scene_porte_rouge', label: '', locked: false, allowOneWay: false },
   );
-  draft.routeMap.notes = `${draft.routeMap.notes || ''}\nActe II: commence après l'endroit sombre de la cave, descend dans les egouts puis les sous-sols, et se terminé en franchissant la porte rouge metallique. Temps bloqué: 10h09. Rat fige: reprise temporaire du temps.`.trim();
+  draft.routeMap.notes = `${draft.routeMap.notes || ''}\nActe II: commence après l'endroit sombre de la cave, descend dans les égouts puis les sous-sols, et se termine en franchissant la porte rouge métallique. Temps bloqué: 10h09. Rat figé: reprise temporaire du temps.`.trim();
 };
 
 const normalizeProject = (rawProject) => {
   const draft = structuredClone(rawProject || {});
   if (!Array.isArray(draft.items)) draft.items = [];
   if (!Array.isArray(draft.combinations)) draft.combinations = [];
+  if (!Array.isArray(draft.storyVariables)) draft.storyVariables = [];
+  const seenStoryVariableKeys = new Set();
+  draft.storyVariables = draft.storyVariables
+    .map((variable) => {
+      const type = ['number', 'boolean', 'text'].includes(variable?.type) ? variable.type : 'boolean';
+      const rawDefaultValue = variable?.defaultValue ?? '';
+      const defaultValue = type === 'number'
+        ? (Number.isFinite(Number(rawDefaultValue)) ? Number(rawDefaultValue) : 0)
+        : type === 'boolean'
+          ? (rawDefaultValue === true || rawDefaultValue === 'true')
+          : String(rawDefaultValue ?? '');
+      return {
+        id: variable?.id || uid(),
+        key: String(variable?.key || '').trim(),
+        type,
+        defaultValue,
+        description: variable?.description || '',
+        journalLabel: variable?.journalLabel || '',
+        journalVisible: variable?.journalVisible !== false,
+      };
+    })
+    .filter((variable) => {
+      if (!variable.key) return true;
+      if (seenStoryVariableKeys.has(variable.key)) return false;
+      seenStoryVariableKeys.add(variable.key);
+      return true;
+    });
   draft.combinations = draft.combinations.map((combo) => ({
     ...combo,
     consume: combo.consume ?? true,
@@ -511,12 +730,13 @@ const normalizeProject = (rawProject) => {
   }
   const fallbackActId = draft.acts[0]?.id || '';
   if (!draft.start || typeof draft.start !== 'object') draft.start = { type: 'scene', targetSceneId: '', targetCinematicId: '' };
+  const startType = normalizeLegacyTechnicalValue(draft.start.type);
   draft.start = {
-    type: draft.start.type === 'cinematic' ? 'cinematic' : 'scene',
+    type: startType === 'cinematic' ? 'cinematic' : 'scene',
     targetSceneId: draft.start.targetSceneId || '',
     targetCinematicId: draft.start.targetCinematicId || '',
   };
-  draft.creationMode = ['beginner', 'intermediate', 'expert'].includes(draft.creationMode) ? draft.creationMode : 'beginner';
+  draft.creationMode = ['beginner', 'intermediate', 'expert', 'adventure', 'hero_adventure'].includes(draft.creationMode) ? draft.creationMode : 'beginner';
   draft.anime2dDraft = draft.anime2dDraft && typeof draft.anime2dDraft === 'object' ? draft.anime2dDraft : null;
   const rawRouteMap = draft.routeMap && typeof draft.routeMap === 'object' ? draft.routeMap : makeRouteMap();
   const routeRows = Number.isFinite(Number(rawRouteMap.rows)) ? Math.max(8, Math.min(32, Number(rawRouteMap.rows))) : 16;
@@ -536,8 +756,9 @@ const normalizeProject = (rawProject) => {
       }),
     rooms: (Array.isArray(rawRouteMap.rooms) ? rawRouteMap.rooms : []).map((room, index) => ({
       id: room?.id || uid(),
-      name: room?.name || `Piece ${index + 1}`,
+      name: room?.name || `Pièce ${index + 1}`,
       sceneId: room?.sceneId || '',
+      canvasId: room?.canvasId || `route_canvas_${Math.floor(index / 15) + 1}`,
       x: Number.isFinite(Number(room?.x)) ? Math.max(4, Math.min(96, Number(room.x))) : Math.min(84, 16 + index * 10),
       y: Number.isFinite(Number(room?.y)) ? Math.max(6, Math.min(94, Number(room.y))) : Math.min(82, 18 + index * 8),
       type: ['start', 'end', 'room'].includes(room?.type) ? room.type : 'room',
@@ -547,9 +768,16 @@ const normalizeProject = (rawProject) => {
       fromRoomId: connection?.fromRoomId || '',
       toRoomId: connection?.toRoomId || '',
       label: connection?.label || '',
+      condition: connection?.condition || '',
       locked: Boolean(connection?.locked),
       allowOneWay: Boolean(connection?.allowOneWay),
     })),
+    canvases: Array.isArray(rawRouteMap.canvases) && rawRouteMap.canvases.length
+      ? rawRouteMap.canvases.map((canvas, index) => ({
+        id: canvas?.id || `route_canvas_${index + 1}`,
+        name: canvas?.name || `Canvas ${index + 1}`,
+      }))
+      : [{ id: 'route_canvas_1', name: 'Canvas 1' }],
   };
   const rawActMaps = rawRouteMap.actMaps && typeof rawRouteMap.actMaps === 'object' ? rawRouteMap.actMaps : {};
   draft.routeMap.actMaps = Object.fromEntries(
@@ -565,7 +793,7 @@ const normalizeProject = (rawProject) => {
     backgroundName: scene.backgroundName || '',
     backgroundWidth: Math.max(0, Math.round(Number(scene.backgroundWidth) || 0)),
     backgroundHeight: Math.max(0, Math.round(Number(scene.backgroundHeight) || 0)),
-    visualEffect: ['none', ...VISUAL_EFFECT_VALUES].includes(scene.visualEffect) ? scene.visualEffect : 'none',
+    visualEffect: normalizeAllowedValue(scene.visualEffect, ['none', ...VISUAL_EFFECT_VALUES], 'none'),
     visualEffectIntensity: VISUAL_EFFECT_INTENSITY_VALUES.includes(scene.visualEffectIntensity) ? scene.visualEffectIntensity : 'normal',
     sceneTransition: SCENE_TRANSITION_VALUES.includes(scene.sceneTransition) ? scene.sceneTransition : 'none',
     sceneTransitionDuration: Number.isFinite(Number(scene.sceneTransitionDuration)) ?
@@ -575,7 +803,7 @@ const normalizeProject = (rawProject) => {
     timerSeconds: Number.isFinite(Number(scene.timerSeconds)) ?
        Math.max(5, Math.min(3600, Math.round(Number(scene.timerSeconds))))
       : 60,
-    timerEndAction: SCENE_TIMER_ACTION_VALUES.includes(scene.timerEndAction) ? scene.timerEndAction : 'none',
+    timerEndAction: normalizeAllowedValue(scene.timerEndAction, SCENE_TIMER_ACTION_VALUES, 'none'),
     timerTargetSceneId: scene.timerTargetSceneId || '',
     timerTargetCinematicId: scene.timerTargetCinematicId || '',
     timerLifeLoss: Number.isFinite(Number(scene.timerLifeLoss)) ?
@@ -594,7 +822,7 @@ const normalizeProject = (rawProject) => {
        scene.visualEffectZones.map((zone) => ({
         id: zone.id || uid(),
         name: zone.name || 'Zone visuelle',
-        effect: VISUAL_EFFECT_VALUES.includes(zone.effect) ? zone.effect : 'sparkles',
+        effect: normalizeAllowedValue(zone.effect, VISUAL_EFFECT_VALUES, 'sparkles'),
         intensity: VISUAL_EFFECT_INTENSITY_VALUES.includes(zone.intensity) ? zone.intensity : 'normal',
         x: Number.isFinite(Number(zone.x)) ? Number(zone.x) : 50,
         y: Number.isFinite(Number(zone.y)) ? Number(zone.y) : 50,
@@ -605,13 +833,7 @@ const normalizeProject = (rawProject) => {
       }))
       : [],
     hotspots: Array.isArray(scene.hotspots) && scene.hotspots.length ?
-       scene.hotspots.map((spot) => ({
-        ...makeHotspot(),
-        ...spot,
-        logicRules: Array.isArray(spot.logicRules) ?
-           spot.logicRules.map((rule) => ({ ...makeLogicRule(), ...rule }))
-          : [],
-      }))
+       scene.hotspots.map(normalizeHotspot)
       : [makeHotspot()],
     sceneObjects: Array.isArray(scene.sceneObjects) ?
        scene.sceneObjects.map((object) => ({
@@ -657,7 +879,7 @@ const normalizeProject = (rawProject) => {
         anime2dSpec: object.anime2dSpec && typeof object.anime2dSpec === 'object' ? object.anime2dSpec : null,
         anime2dName: object.anime2dName || '',
         logicRules: Array.isArray(object.logicRules) ?
-           object.logicRules.map((rule) => ({ ...makeLogicRule(), ...rule }))
+           object.logicRules.map(normalizeLogicRule)
           : [],
         zIndex: object.zIndex,
         shapeType: object.shapeType,
@@ -684,7 +906,7 @@ const normalizeProject = (rawProject) => {
       videoName: cinematic.videoName || '',
       videoAutoplay: cinematic.videoAutoplay !== false,
       videoControls: cinematic.videoControls !== false,
-      onEndType: ['none', 'act', 'scene', 'item'].includes(cinematic.onEndType) ? cinematic.onEndType : 'none',
+      onEndType: normalizeAllowedValue(cinematic.onEndType, CINEMATIC_END_VALUES, 'none'),
       targetActId: cinematic.targetActId || '',
       targetSceneId: cinematic.targetSceneId || '',
       rewardItemId: cinematic.rewardItemId || '',
@@ -708,6 +930,7 @@ const normalizeProject = (rawProject) => {
     miscMin: enigma.miscMin ?? '',
     miscMax: enigma.miscMax ?? '',
     miscTargetItemId: enigma.miscTargetItemId || '',
+    unlockType: normalizeAllowedValue(enigma.unlockType, ENIGMA_UNLOCK_VALUES, 'none'),
     popupBackgroundData: enigma.popupBackgroundData || '',
     popupBackgroundName: enigma.popupBackgroundName || '',
     popupBackgroundZoom: Number(enigma.popupBackgroundZoom) || 1,
@@ -737,7 +960,7 @@ const createInitialProject = () => {
 
   const sceneA = makeScene({ actId: act1.id });
   sceneA.name = 'Salon';
-  sceneA.introText = 'Tu entrès dans le salon. Explore la piece.';
+  sceneA.introText = 'Tu entrès dans le salon. Explore la pièce.';
 
   const sceneB = makeScene({ actId: act1.id, parentSceneId: sceneA.id });
   sceneB.name = 'Tiroir';
@@ -816,7 +1039,7 @@ const createInitialProject = () => {
   const cinematic = makeCinematic();
   cinematic.name = 'Introduction';
   hallwayColors.targetCinematicId = cinematic.id;
-  cinematic.slides[0].narration = 'Le silence pèse sur la piece. Quelqu’un est parti en vitesse.';
+  cinematic.slides[0].narration = 'Le silence pèse sur la pièce. Quelqu’un est parti en vitesse.';
   cinematic.onEndType = 'scene';
   cinematic.targetSceneId = sceneA.id;
 
@@ -846,6 +1069,7 @@ export {
   uid,
   makeItem,
   makeCombination,
+  makeStoryVariable,
   makeHotspot,
   makeLogicRule,
   makeAct,

@@ -21,7 +21,13 @@ import { getCinematicPlaybackModel } from '../lib/cinematicEngine';
 import { parseJsonValue } from '../lib/enigmaEngine';
 import { findAssetById, resolveAssetUrl } from '../lib/assetManager';
 import { getElementShapeStyle, getLayerZIndex } from './scenes/sceneEditorUtils';
-import { SceneObjectBlockContent, getSceneObjectBlockType, getSceneObjectClickMode } from './scenes/SceneObjectInspector.jsx';
+import {
+  applySceneObjectTextOverride,
+  SceneObjectBlockContent,
+  getSceneObjectBlockType,
+  getSceneObjectClickMode,
+} from './scenes/SceneObjectInspector.jsx';
+import { showPrompt } from './AccessibleDialog';
 import Anime2DPreview from './Anime2DPreview.jsx';
 import SceneVisualEffect, { getVisualEffectZoneZIndex } from './SceneVisualEffect';
 
@@ -168,12 +174,29 @@ export default function PreviewTab(props) {
     resetPreview,
     saveGameState,
     loadGameState,
+    restoreLastChoiceSnapshot,
     getSceneLabel,
     dialogue,
     inventory,
+    storyVariables = {},
+    adventureJournalEntries = [],
+    chosenConversationReplyIds = [],
+    hiddenConversationReplyIds = [],
+    completedHotspotIds = [],
     addInventoryItem,
     removeInventoryItem,
     playerLives = 3,
+    heroAdventure = { enabled: false },
+    heroState = null,
+    heroSetupComplete = true,
+    equippedHeroItemIds = [],
+    equippedHeroSlotMap = {},
+    lastChoiceSnapshot = null,
+    adjustHeroStat,
+    lastDiceRoll,
+    rollHeroDie,
+    rollHeroSetupSkills,
+    completeHeroSetup,
     sceneTimerResetKey = 0,
     setInventory,
     setSelectedInventoryIds,
@@ -185,11 +208,23 @@ export default function PreviewTab(props) {
     project,
     selectedInventoryIds,
     openInventoryItem,
+    equipHeroItem,
+    unequipHeroItem,
     setDraggedInventoryId,
     draggedInventoryId,
     combineInventoryItems,
     setDialogue,
     activeEnigma,
+    activeConversation,
+    activeEnding,
+    choiceEffectNotices = [],
+    closeConversation,
+    closeEnding,
+    clearChoiceEffectNotices,
+    isConversationReplyAvailable,
+    getConversationReplyLockReason,
+    chooseConversationReply,
+    heroCharacterPreviewRequestKey = 0,
     enigmaCodeInput,
     setEnigmaCodeInput,
     enigmaColorAttempt,
@@ -219,6 +254,8 @@ export default function PreviewTab(props) {
   const ambientAudioRef = useRef(null);
   const ambientAudioSourceRef = useRef('');
   const hotspotAudioRef = useRef(null);
+  const heroIntroAudioRef = useRef(null);
+  const heroIntroAudioSourceRef = useRef('');
   const playerShellRef = useRef(null);
   const controlsTimerRef = useRef(null);
   const previousSceneRef = useRef(playScene);
@@ -229,6 +266,7 @@ export default function PreviewTab(props) {
   const loadedActIdRef = useRef(playScene?.actId || '');
   const mediaPreloadRef = useRef({ images: [], audios: [] });
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
+  const [isHeroPanelOpen, setIsHeroPanelOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [loadedSceneAspectRatio, setLoadedSceneAspectRatio] = useState(0);
   const [areControlsVisible, setAreControlsVisible] = useState(true);
@@ -239,6 +277,21 @@ export default function PreviewTab(props) {
   const [sceneTimerRemaining, setSceneTimerRemaining] = useState(0);
   const [actPreloadStatus, setActPreloadStatus] = useState({ isLoading: false, progress: 100, label: '' });
   const [debugInventoryItemId, setDebugInventoryItemId] = useState(project.items?.[0]?.id || '');
+  const [isHeroSetupRolling, setIsHeroSetupRolling] = useState(false);
+  const [heroSetupRollingIndex, setHeroSetupRollingIndex] = useState(-1);
+  const [heroSetupDiceFaces, setHeroSetupDiceFaces] = useState([]);
+  const [heroSetupFinalRolls, setHeroSetupFinalRolls] = useState([]);
+  const [heroSetupResultsRevealed, setHeroSetupResultsRevealed] = useState(false);
+  const [heroPanelRollingSkillId, setHeroPanelRollingSkillId] = useState(null);
+  const [heroPanelDieFace, setHeroPanelDieFace] = useState(1);
+  const [heroRewardNotice, setHeroRewardNotice] = useState(null);
+  const heroSetupRollTimerRef = useRef(null);
+  const heroSetupRollIntervalRef = useRef(null);
+  const heroSetupDiceFacesRef = useRef([]);
+  const heroPanelRollIntervalRef = useRef(null);
+  const heroPanelDieFaceRef = useRef(1);
+  const heroRewardNoticeTimerRef = useRef(null);
+  const draggedInventoryIdRef = useRef(null);
   const sceneAspectRatio = Number(loadedSceneAspectRatio || playScene?.backgroundAspectRatio) > 0 ?
      Number(loadedSceneAspectRatio || playScene.backgroundAspectRatio)
     : 1.6;
@@ -250,6 +303,57 @@ export default function PreviewTab(props) {
   const playSceneMusicUrl = getSceneMusicUrl(project, playScene);
   const playSceneAmbientSoundUrl = getSceneAmbientSoundUrl(project, playScene);
   const transitionPreviousBackgroundUrl = getSceneBackgroundUrl(project, sceneTransitionOverlay?.previousScene);
+  const isHeroAdventure = Boolean(heroAdventure?.enabled && heroState);
+  const isChoiceAdventure = !isHeroAdventure && ['adventure', 'adventure_choices'].includes(project?.creationMode);
+  const usesImmersiveAdventurePlayer = isHeroAdventure || isChoiceAdventure;
+  const isHeroSetupOpen = Boolean(isHeroAdventure && !heroSetupComplete);
+  const isHeroDefeated = Boolean(isHeroAdventure && Number(heroState?.health || 0) <= 0);
+  const isCustomHeroDefeatScene = Boolean(isHeroDefeated && heroAdventure?.hero.defeatSceneId && playScene?.id === heroAdventure.hero.defeatSceneId);
+  const heroDiceSkin = heroAdventure?.dice?.skin || 'classic';
+  const heroSetupBackgroundImageData = heroAdventure?.hero.setupBackgroundImageData || heroState?.setupBackgroundImageData || '';
+  const heroSetupMusicData = heroAdventure?.hero.setupMusicData || heroState?.setupMusicData || '';
+  const currentGameTitle = String(project?.title || 'Escape game').trim() || 'Escape game';
+  const playerButtonStyle = ['modern', 'parchment', 'arcane', 'stone', 'neon', 'blood'].includes(project?.ui?.buttonStyle)
+    ? project.ui.buttonStyle
+    : 'modern';
+  const playerButtonFont = ['system', 'serif', 'story', 'fantasy', 'medieval', 'gothic', 'mono'].includes(project?.ui?.buttonFont)
+    ? project.ui.buttonFont
+    : 'system';
+  const playerNarrationFont = ['system', 'serif', 'story', 'fantasy', 'medieval', 'gothic', 'mono'].includes(project?.ui?.narrationFont)
+    ? project.ui.narrationFont
+    : 'system';
+  const playerNarrationBackground = project?.ui?.narrationBackground || 'rgba(2, 6, 23, .62)';
+
+  useEffect(() => {
+    if (!isHeroAdventure || !heroCharacterPreviewRequestKey) return;
+    setIsInventoryOpen(true);
+    setIsHeroPanelOpen(false);
+  }, [heroCharacterPreviewRequestKey, isHeroAdventure]);
+
+  useEffect(() => {
+    if (!isHeroAdventure) setIsHeroPanelOpen(false);
+  }, [isHeroAdventure]);
+
+  useEffect(() => () => {
+    if (heroSetupRollTimerRef.current) window.clearTimeout(heroSetupRollTimerRef.current);
+    if (heroSetupRollIntervalRef.current) window.clearInterval(heroSetupRollIntervalRef.current);
+    if (heroPanelRollIntervalRef.current) window.clearInterval(heroPanelRollIntervalRef.current);
+    if (heroRewardNoticeTimerRef.current) window.clearTimeout(heroRewardNoticeTimerRef.current);
+  }, []);
+
+  useEffect(() => {
+    draggedInventoryIdRef.current = draggedInventoryId || null;
+  }, [draggedInventoryId]);
+
+  useEffect(() => {
+    if (!isHeroSetupOpen) return;
+    setHeroSetupResultsRevealed(false);
+    setHeroSetupFinalRolls([]);
+    setHeroSetupDiceFaces([]);
+    heroSetupDiceFacesRef.current = [];
+    setHeroSetupRollingIndex(-1);
+    setIsHeroSetupRolling(false);
+  }, [isHeroSetupOpen]);
 
   useEffect(() => {
     onSceneTimerEndRef.current = onSceneTimerEnd;
@@ -454,6 +558,16 @@ export default function PreviewTab(props) {
     const nextMusicKey = getSceneMusicKey(playScene) || playSceneMusicUrl;
     const nextAmbientKey = getSceneAmbientSoundKey(playScene) || playSceneAmbientSoundUrl;
 
+    if (isHeroSetupOpen) {
+      if (sceneAudioRef.current) {
+        sceneAudioRef.current.pause();
+        sceneAudioRef.current.currentTime = 0;
+        sceneAudioRef.current = null;
+      }
+      sceneAudioSourceRef.current = '';
+      return undefined;
+    }
+
     if (actPreloadStatus.isLoading) {
       const isSameTrack = Boolean(
         sceneAudioRef.current
@@ -518,10 +632,20 @@ export default function PreviewTab(props) {
     sceneAudioSourceRef.current = nextMusicKey;
 
     return undefined;
-  }, [playSceneMusicUrl, playScene?.musicLoop, playScene?.musicVolume, actPreloadStatus.isLoading]);
+  }, [playSceneMusicUrl, playScene?.musicLoop, playScene?.musicVolume, actPreloadStatus.isLoading, isHeroSetupOpen]);
 
   useEffect(() => {
     const nextAmbientKey = getSceneAmbientSoundKey(playScene) || playSceneAmbientSoundUrl;
+
+    if (isHeroSetupOpen) {
+      if (ambientAudioRef.current) {
+        ambientAudioRef.current.pause();
+        ambientAudioRef.current.currentTime = 0;
+        ambientAudioRef.current = null;
+      }
+      ambientAudioSourceRef.current = '';
+      return undefined;
+    }
 
     if (actPreloadStatus.isLoading) return undefined;
 
@@ -562,7 +686,43 @@ export default function PreviewTab(props) {
     ambientAudioSourceRef.current = nextAmbientKey;
 
     return undefined;
-  }, [playSceneAmbientSoundUrl, playScene?.ambientSoundLoop, playScene?.ambientSoundVolume, actPreloadStatus.isLoading]);
+  }, [playSceneAmbientSoundUrl, playScene?.ambientSoundLoop, playScene?.ambientSoundVolume, actPreloadStatus.isLoading, isHeroSetupOpen]);
+
+  useEffect(() => {
+    if (!isHeroSetupOpen || !heroSetupMusicData) {
+      if (heroIntroAudioRef.current) {
+        heroIntroAudioRef.current.pause();
+        heroIntroAudioRef.current.currentTime = 0;
+        heroIntroAudioRef.current = null;
+      }
+      heroIntroAudioSourceRef.current = '';
+      return undefined;
+    }
+
+    if (heroIntroAudioRef.current && heroIntroAudioSourceRef.current === heroSetupMusicData) {
+      heroIntroAudioRef.current.loop = true;
+      heroIntroAudioRef.current.volume = 0.55;
+      heroIntroAudioRef.current.play().catch(() => {});
+      return undefined;
+    }
+
+    if (heroIntroAudioRef.current) {
+      heroIntroAudioRef.current.pause();
+      heroIntroAudioRef.current.currentTime = 0;
+      heroIntroAudioRef.current = null;
+    }
+
+    const audio = new Audio();
+    audio.preload = 'auto';
+    audio.src = heroSetupMusicData;
+    audio.loop = true;
+    audio.volume = 0.55;
+    audio.play().catch(() => {});
+    heroIntroAudioRef.current = audio;
+    heroIntroAudioSourceRef.current = heroSetupMusicData;
+
+    return undefined;
+  }, [isHeroSetupOpen, heroSetupMusicData]);
 
   useEffect(() => () => {
     if (transitionTimerRef.current) {
@@ -589,6 +749,12 @@ export default function PreviewTab(props) {
       ambientAudioRef.current.currentTime = 0;
       ambientAudioRef.current = null;
       ambientAudioSourceRef.current = '';
+    }
+    if (heroIntroAudioRef.current) {
+      heroIntroAudioRef.current.pause();
+      heroIntroAudioRef.current.currentTime = 0;
+      heroIntroAudioRef.current = null;
+      heroIntroAudioSourceRef.current = '';
     }
   }, []);
 
@@ -686,7 +852,7 @@ export default function PreviewTab(props) {
   };
 
 
-  const handleSceneObjectClick = (event, obj) => {
+  const handleSceneObjectClick = async (event, obj) => {
     event.stopPropagation();
     if (!obj) return;
     const clickMode = getSceneObjectClickMode(obj);
@@ -711,7 +877,12 @@ export default function PreviewTab(props) {
 
     const blockType = getSceneObjectBlockType(obj);
     if (['input', 'code'].includes(blockType)) {
-      const answer = window.prompt(obj.placeholder || (blockType === 'code' ? 'Entre le code.' : 'Entre ta réponse.'));
+      const answer = await showPrompt({
+        title: blockType === 'code' ? 'Code' : 'Réponse',
+        message: obj.placeholder || (blockType === 'code' ? 'Entre le code.' : 'Entre ta réponse.'),
+        inputLabel: blockType === 'code' ? 'Code' : 'Réponse',
+        confirmLabel: 'Valider',
+      });
       if (answer === null) return;
       const normalize = (value) => String(value || '')
         .trim()
@@ -770,6 +941,308 @@ export default function PreviewTab(props) {
   };
 
   const enigma = activeEnigma?.enigma || null;
+  const endingLabel = activeEnding?.label || 'Fin';
+  const storyVariableEntries = Object.entries(storyVariables || {});
+  const visibleStoryVariableEntries = storyVariableEntries.filter(([key]) => {
+    const definition = (project.storyVariables || []).find((variable) => variable.key === key);
+    return definition ? definition.journalVisible !== false : true;
+  });
+  const getStoryVariableJournalLabel = (key) => (
+    (project.storyVariables || []).find((variable) => variable.key === key)?.journalLabel || key
+  );
+  const getJournalItemLabel = (itemId) => {
+    const item = (project.items || []).find((entry) => entry.id === itemId);
+    return item ? `${item.icon || ''} ${item.name || 'Objet'}`.trim() : 'Objet';
+  };
+  const conversationReplies = (project.scenes || []).flatMap((scene) => (
+    (scene.hotspots || [])
+      .filter((spot) => spot.actionType === 'conversation')
+      .flatMap((spot) => (spot.conversation?.nodes || []).flatMap((node) => node.replies || []))
+  ));
+  const endingReplies = conversationReplies.filter((reply) => reply.actionType === 'ending');
+  const hiddenReplies = conversationReplies.filter((reply) => (reply.conditionType || 'none') !== 'none');
+  const getItemById = (itemId) => project.items.find((entry) => entry.id === itemId);
+  const equippedHeroItems = isHeroAdventure
+    ? equippedHeroItemIds.map((itemId) => getItemById(itemId)).filter(Boolean)
+    : [];
+  const carriedInventoryIds = isHeroAdventure
+    ? inventory.filter((itemId) => !equippedHeroItemIds.includes(itemId))
+    : inventory;
+  const getHeroEquipmentBonusLabel = (item) => {
+    const bonus = Number(item?.heroItemBonus) || 1;
+    const sign = bonus >= 0 ? '+' : '';
+    if ((item?.heroItemBonusTarget || 'skill') === 'maxHealth') return `PV max ${sign}${bonus}`;
+    if ((item?.heroItemBonusTarget || 'skill') === 'maxMana') return `Mana max ${sign}${bonus}`;
+    const skill = (heroState?.skills || []).find((entry) => entry.id === item?.heroItemSkillId);
+    return `${skill?.name || 'Compétence'} ${sign}${bonus}`;
+  };
+  const getHeroRewardBonusLabel = (item) => {
+    if (!isHeroAdventure || !item) return '';
+    if ((item.heroItemType || 'none') === 'equipment') return getHeroEquipmentBonusLabel(item);
+    if (item.heroItemType === 'health_potion') return `PV +${Math.max(1, Number(item.heroItemAmount) || 4)}`;
+    if (item.heroItemType === 'mana_potion') return `Mana +${Math.max(1, Number(item.heroItemAmount) || 3)}`;
+    return '';
+  };
+  const showHeroRewardNotice = (itemId) => {
+    const item = project.items?.find((entry) => entry.id === itemId);
+    if (!item) return;
+    if (heroRewardNoticeTimerRef.current) window.clearTimeout(heroRewardNoticeTimerRef.current);
+    setHeroRewardNotice({
+      id: `${item.id}-${Date.now()}`,
+      name: item.name || 'Objet obtenu',
+      icon: item.icon || '+',
+      imageData: item.imageData || '',
+      bonus: getHeroRewardBonusLabel(item),
+    });
+    heroRewardNoticeTimerRef.current = window.setTimeout(() => {
+      setHeroRewardNotice(null);
+      heroRewardNoticeTimerRef.current = null;
+    }, 2600);
+  };
+  const handleConversationReplyClick = (reply) => {
+    if (reply?.rewardItemId) showHeroRewardNotice(reply.rewardItemId);
+    chooseConversationReply?.(reply);
+  };
+  const heroEquipmentSlotCount = Math.max(1, Math.min(8, Number(heroAdventure?.hero.equipmentSlotCount || 6)));
+  const normalizedHeroSlotMap = equippedHeroSlotMap && typeof equippedHeroSlotMap === 'object' ? equippedHeroSlotMap : {};
+  const mappedHeroSlotIds = Array.from({ length: heroEquipmentSlotCount }, (_, index) => normalizedHeroSlotMap[String(index)] || '');
+  const mappedHeroSlotIdSet = new Set(mappedHeroSlotIds.filter(Boolean));
+  const overflowEquippedHeroItems = equippedHeroItems.filter((item) => !mappedHeroSlotIdSet.has(item.id));
+  const heroEquipmentSlots = Array.from({ length: Math.max(heroEquipmentSlotCount, equippedHeroItems.length) }, (_, index) => {
+    const mappedItem = mappedHeroSlotIds[index] ? getItemById(mappedHeroSlotIds[index]) : null;
+    return mappedItem || overflowEquippedHeroItems.shift() || null;
+  });
+  const defaultHeroEquipmentSlotLabels = ['Casque', 'Bouclier', 'Arme', 'Armure', 'Anneau', 'Jambieres', 'Amulette', 'Sac'];
+  const heroEquipmentSlotLabels = defaultHeroEquipmentSlotLabels.map((label, index) => (
+    heroAdventure?.hero.equipmentSlotLabels?.[index] || label
+  ));
+  const getHeroSlotLabel = (item, index) => {
+    if (!item) return heroEquipmentSlotLabels[index % heroEquipmentSlotLabels.length];
+    if ((item.heroItemBonusTarget || 'skill') === 'maxHealth') return 'PV';
+    if ((item.heroItemBonusTarget || 'skill') === 'maxMana') return 'Mana';
+    const skill = (heroState?.skills || []).find((entry) => entry.id === item.heroItemSkillId);
+    return skill?.name || 'Bonus';
+  };
+  const setDraggedHeroItem = (event, itemId) => {
+    draggedInventoryIdRef.current = itemId || null;
+    setDraggedInventoryId(itemId || null);
+    if (event?.dataTransfer && itemId) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', itemId);
+      event.dataTransfer.setData('application/x-hero-item-id', itemId);
+    }
+  };
+  const clearDraggedHeroItem = () => {
+    draggedInventoryIdRef.current = null;
+    setDraggedInventoryId(null);
+  };
+  const getDraggedHeroItemId = (event) => (
+    event?.dataTransfer?.getData('application/x-hero-item-id')
+    || event?.dataTransfer?.getData('text/plain')
+    || draggedInventoryIdRef.current
+    || draggedInventoryId
+    || ''
+  );
+  const dropHeroEquipment = (event, slotItem = null, slotIndex = null) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const draggedItemId = getDraggedHeroItemId(event);
+    const draggedItem = getItemById(draggedItemId);
+    if (!draggedItem) {
+      clearDraggedHeroItem();
+      return;
+    }
+    if ((draggedItem.heroItemType || 'none') !== 'equipment') {
+      setDialogue?.('Cet objet ne se porte pas.');
+      clearDraggedHeroItem();
+      return;
+    }
+    if (slotItem && slotItem.id !== draggedItem.id) unequipHeroItem?.(slotItem.id);
+    equipHeroItem?.(draggedItem.id, slotIndex);
+    clearDraggedHeroItem();
+  };
+  const dropHeroInventory = (event) => {
+    event.preventDefault();
+    const draggedItemId = getDraggedHeroItemId(event);
+    if (draggedItemId && equippedHeroItemIds.includes(draggedItemId)) {
+      unequipHeroItem?.(draggedItemId);
+    }
+    clearDraggedHeroItem();
+  };
+  const equipHeroItemFromEmptySlot = (slotIndex = null) => {
+    const selectedEquipmentId = selectedInventoryIds.find((itemId) => {
+      const item = getItemById(itemId);
+      return item && (item.heroItemType || 'none') === 'equipment' && !equippedHeroItemIds.includes(itemId);
+    });
+    const firstCarriedEquipmentId = carriedInventoryIds.find((itemId) => {
+      const item = getItemById(itemId);
+      return item && (item.heroItemType || 'none') === 'equipment';
+    });
+    const itemId = selectedEquipmentId || firstCarriedEquipmentId || '';
+    if (!itemId) {
+      setDialogue?.("Aucun equipement disponible dans l'inventaire.");
+      return;
+    }
+    equipHeroItem?.(itemId, slotIndex);
+  };
+  const conversationNode = activeConversation?.conversation?.nodes?.find((node) => node.id === activeConversation.nodeId) || null;
+  const visibleConversationReplies = conversationNode
+    ? (conversationNode.replies || []).filter((reply) => isConversationReplyAvailable?.(reply) !== false)
+    : [];
+  const lockedConversationReplies = isChoiceAdventure && conversationNode
+    ? (conversationNode.replies || []).filter((reply) => {
+      const isConsumed = reply.id && (
+        hiddenConversationReplyIds.includes(reply.id)
+        || (reply.hideAfterChosen && chosenConversationReplyIds.includes(reply.id))
+      );
+      return isConversationReplyAvailable?.(reply) === false && reply.showWhenLocked && !isConsumed;
+    })
+    : [];
+  const displayedConversationReplies = [...visibleConversationReplies, ...lockedConversationReplies];
+  const renderChoiceEffectSummary = (compact = false) => {
+    if (!choiceEffectNotices.length) return null;
+    return (
+      <div className={`choice-effect-summary ${compact ? 'compact' : ''}`}>
+        <div className="choice-effect-summary-head">
+          <strong>Conséquences du choix</strong>
+          {clearChoiceEffectNotices ? (
+            <button type="button" className="secondary-action" onClick={clearChoiceEffectNotices}>
+              Masquer
+            </button>
+          ) : null}
+        </div>
+        <div className="choice-effect-list">
+          {choiceEffectNotices.map((notice, index) => (
+            <span key={`${notice.type || 'effect'}-${index}`} className={`choice-effect-pill choice-effect-${notice.type || 'effect'}`}>
+              <strong>{notice.title || 'Effet'}</strong>
+              {notice.detail ? <small>{notice.detail}</small> : null}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  };
+  const renderAdventureJournal = (compact = false) => (
+    <div className={`adventure-journal-card ${compact ? 'compact' : ''}`}>
+      <div className="panel-head">
+        <h3>Journal joueur</h3>
+      </div>
+      <div className="adventure-journal-grid">
+        <section>
+          <strong>Historique</strong>
+          <div className="adventure-journal-list">
+            {adventureJournalEntries.length ? adventureJournalEntries.slice(0, compact ? 4 : 8).map((entry) => (
+              <span key={entry.id || `${entry.type}-${entry.title}`}>
+                <strong>{entry.title || 'Note'}</strong>
+                {entry.detail ? <small>{entry.detail}</small> : null}
+              </span>
+            )) : <span>Aucun choix important note.</span>}
+          </div>
+        </section>
+        <section>
+          <strong>Indices et état</strong>
+          <div className="adventure-state-list">
+            {inventory.length ? inventory.slice(0, compact ? 4 : 8).map((itemId) => (
+              <span key={itemId}>{getJournalItemLabel(itemId)}</span>
+            )) : <span>Aucun indice obtenu.</span>}
+            {visibleStoryVariableEntries.length ? visibleStoryVariableEntries.map(([key, value]) => (
+              <span key={key}><strong>{getStoryVariableJournalLabel(key)}</strong> = {String(value)}</span>
+            )) : null}
+            {activeEnding ? <span><strong>Fin active</strong> = {activeEnding.title || endingLabel}</span> : null}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+  const renderAdventureStateCard = (compact = false) => (
+    <div className={`adventure-state-card ${compact ? 'compact' : ''}`}>
+      <div className="panel-head">
+        <h3>Progression</h3>
+      </div>
+      <div className="adventure-state-grid">
+        <span><strong>{chosenConversationReplyIds.length}</strong> choix</span>
+        <span><strong>{hiddenReplies.length}</strong> cachés</span>
+        <span><strong>{visibleStoryVariableEntries.length}</strong> variables</span>
+        <span><strong>{endingReplies.length}</strong> fins</span>
+      </div>
+      <div className="adventure-state-list">
+        {visibleStoryVariableEntries.length ? visibleStoryVariableEntries.slice(0, compact ? 6 : undefined).map(([key, value]) => (
+          <span key={key}><strong>{getStoryVariableJournalLabel(key)}</strong> = {String(value)}</span>
+        )) : <span>Aucune variable d'histoire modifiée.</span>}
+        {activeEnding ? <span><strong>Fin active</strong> = {activeEnding.title || endingLabel}</span> : null}
+      </div>
+    </div>
+  );
+  const renderAdventureInventoryContent = (compact = false) => (
+    <>
+      <div className="player-adventure-drawer-grid">
+        {!sharedPlayerMode ? renderAdventureStateCard(compact) : null}
+        {!sharedPlayerMode ? renderAdventureJournal(compact) : null}
+      </div>
+      {!sharedPlayerMode ? (
+        <div className="inventory-test-tools">
+          <span className="small-note">Test inventaire</span>
+          <select value={debugInventoryItemId} onChange={(event) => setDebugInventoryItemId(event.target.value)}>
+            {(project.items || []).map((item) => (
+              <option key={item.id} value={item.id}>{item.icon} {item.name}</option>
+            ))}
+          </select>
+          <div className="inline-actions">
+            <button type="button" className="secondary-action" disabled={!debugInventoryItemId} onClick={addDebugInventoryItem}>
+              Ajouter
+            </button>
+            <button type="button" className="danger-button" disabled={!debugInventoryItemId || !inventory.includes(debugInventoryItemId)} onClick={removeDebugInventoryItem}>
+              Retirer
+            </button>
+          </div>
+        </div>
+      ) : null}
+      <button
+        type="button"
+        className="secondary-action player-combine-button"
+        onClick={() => {
+          if (selectedInventoryIds.length !== 2) {
+            setDialogue('Sélectionne 2 objets a combiner.');
+            return;
+          }
+          combineInventoryItems(selectedInventoryIds[0], selectedInventoryIds[1]);
+        }}
+      >
+        Combiner les 2 objets
+      </button>
+      <div className="inventory-grid">
+        {inventory.length ? inventory.map((itemId) => {
+          const item = project.items.find((entry) => entry.id === itemId);
+          if (!item) return null;
+          return (
+            <button
+              key={itemId}
+              type="button"
+              className={`inventory-item inventory-tile ${selectedInventoryIds.includes(itemId) ? 'selected' : ''}`}
+              draggable
+              onClick={() => openInventoryItem(itemId)}
+              onDragStart={() => setDraggedInventoryId(itemId)}
+              onDragEnd={() => setDraggedInventoryId(null)}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                if (draggedInventoryId && draggedInventoryId !== itemId) {
+                  combineInventoryItems(draggedInventoryId, itemId);
+                }
+                setDraggedInventoryId(null);
+              }}
+            >
+              <div className="inventory-thumb">
+                {item.imageData ? <img src={item.imageData} alt={item.name} /> : <span>{item.icon || 'Objet'}</span>}
+              </div>
+              <strong>{item.name}</strong>
+            </button>
+          );
+        }) : <p>Aucun objet.</p>}
+      </div>
+      <p className="small-note">Cliquer = voir l'image. Glisser-deposer un objet sur un autre = tenter une combinaison.</p>
+    </>
+  );
   const rows = Number(enigma?.gridRows) || 3;
   const cols = Number(enigma?.gridCols) || 3;
   const pieceCount = rows * cols;
@@ -823,11 +1296,440 @@ export default function PreviewTab(props) {
     ...getElementShapeStyle(obj),
   });
 
+  const startHeroPanelRoll = (skillId = '') => {
+    if (!isHeroAdventure || isHeroDefeated || heroPanelRollingSkillId !== null) return;
+    const sides = Math.max(2, Number(heroAdventure?.dice?.sides) || 20);
+    const initialFace = Number(lastDiceRoll?.raw) || Math.floor(Math.random() * sides) + 1;
+    heroPanelDieFaceRef.current = Math.max(1, Math.min(sides, initialFace));
+    setHeroPanelDieFace(heroPanelDieFaceRef.current);
+    setHeroPanelRollingSkillId(skillId || '');
+    if (heroPanelRollIntervalRef.current) window.clearInterval(heroPanelRollIntervalRef.current);
+    heroPanelRollIntervalRef.current = window.setInterval(() => {
+      const nextFace = Math.floor(Math.random() * sides) + 1;
+      heroPanelDieFaceRef.current = nextFace;
+      setHeroPanelDieFace(nextFace);
+    }, 80);
+  };
+
+  const stopHeroPanelRoll = () => {
+    if (heroPanelRollingSkillId === null) return;
+    if (heroPanelRollIntervalRef.current) window.clearInterval(heroPanelRollIntervalRef.current);
+    heroPanelRollIntervalRef.current = null;
+    const sides = Math.max(2, Number(heroAdventure?.dice?.sides) || 20);
+    const finalRaw = Math.max(1, Math.min(sides, Number(heroPanelDieFaceRef.current) || 1));
+    rollHeroDie?.(heroPanelRollingSkillId || '', { raw: finalRaw });
+    setHeroPanelRollingSkillId(null);
+  };
+
+  const toggleHeroPanelRoll = (skillId = '') => {
+    if (heroPanelRollingSkillId !== null) {
+      stopHeroPanelRoll();
+      return;
+    }
+    startHeroPanelRoll(skillId);
+  };
+
+  const renderHeroAdventurePanel = (compact = false) => {
+    if (!isHeroAdventure) return null;
+    const healthMax = Number(heroState.maxHealth) || 1;
+    const manaMax = Number(heroState.maxMana) || 1;
+    const healthPercent = Math.max(0, Math.min(100, (Number(heroState.health || 0) / healthMax) * 100));
+    const manaPercent = Math.max(0, Math.min(100, (Number(heroState.mana || 0) / manaMax) * 100));
+
+    return (
+      <div className={`hero-adventure-panel ${compact ? 'hero-adventure-panel--compact' : ''}`} data-tour="hero-adventure-panel">
+        <div className="hero-adventure-head">
+          <div>
+            <span className="eyebrow">Hero Adventure</span>
+            <strong>{heroState.name || 'Héros'}</strong>
+          </div>
+          <button
+            type="button"
+            className="secondary-action hero-dice-button"
+            onClick={() => toggleHeroPanelRoll('')}
+            disabled={isHeroDefeated}
+          >
+            {heroPanelRollingSkillId !== null ? 'Arreter le dé' : `Lancer ${heroAdventure.dice?.label || 'de'}`}
+          </button>
+        </div>
+
+        <div className="hero-stat-grid">
+          <div className="hero-meter">
+            <span>PV</span>
+            <strong>{heroState.health}/{healthMax}</strong>
+            <i style={{ width: `${healthPercent}%` }} />
+          </div>
+          <div className="hero-meter hero-meter--mana">
+            <span>Mana</span>
+            <strong>{heroState.mana}/{manaMax}</strong>
+            <i style={{ width: `${manaPercent}%` }} />
+          </div>
+        </div>
+
+        <div className="hero-stat-actions">
+          <button type="button" onClick={() => adjustHeroStat?.('health', -1)}>- PV</button>
+          <button type="button" onClick={() => adjustHeroStat?.('health', 1)}>+ PV</button>
+          <button type="button" onClick={() => adjustHeroStat?.('mana', -1)}>- Mana</button>
+          <button type="button" onClick={() => adjustHeroStat?.('mana', 1)}>+ Mana</button>
+        </div>
+
+        {isHeroDefeated ? <p className="hero-defeat-note">0 PV: actions joueur bloquées.</p> : null}
+
+        <div className="hero-skill-list">
+          {(heroState.skills || []).map((skill) => (
+            <button
+              key={skill.id}
+              type="button"
+              className="hero-skill-button"
+              onClick={() => startHeroPanelRoll(skill.id)}
+              disabled={isHeroDefeated || heroPanelRollingSkillId !== null || (skill.manaCost > 0 && Number(heroState.mana || 0) < skill.manaCost)}
+            >
+              <span>{skill.name}</span>
+              <strong>+{skill.value}</strong>
+              {skill.manaCost ? <small>{skill.manaCost} mana</small> : null}
+            </button>
+          ))}
+        </div>
+
+        {(lastDiceRoll || heroPanelRollingSkillId !== null) ? (
+          <div className={`hero-roll-result ${heroPanelRollingSkillId !== null ? 'is-rolling' : ''}`}>
+            <span>
+              {heroPanelRollingSkillId !== null
+                ? (heroState.skills || []).find((skill) => skill.id === heroPanelRollingSkillId)?.name || 'Jet libre'
+                : lastDiceRoll.skillName || 'Jet libre'}
+              {heroPanelRollingSkillId === null && typeof lastDiceRoll.success === 'boolean' ? ` - ${lastDiceRoll.success ? 'Réussi' : 'Échec'}` : ''}
+            </span>
+            <button
+              type="button"
+              className={`hero-roll-die-button ${heroPanelRollingSkillId !== null ? 'is-rolling' : ''}`}
+              onClick={stopHeroPanelRoll}
+              disabled={heroPanelRollingSkillId === null}
+              aria-label={heroPanelRollingSkillId !== null ? 'Arreter le dé' : 'Résultat du de'}
+            >
+              <span className={`hero-roll-die hero-die-face hero-die-face--${heroDiceSkin}`}>
+                <span className="hero-roll-die-value">{heroPanelRollingSkillId !== null ? heroPanelDieFace : lastDiceRoll.raw}</span>
+              </span>
+            </button>
+            <small>
+              {heroPanelRollingSkillId !== null
+                ? 'Clique le dé pour l arreter.'
+                : `${lastDiceRoll.die}: ${lastDiceRoll.raw}${lastDiceRoll.modifier ? ` + ${lastDiceRoll.modifier}` : ''} => ${lastDiceRoll.total}${lastDiceRoll.difficulty ? ` / difficulté ${lastDiceRoll.difficulty}` : ''}`}
+            </small>
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
+  const renderHeroRewardNotice = () => {
+    if (!heroRewardNotice) return null;
+    return (
+      <div className="hero-reward-notice" key={heroRewardNotice.id}>
+        <span className="hero-reward-notice-media">
+          {heroRewardNotice.imageData ? (
+            <img src={heroRewardNotice.imageData} alt={heroRewardNotice.name} />
+          ) : (
+            <strong>{heroRewardNotice.icon}</strong>
+          )}
+        </span>
+        <span className="hero-reward-notice-copy">
+          <small>Objet obtenu</small>
+          <strong>{heroRewardNotice.name}</strong>
+          {heroRewardNotice.bonus ? <em>{heroRewardNotice.bonus}</em> : null}
+        </span>
+      </div>
+    );
+  };
+
+  const renderInventoryTiles = (itemIds, emptyLabel = 'Aucun objet.') => (
+    <div className="inventory-grid">
+      {itemIds.length ? itemIds.map((itemId) => {
+        const item = project.items.find((entry) => entry.id === itemId);
+        if (!item) return null;
+        return (
+          <button
+            key={itemId}
+            type="button"
+            className={`inventory-item inventory-tile ${selectedInventoryIds.includes(itemId) ? 'selected' : ''}`}
+            draggable
+            onClick={() => openInventoryItem(itemId)}
+            onDragStart={(event) => setDraggedHeroItem(event, itemId)}
+            onDragEnd={clearDraggedHeroItem}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault();
+              const draggedItemId = getDraggedHeroItemId(event);
+              if (draggedItemId && draggedItemId !== itemId) {
+                combineInventoryItems(draggedItemId, itemId);
+              }
+              clearDraggedHeroItem();
+            }}
+          >
+            <div className="inventory-thumb">
+              {item.imageData ? <img src={item.imageData} alt={item.name} /> : <span>{item.icon || '📦'}</span>}
+            </div>
+            <strong>{item.name}</strong>
+            {isHeroAdventure && item.heroItemType === 'equipment' ? <small className="inventory-item-badge">A porter</small> : null}
+            {isHeroAdventure && ['health_potion', 'mana_potion'].includes(item.heroItemType || '') ? <small className="inventory-item-badge">Consommable</small> : null}
+          </button>
+        );
+      }) : <p>{emptyLabel}</p>}
+    </div>
+  );
+
+  const renderHeroCharacterPage = (compact = false) => {
+    const heroBackgroundStyle = heroState?.backgroundImageData
+      ? { backgroundImage: `linear-gradient(180deg, rgba(2,6,23,.28), rgba(2,6,23,.88)), url(${heroState.backgroundImageData})` }
+      : undefined;
+    return (
+      <div className={`hero-character-page ${compact ? 'hero-character-page--compact' : ''}`} style={heroBackgroundStyle}>
+        <div className="hero-paper-doll">
+          <div className="hero-equipment-slot-grid" aria-label="Equipement porte">
+            {heroEquipmentSlots.map((item, index) => (
+              <button
+                key={item?.id || `empty-${index}`}
+                type="button"
+                className={`hero-equipment-slot slot-${index % 8} ${item ? 'is-filled' : 'is-empty'}`}
+                title={item ? `${item.name} - glisser vers l'inventaire pour retirer` : 'Deposer un equipement ici'}
+                draggable={Boolean(item)}
+                onClick={() => {
+                  if (item) unequipHeroItem?.(item.id);
+                  else equipHeroItemFromEmptySlot(index);
+                }}
+                onDragStart={(event) => item && setDraggedHeroItem(event, item.id)}
+                onDragEnd={clearDraggedHeroItem}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => dropHeroEquipment(event, item, index)}
+              >
+                <span className="hero-equipment-slot-thumb">
+                  {item?.imageData ? <img src={item.imageData} alt={item.name} /> : <span>{item?.icon || '+'}</span>}
+                </span>
+                <small>{getHeroSlotLabel(item, index)}</small>
+              </button>
+            ))}
+          </div>
+
+          <div className="hero-character-core">
+            <div className="hero-character-portrait">
+              {heroState?.characterImageData ? <img src={heroState.characterImageData} alt={heroState.name || 'Héros'} /> : <span>{heroState?.name?.slice(0, 1) || 'H'}</span>}
+            </div>
+            <span className="eyebrow">Personnage</span>
+            <h3>{heroState?.name || 'Héros'}</h3>
+            <small>{heroAdventure.dice?.label || 'de'} principal</small>
+          </div>
+        </div>
+
+        <div className="hero-character-skills">
+          {(heroState?.skills || []).map((skill) => (
+            <span key={skill.id}><strong>{skill.name}</strong> +{skill.value}</span>
+          ))}
+        </div>
+
+        <div className="hero-character-section">
+          <h4>Objets portes <small>bonus actifs</small></h4>
+          <div className="hero-equipped-list">
+            {equippedHeroItems.length ? equippedHeroItems.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="hero-equipped-item"
+                  draggable
+                  onClick={() => unequipHeroItem?.(item.id)}
+                  onDragStart={(event) => setDraggedHeroItem(event, item.id)}
+                  onDragEnd={clearDraggedHeroItem}
+                >
+                  {item.imageData ? <img src={item.imageData} alt={item.name} /> : <span>{item.icon || '◆'}</span>}
+                  <strong>{item.name}</strong>
+                  <small>{getHeroEquipmentBonusLabel(item)}</small>
+                </button>
+            )) : <p>Aucun equipement porte.</p>}
+          </div>
+        </div>
+
+        <div
+          className={`hero-character-section hero-inventory-dropzone ${carriedInventoryIds.length ? 'has-items' : 'is-empty'}`}
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={dropHeroInventory}
+        >
+          <h4>Inventaire <small>objets transportes</small></h4>
+          {renderInventoryTiles(carriedInventoryIds, "Aucun objet dans l'inventaire.")}
+        </div>
+      </div>
+    );
+  };
+
+  const getDiePips = (face = 1) => {
+    const pipsByFace = {
+      1: ['center'],
+      2: ['top-left', 'bottom-right'],
+      3: ['top-left', 'center', 'bottom-right'],
+      4: ['top-left', 'top-right', 'bottom-left', 'bottom-right'],
+      5: ['top-left', 'top-right', 'center', 'bottom-left', 'bottom-right'],
+      6: ['top-left', 'top-right', 'middle-left', 'middle-right', 'bottom-left', 'bottom-right'],
+    };
+    return pipsByFace[Math.max(1, Math.min(6, Number(face) || 1))] || pipsByFace[1];
+  };
+
+  const playHeroIntroMusic = () => {
+    if (isHeroSetupOpen && heroIntroAudioRef.current) {
+      heroIntroAudioRef.current.play().catch(() => {});
+    }
+  };
+
+  const startHeroSetupRoll = (requestedIndex = heroSetupFinalRolls.length) => {
+    if (isHeroSetupRolling) return;
+    playHeroIntroMusic();
+    const skillCount = Math.max(1, (heroState?.skills || []).length);
+    const index = Math.max(0, Math.min(skillCount - 1, Number(requestedIndex) || 0));
+    if (index !== heroSetupFinalRolls.length) return;
+    if (heroSetupFinalRolls.length >= skillCount) return;
+    setIsHeroSetupRolling(true);
+    setHeroSetupRollingIndex(index);
+    const initialFaces = Array.from({ length: skillCount }, (_, faceIndex) => (
+      heroSetupDiceFacesRef.current[faceIndex] || heroSetupDiceFaces[faceIndex] || ((faceIndex % 6) + 1)
+    ));
+    heroSetupDiceFacesRef.current = initialFaces;
+    setHeroSetupDiceFaces(initialFaces);
+    if (heroSetupRollTimerRef.current) window.clearTimeout(heroSetupRollTimerRef.current);
+    if (heroSetupRollIntervalRef.current) window.clearInterval(heroSetupRollIntervalRef.current);
+
+    heroSetupRollIntervalRef.current = window.setInterval(() => {
+      setHeroSetupDiceFaces((faces) => {
+        const nextFaces = faces.map((face, faceIndex) => (
+          faceIndex === index ? Math.floor(Math.random() * 6) + 1 : face
+        ));
+        heroSetupDiceFacesRef.current = nextFaces;
+        return nextFaces;
+      });
+    }, 75);
+  };
+
+  const stopHeroSetupRoll = () => {
+    if (!isHeroSetupRolling || heroSetupRollingIndex < 0) return;
+    playHeroIntroMusic();
+    if (heroSetupRollTimerRef.current) window.clearTimeout(heroSetupRollTimerRef.current);
+    if (heroSetupRollIntervalRef.current) window.clearInterval(heroSetupRollIntervalRef.current);
+    heroSetupRollTimerRef.current = null;
+    heroSetupRollIntervalRef.current = null;
+    const index = heroSetupRollingIndex;
+    const finalRoll = Math.max(1, Math.min(6, Number(heroSetupDiceFacesRef.current[index] || heroSetupDiceFaces[index]) || 1));
+    setHeroSetupDiceFaces((faces) => {
+      const nextFaces = faces.map((face, faceIndex) => (faceIndex === index ? finalRoll : face));
+      heroSetupDiceFacesRef.current = nextFaces;
+      return nextFaces;
+    });
+    setHeroSetupFinalRolls((rolls) => {
+      const nextRolls = rolls.slice();
+      nextRolls[index] = finalRoll;
+      return nextRolls;
+    });
+    setHeroSetupRollingIndex(-1);
+    setIsHeroSetupRolling(false);
+  };
+
+  const revealHeroSetupSkills = () => {
+    const skillCount = Math.max(1, (heroState?.skills || []).length);
+    if (heroSetupFinalRolls.length < skillCount || isHeroSetupRolling) return;
+    playHeroIntroMusic();
+    rollHeroSetupSkills?.(heroSetupFinalRolls);
+    setHeroSetupFinalRolls([]);
+    setHeroSetupResultsRevealed(true);
+  };
+
+  const renderHeroSetupScreen = () => {
+    if (!isHeroSetupOpen) return null;
+    const hasRolledSkills = heroSetupResultsRevealed && (heroState?.skills || []).some((skill) => skill.rolledValue);
+    const skillCount = Math.max(1, (heroState?.skills || []).length);
+    const allDiceRolled = heroSetupFinalRolls.length >= skillCount;
+    const shouldShowDice = isHeroSetupRolling || !hasRolledSkills || allDiceRolled;
+    const setupCardStyle = heroSetupBackgroundImageData
+      ? { backgroundImage: `linear-gradient(180deg, rgba(8,16,30,.38), rgba(8,16,30,.66)), url(${heroSetupBackgroundImageData})` }
+      : undefined;
+    return (
+      <div className="hero-setup-overlay">
+        <div className={`hero-setup-card ${heroSetupBackgroundImageData ? 'has-hero-setup-background' : ''}`} style={setupCardStyle}>
+          <span className="eyebrow">Creation du héros</span>
+          <h2>{heroState?.name || 'Héros'}</h2>
+          <p>
+            Avant de commencer l'aventure, lance les dés pour connaître tes compétences.
+            Chaque compétence tire 1d6; le résultat devient le bonus utilisé dans les tests.
+          </p>
+          {shouldShowDice ? (
+          <div
+            className={`hero-setup-dice-rack ${isHeroSetupRolling ? 'is-rolling' : ''}`}
+          >
+            {(heroState?.skills || []).map((skill, index) => {
+              const face = heroSetupDiceFaces[index] || ((index % 6) + 1);
+              const isCurrentDie = heroSetupRollingIndex === index;
+              const isFinalDie = heroSetupFinalRolls[index];
+              const isNextDie = index === heroSetupFinalRolls.length;
+              return (
+                <button
+                  type="button"
+                  className={`hero-setup-die-wrap ${isCurrentDie ? 'is-current' : ''} ${isFinalDie ? 'is-final' : ''} ${!isFinalDie && !isNextDie ? 'is-locked' : ''}`}
+                  key={skill.id}
+                  onClick={() => (isCurrentDie ? stopHeroSetupRoll() : startHeroSetupRoll(index))}
+                  disabled={isFinalDie || (!isCurrentDie && (isHeroSetupRolling || !isNextDie))}
+                >
+                  <span className={`hero-die-face hero-die-face--${heroDiceSkin} face-${face}`}>
+                    {getDiePips(face).map((position) => <i key={position} className={`pip pip-${position}`} />)}
+                  </span>
+                  <small>{isFinalDie ? `${skill.name} = ${face}` : skill.name}</small>
+                </button>
+              );
+            })}
+            <strong>
+              {isHeroSetupRolling
+                ? heroSetupRollingIndex >= 0
+                  ? `Clique encore pour arreter ${heroState?.skills?.[heroSetupRollingIndex]?.name || 'le dé'}`
+                  : 'Résultats obtenus...'
+                : allDiceRolled
+                  ? 'Les dés ont parlé. Découvre tes compétences.'
+                  : `Clique le dé de ${heroState?.skills?.[heroSetupFinalRolls.length]?.name || 'la compétence'}`}
+            </strong>
+          </div>
+          ) : (
+          <div className="hero-setup-skill-grid">
+            {(heroState?.skills || []).map((skill) => (
+              <div key={skill.id} className={skill.rolledValue ? 'is-rolled' : ''}>
+                <span>{skill.name}</span>
+                <strong>{skill.rolledValue ? `+${skill.value}` : '-'}</strong>
+                <small>{skill.rolledValue ? `Jet : ${skill.rolledValue}` : 'A tirer'}</small>
+              </div>
+            ))}
+          </div>
+          )}
+          <div className="hero-setup-actions">
+            {shouldShowDice ? (
+              <button type="button" className="secondary-action" onClick={revealHeroSetupSkills} disabled={!allDiceRolled || isHeroSetupRolling}>
+                Decouvrir mes compétences
+              </button>
+            ) : (
+              <button type="button" className="secondary-action" onClick={() => {
+                setHeroSetupFinalRolls([]);
+                setHeroSetupDiceFaces([]);
+                heroSetupDiceFacesRef.current = [];
+                setHeroSetupRollingIndex(-1);
+                setHeroSetupResultsRevealed(false);
+              }}>
+                Relancer les compétences
+              </button>
+            )}
+            <button type="button" onClick={completeHeroSetup} disabled={!hasRolledSkills || isHeroSetupRolling || shouldShowDice}>
+              Commencer l'aventure
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div
       ref={playerShellRef}
       data-tour="preview-player"
-      className={`player-shell ${isFullscreen ? 'is-fullscreen' : ''} ${sharedPlayerMode ? 'is-shared-player' : ''} ${showInteractionHints ? 'show-hints' : 'hide-hints'} ${!areControlsVisible ? 'controls-hidden' : ''}`}
+      className={`player-shell player-button-style-${playerButtonStyle} player-button-font-${playerButtonFont} player-narration-font-${playerNarrationFont} ${isChoiceAdventure ? 'is-choice-adventure' : ''} ${usesImmersiveAdventurePlayer ? 'is-immersive-adventure' : ''} ${isFullscreen ? 'is-fullscreen' : ''} ${sharedPlayerMode ? 'is-shared-player' : ''} ${showInteractionHints ? 'show-hints' : 'hide-hints'} ${!areControlsVisible ? 'controls-hidden' : ''}`}
+      style={{ '--player-narration-bg': playerNarrationBackground }}
       onMouseMove={handleShellMouseMove}
       onFocus={() => {
         if (!isFullscreen && !sharedPlayerMode) revealControls();
@@ -837,7 +1739,7 @@ export default function PreviewTab(props) {
         <div className="player-topbar">
           <div>
             <span className="eyebrow">Player</span>
-            <strong>{playScene ? getSceneLabel(playScene.id) : 'Aucune scene'}</strong>
+            <strong>{playScene ? getSceneLabel(playScene.id) : 'Aucune scène'}</strong>
           </div>
           <div className="player-actions">
             <button type="button" className="secondary-action" onClick={() => setIsPauseOpen(true)}>Pause</button>
@@ -852,6 +1754,9 @@ export default function PreviewTab(props) {
         </div>
 
         <div className="scene-player" style={{ aspectRatio: sceneAspectRatio, '--scene-aspect': sceneAspectRatio }} onClick={() => viewerImage && setViewerImage(null)}>
+          {renderHeroSetupScreen()}
+          {renderHeroRewardNotice()}
+
           {playSceneBackgroundUrl ? (
             <img
               className="scene-background"
@@ -868,7 +1773,7 @@ export default function PreviewTab(props) {
               }}
             />
           ) : (
-            <div className="placeholder">Ajoute un fond pour jouer la scene.</div>
+            <div className="placeholder">Ajoute un fond pour jouer la scène.</div>
           )}
           <SceneVisualEffect effect={playScene?.visualEffect} intensity={playScene?.visualEffectIntensity} />
           {(playScene?.visualEffectZones || []).filter((zone) => !zone.isHidden).map((zone) => (
@@ -891,18 +1796,16 @@ export default function PreviewTab(props) {
           {(playScene?.sceneObjects || [])
             .filter((obj) => !usedSceneObjectIds.includes(obj.id) && (!obj.isHidden || revealedSceneObjectIds.includes(obj.id)))
             .map((obj) => {
-              const objectForRender = sceneObjectTextOverrides[obj.id]
-                ? { ...obj, blockText: sceneObjectTextOverrides[obj.id], dialogue: sceneObjectTextOverrides[obj.id] }
-                : obj;
+              const objectForRender = applySceneObjectTextOverride(obj, sceneObjectTextOverrides[obj.id]);
               const linkedItem = obj.linkedItemId ? project.items.find((entry) => entry.id === obj.linkedItemId) : null;
               const displayImage = obj.imageData || linkedItem?.imageData || '';
               return (
                 <button
                   key={obj.id}
                   type="button"
-                  className={`player-scene-object ${obj.isInvisible ? 'player-scene-object-invisible' : ''} ${getSceneObjectClickMode(obj) === 'none' ? 'player-scene-object-not-clickable' : ''}`}
+                  className={`player-scene-object ${obj.isInvisible ? 'player-scene-object-invisible' : ''} ${getSceneObjectClickMode(objectForRender) === 'none' ? 'player-scene-object-not-clickable' : ''}`}
                   style={getSceneObjectStyle(obj)}
-                  onClick={(event) => handleSceneObjectClick(event, obj)}
+                  onClick={(event) => handleSceneObjectClick(event, objectForRender)}
                   title={objectForRender.name}
                   aria-label={objectForRender.name || 'Objet invisible'}
                 >
@@ -953,7 +1856,7 @@ export default function PreviewTab(props) {
                 <div className="act-preload-bar" aria-label={`Chargement ${actPreloadStatus.progress}%`}>
                   <span style={{ width: `${actPreloadStatus.progress}%` }} />
                 </div>
-                <small>{actPreloadStatus.progress}% des medias de l'acte sont prêts</small>
+                <small>{actPreloadStatus.progress}% des médias de l'acte sont prêts</small>
               </div>
             </div>
           ) : null}
@@ -969,7 +1872,7 @@ export default function PreviewTab(props) {
                   src={transitionPreviousBackgroundUrl}
                   alt=""
                 />
-              ) : <div className="placeholder">Scene precedente</div>}
+              ) : <div className="placeholder">Scène précédente</div>}
             </div>
           ) : null}
 
@@ -1010,26 +1913,67 @@ export default function PreviewTab(props) {
                 {dialogue || 'Aucun message.'}
               </p>
             )}
-            <button type="button" className="inventory-discreet-button" onClick={(event) => {
-              event.stopPropagation();
-              setIsInventoryOpen((value) => !value);
-            }}>
-              Inventaire {inventory.length ? `(${inventory.length})` : ''}
-            </button>
+            <div className="player-drawer-actions">
+              {isHeroAdventure ? (
+                <button type="button" className="inventory-discreet-button hero-panel-discreet-button" onClick={(event) => {
+                  event.stopPropagation();
+                  setIsInventoryOpen(false);
+                  setIsHeroPanelOpen((value) => !value);
+                }}>
+                  Hero Adventure
+                </button>
+              ) : null}
+              <button type="button" className="inventory-discreet-button" onClick={(event) => {
+                event.stopPropagation();
+                setIsHeroPanelOpen(false);
+                setIsInventoryOpen((value) => !value);
+              }}>
+                {isHeroAdventure ? 'Personnage' : isChoiceAdventure ? 'Carnet' : 'Inventaire'} {inventory.length ? `(${inventory.length})` : ''}
+              </button>
+            </div>
           </div>
 
+          {isHeroPanelOpen && isHeroAdventure && (
+            <>
+              <button
+                type="button"
+                className="player-inventory-backdrop"
+                aria-label="Fermer le panneau hero aventure"
+                onClick={() => setIsHeroPanelOpen(false)}
+              />
+              <div className="player-inventory-drawer player-inventory-drawer--hero-panel" onClick={(event) => event.stopPropagation()}>
+                <div className="panel-head">
+                  <h3>{currentGameTitle}</h3>
+                  <button type="button" className="secondary-button" onClick={() => setIsHeroPanelOpen(false)}>Fermer</button>
+                </div>
+                {renderHeroAdventurePanel(true)}
+              </div>
+            </>
+          )}
+
           {isInventoryOpen && (
-            <div className="player-inventory-drawer" onClick={(event) => event.stopPropagation()}>
+            <>
+            {usesImmersiveAdventurePlayer ? (
+              <button
+                type="button"
+                className="player-inventory-backdrop"
+                aria-label={isHeroAdventure ? 'Fermer la fiche personnage' : 'Fermer le carnet'}
+                onClick={() => setIsInventoryOpen(false)}
+              />
+            ) : null}
+            <div className={`player-inventory-drawer ${isHeroAdventure ? 'player-inventory-drawer--hero' : isChoiceAdventure ? 'player-inventory-drawer--adventure' : ''}`} onClick={(event) => event.stopPropagation()}>
               <div className="panel-head">
-                <h3>Inventaire</h3>
+                <h3>{isHeroAdventure ? 'Personnage' : isChoiceAdventure ? 'Carnet d’aventure' : 'Inventaire'}</h3>
                 <button type="button" className="secondary-button" onClick={() => setIsInventoryOpen(false)}>Fermer</button>
               </div>
+              {isHeroAdventure ? renderHeroCharacterPage(true) : isChoiceAdventure ? renderAdventureInventoryContent(true) : (
+              <>
               <button
                 type="button"
                 className="secondary-action player-combine-button"
                 onClick={() => {
                   if (selectedInventoryIds.length !== 2) {
-                    setDialogue('Selectionne 2 objets à combiner.');
+                    setDialogue('Sélectionne 2 objets à combiner.');
                     return;
                   }
                   combineInventoryItems(selectedInventoryIds[0], selectedInventoryIds[1]);
@@ -1085,22 +2029,29 @@ export default function PreviewTab(props) {
                   );
                 }) : <p>Aucun objet.</p>}
               </div>
+              </>
+              )}
             </div>
+            </>
           )}
         </div>
 
       </section>
 
+      {!isChoiceAdventure ? (
       <section className="panel side player-side-panel">
-        <div className="badge-line">{playScene ? getSceneLabel(playScene.id) : 'Aucune scene'}</div>
+        <div className="badge-line">{playScene ? getSceneLabel(playScene.id) : 'Aucune scène'}</div>
         <div className="dialogue-box"><p>{dialogue || 'Aucun message.'}</p></div>
+        {renderHeroAdventurePanel()}
 
+        {isHeroAdventure ? renderHeroCharacterPage() : (
+        <>
         <div className="panel-head panel-head-spaced">
           <h3>Inventaire</h3>
           <button
             onClick={() => {
               if (selectedInventoryIds.length !== 2) {
-                setDialogue('Selectionne 2 objets à combiner.');
+                setDialogue('Sélectionne 2 objets à combiner.');
                 return;
               }
               combineInventoryItems(selectedInventoryIds[0], selectedInventoryIds[1]);
@@ -1129,6 +2080,26 @@ export default function PreviewTab(props) {
             </div>
           </div>
         ) : null}
+        {!sharedPlayerMode ? (
+          <div className="combo-card subtle-card adventure-state-card">
+            <div className="panel-head">
+              <h3>État aventure</h3>
+            </div>
+            <div className="adventure-state-grid">
+              <span><strong>{chosenConversationReplyIds.length}</strong> choix faits</span>
+              <span><strong>{hiddenReplies.length}</strong> réponses cachées</span>
+              <span><strong>{storyVariableEntries.length}</strong> variables</span>
+              <span><strong>{endingReplies.length}</strong> fins prevues</span>
+            </div>
+            <div className="adventure-state-list">
+              {visibleStoryVariableEntries.length ? visibleStoryVariableEntries.map(([key, value]) => (
+                <span key={key}><strong>{getStoryVariableJournalLabel(key)}</strong> = {String(value)}</span>
+              )) : <span>Aucune variable d'histoire modifiée.</span>}
+              {activeEnding ? <span><strong>Fin active</strong> = {activeEnding.title || endingLabel}</span> : null}
+            </div>
+          </div>
+        ) : null}
+        {!sharedPlayerMode ? renderAdventureJournal(false) : null}
         <div className="inventory-grid">
           {inventory.length ? inventory.map((itemId) => {
             const item = project.items.find((entry) => entry.id === itemId);
@@ -1160,7 +2131,10 @@ export default function PreviewTab(props) {
           }) : <p>Aucun objet dans l’inventaire.</p>}
         </div>
         <p className="small-note">Cliquer = voir l’image. Glisser-déposer un objet sur un autre = tenter une combinaison.</p>
+        </>
+        )}
       </section>
+      ) : null}
 
       {playingCinematic && (
         <div className="overlay" onClick={(event) => { if (event.target === event.currentTarget) closeCinematic(); }}>
@@ -1174,7 +2148,7 @@ export default function PreviewTab(props) {
               </>
             ) : cinematicPlayback?.type === 'video' ? (
               <>
-                {cinematicPlayback.video?.src ? (
+                {cinematicPlayback.video.src ? (
                   <video
                     className="overlay-media"
                     src={cinematicPlayback.video.src}
@@ -1184,14 +2158,14 @@ export default function PreviewTab(props) {
                     onEnded={closeCinematic}
                   />
                 ) : <p className="small-note">Ajoute une vidéo dans l’éditeur de cinematic.</p>}
-                <p className="narration">{cinematicPlayback.video?.name || playingCinematic.name}</p>
+                <p className="narration">{cinematicPlayback.video.name || playingCinematic.name}</p>
                 <div className="panel-head">
                   <button onClick={closeCinematic}>Terminer</button>
                 </div>
               </>
             ) : (cinematicPlayback?.currentSlide || currentSlide) && (
               <>
-                {(cinematicPlayback?.currentSlide || currentSlide).imageData ? <img className="overlay-media" loading="eager" decoding="async" src={(cinematicPlayback?.currentSlide || currentSlide).imageData} alt={(cinematicPlayback?.currentSlide || currentSlide).imageName || (cinematicPlayback?.currentSlide || currentSlide).narration || 'Cinematic'} /> : null}
+                {(cinematicPlayback?.currentSlide || currentSlide).imageData ? <img className="overlay-media" loading="eager" decoding="async" src={(cinematicPlayback?.currentSlide || currentSlide).imageData} alt={(cinematicPlayback?.currentSlide || currentSlide).imageName || (cinematicPlayback?.currentSlide || currentSlide).narration || 'Cinématique'} /> : null}
                 {(cinematicPlayback?.currentSlide || currentSlide).audioData ? <audio ref={audioRef} autoPlay src={(cinematicPlayback?.currentSlide || currentSlide).audioData} style={{ display: 'none' }} /> : null}
                 <p className="narration">{(cinematicPlayback?.currentSlide || currentSlide).narration}</p>
                 <div className="panel-head">
@@ -1204,6 +2178,93 @@ export default function PreviewTab(props) {
           </div>
         </div>
       )}
+
+      {conversationNode ? (
+        <div className={`overlay ${isChoiceAdventure ? 'conversation-player-overlay' : ''}`} onClick={(event) => { if (event.target === event.currentTarget) closeConversation?.(); }}>
+          <div className={`overlay-card wide ${isChoiceAdventure ? 'conversation-player-card' : ''}`}>
+            <div className="panel-head">
+              {activeConversation?.portraitData ? (
+                <img className="conversation-portrait" src={activeConversation.portraitData} alt={activeConversation.portraitName || conversationNode.speaker || 'Portrait'} />
+              ) : null}
+              <div>
+                <h2>{conversationNode.speaker || 'Conversation'}</h2>
+                <p className="small-note enigma-overlay-question">{conversationNode.text}</p>
+              </div>
+              <button className="danger-button" onClick={closeConversation}>Fermer</button>
+            </div>
+            {renderChoiceEffectSummary(true)}
+            <div className={`stack-10 conversation-player-replies conversation-player-replies-${Math.min(3, Math.max(1, displayedConversationReplies.length || 1))}`}>
+              {displayedConversationReplies.map((reply) => {
+                const isLocked = isConversationReplyAvailable?.(reply) === false;
+                const lockReason = isLocked ? getConversationReplyLockReason?.(reply) : '';
+                return (
+                  <button
+                    key={reply.id}
+                    type="button"
+                    className={`secondary-action code-secondary-button ${isLocked ? 'conversation-reply-locked' : ''}`}
+                    disabled={isLocked}
+                    title={lockReason || undefined}
+                    onClick={() => handleConversationReplyClick(reply)}
+                  >
+                    <span>{reply.label || 'Repondre'}</span>
+                    {isLocked ? <small>{lockReason || 'Choix verrouillée'}</small> : null}
+                  </button>
+                );
+              })}
+              {!displayedConversationReplies.length ? (
+                <button type="button" className="code-primary-button" onClick={closeConversation}>
+                  Continuer
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {choiceEffectNotices.length && !conversationNode && !activeEnding ? (
+        <div className="choice-effect-floating">
+          {renderChoiceEffectSummary(false)}
+        </div>
+      ) : null}
+
+      {activeEnding ? (
+        <div className="overlay">
+          <div className={`overlay-card ending-card ending-card-${activeEnding.type || 'neutral'}`}>
+            <span className="ending-badge">{endingLabel}</span>
+            <h2>{activeEnding.title || endingLabel}</h2>
+            {activeEnding.message ? <p className="small-note">{activeEnding.message}</p> : null}
+            <p>{activeEnding.summary || 'Ton aventure se termine ici.'}</p>
+            {renderChoiceEffectSummary(true)}
+            <div className="inline-actions">
+              <button type="button" className="secondary-action" onClick={closeEnding}>Fermer</button>
+              <button type="button" className="code-primary-button" onClick={resetPreview}>Recommencer</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isHeroDefeated && !activeEnding && !isCustomHeroDefeatScene ? (
+        <div className="overlay hero-defeat-overlay">
+          <div className="overlay-card hero-defeat-card">
+            <span className="ending-badge">Défaite</span>
+            <h2>Le héros tombe à 0 PV</h2>
+            <p className="small-note">Les actions joueur sont bloquées tant que les PV restent à 0.</p>
+            <p>L’aventure s’arrête ici. Recommence la partie ou charge une sauvegarde pour reprendre avant la chute.</p>
+            <div className="inline-actions">
+              <button type="button" className="secondary-action" onClick={loadGameState}>Charger</button>
+              <button
+                type="button"
+                className="secondary-action"
+                onClick={restoreLastChoiceSnapshot}
+                disabled={!lastChoiceSnapshot}
+              >
+                Retour au dernier choix
+              </button>
+              <button type="button" className="code-primary-button" onClick={resetPreview}>Recommencer</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {enigma && (
         <div className="overlay" onClick={(event) => { if (event.target === event.currentTarget) closeEnigma(); }}>
@@ -1310,7 +2371,7 @@ export default function PreviewTab(props) {
 
                 <div className="enigma-actions inline-actions">
                   {codeSkin === 'digicode' ? <button type="button" className="secondary-button code-secondary-button" onClick={() => setEnigmaCodeInput('')}>Effacer</button> : null}
-                  <button className="code-primary-button" onClick={submitEnigma}>Valider l’enigme</button>
+                  <button className="code-primary-button" onClick={submitEnigma}>Valider l’énigme</button>
                 </div>
               </div>
             )}
@@ -1434,7 +2495,7 @@ export default function PreviewTab(props) {
 
                 {miscMode === 'multi-select' ? (
                   <>
-                    <label>Selectionne toutes les bonnes réponses</label>
+                    <label>Sélectionne toutes les bonnes réponses</label>
                     <div className="stack-10">
                       {(enigma.miscChoices || []).map((choice) => (
                         <button
@@ -1465,7 +2526,7 @@ export default function PreviewTab(props) {
                   </>
                 ) : null}
                 <div className="enigma-actions">
-                  <button className="code-primary-button" onClick={submitEnigma}>Valider l’enigme</button>
+                  <button className="code-primary-button" onClick={submitEnigma}>Valider l’énigme</button>
                 </div>
               </div>
             )}
@@ -1485,14 +2546,14 @@ export default function PreviewTab(props) {
                 </div>
                 <div className="panel-head panel-head-loose">
                   <button className="secondary-button" onClick={() => setEnigmaColorAttempt([])}>Effacer la suite</button>
-                  <button onClick={submitEnigma}>Valider l’enigme</button>
+                  <button onClick={submitEnigma}>Valider l’énigme</button>
                 </div>
               </div>
             )}
 
             {enigma.type === 'simon' && (
               <div>
-                <p className="small-note">{simonPlayerTurn ? 'À toi de rejouer la sequence.' : 'Observe la sequence…'}</p>
+                <p className="small-note">{simonPlayerTurn ? 'À toi de rejouer la séquence.' : 'Observe la séquence…'}</p>
                 <div className="color-picker-grid simon-grid">
                   {COLOR_OPTIONS.slice(0, 4).map(([value, label], index) => {
                     const solutionColor = (enigma.solutionColors || [])[simonPlaybackIndex];
@@ -1516,14 +2577,14 @@ export default function PreviewTab(props) {
                   {enigmaColorAttempt.map((color, index) => <span key={`${color}-${index}`} className="color-chip" style={{ background: color }} />)}
                 </div>
                 <div className="inventory-actions">
-                  <button className="secondary-button" onClick={() => startSimonPlayback(enigma)}>Rejouer la sequence</button>
+                  <button className="secondary-button" onClick={() => startSimonPlayback(enigma)}>Rejouer la séquence</button>
                 </div>
               </div>
             )}
 
             {enigma.type === 'puzzle' && enigma.imageData && (
               <div>
-                <p className="small-note">Clique une piece, puis une deuxième pour les échanger.</p>
+                <p className="small-note">Clique une pièce, puis une deuxième pour les échanger.</p>
                 <div className="enigma-grid" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
                   {enigmaPuzzleOrder.map((pieceIndex, index) => (
                     <button
@@ -1540,7 +2601,7 @@ export default function PreviewTab(props) {
 
             {enigma.type === 'rotation' && enigma.imageData && (
               <div>
-                <p className="small-note">Clique sur chaque piece pour la remettre à l’endroit.</p>
+                <p className="small-note">Clique sur chaque pièce pour la remettre à l’endroit.</p>
                 <div className="enigma-grid" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
                   {Array.from({ length: pieceCount }, (_, index) => (
                     <button
@@ -1557,7 +2618,7 @@ export default function PreviewTab(props) {
 
             {enigma.type === 'dragdrop' && enigma.imageData && (
               <div>
-                <p className="small-note">Glisse les pieces vers la bonne case. Clique une case remplie pour renvoyer sa piece dans la réserve.</p>
+                <p className="small-note">Glisse les pièces vers la bonne case. Clique une case remplie pour renvoyer sa pièce dans la réserve.</p>
                 <div className="dragdrop-layout">
                   <div>
                     <h3>Plateau</h3>
@@ -1583,7 +2644,7 @@ export default function PreviewTab(props) {
                     </div>
                   </div>
                   <div>
-                    <h3>Pieces</h3>
+                    <h3>Pièces</h3>
                     <div className="bank-grid">
                       {enigmaDragBank.map((pieceIndex) => (
                         <button
@@ -1603,7 +2664,7 @@ export default function PreviewTab(props) {
             )}
 
             {['puzzle', 'rotation', 'dragdrop'].includes(enigma.type) && !enigma.imageData && (
-              <p className="small-note">Ajoute une image dans l’onglet Enigmes pour jouer cette enigme.</p>
+              <p className="small-note">Ajoute une image dans l’onglet Énigmes pour jouer cette énigme.</p>
             )}
           </div>
         </div>
@@ -1614,6 +2675,16 @@ export default function PreviewTab(props) {
           <div className="player-pause-menu" onClick={(event) => event.stopPropagation()}>
             <span className="eyebrow">Pause</span>
             <h2>{project.title || 'Escape game'}</h2>
+            <div className="adventure-state-card compact">
+              <strong>Progression narrative</strong>
+              <div className="adventure-state-grid">
+                <span><strong>{chosenConversationReplyIds.length}</strong> choix</span>
+                <span><strong>{completedHotspotIds.length}</strong> actions</span>
+                <span><strong>{visibleStoryVariableEntries.length}</strong> variables</span>
+                <span><strong>{activeEnding ? 1 : 0}</strong> fin</span>
+              </div>
+            </div>
+            {renderAdventureJournal(true)}
             <div className="player-pause-actions">
               <button type="button" onClick={() => setIsPauseOpen(false)}>Reprendre</button>
               <button type="button" className="secondary-action" onClick={() => { saveGameState(); setIsPauseOpen(false); }}>Sauvegarder</button>

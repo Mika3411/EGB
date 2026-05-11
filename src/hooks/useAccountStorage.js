@@ -13,6 +13,7 @@ export function useAccountStorage({
   activeProject,
   activeProjectId,
   projects,
+  autoExact = false,
 } = {}) {
   const [accountStorageQuotaBytes, setAccountStorageQuotaBytes] = useState(ACCOUNT_FREE_STORAGE_BYTES);
   const [exactStorageUsageBytes, setExactStorageUsageBytes] = useState(null);
@@ -32,6 +33,11 @@ export function useAccountStorage({
   );
 
   useEffect(() => {
+    if (!autoExact) {
+      setExactStorageUsageBytes(null);
+      return undefined;
+    }
+
     let isCurrent = true;
     exactUsageRequestRef.current += 1;
     const requestId = exactUsageRequestRef.current;
@@ -49,7 +55,7 @@ export function useAccountStorage({
       isCurrent = false;
       window.clearTimeout(timer);
     };
-  }, [projectsForStorageUsage, usageInvalidationVersion]);
+  }, [autoExact, projectsForStorageUsage, usageInvalidationVersion]);
 
   const getCurrentStorageUsageBytes = useCallback(async () => {
     if (exactStorageUsageBytes !== null) return exactStorageUsageBytes;
@@ -76,7 +82,9 @@ export function useAccountStorage({
   const storageSummary = useMemo(() => ({
     usedBytes: effectiveStorageUsageBytes,
     quotaBytes: accountStorageQuotaBytes,
-    usedLabel: exactStorageUsageBytes === null ? 'Calcul...' : formatStorageSize(effectiveStorageUsageBytes),
+    usedLabel: exactStorageUsageBytes === null
+      ? `${formatStorageSize(effectiveStorageUsageBytes)} env.`
+      : formatStorageSize(effectiveStorageUsageBytes),
     quotaLabel: formatStorageSize(accountStorageQuotaBytes),
     isExact: exactStorageUsageBytes !== null,
   }), [accountStorageQuotaBytes, effectiveStorageUsageBytes, exactStorageUsageBytes]);

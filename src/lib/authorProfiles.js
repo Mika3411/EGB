@@ -1,24 +1,10 @@
+import { readJsonStorage, writeJsonStorage } from '../utils/storageHelpers';
+
 const AUTHOR_PROFILES_KEY = 'escapeGameBuilder.authorProfiles.v1';
 
-const canUseStorage = () => typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+const readProfiles = () => readJsonStorage(AUTHOR_PROFILES_KEY, {});
 
-const safeParse = (value, fallback) => {
-  try {
-    return value ? JSON.parse(value) : fallback;
-  } catch {
-    return fallback;
-  }
-};
-
-const readProfiles = () => {
-  if (!canUseStorage()) return {};
-  return safeParse(window.localStorage.getItem(AUTHOR_PROFILES_KEY), {});
-};
-
-const writeProfiles = (profiles) => {
-  if (!canUseStorage()) return;
-  window.localStorage.setItem(AUTHOR_PROFILES_KEY, JSON.stringify(profiles));
-};
+const writeProfiles = (profiles) => writeJsonStorage(AUTHOR_PROFILES_KEY, profiles);
 
 export const normalizeAuthorProfile = (profile = {}, user = {}) => ({
   displayName: profile.displayName || user.name || user.email || 'Créateur',

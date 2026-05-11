@@ -35,7 +35,7 @@ function GalleryImage({ src, alt = '', eager = false, fallback }) {
       alt={alt}
       loading={eager ? 'eager' : 'lazy'}
       decoding="async"
-      fetchPriority={eager ? 'high' : 'auto'}
+      fetchpriority={eager ? 'high' : 'auto'}
       referrerPolicy="no-referrer"
       onError={() => setHasError(true)}
     />
@@ -354,7 +354,7 @@ export default function PublicGallery({
                 fallback={<span>{selectedGame.title.charAt(0).toUpperCase()}</span>}
               />
             </div>
-            <div className="public-game-détails">
+            <div className="public-game-details">
               <div>
                 <span className="eyebrow">Page jeu</span>
                 <h2>{selectedGame.title}</h2>
@@ -401,7 +401,7 @@ export default function PublicGallery({
                   id="public-comment"
                   value={commentText}
                   onChange={(event) => setCommentText(event.target.value)}
-                  placeholder="enigmes cool mais un peu facile"
+                  placeholder="énigmes cool mais un peu facile"
                   maxLength={180}
                 />
                 <button type="submit">Envoyer l’avis</button>

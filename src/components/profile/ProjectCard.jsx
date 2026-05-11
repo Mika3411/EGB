@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { showConfirm } from '../AccessibleDialog';
 import { formatDate } from './profileUtils';
 import {
   getAvailableUpgradeModes,
@@ -38,10 +39,12 @@ export default function ProjectCard({
     onDeleteProject?.(project.id, label);
   };
 
-  const handleModeUpgrade = (nextMode, nextLabel) => {
-    const confirmed = window.confirm(
-      `Passer ce projet en mode ${nextLabel} ? Cette évolution est irréversible : tu ne pourras pas revenir à un mode inférieur ensuite.`,
-    );
+  const handleModeUpgrade = async (nextMode, nextLabel) => {
+    const confirmed = await showConfirm({
+      title: 'Changer de mode',
+      message: `Passer ce projet en mode ${nextLabel} ? Cette évolution est irréversible : tu ne pourras pas revenir à un mode inférieur ensuite.`,
+      confirmLabel: 'Changer',
+    });
     if (confirmed) onUpdateProjectMode?.(project.id, nextMode);
   };
 
@@ -105,8 +108,8 @@ export default function ProjectCard({
           </div>
 
           <p className="small-note">
-            Mode {getProjectModeLabel(project)} · {stats.scenes} scene{stats.scenes > 1 ? 's' : ''} · {stats.enigmas} enigme{stats.enigmas > 1 ? 's' : ''} ·{' '}
-            {stats.cinematics} cinematic{stats.cinematics > 1 ? 's' : ''}
+            Mode {getProjectModeLabel(project)} · {stats.scenes} scène{stats.scenes > 1 ? 's' : ''} · {stats.enigmas} énigme{stats.enigmas > 1 ? 's' : ''} ·{' '}
+            {stats.cinematics} cinématique{stats.cinematics > 1 ? 's' : ''}
           </p>
 
           {upgradeModes.length > 0 ? (
@@ -131,7 +134,7 @@ export default function ProjectCard({
             <div className="project-completion-row ok">
               <span aria-hidden="true">✓</span>
               <strong>{completion.scenes}</strong>
-              <em>scene{completion.scenes > 1 ? 's' : ''}</em>
+              <em>scène{completion.scenes > 1 ? 's' : ''}</em>
             </div>
             <div className={`project-completion-row ${completion.unlinkedHotspots ? 'warn' : 'ok'}`}>
               <span aria-hidden="true">{completion.unlinkedHotspots ? '⚠' : '✓'}</span>
@@ -141,7 +144,7 @@ export default function ProjectCard({
             <div className={`project-completion-row ${completion.enigmasWithoutSolution ? 'danger' : 'ok'}`}>
               <span aria-hidden="true">{completion.enigmasWithoutSolution ? '✕' : '✓'}</span>
               <strong>{completion.enigmasWithoutSolution}</strong>
-              <em>enigme{completion.enigmasWithoutSolution > 1 ? 's' : ''} sans solution</em>
+              <em>énigme{completion.enigmasWithoutSolution > 1 ? 's' : ''} sans solution</em>
             </div>
           </div>
 

@@ -1,30 +1,21 @@
 import { HelpLabel } from './SceneEditorChrome.jsx';
 import MediaSourcePicker from '../MediaSourcePicker.jsx';
+import NumberInput from '../forms/NumberInput.jsx';
+import { showConfirm } from '../AccessibleDialog';
+import {
+  applySceneObjectTextOverride,
+  getSceneObjectBlockType,
+  getSceneObjectClickMode,
+  getSceneObjectFontSize,
+  SCENE_OBJECT_BLOCK_TYPES,
+} from '../../lib/sceneObjectBlocks';
 
-export const SCENE_OBJECT_BLOCK_TYPES = [
-  { value: 'object', label: 'Objet visible' },
-  { value: 'text', label: 'Texte' },
-  { value: 'image', label: 'Image' },
-  { value: 'button', label: 'Bouton' },
-  { value: 'input', label: 'Champ de saisie' },
-  { value: 'code', label: 'Code' },
-  { value: 'hint', label: 'Indice' },
-];
-
-export const getSceneObjectBlockType = (obj) => (
-  SCENE_OBJECT_BLOCK_TYPES.some((type) => type.value === obj?.blockType) ? obj.blockType : 'object'
-);
-
-export const getSceneObjectFontSize = (obj) => {
-  const value = Number(obj?.fontSize);
-  return Number.isFinite(value) ? Math.max(8, Math.min(48, value)) : 13;
-};
-
-export const getSceneObjectClickMode = (obj) => {
-  if (!obj) return 'object';
-  if (obj.clickMode) return obj.clickMode;
-  if (obj.isClickable === false) return 'none';
-  return 'object';
+export {
+  applySceneObjectTextOverride,
+  getSceneObjectBlockType,
+  getSceneObjectClickMode,
+  getSceneObjectFontSize,
+  SCENE_OBJECT_BLOCK_TYPES,
 };
 
 export function SceneObjectBlockContent({ object, displayImage = '', linkedItem = null }) {
@@ -95,13 +86,21 @@ export default function SceneObjectInspector({
     || selectedSceneObject.anime2dName
     || selectedSceneObject.name === 'Animation',
   );
+  const isBeginnerMode = project?.creationMode === 'beginner';
+  const canUseQuickLogic = !isBeginnerMode && project?.creationMode !== 'intermediate';
   const patchObject = (updater) => patchProject((draft) => {
     const obj = draft.scenes.find((scene) => scene.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === selectedSceneObjectId);
     if (obj) updater(obj);
   });
-  const removeObject = () => {
+  const removeObject = async () => {
     const objectKind = isInvisibleObject ? 'invisible' : 'visible';
-    if (!window.confirm(`Supprimer l'objet ${objectKind} "${selectedSceneObject.name}" ?`)) return;
+    const confirmed = await showConfirm({
+      title: "Supprimer l'objet",
+      message: `Supprimer l'objet ${objectKind} "${selectedSceneObject.name}" ?`,
+      confirmLabel: 'Supprimer',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     patchProject((draft) => {
       const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
       if (!scene?.sceneObjects) return;
@@ -114,39 +113,45 @@ export default function SceneObjectInspector({
     <div className="scene-object-inspector-card">
       <HelpLabel help="Nom interne de cet element. Il aide au retrouver dans les calques et les listes de l'éditeur.">Nom</HelpLabel>
       <input value={selectedSceneObject.name} onChange={(event) => patchObject((obj) => { obj.name = event.target.value; })} />
-      <HelpLabel help="Type de bloc affiché dans la scene. Objet visible garde le comportement historique, les autres types ajoutent des blocs interactifs plus lisibles.">Type de bloc</HelpLabel>
-      <select value={blockType} onChange={(event) => patchObject((obj) => {
-        obj.blockType = event.target.value;
-        if (event.target.value === 'object') return;
-        obj.linkedItemId = '';
-        obj.interactionMode = 'popup';
-        obj.clickMode = ['text', 'image'].includes(event.target.value) ? 'none' : 'object';
-        obj.blockLabel = obj.blockLabel || obj.name;
-      })}>
-        {SCENE_OBJECT_BLOCK_TYPES.map((type) => (
-          <option key={type.value} value={type.value}>
-            {type.value === 'object' && isInvisibleObject ? 'Objet invisible' : type.label}
-          </option>
-        ))}
-      </select>
+      {!isBeginnerMode ? (
+        <>
+          <HelpLabel help="Type de bloc affiché dans la scène. Objet visible garde le comportement historique, les autres types ajoutent des blocs interactifs plus lisibles.">Type de bloc</HelpLabel>
+          <select value={blockType} onChange={(event) => patchObject((obj) => {
+            obj.blockType = event.target.value;
+            if (event.target.value === 'object') return;
+            obj.linkedItemId = '';
+            obj.interactionMode = 'popup';
+            obj.clickMode = ['text', 'image'].includes(event.target.value) ? 'none' : 'object';
+            obj.blockLabel = obj.blockLabel || obj.name;
+          })}>
+            {SCENE_OBJECT_BLOCK_TYPES.map((type) => (
+              <option key={type.value} value={type.value}>
+                {type.value === 'object' && isInvisibleObject ? 'Objet invisible' : type.label}
+              </option>
+            ))}
+          </select>
+        </>
+      ) : null}
       <div className="grid-two small-gap">
-        <div><HelpLabel help="Position horizontale du centre de l'objet, en pourcentage de la largeur de l'image.">X</HelpLabel><input type="number" value={selectedSceneObject.x} onChange={(event) => patchObject((obj) => { obj.x = Number(event.target.value); })} /></div>
-        <div><HelpLabel help="Position verticale du centre de l'objet, en pourcentage de la hauteur de l'image.">Y</HelpLabel><input type="number" value={selectedSceneObject.y} onChange={(event) => patchObject((obj) => { obj.y = Number(event.target.value); })} /></div>
-        <div><HelpLabel help="Largeur de l'image visible et, si active, de la zone cliquable.">Largeur</HelpLabel><input type="number" value={selectedSceneObject.width} onChange={(event) => patchObject((obj) => { obj.width = Number(event.target.value); })} /></div>
-        <div><HelpLabel help="Hauteur de l'image visible et, si active, de la zone cliquable.">Hauteur</HelpLabel><input type="number" value={selectedSceneObject.height} onChange={(event) => patchObject((obj) => { obj.height = Number(event.target.value); })} /></div>
+        <div><HelpLabel help="Position horizontale du centre de l'objet, en pourcentage de la largeur de l'image.">X</HelpLabel><NumberInput value={selectedSceneObject.x} onValueChange={(nextValue) => patchObject((obj) => { obj.x = nextValue; })} /></div>
+        <div><HelpLabel help="Position verticale du centre de l'objet, en pourcentage de la hauteur de l'image.">Y</HelpLabel><NumberInput value={selectedSceneObject.y} onValueChange={(nextValue) => patchObject((obj) => { obj.y = nextValue; })} /></div>
+        <div><HelpLabel help="Largeur de l'image visible et, si active, de la zone cliquable.">Largeur</HelpLabel><NumberInput value={selectedSceneObject.width} onValueChange={(nextValue) => patchObject((obj) => { obj.width = nextValue; })} /></div>
+        <div><HelpLabel help="Hauteur de l'image visible et, si active, de la zone cliquable.">Hauteur</HelpLabel><NumberInput value={selectedSceneObject.height} onValueChange={(nextValue) => patchObject((obj) => { obj.height = nextValue; })} /></div>
       </div>
       {renderShapeControls?.('sceneObject', selectedSceneObjectId)}
-      <button type="button" className="secondary-action full" onClick={onOpenLogic}>
-        Logique
-      </button>
+      {canUseQuickLogic ? (
+        <button type="button" className="secondary-action full" onClick={onOpenLogic}>
+          Logique
+        </button>
+      ) : null}
 
-      {isBlockObject ? (
+      {!isBeginnerMode && isBlockObject ? (
         <>
-          <HelpLabel help="Libelle visible sur le bloc, par exemple le titre d'un indice, le texte du bouton ou le nom du champ.">Libelle du bloc</HelpLabel>
+          <HelpLabel help="Libellé visible sur le bloc, par exemple le titre d'un indice, le texte du bouton ou le nom du champ.">Libellé du bloc</HelpLabel>
           <input value={selectedSceneObject.blockLabel || ''} onChange={(event) => patchObject((obj) => { obj.blockLabel = event.target.value; })} />
           {['text', 'hint'].includes(blockType) ? (
             <>
-              <HelpLabel help="Texte affiché directement dans la scene. Pour un indice, il apparait dans le bloc et peut aussi être repris comme dialogue au clic.">Texte</HelpLabel>
+              <HelpLabel help="Texte affiché directement dans la scène. Pour un indice, il apparait dans le bloc et peut aussi être repris comme dialogue au clic.">Texte</HelpLabel>
               <textarea value={selectedSceneObject.blockText || ''} onChange={(event) => patchObject((obj) => {
                 obj.blockText = event.target.value;
                 obj.dialogue = event.target.value;
@@ -163,7 +168,7 @@ export default function SceneObjectInspector({
             <>
               <HelpLabel help="Texte indicatif prèsente au joueur avant la saisie.">Placeholder</HelpLabel>
               <input value={selectedSceneObject.placeholder || ''} onChange={(event) => patchObject((obj) => { obj.placeholder = event.target.value; })} />
-              <HelpLabel help="Reponse attendue. La comparaison ignore les majuscules, accents et espaces superflus.">Reponse attendue</HelpLabel>
+              <HelpLabel help="Réponse attendue. La comparaison ignore les majuscules, accents et espaces superflus.">Réponse attendue</HelpLabel>
               <input value={selectedSceneObject.expectedAnswer || ''} onChange={(event) => patchObject((obj) => { obj.expectedAnswer = event.target.value; })} />
               <HelpLabel help="Message affiché si la réponse est correcte.">Message de réussite</HelpLabel>
               <textarea value={selectedSceneObject.successDialogue || ''} onChange={(event) => patchObject((obj) => { obj.successDialogue = event.target.value; })} />
@@ -177,13 +182,12 @@ export default function SceneObjectInspector({
             <option value="object">Interaction simple</option>
             <option value="action">Action avancee</option>
           </select>
-          <HelpLabel help="Taille du texte affiché dans le cadre du bloc.">Taille de police</HelpLabel>
-          <input
-            type="number"
+          <HelpLabel help="Taille du texte affiché dans le cadre du bloc.">Taille dé police</HelpLabel>
+          <NumberInput
             min="8"
             max="48"
             value={getSceneObjectFontSize(selectedSceneObject)}
-            onChange={(event) => patchObject((obj) => { obj.fontSize = Number(event.target.value); })}
+            onValueChange={(nextValue) => patchObject((obj) => { obj.fontSize = nextValue; })}
           />
         </>
       ) : null}
@@ -231,9 +235,9 @@ export default function SceneObjectInspector({
           </button>
         </div>
       ) : null}
-      {isAnimationObject ? (
+      {!isBeginnerMode && isAnimationObject ? (
         <>
-          <HelpLabel help="JSON exporte depuis l'onglet Animation. Un JSON 2D Anime reste anime directement sur la scene.">Animation 2D</HelpLabel>
+          <HelpLabel help="JSON exporte depuis l'onglet Animation. Un JSON 2D Anime reste anime directement sur la scène.">Animation 2D</HelpLabel>
           <label className="button like full secondary-action">
             {selectedSceneObject.anime2dName ? 'Remplacer JSON 2D Anime' : 'Importer JSON 2D Anime'}
             <input type="file" accept="application/json,.json" hidden onChange={(event) => importSceneObjectAnime2d?.(event, selectedSceneObjectId)} />
@@ -258,13 +262,13 @@ export default function SceneObjectInspector({
 
       {clickMode === 'object' && !isAnimationObject && !isBlockObject ? (
         <>
-          <HelpLabel help="Definit ce qui se passe au clic : montrer un pop-up, ajouter l'objet lie a l'inventaire, ou faire les deux.">Mode d'interaction</HelpLabel>
+          <HelpLabel help="Définit ce qui se passe au clic : montrer un pop-up, ajouter l'objet lié à l'inventaire, ou faire les deux.">Mode d'interaction</HelpLabel>
           <select value={selectedSceneObject.interactionMode || 'popup'} onChange={(event) => patchObject((obj) => { obj.interactionMode = event.target.value; })}>
             <option value="popup">Pop-up uniquement</option>
             <option value="inventory">Inventaire uniquement</option>
             <option value="both">Pop-up + inventaire</option>
           </select>
-          <HelpLabel help="Objet ajoute a l'inventaire si le mode inclut l'inventaire. Sans selection, le clic ne donné aucun objet.">Objet d'inventaire lie</HelpLabel>
+          <HelpLabel help="Objet ajouté à l'inventaire si le mode inclut l'inventaire. Sans sélection, le clic ne donne aucun objet.">Objet d'inventaire lié</HelpLabel>
           <select value={selectedSceneObject.linkedItemId || ''} onChange={(event) => patchObject((obj) => {
             obj.linkedItemId = event.target.value;
             obj.imageData = '';
@@ -283,7 +287,7 @@ export default function SceneObjectInspector({
             <input type="checkbox" checked={Boolean(selectedSceneObject.removeAfterUse)} onChange={(event) => patchObject((obj) => { obj.removeAfterUse = event.target.checked; })} />
             Retirer l'objet visible après interaction ?
           </label>
-          <p className="small-note help-inline-note">Quand c'est active, l'objet disparait de la scene après son utilisation réussie.</p>
+          <p className="small-note help-inline-note">Quand c'est active, l'objet disparait de la scène après son utilisation réussie.</p>
         </>
       ) : null}
 
@@ -293,8 +297,8 @@ export default function SceneObjectInspector({
           <select value={selectedSceneObject.actionType || 'dialogue'} onChange={(event) => patchObject((obj) => { obj.actionType = event.target.value; })}>
             <option value="dialogue">Dialogue</option>
             <option value="dialogue_item">Dialogue + objet</option>
-            <option value="scene">Changer de scene</option>
-            <option value="cinematic">Lancer une cinematic</option>
+            <option value="scene">Changer de scène</option>
+            <option value="cinematic">Lancer une cinématique</option>
           </select>
           <HelpLabel help="Texte affiché lors de l'interaction principale.">Dialogue</HelpLabel>
           <textarea value={selectedSceneObject.dialogue || ''} onChange={(event) => patchObject((obj) => { obj.dialogue = event.target.value; })} />
@@ -312,17 +316,17 @@ export default function SceneObjectInspector({
             <option value="">Aucun</option>
             {project.items.map((item) => <option key={item.id} value={item.id}>{item.icon} {item.name}</option>)}
           </select>
-          <HelpLabel help="Destination utilisée si l'action est Changer de scene.">Scene cible</HelpLabel>
+          <HelpLabel help="Destination utilisée si l'action est Changer de scène.">Scène cible</HelpLabel>
           <select value={selectedSceneObject.targetSceneId || ''} onChange={(event) => patchObject((obj) => { obj.targetSceneId = event.target.value; })}>
             <option value="">Aucune</option>
             {project.scenes.filter((scene) => scene.id !== selectedSceneId).map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
           </select>
-          <HelpLabel help="Cinematic lancee après l'interaction réussie.">Cinematic cible</HelpLabel>
+          <HelpLabel help="Cinématique lancée après l'interaction réussie.">Cinématique cible</HelpLabel>
           <select value={selectedSceneObject.targetCinematicId || ''} onChange={(event) => patchObject((obj) => { obj.targetCinematicId = event.target.value; })}>
             <option value="">Aucune</option>
             {project.cinematics.map((cinematic) => <option key={cinematic.id} value={cinematic.id}>{cinematic.name}</option>)}
           </select>
-          <HelpLabel help="Enigme a résoudre avant d'executer l'action.">Enigme liee</HelpLabel>
+          <HelpLabel help="Énigme a résoudre avant d'executer l'action.">Énigme liée</HelpLabel>
           <select value={selectedSceneObject.enigmaId || ''} onChange={(event) => patchObject((obj) => { obj.enigmaId = event.target.value; })}>
             <option value="">Aucune</option>
             {(project.enigmas || []).map((enigma) => <option key={enigma.id} value={enigma.id}>{enigma.name}</option>)}
@@ -376,7 +380,7 @@ export default function SceneObjectInspector({
       ) : null}
 
       {clickMode === 'none' ? (
-        <p className="small-note help-inline-note">Cette image reste visible dans la scene, mais aucun clic joueur ne déclénche d'action.</p>
+        <p className="small-note help-inline-note">Cette image reste visible dans la scène, mais aucun clic joueur ne déclénche d'action.</p>
       ) : null}
 
       <button className="danger-button" style={{ marginTop: 12 }} onClick={removeObject}>

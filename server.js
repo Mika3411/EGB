@@ -1,8 +1,14 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { extname, join, resolve } from 'node:path';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
+import { assertAiContentAllowed, makeImageModerationInput } from './src/utils/aiModeration.js';
+import { assertAiRateLimit, getClientIpFromHeaders } from './src/utils/aiRateLimit.js';
+import { assertCorsRequestAllowed, makeCorsHeaders } from './src/utils/corsConfig.js';
+import { assertProjectSafety, parseProjectJsonPayload } from './src/utils/projectSafetyValidation.js';
 
 const rootDir = fileURLToPath(new URL('.', import.meta.url));
 const publicDir = resolve(rootDir, 'dist');
@@ -30,11 +36,14 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 let supabaseAdminClient = null;
 
 const creditStorePath = process.env.AI_CREDITS_FILE || join(rootDir, '.data', 'ai-credits.json');
+const creditStoreLockPath = `${creditStorePath}.lock`;
 const defaultAiCredits = Number(process.env.AI_DEFAULT_CREDITS || 20);
 const storageBucket = process.env.SUPABASE_STORAGE_BUCKET || process.env.VITE_SUPABASE_STORAGE_BUCKET || 'escape-game-assets';
 const shopPacksStoragePath = 'public/shop-packs.json';
 const publicProjectsStoragePath = 'public/projects.json';
 const aiJobs = new Map();
+const FREE_STORAGE_BYTES = 250 * 1024 * 1024;
+const STORAGE_BYTES_PER_CREDIT = 5 * 1024 * 1024;
 const aiCreditCosts = {
   text: Number(process.env.AI_TEXT_CREDIT_COST || 2),
   improve: Number(process.env.AI_IMPROVE_CREDIT_COST || 5),
@@ -79,12 +88,11 @@ const calculateTextCreditCost = (body = {}) => (
       : aiCreditCosts.text
 );
 
-const jsonHeaders = {
+const requestContext = new AsyncLocalStorage();
+const getActiveRequest = () => requestContext.getStore();
+const getJsonHeaders = (req = getActiveRequest()) => makeCorsHeaders(req?.headers || {}, process.env, {
   'Content-Type': 'application/json; charset=utf-8',
-  'Access-Control-Allow-Origin': process.env.CORS_ORIGIN || '*',
-  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-AI-User-Id',
-};
+});
 
 const mimeTypes = {
   '.html': 'text/html; charset=utf-8',
@@ -99,7 +107,7 @@ const mimeTypes = {
 };
 
 const sendJson = (res, status, payload) => {
-  res.writeHead(status, jsonHeaders);
+  res.writeHead(status, getJsonHeaders());
   res.end(JSON.stringify(payload));
 };
 
@@ -161,7 +169,44 @@ const readCreditStore = () => {
 
 const writeCreditStore = (store) => {
   mkdirSync(join(creditStorePath, '..'), { recursive: true });
-  writeFileSync(creditStorePath, JSON.stringify(store, null, 2));
+  const tempPath = `${creditStorePath}.${process.pid}.${Date.now()}.tmp`;
+  writeFileSync(tempPath, JSON.stringify(store, null, 2));
+  renameSync(tempPath, creditStorePath);
+};
+
+const sleepSync = (delayMs) => {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delayMs);
+};
+
+const withCreditStoreLock = (task) => {
+  mkdirSync(join(creditStorePath, '..'), { recursive: true });
+  const startedAt = Date.now();
+  let lockHandle = null;
+
+  while (lockHandle === null) {
+    try {
+      lockHandle = openSync(creditStoreLockPath, 'wx');
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      if (Date.now() - startedAt > 5000) {
+        const lockError = new Error('Store de credits occupe, reessaie dans un instant.');
+        lockError.status = 503;
+        throw lockError;
+      }
+      sleepSync(25);
+    }
+  }
+
+  try {
+    return task();
+  } finally {
+    closeSync(lockHandle);
+    try {
+      unlinkSync(creditStoreLockPath);
+    } catch {
+      // Le verrou est best-effort: s'il a deja disparu, la section critique est terminee.
+    }
+  }
 };
 
 const getCreditUserId = (req, body = {}) => {
@@ -356,10 +401,12 @@ const ensureCreditAccount = (store, userId) => {
 };
 
 const getCreditAccount = (userId) => {
-  const store = readCreditStore();
-  const account = ensureCreditAccount(store, userId);
-  writeCreditStore(store);
-  return account;
+  return withCreditStoreLock(() => {
+    const store = readCreditStore();
+    const account = ensureCreditAccount(store, userId);
+    writeCreditStore(store);
+    return account;
+  });
 };
 
 const calculateImageCreditCost = (account, body = {}) => {
@@ -370,22 +417,102 @@ const calculateImageCreditCost = (account, body = {}) => {
   return usedInBatch % batchSize === 0 ? aiCreditCosts.objectImageBatchCost : 0;
 };
 
-const commitImageCreditUsage = (userId, body = {}, cost = 0) => {
-  const store = readCreditStore();
-  const account = ensureCreditAccount(store, userId);
-  const batchSize = Math.max(1, toCount(aiCreditCosts.objectImageBatchSize) || 1);
-  if (body.type === 'item' && body.variant !== 'thumbnail') {
-    account.objectImagesInCurrentBatch = (toCount(account.objectImagesInCurrentBatch) + 1) % batchSize;
-    account.updatedAt = new Date().toISOString();
-  }
-  if (cost > 0) {
-    const lastTransaction = (account.transactions || [])[account.transactions.length - 1];
-    if (lastTransaction?.reason?.startsWith('image:item')) {
-      lastTransaction.batchProgress = `${account.objectImagesInCurrentBatch || batchSize}/${batchSize}`;
+const makeImageCreditReservationId = () => `image_${Date.now()}_${randomUUID()}`;
+
+const sanitizeCreditTrace = (value = '') => String(value || '')
+  .trim()
+  .replace(/[^a-zA-Z0-9_.:-]/g, '-')
+  .slice(0, 120);
+
+const getReservationRefundReason = (reason, reservation = {}) => {
+  const reservationId = sanitizeCreditTrace(reservation.id || reservation.reservationId);
+  return reservationId ? `${reason}:reservation:${reservationId}` : reason;
+};
+
+const reserveImageCredits = (userId, body = {}) => {
+  return withCreditStoreLock(() => {
+    const store = readCreditStore();
+    const account = ensureCreditAccount(store, userId);
+    const reservationId = makeImageCreditReservationId();
+    const batchSize = Math.max(1, toCount(aiCreditCosts.objectImageBatchSize) || 1);
+    const advancesBatch = body.type === 'item' && body.variant !== 'thumbnail';
+    const previousBatchCount = toCount(account.objectImagesInCurrentBatch);
+    const cost = calculateImageCreditCost(account, body);
+    const balance = Number(account.balance || 0);
+    if (balance < cost) {
+      const error = new Error(`Credits IA insuffisants (${balance}/${cost}).`);
+      error.status = 402;
+      error.code = 'AI_CREDITS_EXHAUSTED';
+      error.balance = balance;
+      error.required = cost;
+      throw error;
     }
-  }
-  writeCreditStore(store);
-  return account;
+    const now = new Date().toISOString();
+    const nextBatchCount = advancesBatch ? (previousBatchCount + 1) % batchSize : previousBatchCount;
+
+    if (cost > 0) {
+      addCreditTransaction(account, {
+        type: 'debit',
+        amount: -cost,
+        reason: `image:${body.type || 'image'}`,
+        at: now,
+      });
+      const lastTransaction = (account.transactions || [])[account.transactions.length - 1];
+      if (lastTransaction?.reason?.startsWith('image:item')) {
+        lastTransaction.batchProgress = `${nextBatchCount || batchSize}/${batchSize}`;
+      }
+    }
+
+    if (advancesBatch) {
+      account.objectImagesInCurrentBatch = nextBatchCount;
+      account.updatedAt = now;
+    }
+
+    writeCreditStore(store);
+    return {
+      id: reservationId,
+      account,
+      cost,
+      batchSize,
+      advancesBatch,
+      previousBatchCount,
+      nextBatchCount,
+    };
+  });
+};
+
+const releaseImageCreditReservation = (userId, reservation = {}, reason = 'failed_image') => {
+  return withCreditStoreLock(() => {
+    const store = readCreditStore();
+    const account = ensureCreditAccount(store, userId);
+    const cost = Math.max(0, Math.round(Number(reservation.cost || 0)));
+    const batchSize = Math.max(1, toCount(reservation.batchSize) || 1);
+    const currentBatchCount = toCount(account.objectImagesInCurrentBatch);
+    const refundReason = getReservationRefundReason(reason, reservation);
+    const alreadyRefunded = reservation.id && (account.transactions || []).some((transaction) => (
+      transaction.type === 'refund'
+      && Number(transaction.amount || 0) === cost
+      && transaction.reason === refundReason
+    ));
+    const now = new Date().toISOString();
+
+    if (cost > 0 && !alreadyRefunded) {
+      addCreditTransaction(account, {
+        type: 'refund',
+        amount: cost,
+        reason: refundReason,
+        at: now,
+      });
+    }
+
+    if (reservation.advancesBatch) {
+      account.objectImagesInCurrentBatch = (currentBatchCount - 1 + batchSize) % batchSize;
+      account.updatedAt = now;
+    }
+
+    writeCreditStore(store);
+    return account;
+  });
 };
 
 const addCreditTransaction = (account, transaction) => {
@@ -409,55 +536,68 @@ const requireCreditAdmin = async (req) => {
 };
 
 const spendCredits = (userId, amount, reason) => {
-  const store = readCreditStore();
-  const account = ensureCreditAccount(store, userId);
-  const safeAmount = Math.max(0, Number(amount || 0));
-  if (safeAmount > 0 && Number(account.balance || 0) < safeAmount) {
-    const error = new Error(`Crédits IA insuffisants (${account.balance || 0}/${safeAmount}).`);
-    error.status = 402;
-    error.code = 'AI_CREDITS_EXHAUSTED';
-    error.balance = account.balance || 0;
-    error.required = safeAmount;
-    throw error;
-  }
-  if (safeAmount > 0) {
-    addCreditTransaction(account, {
-      type: 'debit',
-      amount: -safeAmount,
-      reason,
-      at: new Date().toISOString(),
-    });
-    writeCreditStore(store);
-  }
-  return account;
+  return withCreditStoreLock(() => {
+    const store = readCreditStore();
+    const account = ensureCreditAccount(store, userId);
+    const safeAmount = Math.max(0, Number(amount || 0));
+    if (safeAmount > 0 && Number(account.balance || 0) < safeAmount) {
+      const error = new Error(`Crédits IA insuffisants (${account.balance || 0}/${safeAmount}).`);
+      error.status = 402;
+      error.code = 'AI_CREDITS_EXHAUSTED';
+      error.balance = account.balance || 0;
+      error.required = safeAmount;
+      throw error;
+    }
+    if (safeAmount > 0) {
+      addCreditTransaction(account, {
+        type: 'debit',
+        amount: -safeAmount,
+        reason,
+        at: new Date().toISOString(),
+      });
+      writeCreditStore(store);
+    }
+    return account;
+  });
 };
 
 const refundCredits = (userId, amount, reason) => {
   const safeAmount = Math.max(0, Number(amount || 0));
   if (!safeAmount) return;
-  const store = readCreditStore();
-  const account = ensureCreditAccount(store, userId);
-  addCreditTransaction(account, {
-    type: 'refund',
-    amount: safeAmount,
-    reason,
-    at: new Date().toISOString(),
+  withCreditStoreLock(() => {
+    const store = readCreditStore();
+    const account = ensureCreditAccount(store, userId);
+    addCreditTransaction(account, {
+      type: 'refund',
+      amount: safeAmount,
+      reason,
+      at: new Date().toISOString(),
+    });
+    writeCreditStore(store);
   });
-  writeCreditStore(store);
 };
 
 const grantCredits = (userId, amount, reason) => {
-  const store = readCreditStore();
-  const account = ensureCreditAccount(store, userId);
-  addCreditTransaction(account, {
-    type: 'grant',
-    amount,
-    reason,
-    at: new Date().toISOString(),
+  return withCreditStoreLock(() => {
+    const store = readCreditStore();
+    const account = ensureCreditAccount(store, userId);
+    addCreditTransaction(account, {
+      type: 'grant',
+      amount,
+      reason,
+      at: new Date().toISOString(),
+    });
+    writeCreditStore(store);
+    return account;
   });
-  writeCreditStore(store);
-  return account;
 };
+
+const getStorageQuotaFromTransactions = (account = {}) => (
+  (account.transactions || []).reduce((quota, entry) => {
+    const [, , bytes] = String(entry.reason || '').split(':');
+    return Math.max(quota, Math.round(Number(bytes) || 0));
+  }, FREE_STORAGE_BYTES)
+);
 
 const handleCredits = async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -472,7 +612,37 @@ const handleCredits = async (req, res) => {
     nextObjectThumbnailCost: calculateImageCreditCost(account, { type: 'item', variant: 'thumbnail' }),
     objectImagesInCurrentBatch: toCount(account.objectImagesInCurrentBatch),
     objectImageBatchSize,
+    storageQuotaBytes: getStorageQuotaFromTransactions(account),
     transactions: (account.transactions || []).slice(-10).reverse(),
+  });
+};
+
+const handleStorageUpgrade = async (req, res) => {
+  if (req.method !== 'POST') {
+    sendJson(res, 405, { error: 'Methode non autorisee.' });
+    return;
+  }
+
+  const body = await readJsonBody(req);
+  const credits = Math.max(0, Math.round(Number(body.credits || 0)));
+  if (!credits) {
+    sendJson(res, 400, { error: 'Nombre de credits invalide.' });
+    return;
+  }
+
+  const userId = await resolveCreditUserId(req, body);
+  if (!userId || (userId === 'anonymous' && getSupabaseAdminClient())) {
+    sendJson(res, 400, { error: 'Utilisateur manquant.' });
+    return;
+  }
+
+  const storageQuotaBytes = credits * STORAGE_BYTES_PER_CREDIT;
+  const account = spendCredits(userId, credits, `storage_upgrade:${credits}:${storageQuotaBytes}`);
+  sendJson(res, 200, {
+    ok: true,
+    balance: Number(account.balance || 0),
+    storageQuotaBytes: getStorageQuotaFromTransactions(account),
+    storagePackCredits: credits,
   });
 };
 
@@ -523,35 +693,38 @@ const handleCreditsAdminUpdate = async (req, res) => {
     return;
   }
 
-  const store = readCreditStore();
-  const account = ensureCreditAccount(store, userId);
-  const now = new Date().toISOString();
-  const reason = body.reason || `admin_${action}`;
+  const account = withCreditStoreLock(() => {
+    const store = readCreditStore();
+    const lockedAccount = ensureCreditAccount(store, userId);
+    const now = new Date().toISOString();
+    const reason = body.reason || `admin_${action}`;
 
-  if (action === 'set') {
-    const previousBalance = Number(account.balance || 0);
-    const nextBalance = Math.max(0, amount);
-    account.balance = nextBalance;
-    account.updatedAt = now;
-    account.transactions = [...(account.transactions || []), {
-      type: 'admin_set',
-      amount: nextBalance - previousBalance,
-      previousBalance,
-      nextBalance,
-      reason,
-      at: now,
-    }].slice(-100);
-  } else {
-    const signedAmount = action === 'subtract' ? -Math.abs(amount) : Math.abs(amount);
-    addCreditTransaction(account, {
-      type: signedAmount < 0 ? 'admin_debit' : 'admin_grant',
-      amount: signedAmount,
-      reason,
-      at: now,
-    });
-  }
+    if (action === 'set') {
+      const previousBalance = Number(lockedAccount.balance || 0);
+      const nextBalance = Math.max(0, amount);
+      lockedAccount.balance = nextBalance;
+      lockedAccount.updatedAt = now;
+      lockedAccount.transactions = [...(lockedAccount.transactions || []), {
+        type: 'admin_set',
+        amount: nextBalance - previousBalance,
+        previousBalance,
+        nextBalance,
+        reason,
+        at: now,
+      }].slice(-100);
+    } else {
+      const signedAmount = action === 'subtract' ? -Math.abs(amount) : Math.abs(amount);
+      addCreditTransaction(lockedAccount, {
+        type: signedAmount < 0 ? 'admin_debit' : 'admin_grant',
+        amount: signedAmount,
+        reason,
+        at: now,
+      });
+    }
 
-  writeCreditStore(store);
+    writeCreditStore(store);
+    return lockedAccount;
+  });
   sendJson(res, 200, {
     user: normalizeCreditAccount(userId, account),
     costs: aiCreditCosts,
@@ -643,9 +816,62 @@ const saveServerShopPacks = async (packs = []) => {
   return normalized;
 };
 
+const shopPurchaseLocks = new Map();
+
+const withShopPurchaseLock = async (packId, task) => {
+  const previous = shopPurchaseLocks.get(packId) || Promise.resolve();
+  let releaseLock;
+  const current = new Promise((resolve) => {
+    releaseLock = resolve;
+  });
+  const queued = previous.then(() => current, () => current);
+  shopPurchaseLocks.set(packId, queued);
+  await previous.catch(() => {});
+  try {
+    return await task();
+  } finally {
+    releaseLock();
+    if (shopPurchaseLocks.get(packId) === queued) {
+      shopPurchaseLocks.delete(packId);
+    }
+  }
+};
+
+const toPublicShopPack = (pack = {}) => {
+  const {
+    downloadUrl,
+    downloadStoragePath,
+    ...publicPack
+  } = normalizeShopPack(pack);
+  return {
+    ...publicPack,
+    hasDownload: Boolean(downloadUrl || downloadStoragePath),
+  };
+};
+
+const preserveExistingShopPackDownload = (incomingPack = {}, existingPack = null) => {
+  if (!existingPack) return normalizeShopPack(incomingPack);
+  return normalizeShopPack({
+    ...incomingPack,
+    downloadUrl: Object.prototype.hasOwnProperty.call(incomingPack, 'downloadUrl')
+      ? incomingPack.downloadUrl
+      : existingPack.downloadUrl,
+    downloadFileName: Object.prototype.hasOwnProperty.call(incomingPack, 'downloadFileName')
+      ? incomingPack.downloadFileName
+      : existingPack.downloadFileName,
+    downloadStoragePath: Object.prototype.hasOwnProperty.call(incomingPack, 'downloadStoragePath')
+      ? incomingPack.downloadStoragePath
+      : existingPack.downloadStoragePath,
+    downloadMode: Object.prototype.hasOwnProperty.call(incomingPack, 'downloadMode')
+      ? incomingPack.downloadMode
+      : existingPack.downloadMode,
+  });
+};
+
 const handleShopPacks = async (req, res) => {
   if (req.method === 'GET') {
-    sendJson(res, 200, { packs: await loadServerShopPacks() });
+    const packs = await loadServerShopPacks();
+    sendJson(res, 200, { packs: packs.map(toPublicShopPack) });
     return;
   }
 
@@ -655,13 +881,16 @@ const handleShopPacks = async (req, res) => {
   const packs = await loadServerShopPacks();
 
   if (action === 'replace') {
-    const nextPacks = await saveServerShopPacks(Array.isArray(body.packs) ? body.packs : []);
+    const nextPacks = await saveServerShopPacks((Array.isArray(body.packs) ? body.packs : []).map((pack) => (
+      preserveExistingShopPackDownload(pack, packs.find((entry) => entry.id === pack?.id))
+    )));
     sendJson(res, 200, { packs: nextPacks, admin: adminUser.email || '' });
     return;
   }
 
   if (action === 'upsert') {
-    const pack = normalizeShopPack(body.pack || {});
+    const rawPack = body.pack || {};
+    const pack = preserveExistingShopPackDownload(rawPack, packs.find((entry) => entry.id === rawPack?.id));
     if (!pack.title) {
       sendJson(res, 400, { error: 'Nom du pack manquant.' });
       return;
@@ -728,48 +957,68 @@ const handleShopPurchase = async (req, res) => {
     return;
   }
 
-  const packs = await loadServerShopPacks();
-  const pack = packs.find((entry) => entry.id === packId);
-  if (!pack || pack.archived) {
-    sendJson(res, 404, { error: 'Pack indisponible.' });
-    return;
-  }
-  if (!pack.downloadUrl) {
-    sendJson(res, 400, { error: 'Pack sans fichier telechargeable.' });
-    return;
-  }
+  await withShopPurchaseLock(packId, async () => {
+    const packs = await loadServerShopPacks();
+    const pack = packs.find((entry) => entry.id === packId);
+    if (!pack || pack.archived) {
+      sendJson(res, 404, { error: 'Pack indisponible.' });
+      return;
+    }
+    if (!pack.downloadUrl) {
+      sendJson(res, 400, { error: 'Pack sans fichier telechargeable.' });
+      return;
+    }
 
-  const costCredits = Math.max(0, Math.round(Number(pack.costCredits || 0)));
-  const title = String(pack.title || 'Pack boutique').trim().slice(0, 120);
-  if (!costCredits) {
-    sendJson(res, 400, { error: 'Cout en credits invalide.' });
-    return;
-  }
+    const costCredits = Math.max(0, Math.round(Number(pack.costCredits || 0)));
+    const title = String(pack.title || 'Pack boutique').trim().slice(0, 120);
+    if (!costCredits) {
+      sendJson(res, 400, { error: 'Cout en credits invalide.' });
+      return;
+    }
 
-  const account = spendCredits(userId, costCredits, `shop_pack:${packId}:${title}`);
-  const purchasedAt = new Date().toISOString();
-  await saveServerShopPacks(packs.map((entry) => (
-    entry.id === packId ? normalizeShopPack({
-      ...entry,
-      archived: true,
-      archivedAt: purchasedAt,
-      archivedReason: 'sold',
-      soldAt: purchasedAt,
-      soldTo: userId,
-    }) : entry
-  )));
+    const accountBeforePurchase = getCreditAccount(userId);
+    if (Number(accountBeforePurchase.balance || 0) < costCredits) {
+      sendJson(res, 402, {
+        error: `Credits IA insuffisants (${accountBeforePurchase.balance || 0}/${costCredits}).`,
+        balance: accountBeforePurchase.balance || 0,
+        required: costCredits,
+      });
+      return;
+    }
 
-  sendJson(res, 200, {
-    ok: true,
-    purchase: {
-      packId,
-      title,
-      costCredits,
-      downloadUrl: pack.downloadUrl,
-      downloadFileName: pack.downloadFileName || `${title || 'pack'}.zip`,
-      purchasedAt,
-    },
-    balance: account.balance || 0,
+    const purchasedAt = new Date().toISOString();
+    const nextPacks = packs.map((entry) => (
+      entry.id === packId ? normalizeShopPack({
+        ...entry,
+        archived: true,
+        archivedAt: purchasedAt,
+        archivedReason: 'sold',
+        soldAt: purchasedAt,
+        soldTo: userId,
+      }) : entry
+    ));
+    await saveServerShopPacks(nextPacks);
+
+    let account;
+    try {
+      account = spendCredits(userId, costCredits, `shop_pack:${packId}:${title}`);
+    } catch (error) {
+      await saveServerShopPacks(packs);
+      throw error;
+    }
+
+    sendJson(res, 200, {
+      ok: true,
+      purchase: {
+        packId,
+        title,
+        costCredits,
+        downloadUrl: pack.downloadUrl,
+        downloadFileName: pack.downloadFileName || `${title || 'pack'}.zip`,
+        purchasedAt,
+      },
+      balance: account.balance || 0,
+    });
   });
 };
 
@@ -785,6 +1034,20 @@ const supabaseUserToAdminRecord = (user) => ({
   isDisabled: Boolean(user.banned_until && new Date(user.banned_until).getTime() > Date.now()),
 });
 
+const getPublicProjectCounts = (records = []) => (
+  (Array.isArray(records) ? records : []).reduce((counts, record) => {
+    const userId = record?.userId || '';
+    if (userId) counts[userId] = (counts[userId] || 0) + 1;
+    return counts;
+  }, {})
+);
+
+const getStoredProjectCountForUser = async (userId, publicCount = 0) => {
+  const records = await downloadStorageJson(getProjectsStoragePath(userId), []);
+  const privateCount = Array.isArray(records) ? records.filter((project) => project?.id).length : 0;
+  return Math.max(privateCount, Number(publicCount || 0));
+};
+
 const handleAdminUsers = async (req, res) => {
   await verifySupabaseAdminRequest(req);
   const client = getSupabaseAdminClient();
@@ -794,12 +1057,19 @@ const handleAdminUsers = async (req, res) => {
   });
 
   if (error) throw error;
-  const users = (data.users || [])
-    .map(supabaseUserToAdminRecord)
+  const publicRecords = await downloadStorageJson(publicProjectsStoragePath, []);
+  const publicCounts = getPublicProjectCounts(publicRecords);
+  const users = await Promise.all((data.users || [])
+    .map(async (user) => ({
+      ...supabaseUserToAdminRecord(user),
+      projectCount: await getStoredProjectCountForUser(user.id, publicCounts[user.id]),
+    })));
+
+  const visibleUsers = users
     .filter((account) => normalizeEmail(account.email) !== ADMIN_EMAIL)
     .sort((a, b) => normalizeEmail(a.email).localeCompare(normalizeEmail(b.email), 'fr'));
 
-  sendJson(res, 200, { users });
+  sendJson(res, 200, { users: visibleUsers });
 };
 
 const handleAdminUserUpdate = async (req, res) => {
@@ -865,6 +1135,24 @@ const getAdminProjectPayload = (record = {}) => {
   };
 };
 
+const getAdminProjectCounts = async (client, publicRecords = []) => {
+  const { data, error } = await client.auth.admin.listUsers({
+    page: 1,
+    perPage: 1000,
+  });
+
+  if (error) throw error;
+
+  const publicCounts = getPublicProjectCounts(publicRecords);
+
+  const entries = await Promise.all((data.users || []).map(async (user) => {
+    const projectCount = await getStoredProjectCountForUser(user.id, publicCounts[user.id]);
+    return [user.id, projectCount];
+  }));
+
+  return Object.fromEntries(entries);
+};
+
 const handleAdminProjects = async (req, res) => {
   await verifySupabaseAdminRequest(req);
 
@@ -873,9 +1161,11 @@ const handleAdminProjects = async (req, res) => {
     return;
   }
 
+  const client = getSupabaseAdminClient();
   const records = await downloadStorageJson(publicProjectsStoragePath, []);
   const projects = Array.isArray(records) ? records.map(getAdminProjectPayload) : [];
-  sendJson(res, 200, { projects });
+  const projectCounts = await getAdminProjectCounts(client, records);
+  sendJson(res, 200, { projects, projectCounts });
 };
 
 const handleAdminModeration = async (req, res) => {
@@ -986,10 +1276,32 @@ const sanitizePublicSettings = (settings = {}) => Object.fromEntries(
 );
 
 const getProjectsStoragePath = (userId) => buildStoragePath('users', userId, 'projects.json');
+const getProjectRecordStoragePath = (userId, projectId) => buildStoragePath('users', userId, 'projects', `${projectId || 'project'}.json`);
+
+const getProjectIndexRecord = (userId, project = {}) => {
+  const storagePath = project.storagePath || getProjectRecordStoragePath(userId, project.id);
+  const { data, project: legacyProject, ...metadata } = project;
+  return {
+    ...metadata,
+    storagePath,
+  };
+};
+
+const saveProjectRecordForUser = async (userId, project = {}) => {
+  const storagePath = project.storagePath || getProjectRecordStoragePath(userId, project.id);
+  const record = { ...project, storagePath };
+  await uploadStorageJson(storagePath, record);
+  return record;
+};
 
 const loadServerProjectsForUser = async (userId) => {
   const projects = await downloadStorageJson(getProjectsStoragePath(userId), []);
-  return Array.isArray(projects) ? projects.map(normalizeProjectRecord) : [];
+  if (!Array.isArray(projects)) return [];
+  return Promise.all(projects.map(async (project) => {
+    if (!project?.storagePath) return normalizeProjectRecord(project);
+    const fullProject = await downloadStorageJson(project.storagePath, project);
+    return normalizeProjectRecord({ ...project, ...fullProject, storagePath: project.storagePath });
+  }));
 };
 
 const savePublicProjectIndexForUser = async (userId, projects = []) => {
@@ -1009,9 +1321,14 @@ const savePublicProjectIndexForUser = async (userId, projects = []) => {
 
 const saveServerProjectsForUser = async (userId, projects = []) => {
   const normalized = Array.isArray(projects) ? projects.map(normalizeProjectRecord) : [];
-  await uploadStorageJson(getProjectsStoragePath(userId), normalized);
-  await savePublicProjectIndexForUser(userId, normalized);
-  return normalized;
+  const storedProjects = [];
+  for (const project of normalized) {
+    if (!project?.id) continue;
+    storedProjects.push(await saveProjectRecordForUser(userId, project));
+  }
+  await uploadStorageJson(getProjectsStoragePath(userId), storedProjects.map((project) => getProjectIndexRecord(userId, project)));
+  await savePublicProjectIndexForUser(userId, storedProjects);
+  return storedProjects;
 };
 
 const handleProjectPublication = async (req, res) => {
@@ -1172,7 +1489,11 @@ const getGumroadPack = (body = {}) => {
 const handleGumroadWebhook = async (req, res) => {
   const body = await readJsonBody(req);
   const expectedSecret = process.env.GUMROAD_WEBHOOK_SECRET || '';
-  if (expectedSecret && body.secret !== expectedSecret) {
+  if (!expectedSecret) {
+    sendJson(res, 503, { ok: false, error: 'Secret Gumroad serveur non configure.' });
+    return;
+  }
+  if (body.secret !== expectedSecret) {
     sendJson(res, 403, { ok: false, error: 'Secret Gumroad invalide.' });
     return;
   }
@@ -1180,12 +1501,6 @@ const handleGumroadWebhook = async (req, res) => {
   const saleId = String(body.sale_id || body.id || body.order_number || '').trim();
   if (!saleId) {
     sendJson(res, 400, { ok: false, error: 'sale_id Gumroad manquant.' });
-    return;
-  }
-
-  const store = readCreditStore();
-  if (store.gumroadSales[saleId]) {
-    sendJson(res, 200, { ok: true, duplicate: true, saleId });
     return;
   }
 
@@ -1201,32 +1516,46 @@ const handleGumroadWebhook = async (req, res) => {
     return;
   }
 
-  const account = ensureCreditAccount(store, userId);
-  addCreditTransaction(account, {
-    type: 'grant',
-    amount: pack.credits,
-    reason: `gumroad:${saleId}`,
-    at: new Date().toISOString(),
-    productId: body.product_id || '',
-    productPermalink: body.product_permalink || body.permalink || '',
-    buyerEmail: body.email || '',
+  const gumroadResult = withCreditStoreLock(() => {
+    const store = readCreditStore();
+    if (store.gumroadSales[saleId]) {
+      return { duplicate: true };
+    }
+
+    const account = ensureCreditAccount(store, userId);
+    const processedAt = new Date().toISOString();
+    addCreditTransaction(account, {
+      type: 'grant',
+      amount: pack.credits,
+      reason: `gumroad:${saleId}`,
+      at: processedAt,
+      productId: body.product_id || '',
+      productPermalink: body.product_permalink || body.permalink || '',
+      buyerEmail: body.email || '',
+    });
+    store.gumroadSales[saleId] = {
+      userId,
+      credits: pack.credits,
+      productId: body.product_id || '',
+      productPermalink: body.product_permalink || body.permalink || '',
+      email: body.email || '',
+      processedAt,
+    };
+    writeCreditStore(store);
+    return { balance: account.balance };
   });
-  store.gumroadSales[saleId] = {
-    userId,
-    credits: pack.credits,
-    productId: body.product_id || '',
-    productPermalink: body.product_permalink || body.permalink || '',
-    email: body.email || '',
-    processedAt: new Date().toISOString(),
-  };
-  writeCreditStore(store);
+
+  if (gumroadResult.duplicate) {
+    sendJson(res, 200, { ok: true, duplicate: true, saleId });
+    return;
+  }
 
   sendJson(res, 200, {
     ok: true,
     saleId,
     userId,
     creditsAdded: pack.credits,
-    balance: account.balance,
+    balance: gumroadResult.balance,
   });
 };
 
@@ -1258,6 +1587,25 @@ const openaiFetch = async (path, body) => {
   return payload;
 };
 
+const buildTextGenerationInput = (body = {}) => [
+  'Tu dois repondre uniquement avec un JSON valide, sans Markdown ni commentaire.',
+  body.prompt,
+].filter(Boolean).join('\n\n');
+
+const assertServerAiContentAllowed = (input, stage) => assertAiContentAllowed({
+  input,
+  openaiFetch,
+  env: process.env,
+  stage,
+});
+
+const assertServerAiRateLimit = (req, userId, kind = 'text') => assertAiRateLimit({
+  kind,
+  userId,
+  ip: getClientIpFromHeaders(req?.headers || {}),
+  env: process.env,
+});
+
 const extractOutputText = (payload) => {
   if (payload.output_text) return payload.output_text;
   const chunks = [];
@@ -1280,13 +1628,11 @@ const getPublicCreditPayload = (account, cost) => ({
 });
 
 const runTextGeneration = async (body, userId, cost) => {
-  const input = [
-    'Tu dois repondre uniquement avec un JSON valide, sans Markdown ni commentaire.',
-    body.prompt,
-  ].filter(Boolean).join('\n\n');
+  const input = buildTextGenerationInput(body);
 
   let charged = false;
   try {
+    await assertServerAiContentAllowed(input, 'input_text');
     spendCredits(userId, cost, `text:${body.mode || 'generate'}`);
     charged = cost > 0;
 
@@ -1302,13 +1648,15 @@ const runTextGeneration = async (body, userId, cost) => {
       error.status = 502;
       throw error;
     }
+    await assertServerAiContentAllowed(outputText, 'output_text');
     if (body.responseFormat === 'escape-game-project-json') {
       try {
-        JSON.parse(outputText);
-      } catch {
-        const error = new Error('OpenAI a renvoye un JSON invalide ou incomplet. Credits rembourses.');
+        const project = parseProjectJsonPayload(outputText);
+        assertProjectSafety(project, { mode: 'ai' });
+      } catch (validationError) {
+        const error = new Error(validationError.message || 'OpenAI a renvoye un JSON invalide ou incomplet. Credits rembourses.');
         error.status = 502;
-        error.code = 'AI_INVALID_JSON';
+        error.code = validationError.code || 'AI_INVALID_JSON';
         throw error;
       }
     }
@@ -1383,6 +1731,7 @@ const handleGenerate = async (req, res) => {
   const body = await readJsonBody(req);
   const userId = await resolveCreditUserId(req, body);
   const cost = calculateTextCreditCost(body);
+  assertServerAiRateLimit(req, userId, 'text');
   const shouldRunAsync = body.responseFormat === 'escape-game-project-json'
     && body.mode !== 'repair_item_names'
     && !body.runInline;
@@ -1428,9 +1777,10 @@ const handleAiJob = async (req, res) => {
 const handleImage = async (req, res) => {
   const body = await readJsonBody(req);
   const userId = await resolveCreditUserId(req, body);
-  const accountBeforeImage = getCreditAccount(userId);
-  const cost = calculateImageCreditCost(accountBeforeImage, body);
-  spendCredits(userId, cost, `image:${body.type || 'image'}`);
+  assertServerAiRateLimit(req, userId, 'image');
+  await assertServerAiContentAllowed(String(body.prompt || ''), 'input_image');
+  const reservation = reserveImageCredits(userId, body);
+  const cost = reservation.cost;
   let payload;
   try {
     const imageRequest = {
@@ -1451,7 +1801,7 @@ const handleImage = async (req, res) => {
     }
     payload = await openaiFetch('images/generations', imageRequest);
   } catch (error) {
-    refundCredits(userId, cost, `failed_image:${body.type || 'image'}`);
+    releaseImageCreditReservation(userId, reservation, `failed_image:${body.type || 'image'}`);
     throw error;
   }
 
@@ -1461,7 +1811,7 @@ const handleImage = async (req, res) => {
     : image.url;
 
   if (!imageData) {
-    refundCredits(userId, cost, `failed_image:${body.type || 'image'}`);
+    releaseImageCreditReservation(userId, reservation, `failed_image:${body.type || 'image'}`);
     const error = new Error('OpenAI n\'a pas renvoye d\'image.');
     error.status = 502;
     throw error;
@@ -1469,9 +1819,10 @@ const handleImage = async (req, res) => {
 
   let account;
   try {
-    account = commitImageCreditUsage(userId, body, cost);
+    await assertServerAiContentAllowed(makeImageModerationInput(imageData, body.prompt), 'output_image');
+    account = getCreditAccount(userId);
   } catch (error) {
-    refundCredits(userId, cost, `failed_image:${body.type || 'image'}`);
+    releaseImageCreditReservation(userId, reservation, `failed_image:${body.type || 'image'}`);
     throw error;
   }
   sendJson(res, 200, {
@@ -1553,7 +1904,11 @@ const serveStatic = (req, res) => {
     ? join(publicDir, 'index.html')
     : resolve(publicDir, `.${requestedPath}`);
 
-  const safePath = filePath.startsWith(publicDir) ? filePath : join(publicDir, 'index.html');
+  const publicRelativePath = relative(publicDir, filePath);
+  const isInsidePublicDir = publicRelativePath
+    && !publicRelativePath.startsWith('..')
+    && !isAbsolute(publicRelativePath);
+  const safePath = isInsidePublicDir ? filePath : join(publicDir, 'index.html');
   const finalPath = existsSync(safePath) && !safePath.endsWith('\\')
     ? safePath
     : join(publicDir, 'index.html');
@@ -1570,10 +1925,11 @@ const serveStatic = (req, res) => {
   res.end(readFileSync(finalPath));
 };
 
-const server = createServer(async (req, res) => {
+const server = createServer((req, res) => requestContext.run(req, async () => {
   try {
+    assertCorsRequestAllowed(req.headers || {}, process.env);
     if (req.method === 'OPTIONS') {
-      res.writeHead(204, jsonHeaders);
+      res.writeHead(204, getJsonHeaders(req));
       res.end();
       return;
     }
@@ -1643,6 +1999,11 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === 'POST' && req.url === '/api/storage-upgrade') {
+      await handleStorageUpgrade(req, res);
+      return;
+    }
+
     if (req.method === 'POST' && req.url === '/api/shop/purchase') {
       await handleShopPurchase(req, res);
       return;
@@ -1676,14 +2037,15 @@ const server = createServer(async (req, res) => {
     serveStatic(req, res);
   } catch (error) {
     console.error('[api-error]', req.method, req.url, error);
-    sendJson(res, error.status || 500, {
+    sendJson(res, error.status || error.statusCode || 500, {
       error: error.message || 'Erreur serveur.',
       code: error.code,
       balance: error.balance,
       required: error.required,
+      retryAfter: error.retryAfter,
     });
   }
-});
+}));
 
 server.requestTimeout = 0;
 server.headersTimeout = 0;

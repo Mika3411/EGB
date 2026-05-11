@@ -20,8 +20,8 @@ export function useSceneEditorCreation({
       text: {
         name: 'Texte',
         blockLabel: 'Texte',
-        blockText: 'Un message apparait dans la scene.',
-        dialogue: 'Un message apparait dans la scene.',
+        blockText: 'Un message apparait dans la scène.',
+        dialogue: 'Un message apparait dans la scène.',
         width: 28,
         height: 12,
         clickMode: 'none',
@@ -45,7 +45,7 @@ export function useSceneEditorCreation({
       },
       input: {
         name: 'Champ de saisie',
-        blockLabel: 'Reponse',
+        blockLabel: 'Réponse',
         placeholder: 'Saisir une réponse...',
         expectedAnswer: 'secret',
         successDialogue: 'Bonne réponse.',

@@ -1,12 +1,14 @@
 /* Score */
 
-.score-layout{grid-template-columns:minmax(0,1.05fr) minmax(360px,.95fr);grid-template-areas:"hero inventory" "dimensions inventory" "player inventory" "badges inventory" "advice inventory" "conclusion conclusion";align-items:start}
+.score-layout{grid-template-columns:minmax(0,1.05fr) minmax(360px,.95fr);grid-template-areas:"hero inventory" "dimensions inventory" "player inventory" "heroMode inventory" "badges inventory" "advice inventory" "conclusion conclusion";align-items:start}
 
 .score-hero-panel{grid-area:hero}
 
 .score-dimensions-panel{grid-area:dimensions}
 
 .score-player-panel{grid-area:player}
+
+.score-hero-mode-panel{grid-area:heroMode}
 
 .score-badges-panel{grid-area:badges}
 
@@ -51,6 +53,14 @@
 .score-metric-card small{color:var(--muted);font-size:11px;font-weight:800}
 
 .score-mini-total{align-self:center;padding:7px 10px;border-radius:var(--radius-pill);border:1px solid rgba(96,165,250,.25);background:#2563eb1f;color:var(--text-info);font-size:13px;font-variant-numeric:tabular-nums}
+
+.score-mini-total.good{border-color:var(--state-success-border-soft);background:var(--state-success-bg);color:var(--text-success)}
+
+.score-mini-total.warn{border-color:var(--state-warning-border-soft);background:var(--state-warning-bg);color:var(--text-warning)}
+
+.score-hero-metrics-grid{grid-template-columns:repeat(5,minmax(0,1fr))}
+
+.score-hero-diagnostics{margin-top:10px}
 
 .score-badge-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 

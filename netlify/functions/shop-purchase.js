@@ -1,11 +1,112 @@
 import {
+  aiJobBucket,
   getSupabaseAdminClient,
   json,
   parseBody,
   resolveCreditUserId,
-  spendCredits,
   withErrors,
 } from './_shared.js';
+
+const shopPacksStoragePath = 'public/shop-packs.json';
+
+const createShopPackId = () => `pack_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+const normalizeNumber = (value, fallback = 0) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, number) : fallback;
+};
+
+const createEmptyShopPack = () => ({
+  id: '',
+  title: '',
+  costCredits: 50,
+  description: '',
+  rating: 8,
+  actsCount: 1,
+  scenesCount: 5,
+  objectsCount: 5,
+  enigmasCount: 3,
+  cinematicsCount: 1,
+  combinationsCount: 1,
+  screenshots: [],
+  downloadUrl: '',
+  downloadFileName: '',
+  downloadStoragePath: '',
+  downloadMode: '',
+  archived: false,
+  archivedAt: '',
+  archivedReason: '',
+  soldAt: '',
+  soldTo: '',
+  createdAt: '',
+  updatedAt: '',
+});
+
+const normalizeShopPack = (pack = {}) => ({
+  ...createEmptyShopPack(),
+  ...pack,
+  id: String(pack.id || createShopPackId()).trim().replace(/[^a-zA-Z0-9._:-]/g, '-'),
+  title: String(pack.title || '').trim(),
+  costCredits: normalizeNumber(pack.costCredits, 50),
+  description: String(pack.description || '').trim(),
+  rating: Math.min(10, normalizeNumber(pack.rating, 8)),
+  actsCount: normalizeNumber(pack.actsCount, 0),
+  scenesCount: normalizeNumber(pack.scenesCount, 0),
+  objectsCount: normalizeNumber(pack.objectsCount, 0),
+  enigmasCount: normalizeNumber(pack.enigmasCount, 0),
+  cinematicsCount: normalizeNumber(pack.cinematicsCount, 0),
+  combinationsCount: normalizeNumber(pack.combinationsCount, 0),
+  screenshots: Array.isArray(pack.screenshots) ? pack.screenshots.filter((entry) => entry?.src) : [],
+  downloadUrl: String(pack.downloadUrl || '').trim(),
+  downloadFileName: String(pack.downloadFileName || '').trim(),
+  downloadStoragePath: String(pack.downloadStoragePath || '').trim(),
+  downloadMode: String(pack.downloadMode || '').trim(),
+  archived: Boolean(pack.archived),
+  archivedAt: String(pack.archivedAt || '').trim(),
+  archivedReason: String(pack.archivedReason || '').trim(),
+  soldAt: String(pack.soldAt || '').trim(),
+  soldTo: String(pack.soldTo || '').trim(),
+  createdAt: pack.createdAt || new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+});
+
+const loadShopPacks = async (supabase) => {
+  const { data, error } = await supabase.storage.from(aiJobBucket).download(shopPacksStoragePath);
+  if (error) throw error;
+  const packs = JSON.parse(await data.text());
+  return Array.isArray(packs) ? packs.map(normalizeShopPack) : [];
+};
+
+const purchaseShopPack = async (supabase, {
+  packId,
+  userId,
+  title,
+  costCredits,
+  downloadFileName,
+}) => {
+  const { data, error } = await supabase
+    .rpc('purchase_shop_pack', {
+      p_pack_id: packId,
+      p_user_id: userId,
+      p_title: title,
+      p_cost_credits: costCredits,
+      p_download_file_name: downloadFileName,
+    })
+    .single();
+
+  if (error?.code === '23505') {
+    const soldError = new Error('Pack indisponible.');
+    soldError.statusCode = 404;
+    throw soldError;
+  }
+  if (error?.message?.includes('Credits IA insuffisants')) {
+    const creditError = new Error(error.message);
+    creditError.statusCode = 402;
+    throw creditError;
+  }
+  if (error) throw error;
+  return data;
+};
 
 export const handler = async (event) => withErrors(event, async () => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Methode non autorisee.' });
@@ -13,20 +114,39 @@ export const handler = async (event) => withErrors(event, async () => {
   const body = parseBody(event);
   const userId = await resolveCreditUserId(event);
   const packId = String(body.packId || '').trim().replace(/[^a-zA-Z0-9._:-]/g, '-');
-  const costCredits = Math.max(0, Math.round(Number(body.costCredits || 0)));
-  const title = String(body.title || 'Pack boutique').trim().slice(0, 120);
 
   if (!packId) return json(400, { error: 'Pack manquant.' });
   if (!userId || userId === 'anonymous') return json(400, { error: 'Utilisateur manquant.' });
-  if (!costCredits) return json(400, { error: 'Cout en credits invalide.' });
 
   const supabase = getSupabaseAdminClient();
-  const account = await spendCredits(supabase, userId, costCredits, `shop_pack:${packId}:${title}`);
+  const packs = await loadShopPacks(supabase);
+  const pack = packs.find((entry) => entry.id === packId);
+  if (!pack || pack.archived) return json(404, { error: 'Pack indisponible.' });
+  if (!pack.downloadUrl) return json(400, { error: 'Pack sans fichier telechargeable.' });
+
+  const costCredits = Math.max(0, Math.round(Number(pack.costCredits || 0)));
+  const title = String(pack.title || 'Pack boutique').trim().slice(0, 120);
+  const downloadFileName = pack.downloadFileName || `${title || 'pack'}.zip`;
+  if (!costCredits) return json(400, { error: 'Cout en credits invalide.' });
+
+  const purchaseResult = await purchaseShopPack(supabase, {
+    packId,
+    userId,
+    title,
+    costCredits,
+    downloadFileName,
+  });
 
   return json(200, {
     ok: true,
-    packId,
-    costCredits,
-    balance: Number(account.balance || 0),
+    purchase: {
+      packId,
+      title,
+      costCredits,
+      downloadUrl: pack.downloadUrl,
+      downloadFileName,
+      purchasedAt: purchaseResult.purchased_at,
+    },
+    balance: Number(purchaseResult.balance || 0),
   });
 });

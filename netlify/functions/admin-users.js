@@ -8,7 +8,41 @@ import {
   withErrors,
 } from './_shared.js';
 
-const supabaseUserToAdminRecord = (user) => ({
+const privateDataBucket = process.env.SUPABASE_PRIVATE_DATA_BUCKET
+  || process.env.VITE_SUPABASE_PRIVATE_DATA_BUCKET
+  || process.env.SUPABASE_STORAGE_BUCKET
+  || process.env.VITE_SUPABASE_STORAGE_BUCKET
+  || 'escape-game-assets';
+
+const sanitizeStorageSegment = (value = '') => String(value || '')
+  .trim()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-zA-Z0-9._-]+/g, '-')
+  .replace(/-+/g, '-')
+  .replace(/^-+|-+$/g, '')
+  .toLowerCase();
+
+const getStoredProjectCountForUser = async (supabase, userId) => {
+  const safeUserId = sanitizeStorageSegment(userId);
+  if (!safeUserId) return 0;
+
+  const { data, error } = await supabase.storage
+    .from(privateDataBucket)
+    .download(`users/${safeUserId}/projects.json`);
+
+  if (error) {
+    if (error.statusCode === 404 || error.status === 404) return 0;
+    throw error;
+  }
+
+  const text = await data.text();
+  if (!text.trim()) return 0;
+  const records = JSON.parse(text);
+  return Array.isArray(records) ? records.filter((project) => project?.id).length : 0;
+};
+
+const supabaseUserToAdminRecord = (user, projectCount = 0) => ({
   id: user.id,
   email: user.email || '',
   name: user.user_metadata?.name || user.email?.split('@')[0] || 'Utilisateur',
@@ -18,6 +52,7 @@ const supabaseUserToAdminRecord = (user) => ({
   lastSignInAt: user.last_sign_in_at || '',
   bannedUntil: user.banned_until || '',
   isDisabled: Boolean(user.banned_until && new Date(user.banned_until).getTime() > Date.now()),
+  projectCount,
 });
 
 export const handler = async (event) => withErrors(event, async () => {
@@ -32,12 +67,17 @@ export const handler = async (event) => withErrors(event, async () => {
 
     if (error) throw error;
 
-    const users = (data.users || [])
-      .map(supabaseUserToAdminRecord)
+    const users = await Promise.all((data.users || [])
+      .map(async (user) => supabaseUserToAdminRecord(
+        user,
+        await getStoredProjectCountForUser(supabase, user.id),
+      )));
+
+    const visibleUsers = users
       .filter((account) => normalizeEmail(account.email) !== ADMIN_EMAIL)
       .sort((a, b) => normalizeEmail(a.email).localeCompare(normalizeEmail(b.email), 'fr'));
 
-    return json(200, { users });
+    return json(200, { users: visibleUsers });
   }
 
   if (event.httpMethod === 'POST') {
@@ -60,7 +100,12 @@ export const handler = async (event) => withErrors(event, async () => {
 
     const { data, error } = await supabase.auth.admin.updateUserById(userId, attributes);
     if (error) throw error;
-    return json(200, { user: supabaseUserToAdminRecord(data.user) });
+    return json(200, {
+      user: supabaseUserToAdminRecord(
+        data.user,
+        await getStoredProjectCountForUser(supabase, data.user.id),
+      ),
+    });
   }
 
   return json(405, { error: 'Methode non autorisee.' });

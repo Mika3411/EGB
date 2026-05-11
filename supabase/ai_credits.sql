@@ -18,6 +18,95 @@ create table if not exists public.ai_credit_transactions (
 alter table public.ai_credits enable row level security;
 alter table public.ai_credit_transactions enable row level security;
 
+create table if not exists public.ai_rate_limits (
+  bucket_key text primary key,
+  window_start timestamptz not null default now(),
+  request_count integer not null default 0,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.ai_rate_limits enable row level security;
+
+create or replace function public.consume_ai_rate_limits(
+  p_keys text[],
+  p_limits integer[],
+  p_window_seconds integer
+)
+returns table (
+  allowed boolean,
+  retry_after integer,
+  blocked_key text
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  now_ts timestamptz := now();
+  key_count integer := coalesce(array_length(p_keys, 1), 0);
+  idx integer;
+  limit_value integer;
+  row_data public.ai_rate_limits%rowtype;
+begin
+  if key_count = 0 or key_count <> coalesce(array_length(p_limits, 1), 0) then
+    raise exception 'rate limit key/limit mismatch';
+  end if;
+
+  for idx in 1..key_count loop
+    insert into public.ai_rate_limits(bucket_key, window_start, request_count, updated_at)
+    values (p_keys[idx], now_ts, 0, now_ts)
+    on conflict (bucket_key) do nothing;
+  end loop;
+
+  for row_data in
+    select *
+    from public.ai_rate_limits
+    where bucket_key = any(p_keys)
+    order by bucket_key
+    for update
+  loop
+    idx := array_position(p_keys, row_data.bucket_key);
+    limit_value := greatest(coalesce(p_limits[idx], 1), 1);
+
+    if row_data.window_start <= now_ts - make_interval(secs => greatest(p_window_seconds, 1)) then
+      update public.ai_rate_limits
+      set window_start = now_ts,
+          request_count = 0,
+          updated_at = now_ts
+      where bucket_key = row_data.bucket_key;
+      row_data.window_start := now_ts;
+      row_data.request_count := 0;
+    end if;
+
+    if row_data.request_count >= limit_value then
+      allowed := false;
+      retry_after := greatest(
+        1,
+        ceil(extract(epoch from (row_data.window_start + make_interval(secs => greatest(p_window_seconds, 1)) - now_ts)))::integer
+      );
+      blocked_key := row_data.bucket_key;
+      return next;
+      return;
+    end if;
+  end loop;
+
+  for idx in 1..key_count loop
+    update public.ai_rate_limits
+    set request_count = request_count + 1,
+        updated_at = now_ts
+    where bucket_key = p_keys[idx];
+  end loop;
+
+  allowed := true;
+  retry_after := 0;
+  blocked_key := null;
+  return next;
+end;
+$$;
+
+revoke all on function public.consume_ai_rate_limits(text[], integer[], integer) from public;
+grant execute on function public.consume_ai_rate_limits(text[], integer[], integer) to service_role;
+
 drop policy if exists "Users can read their own ai credits" on public.ai_credits;
 create policy "Users can read their own ai credits"
 on public.ai_credits

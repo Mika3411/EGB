@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { showConfirm } from './AccessibleDialog';
 
 export default function AuthorProfileEditor({
   user,
@@ -48,7 +49,13 @@ export default function AuthorProfileEditor({
   };
 
   const deleteBlogPost = async (postId) => {
-    if (!window.confirm('Supprimer cet articlé ?')) return;
+    const confirmed = await showConfirm({
+      title: 'Supprimer l’article',
+      message: 'Supprimer cet article ?',
+      confirmLabel: 'Supprimer',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     await onUpdateAuthorProfile?.({
       ...(authorProfile || {}),
       ...authorDraft,
@@ -79,7 +86,7 @@ export default function AuthorProfileEditor({
             <input
               value={authorDraft.tagline}
               onChange={(event) => setAuthorDraft((draft) => ({ ...draft, tagline: event.target.value }))}
-              placeholder="Escape games narratifs et enigmes maison"
+              placeholder="Escape games narratifs et énigmes maison"
             />
             <label>Bio</label>
             <textarea
@@ -104,7 +111,7 @@ export default function AuthorProfileEditor({
               <input
                 value={blogDraft.title}
                 onChange={(event) => setBlogDraft((draft) => ({ ...draft, title: event.target.value }))}
-                placeholder="Nouveau décor, nouvelle enigme..."
+                placeholder="Nouveau décor, nouvelle énigme..."
                 maxLength={80}
               />
               <label>Articlé court</label>

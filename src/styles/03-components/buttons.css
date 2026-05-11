@@ -24,17 +24,23 @@ button:focus:not(:focus-visible),a:focus:not(:focus-visible),input:focus:not(:fo
 
 .button.like.full{width:100%}
 
-.tabs-profile-button{color:#f8fbff;background:linear-gradient(180deg,#3b82f6f2,#2563ebf2);border-color:#93c5fd6b;box-shadow:0 10px 26px #2563eb3d}
+.tabs-profile-button{gap:7px;color:#f8fbff;background:linear-gradient(180deg,#17243d,#101a2e);border-color:rgba(147,197,253,.22);box-shadow:inset 0 1px rgba(255,255,255,.07)}
 
-.tabs-profile-button:hover{background:linear-gradient(180deg,#60a5fafa,#2563ebfa);border-color:#bfdbfe94}
+.tabs-profile-button:hover{background:linear-gradient(180deg,#21345a,#13213b);border-color:rgba(147,197,253,.48)}
 
 :where(.fake-windows-files) button{display:grid;justify-items:center;gap:6px;min-height:92px;padding:8px 6px;border:1px solid transparent;border-radius:7px;background:transparent;color:#111827;box-shadow:none;font-size:11px;line-height:1.15}
 
 :where(.fake-windows-files) button.selected,:where(.fake-windows-files) button:hover{border-color:#60a5fa;background:#dbeafe}
 
-:where(.tabs) button{background:transparent;color:#dbe7ff;border:1px solid transparent;box-shadow:none}
+:where(.tabs) button{gap:7px;min-height:38px;padding:8px 12px;background:rgba(15,23,42,.58);color:#dbe7ff;border:1px solid rgba(148,163,184,.13);border-radius:12px;box-shadow:inset 0 1px rgba(255,255,255,.035);font-weight:800;line-height:1;white-space:nowrap}
 
-:where(.tabs) button.active{background:var(--state-info-bg-soft);border-color:var(--state-info-border-soft);box-shadow:inset 0 0 0 1px #60a5fa14}
+:where(.tabs) button svg{flex:0 0 auto;color:#8fb8ff;opacity:.86}
+
+:where(.tabs) button:hover{background:rgba(37,99,235,.18);border-color:rgba(147,197,253,.34);box-shadow:inset 0 1px rgba(255,255,255,.06),0 10px 24px rgba(15,23,42,.18)}
+
+:where(.tabs) button.active{color:#fff;background:linear-gradient(180deg,#3b82f6,#2563eb);border-color:rgba(191,219,254,.72);box-shadow:inset 0 1px rgba(255,255,255,.18),0 10px 24px rgba(37,99,235,.32)}
+
+:where(.tabs) button.active svg{color:#fff;opacity:1}
 
 .interactive-block--button{border-color:#60a5fa94;background:linear-gradient(135deg,#2563ebf5,#4f46e5f5);font-weight:800}
 
@@ -120,6 +126,8 @@ button:focus:not(:focus-visible),a:focus:not(:focus-visible),input:focus:not(:fo
 
 .tabs button,.toolbar button,.button.like,.panel-head button,.side button,.main button{padding:6px 10px;border-radius:9px;min-height:34px}
 
+.tabs.tabs-pro button{min-height:32px;padding:6px 9px;border-radius:10px}
+
 .act-delete-button{width:22px!important;min-width:22px!important;height:22px!important;min-height:22px!important;padding:0!important;border-radius:50%!important;background:#94a3b814!important;border:1px solid rgba(148,163,184,.14)!important;color:#94a3b8!important;box-shadow:none!important;opacity:.45;line-height:1!important}
 
 .act-heading:hover .act-delete-button:not(:disabled){opacity:1;color:#fecaca!important;background:#c53d3d29!important;border-color:#f8717157!important}
@@ -181,3 +189,29 @@ button:focus:not(:focus-visible),a:focus:not(:focus-visible),input:focus:not(:fo
 .btn-ghost,.ghost-action,:where(.landing-shell,.toolbar,.tabs,.panel-head,.side,.main) button.ghost-action{background:#4f8cff1f;color:#dbeafe;border-color:#60a5fa38;box-shadow:none}
 
 .btn-active,:where(.profile-section-tabs) button.active{border-color:#60a5fa7a;background:#2563eb3d;color:#fff}
+
+.tabs.tabs-pro button{gap:5px;min-width:0;min-height:32px;padding:6px 8px;border-radius:10px;background:rgba(15,23,42,.58);color:#dbe7ff;border-color:rgba(148,163,184,.13);box-shadow:inset 0 1px rgba(255,255,255,.035);font-size:12.5px;font-weight:800;line-height:1;white-space:nowrap;flex:0 1 auto}
+
+.tabs.tabs-pro button svg{width:14px;height:14px;flex:0 0 auto;color:#8fb8ff;opacity:.86}
+
+.tabs.tabs-pro button span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+
+.tabs.tabs-pro button:hover{background:rgba(37,99,235,.18);border-color:rgba(147,197,253,.34);box-shadow:inset 0 1px rgba(255,255,255,.06),0 10px 24px rgba(15,23,42,.18)}
+
+.tabs.tabs-pro button.active{color:#fff;background:linear-gradient(180deg,#3b82f6,#2563eb);border-color:rgba(191,219,254,.72);box-shadow:inset 0 1px rgba(255,255,255,.18),0 8px 18px rgba(37,99,235,.24)}
+
+.tabs.tabs-pro button.active svg{color:#fff;opacity:1}
+
+.tabs.tabs-pro .tabs-profile-button{color:#f8fbff;background:linear-gradient(180deg,#17243d,#101a2e);border-color:rgba(147,197,253,.22);box-shadow:inset 0 1px rgba(255,255,255,.07)}
+
+.tabs.tabs-pro .tabs-profile-button:hover{background:linear-gradient(180deg,#21345a,#13213b);border-color:rgba(147,197,253,.48)}
+
+@media (max-width: 1500px){
+  .tabs.tabs-pro button{padding-inline:7px;font-size:12px}
+  .tabs.tabs-pro button svg{width:13px;height:13px}
+}
+
+@media (max-width: 1280px){
+  .tabs.tabs-pro button span{max-width:8.5ch}
+  .tabs.tabs-pro .tabs-profile-button span{max-width:5ch}
+}

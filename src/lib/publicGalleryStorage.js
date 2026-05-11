@@ -1,35 +1,20 @@
 import { getAllAccounts, loadProjectRecordsForUser, loadPublicProjectIndex } from './authStorage';
 import { getAuthorProfile } from './authorProfiles';
 import { getBlogModerationId, getModerationState } from './moderationStorage';
+import { readJsonStorage, writeJsonStorage } from '../utils/storageHelpers';
 
 const LOCAL_PROJECTS_KEY_PREFIX = 'escapeGameBuilder.projects';
 const FEEDBACK_KEY = 'escapeGameBuilder.publicFeedback.v1';
 const STATS_KEY = 'escapeGameBuilder.publicStats.v1';
 
-const canUseStorage = () => typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
-
-const safeParse = (value, fallback) => {
-  try {
-    return value ? JSON.parse(value) : fallback;
-  } catch {
-    return fallback;
-  }
-};
-
-const readJson = (key, fallback) => {
-  if (!canUseStorage()) return fallback;
-  return safeParse(window.localStorage.getItem(key), fallback);
-};
+const readJson = (key, fallback) => readJsonStorage(key, fallback);
 
 const countSince = (dates = [], since) => dates.filter((value) => {
   const time = new Date(value).getTime();
   return Number.isFinite(time) && time >= since;
 }).length;
 
-const writeJson = (key, value) => {
-  if (!canUseStorage()) return;
-  window.localStorage.setItem(key, JSON.stringify(value));
-};
+const writeJson = (key, value) => writeJsonStorage(key, value);
 
 const getLocalProjectsKey = (userId) => `${LOCAL_PROJECTS_KEY_PREFIX}.${userId}`;
 

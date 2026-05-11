@@ -2,6 +2,18 @@
 
 *{box-sizing:border-box}
 
+*{scrollbar-color:rgba(100,116,139,.92) rgba(15,23,42,.82);scrollbar-width:thin}
+
+*::-webkit-scrollbar{width:10px;height:10px}
+
+*::-webkit-scrollbar-track{background:rgba(15,23,42,.82);border-radius:999px}
+
+*::-webkit-scrollbar-thumb{min-height:36px;border:2px solid rgba(15,23,42,.82);border-radius:999px;background:rgba(100,116,139,.92)}
+
+*::-webkit-scrollbar-thumb:hover{background:rgba(148,163,184,.96)}
+
+*::-webkit-scrollbar-corner{background:rgba(15,23,42,.82)}
+
 body{margin:0;font-family:Inter,Arial,sans-serif;color:var(--text);background:radial-gradient(circle at top left,rgba(79,140,255,.14),transparent 28%),radial-gradient(circle at top right,rgba(59,130,246,.08),transparent 22%),linear-gradient(180deg,#08101c,#09111f)}
 
 button,input,select,textarea{font:inherit}

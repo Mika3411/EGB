@@ -3,6 +3,11 @@ import { normalizeCinematic } from './cinematicEngine';
 import * as cinematicEngine from './cinematicEngine';
 import * as combinationEngine from './combinationEngine';
 import * as enigmaEngine from './enigmaEngine';
+import {
+  evaluateLogicRuleCondition,
+  isLogicRuleAvailable,
+  isLogicRuleConfigured,
+} from './conditionEngine';
 import { resolveAssetUrl } from './assetManager';
 export {
   isFlexibleAnswerMatch,
@@ -25,6 +30,79 @@ const removeOne = (items = [], item) => {
   const index = next.indexOf(item);
   if (index >= 0) next.splice(index, 1);
   return next;
+};
+
+export const getHotspotRewardItemId = (hotspot = {}) => {
+  const linkedInventoryItemId = ['inventory', 'both'].includes(hotspot.interactionMode)
+    ? hotspot.linkedItemId
+    : '';
+  return hotspot.rewardItemId || linkedInventoryItemId || '';
+};
+
+export const consumeInventoryItem = (items = [], itemId = '') => (
+  itemId ? (() => {
+    const next = [...items];
+    const index = next.indexOf(itemId);
+    if (index >= 0) next.splice(index, 1);
+    return next;
+  })() : items
+);
+
+export const addRewardItemToInventory = (items = [], itemId = '') => (
+  itemId && !items.includes(itemId) ? [...items, itemId] : items
+);
+
+export const selectRewardInventoryItem = (selectedItemIds = [], itemId = '') => (
+  itemId
+    ? (selectedItemIds.includes(itemId) ? selectedItemIds : [...selectedItemIds, itemId]).slice(-2)
+    : selectedItemIds
+);
+
+export const createHotspotViewerImage = (hotspot = {}, src = hotspot.objectImageData) => {
+  if (!src) return null;
+  return {
+    src,
+    name: hotspot.objectImageName || hotspot.name || 'Objet',
+    caption: hotspot.dialogue || hotspot.name || '',
+  };
+};
+
+export const applyHotspotBlockState = (state = {}, hotspot = {}, options = {}) => {
+  if (hotspot.actionType !== 'block' || !hotspot.targetBlockId) return state;
+
+  const removedKey = options.removedKey || 'usedSceneObjectIds';
+  const revealedKey = options.revealedKey || 'revealedSceneObjectIds';
+  const textOverridesKey = options.textOverridesKey || 'sceneObjectTextOverrides';
+  const targetBlockId = hotspot.targetBlockId;
+  const removedIds = Array.isArray(state[removedKey]) ? state[removedKey] : [];
+  const revealedIds = Array.isArray(state[revealedKey]) ? state[revealedKey] : [];
+  const addId = (items = [], itemId = '') => (itemId && !items.includes(itemId) ? [...items, itemId] : items);
+
+  if ((hotspot.blockActionType || 'show') === 'hide') {
+    return {
+      ...state,
+      [removedKey]: addId(removedIds, targetBlockId),
+      [revealedKey]: revealedIds.filter((id) => id !== targetBlockId),
+    };
+  }
+
+  if (hotspot.blockActionType === 'update_text') {
+    return {
+      ...state,
+      [removedKey]: removedIds.filter((id) => id !== targetBlockId),
+      [revealedKey]: addId(revealedIds, targetBlockId),
+      [textOverridesKey]: {
+        ...(state[textOverridesKey] || {}),
+        [targetBlockId]: hotspot.targetBlockText || '',
+      },
+    };
+  }
+
+  return {
+    ...state,
+    [removedKey]: removedIds.filter((id) => id !== targetBlockId),
+    [revealedKey]: addId(revealedIds, targetBlockId),
+  };
 };
 
 export const GAME_ACTIONS = {
@@ -213,6 +291,22 @@ const getCombinationContext = (state) => ({
   revealedSceneObjectIds: state.revealedSceneObjectIds,
 });
 
+const getHotspotConditionContext = (state, hotspotId = '') => ({
+  inventory: state.inventory,
+  visitedSceneIds: state.visitedSceneIds,
+  completedHotspotIds: state.completedHotspotIds,
+  solvedEnigmaIds: state.solvedEnigmaIds,
+  chosenConversationReplyIds: state.chosenConversationReplyIds,
+  storyVariables: state.storyVariables,
+  launchedCinematicIds: state.launchedCinematicIds,
+  completedCombinationIds: state.completedCombinationIds,
+  usedLogicRuleIds: state.usedLogicRuleIds,
+  heroState: state.heroState || {},
+  lastDiceRoll: state.lastDiceRoll || {},
+  heroAdventureEnabled: Boolean(state.project?.heroAdventure?.enabled || state.project?.creationMode === 'hero_adventure'),
+  hotspotId,
+});
+
 function reduceEnigmaAction(state, action) {
   const type = getActionType(action).toLowerCase();
   const enigma = action.enigma || getProjectEnigma(state.project, action.enigmaId);
@@ -246,7 +340,7 @@ function reduceEnigmaAction(state, action) {
     if (!isSolved) {
       return withResult({
         ...state,
-        dialogue: activeEnigma.failMessage || "Ce n'est pas la bonne reponse.",
+        dialogue: activeEnigma.failMessage || "Ce n'est pas la bonne réponse.",
       }, action, { ok: false, engine: 'enigma', solved: false, enigma: activeEnigma });
     }
 
@@ -255,7 +349,7 @@ function reduceEnigmaAction(state, action) {
       solvedEnigmaIds: addUnique(state.solvedEnigmaIds, activeEnigma.id),
       activeEnigma: null,
       activeEnigmaState: {},
-      dialogue: activeEnigma.successMessage || 'Enigme resolue.',
+      dialogue: activeEnigma.successMessage || 'Énigme résolue.',
     };
 
     if (state.activeEnigma?.hotspot && activeEnigma.unlockType !== 'none') {
@@ -268,7 +362,7 @@ function reduceEnigmaAction(state, action) {
         nextState = {
           ...nextState,
           currentSceneId: nextScene.id,
-          dialogue: nextScene.introText || activeEnigma.successMessage || 'Nouvelle scene debloquee.',
+          dialogue: nextScene.introText || activeEnigma.successMessage || 'Nouvelle scène débloquée.',
         };
       }
     } else if (activeEnigma.unlockType === 'cinematic' && activeEnigma.targetCinematicId) {
@@ -292,7 +386,7 @@ function reduceEnigmaAction(state, action) {
           nextState = {
             ...nextState,
             currentSceneId: nextScene.id,
-            dialogue: nextScene.introText || state.activeEnigma.hotspot.dialogue || 'Nouvelle scene.',
+            dialogue: nextScene.introText || state.activeEnigma.hotspot.dialogue || 'Nouvelle scène.',
           };
         }
       }
@@ -349,7 +443,7 @@ function reduceCombinationAction(state, action) {
   if (!resultItemId) {
     return withResult({
       ...state,
-      dialogue: 'Ces deux objets ne peuvent pas etre combines.',
+      dialogue: 'Ces deux objets ne peuvent pas être combines.',
     }, action, { ok: false, engine: 'combination', combination: null });
   }
 
@@ -375,55 +469,129 @@ function applyHotspotSideEffectsToState(state, hotspot, sourceHotspotId = hotspo
 
   if (hotspot.dialogue) nextState.dialogue = hotspot.dialogue;
 
-  const linkedInventoryItemId = ['inventory', 'both'].includes(hotspot.interactionMode)
-    ? hotspot.linkedItemId
-    : '';
-  const rewardItemId = hotspot.rewardItemId || linkedInventoryItemId;
+  const rewardItemId = getHotspotRewardItemId(hotspot);
 
   if (rewardItemId) {
-    nextState.inventory = addUnique(nextState.inventory, rewardItemId);
-    nextState.selectedInventoryIds = addUnique(nextState.selectedInventoryIds, rewardItemId).slice(-2);
+    nextState.inventory = addRewardItemToInventory(nextState.inventory, rewardItemId);
+    nextState.selectedInventoryIds = selectRewardInventoryItem(nextState.selectedInventoryIds, rewardItemId);
     const rewardItem = getProjectItem(state.project, rewardItemId);
     if (!hotspot.dialogue) nextState.dialogue = `Tu obtiens ${rewardItem?.name || hotspot.name || 'un objet'}.`;
   }
 
   if (hotspot.objectImageData) {
-    nextState.viewerImage = {
-      src: hotspot.objectImageData,
-      name: hotspot.name || hotspot.objectImageName || 'Objet',
-      caption: hotspot.dialogue || hotspot.name || '',
-    };
+    nextState.viewerImage = createHotspotViewerImage(hotspot);
   }
 
-  if (hotspot.actionType === 'block' && hotspot.targetBlockId) {
-    if ((hotspot.blockActionType || 'show') === 'hide') {
-      nextState.usedSceneObjectIds = addUnique(nextState.usedSceneObjectIds, hotspot.targetBlockId);
-      nextState.revealedSceneObjectIds = nextState.revealedSceneObjectIds.filter((id) => id !== hotspot.targetBlockId);
-    } else if (hotspot.blockActionType === 'update_text') {
-      nextState.usedSceneObjectIds = nextState.usedSceneObjectIds.filter((id) => id !== hotspot.targetBlockId);
-      nextState.revealedSceneObjectIds = addUnique(nextState.revealedSceneObjectIds, hotspot.targetBlockId);
-      nextState.sceneObjectTextOverrides = {
-        ...(nextState.sceneObjectTextOverrides || {}),
-        [hotspot.targetBlockId]: hotspot.targetBlockText || '',
-      };
-    } else {
-      nextState.usedSceneObjectIds = nextState.usedSceneObjectIds.filter((id) => id !== hotspot.targetBlockId);
-      nextState.revealedSceneObjectIds = addUnique(nextState.revealedSceneObjectIds, hotspot.targetBlockId);
-    }
-  }
+  nextState = applyHotspotBlockState(nextState, hotspot, { removedKey: 'usedSceneObjectIds' });
 
   if (hotspot.consumeRequiredItemOnUse && hotspot.requiredItemId) {
-    nextState.inventory = removeOne(nextState.inventory, hotspot.requiredItemId);
+    nextState.inventory = consumeInventoryItem(nextState.inventory, hotspot.requiredItemId);
     nextState.selectedInventoryIds = nextState.selectedInventoryIds.filter((itemId) => itemId !== hotspot.requiredItemId);
     if (nextState.viewerImage?.id === hotspot.requiredItemId) nextState.viewerImage = null;
   }
 
-  if (sourceHotspotId) nextState.completedHotspotIds = addUnique(nextState.completedHotspotIds, sourceHotspotId);
+  if (sourceHotspotId && !hotspot.logicRuleFailed) {
+    nextState.completedHotspotIds = addUnique(nextState.completedHotspotIds, sourceHotspotId);
+  }
   if (hotspot.disableAfterUse && hotspot.logicRuleId) {
     nextState.usedLogicRuleIds = addUnique(nextState.usedLogicRuleIds, hotspot.logicRuleId);
   }
 
   return nextState;
+}
+
+export function resolveHotspotInteraction(spot, context = {}) {
+  if (!spot) return null;
+
+  const logicRules = Array.isArray(spot.logicRules) ? spot.logicRules : [];
+  const completedHotspotIds = Array.isArray(context.completedHotspotIds) ? context.completedHotspotIds : [];
+  const usedLogicRuleIds = Array.isArray(context.usedLogicRuleIds) ? context.usedLogicRuleIds : [];
+  const usedRule = logicRules.find((rule) => rule.disableAfterUse && usedLogicRuleIds.includes(rule.id));
+  const ruleContext = {
+    ...context,
+    hotspotId: context.hotspotId || spot.id,
+  };
+  const doesRuleMatch = (rule) => evaluateLogicRuleCondition(rule, ruleContext);
+  const matchingRule = logicRules.find(doesRuleMatch);
+
+  if (matchingRule) {
+    const useDefaultAction = matchingRule.actionType === 'default';
+    return {
+      ...spot,
+      actionType: useDefaultAction ? spot.actionType : matchingRule.actionType || 'dialogue',
+      dialogue: matchingRule.dialogue || spot.dialogue || '',
+      requiredItemId: matchingRule.conditionType === 'has_item' ? matchingRule.itemId || '' : '',
+      consumeRequiredItemOnUse: Boolean(matchingRule.consumeRequiredItemOnUse),
+      rewardItemId: matchingRule.rewardItemId || (useDefaultAction ? spot.rewardItemId || '' : ''),
+      targetSceneId: useDefaultAction ? spot.targetSceneId || '' : matchingRule.targetSceneId || '',
+      targetCinematicId: useDefaultAction ? spot.targetCinematicId || '' : matchingRule.targetCinematicId || '',
+      enigmaId: useDefaultAction ? spot.enigmaId || '' : matchingRule.enigmaId || '',
+      blockActionType: matchingRule.blockActionType || 'show',
+      targetBlockId: matchingRule.targetBlockId || '',
+      targetBlockText: matchingRule.targetBlockText || '',
+      objectImageData: useDefaultAction ? spot.objectImageData || '' : matchingRule.objectImageData || '',
+      objectImageName: useDefaultAction ? spot.objectImageName || '' : matchingRule.objectImageName || '',
+      soundId: matchingRule.successSoundId || (useDefaultAction ? spot.soundId || '' : ''),
+      soundData: matchingRule.successSoundData || (useDefaultAction ? spot.soundData || '' : ''),
+      soundName: matchingRule.successSoundName || (useDefaultAction ? spot.soundName || '' : ''),
+      logicRuleId: matchingRule.id || '',
+      disableAfterUse: Boolean(matchingRule.disableAfterUse),
+    };
+  }
+
+  const unmetRule = logicRules.find((rule) => (
+    isLogicRuleAvailable(rule, ruleContext)
+    && isLogicRuleConfigured(rule)
+    && (rule.failureDialogue || rule.failureSoundData || rule.failureSoundId)
+    && !doesRuleMatch(rule)
+  ));
+  if (unmetRule) {
+    return {
+      ...spot,
+      actionType: 'dialogue',
+      dialogue: unmetRule.failureDialogue,
+      requiredItemId: '',
+      consumeRequiredItemOnUse: false,
+      rewardItemId: '',
+      targetSceneId: '',
+      targetCinematicId: '',
+      enigmaId: '',
+      objectImageData: '',
+      objectImageName: '',
+      soundId: unmetRule.failureSoundId || '',
+      soundData: unmetRule.failureSoundData || '',
+      soundName: unmetRule.failureSoundName || '',
+      logicRuleFailed: true,
+      failedLogicRuleId: unmetRule.id || '',
+    };
+  }
+
+  const useSecondAction = Boolean(spot.hasSecondAction && completedHotspotIds.includes(spot.id));
+  if (!useSecondAction) {
+    return usedRule?.conditionType === 'has_item' ? {
+      ...spot,
+      requiredItemId: '',
+      consumeRequiredItemOnUse: false,
+      soundId: '',
+      soundData: '',
+      soundName: '',
+    } : spot;
+  }
+
+  return {
+    ...spot,
+    actionType: spot.secondActionType || 'dialogue',
+    dialogue: spot.secondDialogue || '',
+    requiredItemId: spot.secondRequiredItemId || '',
+    consumeRequiredItemOnUse: Boolean(spot.secondConsumeRequiredItemOnUse),
+    rewardItemId: spot.secondRewardItemId || '',
+    targetSceneId: spot.secondTargetSceneId || '',
+    targetCinematicId: spot.secondTargetCinematicId || '',
+    enigmaId: spot.secondEnigmaId || '',
+    objectImageId: spot.secondObjectImageId || '',
+    objectImageData: spot.secondObjectImageData || '',
+    objectImageName: spot.secondObjectImageName || '',
+  };
 }
 
 function reduceHotspotAction(state, action) {
@@ -432,11 +600,18 @@ function reduceHotspotAction(state, action) {
     return withResult(state, action, { ok: false, engine: 'hotspot', reason: 'unknown_action' });
   }
 
-  const { hotspot, scene } = action.hotspot
+  const { hotspot: sourceHotspot, scene } = action.hotspot
     ? { hotspot: action.hotspot, scene: action.scene || getProjectScene(state.project, state.currentSceneId) }
     : getProjectHotspot(state.project, action.id || action.hotspotId, state.currentSceneId);
 
-  if (!hotspot) return withResult(state, action, { ok: false, engine: 'hotspot', reason: 'not_found' });
+  if (!sourceHotspot) return withResult(state, action, { ok: false, engine: 'hotspot', reason: 'not_found' });
+
+  const hotspot = action.hotspot
+    ? sourceHotspot
+    : resolveHotspotInteraction(
+      sourceHotspot,
+      getHotspotConditionContext(state, sourceHotspot.id),
+    ) || sourceHotspot;
 
   if (hotspot.requiredHotspotId && !state.completedHotspotIds.includes(hotspot.requiredHotspotId)) {
     return withResult({
@@ -473,7 +648,7 @@ function reduceHotspotAction(state, action) {
       nextState = {
         ...nextState,
         currentSceneId: nextScene.id,
-        dialogue: nextScene.introText || hotspot.dialogue || 'Nouvelle scene.',
+        dialogue: nextScene.introText || hotspot.dialogue || 'Nouvelle scène.',
       };
     }
   }
@@ -490,7 +665,14 @@ function reduceHotspotAction(state, action) {
     }
   }
 
-  return withResult(nextState, action, { ok: true, engine: 'hotspot', hotspot, scene });
+  return withResult(nextState, action, {
+    ok: !hotspot.logicRuleFailed,
+    engine: 'hotspot',
+    hotspot,
+    scene,
+    logicRuleFailed: Boolean(hotspot.logicRuleFailed),
+    failedLogicRuleId: hotspot.failedLogicRuleId || '',
+  });
 }
 
 function applyCinematicEndToState(state, cinematic) {

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const storageMock = vi.hoisted(() => ({
   buildStoragePath: vi.fn((...segments) => segments.filter(Boolean).join('/')),
+  deleteStorageFile: vi.fn(),
   downloadTextFile: vi.fn(),
   getSupabaseClient: vi.fn(),
   hasSupabaseConfig: vi.fn(),
@@ -19,6 +20,7 @@ const missingStorageError = {
 
 const setupMissingStorageFile = () => {
   storageMock.hasSupabaseConfig.mockReturnValue(true);
+  storageMock.deleteStorageFile.mockResolvedValue(true);
   storageMock.downloadTextFile.mockRejectedValue(missingStorageError);
   storageMock.isStorageNotFoundError.mockImplementation((error) => error?.code === 'not-found');
 };
@@ -66,12 +68,38 @@ describe('Storage not-found call sites', () => {
     expect(storageMock.isStorageNotFoundError).toHaveBeenCalledWith(missingStorageError);
   });
 
-  test('manifest boutique absent: loadSharedShopPacks retourne les packs locaux et bundles', async () => {
+  test('suppression projet: deleteProjectRecordForUser retire le fichier distant prive', async () => {
+    const { deleteProjectRecordForUser } = await import('../lib/authStorage');
+
+    await expect(deleteProjectRecordForUser('user-1', {
+      id: 'project-1',
+      storagePath: 'users/user-1/projects/project-1.json',
+    })).resolves.toBe(true);
+
+    expect(storageMock.deleteStorageFile).toHaveBeenCalledWith('users/user-1/projects/project-1.json', {
+      visibility: 'private',
+    });
+  });
+
+  test('suppression projet: un storagePath hors utilisateur est ignore', async () => {
+    const { deleteProjectRecordForUser } = await import('../lib/authStorage');
+
+    await expect(deleteProjectRecordForUser('user-1', {
+      id: 'project-1',
+      storagePath: 'users/user-2/projects/project-1.json',
+    })).resolves.toBe(true);
+
+    expect(storageMock.deleteStorageFile).toHaveBeenCalledWith('users/user-1/projects/project-1.json', {
+      visibility: 'private',
+    });
+  });
+
+  test('API boutique absente: loadSharedShopPacks ne lit plus le manifeste Supabase public', async () => {
     const { loadSharedShopPacks } = await import('../lib/shopPacksStorage');
 
     await expect(loadSharedShopPacks()).resolves.toEqual([]);
 
-    expect(storageMock.downloadTextFile).toHaveBeenCalledWith('public/shop-packs.json', { visibility: 'public' });
-    expect(storageMock.isStorageNotFoundError).toHaveBeenCalledWith(missingStorageError);
+    expect(storageMock.downloadTextFile).not.toHaveBeenCalledWith('public/shop-packs.json', { visibility: 'public' });
+    expect(storageMock.isStorageNotFoundError).not.toHaveBeenCalledWith(missingStorageError);
   });
 });

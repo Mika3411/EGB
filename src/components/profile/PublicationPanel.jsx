@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { showAlert, showConfirm } from '../AccessibleDialog';
 import ThumbnailCropper from './ThumbnailCropper';
 import { AGE_RATINGS, PUBLIC_CATEGORIES, formatDate } from './profileUtils';
 import { getProjectName } from '../../lib/projectAnalysis';
@@ -23,22 +24,33 @@ function PublicationCard({
   const [thumbnailPan, setThumbnailPan] = useState({ x: 0, y: 0 });
   const [isThumbnailBusy, setIsThumbnailBusy] = useState(false);
 
-  const handlePublish = () => {
+  const handlePublish = async () => {
     const category = project.shareState?.category || '';
     const ageRating = project.shareState?.ageRating || '';
 
     if (!category) {
-      window.alert('Choisis une catégorie avant de publier ce jeu.');
+      await showAlert({
+        title: 'Publication incomplète',
+        message: 'Choisis une catégorie avant de publier ce jeu.',
+      });
       return;
     }
 
     if (!ageRating) {
-      window.alert("Choisis une mention d'âge avant de publier ce jeu.");
+      await showAlert({
+        title: 'Publication incomplète',
+        message: "Choisis une mention d'âge avant de publier ce jeu.",
+      });
       return;
     }
 
     if (ageRating === '+18 ans') {
-      const confirmed = window.confirm('Confirmer que ce jeu est réservé aux joueurs de 18 ans et plus ?');
+      const confirmed = await showConfirm({
+        title: 'Confirmer +18 ans',
+        message: 'Confirmer que ce jeu est réservé aux joueurs de 18 ans et plus ?',
+        confirmLabel: 'Confirmer',
+        variant: 'danger',
+      });
       if (!confirmed) return;
     }
 

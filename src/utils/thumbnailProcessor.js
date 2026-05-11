@@ -48,7 +48,7 @@ export const makeCroppedThumbnailFile = async ({ src, sourceName, sourceWidth, s
   context.drawImage(image, sx, sy, sourceWidthCropped, sourceHeightCropped, 0, 0, crop.width, crop.height);
 
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', 0.86));
-  if (!blob) throw new Error('Impossible de générer la miniature.');
+  if (!blob) throw new Error('Impossible dé générer la miniature.');
   const safeName = String(sourceName || 'miniature').replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9._-]+/g, '-').toLowerCase() || 'miniature';
   return new File([blob], `${safeName}-${crop.label.replace(':', 'x')}.webp`, { type: 'image/webp' });
 };

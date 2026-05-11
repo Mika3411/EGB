@@ -4,36 +4,46 @@ import { buildGlobalSceneLayout, generateAiImage, getConnectedScenes } from '../
 import { getAiAuthHeaders } from '../utils/aiAuthHeaders';
 import { mergeProjectPatch, validateProject } from '../utils/projectValidation';
 import { downloadBlob } from '../utils/fileHelpers';
+import { createIndexedDraftStorage } from '../utils/indexedDraftStorage';
+import { showConfirm } from './AccessibleDialog';
 
 const FIELD_HELP = {
+  title: "Nom du jeu. Si tu laisses vide, l'IA invente un titre cohérent avec le thème.",
+  story: "Base narrative du jeu: situation de départ, mystère, objectif final. Vide = l'IA invente.",
+  characters: "Personnages importants, alliés, antagonistes, voix entendues, victimes ou suspects. Vide = distribution aléatoire.",
+  places: "Lieux imposés ou ambiance géographique. Vide = l'IA choisit les lieux selon le thème.",
+  constraints: "Contraintes libres: public visé, choses interdites, twist obligatoire, style d'énigmes, fin souhaitée. Vide = choix aléatoires.",
   theme: "Thème principal de l'histoire: manoir, station spatiale, enquête policière, laboratoire, musée...",
-  difficulty: "Influence la complexité des enigmes, le nombre de dépendances et les conditions de déblocage.",
-  actCount: "Grandes parties de l'histoire. Un acte contient plusieurs scenes.",
-  sceneCount: "Nombre de scenes principales à générer.",
-  subsceneCount: "Nombre de sous-scenes rattachées à des scenes principales.",
+  difficulty: "Influence la complexité des énigmes, le nombre de dépendances et les conditions de déblocage.",
+  actCount: "Grandes parties de l'histoire. Un acte contient plusieurs scènes.",
+  sceneCount: "Nombre de scènes principales à générer.",
+  subsceneCount: "Nombre de sous-scènes rattachées à des scènes principales.",
   itemCount: "Objets d'inventaire qui pourront être trouvés, requis ou combinés.",
-  enigmaCount: "Enigmes créées et reliées aux zones d'action.",
-  cinematicCount: "Cinematics narratives créées avec des slides textuelles.",
-  improve: "L'IA garde la structure de la scene et modifié seulement ambiance, dialogues et objets.",
-  mode: "Choisit le type d'aide IA: créer un récit complet, avancer acte par acte, continuer un projet existant ou améliorer une scene précise.",
+  heroBonusObjects: "Demande à l'IA de transformer une partie des objets en potions ou équipements Hero aventure. Les équipements peuvent augmenter une compétence, les PV max ou la mana max.",
+  enigmaCount: "Énigmes créées et reliées aux zones d'action.",
+  combinationCount: "Obligatoire. Combinaisons d'objets à créer. Exemple: clé + ruban = clé aimantée.",
+  cinematicCount: "Cinématiques narratives créées avec des slides textuelles.",
+  improve: "L'IA garde la structure de la scène et modifie seulement ambiance, dialogues et objets.",
+  mode: "Choisit le type d'aide IA: créer un récit complet, avancer acte par acte, continuer un projet existant ou améliorer une scène précise.",
   tone: "Ambiance d'écriture utilisée pour les textes, dialogues et descriptions. Exemple: mystérieux, drôle, horrifique, poétique, réaliste.",
-  duration: "Temps de jeu visé. L'IA s'en sert pour doser le nombre d'steps, d'indices et de détours narratifs.",
-  enrichmentType: "Définit ce que l'step d'enrichissement doit renforcer en priorité: textes, descriptions visuelles, zones d'action ou tout ensemble.",
+  duration: "Temps de jeu visé. L'IA s'en sert pour doser le nombre d'étapes, d'indices et de détours narratifs.",
+  enrichmentType: "Définit ce que l'étape d'enrichissement doit renforcer en priorité: textes, descriptions visuelles, zones d'action ou tout ensemble.",
   source: "Projet utilisé comme base pour la continuation. Le projet actuel vient de l'éditeur, le JSON importé permet de repartir d'une sauvegarde externe.",
   importJson: "Charge un projet JSON existant pour que l'IA puisse le continuer sans dépendre du projet actuellement ouvert.",
-  instruction: "Consigne libre pour guider l'IA. Plus elle est concrète, plus le result respecterà ton intention.",
+  instruction: "Consigne libre pour guider l'IA. Plus elle est concrète, plus le résultat respectera ton intention.",
   storySummary: "Résumé de l'histoire déjà jouée. Il sert à garder la suite cohérente avec les révélations et enjeux actuels.",
-  sceneChronology: "Ordre chronologique canonique. Numérote les scenes dans l'ordre de l'histoire; la suite partira de la dernière ligne.",
+  sceneChronology: "Ordre chronologique canonique. Numérote les scènes dans l'ordre de l'histoire; la suite partira de la dernière ligne.",
   continuationWish: "Direction souhaitée pour la suite. Laisse vide pour demander une suite aléatoire mais cohérente.",
-  continuationScene: "Scene exacte depuis laquelle l'histoire doit continuer. La nouvelle scene doit être reliée à celle-ci.",
-  extendInstruction: "Ajoute une contrainte ou une idée à la continuation: nouveau lieu, type d'enigme, objet important, révélation, ton souhaité...",
-  visualConstraints: "Contraintes données au générateur d'image pour cette scene. Liste les éléments qui doivent être visibles et leur placement approximatif.",
+  continuationScene: "Scène exacte depuis laquelle l'histoire doit continuer. La nouvelle scène doit être reliée à celle-ci.",
+  extendInstruction: "Ajoute une contrainte ou une idée à la continuation: nouveau lieu, type d'énigme, objet important, révélation, ton souhaité...",
+  visualConstraints: "Contraintes données au générateur d'image pour cette scène. Liste les éléments qui doivent être visibles et leur placement approximatif.",
+  imagePrompt: "Prompt image fourni par l'IA. Tu peux le retoucher avant de générer l'image correspondante.",
 };
 
 const IMAGE_STYLE_PRESETS = {
   realistic: {
     label: 'Réaliste',
-    description: 'cinematic photoréaliste, textures naturelles, lumière de film, profondeur et détails réalistes',
+    description: 'cinématique photoréaliste, textures naturelles, lumière de film, profondeur et détails réalistes',
   },
   illustrated: {
     label: 'BD / manga',
@@ -42,64 +52,13 @@ const IMAGE_STYLE_PRESETS = {
 };
 
 const AI_DRAFT_DB = 'escape-game-builder-ai-drafts';
-const AI_DRAFT_STORE = 'drafts';
+const AI_DRAFT_AUTOSAVE_DELAY_MS = 2_500;
 const AI_CREDITS_ENDPOINT = import.meta.env.VITE_AI_CREDITS_ENDPOINT || '/api/ai-credits';
-
-const openAiDraftDb = () => new Promise((resolve, reject) => {
-  if (!window.indexedDB) {
-    reject(new Error('IndexedDB indisponible.'));
-    return;
-  }
-  const request = window.indexedDB.open(AI_DRAFT_DB, 1);
-  request.onupgradeneeded = () => {
-    request.result.createObjectStore(AI_DRAFT_STORE, { keyPath: 'id' });
-  };
-  request.onsuccess = () => resolve(request.result);
-  request.onerror = () => reject(request.error);
-});
-
-const readAiDraft = async (id) => {
-  const db = await openAiDraftDb();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(AI_DRAFT_STORE, 'readonly');
-    const request = transaction.objectStore(AI_DRAFT_STORE).get(id);
-    request.onsuccess = () => resolve(request.result?.value || null);
-    request.onerror = () => reject(request.error);
-    transaction.oncomplete = () => db.close();
-  });
-};
-
-const writeAiDraft = async (id, value) => {
-  const db = await openAiDraftDb();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(AI_DRAFT_STORE, 'readwrite');
-    transaction.objectStore(AI_DRAFT_STORE).put({ id, value, updatedAt: Date.now() });
-    transaction.oncomplete = () => {
-      db.close();
-      resolve();
-    };
-    transaction.onerror = () => {
-      db.close();
-      reject(transaction.error);
-    };
-  });
-};
-
-const deleteAiDraft = async (id) => {
-  const db = await openAiDraftDb();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(AI_DRAFT_STORE, 'readwrite');
-    transaction.objectStore(AI_DRAFT_STORE).delete(id);
-    transaction.oncomplete = () => {
-      db.close();
-      resolve();
-    };
-    transaction.onerror = () => {
-      db.close();
-      reject(transaction.error);
-    };
-  });
-};
+const AI_PROJECT_PRIVACY_NOTICE = "Quand tu lances une génération IA, les informations nécessaires du projet peuvent être transmises au fournisseur IA: titres, scènes, dialogues, personnages, contraintes et consignes. Les médias volumineux ne sont pas inclus dans ce contexte texte compacté.";
+const aiDraftStorage = createIndexedDraftStorage(AI_DRAFT_DB);
+const readAiDraft = aiDraftStorage.read;
+const writeAiDraft = aiDraftStorage.write;
+const deleteAiDraft = aiDraftStorage.remove;
 
 const stripLargeMediaFields = (value) => {
   if (Array.isArray(value)) return value.map(stripLargeMediaFields);
@@ -116,6 +75,13 @@ const HelpLabel = ({ children, help, className = '' }) => (
     <span>{children}</span>
     <span className="help-dot" data-help={help} aria-label={help} tabIndex={0}>?</span>
   </label>
+);
+
+const AiPrivacyNotice = () => (
+  <div className="ai-privacy-notice" role="note">
+    <strong>Confidentialité IA</strong>
+    <p>{AI_PROJECT_PRIVACY_NOTICE}</p>
+  </div>
 );
 
 const shouldPreplaceHotspots = (hotspots = []) => {
@@ -185,10 +151,10 @@ const getStepMeta = (status, locked, doneLabel, availableLabel, lockedLabel = 'v
 
 const getProjectDiff = (before = {}, after = {}) => {
   const keys = [
-    ['scenes', 'scenes'],
+    ['scenes', 'scènes'],
     ['items', 'objets'],
-    ['enigmas', 'enigmes'],
-    ['cinematics', 'cinematics'],
+    ['enigmas', 'énigmes'],
+    ['cinematics', 'cinématiques'],
     ['combinations', 'combinaisons'],
   ];
   return keys.map(([key, label]) => {
@@ -222,17 +188,17 @@ const markAiChanges = (before = {}, after = {}, actionLabel = 'IA') => {
 
 const getActionEstimate = (mode, action) => {
   const estimates = {
-    generate: ['+ projet complet', '+ scenes', '+ objets', '+ enigmes'],
+    generate: ['+ nouveau projet complet', '+ prompts images', '+ scènes', '+ objets', '+ énigmes'],
     progressive: ['+ Acte 1', '+ Acte 2 ensuite', '~ enrichissement contrôlé'],
     extend: ['+ ajouts ciblés', '~ projet existant conservé', '+ références validées'],
-    improve: ['~ 1 scene modifiée', '~ dialogues', '~ ambiance', '~ objets si utile'],
-    act1: ['+ 1 acte', '+ 3 à 6 scenes', '+ objets', '+ enigmes'],
+    improve: ['~ 1 scène modifiée', '~ dialogues', '~ ambiance', '~ objets si utile'],
+    act1: ['+ 1 acte', '+ 3 à 6 scènes', '+ objets', '+ énigmes'],
     improveAct1: ['~ Acte 1', '~ dialogues', '~ ambiance'],
-    act2_continuity: ['+ 1 acte', '+ 2 à 5 scenes', '+ objets', '+ enigmes'],
+    act2_continuity: ['+ 1 acte', '+ 2 à 5 scènes', '+ objets', '+ énigmes'],
     enrich: ['~ dialogues', '~ détails visuels', '~ interactions'],
-    continue_story: ['+ scenes de suite', '+ objets', '+ zones de liaison'],
-    add_scenes: ['+ 1 à 3 scenes', '+ zones de navigation'],
-    add_enigmas: ['+ 1 à 3 enigmes', '+ zones liées'],
+    continue_story: ['+ scènes de suite', '+ objets', '+ zones de liaison'],
+    add_scenes: ['+ 1 à 3 scènes', '+ zones de navigation'],
+    add_enigmas: ['+ 1 à 3 énigmes', '+ zones liées'],
     enrich_interactions: ['~ zones', '~ dialogues', '~ objets'],
   };
   return estimates[action] || estimates[mode] || [];
@@ -241,9 +207,9 @@ const getActionEstimate = (mode, action) => {
 const makeIdeaSuggestions = (theme, projectTitle) => [
   `Ajouter une cave secrète liée à ${theme || projectTitle || 'l’histoire'}`,
   'Introduire un fantôme lié à la famille',
-  'Créer une enigme sonore',
+  'Créer une énigme sonore',
   'Ajouter une clé rouillée et une serrure mécanique',
-  'Révéler une piece cachée derrière un tableau',
+  'Révéler une pièce cachée derrière un tableau',
 ];
 
 const makeProjectStorySummary = (project = {}) => {
@@ -252,12 +218,12 @@ const makeProjectStorySummary = (project = {}) => {
   const lastScene = scenes[scenes.length - 1];
   const sceneLines = scenes.slice(-5).map((scene) => {
     const firstDialogue = (scene.hotspots || []).find((hotspot) => hotspot.dialogue)?.dialogue || '';
-    return `- ${scene.name}: ${(scene.introText || firstDialogue || 'Scene sans résumé.').split('\n')[0]}`;
+    return `- ${scene.name}: ${(scene.introText || firstDialogue || 'Scène sans résumé.').split('\n')[0]}`;
   });
   return [
     `Titre: ${project.title || 'Projet sans titre'}`,
     startScene ? `Départ: ${startScene.name}` : '',
-    lastScene ? `Dernière scene actuelle: ${lastScene.name}` : '',
+    lastScene ? `Dernière scène actuelle: ${lastScene.name}` : '',
     sceneLines.length ? 'Derniers événements:' : '',
     ...sceneLines,
   ].filter(Boolean).join('\n');
@@ -285,7 +251,7 @@ const makeSceneChronology = (project = {}) => {
   });
 
   return ordered.map((scene, index) => (
-    `${index + 1}. [${scene.id}] ${scene.name || 'Scene sans nom'}`
+    `${index + 1}. [${scene.id}] ${scene.name || 'Scène sans nom'}`
   )).join('\n');
 };
 
@@ -323,7 +289,7 @@ const parseChronologyEntries = (chronology = '', project = {}) => {
 
 const formatChronologyEntries = (entries = []) => entries.map((entry, index) => (
   entry.sceneId ?
-     `${index + 1}. [${entry.sceneId}] ${entry.name || 'Scene sans nom'}`
+     `${index + 1}. [${entry.sceneId}] ${entry.name || 'Scène sans nom'}`
     : `${index + 1}. ${entry.name || entry.raw || 'Step manuelle'}`
 )).join('\n');
 
@@ -366,6 +332,20 @@ const getDisplayItemName = (item) => (
   isTechnicalItemName(item?.name) ? 'Objet à renommer' : item.name
 );
 
+const getHeroItemPreviewLabel = (item) => {
+  const type = item?.heroItemType || 'none';
+  if (type === 'health_potion') return `Potion soin +${Number(item.heroItemAmount) || 0} PV`;
+  if (type === 'mana_potion') return `Potion mana +${Number(item.heroItemAmount) || 0}`;
+  if (type === 'equipment') {
+    const bonus = Number(item.heroItemBonus) || 0;
+    const sign = bonus >= 0 ? '+' : '';
+    if ((item.heroItemBonusTarget || 'skill') === 'maxHealth') return `Équipement PV max ${sign}${bonus}`;
+    if ((item.heroItemBonusTarget || 'skill') === 'maxMana') return `Équipement mana max ${sign}${bonus}`;
+    return `Équipement ${item.heroItemSkillId || 'compétence'} ${sign}${bonus}`;
+  }
+  return '';
+};
+
 const makeSceneVisualConstraints = (scene, project = {}) => {
   const lines = [];
   const text = `${scene?.name || ''} ${scene?.introText || ''}`.toLowerCase();
@@ -373,7 +353,7 @@ const makeSceneVisualConstraints = (scene, project = {}) => {
   const scenes = project?.scenes || [];
   const enigmas = project?.enigmas || [];
 
-  lines.push(`- lieu principal clairement identifiable: ${scene?.name || 'scene'}`);
+  lines.push(`- lieu principal clairement identifiable: ${scene?.name || 'scène'}`);
 
   if (text.includes('vestibule') || text.includes('hall')) lines.push('- grand vestibule avec entrée, sol visible et profondeur vers le reste du lieu');
   if (text.includes('bibliothèque')) lines.push('- bibliothèques hautes, livres nombreux et au moins un rayon manipulable');
@@ -382,7 +362,7 @@ const makeSceneVisualConstraints = (scene, project = {}) => {
   if (text.includes('cave')) lines.push('- cave sombre avec murs bruts, stockage et passage lisible vers la suite');
   if (text.includes('grenier')) lines.push('- grenier encombré avec poutrès, malles et zones de fouille distinctes');
   if (text.includes('jardin')) lines.push('- extérieur lisible avec chemin, végétation et point d’accès vers le bâtiment');
-  if (text.includes('chambre')) lines.push('- lit, table de chevet et éléments personnels clairement séparés');
+  if (text.includes('chambre')) lines.push('- lit, table dé chevet et éléments personnels clairement séparés');
   if (text.includes('salon')) lines.push('- salon avec assises, cheminée ou meuble central utilisable');
   if (text.includes('couloir')) lines.push('- couloir profond avec portes ou bifurcation visibles');
 
@@ -390,19 +370,19 @@ const makeSceneVisualConstraints = (scene, project = {}) => {
     const name = hotspot.name || 'zone interactive';
     if (hotspot.targetSceneId) {
       const target = scenes.find((entry) => entry.id === hotspot.targetSceneId);
-      lines.push(`- sortie ou passage visible pour "${name}" vers ${target?.name || 'une autre scene'}`);
+      lines.push(`- sortie ou passage visible pour "${name}" vers ${target?.name || 'une autre scène'}`);
     } else if (hotspot.enigmaId) {
       const enigma = enigmas.find((entry) => entry.id === hotspot.enigmaId);
-      lines.push(`- mécanisme ou support d’enigme visible pour "${name}"${enigma?.name ? ` (${enigma.name})` : ''}`);
+      lines.push(`- mécanisme ou support d’énigme visible pour "${name}"${enigma?.name ? ` (${enigma.name})` : ''}`);
     } else {
       lines.push(`- élément interactif distinct pour "${name}"`);
     }
   });
 
   if (!hotspots.length) lines.push('- décor large et lisible avec plusieurs zones interactives potentielles');
-  lines.push('- composition en camérà large, sans texte incrusté, utilisable comme scene cliquable');
+  lines.push('- composition en caméra large, sans texte incrusté, utilisable comme scène cliquable');
   lines.push('- exposition claire pour le jeu: ombres détaillées, aucun centre noir bouché, passages et objets inspectables');
-  lines.push('- ne pas afficher les objets d’inventaire dans l’image: ils seront ajoutés manuellement par l’utilisateur dans la scene');
+  lines.push('- ne pas afficher les objets d’inventaire dans l’image: ils seront ajoutés manuellement par l’utilisateur dans la scène');
 
   return uniqueLines(lines).join('\n');
 };
@@ -445,18 +425,25 @@ export default function AiTab({
 }) {
   const [mode, setMode] = useState('generate');
   const [brief, setBrief] = useState({
+    title: '',
     theme: 'Manoir familial hanté',
+    story: '',
+    characters: '',
+    places: '',
+    constraints: '',
     difficulty: 'normal',
     actCount: 2,
     sceneCount: 8,
     subsceneCount: 5,
     itemCount: 10,
+    heroBonusObjects: true,
     enigmaCount: 5,
+    combinationCount: 3,
     cinematicCount: 3,
     tone: 'mystérieux et cinématographique',
     duration: '45 minutes',
   });
-  const [instruction, setInstruction] = useState('Améliore cette scene pour la rendre plus stressante.');
+    const [instruction, setInstruction] = useState('Améliore cette scène pour la rendre plus stressante.');
   const [targetSceneId, setTargetSceneId] = useState(project?.scenes?.[0]?.id || '');
   const [generatedProject, setGeneratedProject] = useState(null);
   const [isPatch, setIsPatch] = useState(false);
@@ -485,7 +472,7 @@ export default function AiTab({
   const [enrichmentType, setEnrichmentType] = useState('all');
   const [sceneVisualConstraints, setSceneVisualConstraints] = useState({});
   const [imageStylePreset, setImageStylePreset] = useState('realistic');
-  const [globalVisualStyle, setGlobalVisualStyle] = useState('réaliste, mystérieux mais clairement éclairé, manoir ancien, camérà large, zones interactives visibles, ombres détaillées non bouchées');
+  const [globalVisualStyle, setGlobalVisualStyle] = useState('réaliste, mystérieux mais clairement éclairé, manoir ancien, caméra large, zones interactives visibles, ombres détaillées non bouchées');
   const [imageReadabilityLevel, setImageReadabilityLevel] = useState('balanced');
   const [visualInheritance, setVisualInheritance] = useState('même type de poignée de porte, même parquet, même lumière, mêmes matériaux');
   const [storySummary, setStorySummary] = useState(() => makeProjectStorySummary(project));
@@ -500,7 +487,14 @@ export default function AiTab({
   const [draftRestored, setDraftRestored] = useState(false);
   const [draftSaveStatus, setDraftSaveStatus] = useState('');
   const [draftVersion, setDraftVersion] = useState(0);
-  const draftSaveTimerRef = useRef(null);
+  const indexedDraftSaveTimerRef = useRef(null);
+  const isBeginnerAi = project?.creationMode === 'beginner';
+  const isIntermediateAi = project?.creationMode === 'intermediate';
+  const isHeroAdventureAi = project?.creationMode === 'hero_adventure' || project?.heroAdventure?.enabled;
+  const isChoiceAdventureAi = ['adventure', 'adventure_choices'].includes(project?.creationMode) && !isHeroAdventureAi;
+  const isClassicExpertAi = !isBeginnerAi && !isIntermediateAi && !isHeroAdventureAi && !isChoiceAdventureAi;
+  const constrainedCreationMode = isBeginnerAi ? 'beginner' : isIntermediateAi ? 'intermediate' : isChoiceAdventureAi ? 'adventure' : isClassicExpertAi ? 'expert' : '';
+  const shouldGenerateCombinations = isChoiceAdventureAi || isClassicExpertAi;
   const aiDraftKey = useMemo(() => (
     `ai-draft:${projectStorageKey || project?.title || project?.start?.targetSceneId || 'default'}`
   ), [projectStorageKey, project?.title, project?.start?.targetSceneId]);
@@ -510,7 +504,7 @@ export default function AiTab({
       const response = await fetch(AI_CREDITS_ENDPOINT, {
         headers: await getAiAuthHeaders(),
       });
-      if (!response.ok) throw new Error(`Credits indisponibles (${response.status}).`);
+      if (!response.ok) throw new Error(`Crédits indisponibles (${response.status}).`);
       const payload = await response.json();
       setAiCredits({
         balance: Number(payload.balance || 0),
@@ -522,27 +516,129 @@ export default function AiTab({
         error: '',
       });
     } catch (error) {
-      setAiCredits((previous) => ({ ...previous, isLoading: false, error: error.message || 'Credits indisponibles.' }));
+      setAiCredits((previous) => ({ ...previous, isLoading: false, error: error.message || 'Crédits indisponibles.' }));
     }
   }, []);
   const countCreditUnits = (value) => Math.max(0, Math.round(Number(value) || 0));
+  const getModeConstrainedBrief = (targetBrief = brief) => {
+    if (isClassicExpertAi) {
+      return {
+        ...targetBrief,
+        heroBonusObjects: false,
+        expertBrief: true,
+      };
+    }
+    if (isIntermediateAi) {
+      return {
+        ...targetBrief,
+        combinationCount: 0,
+        heroBonusObjects: false,
+        intermediateBrief: true,
+      };
+    }
+    if (!isBeginnerAi) return targetBrief;
+    return {
+      ...targetBrief,
+      actCount: 1,
+      subsceneCount: 0,
+      combinationCount: 0,
+      cinematicCount: 0,
+      heroBonusObjects: false,
+      beginnerBrief: true,
+    };
+  };
+  const stripUnsupportedModeFeatures = (candidate) => {
+    if (!candidate || typeof candidate !== 'object' || (!isBeginnerAi && !isIntermediateAi && !isChoiceAdventureAi && !isClassicExpertAi)) return candidate;
+    const next = structuredClone(candidate);
+    next.creationMode = constrainedCreationMode;
+    delete next.heroAdventure;
+    if (!isChoiceAdventureAi && Array.isArray(next.storyVariables)) next.storyVariables = [];
+    if ((isBeginnerAi || isIntermediateAi) && Array.isArray(next.combinations)) next.combinations = [];
+    if (isBeginnerAi) {
+      if (Array.isArray(next.cinematics)) next.cinematics = [];
+      delete next.routeMap;
+    }
+    if (Array.isArray(next.items)) next.items = next.items.map((item) => {
+      const cleanItem = { ...item };
+      delete cleanItem.heroItemType;
+      delete cleanItem.heroItemAmount;
+      delete cleanItem.heroItemConsumeOnUse;
+      delete cleanItem.heroItemBonusTarget;
+      delete cleanItem.heroItemSkillId;
+      delete cleanItem.heroItemBonus;
+      return cleanItem;
+    });
+    if (Array.isArray(next.scenes)) next.scenes = next.scenes.map((scene) => ({
+      ...scene,
+      hotspots: (scene.hotspots || []).map((hotspot) => {
+        const cleanHotspot = { ...hotspot };
+        delete cleanHotspot.heroMalusHealthLoss;
+        delete cleanHotspot.heroMalusManaLoss;
+        delete cleanHotspot.heroMalusMessage;
+        if (isBeginnerAi || isIntermediateAi) delete cleanHotspot.logicRules;
+        if (!isChoiceAdventureAi) delete cleanHotspot.conversation;
+        if (isChoiceAdventureAi && cleanHotspot.conversation?.nodes) {
+          cleanHotspot.conversation = {
+            ...cleanHotspot.conversation,
+            nodes: cleanHotspot.conversation.nodes.map((node) => ({
+              ...node,
+              replies: (node.replies || []).map((reply) => {
+                const cleanReply = { ...reply };
+                delete cleanReply.heroMalusHealthLoss;
+                delete cleanReply.heroMalusManaLoss;
+                delete cleanReply.heroMalusMessage;
+                return cleanReply;
+              }),
+            })),
+          };
+        }
+        delete cleanHotspot.advancedConditions;
+        if (cleanHotspot.actionType === 'conversation') cleanHotspot.actionType = 'dialogue';
+        if (isBeginnerAi && cleanHotspot.actionType === 'cinematic') {
+          cleanHotspot.actionType = 'dialogue';
+          cleanHotspot.targetCinematicId = '';
+        }
+        return cleanHotspot;
+      }),
+    }));
+    return next;
+  };
   const calculateBriefCreditCost = (targetBrief = brief) => {
+    const constrainedBrief = getModeConstrainedBrief(targetBrief);
     const units = aiCredits.costs?.projectGeneration || {
       act: 2,
       scene: 1,
       enigma: 1,
       cinematic: 1,
       item: 1,
+      combination: 1,
     };
     return Math.max(1, Math.ceil(
-      countCreditUnits(targetBrief.actCount) * Number(units.act || 0)
-      + countCreditUnits(targetBrief.sceneCount) * Number(units.scene || 0)
-      + countCreditUnits(targetBrief.enigmaCount) * Number(units.enigma || 0)
-      + countCreditUnits(targetBrief.cinematicCount) * Number(units.cinematic || 0)
-      + countCreditUnits(targetBrief.itemCount) * Number(units.item || 0),
+      countCreditUnits(constrainedBrief.actCount) * Number(units.act || 0)
+      + countCreditUnits(constrainedBrief.sceneCount) * Number(units.scene || 0)
+      + countCreditUnits(constrainedBrief.enigmaCount) * Number(units.enigma || 0)
+      + (shouldGenerateCombinations ? countCreditUnits(constrainedBrief.combinationCount) * Number(units.combination || 0) : 0)
+      + countCreditUnits(constrainedBrief.cinematicCount) * Number(units.cinematic || 0)
+      + countCreditUnits(constrainedBrief.itemCount) * Number(units.item || 0),
     ));
   };
   const calculateProjectGenerationCreditCost = () => calculateBriefCreditCost(brief);
+  const getGenerationBrief = (targetBrief = brief) => ({
+    ...getModeConstrainedBrief(targetBrief),
+    heroAdventureBrief: isHeroAdventureAi,
+    adventureChoicesBrief: isChoiceAdventureAi,
+    expertBrief: isClassicExpertAi,
+    heroBonusObjects: Boolean(isHeroAdventureAi && targetBrief.heroBonusObjects !== false),
+    ...(isChoiceAdventureAi ? {} : {
+      title: '',
+      story: '',
+      characters: '',
+      places: '',
+      constraints: '',
+      ...(isClassicExpertAi ? {} : { combinationCount: 0 }),
+      heroBonusObjects: false,
+    }),
+  });
   const getProgressiveActNumber = (stage = '') => {
     const match = String(stage).match(/^act(\d+)$/);
     return match ? Number(match[1]) : 0;
@@ -568,13 +664,14 @@ export default function AiTab({
       subsceneCount: splitProgressiveCount('subsceneCount', stage),
       itemCount: splitProgressiveCount('itemCount', stage),
       enigmaCount: splitProgressiveCount('enigmaCount', stage),
+      combinationCount: splitProgressiveCount('combinationCount', stage),
       cinematicCount: splitProgressiveCount('cinematicCount', stage),
     };
   };
   const getProgressiveStageSummary = (stage) => {
     const stageBrief = getProgressiveStageBrief(stage);
     if (!stageBrief) return '';
-    return `${stageBrief.sceneCount} scenes, ${stageBrief.itemCount} objets, ${stageBrief.enigmaCount} enigmes, ${stageBrief.cinematicCount} cinematics`;
+    return `${stageBrief.sceneCount} scènes, ${stageBrief.itemCount} objets, ${stageBrief.enigmaCount} énigmes, ${stageBrief.cinematicCount} cinématiques`;
   };
   const progressiveActStages = Array.from(
     { length: Math.max(1, countCreditUnits(brief.actCount) || 1) },
@@ -582,10 +679,22 @@ export default function AiTab({
   );
   const getAiCreditCost = (kind) => {
     if (kind === 'text' && mode === 'generate') return calculateProjectGenerationCreditCost();
+    if (isChoiceAdventureAi && (kind === 'objectImage' || kind === 'objectThumbnail')) return Number(aiCredits.costs?.image ?? 5);
     if (kind === 'objectImage') return Number(aiCredits.nextObjectImageCost ?? 1);
     if (kind === 'objectThumbnail') return Number(aiCredits.costs?.objectThumbnail ?? 1);
     return Number(aiCredits.costs?.[kind] ?? (kind === 'image' ? 5 : 2));
   };
+  const calculateBriefImageCreditCost = (targetBrief = brief) => {
+    const constrainedBrief = getModeConstrainedBrief(targetBrief);
+    const imageCost = getAiCreditCost('image');
+    const imageCount = countCreditUnits(constrainedBrief.sceneCount)
+      + countCreditUnits(constrainedBrief.itemCount)
+      + countCreditUnits(constrainedBrief.cinematicCount);
+    return imageCount * imageCost;
+  };
+  const calculateBriefTotalCreditCost = (targetBrief = brief, targetMode = mode, stage = '') => (
+    getTextGenerationCreditCost(targetMode, stage) + calculateBriefImageCreditCost(targetBrief)
+  );
   const getTextGenerationCreditCost = (targetMode = mode, stage = '') => {
     if (targetMode === 'generate') return calculateProjectGenerationCreditCost();
     if (targetMode === 'progressive') {
@@ -603,7 +712,7 @@ export default function AiTab({
   );
   const aiCreditMessage = (kind, costOverride = null) => {
     const cost = costOverride ?? getAiCreditCost(kind);
-    return `Credits IA insuffisants: ${aiCredits.balance || 0}/${cost}.`;
+    return `Crédits IA insuffisants: ${aiCredits.balance || 0}/${cost}.`;
   };
   const currentTextGenerationCost = getTextGenerationCreditCost(
     mode,
@@ -613,52 +722,108 @@ export default function AiTab({
   const canRunImageAi = !aiCredits.isLoading && hasEnoughAiCredits('image');
   const canRunObjectImageAi = !aiCredits.isLoading && hasEnoughAiCredits('objectImage');
   const canRunObjectThumbnailAi = !aiCredits.isLoading && hasEnoughAiCredits('objectThumbnail');
-  const formatCreditCost = (cost) => `${cost} credit${Number(cost) > 1 ? 's' : ''}`;
+  const formatCreditCost = (cost) => `${cost} crédit${Number(cost) > 1 ? 's' : ''}`;
   const selectedImageStyle = IMAGE_STYLE_PRESETS[imageStylePreset] || IMAGE_STYLE_PRESETS.realistic;
   const effectiveVisualStyle = `${selectedImageStyle.description}. ${globalVisualStyle}`;
+  useEffect(() => {
+    if (isBeginnerAi && (mode === 'progressive' || mode === 'extend')) {
+      setMode('generate');
+    }
+  }, [isBeginnerAi, mode]);
   const briefForm = (
     <>
+      {isChoiceAdventureAi ? (
+      <section className="ai-brief-document">
+        <span className="section-kicker">Document IA</span>
+        <HelpLabel help={FIELD_HELP.title}>Nom du jeu</HelpLabel>
+        <input value={brief.title} onChange={(event) => updateBrief('title', event.target.value)} placeholder="Vide = titre invente par l'IA" />
+
+        <HelpLabel help={FIELD_HELP.story}>Histoire</HelpLabel>
+        <textarea value={brief.story} onChange={(event) => updateBrief('story', event.target.value)} placeholder="Vide = histoire aléatoire mais cohérente avec le thème." />
+
+        <HelpLabel help={FIELD_HELP.characters}>Personnages</HelpLabel>
+        <textarea value={brief.characters} onChange={(event) => updateBrief('characters', event.target.value)} placeholder="Vide = personnages inventes par l'IA." />
+
+        <HelpLabel help={FIELD_HELP.places}>Lieux / univers</HelpLabel>
+        <textarea value={brief.places} onChange={(event) => updateBrief('places', event.target.value)} placeholder="Vide = lieux choisis par l'IA." />
+
+        <HelpLabel help={FIELD_HELP.constraints}>Contraintes libres</HelpLabel>
+        <textarea value={brief.constraints} onChange={(event) => updateBrief('constraints', event.target.value)} placeholder="Vide = choix aléatoires. Ex: familial, sans horreur, twist final, fin secrète..." />
+      </section>
+      ) : null}
+
       <HelpLabel help={FIELD_HELP.theme}>Thème</HelpLabel>
       <input value={brief.theme} onChange={(event) => updateBrief('theme', event.target.value)} />
 
       <HelpLabel help={FIELD_HELP.difficulty}>Difficulté</HelpLabel>
       <select value={brief.difficulty} onChange={(event) => updateBrief('difficulty', event.target.value)}>
         <option value="easy">Facile</option>
-        <option value="normal">Intermédiaire</option>
+        <option value="normal">Intermediaire</option>
         <option value="hard">Difficile</option>
       </select>
 
       <div className="grid-two small-gap">
+        {!isBeginnerAi ? (
         <div>
           <HelpLabel help={FIELD_HELP.actCount}>Actes</HelpLabel>
-          <input type="number" min="1" max="6" value={brief.actCount} onChange={(event) => updateBrief('actCount', event.target.value)} />
+          <input type="number" min="1" max="6" value={brief.actCount} onChange={(event) => updateBrief('actCount', event.target.value)} required />
         </div>
+        ) : null}
         <div>
-          <HelpLabel help={FIELD_HELP.sceneCount}>Scenes</HelpLabel>
-          <input type="number" min="1" max="24" value={brief.sceneCount} onChange={(event) => updateBrief('sceneCount', event.target.value)} />
+          <HelpLabel help={FIELD_HELP.sceneCount}>Scènes</HelpLabel>
+          <input type="number" min="1" max="24" value={brief.sceneCount} onChange={(event) => updateBrief('sceneCount', event.target.value)} required />
         </div>
+        {!isBeginnerAi ? (
+
         <div>
           <HelpLabel help={FIELD_HELP.subsceneCount}>Sous-scenes</HelpLabel>
           <input type="number" min="0" max="24" value={brief.subsceneCount} onChange={(event) => updateBrief('subsceneCount', event.target.value)} />
+
         </div>
+
+        ) : null}
         <div>
           <HelpLabel help={FIELD_HELP.itemCount}>Objets</HelpLabel>
-          <input type="number" min="1" max="40" value={brief.itemCount} onChange={(event) => updateBrief('itemCount', event.target.value)} />
+          <input type="number" min="1" max="40" value={brief.itemCount} onChange={(event) => updateBrief('itemCount', event.target.value)} required />
         </div>
+        {isHeroAdventureAi ? (
         <div>
-          <HelpLabel help={FIELD_HELP.enigmaCount}>Enigmes</HelpLabel>
-          <input type="number" min="0" max="20" value={brief.enigmaCount} onChange={(event) => updateBrief('enigmaCount', event.target.value)} />
+          <HelpLabel help={FIELD_HELP.heroBonusObjects}>Objets avec bonus</HelpLabel>
+          <label className="checkbox-row ai-inline-check">
+            <input
+              type="checkbox"
+              checked={brief.heroBonusObjects !== false}
+              onChange={(event) => updateBrief('heroBonusObjects', event.target.checked)}
+            />
+            <span>Potions et équipements</span>
+          </label>
         </div>
+        ) : null}
         <div>
-          <HelpLabel help={FIELD_HELP.cinematicCount}>Cinematics</HelpLabel>
-          <input type="number" min="0" max="12" value={brief.cinematicCount} onChange={(event) => updateBrief('cinematicCount', event.target.value)} />
+          <HelpLabel help={FIELD_HELP.enigmaCount}>Énigmes</HelpLabel>
+          <input type="number" min="0" max="20" value={brief.enigmaCount} onChange={(event) => updateBrief('enigmaCount', event.target.value)} required />
         </div>
+        {shouldGenerateCombinations ? (
+        <div>
+          <HelpLabel help={FIELD_HELP.combinationCount}>Combinaisons</HelpLabel>
+          <input type="number" min="0" max="30" value={brief.combinationCount} onChange={(event) => updateBrief('combinationCount', event.target.value)} required />
+        </div>
+        ) : null}
+        {!isBeginnerAi ? (
+
+        <div>
+          <HelpLabel help={FIELD_HELP.cinematicCount}>Cinematiques</HelpLabel>
+          <input type="number" min="0" max="12" value={brief.cinematicCount} onChange={(event) => updateBrief('cinematicCount', event.target.value)} required />
+
+        </div>
+
+        ) : null}
       </div>
 
       <HelpLabel help={FIELD_HELP.tone}>Ton</HelpLabel>
       <input value={brief.tone} onChange={(event) => updateBrief('tone', event.target.value)} />
 
-      <HelpLabel help={FIELD_HELP.duration}>Duree visée</HelpLabel>
+      <HelpLabel help={FIELD_HELP.duration}>Durée visée</HelpLabel>
       <input value={brief.duration} onChange={(event) => updateBrief('duration', event.target.value)} />
     </>
   );
@@ -687,7 +852,7 @@ export default function AiTab({
       setGeneratedProject(draft.generatedProject);
       setIsPatch(Boolean(draft.isPatch));
       setSceneVisualConstraints(draft.sceneVisualConstraints || {});
-      setGlobalVisualStyle(draft.globalVisualStyle || 'réaliste, mystérieux mais clairement éclairé, manoir ancien, camérà large, zones interactives visibles, ombres détaillées non bouchées');
+      setGlobalVisualStyle(draft.globalVisualStyle || 'réaliste, mystérieux mais clairement éclairé, manoir ancien, caméra large, zones interactives visibles, ombres détaillées non bouchées');
       setImageReadabilityLevel(draft.imageReadabilityLevel || 'balanced');
       setVisualInheritance(draft.visualInheritance || 'même type de poignée de porte, même parquet, même lumière, mêmes matériaux');
       setStorySummary(draft.storySummary || makeProjectStorySummary(project));
@@ -723,7 +888,7 @@ export default function AiTab({
 
     return () => {
       cancelled = true;
-      if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
+      if (indexedDraftSaveTimerRef.current) clearTimeout(indexedDraftSaveTimerRef.current);
     };
   }, [aiDraftKey, draftVersion]);
 
@@ -757,14 +922,20 @@ export default function AiTab({
 
   const buildLightAiDraftPayload = () => stripLargeMediaFields(buildAiDraftPayload());
 
-  const saveDraftNow = async (manual = false) => {
+  const saveDraftNow = async (options = {}) => {
+    const {
+      includeProjectCopy,
+      manual,
+    } = typeof options === 'boolean'
+      ? { includeProjectCopy: options, manual: options }
+      : { includeProjectCopy: Boolean(options.includeProjectCopy), manual: Boolean(options.manual) };
     if (!generatedProject) {
       if (manual) setDraftSaveStatus('Aucun brouillon IA à sauvegarder.');
       return;
     }
 
     const fullDraft = buildAiDraftPayload();
-    const lightDraft = buildLightAiDraftPayload();
+    const lightDraft = includeProjectCopy ? buildLightAiDraftPayload() : null;
     let fullSaved = false;
     let projectSaved = false;
 
@@ -775,7 +946,7 @@ export default function AiTab({
       fullSaved = false;
     }
 
-    if (onSaveAiDraft) {
+    if (includeProjectCopy && onSaveAiDraft) {
       try {
         await onSaveAiDraft(lightDraft);
         projectSaved = true;
@@ -801,13 +972,22 @@ export default function AiTab({
   };
 
   useEffect(() => {
-    if (!draftRestored || !generatedProject) return;
-    if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
-    draftSaveTimerRef.current = setTimeout(() => {
-      saveDraftNow(false).catch(() => {
+    if (!draftRestored || !generatedProject) {
+      if (indexedDraftSaveTimerRef.current) clearTimeout(indexedDraftSaveTimerRef.current);
+      indexedDraftSaveTimerRef.current = null;
+      return undefined;
+    }
+    if (indexedDraftSaveTimerRef.current) clearTimeout(indexedDraftSaveTimerRef.current);
+    indexedDraftSaveTimerRef.current = setTimeout(() => {
+      indexedDraftSaveTimerRef.current = null;
+      saveDraftNow({ manual: false, includeProjectCopy: false }).catch(() => {
         setDraftSaveStatus('Brouillon IA non sauvegardé: stockage indisponible.');
       });
-    }, 350);
+    }, AI_DRAFT_AUTOSAVE_DELAY_MS);
+    return () => {
+      if (indexedDraftSaveTimerRef.current) clearTimeout(indexedDraftSaveTimerRef.current);
+      indexedDraftSaveTimerRef.current = null;
+    };
   }, [
     draftRestored,
     generatedProject,
@@ -849,7 +1029,7 @@ export default function AiTab({
         const scene = { ...(previousScene || {}), ...patchedScene };
         return {
           id: scene.id,
-          name: scene.name || previousScene?.name || 'Scene modifiée',
+          name: scene.name || previousScene?.name || 'Scène modifiée',
           introText: scene.introText || '',
           backgroundData: scene.backgroundData || '',
           aiVisualElements: scene.aiVisualElements || [],
@@ -859,7 +1039,7 @@ export default function AiTab({
 
       return {
         title: 'Amélioration proposée',
-        subtitle: `${patchedScenes.length} scene(s) touchée(s), le reste du projet reste intact.`,
+        subtitle: `${patchedScenes.length} scène(s) touchée(s), le reste du projet reste intact.`,
         scenes: patchedScenes,
         items: [],
         enigmas: [],
@@ -869,7 +1049,7 @@ export default function AiTab({
 
     return {
       title: previewCandidate?.title || 'Projet généré',
-      subtitle: `${counts.acts} acte(s), ${counts.scenes} scene(s), ${counts.items} objet(s), ${counts.enigmas} enigme(s).`,
+      subtitle: `${counts.acts} acte(s), ${counts.scenes} scène(s), ${counts.items} objet(s), ${counts.enigmas} énigme(s).`,
       scenes: previewCandidate?.scenes || [],
       items: (previewCandidate?.items || []).slice(0, 8),
       enigmas: (previewCandidate?.enigmas || []).slice(0, 5),
@@ -879,6 +1059,25 @@ export default function AiTab({
 
   const updateBrief = (key, value) => {
     setBrief((previous) => ({ ...previous, [key]: value }));
+  };
+  const validateMandatoryBriefCounts = (targetBrief = brief) => {
+    const constrainedBrief = getModeConstrainedBrief(targetBrief);
+    const requiredCounts = [
+      ['sceneCount', 'scenes'],
+      ['enigmaCount', 'enigmes'],
+      ...(!isBeginnerAi ? [['actCount', 'actes']] : []),
+      ...(shouldGenerateCombinations ? [['combinationCount', 'combinaisons']] : []),
+      ...(!isBeginnerAi ? [['cinematicCount', 'cinematiques']] : []),
+      ['itemCount', 'objets'],
+    ];
+    const missing = requiredCounts
+      .filter(([key]) => constrainedBrief[key] === '' || constrainedBrief[key] == null || Number.isNaN(Number(constrainedBrief[key])))
+      .map(([, label]) => label);
+    if (missing.length) {
+      setStatus(`Champs obligatoires a remplir: ${missing.join(', ')}.`);
+      return false;
+    }
+    return true;
   };
 
   const extensionSourceProject = extendSource === 'imported' && importedProject ? importedProject : project;
@@ -903,8 +1102,9 @@ export default function AiTab({
   };
 
   const setGeneratedWithHistory = (nextProject, label, baseline = project) => {
+    const constrainedProject = stripUnsupportedModeFeatures(nextProject);
     if (generatedProject) pushHistory(label, generatedProject);
-    setGeneratedProject(markAiChanges(baseline, nextProject, label));
+    setGeneratedProject(markAiChanges(baseline, constrainedProject, label));
   };
 
   const restoreHistory = (entry) => {
@@ -917,7 +1117,8 @@ export default function AiTab({
   };
 
   const validateCandidate = (candidate, patchMode = isPatch) => {
-    const projectToValidate = patchMode ? mergeProjectPatch(project, candidate) : candidate;
+    const modeCandidate = patchMode ? candidate : stripUnsupportedModeFeatures(candidate);
+    const projectToValidate = patchMode ? mergeProjectPatch(project, candidate) : modeCandidate;
     const result = validateProject(projectToValidate);
     setValidation(result);
     return result;
@@ -933,13 +1134,14 @@ export default function AiTab({
 
   const assertPlayableAiCandidate = (candidate) => {
     if (!Array.isArray(candidate?.scenes) || candidate.scenes.length < 1) {
-      const error = new Error('Le brouillon IA ne contient aucune scene exploitable. Relance la génération.');
+      const error = new Error('Le brouillon IA ne contient aucune scène exploitable. Relance la génération.');
       error.code = 'AI_PROJECT_WITHOUT_SCENES';
       throw error;
     }
   };
 
   const generate = async () => {
+    if (!validateMandatoryBriefCounts()) return;
     const generationCost = getTextGenerationCreditCost(mode);
     if (!hasEnoughAiCredits('text', generationCost)) {
       setStatus(aiCreditMessage('text', generationCost));
@@ -950,8 +1152,11 @@ export default function AiTab({
     setGeneratedProject(null);
     setStatus(`${mode === 'improve' ? 'Amélioration' : 'Génération'} en cours (${formatCreditCost(generationCost)})...`);
     try {
-      const result = await generateAiProject(brief, {
+      const result = await generateAiProject(getGenerationBrief(), {
         mode,
+        beginnerMode: isBeginnerAi,
+        intermediateMode: isIntermediateAi,
+        expertMode: isClassicExpertAi,
         currentProject: project,
         target: { type: 'scene', id: targetSceneId },
         instruction,
@@ -959,7 +1164,7 @@ export default function AiTab({
       const baseline = mode === 'improve' ? project : {};
       const nextProject = result.isPatch ? mergeProjectPatch(project, result.project) : result.project;
       assertPlayableAiCandidate(nextProject);
-      setGeneratedWithHistory(nextProject, mode === 'improve' ? 'Amélioration scene' : 'Génération initiale', baseline);
+      setGeneratedWithHistory(nextProject, mode === 'improve' ? 'Amélioration scène' : 'Génération initiale', baseline);
       setIsPatch(false);
       validateCandidate(nextProject, false);
       setStatus(result.source === 'api' ?
@@ -975,6 +1180,8 @@ export default function AiTab({
 
   const generateProgressiveStep = async (stage) => {
     const stageBrief = getProgressiveStageBrief(stage) || brief;
+    const generationBrief = getGenerationBrief(stageBrief);
+    if (!validateMandatoryBriefCounts(stageBrief)) return;
     const generationCost = getTextGenerationCreditCost('progressive', stage);
     if (!hasEnoughAiCredits('text', generationCost)) {
       setStatus(aiCreditMessage('text', generationCost));
@@ -988,7 +1195,7 @@ export default function AiTab({
     const stageLabel = actNumber ? `Acte ${actNumber}` : stage;
     setStatus(`Génération progressive: ${stageLabel} (${formatCreditCost(generationCost)})...`);
     try {
-      const result = await generateAiProject(stageBrief, {
+      const result = await generateAiProject(generationBrief, {
         mode: 'progressive',
         stage,
         enrichmentType,
@@ -1031,6 +1238,7 @@ export default function AiTab({
   };
 
   const extendExistingProject = async (stage) => {
+    if (!validateMandatoryBriefCounts()) return;
     const generationCost = getTextGenerationCreditCost('extend', stage);
     if (!hasEnoughAiCredits('text', generationCost)) {
       setStatus(aiCreditMessage('text', generationCost));
@@ -1041,13 +1249,13 @@ export default function AiTab({
     setGeneratedProject(null);
     const labels = {
       continue_story: 'Continuer l’histoire',
-      add_scenes: 'Ajouter des scenes',
-      add_enigmas: 'Ajouter des enigmes',
+      add_scenes: 'Ajouter des scènes',
+      add_enigmas: 'Ajouter des énigmes',
       enrich_interactions: 'Enrichir les interactions',
     };
     setStatus(`${labels[stage]} (${formatCreditCost(generationCost)})...`);
     try {
-      const result = await generateAiProject(brief, {
+      const result = await generateAiProject(getGenerationBrief(), {
         mode: 'extend',
         stage,
         currentProject: extensionSourceProject,
@@ -1057,12 +1265,13 @@ export default function AiTab({
         continuationWish,
         continuationSceneId: continuationScene?.id || getLastSceneIdFromChronology(sceneChronology, extensionSourceProject),
       });
-      const nextProject = mergeProjectPatch(extensionSourceProject, result.project);
+      const safePatch = stripUnsupportedModeFeatures(result.project);
+      const nextProject = mergeProjectPatch(extensionSourceProject, safePatch);
       if (extendSource === 'current') {
         if (generatedProject) pushHistory(labels[stage], generatedProject);
-        setGeneratedProject(markAiChanges(extensionSourceProject, result.project, labels[stage]));
+        setGeneratedProject(markAiChanges(extensionSourceProject, safePatch, labels[stage]));
         setIsPatch(true);
-        validateCandidate(result.project, true);
+        validateCandidate(safePatch, true);
       } else {
         setGeneratedWithHistory(nextProject, labels[stage], extensionSourceProject);
         setIsPatch(false);
@@ -1113,7 +1322,12 @@ export default function AiTab({
         '',
         ...(lines.length ? lines : ['Aucune différence détectée.']),
       ].join('\n');
-      if (!window.confirm(message)) {
+      const confirmed = await showConfirm({
+        title: 'Confirmer les modifications',
+        message,
+        confirmLabel: 'Appliquer',
+      });
+      if (!confirmed) {
         setStatus('Application annulée.');
         return;
       }
@@ -1303,7 +1517,7 @@ export default function AiTab({
       setImageStatus(aiCreditMessage('image', generationCost));
       return;
     }
-    const key = `scene:${scene.id}`;
+    const key = `scène:${scene.id}`;
     setGeneratingImageKey(key);
     setImageStatus(`Génération de l’image de "${scene.name}" (${formatCreditCost(generationCost)})...`);
     try {
@@ -1314,6 +1528,7 @@ export default function AiTab({
         style: effectiveVisualStyle,
         stylePreset: imageStylePreset,
         visualInheritance,
+        useEntityImagePrompt: isChoiceAdventureAi,
         layout: buildGlobalSceneLayout(previewCandidate || project),
       };
       const result = await generateAiImage({
@@ -1371,7 +1586,7 @@ export default function AiTab({
     }
     const key = `item:${variant}:${item.id}`;
     setGeneratingImageKey(key);
-    setImageStatus(`Génération de ${isThumbnail ? 'la miniature économique' : 'l’image détaillée'} de "${item.name}" (${formatCreditCost(generationCost)})...`);
+      setImageStatus(`Génération de ${isThumbnail ? (isChoiceAdventureAi ? 'la miniature' : 'la miniature économique') : 'l’image détaillée'} de "${item.name}" (${formatCreditCost(generationCost)})...`);
     try {
       const result = await generateAiImage({
         type: 'item',
@@ -1380,6 +1595,7 @@ export default function AiTab({
         visualContext: {
           style: effectiveVisualStyle,
           stylePreset: imageStylePreset,
+          useEntityImagePrompt: isChoiceAdventureAi,
         },
         regenerate: Boolean(item.imageData),
         variant,
@@ -1393,7 +1609,7 @@ export default function AiTab({
       const nextVariant = makeImageVariant({
         imageData: result.imageData,
         imageName: result.imageName,
-        label: isThumbnail ? 'Miniature économique' : 'Image détaillée',
+        label: isThumbnail ? (isChoiceAdventureAi ? 'Miniature' : 'Miniature économique') : 'Image détaillée',
         kind: isThumbnail ? 'thumbnail' : 'item',
       });
       const itemPatch = {
@@ -1404,7 +1620,7 @@ export default function AiTab({
       patchGeneratedItem(item.id, itemPatch);
       const persisted = await onPersistAiImage?.({ type: 'item', id: item.id, patch: itemPatch });
       if (persisted?.patch) patchGeneratedItem(item.id, persisted.patch);
-      setImageStatus(result.warning || `${isThumbnail ? 'Miniature économique' : 'Image détaillée'} de "${getDisplayItemName(item)}" prête.`);
+      setImageStatus(result.warning || `${isThumbnail ? (isChoiceAdventureAi ? 'Miniature' : 'Miniature économique') : 'Image détaillée'} de "${getDisplayItemName(item)}" prête.`);
     } catch (error) {
       setImageStatus(`Erreur image: ${error.message}`);
     } finally {
@@ -1423,7 +1639,7 @@ export default function AiTab({
     }
     const key = `cinematic:${cinematic.id}:${targetSlide.id}`;
     setGeneratingImageKey(key);
-    setImageStatus(`Génération de l’image de la cinematic "${cinematic.name}" (${formatCreditCost(generationCost)})...`);
+    setImageStatus(`Génération de l’image de la cinématique "${cinematic.name}" (${formatCreditCost(generationCost)})...`);
     try {
       const result = await generateAiImage({
         type: 'cinematic',
@@ -1432,6 +1648,7 @@ export default function AiTab({
           name: `Slide de ${cinematic.name}`,
           cinematicName: cinematic.name,
           narration: targetSlide.narration,
+          imagePrompt: targetSlide.imagePrompt,
         },
         projectTitle: previewCandidate?.title || project?.title,
         project: previewCandidate || project,
@@ -1440,6 +1657,7 @@ export default function AiTab({
           style: effectiveVisualStyle,
           stylePreset: imageStylePreset,
           visualInheritance,
+          useEntityImagePrompt: isChoiceAdventureAi,
         },
         regenerate: Boolean(targetSlide.imageData),
         readabilityLevel: imageReadabilityLevel,
@@ -1469,7 +1687,7 @@ export default function AiTab({
       if (persisted?.patch) patchGeneratedCinematicSlide(cinematic.id, targetSlide.id, persisted.patch);
       setImageStatus(result.warning || `Image de "${cinematic.name}" prête.`);
     } catch (error) {
-      setImageStatus(`Erreur image cinematic: ${error.message}`);
+      setImageStatus(`Erreur image cinématique: ${error.message}`);
     } finally {
       setGeneratingImageKey('');
       refreshAiCredits();
@@ -1520,7 +1738,7 @@ export default function AiTab({
                     <span>{variant.label || `Image ${index + 1}`}</span>
                     <div>
                       <button type="button" className="secondary-action" disabled={selected} onClick={() => selectImageVariant(variant)}>
-                        {selected ? 'Selectionnée' : 'Choisir'}
+                        {selected ? 'Sélectionnée' : 'Choisir'}
                       </button>
                       <button type="button" className="secondary-action" onClick={() => downloadImage(variant.imageData, variant.imageName || `${imageCompare.title}-${index + 1}.png`)}>
                         Télécharger
@@ -1540,25 +1758,34 @@ export default function AiTab({
         </div>
         <div data-tour="ai-credits" className={`ai-credit-panel ${aiCredits.balance != null && aiCredits.balance < currentTextGenerationCost ? 'low' : ''}`}>
           <div>
-            <span className="section-kicker">Credits IA</span>
+            <span className="section-kicker">Crédits IA</span>
             <strong>{aiCredits.isLoading ? '...' : `${aiCredits.balance ?? 0}`}</strong>
           </div>
           <button type="button" className="secondary-action" onClick={refreshAiCredits} disabled={aiCredits.isLoading}>
             Actualiser
           </button>
           <p>
-            Projet: {calculateProjectGenerationCreditCost()} credits · Texte: {Number(aiCredits.costs?.text ?? 2)} credits · Scene: {getAiCreditCost('image')} credits · Objet détaillé: {formatCreditCost(getAiCreditCost('objectImage'))} · Miniature éco: {formatCreditCost(getAiCreditCost('objectThumbnail'))}
+            {isChoiceAdventureAi ?
+              `Projet: ${calculateProjectGenerationCreditCost()} crédits · Texte: ${Number(aiCredits.costs?.text ?? 2)} crédits · Chaque image: ${formatCreditCost(getAiCreditCost('image'))} · Combinaisons incluses dans le calcul`
+              : <>Projet: {calculateProjectGenerationCreditCost()} crédits · Texte: {Number(aiCredits.costs?.text ?? 2)} crédits · Scène: {getAiCreditCost('image')} crédits · Objet détaillé: {formatCreditCost(getAiCreditCost('objectImage'))} · Miniature éco: {formatCreditCost(getAiCreditCost('objectThumbnail'))}</>}
           </p>
           <p className="ai-current-cost">
             Prochaine génération ({mode === 'generate' ? 'projet complet' : mode === 'progressive' ? 'step progressive' : mode === 'extend' ? 'continuer/enrichir' : 'amélioration'}): <strong>{formatCreditCost(currentTextGenerationCost)}</strong>
           </p>
+          {isChoiceAdventureAi ? (
+            <p className="ai-current-cost">
+              Images du brief: <strong>{countCreditUnits(brief.sceneCount) + countCreditUnits(brief.itemCount) + countCreditUnits(brief.cinematicCount)} image(s) - {formatCreditCost(calculateBriefImageCreditCost())}</strong>
+              {' '}si tu génères toutes les scènes, objets et cinématiques. Total texte + images: <strong>{formatCreditCost(calculateBriefTotalCreditCost())}</strong>
+            </p>
+          ) : null}
           {aiCredits.error ? <p className="small-note">{aiCredits.error}</p> : null}
         </div>
+        <AiPrivacyNotice />
         <p className="small-note">
-          Génère un projet complet ou améliore une scene existante avec un JSON partiel validé avant application.
+          Génère un projet complet ou améliore une scène existante avec un JSON partiel validé avant application.
         </p>
 
-        <HelpLabel help="Choisis le rendu utilisé par les prochaines images IA: scenes, objets et cinematics.">Style d'image</HelpLabel>
+        <HelpLabel help="Choisis le rendu utilisé par les prochaines images IA: scènes, objets et cinématiques.">Style d'image</HelpLabel>
         <div className="segmented-control compact ai-style-choice" data-tour="ai-image-style">
           {Object.entries(IMAGE_STYLE_PRESETS).map(([value, preset]) => (
             <button
@@ -1572,7 +1799,7 @@ export default function AiTab({
           ))}
         </div>
 
-        <HelpLabel help="Style partagé par les images de scenes pour éviter que chaque piece parte dans une direction visuelle différente.">Style visuel global</HelpLabel>
+        <HelpLabel help="Style partagé par les images de scènes pour éviter que chaque pièce parte dans une direction visuelle différente.">Style visuel global</HelpLabel>
         <input data-tour="ai-visual-style" value={globalVisualStyle} onChange={(event) => setGlobalVisualStyle(event.target.value)} />
 
         <HelpLabel help="Ajuste automatiquement la luminosité après génération pour garder une image jouable sans trop délaver l'ambiance.">Lisibilité des images</HelpLabel>
@@ -1583,14 +1810,18 @@ export default function AiTab({
           <option value="none">Aucune correction</option>
         </select>
 
-        <HelpLabel help="Détails récurrents à conserver entre les pieces: portes, parquet, lumière, époque, matériaux.">Héritage visuel</HelpLabel>
+        <HelpLabel help="Détails récurrents à conserver entre les pièces: portes, parquet, lumière, époque, matériaux.">Héritage visuel</HelpLabel>
         <textarea data-tour="ai-visual-inheritance" value={visualInheritance} onChange={(event) => setVisualInheritance(event.target.value)} />
 
         <HelpLabel help={FIELD_HELP.mode}>Mode</HelpLabel>
         <div className="segmented-control" data-tour="ai-mode">
-          <button type="button" className={mode === 'generate' ? 'active' : ''} onClick={() => setMode('generate')}>Générer</button>
-          <button type="button" className={mode === 'progressive' ? 'active' : ''} onClick={() => setMode('progressive')}>Progressif</button>
-          <button type="button" className={mode === 'extend' ? 'active' : ''} onClick={() => setMode('extend')}>Continuer</button>
+          <button type="button" className={mode === 'generate' ? 'active' : ''} onClick={() => setMode('generate')}>Nouveau</button>
+          {!isBeginnerAi ? (
+            <>
+              <button type="button" className={mode === 'progressive' ? 'active' : ''} onClick={() => setMode('progressive')}>Progressif</button>
+              <button type="button" className={mode === 'extend' ? 'active' : ''} onClick={() => setMode('extend')}>Continuer</button>
+            </>
+          ) : null}
           <button type="button" className={mode === 'improve' ? 'active' : ''} onClick={() => setMode('improve')}>Améliorer</button>
         </div>
 
@@ -1604,7 +1835,7 @@ export default function AiTab({
 
         {mode === 'improve' ? (
           <>
-            <HelpLabel help={FIELD_HELP.improve}>Scene à améliorer</HelpLabel>
+            <HelpLabel help={FIELD_HELP.improve}>Scène à améliorer</HelpLabel>
             <select value={targetSceneId} onChange={(event) => setTargetSceneId(event.target.value)}>
               {scenes.map((scene) => (
                 <option key={scene.id} value={scene.id}>{getSceneLabel?.(scene) || scene.name}</option>
@@ -1615,7 +1846,7 @@ export default function AiTab({
             <textarea
               value={instruction}
               onChange={(event) => setInstruction(event.target.value)}
-              placeholder="Ex: Améliore cette scene pour la rendre plus stressante."
+              placeholder="Ex: Améliore cette scène pour la rendre plus stressante."
             />
             <p className="small-note">Structure protégée: seules l’ambiance, les dialogues et les objets peuvent être raffinés.</p>
             <button type="button" className="secondary-action full" onClick={proposeIdeas}>Proposer des idées</button>
@@ -1677,7 +1908,7 @@ export default function AiTab({
               Refaire le résumé depuis le projet
             </button>
 
-            <HelpLabel help={FIELD_HELP.sceneChronology}>Chronologie des scenes</HelpLabel>
+            <HelpLabel help={FIELD_HELP.sceneChronology}>Chronologie des scènes</HelpLabel>
             <div className="ai-chronology-list">
               {parseChronologyEntries(sceneChronology, extensionSourceProject).map((entry, index, entries) => (
                 <div className="ai-chronology-row" key={`${entry.id}:${index}`}>
@@ -1695,9 +1926,9 @@ export default function AiTab({
                 setContinuationSceneId(getLastSceneIdFromChronology(event.target.value, extensionSourceProject));
               }}
               placeholder={[
-                '1. [id_scene] Première scene',
-                '2. [id_scene] Deuxième scene',
-                '3. [id_scene] Dernière scene actuelle',
+                '1. [id_scene] Première scène',
+                '2. [id_scene] Deuxième scène',
+                '3. [id_scene] Dernière scène actuelle',
               ].join('\n')}
             />
             <button type="button" className="secondary-action full" onClick={() => {
@@ -1708,7 +1939,7 @@ export default function AiTab({
               Reconstruire la chronologie depuis le projet
             </button>
 
-            <HelpLabel help={FIELD_HELP.continuationScene}>Scene de départ détectée</HelpLabel>
+            <HelpLabel help={FIELD_HELP.continuationScene}>Scène de départ détectée</HelpLabel>
             <select value={continuationScene?.id || ''} onChange={(event) => setContinuationSceneId(event.target.value)}>
               {extensionScenes.map((scene) => (
                 <option key={scene.id} value={scene.id}>{getSceneLabel?.(scene.id) || scene.name}</option>
@@ -1725,7 +1956,7 @@ export default function AiTab({
                 setContinuationWish(event.target.value);
                 setExtendInstruction(event.target.value);
               }}
-              placeholder="Vide = suite aléatoire mais cohérente. Ex: révéler une cave secrète avec une enigme mécanique."
+              placeholder="Vide = suite aléatoire mais cohérente. Ex: révéler une cave secrète avec une énigme mécanique."
             />
             <button type="button" className="secondary-action full" onClick={proposeIdeas}>Proposer des idées</button>
             {ideaSuggestions.length ? (
@@ -1756,7 +1987,7 @@ export default function AiTab({
 
         {mode !== 'progressive' && mode !== 'extend' ? (
           <button type="button" data-tour="ai-generate-button" disabled={isGenerating || !canRunTextAi || (mode === 'improve' && !targetSceneId)} onClick={generate}>
-            {isGenerating ? 'Traitement...' : `${mode === 'improve' ? 'Améliorer la scene' : 'Générer le récit'} · ${formatCreditCost(currentTextGenerationCost)}`}
+            {isGenerating ? 'Traitement...' : `${mode === 'improve' ? 'Améliorer la scène' : 'Générer le jeu complet'} · ${formatCreditCost(currentTextGenerationCost)}`}
           </button>
         ) : null}
       </section>
@@ -1771,7 +2002,7 @@ export default function AiTab({
             <button type="button" className="secondary-action" disabled={isGenerating && !generatedProject} onClick={clearAiDraft}>
               Nouveau brouillon
             </button>
-            <button type="button" className="secondary-action" disabled={!generatedProject} onClick={() => saveDraftNow(true)}>
+            <button type="button" className="secondary-action" disabled={!generatedProject} onClick={() => saveDraftNow({ manual: true, includeProjectCopy: true })}>
               Sauvegarder le brouillon IA
             </button>
             <button type="button" className="secondary-action" disabled={!generatedProject} onClick={exportAiJson}>
@@ -1839,7 +2070,7 @@ export default function AiTab({
             </section>
 
             <section className="combo-card">
-              <h3>Scenes</h3>
+              <h3>Scènes</h3>
               <div className="ai-narrative-list">
                 {narrativePreview.scenes.map((scene) => (
                   <article key={scene.id} className="ai-narrative-card">
@@ -1848,7 +2079,18 @@ export default function AiTab({
                     ) : null}
                     <strong>{scene.name}</strong>
                     {scene.introText ? <p>{scene.introText}</p> : null}
-                    <HelpLabel className="ai-visual-label" help={FIELD_HELP.visualConstraints}>Contraintes visuelles de la scene</HelpLabel>
+                    {isChoiceAdventureAi ? (
+                      <>
+                        <HelpLabel className="ai-visual-label" help={FIELD_HELP.imagePrompt}>Prompt image scène</HelpLabel>
+                        <textarea
+                          className="ai-image-prompt"
+                          value={scene.imagePrompt || ''}
+                          onChange={(event) => patchGeneratedScene(scene.id, { imagePrompt: event.target.value })}
+                          placeholder="Prompt image généré par l'IA pour cette scène."
+                        />
+                      </>
+                    ) : null}
+                    <HelpLabel className="ai-visual-label" help={FIELD_HELP.visualConstraints}>Contraintes visuelles de la scène</HelpLabel>
                     <textarea
                       className="ai-visual-constraints"
                       data-tour="ai-scene-visual-constraints"
@@ -1865,12 +2107,12 @@ export default function AiTab({
                       type="button"
                       className="secondary-action ai-image-action"
                       data-tour="ai-scene-image-button"
-                      disabled={generatingImageKey === `scene:${scene.id}` || !canRunImageAi}
+                      disabled={generatingImageKey === `scène:${scene.id}` || !canRunImageAi}
                       onClick={() => generateSceneImage(scene)}
                     >
-                      {generatingImageKey === `scene:${scene.id}` ?
+                      {generatingImageKey === `scène:${scene.id}` ?
                          'Génération...'
-                        : `${scene.backgroundData ? 'Regénérer uniquement cette image' : 'Générer l’image de cette scene'} · ${formatCreditCost(getAiCreditCost('image'))}`}
+                        : `${scene.backgroundData ? 'Régénérer uniquement cette image' : 'Générer l’image de cette scène'} · ${formatCreditCost(getAiCreditCost('image'))}`}
                     </button>
                     {scene.aiImageVariants?.length > 1 ? (
                       <button
@@ -1941,6 +2183,20 @@ export default function AiTab({
                             onBlur={(event) => renameGeneratedItem(item.id, event.target.value)}
                             placeholder="Nom de l’objet"
                           />
+                          {isHeroAdventureAi && getHeroItemPreviewLabel(item) ? (
+                            <small className="inventory-item-badge">{getHeroItemPreviewLabel(item)}</small>
+                          ) : null}
+                          {isChoiceAdventureAi ? (
+                            <>
+                              <HelpLabel className="ai-visual-label" help={FIELD_HELP.imagePrompt}>Prompt image objet</HelpLabel>
+                              <textarea
+                                className="ai-image-prompt"
+                                value={item.imagePrompt || ''}
+                                onChange={(event) => patchGeneratedItem(item.id, { imagePrompt: event.target.value })}
+                                placeholder="Prompt image généré par l'IA pour cet objet."
+                              />
+                            </>
+                          ) : null}
                           <button
                             type="button"
                             className="secondary-action ai-image-action"
@@ -1949,7 +2205,7 @@ export default function AiTab({
                           >
                             {generatingImageKey === `item:full:${item.id}` ?
                                'Génération...'
-                              : `${item.imageData ? 'Regénérer l’image détaillée' : 'Générer image détaillée'} · ${formatCreditCost(getAiCreditCost('objectImage'))}`}
+                              : `${item.imageData ? 'Régénérer l’image détaillée' : 'Générer image détaillée'} · ${formatCreditCost(getAiCreditCost('objectImage'))}`}
                           </button>
                           <button
                             type="button"
@@ -1959,7 +2215,7 @@ export default function AiTab({
                           >
                             {generatingImageKey === `item:thumbnail:${item.id}` ?
                                'Génération...'
-                              : `${item.imageData ? 'Regénérer miniature économique' : 'Générer miniature économique'} · ${formatCreditCost(getAiCreditCost('objectThumbnail'))}`}
+                              : `${item.imageData ? (isChoiceAdventureAi ? 'Régénérer miniature' : 'Régénérer miniature économique') : (isChoiceAdventureAi ? 'Générer miniature' : 'Générer miniature économique')} · ${formatCreditCost(getAiCreditCost('objectThumbnail'))}`}
                           </button>
                           {item.aiImageVariants?.length > 1 ? (
                             <button
@@ -1982,18 +2238,18 @@ export default function AiTab({
                   ) : <p>Aucun objet.</p>}
                 </div>
                 <div>
-                  <h3>Enigmes</h3>
-                  <p>{narrativePreview.enigmas.map((enigma) => enigma.name).join(', ') || 'Aucune enigme.'}</p>
+                  <h3>Énigmes</h3>
+                  <p>{narrativePreview.enigmas.map((enigma) => enigma.name).join(', ') || 'Aucune énigme.'}</p>
                 </div>
                 <div>
-                  <h3>Cinematics</h3>
+                  <h3>Cinématiques</h3>
                   {narrativePreview.cinematics.length ? (
                     <div className="ai-cinematic-list">
                       {narrativePreview.cinematics.map((cinematic) => (
                         <article key={cinematic.id} className="ai-cinematic-card">
                           <strong>{cinematic.name}</strong>
                           <div className="ai-cinematic-slide-list">
-                            {(cinematic.slides?.length ? cinematic.slides : [{ id: `${cinematic.id}-slide-1`, narration: 'Cinematic sans narration.' }]).map((slide, index) => {
+                            {(cinematic.slides?.length ? cinematic.slides : [{ id: `${cinematic.id}-slide-1`, narration: 'Cinématique sans narration.' }]).map((slide, index) => {
                               const imageKey = `cinematic:${cinematic.id}:${slide.id}`;
                               return (
                                 <div key={slide.id || index} className="ai-cinematic-slide-card">
@@ -2009,7 +2265,18 @@ export default function AiTab({
                                   ) : (
                                     <span>Image {index + 1}</span>
                                   )}
-                                  <p>{slide.narration || `Prompt cinematic ${index + 1}`}</p>
+                                  <p>{slide.narration || `Prompt cinématique ${index + 1}`}</p>
+                                  {isChoiceAdventureAi ? (
+                                    <>
+                                      <HelpLabel className="ai-visual-label" help={FIELD_HELP.imagePrompt}>Prompt image cinématique</HelpLabel>
+                                      <textarea
+                                        className="ai-image-prompt"
+                                        value={slide.imagePrompt || ''}
+                                        onChange={(event) => patchGeneratedCinematicSlide(cinematic.id, slide.id, { imagePrompt: event.target.value })}
+                                        placeholder="Prompt image généré par l'IA pour cette image de cinématique."
+                                      />
+                                    </>
+                                  ) : null}
                                   <button
                                     type="button"
                                     className="secondary-action ai-image-action"
@@ -2018,7 +2285,7 @@ export default function AiTab({
                                   >
                                     {generatingImageKey === imageKey ?
                                        'Génération...'
-                                      : `${slide.imageData ? 'Regénérer cette image' : 'Générer cette image'} · ${formatCreditCost(getAiCreditCost('image'))}`}
+                                      : `${slide.imageData ? 'Régénérer cette image' : 'Générer cette image'} · ${formatCreditCost(getAiCreditCost('image'))}`}
                                   </button>
                                   {slide.aiImageVariants?.length > 1 ? (
                                     <button
@@ -2043,7 +2310,7 @@ export default function AiTab({
                         </article>
                       ))}
                     </div>
-                  ) : <p>Aucune cinematic.</p>}
+                  ) : <p>Aucune cinématique.</p>}
                 </div>
               </section>
             ) : null}
@@ -2053,14 +2320,14 @@ export default function AiTab({
             <div className="empty-state-inline">Aucun result narratif pour le moment.</div>
             <section className="combo-card ai-image-empty-panel" data-tour="ai-images-info">
               <span className="section-kicker">Images à la demande</span>
-              <h3>Scenes et objets</h3>
+              <h3>Scènes et objets</h3>
               <p className="small-note">
-                Génère d’abord le récit ou améliore une scene. Les boutons d’image apparaîtront ensuite sur chaque scene et chaque objet.
+                Génère d’abord le récit ou améliore une scène. Les boutons d’image apparaîtront ensuite sur chaque scène et chaque objet.
               </p>
               <div className="ai-disabled-actions">
-                <button type="button" className="secondary-action" disabled>Générer l’image de cette scene</button>
+                <button type="button" className="secondary-action" disabled>Générer l’image de cette scène</button>
                 <button type="button" className="secondary-action" disabled>Générer l’image de cet objet</button>
-                <button type="button" className="secondary-action" disabled>Regénérer uniquement cette image</button>
+                <button type="button" className="secondary-action" disabled>Régénérer uniquement cette image</button>
               </div>
             </section>
           </div>

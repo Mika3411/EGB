@@ -1,5 +1,9 @@
 import {
   aiCreditCosts,
+  assertAiGeneratedTextAllowed,
+  assertAiRequestRateLimit,
+  assertAiTextPromptAllowed,
+  buildTextGenerationInput,
   calculateImageCreditCost,
   calculateTextCreditCost,
   ensureCreditAccount,
@@ -9,12 +13,27 @@ import {
   openaiFetch,
   parseOpenAiProjectJson,
   parseBody,
+  readAiJob,
   refundCredits,
   resolveCreditUserId,
   spendCredits,
   writeAiJob,
   withErrors,
 } from './_shared.js';
+
+const assertEntrypointRateLimitApplied = async (supabase, jobId, userId, rateLimitToken) => {
+  if (!rateLimitToken) return false;
+
+  const job = await readAiJob(supabase, jobId);
+  if (job.userId !== userId || job.status !== 'pending' || job.rateLimitToken !== rateLimitToken) {
+    const error = new Error('Jeton de generation IA asynchrone invalide.');
+    error.statusCode = 403;
+    error.code = 'AI_ASYNC_TOKEN_INVALID';
+    throw error;
+  }
+
+  return true;
+};
 
 export const handler = async (event) => withErrors(event, async () => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Methode non autorisee.' });
@@ -27,10 +46,11 @@ export const handler = async (event) => withErrors(event, async () => {
   const supabase = getSupabaseAdminClient();
   const userId = await resolveCreditUserId(event);
   const cost = calculateTextCreditCost(body);
-  const input = [
-    'Tu dois repondre uniquement avec un JSON valide, sans Markdown ni commentaire.',
-    body.prompt,
-  ].filter(Boolean).join('\n\n');
+  const input = buildTextGenerationInput(body);
+  const entrypointRateLimitApplied = await assertEntrypointRateLimitApplied(supabase, jobId, userId, payload.rateLimitToken);
+  if (!entrypointRateLimitApplied) {
+    await assertAiRequestRateLimit(event, userId, 'text', supabase);
+  }
 
   let charged = false;
   try {
@@ -43,6 +63,7 @@ export const handler = async (event) => withErrors(event, async () => {
       createdAt: payload.createdAt || new Date().toISOString(),
     });
 
+    await assertAiTextPromptAllowed(input);
     await spendCredits(supabase, userId, cost, `text:${body.mode || 'generate'}`);
     charged = cost > 0;
 
@@ -58,6 +79,7 @@ export const handler = async (event) => withErrors(event, async () => {
       error.statusCode = 502;
       throw error;
     }
+    await assertAiGeneratedTextAllowed(outputText);
 
     if (body.responseFormat === 'escape-game-project-json') {
       parseOpenAiProjectJson(outputText);

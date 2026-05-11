@@ -1,6 +1,7 @@
 import { makeCinematic, makeCombination, makeEnigma, makeLogicRule, makeRouteMap } from './projectData';
+import { applyCreationTemplate } from '../lib/projectTemplates';
 
-export const BUILDER_TUTORIAL_TABS = ['profile', 'scenes', 'editor', 'map', 'cinematics', 'animation', 'combinations', 'enigmas', 'logic', 'ai'];
+export const BUILDER_TUTORIAL_TABS = ['profile', 'scenes', 'media', 'objects', 'editor', 'map', 'adventure', 'hero', 'cinematics', 'animation', 'combinations', 'enigmas', 'logic', 'ai', 'preview', 'score'];
 
 const getProjectRecordName = (project) =>
   project?.name || project?.data?.title || project?.data?.name || '';
@@ -105,7 +106,7 @@ export const makeTutorialImageDataUrl = (label, color) => {
 export const makeTutorialFileIconDataUrl = (label, color = '#2563eb') => makeTutorialImageDataUrl(label, color);
 
 const FAKE_WINDOWS_IMAGES = [
-  { name: 'clé-rouillée.png', label: 'Cle', color: '#b45309' },
+  { name: 'clé-rouillée.png', label: 'Clé', color: '#b45309' },
   { name: 'lettre-cachétée.png', label: 'Lettre', color: '#7c3aed' },
   { name: 'montre-arrêtée.png', label: 'Montre', color: '#2563eb' },
 ];
@@ -185,7 +186,7 @@ export const getFakeWindowImageOptions = (project, target = 'object') => {
 };
 
 export const prepareProjectForTutorial = (project, tab) => {
-  const nextProject = structuredClone(project);
+  let nextProject = structuredClone(project);
   if (tab === 'scenes') {
     const existingTutorialImages = Array.isArray(nextProject.tutorialExampleImages) ? nextProject.tutorialExampleImages : [];
     const existingTutorialAudio = Array.isArray(nextProject.tutorialExampleAudio) ? nextProject.tutorialExampleAudio : [];
@@ -254,6 +255,24 @@ export const prepareProjectForTutorial = (project, tab) => {
       }
     }
   }
+  if (tab === 'media') {
+    const existingTutorialImages = Array.isArray(nextProject.tutorialExampleImages) ? nextProject.tutorialExampleImages : [];
+    const existingTutorialAudio = Array.isArray(nextProject.tutorialExampleAudio) ? nextProject.tutorialExampleAudio : [];
+    nextProject.tutorialExampleImages = existingTutorialImages.length
+      ? existingTutorialImages
+      : (nextProject.scenes || []).filter((scene) => scene.backgroundData).map((scene) => ({
+        name: scene.name,
+        backgroundData: scene.backgroundData,
+        backgroundName: scene.backgroundName,
+      }));
+    nextProject.tutorialExampleAudio = existingTutorialAudio.length
+      ? existingTutorialAudio
+      : (nextProject.scenes || []).filter((scene) => scene.musicData).map((scene) => ({
+        name: scene.name,
+        musicData: scene.musicData,
+        musicName: scene.musicName,
+      }));
+  }
   if (tab === 'editor') {
     const scene = nextProject.scenes?.[0];
     if (scene) {
@@ -277,13 +296,109 @@ export const prepareProjectForTutorial = (project, tab) => {
       const firstScene = nextProject.scenes?.[0];
       nextProject.routeMap.rooms = [{
         id: `room_${Date.now().toString(36)}`,
-        name: firstScene?.name || 'Piece de depart',
+        name: firstScene?.name || 'Pièce de départ',
         sceneId: firstScene?.id || '',
         x: 28,
         y: 42,
         type: 'start',
       }];
     }
+  }
+  if (tab === 'adventure') {
+    nextProject.creationMode = 'adventure';
+    nextProject.storyVariables = [{
+      id: 'tutorial_variable_confiance_du_guide',
+      key: 'confiance_du_guide',
+      type: 'number',
+      defaultValue: 0,
+      description: 'Augmente quand le joueur aide le guide. Débloqué une fin secrete.',
+      journalLabel: 'Confiance du guide',
+      journalVisible: true,
+    }];
+    const scene = nextProject.scenes?.[0];
+    if (scene) {
+      const itemId = nextProject.items?.[0]?.id || '';
+      const enigmaId = nextProject.enigmas?.[0]?.id || '';
+      scene.hotspots = [{
+        id: `hotspot_adventure_${Date.now().toString(36)}`,
+        name: 'Guide du carrefour',
+        x: 42,
+        y: 44,
+        width: 18,
+        height: 16,
+        actionType: 'conversation',
+        dialogue: '',
+        conversation: {
+          startNodeId: 'node-guide',
+          nodes: [
+            {
+              id: 'node-guide',
+              speaker: 'Guide',
+              text: 'Tu peux prendre la forêt ou viser la tour. Que veux-tu demander ?',
+              replies: [
+                {
+                  id: 'reply-safe-path',
+                  label: 'Quel chemin est le plus sur ?',
+                  actionType: 'node',
+                  nextNodeId: 'node-forest',
+                  dialogue: '',
+                },
+                {
+                  id: 'reply-help',
+                  label: 'As-tu quelque chose pour m aider ?',
+                  actionType: 'multiple',
+                  nextNodeId: '',
+                  dialogue: 'Le guide te donne un jeton grave. Il pourrait servir plus tard.',
+                  rewardItemId: itemId,
+                  storyVariableOperation: 'increment',
+                  storyVariableKey: 'confiance_du_guide',
+                  storyVariableValue: '1',
+                },
+                {
+                  id: 'reply-secret',
+                  label: 'Je connais le mot de passe.',
+                  actionType: 'ending',
+                  conditionType: 'story_variable',
+                  conditionVariableKey: 'confiance_du_guide',
+                  conditionVariableOperator: 'greater_or_equal',
+                  conditionVariableValue: '1',
+                  endingType: 'secret',
+                  endingTitle: 'Alliance du guide',
+                  endingSummary: 'Le guide reconnaît ton aide et ouvre un chemin caché.',
+                },
+              ],
+            },
+            {
+              id: 'node-forest',
+              speaker: 'Guide',
+              text: 'La forêt est plus lente, mais elle revele parfois ce que la tour cache.',
+              replies: [
+                {
+                  id: 'reply-tower',
+                  label: 'Comment atteindre la tour ?',
+                  actionType: enigmaId ? 'enigma' : 'end',
+                  enigmaId,
+                  dialogue: 'Le guide pointe le vieux panneau. Choisis le bon symbole.',
+                },
+              ],
+            },
+          ],
+        },
+        requiredItemId: '',
+        consumeRequiredItemOnUse: false,
+        rewardItemId: '',
+        targetSceneId: '',
+        targetCinematicId: '',
+        enigmaId: '',
+        requiredHotspotId: '',
+        lockedMessage: '',
+        logicRules: [],
+      }];
+    }
+  }
+  if (tab === 'hero') {
+    nextProject = applyCreationTemplate(nextProject, 'hero_adventure', nextProject.title || 'Projet didacticiel temporaire');
+    nextProject.isTemporaryTutorial = Boolean(project?.isTemporaryTutorial);
   }
   if (tab === 'cinematics') {
     if (!Array.isArray(nextProject.cinematics)) nextProject.cinematics = [];

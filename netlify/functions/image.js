@@ -1,15 +1,17 @@
 import {
   aiCreditCosts,
+  assertAiGeneratedImageAllowed,
+  assertAiImagePromptAllowed,
+  assertAiRequestRateLimit,
   calculateImageCreditCost,
-  commitImageCreditUsage,
   ensureCreditAccount,
   getSupabaseAdminClient,
   json,
   openaiFetch,
   parseBody,
-  refundCredits,
+  releaseImageCreditReservation,
   resolveCreditUserId,
-  spendCredits,
+  reserveImageCredits,
   withErrors,
 } from './_shared.js';
 
@@ -19,10 +21,11 @@ export const handler = async (event) => withErrors(event, async () => {
   const body = parseBody(event);
   const userId = await resolveCreditUserId(event);
   const supabase = getSupabaseAdminClient();
-  const accountBeforeImage = await ensureCreditAccount(supabase, userId);
-  const cost = calculateImageCreditCost(accountBeforeImage, body);
 
-  await spendCredits(supabase, userId, cost, `image:${body.type || 'image'}`);
+  await assertAiRequestRateLimit(event, userId, 'image', supabase);
+  await assertAiImagePromptAllowed(body.prompt);
+  const reservation = await reserveImageCredits(supabase, userId, body);
+  const cost = reservation.cost;
 
   let payload;
   try {
@@ -46,14 +49,14 @@ export const handler = async (event) => withErrors(event, async () => {
 
     payload = await openaiFetch('images/generations', imageRequest);
   } catch (error) {
-    await refundCredits(supabase, userId, cost, `failed_image:${body.type || 'image'}`);
+    await releaseImageCreditReservation(supabase, userId, reservation, `failed_image:${body.type || 'image'}`).catch(() => null);
     throw error;
   }
 
   const image = payload.data?.[0] || {};
   const imageData = image.b64_json ? `data:image/png;base64,${image.b64_json}` : image.url;
   if (!imageData) {
-    await refundCredits(supabase, userId, cost, `failed_image:${body.type || 'image'}`);
+    await releaseImageCreditReservation(supabase, userId, reservation, `failed_image:${body.type || 'image'}`).catch(() => null);
     const error = new Error("OpenAI n'a pas renvoye d'image.");
     error.statusCode = 502;
     throw error;
@@ -61,9 +64,10 @@ export const handler = async (event) => withErrors(event, async () => {
 
   let account;
   try {
-    account = await commitImageCreditUsage(supabase, userId, body);
+    await assertAiGeneratedImageAllowed(imageData, body.prompt);
+    account = await ensureCreditAccount(supabase, userId);
   } catch (error) {
-    await refundCredits(supabase, userId, cost, `failed_image:${body.type || 'image'}`);
+    await releaseImageCreditReservation(supabase, userId, reservation, `failed_image:${body.type || 'image'}`).catch(() => null);
     throw error;
   }
 

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import SceneVisualEffect, { VISUAL_EFFECT_INTENSITY_OPTIONS, getVisualEffectZoneZIndex } from './SceneVisualEffect.jsx';
 import VisualEffectCascadeMenu from './VisualEffectCascadeMenu.jsx';
 import MediaSourcePicker from './MediaSourcePicker.jsx';
+import { showConfirm } from './AccessibleDialog';
 import { HelpLabel } from './scenes/SceneEditorChrome.jsx';
 import { getElementShapeStyle, getLayerZIndex, getSceneObjectImageStyle, getSceneObjectStyle } from './scenes/sceneEditorUtils.js';
 import {
@@ -52,17 +53,17 @@ const SCENE_TRANSITION_DURATION_OPTIONS = [
   { value: 450, label: 'Rapide' },
   { value: 700, label: 'Normal' },
   { value: 1000, label: 'Lent' },
-  { value: 1400, label: 'Tres lent' },
+  { value: 1400, label: 'Très lent' },
 ];
 
 const SCENE_TIMER_ACTION_OPTIONS = [
   { value: 'none', label: 'Rien' },
-  { value: 'scene', label: 'Aller à une scene' },
-  { value: 'restart-scene', label: 'Relancer cette scene' },
+  { value: 'scene', label: 'Aller à une scène' },
+  { value: 'restart-scene', label: 'Relancer cette scène' },
   { value: 'restart-preview', label: 'Recommencer le jeu' },
   { value: 'damage-life', label: 'Perdre des vies' },
   { value: 'dialogue', label: 'Afficher un message' },
-  { value: 'cinematic', label: 'Lancer une cinematic' },
+  { value: 'cinematic', label: 'Lancer une cinématique' },
 ];
 
 const formatTimerSeconds = (seconds = 0) => {
@@ -146,10 +147,10 @@ export default function MediaTab({
         <div className="media-topline">
           <div>
             <span className="section-kicker">Média</span>
-            <h2>{selectedScene?.name || 'Aucune scene'}</h2>
+            <h2>{selectedScene?.name || 'Aucune scène'}</h2>
           </div>
           <div className="media-scene-picker">
-            <HelpLabel help="Choisis la scene dont tu veux regler les images, sons et effets.">Scene</HelpLabel>
+            <HelpLabel help="Choisis la scène dont tu veux régler les images, sons et effets.">Scène</HelpLabel>
             <select value={selectedSceneId || ''} onChange={(event) => {
               setSelectedSceneId(event.target.value);
               const target = project.scenes.find((scene) => scene.id === event.target.value);
@@ -186,13 +187,14 @@ export default function MediaTab({
                     handleUpload={handleUpload}
                     mediaLibrary={mediaLibrary}
                     onSelect={updateSceneBackground}
+                    tourId="media-background-image"
                   >
                     {selectedBackgroundUrl ? 'Remplacer le fond' : 'Importer une image'}
                   </MediaSourcePicker>
                 </div>
                 <div className="compact-form-grid">
                   <div data-tour="media-visual-effect">
-                    <HelpLabel help="Filtre ou effet applique a toute la scene.">Effet global</HelpLabel>
+                    <HelpLabel help="Filtre ou effet appliqué à toute la scène.">Effet global</HelpLabel>
                     <VisualEffectCascadeMenu
                       value={selectedScene.visualEffect || 'none'}
                       includeNone
@@ -214,7 +216,7 @@ export default function MediaTab({
                     </select>
                   </div>
                   <div>
-                    <HelpLabel help="Transition jouée quand le joueur quitte cette scene vers une autre scene.">Transition de sortie</HelpLabel>
+                    <HelpLabel help="Transition jouée quand le joueur quitte cette scène vers une autre scène.">Transition de sortie</HelpLabel>
                     <select value={selectedTransition} onChange={(event) => patchProject((draft) => {
                       const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
                       if (scene) scene.sceneTransition = event.target.value;
@@ -225,7 +227,7 @@ export default function MediaTab({
                     </select>
                   </div>
                   <div>
-                    <HelpLabel help="Vitesse de la transition entre les deux scenes.">Duree</HelpLabel>
+                    <HelpLabel help="Vitesse de la transition entre les deux scènes.">Durée</HelpLabel>
                     <select value={selectedTransitionDuration} onChange={(event) => patchProject((draft) => {
                       const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
                       if (scene) scene.sceneTransitionDuration = Number(event.target.value);
@@ -236,7 +238,7 @@ export default function MediaTab({
                     </select>
                   </div>
                   <div>
-                    <HelpLabel help="Scene utilisée uniquement pour rejouer la transition dans l'aperçu Média.">Scene d'arrivée test</HelpLabel>
+                    <HelpLabel help="Scène utilisée uniquement pour rejouer la transition dans l'aperçu Média.">Scène d'arrivée test</HelpLabel>
                     <select
                       value={transitionPreviewTargetId}
                       disabled={!transitionPreviewTargets.length}
@@ -244,7 +246,7 @@ export default function MediaTab({
                     >
                       {transitionPreviewTargets.length ? transitionPreviewTargets.map((scene) => (
                         <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>
-                      )) : <option value="">Ajoute une autre scene</option>}
+                      )) : <option value="">Ajoute une autre scène</option>}
                     </select>
                   </div>
                   <div className="media-transition-test-action">
@@ -260,7 +262,7 @@ export default function MediaTab({
                 </div>
               </div>
 
-              <div className="subpanel media-audio-panel">
+              <div className="subpanel media-audio-panel" data-tour="media-ambient-sound">
                 <div className="subpanel-head"><h3>Musique</h3></div>
                 <div className="music-compact-row media-audio-card" data-tour="media-music">
                   <MediaSourcePicker
@@ -291,8 +293,14 @@ export default function MediaTab({
                           />
                           Bouclé
                         </label>
-                        <button type="button" className="danger-button" onClick={() => {
-                          if (!window.confirm('Supprimer la musique de cette scene ?')) return;
+                        <button type="button" className="danger-button" onClick={async () => {
+                          const confirmed = await showConfirm({
+                            title: 'Supprimer la musique',
+                            message: 'Supprimer la musique de cette scène ?',
+                            confirmLabel: 'Supprimer',
+                            variant: 'danger',
+                          });
+                          if (!confirmed) return;
                           patchProject((draft) => {
                             const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
                             clearSceneMusicAsset(scene, draft);
@@ -302,7 +310,7 @@ export default function MediaTab({
                         </button>
                       </div>
                     </>
-                  ) : <p className="small-note">Aucune musique n'est attachee a cette scene.</p>}
+                  ) : <p className="small-note">Aucune musique n'est attachée à cette scène.</p>}
                 </div>
               </div>
 
@@ -337,8 +345,14 @@ export default function MediaTab({
                           />
                           Bouclé
                         </label>
-                        <button type="button" className="danger-button" onClick={() => {
-                          if (!window.confirm('Supprimer le son secondaire de cette scene ?')) return;
+                        <button type="button" className="danger-button" onClick={async () => {
+                          const confirmed = await showConfirm({
+                            title: 'Supprimer le son',
+                            message: 'Supprimer le son secondaire de cette scène ?',
+                            confirmLabel: 'Supprimer',
+                            variant: 'danger',
+                          });
+                          if (!confirmed) return;
                           patchProject((draft) => {
                             const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
                             clearSceneAmbientSoundAsset(scene, draft);
@@ -348,118 +362,7 @@ export default function MediaTab({
                         </button>
                       </div>
                     </>
-                  ) : <p className="small-note">Aucun son secondaire n'est attache a cette scene.</p>}
-                </div>
-              </div>
-
-              <div className="subpanel media-timer-panel">
-                <div className="subpanel-head"><h3>Temps de scene</h3></div>
-                <div className="compact-form-grid">
-                  <label className="checkbox-row media-timer-toggle">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(selectedScene.timerEnabled)}
-                      onChange={(event) => patchProject((draft) => {
-                        const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
-                        if (scene) scene.timerEnabled = event.target.checked;
-                      })}
-                    />
-                    Activer un compte a rebours
-                  </label>
-                  <div>
-                    <HelpLabel help="Duree disponible dans cette scene avant l'action automatique.">Duree</HelpLabel>
-                    <input
-                      type="number"
-                      min="5"
-                      max="3600"
-                      step="5"
-                      value={selectedScene.timerSeconds || 60}
-                      disabled={!selectedScene.timerEnabled}
-                      onChange={(event) => patchProject((draft) => {
-                        const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
-                        if (scene) scene.timerSeconds = Math.max(5, Math.min(3600, Number(event.target.value) || 60));
-                      })}
-                    />
-                  </div>
-                  <div>
-                    <HelpLabel help="Action déclénchée quand le temps arrive a zéro.">Fin du temps</HelpLabel>
-                    <select
-                      value={selectedTimerAction}
-                      disabled={!selectedScene.timerEnabled}
-                      onChange={(event) => patchProject((draft) => {
-                        const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
-                        if (scene) scene.timerEndAction = event.target.value;
-                      })}
-                    >
-                      {SCENE_TIMER_ACTION_OPTIONS.map((action) => (
-                        <option key={action.value} value={action.value}>{action.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  {selectedTimerAction === 'scene' || selectedTimerAction === 'damage-life' ? (
-                    <div>
-                      <HelpLabel help="Scene ouverte à la fin du temps, ou quand les vies tombent a zéro.">Scene cible</HelpLabel>
-                      <select
-                        value={selectedScene.timerTargetSceneId || ''}
-                        disabled={!selectedScene.timerEnabled}
-                        onChange={(event) => patchProject((draft) => {
-                          const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
-                          if (scene) scene.timerTargetSceneId = event.target.value;
-                        })}
-                      >
-                        <option value="">Aucune</option>
-                        {project.scenes.map((scene) => (
-                          <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : null}
-                  {selectedTimerAction === 'cinematic' ? (
-                    <div>
-                      <HelpLabel help="Cinematic lancee automatiquement quand le temps arrive a zéro.">Cinematic cible</HelpLabel>
-                      <select
-                        value={selectedScene.timerTargetCinematicId || ''}
-                        disabled={!selectedScene.timerEnabled}
-                        onChange={(event) => patchProject((draft) => {
-                          const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
-                          if (scene) scene.timerTargetCinematicId = event.target.value;
-                        })}
-                      >
-                        <option value="">Aucune</option>
-                        {(project.cinematics || []).map((cinematic) => (
-                          <option key={cinematic.id} value={cinematic.id}>{cinematic.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : null}
-                  {selectedTimerAction === 'damage-life' ? (
-                    <div>
-                      <HelpLabel help="Nombre de vies perdues quand le temps expire. Le joueur commence avec 3 vies dans l'aperçu.">Vies perdues</HelpLabel>
-                      <input
-                        type="number"
-                        min="1"
-                        max="9"
-                        value={selectedScene.timerLifeLoss || 1}
-                        disabled={!selectedScene.timerEnabled}
-                        onChange={(event) => patchProject((draft) => {
-                          const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
-                          if (scene) scene.timerLifeLoss = Math.max(1, Math.min(9, Number(event.target.value) || 1));
-                        })}
-                      />
-                    </div>
-                  ) : null}
-                  <div className="media-timer-message-field">
-                    <HelpLabel help="Texte affiché si l'action de fin a besoin d'un message.">Message de fin</HelpLabel>
-                    <input
-                      value={selectedScene.timerEndMessage || ''}
-                      disabled={!selectedScene.timerEnabled}
-                      onChange={(event) => patchProject((draft) => {
-                        const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
-                        if (scene) scene.timerEndMessage = event.target.value;
-                      })}
-                      placeholder="Le temps est ecoule."
-                    />
-                  </div>
+                  ) : <p className="small-note">Aucun son secondaire n'est attaché à cette scène.</p>}
                 </div>
               </div>
 
@@ -488,12 +391,12 @@ export default function MediaTab({
                       </div>
                     ))}
                   </div>
-                ) : <div className="empty-state-inline">Aucune zone visuelle pour cette scene.</div>}
+                ) : <div className="empty-state-inline">Aucune zone visuelle pour cette scène.</div>}
               </div>
             </div>
 
               <div className="subpanel media-preview-panel">
-              <div className="subpanel-head"><h3>Aperçu de la scene</h3></div>
+              <div className="subpanel-head"><h3>Aperçu de la scène</h3></div>
               <div className="editor-canvas editor-canvas-pro media-scene-preview" data-tour="media-preview" style={{ aspectRatio: sceneAspectRatio }}>
                 {selectedBackgroundUrl ? (
                   <img loading="eager" decoding="async" fetchPriority="high" src={selectedBackgroundUrl} alt="fond" onLoad={(event) => rememberSceneBackgroundAspectRatio(event.currentTarget)} />
@@ -539,17 +442,17 @@ export default function MediaTab({
                   >
                     {selectedBackgroundUrl ? (
                       <img loading="lazy" decoding="async" src={selectedBackgroundUrl} alt="" />
-                    ) : <div className="placeholder">Scene de depart</div>}
+                    ) : <div className="placeholder">Scène de départ</div>}
                     {transitionPreviewTargetBackgroundUrl ? (
                       <img loading="lazy" decoding="async" src={transitionPreviewTargetBackgroundUrl} alt="" />
-                    ) : <div className="placeholder">Scene d'arrivée</div>}
+                    ) : <div className="placeholder">Scène d'arrivée</div>}
                   </div>
                 ) : null}
               </div>
               </div>
             </div>
           </>
-        ) : <div className="empty-state-inline">Cree une scene pour gerer ses medias.</div>}
+        ) : <div className="empty-state-inline">Crée une scène pour gerer ses médias.</div>}
       </section>
     </div>
   );

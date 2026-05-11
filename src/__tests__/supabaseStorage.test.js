@@ -6,6 +6,7 @@ const supabaseMock = vi.hoisted(() => ({
   upload: vi.fn(),
   getPublicUrl: vi.fn(),
   download: vi.fn(),
+  remove: vi.fn(),
 }));
 
 vi.mock('@supabase/supabase-js', () => ({
@@ -30,10 +31,12 @@ const setupSupabaseStorage = async ({ useLegacyBucket = false, publicBucket = 'p
   supabaseMock.upload.mockResolvedValue({ error: null });
   supabaseMock.getPublicUrl.mockReturnValue({ data: { publicUrl: 'https://cdn.test/file.txt' } });
   supabaseMock.download.mockResolvedValue({ data: new Blob(['bonjour'], { type: 'text/plain' }), error: null });
+  supabaseMock.remove.mockResolvedValue({ error: null });
   supabaseMock.from.mockReturnValue({
     upload: supabaseMock.upload,
     getPublicUrl: supabaseMock.getPublicUrl,
     download: supabaseMock.download,
+    remove: supabaseMock.remove,
   });
   supabaseMock.createClient.mockReturnValue({
     storage: {
@@ -188,6 +191,28 @@ describe('supabaseStorage', () => {
     await downloadTextFile('exports/file.json', { bucket: 'archive-bucket' });
 
     expect(supabaseMock.from).toHaveBeenLastCalledWith('archive-bucket');
+  });
+
+  test('deleteStorageFile supprime dans le bucket prive par defaut', async () => {
+    const { deleteStorageFile } = await setupSupabaseStorage();
+
+    await expect(deleteStorageFile('users/user-1/projects/project-1.json')).resolves.toBe(true);
+
+    expect(supabaseMock.from).toHaveBeenCalledWith('private-bucket');
+    expect(supabaseMock.remove).toHaveBeenCalledWith(['users/user-1/projects/project-1.json']);
+  });
+
+  test('deleteStorageFile transforme les erreurs Supabase en StorageError', async () => {
+    const { deleteStorageFile } = await setupSupabaseStorage();
+    supabaseMock.remove.mockResolvedValueOnce({ error: { message: 'Forbidden', statusCode: 403 } });
+
+    await expect(deleteStorageFile('users/user-1/projects/project-1.json')).rejects.toMatchObject({
+      name: 'StorageError',
+      code: 'permission-denied',
+      action: 'suppression du fichier',
+      bucket: 'private-bucket',
+      path: 'users/user-1/projects/project-1.json',
+    });
   });
 
   test('VITE_SUPABASE_STORAGE_BUCKET reste un fallback retrocompatible', async () => {

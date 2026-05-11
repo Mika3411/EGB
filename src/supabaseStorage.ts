@@ -54,6 +54,11 @@ export interface DownloadTextFileOptions {
   bucket?: string;
 }
 
+export interface DeleteStorageFileOptions {
+  visibility?: StorageVisibility;
+  bucket?: string;
+}
+
 export interface GenerateStorageFilenameOptions {
   suffix?: 'timestamp' | 'uuid' | 'both' | 'none';
   timestamp?: boolean;
@@ -72,7 +77,10 @@ type StorageDebugEvent =
   | 'upload:failure'
   | 'download:start'
   | 'download:success'
-  | 'download:failure';
+  | 'download:failure'
+  | 'delete:start'
+  | 'delete:success'
+  | 'delete:failure';
 
 interface StorageDebugMetadata {
   action?: string;
@@ -660,12 +668,12 @@ export function buildStoragePath(...segments: unknown[]): string {
 
 export function validateStoragePath(path: string): string {
   if (typeof path !== 'string') {
-    throw new Error('Chemin Supabase invalide : une chaine de caracteres est attendue.');
+    throw new Error('Chemin Supabase invalide : une chaîne de caractères est attendue.');
   }
 
   const trimmedPath = path.trim();
   if (!trimmedPath) {
-    throw new Error('Chemin Supabase invalide : le chemin final ne peut pas etre vide.');
+    throw new Error('Chemin Supabase invalide : le chemin final ne peut pas être vide.');
   }
 
   const parts = trimmedPath.split('/');
@@ -886,6 +894,60 @@ export async function downloadTextFile(path: string, options: DownloadTextFileOp
     });
 
     logStorageDebug('download:failure', {
+      action,
+      bucket,
+      path: storagePath,
+      visibility,
+      durationMs: getRoundedDuration(startedAt),
+      code: storageError.code,
+    }, 'warn');
+    throw storageError;
+  }
+}
+
+export async function deleteStorageFile(path: string, options: DeleteStorageFileOptions = {}): Promise<boolean> {
+  const client = getSupabaseClient();
+  const storagePath = validateStoragePath(path);
+  const visibility = normalizeStorageVisibility(options.visibility);
+  const bucket = options.bucket || resolveStorageBucket(visibility);
+  const action = 'suppression du fichier';
+  const startedAt = getNow();
+
+  logStorageDebug('delete:start', {
+    action,
+    bucket,
+    path: storagePath,
+    visibility,
+  });
+
+  try {
+    const { error } = await client.storage.from(bucket).remove([storagePath]);
+    if (error) {
+      throw createStorageError({
+        action,
+        bucket,
+        path: storagePath,
+        cause: error,
+      });
+    }
+
+    logStorageDebug('delete:success', {
+      action,
+      bucket,
+      path: storagePath,
+      visibility,
+      durationMs: getRoundedDuration(startedAt),
+    });
+    return true;
+  } catch (error) {
+    const storageError = error instanceof StorageError ? error : createStorageError({
+      action,
+      bucket,
+      path: storagePath,
+      cause: error,
+    });
+
+    logStorageDebug('delete:failure', {
       action,
       bucket,
       path: storagePath,

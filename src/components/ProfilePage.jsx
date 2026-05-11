@@ -3,6 +3,7 @@ import CreateProjectPanel from './profile/CreateProjectPanel';
 import OrdersPanel from './profile/OrdersPanel';
 import ProfileHeader from './profile/ProfileHeader';
 import ProfileMediaTab from './profile/ProfileMediaTab';
+import ProfileSettingsPanel from './profile/ProfileSettingsPanel';
 import PublicationPanel from './profile/PublicationPanel';
 import ProjectList from './profile/ProjectList';
 import { readShopPurchases } from '../lib/shopPurchases';
@@ -12,6 +13,7 @@ export default function ProfilePage({
   canOpenAdmin = false,
   projects = [],
   activeProjectId = '',
+  authorProfile = null,
   isBusy = false,
   statusMessage = '',
   syncStatus = 'offline',
@@ -33,6 +35,9 @@ export default function ProfilePage({
   onDeleteMedia,
   onImportProject,
   onImportMediaFile,
+  onUpdateAuthorProfile,
+  onUpdatePassword,
+  onRefreshStorageUsage,
   mediaLibrary = [],
   storageSummary = null,
   aiCreditBalance = 0,
@@ -40,7 +45,7 @@ export default function ProfilePage({
   onLogout,
   isProfileTutorialActive = false,
 }) {
-  const [activeProfileTab, setActiveProfileTab] = useState('projects');
+  const [activeProfileTab, setActiveProfileTab] = useState('new-project');
   const [isOrdersOpen, setIsOrdersOpen] = useState(false);
   const tutorialMenuRef = useRef(null);
   const shopUserId = user?.id || user?.email || 'anonymous';
@@ -111,6 +116,13 @@ export default function ProfilePage({
       <section className="panel profile-section-tabs" aria-label="Navigation profil">
         <button
           type="button"
+          className={activeProfileTab === 'new-project' ? 'active' : ''}
+          onClick={() => setActiveProfileTab('new-project')}
+        >
+          Nouveau projet
+        </button>
+        <button
+          type="button"
           className={activeProfileTab === 'projects' ? 'active' : ''}
           onClick={() => setActiveProfileTab('projects')}
         >
@@ -121,7 +133,7 @@ export default function ProfilePage({
           className={activeProfileTab === 'media' ? 'active' : ''}
           onClick={() => setActiveProfileTab('media')}
         >
-          Medias
+          Médias
         </button>
         <button
           type="button"
@@ -130,28 +142,35 @@ export default function ProfilePage({
         >
           Publication
         </button>
+        <button
+          type="button"
+          className={activeProfileTab === 'settings' ? 'active' : ''}
+          onClick={() => setActiveProfileTab('settings')}
+        >
+          Profil
+        </button>
       </section>
 
-      {activeProfileTab === 'projects' ? (
-        <>
-          <CreateProjectPanel
-            isBusy={isBusy}
-            onCreateProject={onCreateProject}
-            onImportProject={onImportProject}
-          />
+      {activeProfileTab === 'new-project' ? (
+        <CreateProjectPanel
+          isBusy={isBusy}
+          onCreateProject={onCreateProject}
+          onImportProject={onImportProject}
+        />
+      ) : null}
 
-          <ProjectList
-            projects={projects}
-            activeProjectId={activeProjectId}
-            syncStatus={syncStatus}
-            onOpenProject={onOpenProject}
-            onTestProject={onTestProject}
-            onRenameProject={onRenameProject}
-            onUpdateProjectMode={onUpdateProjectMode}
-            onDuplicateProject={onDuplicateProject}
-            onDeleteProject={onDeleteProject}
-          />
-        </>
+      {activeProfileTab === 'projects' ? (
+        <ProjectList
+          projects={projects}
+          activeProjectId={activeProjectId}
+          syncStatus={syncStatus}
+          onOpenProject={onOpenProject}
+          onTestProject={onTestProject}
+          onRenameProject={onRenameProject}
+          onUpdateProjectMode={onUpdateProjectMode}
+          onDuplicateProject={onDuplicateProject}
+          onDeleteProject={onDeleteProject}
+        />
       ) : null}
 
       {activeProfileTab === 'media' ? (
@@ -160,6 +179,7 @@ export default function ProfilePage({
           mediaLibrary={mediaLibrary}
           onImportMediaFile={onImportMediaFile}
           onDeleteMedia={onDeleteMedia}
+          onRefreshStorageUsage={onRefreshStorageUsage}
           storageSummary={storageSummary}
           aiCreditBalance={aiCreditBalance}
           onBuyStorage={onBuyStorage}
@@ -175,6 +195,16 @@ export default function ProfilePage({
           onUnpublishProject={onUnpublishProject}
           onUpdatePublicSettings={onUpdatePublicSettings}
           onUploadGalleryThumbnail={onUploadGalleryThumbnail}
+        />
+      ) : null}
+
+      {activeProfileTab === 'settings' ? (
+        <ProfileSettingsPanel
+          user={user}
+          authorProfile={authorProfile}
+          isBusy={isBusy}
+          onUpdateAuthorProfile={onUpdateAuthorProfile}
+          onUpdatePassword={onUpdatePassword}
         />
       ) : null}
     </main>

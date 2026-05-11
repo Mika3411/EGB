@@ -39,6 +39,12 @@ export function normalizeAsset(asset = {}) {
   };
 }
 
+export function collectProjectAssetManifest(project = {}) {
+  return Array.isArray(project.assets)
+    ? project.assets.map((asset) => normalizeAsset(asset)).filter((asset) => asset.url)
+    : [];
+}
+
 export function findAssetById(project = {}, assetId = '') {
   return (project.assets || []).find((asset) => asset.id === assetId) || null;
 }
@@ -285,7 +291,7 @@ export function collectProjectAssets(project = {}) {
       name: scene.backgroundName || `${scene.name} background`,
       width: scene.backgroundWidth,
       height: scene.backgroundHeight,
-      usedIn: [`scene:${scene.id}`],
+      usedIn: [`scène:${scene.id}`],
       meta: { role: 'background' },
     });
     pushAsset(assets, {
@@ -293,7 +299,7 @@ export function collectProjectAssets(project = {}) {
       type: 'audio',
       url: scene.musicData,
       name: scene.musicName || `${scene.name} music`,
-      usedIn: [`scene:${scene.id}`],
+      usedIn: [`scène:${scene.id}`],
       meta: { role: 'music', loop: scene.musicLoop !== false },
     });
     pushAsset(assets, {
@@ -301,7 +307,7 @@ export function collectProjectAssets(project = {}) {
       type: 'audio',
       url: scene.ambientSoundData,
       name: scene.ambientSoundName || `${scene.name} ambient sound`,
-      usedIn: [`scene:${scene.id}`],
+      usedIn: [`scène:${scene.id}`],
       meta: { role: 'ambientSound', loop: Boolean(scene.ambientSoundLoop) },
     });
 
@@ -311,28 +317,28 @@ export function collectProjectAssets(project = {}) {
         type: 'image',
         url: object.imageData,
         name: object.imageName || object.name,
-        usedIn: [`scene:${scene.id}`, `sceneObject:${object.id}`],
+        usedIn: [`scène:${scene.id}`, `sceneObject:${object.id}`],
       });
       pushAsset(assets, {
         id: object.objectImageId || makeAssetId('scene_object', object.id, 'object_image'),
         type: 'image',
         url: object.objectImageData,
         name: object.objectImageName || object.name,
-        usedIn: [`scene:${scene.id}`, `sceneObject:${object.id}`],
+        usedIn: [`scène:${scene.id}`, `sceneObject:${object.id}`],
       });
       pushAsset(assets, {
         id: object.popupImageId || makeAssetId('scene_object', object.id, 'popup_image'),
         type: 'image',
         url: object.popupImageData || object.popupImage,
         name: object.popupImageName || object.name,
-        usedIn: [`scene:${scene.id}`, `sceneObject:${object.id}`],
+        usedIn: [`scène:${scene.id}`, `sceneObject:${object.id}`],
       });
       pushAsset(assets, {
         id: object.soundId || makeAssetId('scene_object', object.id, 'sound'),
         type: 'audio',
         url: object.soundData,
         name: object.soundName || object.name,
-        usedIn: [`scene:${scene.id}`, `sceneObject:${object.id}`],
+        usedIn: [`scène:${scene.id}`, `sceneObject:${object.id}`],
       });
       pushAnime2dLayerAssets(assets, object.anime2dSpec, {
         scope: 'sceneObject',
@@ -347,21 +353,21 @@ export function collectProjectAssets(project = {}) {
         type: 'image',
         url: hotspot.objectImageData,
         name: hotspot.objectImageName || hotspot.name,
-        usedIn: [`scene:${scene.id}`, `hotspot:${hotspot.id}`],
+        usedIn: [`scène:${scene.id}`, `hotspot:${hotspot.id}`],
       });
       pushAsset(assets, {
         id: hotspot.secondObjectImageId || makeAssetId('hotspot', hotspot.id, 'second_object_image'),
         type: 'image',
         url: hotspot.secondObjectImageData,
         name: hotspot.secondObjectImageName || hotspot.name,
-        usedIn: [`scene:${scene.id}`, `hotspot:${hotspot.id}`],
+        usedIn: [`scène:${scene.id}`, `hotspot:${hotspot.id}`],
       });
       pushAsset(assets, {
         id: hotspot.soundId || makeAssetId('hotspot', hotspot.id, 'sound'),
         type: 'audio',
         url: hotspot.soundData,
         name: hotspot.soundName || hotspot.name,
-        usedIn: [`scene:${scene.id}`, `hotspot:${hotspot.id}`],
+        usedIn: [`scène:${scene.id}`, `hotspot:${hotspot.id}`],
       });
 
       (hotspot.logicRules || []).forEach((rule) => {
@@ -370,14 +376,14 @@ export function collectProjectAssets(project = {}) {
           type: 'audio',
           url: rule.successSoundData,
           name: rule.successSoundName || rule.name,
-          usedIn: [`scene:${scene.id}`, `hotspot:${hotspot.id}`, `logicRule:${rule.id}:successSound`],
+          usedIn: [`scène:${scene.id}`, `hotspot:${hotspot.id}`, `logicRule:${rule.id}:successSound`],
         });
         pushAsset(assets, {
           id: rule.failureSoundId || makeAssetId('logic_rule', rule.id, 'failure_sound'),
           type: 'audio',
           url: rule.failureSoundData,
           name: rule.failureSoundName || rule.name,
-          usedIn: [`scene:${scene.id}`, `hotspot:${hotspot.id}`, `logicRule:${rule.id}:failureSound`],
+          usedIn: [`scène:${scene.id}`, `hotspot:${hotspot.id}`, `logicRule:${rule.id}:failureSound`],
         });
       });
     });
@@ -528,7 +534,6 @@ export function getSceneMediaStatus(scene = {}) {
     { label: 'Effet', ready: Boolean(scene?.visualEffect && scene.visualEffect !== 'none') },
     { label: 'Musique', ready: Boolean(scene?.musicData) },
     { label: 'Son', ready: Boolean(scene?.ambientSoundData) },
-    { label: 'Timer', ready: Boolean(scene?.timerEnabled) },
   ];
 }
 
@@ -543,7 +548,7 @@ export function setSceneBackgroundAsset(scene, data = '', name = '', project = n
     type: 'image',
     url: data,
     name,
-    usedIn: scene.id ? [`scene:${scene.id}`] : [],
+    usedIn: scene.id ? [`scène:${scene.id}`] : [],
     meta: { role: 'background' },
   });
   const storedAsset = upsertProjectAsset(project, asset) || asset;
@@ -587,7 +592,7 @@ export function setSceneMusicAsset(scene, data = '', name = '', project = null) 
     type: 'audio',
     url: data,
     name,
-    usedIn: scene.id ? [`scene:${scene.id}`] : [],
+    usedIn: scene.id ? [`scène:${scene.id}`] : [],
     meta: { role: 'music', loop: scene.musicLoop !== false },
   });
   const storedAsset = upsertProjectAsset(project, asset) || asset;
@@ -603,7 +608,7 @@ export function clearSceneMusicAsset(scene, project = null) {
   scene.musicId = '';
   scene.musicLoop = true;
   scene.musicAsset = null;
-  removeProjectAssetUsage(project, assetId, scene.id ? `scene:${scene.id}` : '');
+  removeProjectAssetUsage(project, assetId, scene.id ? `scène:${scene.id}` : '');
 }
 
 export function setSceneAmbientSoundAsset(scene, data = '', name = '', project = null) {
@@ -617,7 +622,7 @@ export function setSceneAmbientSoundAsset(scene, data = '', name = '', project =
     type: 'audio',
     url: data,
     name,
-    usedIn: scene.id ? [`scene:${scene.id}`] : [],
+    usedIn: scene.id ? [`scène:${scene.id}`] : [],
     meta: { role: 'ambientSound', loop: Boolean(scene.ambientSoundLoop) },
   });
   const storedAsset = upsertProjectAsset(project, asset) || asset;
@@ -633,5 +638,5 @@ export function clearSceneAmbientSoundAsset(scene, project = null) {
   scene.ambientSoundId = '';
   scene.ambientSoundLoop = false;
   scene.ambientSoundAsset = null;
-  removeProjectAssetUsage(project, assetId, scene.id ? `scene:${scene.id}` : '');
+  removeProjectAssetUsage(project, assetId, scene.id ? `scène:${scene.id}` : '');
 }

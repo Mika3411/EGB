@@ -45,6 +45,35 @@ const ensureSceneObjects = (scene) => {
   return scene.sceneObjects;
 };
 
+const LARGE_MEDIA_FIELD_PATTERN = /^(backgroundData|imageData|objectImageData|popupImageData|popupBackgroundData|musicData|soundData|videoData|videoPoster|audioData|responseImageData|responseSoundData|ambienceSoundData|setupMusicData|setupBackgroundImageData|characterImageData|backgroundImageData|src|originalSrc)$/i;
+
+const countEmbeddedMediaBytes = (value, key = '') => {
+  if (typeof value === 'string') {
+    if (!value.startsWith('data:') && !LARGE_MEDIA_FIELD_PATTERN.test(key)) return 0;
+    return value.length * 2;
+  }
+  if (Array.isArray(value)) {
+    return value.reduce((total, entry) => total + countEmbeddedMediaBytes(entry, key), 0);
+  }
+  if (!value || typeof value !== 'object') return 0;
+  return Object.entries(value).reduce((total, [entryKey, entry]) => total + countEmbeddedMediaBytes(entry, entryKey), 0);
+};
+
+const getUndoHistoryLimit = (project) => {
+  const embeddedMediaBytes = countEmbeddedMediaBytes(project);
+  if (embeddedMediaBytes > 8 * 1024 * 1024) return 1;
+  if (embeddedMediaBytes > 3 * 1024 * 1024) return 3;
+  return 25;
+};
+
+const keepUndoHistoryRoomForNextSnapshot = (stack, limit) => (
+  stack.slice(Math.max(0, stack.length - Math.max(0, limit - 1)))
+);
+
+const keepUndoHistoryWithinLimit = (stack, limit) => (
+  stack.slice(Math.max(0, stack.length - Math.max(1, limit)))
+);
+
 
 export function useProjectEditor() {
   const [project, setProject] = useState(initialProject);
@@ -66,7 +95,9 @@ export function useProjectEditor() {
   }, [project]);
 
   const rememberProjectState = useCallback(() => {
-    setUndoStack((previous) => [...previous.slice(-49), structuredClone(projectRef.current)]);
+    const snapshot = structuredClone(projectRef.current);
+    const undoLimit = getUndoHistoryLimit(snapshot);
+    setUndoStack((previous) => [...keepUndoHistoryRoomForNextSnapshot(previous, undoLimit), snapshot]);
     setRedoStack([]);
   }, []);
 
@@ -87,7 +118,8 @@ export function useProjectEditor() {
       const nextUndoStack = previous.slice(0, -1);
       const previousProject = previous[previous.length - 1];
       const currentProject = structuredClone(projectRef.current);
-      setRedoStack((nextRedoStack) => [...nextRedoStack.slice(-49), currentProject]);
+      const redoLimit = getUndoHistoryLimit(currentProject);
+      setRedoStack((nextRedoStack) => [...keepUndoHistoryRoomForNextSnapshot(nextRedoStack, redoLimit), currentProject]);
       projectRef.current = previousProject;
       setProject(previousProject);
       return nextUndoStack;
@@ -100,10 +132,11 @@ export function useProjectEditor() {
       const nextRedoStack = previous.slice(0, -1);
       const nextProject = previous[previous.length - 1];
       const currentProject = structuredClone(projectRef.current);
-      setUndoStack((nextUndoStack) => [...nextUndoStack.slice(-49), currentProject]);
+      const undoLimit = getUndoHistoryLimit(currentProject);
+      setUndoStack((nextUndoStack) => [...keepUndoHistoryRoomForNextSnapshot(nextUndoStack, undoLimit), currentProject]);
       projectRef.current = nextProject;
       setProject(nextProject);
-      return nextRedoStack;
+      return keepUndoHistoryWithinLimit(nextRedoStack, getUndoHistoryLimit(nextProject));
     });
   }, []);
 
@@ -194,7 +227,7 @@ export function useProjectEditor() {
     const scene = makeScene({
       actId: selectedScene.actId,
       parentSceneId: selectedScene.id,
-      name: `Sous-scene de ${selectedScene.name}`,
+      name: `Sous-scène de ${selectedScene.name}`,
     });
     scene.sceneObjects = scene.sceneObjects || [];
     patchProject((draft) => draft.scenes.push(scene));
@@ -386,7 +419,7 @@ export function useProjectEditor() {
               >
                 <span className="scene-title-line" style={{ paddingLeft: `${depth * 14}px` }}>
                   <strong>{scene.name}</strong>
-                  <small>{children.length ? `${children.length} sous-scene(s)` : 'Aucune sous-scene'}</small>
+                  <small>{children.length ? `${children.length} sous-scène(s)` : 'Aucune sous-scène'}</small>
                 </span>
               </button>
             </summary>

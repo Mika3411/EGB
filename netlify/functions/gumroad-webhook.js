@@ -178,7 +178,10 @@ export const handler = async (event) => withErrors(event, async () => {
 
   const body = parseBody(event);
   const expectedSecret = process.env.GUMROAD_WEBHOOK_SECRET || '';
-  if (expectedSecret && body.secret !== expectedSecret) {
+  if (!expectedSecret) {
+    return json(503, { ok: false, error: 'Secret Gumroad serveur non configure.' });
+  }
+  if (body.secret !== expectedSecret) {
     return json(403, { ok: false, error: 'Secret Gumroad invalide.' });
   }
 

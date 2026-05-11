@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  deleteProjectRecordForUser,
   getProjectMetaForUser,
   getSessionUser,
   isAdminAccount,
@@ -9,6 +10,7 @@ import {
   loginUser,
   logoutUser,
   registerUser,
+  saveProjectRecordForUser,
   saveProjectRecordsForUser,
   sendPasswordResetEmail,
   supabaseUserToAccount,
@@ -17,6 +19,8 @@ import {
 import { getAuthorProfile, saveAuthorProfile } from '../lib/authorProfiles';
 import { getSupabaseClient, hasSupabaseConfig } from '../supabaseStorage';
 import { migrateProjectAssetReferences } from '../lib/assetManager';
+import { canUseLocalStorage, readJsonStorage, removeStorageKey } from '../utils/storageHelpers';
+import { deleteProjectLocalDrafts } from '../utils/projectDraftCleanup';
 
 const PROJECTS_KEY_PREFIX = 'escapeGameBuilder.projects';
 const ACTIVE_PROJECT_KEY_PREFIX = 'escapeGameBuilder.activeProject';
@@ -29,6 +33,7 @@ const PROJECT_MODE_RANKS = {
   beginner: 0,
   intermediate: 1,
   expert: 2,
+  adventure: 3,
 };
 
 const createId = () => {
@@ -38,14 +43,8 @@ const createId = () => {
 
 const getProjectsKey = (userId) => `${PROJECTS_KEY_PREFIX}.${userId}`;
 const getActiveProjectKey = (userId) => `${ACTIVE_PROJECT_KEY_PREFIX}.${userId}`;
-
-const safeParse = (value, fallback) => {
-  try {
-    return value ? JSON.parse(value) : fallback;
-  } catch {
-    return fallback;
-  }
-};
+const getProjectRecordKeyPrefix = (userId) => `project:${userId}:`;
+const getProjectRecordKey = (userId, projectId) => `${getProjectRecordKeyPrefix(userId)}${projectId}`;
 
 const openProjectsDb = () => new Promise((resolve, reject) => {
   if (typeof indexedDB === 'undefined') {
@@ -70,17 +69,82 @@ const readProjectsFromIndexedDb = async (userId) => {
     return await new Promise((resolve, reject) => {
       const transaction = db.transaction(PROJECTS_DB_STORE, 'readonly');
       const store = transaction.objectStore(PROJECTS_DB_STORE);
-      const request = store.get(userId);
-      request.onsuccess = () => {
-        const value = request.result;
-        resolve(Array.isArray(value) ? value.map(normalizeProjectRecord) : []);
+      const listRequest = store.get(userId);
+      const keysRequest = store.getAllKeys();
+      const valuesRequest = store.getAll();
+      const requests = [listRequest, keysRequest, valuesRequest];
+      requests.forEach((request) => {
+        request.onerror = () => reject(request.error || new Error('Lecture IndexedDB impossible'));
+      });
+      transaction.oncomplete = () => {
+        const listProjects = Array.isArray(listRequest.result) ? listRequest.result.map(normalizeProjectRecord) : [];
+        const prefix = getProjectRecordKeyPrefix(userId);
+        const projectRecords = (valuesRequest.result || [])
+          .map((value, index) => ({ key: keysRequest.result?.[index], value }))
+          .filter(({ key, value }) => typeof key === 'string' && key.startsWith(prefix) && value?.id)
+          .map(({ value }) => normalizeProjectRecord(value));
+        db.close();
+        resolve(mergeProjectRecordsByFreshness(listProjects, projectRecords));
       };
-      request.onerror = () => reject(request.error || new Error('Lecture IndexedDB impossible'));
-      transaction.oncomplete = () => db.close();
-      transaction.onerror = () => db.close();
+      transaction.onerror = () => {
+        db.close();
+        reject(transaction.error || new Error('Transaction IndexedDB impossible'));
+      };
     });
   } catch {
     return [];
+  }
+};
+
+const getProjectRecordFreshness = (project) => {
+  const revision = Number(project?.uiState?.autosaveRevision || 0);
+  const updatedAt = Date.parse(project?.updatedAt || '') || 0;
+  return { revision, updatedAt };
+};
+
+const isProjectRecordFresher = (candidate, current) => {
+  if (!current) return true;
+  const candidateFreshness = getProjectRecordFreshness(candidate);
+  const currentFreshness = getProjectRecordFreshness(current);
+  if (candidateFreshness.revision !== currentFreshness.revision) {
+    return candidateFreshness.revision > currentFreshness.revision;
+  }
+  return candidateFreshness.updatedAt >= currentFreshness.updatedAt;
+};
+
+const mergeProjectRecordsByFreshness = (...projectLists) => {
+  const projectsById = new Map();
+  projectLists.flat().filter(Boolean).forEach((entry) => {
+    const project = normalizeProjectRecord(entry);
+    if (!project.id) return;
+    const current = projectsById.get(project.id);
+    if (isProjectRecordFresher(project, current)) projectsById.set(project.id, project);
+  });
+  return Array.from(projectsById.values());
+};
+
+const writeProjectToIndexedDb = async (userId, project) => {
+  if (!userId || !project?.id) return false;
+  try {
+    const db = await openProjectsDb();
+    const storableProject = normalizeProjectRecord(project);
+    return await new Promise((resolve, reject) => {
+      const transaction = db.transaction(PROJECTS_DB_STORE, 'readwrite');
+      const store = transaction.objectStore(PROJECTS_DB_STORE);
+      const request = store.put(storableProject, getProjectRecordKey(userId, storableProject.id));
+      request.onerror = () => reject(request.error || new Error('Ecriture IndexedDB impossible'));
+      transaction.onerror = () => {
+        db.close();
+        reject(transaction.error || new Error('Transaction IndexedDB impossible'));
+      };
+      transaction.oncomplete = () => {
+        db.close();
+        resolve(true);
+      };
+    });
+  } catch (error) {
+    console.warn('Sauvegarde IndexedDB du projet impossible.', error);
+    return false;
   }
 };
 
@@ -92,8 +156,22 @@ const writeProjectsToIndexedDb = async (userId, projects) => {
     return await new Promise((resolve, reject) => {
       const transaction = db.transaction(PROJECTS_DB_STORE, 'readwrite');
       const store = transaction.objectStore(PROJECTS_DB_STORE);
-      const request = store.put(storableProjects, userId);
-      request.onerror = () => reject(request.error || new Error('Ecriture IndexedDB impossible'));
+      const keysRequest = store.getAllKeys();
+      keysRequest.onerror = () => reject(keysRequest.error || new Error('Lecture IndexedDB impossible'));
+      keysRequest.onsuccess = () => {
+        const projectIds = new Set(storableProjects.map((project) => project.id).filter(Boolean));
+        store.put(storableProjects, userId);
+        storableProjects.forEach((project) => {
+          if (project.id) store.put(project, getProjectRecordKey(userId, project.id));
+        });
+        const prefix = getProjectRecordKeyPrefix(userId);
+        (keysRequest.result || []).forEach((key) => {
+          if (typeof key === 'string' && key.startsWith(prefix)) {
+            const projectId = key.slice(prefix.length);
+            if (!projectIds.has(projectId)) store.delete(key);
+          }
+        });
+      };
       transaction.oncomplete = () => {
         db.close();
         resolve(true);
@@ -116,6 +194,16 @@ const cloneProjectData = (data) => JSON.parse(JSON.stringify(data || {}));
 
 const LARGE_MEDIA_FIELD_PATTERN = /^(backgroundData|imageData|objectImageData|popupImageData|popupBackgroundData|musicData|soundData|videoData|videoPoster|audioData)$/i;
 const LARGE_EMBEDDED_MEDIA_LENGTH = 200_000;
+const MAX_INLINE_PROJECT_THUMBNAIL_LENGTH = 180_000;
+
+const normalizeProjectThumbnail = (thumbnail = '') => {
+  if (typeof thumbnail !== 'string') return '';
+  const cleanThumbnail = thumbnail.trim();
+  if (!cleanThumbnail) return '';
+  if (/^https?:\/\//i.test(cleanThumbnail)) return cleanThumbnail;
+  if (cleanThumbnail.startsWith('data:') && cleanThumbnail.length <= MAX_INLINE_PROJECT_THUMBNAIL_LENGTH) return cleanThumbnail;
+  return '';
+};
 
 const stripLargeMediaForLocalCache = (value) => {
   if (Array.isArray(value)) return value.map(stripLargeMediaForLocalCache);
@@ -189,7 +277,7 @@ const getProjectThumbnail = (project = {}) => {
     ...(project.items || []).map((item) => item.imageData),
   ];
 
-  return candidates.find((value) => typeof value === 'string' && value.trim()) || '';
+  return candidates.map(normalizeProjectThumbnail).find(Boolean) || '';
 };
 
 const normalizeProjectRecord = (record) => {
@@ -200,9 +288,10 @@ const normalizeProjectRecord = (record) => {
   return {
     id: record?.id || createId(),
     name: record?.name || getProjectTitle(data),
-    thumbnail: record?.thumbnail || record?.thumbnailUrl || record?.thumbnail_url || getProjectThumbnail(data),
+    thumbnail: normalizeProjectThumbnail(record?.thumbnail || record?.thumbnailUrl || record?.thumbnail_url) || getProjectThumbnail(data),
     uiState: record?.uiState || record?.ui_state || {},
     shareState: record?.shareState || record?.share_state || { isPublic: false, copiedAt: '' },
+    storagePath: record?.storagePath || record?.storage_path || '',
     createdAt,
     updatedAt,
     data,
@@ -215,14 +304,14 @@ const sanitizeProjectRecordForStorage = (record) => {
   return {
     ...normalized,
     name: normalized.name || getProjectTitle(data),
-    thumbnail: getProjectThumbnail(data) || normalized.thumbnail || '',
+    thumbnail: normalizeProjectThumbnail(normalized.thumbnail) || getProjectThumbnail(data),
     data,
   };
 };
 
 const readProjects = (userId) => {
   if (!userId) return [];
-  const rawProjects = safeParse(localStorage.getItem(getProjectsKey(userId)), []);
+  const rawProjects = readJsonStorage(getProjectsKey(userId), []);
   return Array.isArray(rawProjects) ? rawProjects.map(sanitizeProjectRecordForStorage) : [];
 };
 
@@ -232,43 +321,159 @@ const readPersistedProjects = async (userId) => {
   return readProjects(userId);
 };
 
+const makeLocalWriteStatus = ({
+  cacheSaved = false,
+  fullSaved = false,
+  slimmed = false,
+} = {}) => ({
+  cacheSaved,
+  fullSaved,
+  saved: cacheSaved || fullSaved,
+  slimmed,
+});
+
 const writeProjects = (userId, projects) => {
   const storableProjects = Array.isArray(projects) ? projects.map(sanitizeProjectRecordForStorage) : [];
-  const cacheProjects = storableProjects.some((project) => hasLargeEmbeddedMedia(project.data))
+  const shouldUseSlimCache = storableProjects.some((project) => hasLargeEmbeddedMedia(project.data));
+  const cacheProjects = shouldUseSlimCache
     ? storableProjects.map(slimProjectForLocalCache)
     : storableProjects;
   try {
     localStorage.setItem(getProjectsKey(userId), JSON.stringify(cacheProjects));
-    return true;
+    return makeLocalWriteStatus({
+      cacheSaved: true,
+      fullSaved: !shouldUseSlimCache,
+      slimmed: shouldUseSlimCache,
+    });
   } catch {
     const slimProjects = storableProjects.map(slimProjectForLocalCache);
     try {
       localStorage.setItem(getProjectsKey(userId), JSON.stringify(slimProjects));
-      return true;
+      return makeLocalWriteStatus({ cacheSaved: true, slimmed: true });
     } catch (error) {
       console.warn('Cache local projets trop volumineux.', error);
-      return false;
+      return makeLocalWriteStatus({ slimmed: true });
     }
   }
+};
+
+const attachProjectSyncStatus = (projects, syncStatus) => {
+  Object.defineProperty(projects, 'syncStatus', {
+    configurable: true,
+    enumerable: false,
+    value: syncStatus,
+  });
+  return projects;
+};
+
+const applyRemoteStoragePaths = (projects = [], remoteProjects = []) => {
+  remoteProjects.forEach((entry) => {
+    if (!entry?.id || !entry.storagePath) return;
+    const storedProject = projects.find((projectEntry) => projectEntry.id === entry.id);
+    if (storedProject) storedProject.storagePath = entry.storagePath;
+  });
+  return projects;
+};
+
+const persistStoragePathsLocally = async (userId, projects = []) => {
+  await writeProjectsToIndexedDb(userId, projects).catch((error) => {
+    console.warn('Cache IndexedDB des chemins Supabase impossible.', error);
+  });
+  writeProjects(userId, projects);
+};
+
+const persistSingleProject = async (userId, project, projects, options = {}) => {
+  const fullProjects = Array.isArray(projects) ? projects.map(normalizeProjectRecord) : [];
+  let storableProjects = null;
+  let storableProject = null;
+  const getStorableProjects = () => {
+    if (!storableProjects) storableProjects = fullProjects.map(sanitizeProjectRecordForStorage);
+    return storableProjects;
+  };
+  const getStorableProject = () => {
+    if (!storableProject) storableProject = sanitizeProjectRecordForStorage(project);
+    return storableProject;
+  };
+  const indexedSaved = await writeProjectToIndexedDb(userId, project);
+  const localWriteStatus = indexedSaved ? makeLocalWriteStatus() : writeProjects(userId, getStorableProjects());
+  const localSaved = indexedSaved || localWriteStatus.fullSaved;
+  const localCacheSaved = localWriteStatus.cacheSaved;
+  const localPartial = !localSaved && localCacheSaved;
+  const remoteAttempted = !options.localOnly && hasSupabaseConfig();
+  let remoteSaved = false;
+  let remoteError = '';
+  if (options.localOnly) {
+    return attachProjectSyncStatus(fullProjects, {
+      indexedSaved,
+      localCacheSaved,
+      localPartial,
+      localSaved,
+      localSlimmed: localWriteStatus.slimmed,
+      remoteError,
+      remoteAttempted,
+      remoteSaved,
+    });
+  }
+  try {
+    const remoteProject = await saveProjectRecordForUser(userId, getStorableProject(), getStorableProjects(), options);
+    const remoteProjects = Array.isArray(remoteProject?.syncedProjects) ? remoteProject.syncedProjects : [remoteProject];
+    applyRemoteStoragePaths(fullProjects, remoteProjects);
+    await persistStoragePathsLocally(userId, fullProjects);
+    remoteSaved = remoteAttempted;
+  } catch (error) {
+    remoteError = error?.message || 'Synchronisation Supabase impossible.';
+    if (options.requirePublicIndex || !localSaved) {
+      throw error;
+    }
+    console.warn('Sauvegarde distante indisponible, brouillon conserve localement.', error);
+  }
+  return attachProjectSyncStatus(fullProjects, {
+    indexedSaved,
+    localCacheSaved,
+    localPartial,
+    localSaved,
+    localSlimmed: localWriteStatus.slimmed,
+    remoteError,
+    remoteAttempted,
+    remoteSaved,
+  });
 };
 
 const persistProjects = async (userId, projects, options = {}) => {
   const fullProjects = Array.isArray(projects) ? projects.map(normalizeProjectRecord) : [];
   const storableProjects = fullProjects.map(sanitizeProjectRecordForStorage);
-  const remoteProjects = storableProjects.some((project) => hasLargeEmbeddedMedia(project.data))
-    ? storableProjects.map(slimProjectForLocalCache)
-    : storableProjects;
   const indexedSaved = await writeProjectsToIndexedDb(userId, fullProjects);
-  const localSaved = writeProjects(userId, remoteProjects);
+  const localWriteStatus = writeProjects(userId, storableProjects);
+  const localSaved = indexedSaved || localWriteStatus.fullSaved;
+  const localCacheSaved = localWriteStatus.cacheSaved;
+  const localPartial = !localSaved && localCacheSaved;
+  const remoteAttempted = hasSupabaseConfig();
+  let remoteSaved = false;
+  let remoteError = '';
   try {
-    await saveProjectRecordsForUser(userId, remoteProjects, options);
+    const remoteProjects = await saveProjectRecordsForUser(userId, storableProjects, options);
+    if (Array.isArray(remoteProjects)) {
+      applyRemoteStoragePaths(fullProjects, remoteProjects);
+      await persistStoragePathsLocally(userId, fullProjects);
+    }
+    remoteSaved = remoteAttempted;
   } catch (error) {
-    if (options.requirePublicIndex || (!indexedSaved && !localSaved)) {
+    remoteError = error?.message || 'Synchronisation Supabase impossible.';
+    if (options.requirePublicIndex || !localSaved) {
       throw error;
     }
     console.warn('Sauvegarde distante indisponible, brouillon conserve localement.', error);
   }
-  return fullProjects;
+  return attachProjectSyncStatus(fullProjects, {
+    indexedSaved,
+    localCacheSaved,
+    localPartial,
+    localSaved,
+    localSlimmed: localWriteStatus.slimmed,
+    remoteError,
+    remoteAttempted,
+    remoteSaved,
+  });
 };
 
 const cacheProjectsLocally = async (userId, projects) => {
@@ -282,10 +487,13 @@ const cacheProjectsLocally = async (userId, projects) => {
   return fullProjects;
 };
 
-const readActiveProjectId = (userId) => localStorage.getItem(getActiveProjectKey(userId)) || '';
+const readActiveProjectId = (userId) => (
+  canUseLocalStorage() ? localStorage.getItem(getActiveProjectKey(userId)) || '' : ''
+);
 const writeActiveProjectId = (userId, projectId) => {
-  if (!projectId) localStorage.removeItem(getActiveProjectKey(userId));
-  else localStorage.setItem(getActiveProjectKey(userId), projectId);
+  const key = getActiveProjectKey(userId);
+  if (!projectId) removeStorageKey(key);
+  else if (canUseLocalStorage()) localStorage.setItem(key, projectId);
 };
 
 export function useLocalAuth() {
@@ -397,12 +605,12 @@ export function useLocalAuth() {
         if (isMounted) setProjectMeta(nextMeta);
 
         if (localProjects.length > 0) {
-          await persistProjects(user.id, localProjects);
+          localProjects = await persistProjects(user.id, localProjects);
         } else {
           const remoteProjects = await loadProjectRecordsForUser(user.id);
           if (Array.isArray(remoteProjects) && remoteProjects.length > 0) {
             localProjects = remoteProjects.map(sanitizeProjectRecordForStorage);
-            await persistProjects(user.id, localProjects);
+            localProjects = await persistProjects(user.id, localProjects);
           }
         }
 
@@ -423,7 +631,7 @@ export function useLocalAuth() {
             });
 
             localProjects = [migratedProject];
-            await persistProjects(user.id, localProjects);
+            localProjects = await persistProjects(user.id, localProjects);
           }
         }
 
@@ -500,11 +708,11 @@ export function useLocalAuth() {
     }
   };
 
-  const updatePassword = async ({ password }) => {
+  const updatePassword = async ({ password, currentPassword = '' }) => {
     setIsBusy(true);
     setAuthError('');
     try {
-      const account = await updateCurrentUserPassword(password);
+      const account = await updateCurrentUserPassword({ password, currentPassword });
       setUser(account);
       setAuthorProfile(getAuthorProfile(account.id, account));
       setIsPasswordRecovery(false);
@@ -556,35 +764,40 @@ export function useLocalAuth() {
     });
 
     const nextProjects = [record, ...(await readPersistedProjects(user.id))];
-    await persistProjects(user.id, nextProjects);
+    const persistedProjects = await persistProjects(user.id, nextProjects);
+    const persistedRecord = persistedProjects.find((projectEntry) => projectEntry.id === record.id) || record;
     writeActiveProjectId(user.id, record.id);
-    projectsRef.current = nextProjects;
-    setProjects(nextProjects);
+    projectsRef.current = persistedProjects;
+    setProjects(persistedProjects);
     setActiveProjectId(record.id);
-    setProjectMeta({ id: record.id, name: record.name, updatedAt: record.updatedAt });
-    return record;
+    setProjectMeta({ id: persistedRecord.id, name: persistedRecord.name, updatedAt: persistedRecord.updatedAt });
+    return persistedRecord;
   };
 
-  const saveProject = async (project, projectId = activeProjectId, uiState = {}) => {
+  const saveProject = async (project, projectId = activeProjectId, uiState = {}, saveOptions = {}) => {
     if (!user?.id) return null;
 
     const storableProject = project || {};
+    const nextUiState = uiState || {};
     const currentProjects = projectsRef.current || [];
     const existingProjects = currentProjects.length ? currentProjects.map(normalizeProjectRecord) : await readPersistedProjects(user.id);
     const currentProjectId = projectId || existingProjects[0]?.id || createId();
     const existing = existingProjects.find((item) => item.id === currentProjectId);
-    const incomingAutosaveRevision = Number(uiState.autosaveRevision || 0);
+    const incomingAutosaveRevision = Number(nextUiState.autosaveRevision || 0);
     const existingAutosaveRevision = Number(existing?.uiState?.autosaveRevision || 0);
     if (incomingAutosaveRevision > 0 && existingAutosaveRevision > incomingAutosaveRevision) {
       return existing ? { id: existing.id, name: existing.name, updatedAt: existing.updatedAt } : null;
     }
     const timestamp = nowIso();
+    const thumbnail = saveOptions.localOnly && existing?.thumbnail
+      ? existing.thumbnail
+      : getProjectThumbnail(storableProject) || existing?.thumbnail || '';
     const record = normalizeProjectRecord({
       ...existing,
       id: currentProjectId,
       name: existing?.name || getProjectTitle(storableProject),
-      thumbnail: getProjectThumbnail(storableProject) || existing?.thumbnail || '',
-      uiState: { ...(existing?.uiState || {}), ...uiState },
+      thumbnail,
+      uiState: { ...(existing?.uiState || {}), ...nextUiState },
       shareState: existing?.shareState || { isPublic: false, copiedAt: '' },
       createdAt: existing?.createdAt || timestamp,
       updatedAt: timestamp,
@@ -592,13 +805,14 @@ export function useLocalAuth() {
     });
 
     const nextProjects = [record, ...existingProjects.filter((item) => item.id !== currentProjectId)];
-    await persistProjects(user.id, nextProjects);
+    const persistedProjects = await persistSingleProject(user.id, record, nextProjects, saveOptions);
+    const syncStatus = persistedProjects.syncStatus || {};
     writeActiveProjectId(user.id, record.id);
-    projectsRef.current = nextProjects;
-    setProjects(nextProjects);
+    projectsRef.current = persistedProjects;
+    setProjects(persistedProjects);
     setActiveProjectId(record.id);
 
-    const nextMeta = { id: record.id, name: record.name, updatedAt: record.updatedAt };
+    const nextMeta = { id: record.id, name: record.name, updatedAt: record.updatedAt, syncStatus };
     setProjectMeta(nextMeta);
     return nextMeta;
   };
@@ -608,18 +822,18 @@ export function useLocalAuth() {
     const normalizedProjects = Array.isArray(projectRecords)
       ? projectRecords.map(normalizeProjectRecord)
       : [];
-    await persistProjects(user.id, normalizedProjects);
-    projectsRef.current = normalizedProjects;
-    setProjects(normalizedProjects);
+    const persistedProjects = await persistProjects(user.id, normalizedProjects);
+    projectsRef.current = persistedProjects;
+    setProjects(persistedProjects);
     if (nextActiveProjectId) {
       writeActiveProjectId(user.id, nextActiveProjectId);
       setActiveProjectId(nextActiveProjectId);
     }
-    const activeRecord = normalizedProjects.find((project) => project.id === nextActiveProjectId) || normalizedProjects[0];
+    const activeRecord = persistedProjects.find((project) => project.id === nextActiveProjectId) || persistedProjects[0];
     if (activeRecord) {
       setProjectMeta({ id: activeRecord.id, name: activeRecord.name, updatedAt: activeRecord.updatedAt });
     }
-    return normalizedProjects;
+    return persistedProjects;
   };
 
   const loadProject = async (projectId = activeProjectId) => {
@@ -689,7 +903,7 @@ export function useLocalAuth() {
             copiedAt: timestamp,
             publishedAt: project.shareState?.publishedAt || timestamp,
             durationMinutes: project.shareState?.durationMinutes || Math.max(15, Math.min(90, 15 + (project.data?.scenes?.length || 0) * 8 + (project.data?.enigmas?.length || 0) * 5)),
-            difficulty: project.shareState?.difficulty || ((project.data?.enigmas?.length || 0) >= 5 ? 'difficile' : (project.data?.enigmas?.length || 0) >= 2 ? 'intermédiaire' : 'facile'),
+            difficulty: project.shareState?.difficulty || ((project.data?.enigmas?.length || 0) >= 5 ? 'difficile' : (project.data?.enigmas?.length || 0) >= 2 ? 'intermediaire' : 'facile'),
           },
           updatedAt: timestamp,
         }
@@ -723,7 +937,7 @@ export function useLocalAuth() {
           publishedName: project.name || getProjectTitle(project.data),
           publishedThumbnail: project.shareState?.galleryThumbnail || project.thumbnail || getProjectThumbnail(snapshot) || '',
           durationMinutes: Math.max(15, Math.min(90, 15 + (snapshot?.scenes?.length || 0) * 8 + (snapshot?.enigmas?.length || 0) * 5)),
-          difficulty: (snapshot?.enigmas?.length || 0) >= 5 ? 'difficile' : (snapshot?.enigmas?.length || 0) >= 2 ? 'intermédiaire' : 'facile',
+          difficulty: (snapshot?.enigmas?.length || 0) >= 5 ? 'difficile' : (snapshot?.enigmas?.length || 0) >= 2 ? 'intermediaire' : 'facile',
         },
         updatedAt: timestamp,
       };
@@ -781,9 +995,17 @@ export function useLocalAuth() {
         }
         : project
     ));
-    await persistProjects(user.id, nextProjects);
-    setProjects(nextProjects);
-    return nextProjects.find((project) => project.id === projectId) || null;
+    const localProject = nextProjects.find((project) => project.id === projectId) || null;
+    const shouldUpdatePublicIndex = Boolean(localProject?.shareState?.isPublic);
+    const serverProject = shouldUpdatePublicIndex
+      ? await requestBackendPublication({ action: 'settings', projectId, project: localProject, settings })
+      : null;
+    const finalProjects = serverProject
+      ? nextProjects.map((project) => (project.id === projectId ? serverProject : project))
+      : await persistProjects(user.id, nextProjects, { requirePublicIndex: shouldUpdatePublicIndex });
+    if (serverProject) await cacheProjectsLocally(user.id, finalProjects);
+    setProjects(finalProjects);
+    return finalProjects.find((project) => project.id === projectId) || null;
   };
 
   const renameProject = async (projectId, name) => {
@@ -795,9 +1017,9 @@ export function useLocalAuth() {
          { ...project, name, thumbnail: getProjectThumbnail({ ...project.data, title: name }) || project.thumbnail || '', data: { ...project.data, title: name }, updatedAt: timestamp }
         : project,
     );
-    await persistProjects(user.id, nextProjects);
-    setProjects(nextProjects);
-    return nextProjects.find((project) => project.id === projectId) || null;
+    const finalProjects = await persistProjects(user.id, nextProjects);
+    setProjects(finalProjects);
+    return finalProjects.find((project) => project.id === projectId) || null;
   };
 
   const updateProjectMode = async (projectId, creationMode) => {
@@ -854,20 +1076,41 @@ export function useLocalAuth() {
     });
 
     const nextProjects = [copy, ...sourceProjects];
-    await persistProjects(user.id, nextProjects);
-    setProjects(nextProjects);
-    return copy;
+    const finalProjects = await persistProjects(user.id, nextProjects);
+    setProjects(finalProjects);
+    return finalProjects.find((project) => project.id === copy.id) || copy;
   };
 
   const deleteProject = async (projectId) => {
     if (!user?.id || !projectId) return;
     const sourceProjects = projects.length ? projects.map(normalizeProjectRecord) : await readPersistedProjects(user.id);
+    const deletedProject = sourceProjects.find((project) => project.id === projectId);
     const nextProjects = sourceProjects.filter((project) => project.id !== projectId);
-    await persistProjects(user.id, nextProjects);
-    setProjects(nextProjects);
+    const finalProjects = await persistProjects(user.id, nextProjects, {
+      requirePublicIndex: Boolean(deletedProject?.shareState?.isPublic),
+    });
+    const syncStatus = finalProjects.syncStatus || {};
+    if (deletedProject && syncStatus.remoteSaved) {
+      await deleteProjectRecordForUser(user.id, deletedProject).catch((error) => {
+        console.warn('Suppression distante du projet impossible.', error);
+      });
+    }
+    if (deletedProject) {
+      await deleteProjectLocalDrafts(projectId, {
+        ...(deletedProject.data || {}),
+        title: deletedProject.data?.title || deletedProject.name,
+      }).then((draftCleanup) => {
+        if (draftCleanup.errors.length) {
+          console.warn('Suppression des brouillons locaux impossible.', draftCleanup.errors);
+        }
+      }).catch((error) => {
+        console.warn('Suppression des brouillons locaux impossible.', error);
+      });
+    }
+    setProjects(finalProjects);
 
     if (activeProjectId === projectId) {
-      const nextActiveProjectId = nextProjects[0]?.id || '';
+      const nextActiveProjectId = finalProjects[0]?.id || '';
       writeActiveProjectId(user.id, nextActiveProjectId);
       setActiveProjectId(nextActiveProjectId);
     }

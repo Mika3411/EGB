@@ -13,7 +13,7 @@ export const VISUAL_EFFECT_OPTIONS = [
   { value: 'smoke', label: 'Fumee' },
   { value: 'hearts', label: 'Coeurs flottants' },
   { value: 'glow', label: 'Halo lumineux' },
-  { value: 'firefliés', label: 'Lucioles' },
+  { value: 'fireflies', label: 'Lucioles' },
   { value: 'rain', label: 'Pluie fine' },
   { value: 'storm', label: 'Orage' },
   { value: 'magic', label: 'Poussiere magique' },
@@ -22,7 +22,7 @@ export const VISUAL_EFFECT_OPTIONS = [
   { value: 'bubbles', label: 'Bulles' },
   { value: 'aurora', label: 'Aurore' },
   { value: 'vignette', label: 'Ombre dramatique' },
-  { value: 'scanlines', label: 'Ecran VHS' },
+  { value: 'scanlines', label: 'Écran VHS' },
   { value: 'glitch', label: 'Glitch' },
   { value: 'confetti', label: 'Confettis' },
   { value: 'beauty-lens', label: 'Lens douceur' },
@@ -37,7 +37,7 @@ export const VISUAL_EFFECT_OPTIONS = [
 export const VISUAL_EFFECT_GROUPS = [
   {
     label: 'Lumiere et magie',
-    options: ['sparkles', 'stars', 'glow', 'firefliés', 'magic', 'aurora'],
+    options: ['sparkles', 'stars', 'glow', 'fireflies', 'magic', 'aurora'],
   },
   {
     label: 'Météo et ambiance',

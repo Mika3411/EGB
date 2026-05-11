@@ -1,5 +1,6 @@
 import { HelpLabel } from './SceneEditorChrome.jsx';
 import MediaSourcePicker from '../MediaSourcePicker.jsx';
+import { showConfirm } from '../AccessibleDialog';
 
 export default function HotspotAssetsPanel({
   selectedHotspot,
@@ -44,8 +45,14 @@ export default function HotspotAssetsPanel({
             <button
               type="button"
               className="danger-button"
-              onClick={() => {
-                if (!window.confirm('Supprimer le son de cette zone ?')) return;
+              onClick={async () => {
+                const confirmed = await showConfirm({
+                  title: 'Supprimer le son',
+                  message: 'Supprimer le son de cette zone ?',
+                  confirmLabel: 'Supprimer',
+                  variant: 'danger',
+                });
+                if (!confirmed) return;
                 patchSelectedHotspot((spot) => {
                   spot.soundData = '';
                   spot.soundName = '';
@@ -59,7 +66,7 @@ export default function HotspotAssetsPanel({
       </div>
 
       <div className="hotspot-assets-field">
-        <HelpLabel help="Image associee a l'action principale de cette zone, souvent utilisée pour montrer un objet trouvé ou un indice visuel.">Image objet</HelpLabel>
+        <HelpLabel help="Image associée à l'action principale de cette zone, souvent utilisée pour montrer un objet trouvé ou un indice visuel.">Image objet</HelpLabel>
         <MediaSourcePicker
           className="button like full secondary-action"
           accept="image/*"
@@ -77,8 +84,14 @@ export default function HotspotAssetsPanel({
           <button
             type="button"
             className="danger-button"
-            onClick={() => {
-              if (!window.confirm("Supprimer l'image de cette zone ?")) return;
+            onClick={async () => {
+              const confirmed = await showConfirm({
+                title: "Supprimer l'image",
+                message: "Supprimer l'image de cette zone ?",
+                confirmLabel: 'Supprimer',
+                variant: 'danger',
+              });
+              if (!confirmed) return;
               patchSelectedHotspot((spot) => {
                 spot.objectImageData = '';
                 spot.objectImageName = '';

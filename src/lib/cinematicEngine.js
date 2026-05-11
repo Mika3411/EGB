@@ -127,7 +127,7 @@ export function legacyCinematicToSteps(cinematic = {}) {
 
   if (cinematicType === 'video') {
     steps.push(createCinematicStep('video', {
-      id: `${cinematic.id || 'cinematic'}:video`,
+      id: `${cinematic.id || 'cinematic'}:vidéo`,
       src: cinematic.videoData || '',
       name: cinematic.videoName || '',
       autoplay: cinematic.videoAutoplay !== false,
@@ -271,7 +271,7 @@ export function normalizeAnime2dSpecForCinematic(payload) {
 
 export function createCinematicFromAnime2dPayload(payload, options = {}) {
   if (payload?.kind !== 'escape-game-builder-2d-animation' || !Array.isArray(payload.cinematicSteps)) {
-    throw new Error('Ce JSON ne vient pas de l editeur 2D Anime.');
+    throw new Error('Ce JSON ne vient pas de l’éditeur 2D Anime.');
   }
 
   const {
@@ -489,7 +489,7 @@ export function resolveCinematicEnd(cinematic = {}, project = {}, options = {}) 
     return {
       ...event,
       sceneId: event.targetSceneId,
-      dialogue: 'Nouvelle scene debloquee.',
+      dialogue: 'Nouvelle scène débloquée.',
     };
   }
 

@@ -1,3 +1,11 @@
+import {
+  getCinematicTargetSceneIds,
+  getEntryActions,
+  getSceneTransitions,
+} from './projectTransitions';
+
+export { getSceneTransitions } from './projectTransitions';
+
 const SCORE_MAX = 10;
 
 const SCORE_WEIGHTS = {
@@ -17,75 +25,6 @@ const roundTo = (value, precision = 1) => {
 const asArray = (value) => (Array.isArray(value) ? value : []);
 
 const hasText = (value) => String(value || '').trim().length > 0;
-
-const getActStartSceneId = (project, actId) => {
-  const actScenes = asArray(project.scenes).filter((scene) => scene.actId === actId);
-  return actScenes.find((scene) => !scene.parentSceneId)?.id || actScenes[0]?.id || '';
-};
-
-const getCinematicTargetSceneIds = (project, cinematicId) => {
-  const cinematic = asArray(project.cinematics).find((entry) => entry.id === cinematicId);
-  if (!cinematic) return [];
-  if (cinematic.onEndType === 'scene' && cinematic.targetSceneId) return [cinematic.targetSceneId];
-  if (cinematic.onEndType === 'act' && cinematic.targetActId) {
-    const targetSceneId = getActStartSceneId(project, cinematic.targetActId);
-    return targetSceneId ? [targetSceneId] : [];
-  }
-  return [];
-};
-
-const getEnigmaTargetSceneIds = (project, enigmaId) => {
-  const enigma = asArray(project.enigmas).find((entry) => entry.id === enigmaId);
-  if (!enigma) return [];
-  if (enigma.unlockType === 'scene' && enigma.targetSceneId) return [enigma.targetSceneId];
-  if (enigma.unlockType === 'cinematic' && enigma.targetCinematicId) {
-    return getCinematicTargetSceneIds(project, enigma.targetCinematicId);
-  }
-  return [];
-};
-
-const getActionTargetSceneIds = (project, action) => {
-  if (!action) return [];
-  if (action.enigmaId) {
-    const targets = getEnigmaTargetSceneIds(project, action.enigmaId);
-    if (targets.length) return targets;
-  }
-  if (action.actionType === 'scene' && action.targetSceneId) return [action.targetSceneId];
-  if (action.actionType === 'cinematic' && action.targetCinematicId) {
-    return getCinematicTargetSceneIds(project, action.targetCinematicId);
-  }
-  return [];
-};
-
-const getSecondaryAction = (entry) => (entry?.hasSecondAction ? {
-  actionType: entry.secondActionType,
-  targetSceneId: entry.secondTargetSceneId,
-  targetCinematicId: entry.secondTargetCinematicId,
-  enigmaId: entry.secondEnigmaId,
-} : null);
-
-const getEntryActions = (entry) => [
-  entry,
-  getSecondaryAction(entry),
-  ...asArray(entry?.logicRules).map((rule) => (rule.actionType === 'default' ? entry : rule)),
-].filter(Boolean);
-
-export const getSceneTransitions = (project = {}) => (
-  asArray(project.scenes).flatMap((scene) => {
-    const interactiveEntries = [
-      ...asArray(scene.hotspots),
-      ...asArray(scene.sceneObjects).filter((object) => object.clickMode !== 'none'),
-    ];
-
-    return interactiveEntries.flatMap((entry) => (
-      getEntryActions(entry).flatMap((action) => (
-        getActionTargetSceneIds(project, action)
-          .filter((targetSceneId) => targetSceneId && targetSceneId !== scene.id)
-          .map((targetSceneId) => ({ fromSceneId: scene.id, toSceneId: targetSceneId }))
-      ))
-    ));
-  })
-);
 
 const getRouteMapRoomsAndConnections = (routeMap = {}) => {
   const actMaps = routeMap.actMaps && typeof routeMap.actMaps === 'object' ? Object.values(routeMap.actMaps) : [];
@@ -222,6 +161,118 @@ const estimateEnigmaDifficulty = (enigma) => {
   return 4;
 };
 
+const hasSkillCheckFailureBranch = (check) => (
+  hasText(check.skillCheckFailureDialogue)
+  || hasText(check.skillCheckFailureTargetSceneId)
+  || hasText(check.skillCheckFailureNextNodeId)
+  || Number(check.skillCheckFailureHealthLoss) > 0
+);
+
+const collectHeroSkillChecks = (project = {}, scenes = []) => {
+  const checks = [];
+  scenes.forEach((scene) => {
+    asArray(scene.hotspots).forEach((hotspot) => {
+      if (hotspot.actionType === 'skill_check') {
+        checks.push({ source: 'hotspot', scene, entry: hotspot, check: hotspot });
+      }
+      if (hotspot.actionType === 'conversation') {
+        asArray(hotspot.conversation?.nodes).forEach((node) => {
+          asArray(node.replies).forEach((reply) => {
+            if (reply.actionType === 'skill_check') {
+              checks.push({ source: 'conversation', scene, entry: hotspot, node, check: reply });
+            }
+          });
+        });
+      }
+    });
+  });
+
+  const hero = project.heroAdventure?.hero || {};
+  const skillIds = new Set(asArray(hero.skills).map((skill) => skill.id).filter(Boolean));
+  const maxMana = Math.max(0, Number(hero.maxMana ?? hero.mana ?? 0) || 0);
+  const enabled = Boolean(project.heroAdventure?.enabled || project.creationMode === 'hero_adventure');
+  const withoutSkill = checks.filter(({ check }) => !check.skillCheckSkillId || !skillIds.has(check.skillCheckSkillId));
+  const withoutDifficulty = checks.filter(({ check }) => !Number(check.skillCheckDifficulty));
+  const withoutFailureBranch = checks.filter(({ check }) => !hasSkillCheckFailureBranch(check));
+  const costly = checks.filter(({ check }) => Number(check.skillCheckManaCost) > maxMana);
+  const punishing = checks.filter(({ check }) => Number(check.skillCheckFailureHealthLoss) >= Math.max(1, Number(hero.maxHealth ?? hero.health ?? 0) || 0));
+
+  return {
+    enabled,
+    count: checks.length,
+    checks,
+    withoutSkill,
+    withoutDifficulty,
+    withoutFailureBranch,
+    costly,
+    punishing,
+    maxMana,
+  };
+};
+
+const getCombatSkillId = (combat = {}) => combat.combatSkillId || combat.skillCheckSkillId || combat.skillId || '';
+const getCombatDifficulty = (combat = {}) => Number(combat.combatAttackDifficulty || combat.combatDifficulty || combat.skillCheckDifficulty || 0);
+const getCombatEnemyHealth = (combat = {}) => Number(combat.combatEnemyMaxHealth || combat.enemyHealth || combat.enemyMaxHealth || 0);
+const getCombatRewardItemId = (combat = {}) => combat.combatRewardItemId || combat.rewardItemId || '';
+const getCombatVictoryTargetSceneId = (combat = {}) => combat.combatVictoryTargetSceneId || combat.victoryTargetSceneId || combat.targetSceneId || '';
+const getCombatDefeatTargetSceneId = (combat = {}) => combat.combatDefeatTargetSceneId || combat.defeatTargetSceneId || '';
+
+const hasCombatNarrativePayoff = (combat = {}) => (
+  Boolean(getCombatRewardItemId(combat))
+  || hasText(combat.combatVictoryDialogue)
+  || hasText(combat.victoryDialogue)
+  || hasText(getCombatVictoryTargetSceneId(combat))
+);
+
+const collectHeroCombats = (project = {}, scenes = []) => {
+  const combats = [];
+  scenes.forEach((scene) => {
+    asArray(scene.hotspots).forEach((hotspot) => {
+      if (hotspot.actionType === 'hero_combat') {
+        combats.push({ source: 'hotspot', scene, entry: hotspot, combat: hotspot });
+      }
+      if (hotspot.actionType === 'conversation') {
+        asArray(hotspot.conversation?.nodes).forEach((node) => {
+          asArray(node.replies).forEach((reply) => {
+            if (reply.actionType === 'hero_combat') {
+              combats.push({ source: 'conversation', scene, entry: hotspot, node, combat: reply });
+            }
+          });
+        });
+      }
+    });
+  });
+
+  const hero = project.heroAdventure?.hero || {};
+  const skillIds = new Set(asArray(hero.skills).map((skill) => skill.id).filter(Boolean));
+  const maxHealth = Math.max(1, Number(hero.maxHealth ?? hero.health ?? 0) || 1);
+  const enabled = Boolean(project.heroAdventure?.enabled || project.creationMode === 'hero_adventure');
+
+  const withoutEnemy = combats.filter(({ combat }) => !hasText(combat.combatEnemyName || combat.enemyName || combat.name));
+  const withoutEnemyHealth = combats.filter(({ combat }) => getCombatEnemyHealth(combat) <= 0);
+  const withoutSkill = combats.filter(({ combat }) => !getCombatSkillId(combat) || !skillIds.has(getCombatSkillId(combat)));
+  const withoutDifficulty = combats.filter(({ combat }) => getCombatDifficulty(combat) <= 0);
+  const withoutVictoryBranch = combats.filter(({ combat }) => !getCombatVictoryTargetSceneId(combat));
+  const withoutDefeatBranch = combats.filter(({ combat }) => !getCombatDefeatTargetSceneId(combat));
+  const withoutRewardOrNarrativePayoff = combats.filter(({ combat }) => !hasCombatNarrativePayoff(combat));
+  const lethalEnemyDamage = combats.filter(({ combat }) => Number(combat.combatEnemyDamage || combat.enemyDamage || 0) >= maxHealth);
+
+  return {
+    enabled,
+    count: combats.length,
+    combats,
+    withoutEnemy,
+    withoutEnemyHealth,
+    withoutSkill,
+    withoutDifficulty,
+    withoutVictoryBranch,
+    withoutDefeatBranch,
+    withoutRewardOrNarrativePayoff,
+    lethalEnemyDamage,
+    maxHealth,
+  };
+};
+
 const buildAdvancedAnalysis = ({ project, scenes, items, enigmas, cinematics, map, content, transitions }) => {
   const startSceneId = getStartSceneId(project, map.details.rooms);
   const reachableSceneIds = getReachableSceneIds({ startSceneId, scenes, transitions });
@@ -276,6 +327,8 @@ const buildAdvancedAnalysis = ({ project, scenes, items, enigmas, cinematics, ma
     ? Math.max(...difficultyScores) - Math.min(...difficultyScores)
     : 0;
   const timedScenePressure = scenes.filter((scene) => scene.timerEnabled && Number(scene.timerSeconds) > 0 && Number(scene.timerSeconds) < 30).length;
+  const heroAdventure = collectHeroSkillChecks(project, scenes);
+  const heroCombat = collectHeroCombats(project, scenes);
   const difficultyIncoherent = (
     difficultySpread >= 5
     || (enigmas.length <= 2 && averageDifficulty >= 7)
@@ -318,6 +371,8 @@ const buildAdvancedAnalysis = ({ project, scenes, items, enigmas, cinematics, ma
       missingRequiredItems: missingRequiredItems.length,
       deadEndActions: content.details.deadEndActions,
     },
+    heroAdventure,
+    heroCombat,
   };
 };
 
@@ -344,10 +399,10 @@ const hasPlayableEnigmaSolution = (enigma) => {
 const buildStructureSection = ({ acts, scenes, items, enigmas, cinematics }) => {
   const criteria = [
     { id: 'acts', label: 'Actes', score: acts.length ? 0.7 : 0, max: 0.7 },
-    { id: 'scenes', label: 'Scenes', score: Math.min(1.1, (scenes.length / 6) * 1.1), max: 1.1 },
+    { id: 'scenes', label: 'Scènes', score: Math.min(1.1, (scenes.length / 6) * 1.1), max: 1.1 },
     { id: 'items', label: 'Objets', score: Math.min(0.8, (items.length / 6) * 0.8), max: 0.8 },
-    { id: 'enigmas', label: 'Enigmes', score: Math.min(0.9, (enigmas.length / 4) * 0.9), max: 0.9 },
-    { id: 'cinematics', label: 'Cinematics', score: Math.min(0.5, (cinematics.length / 2) * 0.5), max: 0.5 },
+    { id: 'enigmas', label: 'Énigmes', score: Math.min(0.9, (enigmas.length / 4) * 0.9), max: 0.9 },
+    { id: 'cinematics', label: 'Cinématiques', score: Math.min(0.5, (cinematics.length / 2) * 0.5), max: 0.5 },
   ];
 
   return {
@@ -376,9 +431,9 @@ const buildMapSection = ({ scenes, routeMap, transitions }) => {
   const hasStartRoom = rooms.some((room) => room.type === 'start');
 
   const criteria = [
-    { id: 'mappedScenes', label: 'Scenes mappees', score: mappedRatio * 1.3, max: 1.3 },
+    { id: 'mappedScenes', label: 'Scènes mappees', score: mappedRatio * 1.3, max: 1.3 },
     { id: 'connections', label: 'Liaisons jouables', score: connectionQuality * 2, max: 2 },
-    { id: 'startRoom', label: 'Depart sur le plan', score: hasStartRoom ? 0.4 : 0, max: 0.4 },
+    { id: 'startRoom', label: 'Départ sur le plan', score: hasStartRoom ? 0.4 : 0, max: 0.4 },
   ];
 
   return {
@@ -415,9 +470,9 @@ const buildContentSection = ({ project, scenes, enigmas, cinematics }) => {
   const deadEndActions = countDeadEndActions({ scenes, enigmas, cinematics });
 
   const criteria = [
-    { id: 'actions', label: 'Scenes interactives', score: actionRatio * 1, max: 1 },
-    { id: 'enigmaSolutions', label: 'Solutions enigmes', score: enigmaRatio * 0.7, max: 0.7 },
-    { id: 'start', label: 'Point de depart', score: startValid ? 0.3 : 0, max: 0.3 },
+    { id: 'actions', label: 'Scènes interactives', score: actionRatio * 1, max: 1 },
+    { id: 'enigmaSolutions', label: 'Solutions énigmes', score: enigmaRatio * 0.7, max: 0.7 },
+    { id: 'start', label: 'Point de départ', score: startValid ? 0.3 : 0, max: 0.3 },
   ];
 
   return {
@@ -455,8 +510,8 @@ const buildPolishSection = ({ scenes, cinematics }) => {
   const cinematicRatio = cinematics.length ? cinematicContentCount / cinematics.length : 0;
 
   const criteria = [
-    { id: 'sceneMood', label: 'Ambiance scenes', score: moodRatio * 0.18, max: 0.18 },
-    { id: 'cinematicContent', label: 'Cinematics renseignees', score: cinematicRatio * 0.12, max: 0.12 },
+    { id: 'sceneMood', label: 'Ambiance scènes', score: moodRatio * 0.18, max: 0.18 },
+    { id: 'cinematicContent', label: 'Cinématiques renseignees', score: cinematicRatio * 0.12, max: 0.12 },
   ];
 
   return {
@@ -496,7 +551,48 @@ const getBalancedRangeScore = (value, idealMin, idealMax, hardMin, hardMax) => {
   return clamp(roundTo(((hardMax - value) / (hardMax - idealMax)) * SCORE_MAX), 0, SCORE_MAX);
 };
 
-const buildPlayerScore = ({ scenes, items, enigmas, cinematics, transitions, advancedAnalysis, estimatedMinutes, playtimeRange }) => {
+const buildExpectedPlayerRanges = ({ acts, scenes }) => {
+  const actCount = Math.max(1, acts.length);
+  const sceneCount = Math.max(1, scenes.length);
+  const timeIdealMin = clamp(Math.round((actCount * 8) + (sceneCount * 2.5)), 20, 120);
+  const timeIdealMax = clamp(Math.round((actCount * 18) + (sceneCount * 6)), timeIdealMin + 20, 240);
+  const actionIdealMin = clamp(Math.round((actCount * 2) + (sceneCount * 1.2)), 8, 90);
+  const actionIdealMax = clamp(Math.round((actCount * 6) + (sceneCount * 4)), actionIdealMin + 12, 220);
+  const complexityIdealMax = clamp(roundTo(7 + (actCount * 0.25) + (sceneCount * 0.03)), 7, 9);
+
+  return {
+    time: {
+      idealMin: timeIdealMin,
+      idealMax: timeIdealMax,
+      hardMin: 5,
+      hardMax: Math.max(120, Math.round(timeIdealMax * 1.75)),
+    },
+    actions: {
+      idealMin: actionIdealMin,
+      idealMax: actionIdealMax,
+      hardMin: 0,
+      hardMax: Math.max(55, Math.round(actionIdealMax * 1.8)),
+    },
+    complexity: {
+      idealMin: 4,
+      idealMax: complexityIdealMax,
+      hardMin: 0,
+      hardMax: 10,
+    },
+  };
+};
+
+const getExperienceDepthScore = ({ acts, scenes }) => {
+  const actCount = Math.max(0, acts.length);
+  const sceneCount = Math.max(0, scenes.length);
+  return clamp(roundTo(
+    2
+    + Math.min(3, actCount * 0.9)
+    + Math.min(5, sceneCount * 0.45)
+  ), 0, SCORE_MAX);
+};
+
+const buildPlayerScore = ({ acts, scenes, items, enigmas, cinematics, transitions, advancedAnalysis, estimatedMinutes, playtimeRange }) => {
   const actions = collectProjectActions(scenes);
   const actionableActions = actions.filter(({ action }) => (
     action.actionType !== 'dialogue'
@@ -521,10 +617,30 @@ const buildPlayerScore = ({ scenes, items, enigmas, cinematics, transitions, adv
     + Math.min(1, timedScenes / 2)
   ), 0, SCORE_MAX);
 
-  const time = getBalancedRangeScore(estimatedMinutes, 20, 55, 5, 100);
-  const actionScore = getBalancedRangeScore(actionableActions.length, 8, 28, 0, 55);
-  const complexityScore = getBalancedRangeScore(complexity, 4, 7, 0, 10);
-  const score = clamp(roundTo((time * 0.35) + (actionScore * 0.3) + (complexityScore * 0.35)), 0, SCORE_MAX);
+  const expectedRanges = buildExpectedPlayerRanges({ acts, scenes });
+  const time = getBalancedRangeScore(
+    estimatedMinutes,
+    expectedRanges.time.idealMin,
+    expectedRanges.time.idealMax,
+    expectedRanges.time.hardMin,
+    expectedRanges.time.hardMax
+  );
+  const actionScore = getBalancedRangeScore(
+    actionableActions.length,
+    expectedRanges.actions.idealMin,
+    expectedRanges.actions.idealMax,
+    expectedRanges.actions.hardMin,
+    expectedRanges.actions.hardMax
+  );
+  const complexityScore = getBalancedRangeScore(
+    complexity,
+    expectedRanges.complexity.idealMin,
+    expectedRanges.complexity.idealMax,
+    expectedRanges.complexity.hardMin,
+    expectedRanges.complexity.hardMax
+  );
+  const depthScore = getExperienceDepthScore({ acts, scenes });
+  const score = clamp(roundTo((time * 0.25) + (actionScore * 0.25) + (complexityScore * 0.3) + (depthScore * 0.2)), 0, SCORE_MAX);
 
   return {
     score,
@@ -533,22 +649,39 @@ const buildPlayerScore = ({ scenes, items, enigmas, cinematics, transitions, adv
       score: time,
       estimatedMinutes,
       range: playtimeRange,
+      expectedRange: {
+        min: expectedRanges.time.idealMin,
+        max: expectedRanges.time.idealMax,
+      },
       label: `${playtimeRange.min}-${playtimeRange.max} min`,
     },
     actions: {
       score: actionScore,
       count: actionableActions.length,
+      expectedRange: {
+        min: expectedRanges.actions.idealMin,
+        max: expectedRanges.actions.idealMax,
+      },
       totalConfigured: actions.length,
       logicRules: logicRuleCount,
     },
     complexity: {
       score: complexityScore,
       value: complexity,
+      expectedRange: {
+        min: expectedRanges.complexity.idealMin,
+        max: expectedRanges.complexity.idealMax,
+      },
       averageEnigmaDifficulty: averageDifficulty,
       branchDensity: roundTo(branchDensity, 2),
       inventoryPressure: roundTo(inventoryPressure, 2),
       enigmaPressure: roundTo(enigmaPressure, 2),
       timedScenes,
+    },
+    depth: {
+      score: depthScore,
+      acts: acts.length,
+      scenes: scenes.length,
     },
   };
 };
@@ -566,11 +699,11 @@ const buildMotivationBadges = ({ dimensions, playerScore, advancedAnalysis, scen
     && !advancedAnalysis.deadPaths.count
     && !advancedAnalysis.blockedProgression.count
   ) {
-    badges.push(makeBadge('good-flow', 'Bon flow', 'Le parcours est fluide, lisible et peu susceptible de bloquer le joueur.'));
+    badges.push(makeBadge('good-flow', 'Bon flow', 'Le parcours est fluide, lisible et peu susceptible dé bloquer le joueur.'));
   }
 
   if (dimensions.narration >= 8 && cinematicRatio >= 0.75 && scenes.length >= 2) {
-    badges.push(makeBadge('strong-narration', 'Narration forte', 'Les scenes et cinematiques donnent une vraie continuité narrative.'));
+    badges.push(makeBadge('strong-narration', 'Narration forte', 'Les scènes et cinematiques donnent une vraie continuité narrative.'));
   }
 
   if (
@@ -578,19 +711,19 @@ const buildMotivationBadges = ({ dimensions, playerScore, advancedAnalysis, scen
     || advancedAnalysis.difficulty.average >= 7
     || (playerScore.complexity.value >= 7 && enigmas.length >= 2)
   ) {
-    badges.push(makeBadge('expert-puzzle', 'Puzzle expert', 'Les enigmes proposent une complexite solide pour les joueurs qui aiment reflechir.', 'expert'));
+    badges.push(makeBadge('expert-puzzle', 'Puzzle expert', 'Les énigmes proposent une complexite solide pour les joueurs qui aiment reflechir.', 'expert'));
   }
 
   if (advancedAnalysis.variety.enigmaTypes >= 3 || advancedAnalysis.variety.actionTypes >= 4) {
-    badges.push(makeBadge('varied-gameplay', 'Gameplay varie', 'Le projet alterne plusieurs types d interactions et d enigmes.'));
+    badges.push(makeBadge('varied-gameplay', 'Gameplay varié', 'Le projet alterne plusieurs types d’interactions et d énigmes.'));
   }
 
   if (playerScore.time.score >= 8 && playerScore.actions.score >= 8) {
-    badges.push(makeBadge('balanced-session', 'Session bien calibree', 'Le temps estime et le nombre d actions semblent confortables cote joueur.'));
+    badges.push(makeBadge('balanced-session', 'Session bien calibree', 'Le temps estime et le nombre d’actions semblent confortables cote joueur.'));
   }
 
   if (map.details.mappedRatio === 1 && map.details.connectionQuality >= 0.9 && content.details.startValid) {
-    badges.push(makeBadge('clean-map', 'Plan propre', 'Toutes les scenes importantes sont mappees avec des liaisons solides.'));
+    badges.push(makeBadge('clean-map', 'Plan propre', 'Toutes les scènes importantes sont mappees avec des liaisons solides.'));
   }
 
   return badges.slice(0, 6);
@@ -603,50 +736,86 @@ const buildFeedback = ({ acts, scenes, items, enigmas, cinematics, map, content,
   const connectionCounts = map.details.connectionCounts;
 
   if (map.details.mappedRatio >= 0.85 && map.details.connectionQuality >= 0.8 && scenes.length > 1) {
-    feedback.push(makeFeedback('success', 'Bon maillage des scenes', 'Le plan couvre la majorite des scenes et les liaisons sont jouables.'));
+    feedback.push(makeFeedback('success', 'Bon maillage des scènes', 'Le plan couvre la majorite des scènes et les liaisons sont jouables.'));
   }
   if (content.details.actionRatio >= 0.75 && scenes.length) {
-    feedback.push(makeFeedback('success', 'Scenes bien interactives', 'La plupart des scenes proposent au moins une action utile.'));
+    feedback.push(makeFeedback('success', 'Scènes bien interactives', 'La plupart des scènes proposent au moins une action utile.'));
   }
   if (content.details.startValid) {
-    feedback.push(makeFeedback('success', 'Depart valide', 'Le joueur arrive bien sur une scene ou une cinematic existante.'));
+    feedback.push(makeFeedback('success', 'Départ valide', 'Le joueur arrive bien sur une scène ou une cinématique existante.'));
   }
 
-  if (!acts.length) feedback.push(makeFeedback('warning', 'Structure absente', 'Cree au moins un acte pour structurer le parcours.'));
-  if (scenes.length < 4) feedback.push(makeFeedback('warning', 'Peu de scenes', 'Ajoute quelques scenes pour donner plus de matiere au parcours.', `${scenes.length}/4`));
-  if (items.length < 3) feedback.push(makeFeedback('warning', 'Inventaire leger', 'Ajoute des objets d inventaire pour enrichir les interactions.', `${items.length}/3`));
-  if (enigmas.length < 2) feedback.push(makeFeedback('warning', 'Trop peu d enigmes', 'Ajoute des enigmes pour renforcer la progression du joueur.', `${enigmas.length}/2`));
-  if (!cinematics.length) feedback.push(makeFeedback('warning', 'Pas de cinematic', 'Ajoute une cinematic d introduction, de transition ou de fin.'));
-  if (map.details.mappedRatio < 1 && scenes.length) feedback.push(makeFeedback('warning', 'Scenes non mappees', 'Associe toutes les scenes importantes a une piece du plan.', `${map.details.mappedSceneCount}/${scenes.length}`));
-  if (connectionCounts.partial) feedback.push(makeFeedback('warning', 'Allers simples a confirmer', 'Valide les allers simples voulus ou ajoute la zone d action de retour.', String(connectionCounts.partial)));
-  if (content.details.actionRatio < 0.75 && scenes.length) feedback.push(makeFeedback('warning', 'Interactions inegales', 'Ajoute des zones d action utiles dans les scenes encore peu interactives.'));
-  if (content.details.enigmaRatio < 1 && enigmas.length) feedback.push(makeFeedback('warning', 'Enigmes incompletes', 'Complete les solutions des enigmes incompletes.', `${content.details.solvedEnigmas}/${enigmas.length}`));
-  if (polish.details.moodRatio < 0.5 && scenes.length) feedback.push(makeFeedback('warning', 'Ambiance a renforcer', 'Ajoute quelques medias, sons ou effets visuels sur les scenes cles.'));
-  if (advancedAnalysis.variety.lacksVariety) feedback.push(makeFeedback('warning', 'Manque de variete', 'Varie les types d enigmes, les modes de reponse ou les actions disponibles.', `${advancedAnalysis.variety.enigmaTypes} type(s)`));
-  if (advancedAnalysis.difficulty.incoherent) feedback.push(makeFeedback('warning', 'Difficulte incoherente', 'La courbe de difficulte semble brusque: enigmes trop faciles/trop dures ou timer trop agressif.', `moy. ${advancedAnalysis.difficulty.average}/10`));
+  if (!acts.length) feedback.push(makeFeedback('warning', 'Structure absente', 'Crée au moins un acte pour structurer le parcours.'));
+  if (scenes.length < 4) feedback.push(makeFeedback('warning', 'Peu de scènes', 'Ajoute quelques scènes pour donner plus de matiere au parcours.', `${scenes.length}/4`));
+  if (items.length < 3) feedback.push(makeFeedback('warning', 'Inventaire léger', 'Ajoute des objets d’inventaire pour enrichir les interactions.', `${items.length}/3`));
+  if (enigmas.length < 2) feedback.push(makeFeedback('warning', 'Trop peu d énigmes', 'Ajoute des énigmes pour renforcer la progression du joueur.', `${enigmas.length}/2`));
+  if (!cinematics.length) feedback.push(makeFeedback('warning', 'Pas de cinematic', 'Ajoute une cinématique d introduction, de transition ou de fin.'));
+  if (map.details.mappedRatio < 1 && scenes.length) feedback.push(makeFeedback('warning', 'Scènes non mappees', 'Associe toutes les scènes importantes à une pièce du plan.', `${map.details.mappedSceneCount}/${scenes.length}`));
+  if (connectionCounts.partial) feedback.push(makeFeedback('warning', 'Allers simples a confirmer', 'Valide les allers simples voulus ou ajoute la zone d’action de retour.', String(connectionCounts.partial)));
+  if (content.details.actionRatio < 0.75 && scenes.length) feedback.push(makeFeedback('warning', 'Interactions inegales', 'Ajoute des zones d’action utiles dans les scènes encore peu interactives.'));
+  if (content.details.enigmaRatio < 1 && enigmas.length) feedback.push(makeFeedback('warning', 'Énigmes incompletes', 'Complete les solutions des énigmes incompletes.', `${content.details.solvedEnigmas}/${enigmas.length}`));
+  if (polish.details.moodRatio < 0.5 && scenes.length) feedback.push(makeFeedback('warning', 'Ambiance à renforcer', 'Ajoute quelques médias, sons ou effets visuels sur les scènes clés.'));
+  if (advancedAnalysis.variety.lacksVariety) feedback.push(makeFeedback('warning', 'Manque de variete', 'Varie les types d énigmes, les modes de réponse ou les actions disponibles.', `${advancedAnalysis.variety.enigmaTypes} type(s)`));
+  if (advancedAnalysis.difficulty.incoherent) feedback.push(makeFeedback('warning', 'Difficulté incoherente', 'La courbe de difficulté semble brusque: énigmes trop faciles/trop dures ou timer trop agressif.', `moy. ${advancedAnalysis.difficulty.average}/10`));
+  if (advancedAnalysis.heroAdventure.enabled && !advancedAnalysis.heroAdventure.count) {
+    feedback.push(makeFeedback('warning', 'Hero Adventure sans test', 'Ajoute au moins un Test de compétence dans une zone ou une réponse de conversation.', '0 test'));
+  }
+  if (advancedAnalysis.heroAdventure.withoutSkill.length) {
+    feedback.push(makeFeedback('danger', 'Test sans compétence valide', 'Certains tests Hero Adventure n’ont pas de compétence existante sélectionnée.', String(advancedAnalysis.heroAdventure.withoutSkill.length)));
+  }
+  if (advancedAnalysis.heroAdventure.withoutDifficulty.length) {
+    feedback.push(makeFeedback('warning', 'Test sans difficulté', 'Certains tests Hero Adventure n’ont pas de difficulté claire. Donne un seuil comme 10, 12 ou 15.', String(advancedAnalysis.heroAdventure.withoutDifficulty.length)));
+  }
+  if (advancedAnalysis.heroAdventure.withoutFailureBranch.length) {
+    feedback.push(makeFeedback('warning', 'Échec sans conséquence', 'Certains tests Hero Adventure n ont ni message, ni perte de PV, ni branche d’échec.', String(advancedAnalysis.heroAdventure.withoutFailureBranch.length)));
+  }
+  if (advancedAnalysis.heroAdventure.costly.length) {
+    feedback.push(makeFeedback('danger', 'Coût mana impossible', 'Certains tests coutent plus de mana que le maximum du héros.', `${advancedAnalysis.heroAdventure.costly.length}/${advancedAnalysis.heroAdventure.maxMana}`));
+  }
+  if (advancedAnalysis.heroAdventure.punishing.length) {
+    feedback.push(makeFeedback('warning', 'Échec trop punitif', "Certains tests peuvent retirer tous les PV du héros en un seul échec. Vérifie que c'est volontaire.", String(advancedAnalysis.heroAdventure.punishing.length)));
+  }
+  if (advancedAnalysis.heroCombat.enabled && !advancedAnalysis.heroCombat.count) {
+    feedback.push(makeFeedback('warning', 'Mode héros sans combat', 'Ajoute au moins un combat Hero pour exploiter les PV, les compétences et les récompenses.', '0 combat'));
+  }
+  if (advancedAnalysis.heroCombat.withoutSkill.length) {
+    feedback.push(makeFeedback('danger', 'Combat sans compétence valide', 'Certains combats Hero n’ont pas de compétence existante sélectionnée.', String(advancedAnalysis.heroCombat.withoutSkill.length)));
+  }
+  if (advancedAnalysis.heroCombat.withoutDifficulty.length || advancedAnalysis.heroCombat.withoutEnemyHealth.length) {
+    feedback.push(makeFeedback('warning', 'Combat incomplet', 'Certains combats manquent de difficulté ou de PV ennemi.', String(advancedAnalysis.heroCombat.withoutDifficulty.length + advancedAnalysis.heroCombat.withoutEnemyHealth.length)));
+  }
+  if (advancedAnalysis.heroCombat.withoutVictoryBranch.length || advancedAnalysis.heroCombat.withoutDefeatBranch.length) {
+    feedback.push(makeFeedback('danger', 'Combat sans issue claire', 'Chaque combat devrait avoir une suite de victoire et une suite de défaite.', String(advancedAnalysis.heroCombat.withoutVictoryBranch.length + advancedAnalysis.heroCombat.withoutDefeatBranch.length)));
+  }
+  if (advancedAnalysis.heroCombat.withoutRewardOrNarrativePayoff.length) {
+    feedback.push(makeFeedback('warning', 'Combat sans gain narratif', 'Ajoute une récompense, une révélation ou une scène de victoire utile aux combats concernes.', String(advancedAnalysis.heroCombat.withoutRewardOrNarrativePayoff.length)));
+  }
+  if (advancedAnalysis.heroCombat.lethalEnemyDamage.length) {
+    feedback.push(makeFeedback('warning', 'Dégâts ennemis trop forts', "Certains ennemis peuvent retirer tous les PV du héros en une attaque. Vérifie que c'est volontaire.", String(advancedAnalysis.heroCombat.lethalEnemyDamage.length)));
+  }
   if (playerScore.time.score < 6) feedback.push(makeFeedback('warning', 'Rythme joueur a ajuster', 'Le temps estime semble trop court ou trop long pour une session confortable.', playerScore.time.label));
-  if (playerScore.actions.score < 6) feedback.push(makeFeedback('warning', 'Volume d actions desequilibre', 'Le parcours contient trop peu ou trop d actions utiles pour le temps estime.', String(playerScore.actions.count)));
+  if (playerScore.actions.score < 6) feedback.push(makeFeedback('warning', 'Volume d’actions desequilibre', 'Le parcours contient trop peu ou trop d’actions utiles pour le temps estime.', String(playerScore.actions.count)));
   if (playerScore.complexity.score < 6) feedback.push(makeFeedback('warning', 'Complexite joueur a lisser', 'La charge mentale joueur semble trop faible, trop forte ou trop concentree.', `${playerScore.complexity.value}/10`));
 
-  if (!content.details.startValid) feedback.push(makeFeedback('danger', 'Depart introuvable', 'Verifie le point de depart du jeu.'));
-  if (!map.details.hasStartRoom) feedback.push(makeFeedback('danger', 'Depart absent du plan', 'Marque une piece comme depart dans le plan.'));
-  if (connectionCounts.missing) feedback.push(makeFeedback('danger', 'Liaisons bloquees', 'Certaines liaisons du plan ne correspondent a aucune zone d action.', String(connectionCounts.missing)));
-  if (content.details.deadEndActions) feedback.push(makeFeedback('danger', 'Certaines zones ne menent a rien', 'Corrige les zones qui pointent vers une scene, une cinematic ou une enigme manquante.', String(content.details.deadEndActions)));
-  if (advancedAnalysis.deadPaths.count) feedback.push(makeFeedback('danger', 'Chemins morts', 'Des scenes atteignables ne proposent aucune suite et ne sont pas marquees comme fin.', String(advancedAnalysis.deadPaths.count)));
-  if (advancedAnalysis.blockedProgression.count) feedback.push(makeFeedback('danger', 'Progression bloquee', 'Certaines scenes ou conditions de logique semblent impossibles a atteindre.', String(advancedAnalysis.blockedProgression.count)));
+  if (!content.details.startValid) feedback.push(makeFeedback('danger', 'Départ introuvable', 'Vérifie le point de départ du jeu.'));
+  if (!map.details.hasStartRoom) feedback.push(makeFeedback('danger', 'Départ absent du plan', 'Marque une pièce comme départ dans le plan.'));
+  if (connectionCounts.missing) feedback.push(makeFeedback('danger', 'Liaisons bloquées', 'Certaines liaisons du plan ne correspondent a aucune zone d’action.', String(connectionCounts.missing)));
+  if (content.details.deadEndActions) feedback.push(makeFeedback('danger', 'Certaines zones ne menent a rien', 'Corrige les zones qui pointent vers une scène, une cinématique ou une énigme manquante.', String(content.details.deadEndActions)));
+  if (advancedAnalysis.deadPaths.count) feedback.push(makeFeedback('danger', 'Chemins morts', 'Des scènes atteignables ne proposent aucune suite et ne sont pas marquees comme fin.', String(advancedAnalysis.deadPaths.count)));
+  if (advancedAnalysis.blockedProgression.count) feedback.push(makeFeedback('danger', 'Progression bloquée', 'Certaines scènes ou conditions de logique semblent impossibles a atteindre.', String(advancedAnalysis.blockedProgression.count)));
 
   if (!feedback.length) {
-    feedback.push(makeFeedback('success', 'Projet coherent', 'Les dernieres ameliorations seront surtout du polish: ambiance, medias, rythme et tests joueur.'));
+    feedback.push(makeFeedback('success', 'Projet cohérent', 'Les dernières améliorations seront surtout du polish: ambiance, médias, rythme et tests joueur.'));
   }
 
   return feedback;
 };
 
 const getConclusion = (score) => {
-  if (score >= 9) return 'Projet tres solide: le parcours est lisible, coherent et presque pret a etre teste en conditions reelles.';
+  if (score >= 9) return 'Projet très solide: le parcours est lisible, cohérent et presque prêt à être testé en conditions réelles.';
   if (score >= 7) return 'Bonne base: le jeu est jouable, avec quelques points de coherence ou de contenu a renforcer.';
-  if (score >= 5) return 'Projet prometteur: la structure existe, mais le plan et les interactions doivent encore etre consolides.';
-  return 'Projet encore en construction: commence par relier les scenes, poser le depart et ajouter des interactions cles.';
+  if (score >= 5) return 'Projet prometteur: la structure existe, mais le plan et les interactions doivent encore être consolides.';
+  return 'Projet encore en construction: commence par relier les scènes, poser le départ et ajouter des interactions clés.';
 };
 
 const normalizeSectionScore = (section) => (
@@ -720,6 +889,7 @@ export function calculateProjectScore(project = {}) {
     transitions,
   });
   const playerScore = buildPlayerScore({
+    acts,
     scenes,
     items,
     enigmas,
@@ -800,13 +970,28 @@ export function calculateProjectScore(project = {}) {
       blockedProgression: advancedAnalysis.blockedProgression.count,
       varietyIssues: advancedAnalysis.variety.lacksVariety ? 1 : 0,
       difficultyIssues: advancedAnalysis.difficulty.incoherent ? 1 : 0,
+      heroSkillChecks: advancedAnalysis.heroAdventure.count,
+      heroSkillCheckIssues: advancedAnalysis.heroAdventure.withoutSkill.length
+        + advancedAnalysis.heroAdventure.withoutDifficulty.length
+        + advancedAnalysis.heroAdventure.withoutFailureBranch.length
+        + advancedAnalysis.heroAdventure.costly.length
+        + advancedAnalysis.heroAdventure.punishing.length,
+      heroCombats: advancedAnalysis.heroCombat.count,
+      heroCombatIssues: advancedAnalysis.heroCombat.withoutEnemy.length
+        + advancedAnalysis.heroCombat.withoutEnemyHealth.length
+        + advancedAnalysis.heroCombat.withoutSkill.length
+        + advancedAnalysis.heroCombat.withoutDifficulty.length
+        + advancedAnalysis.heroCombat.withoutVictoryBranch.length
+        + advancedAnalysis.heroCombat.withoutDefeatBranch.length
+        + advancedAnalysis.heroCombat.withoutRewardOrNarrativePayoff.length
+        + advancedAnalysis.heroCombat.lethalEnemyDamage.length,
     },
     summary: [
       `Structure: ${sections.structure.toFixed(1)}/4`,
       `Plan: ${sections.map.toFixed(1)}/3,7`,
       `Contenu: ${sections.content.toFixed(1)}/2`,
       `Polish: ${sections.polish.toFixed(1)}/0,3`,
-      `${acts.length} acte(s), ${scenes.length} scene(s), ${items.length} objet(s), ${enigmas.length} enigme(s), ${cinematics.length} cinematic(s)`,
+      `${acts.length} acte(s), ${scenes.length} scène(s), ${items.length} objet(s), ${enigmas.length} énigme(s), ${cinematics.length} cinematic(s)`,
     ].join(' - '),
   };
 }

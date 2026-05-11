@@ -54,8 +54,71 @@ const extensionFromMime = (mimeType = '') => {
 
 const deepClone = (value) => JSON.parse(JSON.stringify(value || {}));
 
+const ROUTE_CANVAS_ROOM_LIMIT = 15;
+const DEFAULT_ROUTE_CANVAS_ID = 'route_canvas_1';
+
+const makeDefaultCanvas = (index = 0) => ({
+  id: index === 0 ? DEFAULT_ROUTE_CANVAS_ID : `route_canvas_${index + 1}`,
+  name: `Canvas ${index + 1}`,
+});
+
+export const normalizeRouteMapCanvasesForExport = (routeMap) => {
+  if (!routeMap || typeof routeMap !== 'object') return;
+
+  const sourceCanvases = Array.isArray(routeMap.canvases) && routeMap.canvases.length
+    ? routeMap.canvases
+    : [makeDefaultCanvas(0)];
+  const usedCanvasIds = new Set();
+
+  routeMap.canvases = sourceCanvases.map((canvas, index) => {
+    const fallback = makeDefaultCanvas(index);
+    const source = canvas && typeof canvas === 'object' ? canvas : {};
+    let id = typeof source.id === 'string' && source.id.trim() ? source.id : fallback.id;
+    let dedupeIndex = index + 1;
+
+    while (usedCanvasIds.has(id)) {
+      id = `route_canvas_${dedupeIndex + 1}`;
+      dedupeIndex += 1;
+    }
+
+    usedCanvasIds.add(id);
+    return {
+      ...source,
+      id,
+      name: typeof source.name === 'string' && source.name.trim() ? source.name : fallback.name,
+    };
+  });
+
+  const ensureCanvas = (canvasId) => {
+    if (routeMap.canvases.some((canvas) => canvas.id === canvasId)) return;
+    routeMap.canvases.push({ id: canvasId, name: `Canvas ${routeMap.canvases.length + 1}` });
+  };
+
+  const rooms = Array.isArray(routeMap.rooms) ? routeMap.rooms : [];
+  rooms.forEach((room, index) => {
+    if (!room || typeof room !== 'object') return;
+    const fallbackCanvasIndex = Math.floor(index / ROUTE_CANVAS_ROOM_LIMIT);
+    const fallbackCanvas = routeMap.canvases[fallbackCanvasIndex] || makeDefaultCanvas(fallbackCanvasIndex);
+
+    if (!routeMap.canvases[fallbackCanvasIndex]) {
+      routeMap.canvases.push(fallbackCanvas);
+    }
+
+    const canvasId = typeof room.canvasId === 'string' && room.canvasId.trim()
+      ? room.canvasId
+      : fallbackCanvas.id;
+    room.canvasId = canvasId;
+    ensureCanvas(canvasId);
+  });
+
+  if (routeMap.actMaps && typeof routeMap.actMaps === 'object') {
+    Object.values(routeMap.actMaps).forEach(normalizeRouteMapCanvasesForExport);
+  }
+};
+
 export function buildExportProjectWithAssets(project, zip) {
   const nextProject = deepClone(project);
+  normalizeRouteMapCanvasesForExport(nextProject.routeMap);
   const usedPaths = new Map();
 
   const uniqueAssetPath = (folder, preferredName, mimeType) => {

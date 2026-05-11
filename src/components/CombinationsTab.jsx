@@ -2,11 +2,11 @@ const FIELD_HELP = {
   addCombination: "Crée une nouvelle recette d’inventaire. Le joueur devra combiner deux objets pour obtenir un result.",
   itemA: "Premier objet nécessaire à la combinaison. L’ordre avec l’objet 2 sert surtout à organiser la recette dans l’éditeur.",
   itemB: "Deuxième objet nécessaire à la combinaison. Choisis un objet différent si tu veux éviter les recettes ambiguës.",
-  result: "Objet obtenu quand la combinaison réussit. Il peut ensuite servir dans une zone, une enigme ou une autre combinaison.",
+  result: "Objet obtenu quand la combinaison réussit. Il peut ensuite servir dans une zone, une énigme ou une autre combinaison.",
   message: "Texte affiché au joueur après une combinaison réussie. Il confirme le result ou donne un indice sur la suite.",
-  consume: "Retire les deux objets sources de l'inventaire quand la combinaison reussit.",
+  consume: "Retire les deux objets sources de l'inventaire quand la combinaison réussit.",
   conditions: "Conditions a valider avant la combinaison, separees par des virgules. Exemple : has_oil.",
-  failMessage: "Texte affiche si la recette existe mais que ses conditions ne sont pas remplies.",
+  failMessage: "Texte affiché si la recette existe mais que ses conditions ne sont pas remplies.",
 };
 
 const HelpLabel = ({ children, help, className = '' }) => (
@@ -95,7 +95,7 @@ export default function CombinationsTab({ project, addCombination, getItemById, 
                 if (target) target.conditions = e.target.value.split(',').map((entry) => entry.trim()).filter(Boolean);
               })}
             />
-            <HelpLabel help={FIELD_HELP.failMessage}>Message d'echec</HelpLabel>
+            <HelpLabel help={FIELD_HELP.failMessage}>Message d'échec</HelpLabel>
             <textarea value={combo.failMessage || ''} onChange={(e) => patchProject((draft) => {
               const target = (draft.combinations || []).find((c) => c.id === combo.id); if (target) target.failMessage = e.target.value;
             })} />

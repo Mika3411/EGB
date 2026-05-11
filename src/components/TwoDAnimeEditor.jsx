@@ -24,18 +24,21 @@ import {
 } from 'lucide-react';
 import '../styles/2d-anime.css';
 import { getAiAuthHeaders } from '../utils/aiAuthHeaders';
+import { createIndexedDraftStorage } from '../utils/indexedDraftStorage';
+import { getAnime2dDraftStorageKey } from '../utils/storageHelpers';
+import { showConfirm } from './AccessibleDialog';
 
 const ANIMATION_PRESETS = [
   { id: 'none', label: 'Aucun', description: 'Aucune animation.', duration: 1000 },
-  { id: 'idle-breathe', label: 'Respiration', description: 'Léger scale vertical pour donner vie a un personnage.', duration: 2400 },
+  { id: 'idle-breathe', label: 'Respiration', description: 'Léger scale vertical pour donner vie à un personnage.', duration: 2400 },
   { id: 'float', label: 'Flottement', description: 'Mouvement doux vers le haut et le bas.', duration: 3200 },
   { id: 'shake', label: 'Tremblement', description: 'Secousse courte pour peur, impact ou surprise.', duration: 650 },
-  { id: 'blink', label: 'Clignotement', description: 'Variation rapide d opacite pour ecran, lumière ou apparition.', duration: 900 },
+  { id: 'blink', label: 'Clignotement', description: 'Variation rapide d opacite pour écran, lumière ou apparition.', duration: 900 },
   { id: 'reveal', label: 'Apparition', description: 'Entree progressive avec zoom et fondu.', duration: 1100 },
   { id: 'talk', label: 'Parle', description: 'Micro mouvement pour accompagner un dialogue.', duration: 520 },
   { id: 'glow', label: 'Aura', description: 'Halo pulse pour objet magique ou indice important.', duration: 1800 },
   { id: 'embers', label: 'Braises', description: 'Lueur chaude et petites particules qui montent sur les bords brules.', duration: 2200 },
-  { id: 'look-around', label: 'Regard', description: 'Balancement leger de tété ou silhouette.', duration: 1600 },
+  { id: 'look-around', label: 'Regard', description: 'Balancement léger de tête ou silhouette.', duration: 1600 },
 ];
 
 const TRANSITION_EFFECTS = [
@@ -58,39 +61,38 @@ const CHARACTER_STATES = [
 ];
 
 const BACKDROP_PRESETS = [
-  ['room', 'Piece sombre'],
-  ['school', 'Salle de classe'],
-  ['forest', 'Foret'],
+  ['room', 'Pièce sombre'],
+  ['school', 'Salle dé classe'],
+  ['forest', 'Forêt'],
   ['lab', 'Laboratoire'],
 ];
 
 const FIELD_HELP = {
-  stepStart: "Moment ou cette step commence dans la sequence. 0 correspond au debut de l animation.",
-  stepDuration: "Temps pendant lequel cette step reste active. Une duree courte donne un rythme rapide, une duree longue laisse le joueur lire.",
-  stepAction: "Choisit ce que l step fait aux images : continuer la scene, afficher un calque ou remplacer l image visible.",
-  stepImage: "Calque utilise par cette step. Tu peux choisir une image existante ou en ajouter une nouvelle.",
-  stepTransitionIn: "Effet utilise quand l image apparait pendant cette step.",
-  stepTransitionOut: "Effet utilise quand l image disparait ou laisse la place à la suite.",
-  stepNarration: "Texte affiché pendant l step. Garde-le court pour accompagner l image sans ralentir la lecture.",
+  stepStart: "Moment où cette étape commence dans la séquence. 0 correspond au début de l’animation.",
+  stepDuration: "Temps pendant lequel cette étape reste active. Une durée courte donne un rythme rapide, une durée longue laisse le joueur lire.",
+  stepAction: "Choisit ce que l'étape fait aux images : continuer la scène, afficher un calque ou remplacer l’image visible.",
+  stepImage: "Calque utilisé par cette étape. Tu peux choisir une image existante ou en ajouter une nouvelle.",
+  stepTransitionIn: "Effet utilisé quand l’image apparait pendant cette étape.",
+  stepTransitionOut: "Effet utilisé quand l’image disparait ou laisse la place à la suite.",
+  stepNarration: "Texte affiché pendant l'étape. Garde-le court pour accompagner l’image sans ralentir la lecture.",
   layerName: "Nom interne du calque. Utilise un nom clair pour le retrouver dans la timeline et le storyboard.",
   layerX: "Position horizontale du centre du calque en pourcentage du canvas.",
   layerY: "Position verticale du centre du calque en pourcentage du canvas.",
-  layerSize: "Largeur du calque en pourcentage du canvas. La hauteur suit automatiquement le format de l image.",
+  layerSize: "Largeur du calque en pourcentage du canvas. La hauteur suit automatiquement le format de l’image.",
   layerOpacity: "Transparence du calque. 100 est totalement visible, 0 est invisible.",
   layerDuration: "Vitesse du preset d animation du calque, en millisecondes.",
   layerDelay: "Retard avant le lancement du mouvement du calque, en millisecondes.",
   layerLoop: "Repété le mouvement en continu. Utile pour respiration, aura ou flottement.",
-  brushSize: "Taille du pinceau utilise pour gommer ou restaurer l image selectionnee.",
-  cropLeft: "Position du bord gauche du recadrage dans l image.",
-  cropTop: "Position du bord haut du recadrage dans l image.",
+  brushSize: "Taille du pinceau utilisé pour gommer ou restaurer l’image sélectionnée.",
+  cropLeft: "Position du bord gauche du recadrage dans l’image.",
+  cropTop: "Position du bord haut du recadrage dans l’image.",
   cropWidth: "Largeur de la zone conservee par le recadrage.",
   cropHeight: "Hauteur de la zone conservee par le recadrage.",
 };
 
 const LEGACY_DRAFT_STORAGE_KEY = 'escapeGameBuilder.2dAnimeDraft.v1';
-const DRAFT_STORAGE_KEY_PREFIX = 'escapeGameBuilder.2dAnimeDraft.v2';
 const ANIME_DRAFT_DB = 'escape-game-builder-2d-anime-drafts';
-const ANIME_DRAFT_STORE = 'drafts';
+const animeDraftStorage = createIndexedDraftStorage(ANIME_DRAFT_DB);
 const LAYER_SIZE_MIN = 6;
 const LAYER_SIZE_MAX = 180;
 const LAYER_HEIGHT_MIN = 6;
@@ -167,74 +169,8 @@ const makeSafeFilename = (value = 'image') => (
     .slice(0, 80) || 'image'
 );
 
-const makeDraftStorageKey = (value = 'default') => {
-  const safeValue = String(value || 'default')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 96) || 'default';
-  return `${DRAFT_STORAGE_KEY_PREFIX}.${safeValue}`;
-};
-
-const openAnimeDraftDb = () => new Promise((resolve, reject) => {
-  if (typeof window === 'undefined' || !window.indexedDB) {
-    reject(new Error('IndexedDB indisponible.'));
-    return;
-  }
-  const request = window.indexedDB.open(ANIME_DRAFT_DB, 1);
-  request.onupgradeneeded = () => {
-    request.result.createObjectStore(ANIME_DRAFT_STORE, { keyPath: 'id' });
-  };
-  request.onsuccess = () => resolve(request.result);
-  request.onerror = () => reject(request.error);
-});
-
-const readAnimeDraft = async (id) => {
-  const db = await openAnimeDraftDb();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(ANIME_DRAFT_STORE, 'readonly');
-    const request = transaction.objectStore(ANIME_DRAFT_STORE).get(id);
-    request.onsuccess = () => resolve(request.result?.value || null);
-    request.onerror = () => reject(request.error);
-    transaction.oncomplete = () => db.close();
-  });
-};
-
-const writeAnimeDraft = async (id, value) => {
-  const db = await openAnimeDraftDb();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(ANIME_DRAFT_STORE, 'readwrite');
-    transaction.objectStore(ANIME_DRAFT_STORE).put({ id, value, updatedAt: Date.now() });
-    transaction.oncomplete = () => {
-      db.close();
-      resolve();
-    };
-    transaction.onerror = () => {
-      db.close();
-      reject(transaction.error);
-    };
-  });
-};
-
-const deleteAnimeDraft = async (id) => {
-  const db = await openAnimeDraftDb();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(ANIME_DRAFT_STORE, 'readwrite');
-    transaction.objectStore(ANIME_DRAFT_STORE).delete(id);
-    transaction.oncomplete = () => {
-      db.close();
-      resolve();
-    };
-    transaction.onerror = () => {
-      db.close();
-      reject(transaction.error);
-    };
-  });
-};
-
 const readBestAnimeDraft = async (id) => {
-  const exactDraft = await readAnimeDraft(id).catch(() => null);
+  const exactDraft = await animeDraftStorage.read(id).catch(() => null);
   if (exactDraft?.layers?.length) return exactDraft;
   const localDraft = readStoredDraft(id);
   if (localDraft?.layers?.length) return localDraft;
@@ -245,7 +181,7 @@ const writeBestAnimeDraft = async (id, value) => {
   let indexedSaved = false;
   let localSaved = false;
   try {
-    await writeAnimeDraft(id, value);
+    await animeDraftStorage.write(id, value);
     indexedSaved = true;
   } catch {
     indexedSaved = false;
@@ -264,7 +200,7 @@ const writeBestAnimeDraft = async (id, value) => {
 };
 
 const deleteBestAnimeDraft = async (id) => {
-  await deleteAnimeDraft(id).catch(() => {});
+  await animeDraftStorage.remove(id).catch(() => {});
   if (typeof window !== 'undefined') {
     try {
       window.localStorage.removeItem(id);
@@ -381,7 +317,7 @@ const removeImageBackgroundWithAi = async (src, onProgress) => {
   const module = await import('@imgly/background-removal');
   const removeBackground = module.default || module.removeBackground;
   if (typeof removeBackground !== 'function') {
-    throw new Error('Module de detourage IA indisponible.');
+    throw new Error('Module dé detourage IA indisponible.');
   }
 
   const blob = await removeBackground(src, {
@@ -393,7 +329,7 @@ const removeImageBackgroundWithAi = async (src, onProgress) => {
     },
     progress: (key, current, total) => {
       if (!total) {
-        onProgress?.('Telechargement du modele IA...');
+        onProgress?.('Téléchargement du modele IA...');
         return;
       }
       const percent = Math.max(0, Math.min(100, Math.round((current / total) * 100)));
@@ -746,7 +682,7 @@ const normalizeImportedDraft = (payload) => {
   return {
     layers: importedLayers,
     selectedBackdrop: payload.selectedBackdrop || payload.backdrop || 'room',
-    sceneName: payload.sceneName || 'Scene animee',
+    sceneName: payload.sceneName || 'Scène animee',
     cinematicSteps: Array.isArray(payload.cinematicSteps) && payload.cinematicSteps.length
       ? payload.cinematicSteps
       : [makeCinematicStep({ mode: 'scene', narration: '' })],
@@ -978,7 +914,7 @@ export default function TwoDAnimeEditor({
   onRegisterSaveBeforeLeave = null,
   onBackToBuilder = null,
 } = {}) {
-  const storageKey = makeDraftStorageKey(draftStorageKey || projectName || user?.id || 'default');
+  const storageKey = getAnime2dDraftStorageKey(draftStorageKey || projectName || user?.id || 'default');
   const initialDraftRef = useRef(readStoredDraft(storageKey));
   const initialProjectDraftRef = useRef(projectDraft);
   const savedDraftSignatureRef = useRef(initialProjectDraftRef.current?.layers?.length
@@ -995,7 +931,7 @@ export default function TwoDAnimeEditor({
   );
   const [selectedBackdrop, setSelectedBackdrop] = useState(initialDraftRef.current?.selectedBackdrop || 'room');
   const [sceneName, setSceneName] = useState(
-    initialDraftRef.current?.sceneName && initialDraftRef.current.sceneName !== 'Scene animee'
+    initialDraftRef.current?.sceneName && initialDraftRef.current.sceneName !== 'Scène animee'
       ? initialDraftRef.current.sceneName
       : fallbackProjectName,
   );
@@ -1004,7 +940,7 @@ export default function TwoDAnimeEditor({
       id: 'cine-step-intro',
       at: 0,
       duration: 2,
-      narration: 'La scene commence.',
+      narration: 'La scène commence.',
       mode: 'scene',
     }),
   ]);
@@ -1130,7 +1066,7 @@ export default function TwoDAnimeEditor({
         : restoredLayers[0]?.id || '',
     );
     setSelectedBackdrop(draft.selectedBackdrop || 'room');
-    setSceneName(draft.sceneName && draft.sceneName !== 'Scene animee' ? draft.sceneName : fallbackProjectName);
+    setSceneName(draft.sceneName && draft.sceneName !== 'Scène animee' ? draft.sceneName : fallbackProjectName);
     const nextSteps = Array.isArray(draft.cinematicSteps) && draft.cinematicSteps.length
       ? draft.cinematicSteps
       : [makeCinematicStep({ mode: 'scene', narration: '' })];
@@ -1417,7 +1353,7 @@ export default function TwoDAnimeEditor({
         originalSrc: selectedLayer.originalSrc || selectedLayer.src,
         name: selectedLayer.name.replace(/\s*\(detoure\)$/i, '') + ' (detoure)',
       });
-      setSaveStatus('Arriere-plan supprime sur le calque selectionne.');
+      setSaveStatus('Arriere-plan supprime sur le calque sélectionne.');
     } catch (error) {
       setExportNotice(error.message || 'Detourage impossible.');
     } finally {
@@ -1578,7 +1514,7 @@ export default function TwoDAnimeEditor({
       id: 'cine-step-intro',
       at: 0,
       duration: 2,
-      narration: 'La scene commence.',
+      narration: 'La scène commence.',
       mode: 'scene',
     }),
   ];
@@ -1597,9 +1533,12 @@ export default function TwoDAnimeEditor({
   };
 
   const createNewProject = async () => {
-    const confirmed = window.confirm(
-      'Nouveau projet ? Le projet en cours sera supprime. Cette action est irreversible.',
-    );
+    const confirmed = await showConfirm({
+      title: 'Nouveau projet',
+      message: 'Nouveau projet ? Le projet en cours sera supprimé. Cette action est irréversible.',
+      confirmLabel: 'Créer',
+      variant: 'danger',
+    });
     if (!confirmed) return;
 
     resetDraft();
@@ -1616,8 +1555,8 @@ export default function TwoDAnimeEditor({
     });
     onDirtyChange(false);
     setSaveStatus(projectCleared
-      ? 'Nouveau projet cree.'
-      : 'Nouveau projet cree sur cet appareil.');
+      ? 'Nouveau projet crée.'
+      : 'Nouveau projet crée sur cet appareil.');
   };
 
   const importJsonProject = async (event) => {
@@ -1633,7 +1572,7 @@ export default function TwoDAnimeEditor({
       setLayers(draft.layers.map(normalizeLayerDimensions));
       setSelectedLayerId(draft.layers[0]?.id || '');
       setSelectedBackdrop(draft.selectedBackdrop);
-      setSceneName(draft.sceneName && draft.sceneName !== 'Scene animee' ? draft.sceneName : fallbackProjectName);
+      setSceneName(draft.sceneName && draft.sceneName !== 'Scène animee' ? draft.sceneName : fallbackProjectName);
       setCinematicSteps(draft.cinematicSteps);
       setSelectedCinematicStepId(draft.cinematicSteps[0]?.id || '');
       setCurrentTime(Number(draft.cinematicSteps[0]?.at || 0));
@@ -1871,10 +1810,10 @@ export default function TwoDAnimeEditor({
 
   const downloadSelectedImage = async () => {
     try {
-      if (!selectedLayer?.src) throw new Error('Selectionne une image a enregistrer.');
+      if (!selectedLayer?.src) throw new Error('Sélectionne une image a enregistrer.');
       const blob = await dataUrlToBlob(selectedLayer.src);
       downloadBlob(blob, `${makeSafeFilename(selectedLayer.name || 'image')}.png`);
-      setExportNotice('Image selectionnee enregistree.');
+      setExportNotice('Image sélectionnée enregistrée.');
     } catch (error) {
       setExportNotice(error.message || 'Enregistrement image impossible.');
     }
@@ -1909,7 +1848,7 @@ export default function TwoDAnimeEditor({
             <MenuItem shortcut="Ctrl+D" onClick={duplicateSelectedLayer} disabled={!selectedLayer}>Dupliquer le calque</MenuItem>
             <MenuItem onClick={() => moveSelectedLayer('up')} disabled={!selectedLayer || layers.findIndex((layer) => layer.id === selectedLayer.id) === 0}>Remonter</MenuItem>
             <MenuItem onClick={() => moveSelectedLayer('down')} disabled={!selectedLayer || layers.findIndex((layer) => layer.id === selectedLayer.id) === layers.length - 1}>Descendre</MenuItem>
-            <MenuItem onClick={() => patchSelectedLayer({ locked: !selectedLayer?.locked })} disabled={!selectedLayer}>{selectedLayer?.locked ? 'Deverrouiller' : 'Verrouiller'}</MenuItem>
+            <MenuItem onClick={() => patchSelectedLayer({ locked: !selectedLayer?.locked })} disabled={!selectedLayer}>{selectedLayer?.locked ? 'Deverrouilléer' : 'Verrouiller'}</MenuItem>
             <MenuItem shortcut="Suppr" danger onClick={removeSelectedLayer} disabled={!selectedLayer}>Supprimer</MenuItem>
           </Menu>
           <Menu label="Affichage" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
@@ -1925,7 +1864,7 @@ export default function TwoDAnimeEditor({
             <MenuItem onClick={removeSelectedBackgroundAi} disabled={!selectedLayer?.src || isRemovingBackgroundAi}>
               {isRemovingBackgroundAi ? 'Detourage IA en cours...' : 'Detourage IA local'}
             </MenuItem>
-            <MenuItem shortcut="V" onClick={() => setRetouchMode('none')}>Deplacer</MenuItem>
+            <MenuItem shortcut="V" onClick={() => setRetouchMode('none')}>Déplacer</MenuItem>
             <MenuItem shortcut="G" onClick={() => setRetouchMode('erase')} disabled={!selectedLayer?.src}>Gommer</MenuItem>
             <MenuItem shortcut="R" onClick={() => setRetouchMode('restore')} disabled={!selectedLayer?.originalSrc}>Restaurer</MenuItem>
             <MenuItem shortcut="C" onClick={() => setRetouchMode('crop')} disabled={!selectedLayer?.src}>Rogner</MenuItem>
@@ -1981,7 +1920,7 @@ export default function TwoDAnimeEditor({
         <div className="anime-panel-head">
           <div>
             <span className="anime-kicker">Storyboard</span>
-            <h2>Cinematic</h2>
+            <h2>Cinématique</h2>
           </div>
           <Clapperboard size={20} />
         </div>
@@ -2003,7 +1942,7 @@ export default function TwoDAnimeEditor({
               }}
             >
               <strong>{Number(step.at || 0).toFixed(1)}s</strong>
-              <span>{step.mode === 'replace' ? 'Remplacer' : step.mode === 'add' ? 'Afficher' : 'Scene'}</span>
+              <span>{step.mode === 'replace' ? 'Remplacer' : step.mode === 'add' ? 'Afficher' : 'Scène'}</span>
               <small>{step.narration || 'Sans narration'}</small>
             </button>
           ))}
@@ -2013,7 +1952,7 @@ export default function TwoDAnimeEditor({
           <div className="anime-cinematic-editor" data-tour="anime-step-editor">
             {sortedCinematicSteps.filter((step) => step.id === selectedCinematicStepId).map((step) => (
               <div key={step.id} className="anime-cinematic-form">
-                <Field label="Depart" help={FIELD_HELP.stepStart}>
+                <Field label="Départ" help={FIELD_HELP.stepStart}>
                   <input
                     type="number"
                     min="0"
@@ -2024,7 +1963,7 @@ export default function TwoDAnimeEditor({
                     onBlur={() => commitDraftStepNumber(step.id, 'at', 0, (value) => patchCinematicStepStart(step.id, value))}
                   />
                 </Field>
-                <Field label="Duree" help={FIELD_HELP.stepDuration}>
+                <Field label="Durée" help={FIELD_HELP.stepDuration}>
                   <input
                     type="number"
                     min="0.2"
@@ -2037,7 +1976,7 @@ export default function TwoDAnimeEditor({
                 </Field>
                 <Field label="Action image" help={FIELD_HELP.stepAction} className="anime-field-wide" data-tour="anime-step-action">
                   <select value={step.mode} onChange={(event) => patchCinematicStep(step.id, { mode: event.target.value })}>
-                    <option value="scene">Continuer la scene</option>
+                    <option value="scene">Continuer la scène</option>
                     <option value="add">Afficher une image</option>
                     <option value="replace">Remplacer par une image</option>
                   </select>
@@ -2088,7 +2027,7 @@ export default function TwoDAnimeEditor({
                 </Field>
                 <button type="button" className="anime-tool-button danger" onClick={() => removeCinematicStep(step.id)}>
                   <Trash2 size={16} />
-                  <span>Supprimer l'step</span>
+                  <span>Supprimer l'étape</span>
                 </button>
               </div>
             ))}
@@ -2240,7 +2179,7 @@ export default function TwoDAnimeEditor({
             <div className="anime-ai-loading" role="status" aria-live="polite">
               <span className="anime-ai-spinner" />
               <strong>Detourage IA en cours</strong>
-              <small>{aiBackgroundStatus || 'Analyse de l image...'}</small>
+              <small>{aiBackgroundStatus || 'Analyse de l’image...'}</small>
             </div>
           ) : null}
         </div>
@@ -2303,7 +2242,7 @@ export default function TwoDAnimeEditor({
           <>
             <div className="anime-inspector-actions" data-tour="anime-layer-lock">
               <IconButton
-                title={selectedLayer.locked ? 'Deverrouiller l image' : 'Verrouiller l image'}
+                title={selectedLayer.locked ? 'Deverrouilléer l’image' : 'Verrouiller l’image'}
                 active={selectedLayer.locked}
                 onClick={() => patchSelectedLayer({ locked: !selectedLayer.locked })}
               >
@@ -2323,7 +2262,7 @@ export default function TwoDAnimeEditor({
                 <ArrowUp size={18} />
               </IconButton>
               <IconButton
-                title="Passer derriere"
+                title="Passer derrière"
                 onClick={() => moveSelectedLayer('down')}
                 disabled={layers.findIndex((layer) => layer.id === selectedLayer.id) === layers.length - 1}
               >
@@ -2387,7 +2326,7 @@ export default function TwoDAnimeEditor({
               <Field label="Opacite (%)" help={FIELD_HELP.layerOpacity}>
                 <input type="number" min="0" max="100" step="1" value={selectedLayer.opacity} onChange={(event) => patchSelectedLayer({ opacity: clamp(event.target.value, 0, 100) })} />
               </Field>
-              <Field label="Duree (ms)" help={FIELD_HELP.layerDuration}>
+              <Field label="Durée (ms)" help={FIELD_HELP.layerDuration}>
                 <input type="number" min="250" max="6000" step="50" value={selectedLayer.duration} onChange={(event) => patchSelectedLayer({ duration: clamp(event.target.value, 250, 6000) })} />
               </Field>
               <Field label="Delai (ms)" help={FIELD_HELP.layerDelay}>
@@ -2397,7 +2336,7 @@ export default function TwoDAnimeEditor({
 
             <label className="anime-check-row" data-tour="anime-layer-loop">
               <input type="checkbox" checked={selectedLayer.loop} onChange={(event) => patchSelectedLayer({ loop: event.target.checked })} />
-              <span>Bouclér l animation</span>
+              <span>Boucler l’animation</span>
               <span className="help-dot" data-help={FIELD_HELP.layerLoop} aria-label={FIELD_HELP.layerLoop} tabIndex={0}>?</span>
             </label>
 

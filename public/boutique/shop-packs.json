@@ -23,10 +23,9 @@
         "src": "/boutique/La%20for%C3%AAt%20maudite/screenshot-sentier-rouge.png"
       }
     ],
-    "downloadUrl": "/boutique/La%20for%C3%AAt%20maudite/La%20for%C3%AAt%20maudite.zip",
-    "downloadFileName": "La forêt maudite.zip",
-    "downloadStoragePath": "public/boutique/La foret maudite/La foret maudite.zip",
+    "downloadFileName": "La foret maudite.zip",
     "downloadMode": "public",
+    "hasDownload": true,
     "createdAt": "2026-05-01T00:00:00.000Z",
     "updatedAt": "2026-05-01T00:00:00.000Z"
   }

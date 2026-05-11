@@ -209,7 +209,7 @@ describe('extracted hooks', () => {
     expect(saveProject).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      firstSave.resolve();
+      firstSave.resolve({ syncStatus: { localSaved: true, remoteAttempted: false, remoteSaved: false } });
       await flushPromises();
     });
     expect(saveProject).toHaveBeenCalledTimes(2);
@@ -218,10 +218,230 @@ describe('extracted hooks', () => {
     expect(setSaveStatus).not.toHaveBeenCalledWith('Sauvegardé localement');
 
     await act(async () => {
-      secondSave.resolve();
+      secondSave.resolve({ syncStatus: { localSaved: true, remoteAttempted: false, remoteSaved: false } });
       await flushPromises();
     });
     expect(setSaveStatus).toHaveBeenCalledWith('Sauvegardé localement');
+  });
+
+  test('autosave groupe la synchronisation distante apres les brouillons locaux', async () => {
+    vi.useFakeTimers();
+    const saveProject = vi.fn(async () => ({ syncStatus: { localSaved: true, remoteAttempted: false, remoteSaved: false } }));
+    const setSaveStatus = vi.fn();
+    const hydratedProjectRef = { current: 'project-1' };
+    const baseProps = {
+      activeProjectId: 'project-1',
+      hydratedProjectRef,
+      saveProject,
+      screen: 'editor',
+      selectedSceneId: 'scene-1',
+      setSaveStatus,
+      tab: 'scenes',
+      userId: 'user-1',
+      writeBuilderUiState: vi.fn(),
+    };
+
+    const { rerender } = renderHook((props) => useAutosaveProject(props), {
+      initialProps: {
+        ...baseProps,
+        project: { title: 'premier brouillon' },
+      },
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(900);
+      await flushPromises();
+    });
+    expect(saveProject).toHaveBeenCalledTimes(1);
+    expect(saveProject.mock.calls[0][3]).toMatchObject({ localOnly: true });
+
+    rerender({
+      ...baseProps,
+      project: { title: 'brouillon final' },
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(900);
+      await flushPromises();
+    });
+    expect(saveProject).toHaveBeenCalledTimes(2);
+    expect(saveProject.mock.calls[1][0].title).toBe('brouillon final');
+    expect(saveProject.mock.calls[1][3]).toMatchObject({ localOnly: true });
+
+    await act(async () => {
+      vi.advanceTimersByTime(9099);
+      await flushPromises();
+    });
+    expect(saveProject).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+      await flushPromises();
+    });
+    expect(saveProject).toHaveBeenCalledTimes(3);
+    expect(saveProject.mock.calls[2][0].title).toBe('brouillon final');
+    expect(saveProject.mock.calls[2][3]).toMatchObject({ localOnly: false });
+  });
+
+  test('autosave signale un cache local incomplet sans afficher sauvegarde locale', async () => {
+    vi.useFakeTimers();
+    const saveProject = vi.fn(async () => ({
+      syncStatus: {
+        localCacheSaved: true,
+        localPartial: true,
+        localSaved: false,
+        remoteAttempted: false,
+        remoteSaved: false,
+      },
+    }));
+    const setSaveStatus = vi.fn();
+
+    renderHook(() => useAutosaveProject({
+      activeProjectId: 'project-1',
+      hydratedProjectRef: { current: 'project-1' },
+      project: { title: 'projet lourd' },
+      saveProject,
+      screen: 'editor',
+      selectedSceneId: 'scene-1',
+      setSaveStatus,
+      tab: 'scenes',
+      userId: 'user-1',
+      writeBuilderUiState: vi.fn(),
+    }));
+
+    await act(async () => {
+      vi.advanceTimersByTime(900);
+      await flushPromises();
+    });
+
+    expect(setSaveStatus).toHaveBeenCalledWith('Sauvegarde locale incomplète');
+    expect(setSaveStatus).not.toHaveBeenCalledWith('Sauvegardé localement');
+  });
+
+  test('autosave retry quand aucune ecriture locale ou distante ne reussit', async () => {
+    vi.useFakeTimers();
+    const saveProject = vi.fn(async () => ({
+      syncStatus: {
+        localCacheSaved: false,
+        localSaved: false,
+        remoteAttempted: false,
+        remoteSaved: false,
+      },
+    }));
+    const setSaveStatus = vi.fn();
+
+    renderHook(() => useAutosaveProject({
+      activeProjectId: 'project-1',
+      hydratedProjectRef: { current: 'project-1' },
+      project: { title: 'projet impossible a sauver' },
+      saveProject,
+      screen: 'editor',
+      selectedSceneId: 'scene-1',
+      setSaveStatus,
+      tab: 'scenes',
+      userId: 'user-1',
+      writeBuilderUiState: vi.fn(),
+    }));
+
+    await act(async () => {
+      vi.advanceTimersByTime(900);
+      await flushPromises();
+    });
+    expect(saveProject).toHaveBeenCalledTimes(1);
+    expect(setSaveStatus).toHaveBeenCalledWith('Erreur de sauvegarde');
+
+    await act(async () => {
+      vi.advanceTimersByTime(1_999);
+      await flushPromises();
+    });
+    expect(saveProject).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+      await flushPromises();
+    });
+    expect(saveProject).toHaveBeenCalledTimes(2);
+  });
+
+  test('autosave ne rejoue pas une sauvegarde manuelle deja ack', async () => {
+    vi.useFakeTimers();
+    const saveProject = vi.fn(async () => ({ syncStatus: { localSaved: true, remoteAttempted: false, remoteSaved: false } }));
+    const setSaveStatus = vi.fn();
+    const projectInEditor = {
+      title: 'Projet importe',
+      scenes: [{ id: 'scene-1', name: 'Scene 1', hotspots: [] }],
+    };
+    const savedProjectClone = structuredClone(projectInEditor);
+
+    const { result } = renderHook(() => useAutosaveProject({
+      activeProjectId: 'project-1',
+      hydratedProjectRef: { current: 'project-1' },
+      project: projectInEditor,
+      saveProject,
+      screen: 'editor',
+      selectedSceneId: 'scene-1',
+      setSaveStatus,
+      tab: 'ai',
+      userId: 'user-1',
+      writeBuilderUiState: vi.fn(),
+    }));
+
+    act(() => {
+      result.current.markProjectSaveStarted(savedProjectClone, 'project-1');
+      result.current.markProjectSaved(savedProjectClone, 'project-1', {
+        localSaved: true,
+        remoteAttempted: false,
+        remoteSaved: false,
+      });
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(30_000);
+      await flushPromises();
+    });
+
+    expect(saveProject).not.toHaveBeenCalled();
+  });
+
+  test('autosave rejoue une sauvegarde manuelle ack sans ecriture durable', async () => {
+    vi.useFakeTimers();
+    const saveProject = vi.fn(async () => ({ syncStatus: { localSaved: true, remoteAttempted: false, remoteSaved: false } }));
+    const setSaveStatus = vi.fn();
+    const projectInEditor = {
+      title: 'Projet importe',
+      scenes: [{ id: 'scene-1', name: 'Scene 1', hotspots: [] }],
+    };
+    const savedProjectClone = structuredClone(projectInEditor);
+
+    const { result } = renderHook(() => useAutosaveProject({
+      activeProjectId: 'project-1',
+      hydratedProjectRef: { current: 'project-1' },
+      project: projectInEditor,
+      saveProject,
+      screen: 'editor',
+      selectedSceneId: 'scene-1',
+      setSaveStatus,
+      tab: 'ai',
+      userId: 'user-1',
+      writeBuilderUiState: vi.fn(),
+    }));
+
+    act(() => {
+      result.current.markProjectSaveStarted(savedProjectClone, 'project-1');
+      result.current.markProjectSaved(savedProjectClone, 'project-1', {
+        localCacheSaved: false,
+        localSaved: false,
+        remoteAttempted: false,
+        remoteSaved: false,
+      });
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(900);
+      await flushPromises();
+    });
+
+    expect(saveProject).toHaveBeenCalledTimes(1);
   });
 
   test('calcule quota, usage estimé/exact et storageSummary après debounce', async () => {
@@ -239,6 +459,7 @@ describe('extracted hooks', () => {
     const { result } = renderHook(() => useAccountStorage({
       activeProject,
       activeProjectId: 'active',
+      autoExact: true,
       projects,
     }));
 
@@ -247,7 +468,7 @@ describe('extracted hooks', () => {
       isExact: false,
       quotaBytes: 250 * MB,
       usedBytes: 7 * MB,
-      usedLabel: 'Calcul...',
+      usedLabel: '7,0 Mo env.',
     });
 
     await act(async () => {

@@ -155,7 +155,7 @@ export default function ShopTab({ user }) {
   ));
 
   const buyProductPack = async (pack) => {
-    if (!pack.downloadUrl) {
+    if (pack.hasDownload === false) {
       setPurchaseStatus('Ce pack n a pas encore de ZIP telechargeable.');
       return;
     }
@@ -320,7 +320,7 @@ export default function ShopTab({ user }) {
                     <button
                       type="button"
                       className="profile-action-button shop-buy-button"
-                      disabled={buyingPackId === pack.id || !pack.downloadUrl || aiCredits.isLoading}
+                      disabled={buyingPackId === pack.id || pack.hasDownload === false || aiCredits.isLoading}
                       onClick={() => buyProductPack(pack)}
                     >
                       {buyingPackId === pack.id ? 'Achat...' : `Achétér pour ${pack.costCredits} credits`}

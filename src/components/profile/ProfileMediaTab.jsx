@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { showConfirm } from '../AccessibleDialog';
 import { getProjectName } from '../../lib/projectAnalysis';
 import { getAssetStorageBytes } from '../../lib/storageQuota';
 
 const MEDIA_FOLDERS = [
-  { id: 'scene-images', label: 'Photos scenes', type: 'image' },
+  { id: 'scene-images', label: 'Photos scènes', type: 'image' },
   { id: 'object-images', label: 'Photos objets', type: 'image' },
-  { id: 'cinematic-images', label: 'Photos cinematiques', type: 'image' },
+  { id: 'cinematic-images', label: 'Photos cinématiques', type: 'image' },
   { id: 'animation-images', label: 'Photos animation', type: 'image' },
   { id: 'music', label: 'Musiques', type: 'audio' },
   { id: 'sounds', label: 'Sons', type: 'audio' },
@@ -78,7 +79,7 @@ const getMediaType = (url = '', fallback = 'unknown') => {
   return fallback;
 };
 
-const fileLabel = (name = '', fallback = 'Media') => String(name || fallback).trim() || fallback;
+const fileLabel = (name = '', fallback = 'Média') => String(name || fallback).trim() || fallback;
 
 const getMediaDedupeKey = ({ type, url, name }) => {
   const normalizedName = fileLabel(name, '')
@@ -132,11 +133,11 @@ const getUsageKindFromReference = (reference = '') => {
 const getUsageLabelFromReference = (reference = '') => {
   const [kind, id, role] = String(reference || '').split(':');
   const labels = {
-    scene: 'Scene',
+    scene: 'Scène',
     sceneObject: 'Objet',
     hotspot: 'Hotspot',
     item: 'Objet inventaire',
-    cinematic: 'Cinematic',
+    cinematic: 'Cinématique',
     slide: 'Slide cinematic',
     animation: 'Animation',
   };
@@ -215,8 +216,8 @@ const collectProfileMedia = (projects = [], mediaLibrary = []) => {
       orgKey,
       folderId,
       folderIds: [folderId],
-      folderLabel: folder?.label || 'Medias',
-      folderLabels: [folder?.label || 'Medias'],
+      folderLabel: folder?.label || 'Médias',
+      folderLabels: [folder?.label || 'Médias'],
       type: getMediaType(url, type),
       url,
       urls: [url],
@@ -261,6 +262,8 @@ const collectProfileMedia = (projects = [], mediaLibrary = []) => {
       });
     });
 
+    if (Array.isArray(project.assets) && project.assets.length) return;
+
     (project.scenes || []).forEach((scene) => {
       addMedia({
         project,
@@ -269,7 +272,7 @@ const collectProfileMedia = (projects = [], mediaLibrary = []) => {
         url: scene.backgroundData,
         name: scene.backgroundName || scene.name,
         assetId: scene.backgroundId,
-        usage: `Scene: ${scene.name || scene.id}`,
+        usage: `Scène: ${scene.name || scene.id}`,
         usageKind: 'scene',
         width: scene.backgroundWidth,
         height: scene.backgroundHeight,
@@ -383,7 +386,7 @@ const collectProfileMedia = (projects = [], mediaLibrary = []) => {
         url: cinematic.videoData,
         name: cinematic.videoName || cinematic.name,
         assetId: cinematic.videoId,
-        usage: `Cinematic: ${cinematic.name || cinematic.id}`,
+        usage: `Cinématique: ${cinematic.name || cinematic.id}`,
         usageKind: 'cinematic',
       });
 
@@ -395,7 +398,7 @@ const collectProfileMedia = (projects = [], mediaLibrary = []) => {
           url: slide.imageData,
           name: slide.imageName || cinematic.name,
           assetId: slide.imageId,
-          usage: `Cinematic: ${cinematic.name || cinematic.id} / slide ${index + 1}`,
+          usage: `Cinématique: ${cinematic.name || cinematic.id} / slide ${index + 1}`,
           usageKind: 'cinematic',
         });
         addMedia({
@@ -427,7 +430,7 @@ const collectProfileMedia = (projects = [], mediaLibrary = []) => {
 
   mediaLibrary.forEach((asset) => {
     addMedia({
-      project: { id: asset.projectId || asset.projectKey || 'library', title: asset.projectName || 'Mediatheque' },
+      project: { id: asset.projectId || asset.projectKey || 'library', title: asset.projectName || 'Médiathèque' },
       folderId: getAssetFolderId(asset),
       type: asset.type,
       url: asset.url,
@@ -480,7 +483,7 @@ function MediaPreview({ asset }) {
   if (asset.type === 'audio') {
     return <audio controls preload="metadata" src={asset.url} />;
   }
-  return <span>{asset.type || 'media'}</span>;
+  return <span>{asset.type || 'média'}</span>;
 }
 
 export default function ProfileMediaTab({
@@ -488,6 +491,7 @@ export default function ProfileMediaTab({
   mediaLibrary = [],
   onImportMediaFile,
   onDeleteMedia,
+  onRefreshStorageUsage,
   storageSummary = null,
   aiCreditBalance = 0,
   onBuyStorage,
@@ -506,6 +510,10 @@ export default function ProfileMediaTab({
   useEffect(() => {
     setOrganization(readMediaOrganization(mediaOrganizationKey));
   }, [mediaOrganizationKey]);
+  useEffect(() => {
+    if (storageSummary?.isExact) return;
+    onRefreshStorageUsage?.();
+  }, [onRefreshStorageUsage, storageSummary?.isExact]);
   const persistOrganization = (updater) => {
     setOrganization((previous) => {
       const next = typeof updater === 'function' ? updater(previous) : updater;
@@ -609,9 +617,14 @@ export default function ProfileMediaTab({
     }));
     setNewFolderName('');
   };
-  const deleteCustomFolder = (folderId) => {
+  const deleteCustomFolder = async (folderId) => {
     const folder = customFolders.find((entry) => entry.id === folderId);
-    const confirmed = window.confirm(`Supprimer le dossier "${folder?.label || 'media'}" ? Les assets ne seront pas supprimes.`);
+    const confirmed = await showConfirm({
+      title: 'Supprimer le dossier',
+      message: `Supprimer le dossier "${folder?.label || 'média'}" ? Les assets ne seront pas supprimés.`,
+      confirmLabel: 'Supprimer',
+      variant: 'danger',
+    });
     if (!confirmed) return;
 
     persistOrganization((previous) => ({
@@ -718,8 +731,8 @@ export default function ProfileMediaTab({
     <section className="panel profile-media-panel">
       <div className="panel-head">
         <div>
-          <h2>Mediatheque</h2>
-          <p className="small-note">Tous les medias de tes projets, ranges par dossier et dedoublonnes.</p>
+          <h2>Médiathèque</h2>
+          <p className="small-note">Tous les médias de tes projets, rangés par dossier et dédoublonnés.</p>
         </div>
         <div className="profile-media-stats">
           {storageSummary ? (
@@ -738,8 +751,8 @@ export default function ProfileMediaTab({
           type="search"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Rechercher un media"
-          aria-label="Rechercher un media"
+          placeholder="Rechercher un média"
+          aria-label="Rechercher un média"
         />
       </div>
 
@@ -818,7 +831,7 @@ export default function ProfileMediaTab({
               ) : null}
             </div>
           )) : (
-            <p className="small-note">Aucun projet avec media.</p>
+            <p className="small-note">Aucun projet avec média.</p>
           )}
         </aside>
 
@@ -857,7 +870,7 @@ export default function ProfileMediaTab({
                     {asset.usages.length ? `Utilise dans ${formatUsageSummary(asset)}` : 'Inactif - 0 usage'}
                   </em>
                   {customFolders.length ? (
-                    <div className="profile-media-folder-tags" aria-label={`Dossiers personnalises pour ${asset.name}`}>
+                    <div className="profile-media-folder-tags" aria-label={`Dossiers personnalisés pour ${asset.name}`}>
                       {customFolders.map((folder) => {
                         const isSelected = asset.customFolderIds.includes(folder.id);
                         return (
@@ -898,8 +911,8 @@ export default function ProfileMediaTab({
         ) : (
           <div className="empty-state-inline">
             <div>
-              <strong>Aucun media</strong>
-              <p className="small-note">Les images, musiques et sons ajoutes dans tes projets apparaitront ici.</p>
+              <strong>Aucun média</strong>
+              <p className="small-note">Les images, musiques et sons ajoutés dans tes projets apparaîtront ici.</p>
             </div>
           </div>
         )}

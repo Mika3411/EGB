@@ -1,4 +1,4 @@
-import { collectProjectAssets } from './assetManager';
+import { collectProjectAssetManifest, collectProjectAssets } from './assetManager';
 
 export const MB = 1024 * 1024;
 export const ACCOUNT_FREE_STORAGE_BYTES = 250 * MB;
@@ -73,11 +73,17 @@ export const getExactAssetStorageBytes = async (asset = {}) => {
   }
 };
 
-export const getAccountStorageUsageBytes = (projects = []) => {
+const getProjectStorageAssets = (project = {}, { includeLegacyFields = false } = {}) => {
+  const manifestAssets = collectProjectAssetManifest(project);
+  if (manifestAssets.length && !includeLegacyFields) return manifestAssets;
+  return collectProjectAssets(project);
+};
+
+export const getAccountStorageUsageBytes = (projects = [], options = {}) => {
   const seenUrls = new Set();
   return projects.reduce((total, projectRecordOrData) => {
     const project = projectRecordOrData?.data || projectRecordOrData || {};
-    return total + collectProjectAssets(project).reduce((projectTotal, asset) => {
+    return total + getProjectStorageAssets(project, options).reduce((projectTotal, asset) => {
       if (!asset?.url || seenUrls.has(asset.url)) return projectTotal;
       seenUrls.add(asset.url);
       return projectTotal + getAssetStorageBytes(asset);
@@ -85,12 +91,12 @@ export const getAccountStorageUsageBytes = (projects = []) => {
   }, 0);
 };
 
-export const getAccountExactStorageUsageBytes = async (projects = []) => {
+export const getAccountExactStorageUsageBytes = async (projects = [], options = {}) => {
   const assets = [];
   const seenUrls = new Set();
   projects.forEach((projectRecordOrData) => {
     const project = projectRecordOrData?.data || projectRecordOrData || {};
-    collectProjectAssets(project).forEach((asset) => {
+    getProjectStorageAssets(project, options).forEach((asset) => {
       if (!asset?.url || seenUrls.has(asset.url)) return;
       seenUrls.add(asset.url);
       assets.push(asset);

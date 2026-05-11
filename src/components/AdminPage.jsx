@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { showConfirm } from './AccessibleDialog';
 import { normalizeEmail } from '../lib/authStorage';
 import { getBlogModerationId } from '../lib/moderationStorage';
 import {
   getDisplayName,
+  getAdminProjectCount,
   getManagedUsers,
   loadAdminDashboard,
   prepareAdminShopPackScreenshots,
@@ -58,6 +60,7 @@ export default function AdminPage({
   const [accounts, setAccounts] = useState([]);
   const [supabaseUsers, setSupabaseUsers] = useState([]);
   const [creditUsers, setCreditUsers] = useState([]);
+  const [projectCounts, setProjectCounts] = useState({});
   const [publicGames, setPublicGames] = useState([]);
   const [shopPacks, setShopPacks] = useState(() => getShopPacks());
   const [shopPackForm, setShopPackForm] = useState(() => createEmptyShopPack());
@@ -73,6 +76,7 @@ export default function AdminPage({
     setAccounts(dashboard.accounts);
     setSupabaseUsers(dashboard.supabaseUsers);
     setCreditUsers(dashboard.creditUsers);
+    setProjectCounts(dashboard.projectCounts || {});
     setPublicGames(dashboard.publicGames);
     setModeration(dashboard.moderation);
     if (dashboard.warning) setStatus(dashboard.warning);
@@ -97,7 +101,10 @@ export default function AdminPage({
     };
   }, []);
 
-  const managedUsers = useMemo(() => getManagedUsers({ accounts, supabaseUsers, creditUsers }), [accounts, supabaseUsers, creditUsers]);
+  const managedUsers = useMemo(
+    () => getManagedUsers({ accounts, supabaseUsers, creditUsers, projectCounts }),
+    [accounts, supabaseUsers, creditUsers, projectCounts],
+  );
 
   const selectedUser = managedUsers.find((entry) => entry.userId === selectedUserId) || managedUsers[0] || null;
 
@@ -177,10 +184,15 @@ export default function AdminPage({
   const banSupabaseAccountTemporarily = (targetUser, banDuration) =>
     updateSupabaseAccount(targetUser, 'ban_temp', { banDuration });
 
-  const deleteSupabaseAccount = (targetUser) => {
+  const deleteSupabaseAccount = async (targetUser) => {
     if (!targetUser?.userId || targetUser.provider !== 'supabase') return;
     const label = targetUser.email || targetUser.name || targetUser.userId;
-    const confirmed = window.confirm(`Supprimer definitivement le compte "${label}" ? Cette action est irreversible.`);
+    const confirmed = await showConfirm({
+      title: 'Supprimer le compte',
+      message: `Supprimer definitivement le compte "${label}" ? Cette action est irreversible.`,
+      confirmLabel: 'Supprimer',
+      variant: 'danger',
+    });
     if (!confirmed) return;
     updateSupabaseAccount(targetUser, 'delete');
   };
@@ -261,7 +273,7 @@ export default function AdminPage({
       const nextPacks = await upsertSharedShopPack(shopPackForm);
       setShopPacks(nextPacks);
       setShopPackForm(createEmptyShopPack());
-      setStatus(hasSupabaseConfig() ? 'Pack boutique publie.' : 'Pack boutique enregistre localement.');
+      setStatus(hasSupabaseConfig() ? 'Pack boutique publie.' : 'Pack boutique enregistré localement.');
     } catch (error) {
       setStatus(error.message || 'Enregistrement du pack impossible.');
     } finally {
@@ -275,7 +287,13 @@ export default function AdminPage({
   };
 
   const removeShopPack = async (pack) => {
-    if (!window.confirm(`Supprimer le pack "${pack.title}" ?`)) return;
+    const confirmed = await showConfirm({
+      title: 'Supprimer le pack',
+      message: `Supprimer le pack "${pack.title}" ?`,
+      confirmLabel: 'Supprimer',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     setIsBusy(true);
     try {
       const nextPacks = await deleteSharedShopPack(pack.id);
@@ -345,7 +363,7 @@ export default function AdminPage({
             <span className="eyebrow">Admin</span>
             <h2>Gestion des utilisateurs</h2>
             <p className="small-note">
-              Ton compte admin est masque ici. Cette page sert a gerer les autres comptes et leurs credits IA.
+              Ton compte admin est masque ici. Cette page sert à gerer les autres comptes et leurs crédits IA.
             </p>
           </div>
 
@@ -413,7 +431,7 @@ export default function AdminPage({
           <div className="panel-head">
             <div>
               <h2>Comptes</h2>
-              <p className="small-note">Selectionne un utilisateur pour ajuster ses credits.</p>
+              <p className="small-note">Sélectionne un utilisateur pour ajuster ses crédits.</p>
             </div>
           </div>
 
@@ -439,7 +457,9 @@ export default function AdminPage({
                 <span role="cell">{entry.status === 'disabled' ? 'Desactive' : 'Actif'}</span>
                 <span role="cell">{entry.credits?.balance ?? 0}</span>
                 <span role="cell">
-                  <span className="status-badge soft">{entry.projects.length} projet{entry.projects.length > 1 ? 's' : ''}</span>
+                  <span className="status-badge soft">
+                    {getAdminProjectCount(entry)} projet{getAdminProjectCount(entry) > 1 ? 's' : ''}
+                  </span>
                 </span>
               </button>
             ))}
@@ -457,7 +477,7 @@ export default function AdminPage({
               <h3>{selectedUser ? getDisplayName(selectedUser) : 'Aucun utilisateur'}</h3>
               <p className="small-note">{selectedUser?.email || selectedUser?.userId || ''}</p>
             </div>
-            <span className="status-badge">{selectedUser?.credits?.balance ?? 0} credits</span>
+            <span className="status-badge">{selectedUser?.credits?.balance ?? 0} crédits</span>
           </div>
 
           <form onSubmit={applyCreditChange}>
@@ -478,7 +498,7 @@ export default function AdminPage({
             />
 
             <button type="submit" className="profile-action-button" disabled={!selectedUser || isBusy}>
-              {isBusy ? 'Mise a jour...' : 'Appliquer aux credits'}
+              {isBusy ? 'Mise a jour...' : 'Appliquer aux crédits'}
             </button>
           </form>
 
@@ -548,7 +568,7 @@ export default function AdminPage({
               </div>
             ))}
             {!selectedUser?.credits?.transactions?.length ? (
-              <p className="small-note">Aucune transaction de credits.</p>
+              <p className="small-note">Aucune transaction de crédits.</p>
             ) : null}
           </div>
         </aside>
@@ -700,7 +720,7 @@ export default function AdminPage({
             <div>
               <span className="eyebrow">Boutique</span>
               <h2>Packs de jeux</h2>
-              <p className="small-note">Cree des fiches produit avec cout en credits, contenu du pack et screenshots.</p>
+              <p className="small-note">Crée des fiches produit avec coût en crédits, contenu du pack et screenshots.</p>
             </div>
             <button type="button" className="secondary-action" onClick={() => setShopPackForm(createEmptyShopPack())}>
               Nouveau pack
@@ -712,7 +732,7 @@ export default function AdminPage({
               <div className="subpanel-head">
                 <div>
                   <h3>{shopPackForm.id ? 'Modifier le pack' : 'Ajouter un pack'}</h3>
-                  <p className="small-note">Les champs numeriques alimentent la fiche produit.</p>
+                  <p className="small-note">Les champs numériques alimentent la fiche produit.</p>
                 </div>
               </div>
 
@@ -725,7 +745,7 @@ export default function AdminPage({
 
               <div className="grid-two compact-grid">
                 <label>
-                  Cout en credits
+                  Coût en crédits
                   <input type="number" min="0" value={shopPackForm.costCredits} onChange={(event) => updateShopPackForm('costCredits', event.target.value)} />
                 </label>
                 <label>
@@ -739,7 +759,7 @@ export default function AdminPage({
                 rows={5}
                 value={shopPackForm.description}
                 onChange={(event) => updateShopPackForm('description', event.target.value)}
-                placeholder="Resume du pack, ambiance, type d'enigmes, public cible..."
+                placeholder="Résumé du pack, ambiance, type d'énigmes, public cible..."
               />
 
               <div className="admin-pack-metrics-form">
@@ -747,8 +767,8 @@ export default function AdminPage({
                   ['actsCount', 'Actes'],
                   ['scenesCount', 'Scenes'],
                   ['objectsCount', 'Objets'],
-                  ['enigmasCount', 'Enigmes'],
-                  ['cinematicsCount', 'Cinematics'],
+                  ['enigmasCount', 'Énigmes'],
+                  ['cinematicsCount', 'Cinématiques'],
                   ['combinationsCount', 'Combinaisons'],
                 ].map(([field, label]) => (
                   <label key={field}>
@@ -780,13 +800,13 @@ export default function AdminPage({
                 ZIP telechargeable
                 <input type="file" accept=".zip,application/zip,application/x-zip-compressed" onChange={importShopPackZip} />
               </label>
-              {shopPackForm.downloadUrl ? (
+              {shopPackForm.downloadUrl || shopPackForm.hasDownload ? (
                 <div className="admin-pack-download-chip">
                   <strong>{shopPackForm.downloadFileName || 'pack.zip'}</strong>
-                  <span>{shopPackForm.downloadMode === 'supabase' ? 'Prêt pour les acheteurs' : 'Stockage local'}</span>
+                  <span>{shopPackForm.downloadUrl ? (shopPackForm.downloadMode === 'supabase' ? 'Prêt pour les acheteurs' : 'Stockage local') : 'ZIP conserve cote serveur'}</span>
                 </div>
               ) : (
-                <p className="small-note">Ajoute le dossier ZIP qui sera propos? au telechargement après achat.</p>
+                <p className="small-note">Ajoute le dossier ZIP qui sera proposé au téléchargement après achat.</p>
               )}
 
               <button type="submit" className="profile-action-button">
@@ -809,15 +829,15 @@ export default function AdminPage({
                   <div className="inline-head">
                     <div>
                       <strong>{pack.title}</strong>
-                      <span>{pack.costCredits} credits - note {pack.rating}/10</span>
+                      <span>{pack.costCredits} crédits - note {pack.rating}/10</span>
                     </div>
-                    <span className="status-badge soft">{pack.downloadUrl ? 'ZIP prêt' : 'ZIP manquant'}</span>
+                    <span className="status-badge soft">{pack.downloadUrl || pack.hasDownload ? 'ZIP prêt' : 'ZIP manquant'}</span>
                   </div>
                   <p className="small-note">{pack.description || 'Aucun descriptif.'}</p>
                   <div className="admin-pack-metrics">
-                    <span>{pack.scenesCount} scenes</span>
+                    <span>{pack.scenesCount} scènes</span>
                     <span>{pack.objectsCount} objets</span>
-                    <span>{pack.enigmasCount} enigmes</span>
+                    <span>{pack.enigmasCount} énigmes</span>
                     <span>{pack.cinematicsCount} cinemat.</span>
                     <span>{pack.combinationsCount} combinaisons</span>
                   </div>
@@ -857,7 +877,7 @@ export default function AdminPage({
                       <div className="inline-head">
                         <div>
                           <strong>{pack.title}</strong>
-                          <span>{pack.costCredits} credits - {pack.soldTo ? `vendu a ${pack.soldTo}` : 'archive'}</span>
+                          <span>{pack.costCredits} crédits - {pack.soldTo ? `vendu a ${pack.soldTo}` : 'archive'}</span>
                         </div>
                         <span className="status-badge soft">Archive</span>
                       </div>

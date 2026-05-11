@@ -69,6 +69,8 @@ export function EditorToolbarMenus({
   addInvisibleSceneObject,
   addInteractiveBlock,
   addVisualEffectZone,
+  isBeginnerMode = false,
+  isIntermediateMode = false,
 }) {
   const menuBarRef = useRef(null);
 
@@ -111,12 +113,12 @@ export function EditorToolbarMenus({
   };
 
   return (
-    <nav ref={menuBarRef} className="editor-menu-bar" aria-label="Menus de l'éditeur de scene">
+    <nav ref={menuBarRef} className="editor-menu-bar" aria-label="Menus de l'éditeur de scène">
       <details className="editor-menu" data-tour="scene-toolbar-add" onToggle={closeSiblingMenus}>
         <summary>Fichier</summary>
         <div className="editor-menu-popover">
           <MenuItem onClick={() => previewScene?.(selectedSceneId)}>Prévisualiser</MenuItem>
-          <MenuItem danger onClick={() => deleteScene(selectedSceneId)}>Supprimer la scene</MenuItem>
+          <MenuItem danger onClick={() => deleteScene(selectedSceneId)}>Supprimer la scène</MenuItem>
           {fullscreen ? <MenuItem shortcut="Esc" onClick={closeEditorFullscreen}>Fermer le plein écran</MenuItem> : null}
         </div>
       </details>
@@ -127,13 +129,17 @@ export function EditorToolbarMenus({
           <MenuItem shortcut="Ctrl+Z" onClick={undoProjectChange} disabled={!canUndoProjectChange}>Annuler</MenuItem>
           <MenuItem shortcut="Ctrl+Y" onClick={redoProjectChange} disabled={!canRedoProjectChange}>Rétablir</MenuItem>
           <MenuItem shortcut="Ctrl+D" disabled={!activeSelectionCount} onClick={duplicateSelectedEditorItems}>Dupliquer</MenuItem>
-          <MenuItem shortcut="M" active={multiSelectEnabled} onClick={() => setMultiSelectEnabled((value) => !value)}>Selection multiple</MenuItem>
-          <MenuItem shortcut="Suppr" danger disabled={!activeSelectionCount} onClick={deleteSelectedEditorItems}>Supprimer la selection</MenuItem>
-          <MenuItem disabled={activeSelectionCount < 2} onClick={() => alignSelectedEditorItems('left')}>Aligner à gauche</MenuItem>
-          <MenuItem disabled={activeSelectionCount < 2} onClick={() => alignSelectedEditorItems('center')}>Aligner au centre</MenuItem>
-          <MenuItem disabled={activeSelectionCount < 2} onClick={() => alignSelectedEditorItems('right')}>Aligner à droite</MenuItem>
-          <MenuItem disabled={activeSelectionCount < 3} onClick={() => alignSelectedEditorItems('distribute-horizontal')}>Répartir horizontalement</MenuItem>
-          <MenuItem disabled={activeSelectionCount < 2} onClick={() => alignSelectedEditorItems('same-size')}>Même taille</MenuItem>
+          <MenuItem shortcut="Suppr" danger disabled={!activeSelectionCount} onClick={deleteSelectedEditorItems}>Supprimer la sélection</MenuItem>
+          {!isBeginnerMode ? (
+            <>
+              <MenuItem shortcut="M" active={multiSelectEnabled} onClick={() => setMultiSelectEnabled((value) => !value)}>Sélection multiple</MenuItem>
+              <MenuItem disabled={activeSelectionCount < 2} onClick={() => alignSelectedEditorItems('left')}>Aligner à gauche</MenuItem>
+              <MenuItem disabled={activeSelectionCount < 2} onClick={() => alignSelectedEditorItems('center')}>Aligner au centre</MenuItem>
+              <MenuItem disabled={activeSelectionCount < 2} onClick={() => alignSelectedEditorItems('right')}>Aligner à droite</MenuItem>
+              <MenuItem disabled={activeSelectionCount < 3} onClick={() => alignSelectedEditorItems('distribute-horizontal')}>Répartir horizontalement</MenuItem>
+              <MenuItem disabled={activeSelectionCount < 2} onClick={() => alignSelectedEditorItems('same-size')}>Même taille</MenuItem>
+            </>
+          ) : null}
         </div>
       </details>
 
@@ -162,17 +168,19 @@ export function EditorToolbarMenus({
         <div className="editor-menu-popover">
           <MenuItem tour="scene-add-hotspot" onClick={addHotspot}>Zone d'action</MenuItem>
           <MenuItem tour="scene-add-visible-object" onClick={addSceneObject}>Objet visible</MenuItem>
-          <SubMenuItem label="Bloc">
-            <MenuItem onClick={() => addInteractiveBlock?.('text')}>Texte</MenuItem>
-            <MenuItem onClick={() => addInteractiveBlock?.('image')}>Image</MenuItem>
-            <MenuItem onClick={() => addInteractiveBlock?.('button')}>Bouton</MenuItem>
-            <MenuItem onClick={() => addInteractiveBlock?.('input')}>Champ de saisie</MenuItem>
-            <MenuItem onClick={() => addInteractiveBlock?.('code')}>Code</MenuItem>
-            <MenuItem onClick={() => addInteractiveBlock?.('hint')}>Indice</MenuItem>
-          </SubMenuItem>
-          <MenuItem onClick={addAnimationObject}>Animation</MenuItem>
-          <MenuItem onClick={addInvisibleSceneObject}>Objet invisible</MenuItem>
-          <MenuItem tour="scene-add-visual-zone" onClick={addVisualEffectZone}>Zone visuelle</MenuItem>
+          {!isBeginnerMode ? (
+            <SubMenuItem label="Bloc">
+              <MenuItem onClick={() => addInteractiveBlock?.('text')}>Texte</MenuItem>
+              <MenuItem onClick={() => addInteractiveBlock?.('image')}>Image</MenuItem>
+              <MenuItem onClick={() => addInteractiveBlock?.('button')}>Bouton</MenuItem>
+              <MenuItem onClick={() => addInteractiveBlock?.('input')}>Champ de saisie</MenuItem>
+              <MenuItem onClick={() => addInteractiveBlock?.('code')}>Code</MenuItem>
+              <MenuItem onClick={() => addInteractiveBlock?.('hint')}>Indice</MenuItem>
+            </SubMenuItem>
+          ) : null}
+          {!isBeginnerMode && !isIntermediateMode ? <MenuItem onClick={addAnimationObject}>Animation</MenuItem> : null}
+          {!isBeginnerMode ? <MenuItem onClick={addInvisibleSceneObject}>Objet invisible</MenuItem> : null}
+          {!isBeginnerMode ? <MenuItem tour="scene-add-visual-zone" onClick={addVisualEffectZone}>Zone visuelle</MenuItem> : null}
         </div>
       </details>
     </nav>
@@ -202,7 +210,7 @@ export function MiniMap({
     );
   }
   return (
-    <div className="editor-minimap" aria-label="Mini-map de la scene">
+    <div className="editor-minimap" aria-label="Mini-map de la scène">
       <button
         type="button"
         className="editor-minimap-collapse"

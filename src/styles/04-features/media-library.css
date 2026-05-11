@@ -76,8 +76,6 @@
 
 .media-layout-pro .media-audio-panel .music-compact-actions{grid-column:auto;display:flex;align-items:center;justify-content:space-between;gap:10px}
 
-.media-layout-pro .media-timer-panel .compact-form-grid{grid-template-columns:1fr 1fr;gap:10px}
-
 .media-layout-pro .visual-effect-cascade{z-index:400}
 
 .media-layout-pro .visual-effect-cascade__menu{min-width:min(320px,calc(100vw - 80px))}
@@ -113,8 +111,6 @@
 .media-transition-test-action{align-self:end}
 
 .media-transition-test-action button{width:100%;justify-content:center}
-
-.media-timer-toggle,.media-timer-message-field{grid-column:1 / -1}
 
 .media-zone-list{display:grid;gap:10px}
 

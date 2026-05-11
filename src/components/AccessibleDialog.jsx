@@ -9,11 +9,51 @@ const FOCUSABLE_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
+let activeDialogOpener = null;
+
 function getFallbackResult(kind) {
   if (kind === 'prompt') return null;
   if (kind === 'alert') return true;
   return false;
 }
+
+const normalizeDialogOptions = (options, fallbackTitle) => (
+  typeof options === 'string'
+    ? { title: fallbackTitle, message: options }
+    : { title: fallbackTitle, ...(options || {}) }
+);
+
+const openGlobalDialog = (request) => {
+  if (activeDialogOpener) return activeDialogOpener(request);
+
+  if (typeof window !== 'undefined') {
+    if (request.kind === 'confirm') {
+      return Promise.resolve(window.confirm(request.message || request.title || 'Confirmer ?'));
+    }
+    if (request.kind === 'prompt') {
+      return Promise.resolve(window.prompt(request.message || request.title || '', request.defaultValue || ''));
+    }
+    window.alert(request.message || request.title || '');
+  }
+
+  return Promise.resolve(getFallbackResult(request.kind));
+};
+
+export const showConfirm = (options = {}) => openGlobalDialog({
+  kind: 'confirm',
+  ...normalizeDialogOptions(options, 'Confirmation'),
+});
+
+export const showAlert = (options = {}) => openGlobalDialog({
+  kind: 'alert',
+  confirmLabel: 'OK',
+  ...normalizeDialogOptions(options, 'Information'),
+});
+
+export const showPrompt = (options = {}) => openGlobalDialog({
+  kind: 'prompt',
+  ...normalizeDialogOptions(options, 'Saisie'),
+});
 
 function DialogPanel({ request, onResolve }) {
   const titleId = useId();
@@ -151,6 +191,11 @@ function DialogPanel({ request, onResolve }) {
 export function useAccessibleDialog() {
   const [request, setRequest] = useState(null);
   const resolverRef = useRef(null);
+  const requestRef = useRef(null);
+
+  useEffect(() => {
+    requestRef.current = request;
+  }, [request]);
 
   const resolveCurrent = useCallback((result) => {
     resolverRef.current?.(result);
@@ -159,12 +204,19 @@ export function useAccessibleDialog() {
   }, []);
 
   const openDialog = useCallback((nextRequest) => new Promise((resolve) => {
-    if (resolverRef.current && request) {
-      resolverRef.current(getFallbackResult(request.kind));
+    if (resolverRef.current && requestRef.current) {
+      resolverRef.current(getFallbackResult(requestRef.current.kind));
     }
     resolverRef.current = resolve;
     setRequest(nextRequest);
-  }), [request]);
+  }), []);
+
+  useEffect(() => {
+    activeDialogOpener = openDialog;
+    return () => {
+      if (activeDialogOpener === openDialog) activeDialogOpener = null;
+    };
+  }, [openDialog]);
 
   const confirm = useCallback((options = {}) => openDialog({
     kind: 'confirm',

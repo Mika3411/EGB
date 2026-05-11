@@ -2,12 +2,16 @@ export const CREATION_MODES = [
   ['beginner', 'Debutant'],
   ['intermediate', 'Intermediaire'],
   ['expert', 'Expert'],
+  ['adventure', 'Narration choix multiples'],
+  ['hero_adventure', 'Aventure de héros'],
 ];
 
 export const MODE_RANKS = {
   beginner: 0,
   intermediate: 1,
   expert: 2,
+  adventure: 3,
+  hero_adventure: 4,
 };
 
 export const getProjectName = (project) =>

@@ -43,7 +43,7 @@ export default function OrdersPanel({ orders, onClose }) {
                   </div>
 
                   <div className="profile-order-meta">
-                    <span>{Number(order.costCredits || 0)} credits</span>
+                    <span>{Number(order.costCredits || 0)} crédits</span>
                     <span>Suivi: achat valide</span>
                   </div>
 

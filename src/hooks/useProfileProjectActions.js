@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { createInitialProject, normalizeProject } from '../data/projectData';
 import { prepareProjectForTutorial } from '../data/tutorialSteps';
 import { applyCreationTemplate } from '../lib/projectTemplates';
+import { showPrompt } from '../components/AccessibleDialog';
 import { getSafeBuilderTab } from '../utils/tutorialHelpers';
 import { readBuilderUiState } from '../utils/storageHelpers';
 
@@ -11,6 +12,7 @@ export function useProfileProjectActions({
   editor,
   hydratedProjectRef,
   preview,
+  saveProject = auth.saveProject,
   setSaveStatus,
   setScreen,
 }) {
@@ -25,7 +27,7 @@ export function useProfileProjectActions({
           normalizedSavedProject.title = savedRecord?.name || 'Projet';
         }
         if (projectId) {
-          await auth.saveProject(normalizedSavedProject, projectId, {
+          await saveProject(normalizedSavedProject, projectId, {
             tab: 'animation',
             selectedSceneId: normalizedSavedProject.scenes?.[0]?.id || '',
           });
@@ -52,7 +54,7 @@ export function useProfileProjectActions({
       setScreen('editor');
       setSaveStatus(savedProject ? 'Projet chargé' : 'Nouveau projet');
       if (options.tutorialTab && projectId) {
-        await auth.saveProject(projectToLoad, projectId, {
+        await saveProject(projectToLoad, projectId, {
           tab: resumeTab,
           selectedSceneId: resumeSceneId,
         });
@@ -66,20 +68,20 @@ export function useProfileProjectActions({
     auth.getProjectResumeState,
     auth.loadProject,
     auth.projects,
-    auth.saveProject,
     auth.user?.id,
     editor.loadProject,
     editor.setSelectedSceneId,
     editor.setTab,
     hydratedProjectRef,
     preview.syncWithProject,
+    saveProject,
     setSaveStatus,
     setScreen,
   ]);
 
   const createProjectFromProfile = useCallback(async (name, templateId = 'empty', creationMode = 'beginner') => {
     const project = applyCreationTemplate(createInitialProject(), templateId, name);
-    project.creationMode = ['beginner', 'intermediate', 'expert'].includes(creationMode) ? creationMode : 'beginner';
+    project.creationMode = ['beginner', 'intermediate', 'expert', 'adventure', 'hero_adventure'].includes(creationMode) ? creationMode : 'beginner';
     const record = await auth.createProject(project, name || project.title);
     if (record?.id) await openProjectInEditor(record.id);
   }, [auth.createProject, openProjectInEditor]);
@@ -145,7 +147,7 @@ export function useProfileProjectActions({
 
     try {
       if (projectId === auth.activeProjectId && hydratedProjectRef.current === projectId) {
-        await auth.saveProject(editor.project, projectId, {
+        await saveProject(editor.project, projectId, {
           tab: editor.tab,
           selectedSceneId: editor.selectedSceneId,
         });
@@ -155,24 +157,29 @@ export function useProfileProjectActions({
       setSaveStatus('Lien joueur public copié');
     } catch (error) {
       console.error('Erreur de génération du lien jouable', error);
-      window.prompt('Lien jouable', url.toString());
+      await showPrompt({
+        title: 'Lien jouable',
+        message: 'Copie ce lien pour partager le projet.',
+        defaultValue: url.toString(),
+        confirmLabel: 'Fermer',
+      });
       setSaveStatus('Lien joueur public généré');
     }
   }, [
     auth.activeProjectId,
     auth.markProjectLinkCopied,
-    auth.saveProject,
     auth.user?.id,
     editor.project,
     editor.selectedSceneId,
     editor.tab,
     hydratedProjectRef,
+    saveProject,
     setSaveStatus,
   ]);
 
   const publishProjectFromProfile = useCallback(async (projectId) => {
     if (projectId === auth.activeProjectId && hydratedProjectRef.current === projectId) {
-      await auth.saveProject(editor.project, projectId, {
+      await saveProject(editor.project, projectId, {
         tab: editor.tab,
         selectedSceneId: editor.selectedSceneId,
       });
@@ -182,20 +189,25 @@ export function useProfileProjectActions({
   }, [
     auth.activeProjectId,
     auth.publishProject,
-    auth.saveProject,
     editor.project,
     editor.selectedSceneId,
     editor.tab,
     hydratedProjectRef,
+    saveProject,
     setSaveStatus,
   ]);
 
   const unpublishProjectFromProfile = useCallback(async (projectId) => {
-    const confirmed = window.confirm('Retirer ce jeu de la galerie publique ? Le projet restera dans ton profil.');
+    const confirmed = await confirmDialog({
+      title: 'Retirer de la galerie',
+      message: 'Retirer ce jeu de la galerie publique ? Le projet restera dans ton profil.',
+      confirmLabel: 'Retirer',
+      variant: 'danger',
+    });
     if (!confirmed) return;
     await auth.unpublishProject(projectId);
     setSaveStatus('Jeu retiré de la galerie');
-  }, [auth.unpublishProject, setSaveStatus]);
+  }, [auth.unpublishProject, confirmDialog, setSaveStatus]);
 
   const updatePublicSettingsFromProfile = useCallback(async (projectId, settings) => {
     await auth.updateProjectShareSettings(projectId, settings);

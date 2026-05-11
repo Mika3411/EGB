@@ -1,34 +1,29 @@
 import {
   buildStoragePath,
+  deleteStorageFile,
   downloadTextFile,
   getSupabaseClient,
   hasSupabaseConfig,
   isStorageNotFoundError,
   uploadToStorage,
 } from '../supabaseStorage';
+import {
+  canUseLocalStorage,
+  readJsonStorage,
+  removeStorageKey,
+  writeJsonStorage,
+} from '../utils/storageHelpers';
 
 const ACCOUNTS_KEY = 'escape_builder_accounts_v1';
 const SESSION_KEY = 'escape_builder_session_v1';
 const PROJECTS_KEY = 'escape_builder_projects_v1';
 const SIGNUP_ATTEMPTS_KEY = 'escape_builder_signup_attempts_v1';
 const SIGNUP_COOLDOWN_MS = 10 * 60 * 1000;
+const PROJECT_RECORDS_MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
-const canUseStorage = () => typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+const readJson = (key, fallback) => readJsonStorage(key, fallback);
 
-const readJson = (key, fallback) => {
-  if (!canUseStorage()) return fallback;
-  try {
-    const raw = window.localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch {
-    return fallback;
-  }
-};
-
-const writeJson = (key, value) => {
-  if (!canUseStorage()) return;
-  window.localStorage.setItem(key, JSON.stringify(value));
-};
+const writeJson = (key, value) => writeJsonStorage(key, value);
 
 const getSignupAttempts = () => readJson(SIGNUP_ATTEMPTS_KEY, {});
 
@@ -41,7 +36,7 @@ const getSignupCooldownRemainingMs = (email) => {
 
 const rememberSignupAttempt = (email) => {
   const normalizedEmail = normalizeEmail(email);
-  if (!normalizedEmail || !canUseStorage()) return;
+  if (!normalizedEmail || !canUseLocalStorage()) return;
   const attempts = getSignupAttempts();
   attempts[normalizedEmail] = Date.now();
   writeJson(SIGNUP_ATTEMPTS_KEY, attempts);
@@ -65,6 +60,7 @@ const randomSalt = () => {
 
 const getProjectStoragePath = (userId) => buildStoragePath('users', userId, 'project.json');
 const getProjectsStoragePath = (userId) => buildStoragePath('users', userId, 'projects.json');
+const getProjectRecordStoragePath = (userId, projectId) => buildStoragePath('users', userId, 'projects', `${projectId || 'project'}.json`);
 const getPublicProjectsStoragePath = () => buildStoragePath('public', 'projects.json');
 
 const getLocalProjects = () => readJson(PROJECTS_KEY, {});
@@ -137,7 +133,7 @@ export function updateStoredAccount(accountId, patch = {}) {
 }
 
 export function getSessionUserId() {
-  if (!canUseStorage()) return '';
+  if (!canUseLocalStorage()) return '';
   return window.localStorage.getItem(SESSION_KEY) || '';
 }
 
@@ -346,9 +342,21 @@ export async function sendPasswordResetEmail(email) {
   throw new Error('La réinitialisation par email nécessite Supabase.');
 }
 
-export async function updateCurrentUserPassword(password) {
+export async function updateCurrentUserPassword({ password, currentPassword = '' } = {}) {
   if (hasSupabaseConfig()) {
     const client = getSupabaseClient();
+    if (currentPassword) {
+      const { data: sessionData } = await client.auth.getSession();
+      const email = sessionData.session?.user?.email || '';
+      if (!email) throw new Error('Session introuvable. Reconnecte-toi avant de changer le mot de passe.');
+      const { error: confirmationError } = await client.auth.signInWithPassword({
+        email: normalizeEmail(email),
+        password: currentPassword,
+      });
+      if (confirmationError) {
+        throw new Error('Mot de passe actuel incorrect.');
+      }
+    }
     const { data, error } = await client.auth.updateUser({ password });
     if (error) throw error;
     const account = supabaseUserToAccount(data.user);
@@ -371,8 +379,7 @@ export async function logoutUser() {
     await client.auth.signOut();
   }
 
-  if (!canUseStorage()) return;
-  window.localStorage.removeItem(SESSION_KEY);
+  removeStorageKey(SESSION_KEY);
 }
 
 export async function saveProjectRecordsForUser(userId, projects = [], options = {}) {
@@ -383,23 +390,98 @@ export async function saveProjectRecordsForUser(userId, projects = [], options =
     return normalizedProjects;
   }
 
-  const blob = new Blob([JSON.stringify(normalizedProjects, null, 2)], { type: 'application/json' });
-  await uploadToStorage(getProjectsStoragePath(userId), blob, {
+  const storedProjects = [];
+  for (const project of normalizedProjects) {
+    if (!project?.id) continue;
+    storedProjects.push(await uploadProjectRecordForUser(userId, project));
+  }
+
+  const projectIndex = storedProjects.map((project) => getProjectIndexRecord(userId, project));
+  const indexBlob = new Blob([JSON.stringify(projectIndex, null, 2)], { type: 'application/json' });
+  await uploadToStorage(getProjectsStoragePath(userId), indexBlob, {
     contentType: 'application/json',
     cacheControl: '0',
+    maxFileSize: PROJECT_RECORDS_MAX_UPLOAD_BYTES,
     visibility: 'private',
     upsert: true,
   });
 
-  if (options.requirePublicIndex) {
-    await updatePublicProjectIndexForUser(userId, normalizedProjects);
-  } else {
-    await updatePublicProjectIndexForUser(userId, normalizedProjects).catch((error) => {
-      console.warn('Index public impossible a mettre a jour', error);
-    });
-  }
+  if (options.requirePublicIndex) await updatePublicProjectIndexForUser(userId, storedProjects);
 
-  return normalizedProjects;
+  return storedProjects;
+}
+
+const getProjectIndexRecord = (userId, project = {}) => {
+  const storagePath = project.storagePath || getProjectRecordStoragePath(userId, project.id);
+  const { data, project: legacyProject, ...metadata } = project;
+  return {
+    ...metadata,
+    storagePath,
+  };
+};
+
+const uploadProjectRecordForUser = async (userId, project = {}) => {
+  const storagePath = project.storagePath || getProjectRecordStoragePath(userId, project.id);
+  const record = { ...project, storagePath };
+  const blob = new Blob([JSON.stringify(record, null, 2)], { type: 'application/json' });
+  await uploadToStorage(storagePath, blob, {
+    contentType: 'application/json',
+    cacheControl: '0',
+    maxFileSize: PROJECT_RECORDS_MAX_UPLOAD_BYTES,
+    visibility: 'private',
+    upsert: true,
+  });
+  return record;
+};
+
+export async function deleteProjectRecordForUser(userId, project = {}) {
+  if (!userId || !project?.id || !hasSupabaseConfig()) return false;
+
+  const projectsPrefix = buildStoragePath('users', userId, 'projects');
+  const storagePath = typeof project.storagePath === 'string' && project.storagePath.startsWith(`${projectsPrefix}/`)
+    ? project.storagePath
+    : getProjectRecordStoragePath(userId, project.id);
+
+  await deleteStorageFile(storagePath, { visibility: 'private' });
+  return true;
+}
+
+export async function saveProjectRecordForUser(userId, project = {}, projects = [], options = {}) {
+  if (!userId || !project?.id) return project;
+  const normalizedProjects = Array.isArray(projects) ? projects : [];
+
+  if (!hasSupabaseConfig()) return project;
+
+  const storedProject = await uploadProjectRecordForUser(userId, project);
+  const storedProjects = [];
+  for (const record of normalizedProjects) {
+    if (!record?.id) continue;
+    if (record.id === storedProject.id) {
+      storedProjects.push(storedProject);
+    } else if (record.storagePath) {
+      storedProjects.push(record);
+    } else {
+      storedProjects.push(await uploadProjectRecordForUser(userId, record));
+    }
+  }
+  const projectIndex = storedProjects
+    .filter((record) => record?.id)
+    .map((record) => getProjectIndexRecord(userId, record));
+  const indexBlob = new Blob([JSON.stringify(projectIndex, null, 2)], { type: 'application/json' });
+  await uploadToStorage(getProjectsStoragePath(userId), indexBlob, {
+    contentType: 'application/json',
+    cacheControl: '0',
+    maxFileSize: PROJECT_RECORDS_MAX_UPLOAD_BYTES,
+    visibility: 'private',
+    upsert: true,
+  });
+
+  if (options.requirePublicIndex) await updatePublicProjectIndexForUser(userId, storedProjects);
+
+  return {
+    ...storedProject,
+    syncedProjects: storedProjects,
+  };
 }
 
 export async function loadPublicProjectIndex() {
@@ -421,6 +503,7 @@ async function savePublicProjectIndex(projects = []) {
   await uploadToStorage(getPublicProjectsStoragePath(), blob, {
     contentType: 'application/json',
     cacheControl: '0',
+    maxFileSize: PROJECT_RECORDS_MAX_UPLOAD_BYTES,
     visibility: 'public',
     upsert: true,
   });
@@ -449,7 +532,17 @@ export async function loadProjectRecordsForUser(userId) {
   try {
     const text = await downloadTextFile(getProjectsStoragePath(userId), { visibility: 'private' });
     const projects = JSON.parse(text);
-    return Array.isArray(projects) ? projects : [];
+    if (!Array.isArray(projects)) return [];
+    return Promise.all(projects.map(async (project) => {
+      if (!project?.storagePath) return project;
+      try {
+        const projectText = await downloadTextFile(project.storagePath, { visibility: 'private' });
+        return { ...project, ...JSON.parse(projectText), storagePath: project.storagePath };
+      } catch (error) {
+        if (isStorageNotFoundError(error)) return project;
+        throw error;
+      }
+    }));
   } catch (error) {
     if (isStorageNotFoundError(error)) return null;
     throw error;

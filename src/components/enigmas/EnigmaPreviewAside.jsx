@@ -74,7 +74,7 @@ export default function EnigmaPreviewAside({
                     ) : null}
                   </div>
 
-                  <p className="small-note">Cette valeur est sauvegardée dans l’enigme via <code>codeSkin</code>. Le preview joueur pourra ensuite lire ce champ pour afficher la bonne interface.</p>
+                  <p className="small-note">Cette valeur est sauvegardée dans l’énigme via <code>codeSkin</code>. Le preview joueur pourra ensuite lire ce champ pour afficher la bonne interface.</p>
                 </aside>
               ) : null}
 
@@ -91,7 +91,7 @@ export default function EnigmaPreviewAside({
                   <div style={{ marginTop: 14, padding: 16, border: '1px solid rgba(148, 163, 184, 0.25)', borderRadius: 16, background: 'rgba(2, 6, 23, 0.45)' }}>
                     <p className="small-note" style={{ marginTop: 0 }}>Aperçu : {COLOR_LOGIC_LABELS[selectedColorLogic]}</p>
 
-                    {selectedColorLogic === 'sequence' ? (
+                    {selectedColorLogic === 'séquence' ? (
                       <>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
                           {['red', 'blue', 'yellow', 'green'].map((color, index) => (
@@ -180,7 +180,7 @@ export default function EnigmaPreviewAside({
                             </div>
                           ))}
                         </div>
-                        <p className="small-note" style={{ marginBottom: 0 }}>Logique : les objets colorés de la scene donnént l’ordre du code.</p>
+                        <p className="small-note" style={{ marginBottom: 0 }}>Logique : les objets colorés de la scène donnent l’ordre du code.</p>
                       </>
                     ) : null}
 
@@ -243,7 +243,7 @@ export default function EnigmaPreviewAside({
                     ) : null}
                   </div>
 
-                  <p className="small-note">Sauvegardé dans l’enigme via <code>colorLogic</code>. La combinaison reste dans <code>solutionColors</code>.</p>
+                  <p className="small-note">Sauvegardé dans l’énigme via <code>colorLogic</code>. La combinaison reste dans <code>solutionColors</code>.</p>
                 </aside>
               ) : null}
 
@@ -361,7 +361,7 @@ export default function EnigmaPreviewAside({
                     ) : null}
                   </div>
 
-                  <p className="small-note">Sauvegardé dans l’enigme via <code>miscMode</code> et les champs Divers associés.</p>
+                  <p className="small-note">Sauvegardé dans l’énigme via <code>miscMode</code> et les champs Divers associés.</p>
                 </aside>
               ) : null}
 
@@ -423,7 +423,7 @@ export default function EnigmaPreviewAside({
                             </div>
                           ))}
                         </div>
-                        <p className="small-note" style={{ marginBottom: 0 }}>Logique : l’image est découpée en grille. Le joueur remet les pieces dans le bon ordre, en drag & drop ou avec une case vide.</p>
+                        <p className="small-note" style={{ marginBottom: 0 }}>Logique : l’image est découpée en grille. Le joueur remet les pièces dans le bon ordre, en drag & drop ou avec une case vide.</p>
                       </>
                     ) : null}
                   </div>
@@ -456,11 +456,11 @@ export default function EnigmaPreviewAside({
                       )) : null}
                     </div>
                     <p className="small-note" style={{ marginBottom: 0 }}>
-                      Ce style pourra être utilisé par le rendu joueur pour afficher les pieces avec la bonne forme.
+                      Ce style pourra être utilisé par le rendu joueur pour afficher les pièces avec la bonne forme.
                     </p>
                   </div>
 
-                  <p className="small-note">Sauvegardé dans l’enigme via <code>imagePuzzleLogic</code> et <code>imageCutStyle</code>. L’image et la grille restent configurées plus bas.</p>
+                  <p className="small-note">Sauvegardé dans l’énigme via <code>imagePuzzleLogic</code> et <code>imageCutStyle</code>. L’image et la grille restent configurées plus bas.</p>
                 </aside>
               ) : null}
     </>

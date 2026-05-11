@@ -29,6 +29,7 @@ export function useSceneEditorShapes({
   selectedScene,
   selectedSceneId,
   patchProject,
+  isBeginnerMode = false,
 }) {
   const getEditorElementByType = (scene, type, id) => {
     const collections = {
@@ -144,6 +145,7 @@ export function useSceneEditorShapes({
   };
 
   const renderShapeControls = (type, id) => {
+    if (isBeginnerMode) return null;
     const entry = getEditorElementByType(selectedScene, type, id);
     if (!entry) return null;
     const shapeType = getElementShapeType(entry);

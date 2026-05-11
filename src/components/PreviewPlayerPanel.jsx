@@ -1,6 +1,11 @@
 import PreviewTab from './PreviewTab';
 
-export default function PreviewPlayerPanel({ editor, preview, sharedPlayerMode = false }) {
+export default function PreviewPlayerPanel({
+  editor,
+  preview,
+  heroCharacterPreviewRequestKey = 0,
+  sharedPlayerMode = false,
+}) {
   return (
     <PreviewTab
       playScene={preview.playScene}
@@ -19,12 +24,29 @@ export default function PreviewPlayerPanel({ editor, preview, sharedPlayerMode =
       resetPreview={preview.resetPreview}
       saveGameState={preview.saveGameState}
       loadGameState={preview.loadGameState}
+      restoreLastChoiceSnapshot={preview.restoreLastChoiceSnapshot}
       getSceneLabel={editor.getSceneLabel}
       dialogue={preview.dialogue}
       inventory={preview.inventory}
+      storyVariables={preview.storyVariables}
+      adventureJournalEntries={preview.adventureJournalEntries}
+      chosenConversationReplyIds={preview.chosenConversationReplyIds}
+      hiddenConversationReplyIds={preview.hiddenConversationReplyIds}
+      completedHotspotIds={preview.completedHotspotIds}
       addInventoryItem={preview.addInventoryItem}
       removeInventoryItem={preview.removeInventoryItem}
       playerLives={preview.playerLives}
+      heroAdventure={preview.heroAdventure}
+      heroState={preview.heroState}
+      heroSetupComplete={preview.heroSetupComplete}
+      equippedHeroItemIds={preview.equippedHeroItemIds}
+      equippedHeroSlotMap={preview.equippedHeroSlotMap}
+      lastChoiceSnapshot={preview.lastChoiceSnapshot}
+      adjustHeroStat={preview.adjustHeroStat}
+      lastDiceRoll={preview.lastDiceRoll}
+      rollHeroDie={preview.rollHeroDie}
+      rollHeroSetupSkills={preview.rollHeroSetupSkills}
+      completeHeroSetup={preview.completeHeroSetup}
       sceneTimerResetKey={preview.sceneTimerResetKey}
       setInventory={preview.setInventory}
       setSelectedInventoryIds={preview.setSelectedInventoryIds}
@@ -36,11 +58,23 @@ export default function PreviewPlayerPanel({ editor, preview, sharedPlayerMode =
       project={editor.project}
       selectedInventoryIds={preview.selectedInventoryIds}
       openInventoryItem={preview.openInventoryItem}
+      equipHeroItem={preview.equipHeroItem}
+      unequipHeroItem={preview.unequipHeroItem}
       setDraggedInventoryId={preview.setDraggedInventoryId}
       draggedInventoryId={preview.draggedInventoryId}
       combineInventoryItems={preview.combineInventoryItems}
       setDialogue={preview.setDialogue}
       activeEnigma={preview.activeEnigma}
+      activeConversation={preview.activeConversation}
+      activeEnding={preview.activeEnding}
+      choiceEffectNotices={preview.choiceEffectNotices}
+      closeConversation={preview.closeConversation}
+      closeEnding={preview.closeEnding}
+      clearChoiceEffectNotices={preview.clearChoiceEffectNotices}
+      isConversationReplyAvailable={preview.isConversationReplyAvailable}
+      getConversationReplyLockReason={preview.getConversationReplyLockReason}
+      chooseConversationReply={preview.chooseConversationReply}
+      heroCharacterPreviewRequestKey={heroCharacterPreviewRequestKey}
       enigmaCodeInput={preview.enigmaCodeInput}
       setEnigmaCodeInput={preview.setEnigmaCodeInput}
       enigmaColorAttempt={preview.enigmaColorAttempt}

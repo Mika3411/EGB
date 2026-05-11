@@ -19,6 +19,7 @@ import HelpLabel from './forms/HelpLabel';
 import EnigmaList from './enigmas/EnigmaList';
 import EnigmaPreviewAside from './enigmas/EnigmaPreviewAside';
 import MediaSourcePicker from './MediaSourcePicker.jsx';
+import { showConfirm } from './AccessibleDialog';
 
 export default function EnigmasTab({
   project,
@@ -75,7 +76,7 @@ export default function EnigmasTab({
 
       <section className="panel main">
         <div className="panel-head">
-          <h2>Éditeur d’enigme</h2>
+          <h2>Éditeur d’énigme</h2>
           {selectedEnigma && (
             <div className="inline-actions end">
               <button type="button" className="secondary-action" data-tour="enigma-preview-button" onClick={() => previewEnigma?.(selectedEnigma.id)}>
@@ -167,8 +168,14 @@ export default function EnigmasTab({
                         <input value={choice} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                           enigma.miscChoices[index] = e.target.value;
                         })} />
-                        <button type="button" className="danger-button" onClick={() => {
-                          if (!window.confirm('Supprimer ce choix ?')) return;
+                        <button type="button" className="danger-button" onClick={async () => {
+                          const confirmed = await showConfirm({
+                            title: 'Supprimer le choix',
+                            message: 'Supprimer ce choix ?',
+                            confirmLabel: 'Supprimer',
+                            variant: 'danger',
+                          });
+                          if (!confirmed) return;
                           updateEnigma(selectedEnigma.id, (enigma) => {
                           enigma.miscChoices = (enigma.miscChoices || []).filter((_, choiceIndex) => choiceIndex !== index);
                           });
@@ -241,8 +248,14 @@ export default function EnigmasTab({
                         <input value={pair.right || ''} placeholder="Association" onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                           enigma.miscPairs[index] = { ...(enigma.miscPairs[index] || {}), right: e.target.value };
                         })} />
-                        <button type="button" className="danger-button" onClick={() => {
-                          if (!window.confirm('Supprimer cette paire ?')) return;
+                        <button type="button" className="danger-button" onClick={async () => {
+                          const confirmed = await showConfirm({
+                            title: 'Supprimer la paire',
+                            message: 'Supprimer cette paire ?',
+                            confirmLabel: 'Supprimer',
+                            variant: 'danger',
+                          });
+                          if (!confirmed) return;
                           updateEnigma(selectedEnigma.id, (enigma) => {
                           enigma.miscPairs = (enigma.miscPairs || []).filter((_, pairIndex) => pairIndex !== index);
                           });
@@ -298,8 +311,14 @@ export default function EnigmasTab({
                     type="button"
                     className="danger-button"
                     disabled={!selectedEnigma.popupBackgroundData}
-                    onClick={() => {
-                      if (!window.confirm('Supprimer le fond de cette enigme ?')) return;
+                    onClick={async () => {
+                      const confirmed = await showConfirm({
+                        title: 'Supprimer le fond',
+                        message: 'Supprimer le fond de cette énigme ?',
+                        confirmLabel: 'Supprimer',
+                        variant: 'danger',
+                      });
+                      if (!confirmed) return;
                       updateEnigma(selectedEnigma.id, (enigma) => {
                       enigma.popupBackgroundData = '';
                       enigma.popupBackgroundName = '';
@@ -331,7 +350,7 @@ export default function EnigmasTab({
                   <input data-tour="enigma-popup-background-zoom" type="range" min="1" max="3" step="0.05" value={Number(selectedEnigma.popupBackgroundZoom) || 1} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                     enigma.popupBackgroundZoom = Number(e.target.value);
                   })} />
-                  <HelpLabel help={FIELD_HELP.popupBackgroundOverlay}>Voile de lisibilité</HelpLabel>
+                  <HelpLabel help={FIELD_HELP.popupBackgroundOverlay}>Voile dé lisibilité</HelpLabel>
                   <select data-tour="enigma-popup-background-overlay" value={selectedEnigma.popupBackgroundOverlay || 'dark'} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                     enigma.popupBackgroundOverlay = e.target.value;
                   })}>
@@ -404,8 +423,14 @@ export default function EnigmasTab({
                       type="button"
                       className="danger-button"
                       disabled={!selectedEnigma.imageData}
-                      onClick={() => {
-                        if (!window.confirm("Supprimer l'image de cette enigme ?")) return;
+                      onClick={async () => {
+                        const confirmed = await showConfirm({
+                          title: "Supprimer l'image",
+                          message: "Supprimer l'image de cette énigme ?",
+                          confirmLabel: 'Supprimer',
+                          variant: 'danger',
+                        });
+                        if (!confirmed) return;
                         updateEnigma(selectedEnigma.id, (enigma) => {
                         enigma.imageData = '';
                         enigma.imageName = '';
@@ -419,7 +444,7 @@ export default function EnigmasTab({
                 {selectedEnigma.imageData ? (
                   <img className="thumb" src={selectedEnigma.imageData} alt={selectedEnigma.imageName || selectedEnigma.name} />
                 ) : (
-                  <p className="small-note">L’image sera découpée automatiquement en pieces au moment du jeu.</p>
+                  <p className="small-note">L’image sera découpée automatiquement en pièces au moment du jeu.</p>
                 )}
                 <div className="grid-two">
                   <div>
@@ -436,7 +461,7 @@ export default function EnigmasTab({
                   </div>
                 </div>
                 <p className="small-note">
-                  Les pieces sont mélangées automatiquement. Le joueur clique sur 2 pieces pour les échanger.
+                  Les pièces sont mélangées automatiquement. Le joueur clique sur 2 pièces pour les échanger.
                 </p>
               </>
             ) : null}
@@ -465,12 +490,12 @@ export default function EnigmasTab({
                   if (e.target.value !== 'cinematic') enigma.targetCinematicId = '';
                 })}>
                   <option value="none">Rien / juste valider</option>
-                  <option value="scene">Accès à une scene</option>
-                  <option value="cinematic">Lancer une cinematic</option>
+                  <option value="scene">Accès à une scène</option>
+                  <option value="cinematic">Lancer une cinématique</option>
                 </select>
               </div>
               <div>
-                <HelpLabel help={FIELD_HELP.targetScene}>Scene à débloquér</HelpLabel>
+                <HelpLabel help={FIELD_HELP.targetScene}>Scène à débloquér</HelpLabel>
                 <select value={selectedEnigma.targetSceneId || ''} disabled={(selectedEnigma.unlockType || 'none') !== 'scene'} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                   enigma.targetSceneId = e.target.value;
                 })}>
@@ -479,7 +504,7 @@ export default function EnigmasTab({
                 </select>
               </div>
               <div>
-                <HelpLabel help={FIELD_HELP.targetCinematic}>Cinematic à lancer</HelpLabel>
+                <HelpLabel help={FIELD_HELP.targetCinematic}>Cinématique à lancer</HelpLabel>
                 <select value={selectedEnigma.targetCinematicId || ''} disabled={(selectedEnigma.unlockType || 'none') !== 'cinematic'} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                   enigma.targetCinematicId = e.target.value;
                 })}>
@@ -506,7 +531,7 @@ export default function EnigmasTab({
               />
             </div>
           </div>
-        ) : <p>Selectionne une enigme à gauche, ou crée-en une nouvelle.</p>}
+        ) : <p>Sélectionne une énigme à gauche, ou crée-en une nouvelle.</p>}
       </section>
     </div>
   );

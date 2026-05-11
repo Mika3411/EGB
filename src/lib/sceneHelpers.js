@@ -35,5 +35,5 @@ export function buildSceneLabel(sceneId, getSceneById, getActById) {
   const scene = getSceneById(sceneId);
   if (!scene) return '—';
   const act = getActById(scene.actId);
-  return `${act?.name || 'Sans acte'} · ${scene.parentSceneId ? 'Sous-scene' : 'Scene'} · ${scene.name}`;
+  return `${act?.name || 'Sans acte'} · ${scene.parentSceneId ? 'Sous-scène' : 'Scene'} · ${scene.name}`;
 }

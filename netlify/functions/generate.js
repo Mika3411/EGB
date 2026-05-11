@@ -1,5 +1,11 @@
+import { randomUUID } from 'node:crypto';
+
 import {
   aiCreditCosts,
+  assertAiGeneratedTextAllowed,
+  assertAiRequestRateLimit,
+  assertAiTextPromptAllowed,
+  buildTextGenerationInput,
   calculateImageCreditCost,
   calculateTextCreditCost,
   ensureCreditAccount,
@@ -18,7 +24,7 @@ import {
 
 const makeJobId = () => `ai_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
-const invokeBackgroundGeneration = async (event, jobId, body) => {
+const invokeBackgroundGeneration = async (event, jobId, body, rateLimitToken) => {
   const host = event.headers.host || event.headers.Host;
   const protocol = event.headers['x-forwarded-proto'] || 'https';
   const baseUrl = host ? `${protocol}://${host}` : process.env.URL;
@@ -34,7 +40,7 @@ const invokeBackgroundGeneration = async (event, jobId, body) => {
       'Content-Type': 'application/json',
       Authorization: event.headers.authorization || event.headers.Authorization || '',
     },
-    body: JSON.stringify({ jobId, body }),
+    body: JSON.stringify({ jobId, body, rateLimitToken }),
   });
 
   if (!response.ok && response.status !== 202) {
@@ -51,18 +57,23 @@ export const handler = async (event) => withErrors(event, async () => {
   const userId = await resolveCreditUserId(event);
   const cost = calculateTextCreditCost(body);
   const supabase = getSupabaseAdminClient();
+  const input = buildTextGenerationInput(body);
+  await assertAiRequestRateLimit(event, userId, 'text', supabase);
+  await assertAiTextPromptAllowed(input);
   const shouldRunAsync = body.responseFormat === 'escape-game-project-json' && body.mode !== 'repair_item_names' && !body.runInline;
   if (shouldRunAsync) {
     const jobId = makeJobId();
+    const rateLimitToken = randomUUID();
     await writeAiJob(supabase, {
       id: jobId,
       userId,
       status: 'pending',
       mode: body.mode || 'generate',
       cost,
+      rateLimitToken,
       createdAt: new Date().toISOString(),
     });
-    await invokeBackgroundGeneration(event, jobId, body);
+    await invokeBackgroundGeneration(event, jobId, body, rateLimitToken);
     return json(202, {
       jobId,
       status: 'pending',
@@ -70,11 +81,6 @@ export const handler = async (event) => withErrors(event, async () => {
       credits: { cost, costs: aiCreditCosts },
     });
   }
-
-  const input = [
-    'Tu dois repondre uniquement avec un JSON valide, sans Markdown ni commentaire.',
-    body.prompt,
-  ].filter(Boolean).join('\n\n');
 
   let charged = false;
   try {
@@ -93,14 +99,15 @@ export const handler = async (event) => withErrors(event, async () => {
       error.statusCode = 502;
       throw error;
     }
+    await assertAiGeneratedTextAllowed(outputText);
 
     if (body.responseFormat === 'escape-game-project-json') {
       try {
         parseOpenAiProjectJson(outputText);
-      } catch {
-        const error = new Error('OpenAI a renvoye un JSON invalide ou incomplet. Credits rembourses.');
+      } catch (validationError) {
+        const error = new Error(validationError.message || 'OpenAI a renvoye un JSON invalide ou incomplet. Credits rembourses.');
         error.statusCode = 502;
-        error.code = 'AI_INVALID_PROJECT_JSON';
+        error.code = validationError.code || 'AI_INVALID_PROJECT_JSON';
         throw error;
       }
     }

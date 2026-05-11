@@ -15,6 +15,14 @@ export const formatDate = (value) => {
 
 export const CREATION_TEMPLATES = [
   ['empty', 'Projet vide'],
+  ['adventure_choices', 'Narration choix multiples'],
+  ['hero_adventure', 'Aventure de héros'],
+  ['narrative_investigation', 'Enquête narrative'],
+  ['magic_forest', 'Forêt magique'],
+  ['survival_choices', 'Survie'],
+  ['npc_dialogue', 'Dialogue PNJ'],
+  ['negotiation', 'Négociation'],
+  ['narrative_maze', 'Labyrinthe narratif'],
   ['manor', 'Manoir hanté'],
   ['investigation', 'Enquête policière'],
   ['laboratory', 'Laboratoire'],
@@ -25,13 +33,18 @@ export const PUBLIC_CATEGORIES = ['Horreur', 'Enquête', 'Aventure', 'Science-fi
 export const AGE_RATINGS = ['Tout public', '+18 ans'];
 export const PROFILE_TUTORIAL_OPTIONS = [
   ['profile', 'Profil'],
-  ['scenes', 'Scenes'],
+  ['scenes', 'Scènes'],
+  ['media', 'Média'],
   ['editor', 'Éditeur'],
   ['map', 'Plan'],
-  ['cinematics', 'Cinematics'],
+  ['adventure', 'Narration'],
+  ['hero', 'Héros'],
+  ['cinematics', 'Cinématiques'],
   ['animation', 'Animation'],
   ['combinations', 'Combinaisons'],
-  ['enigmas', 'Enigmes'],
+  ['enigmas', 'Énigmes'],
   ['logic', 'Logique'],
+  ['preview', 'Preview'],
   ['ai', 'IA'],
+  ['score', 'Bilan'],
 ];

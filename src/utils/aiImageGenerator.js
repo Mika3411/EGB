@@ -171,6 +171,7 @@ const buildPrompt = ({ type, entity, projectTitle, visualConstraints, visualCont
     const isThumbnail = variant === 'thumbnail';
     return `
 Objet d'inventaire pour un escape game: ${entity?.name}.
+${visualContext?.useEntityImagePrompt ? `Prompt fourni par le brief IA: ${entity?.imagePrompt || 'aucun prompt sp?cifique, inventer un objet cohérent'}.` : ''}
 Style lisible, isolé, iconique, cohérent avec "${projectTitle}".
 Style d'image: ${visualContext?.style || 'rendu cohérent avec le projet'}.
 
@@ -178,20 +179,21 @@ Contraintes obligatoires:
 - PNG détouré sur fond transparent avec canal alpha.
 - Un seul objet au centre, entier, sans recadrage.
 - Format ${isThumbnail ? 'miniature carrée simple, détails réduits, lisible en 64x64 pixels' : 'objet complet plus détaillé'}.
-- Aucun décor, aucune table, aucun mur, aucune piece, aucun support.
+- Aucun décor, aucune table, aucun mur, aucune pièce, aucun support.
 - Aucun texte, aucun logo, aucune étiquette lisible.
 - Ne pas dessiner de carré blanc, gris, noir ou coloré derrière l'objet.
 - Ombre douce autorisée uniquement si elle reste dans la transparence et ne crée pas un fond visible.
-- L'image doit pouvoir être posée directement par-dessus une scene.
+- L'image doit pouvoir être posée directement par-dessus une scène.
 `.trim();
   }
   if (type === 'cinematic') {
     return `
 Image cinematic 16:9 pour un escape game.
 
-Cinematic: ${entity?.cinematicName || entity?.name || projectTitle || 'Cinematic'}
+Cinématique: ${entity?.cinematicName || entity?.name || projectTitle || 'Cinématique'}
 Slide: ${entity?.name || 'Slide'}
 Narration: ${entity?.narration || 'Révélation narrative.'}
+${visualContext?.useEntityImagePrompt ? `Prompt fourni par le brief IA: ${entity?.imagePrompt || 'aucun prompt sp?cifique, illustrer la narration'}.` : ''}
 Thème global: ${visualContext?.globalTheme || projectTitle || 'escape game'}
 Style visuel: ${visualContext?.style || 'réaliste, cinématographique, lisible, dramatique'}
 
@@ -199,11 +201,11 @@ Contraintes:
 - Image large 16:9, composition cinématographique.
 - Aucun texte incrusté dans l'image.
 - Montrer la révélation, la transition ou l'ambiance décrite par la narration.
-- Rester cohérent avec les scenes et objets du projet.
+- Rester cohérent avec les scènes et objets du projet.
 - Lumière lisible, détails visibles, pas d'image trop noire.
 `.trim();
   }
-  const safeStyle = String(visualContext?.style || 'réaliste, atmosphère mystérieuse mais clairement éclairée, camérà large, contraste suffisant pour un jeu cliquable')
+  const safeStyle = String(visualContext?.style || 'réaliste, atmosphère mystérieuse mais clairement éclairée, caméra large, contraste suffisant pour un jeu cliquable')
     .replace(/\bsombre\b/gi, 'mystérieux')
     .replace(/\btrès noir\b/gi, 'lisible');
   const constraints = formatConstraints(visualConstraints);
@@ -212,10 +214,11 @@ Contraintes:
      connectedScenes.map((entry) => `- ${entry.relation}`).join('\n')
     : '- Aucune connexion explicite connue.';
   return ` ?
-Tu génères une scene pour un escape game.
+Tu génères une scène pour un escape game.
 
-Scene actuelle: ${entity?.name}
-Résumé narratif: ${entity?.introText || 'Scene interactive.'}
+Scène actuelle: ${entity?.name}
+Résumé narratif: ${entity?.introText || 'Scène interactive.'}
+${visualContext?.useEntityImagePrompt ? `Prompt fourni par le brief IA: ${entity?.imagePrompt || 'aucun prompt sp?cifique, créer une scène coh?rente avec le r?sum?'}.` : ''}
 Thème global: ${visualContext?.globalTheme || projectTitle || 'escape game'}
 Style visuel: ${safeStyle}, éclairage de jeu vidéo lisible, luminosité globale moyenne, pas de sous-exposition ?
 Héritage visuel: ${visualContext?.visualInheritance || 'même époque, mêmes matériaux, mêmes portes, même lumière'}
@@ -224,18 +227,18 @@ Contraintes visuelles OBLIGATOIRES:
 ${constraints || '- Décor large et lisible permettant de placer des zones interactives.'}
 
 Interdiction importante:
-- Ne montre aucun objet d'inventaire dans l'image de scene, même s'il est mentionné par une zone, une récompense ou une condition. L'utilisateur doit pouvoir ajouter/cacher ces objets lui-même ensuite.
+- Ne montre aucun objet d'inventaire dans l'image de scène, même s'il est mentionné par une zone, une récompense ou une condition. L'utilisateur doit pouvoir ajouter/cacher ces objets lui-même ensuite.
 - Tu peux montrer les supports, meubles, cachettes, mécanismes, portes, tiroirs, boîtes, marques et indices non-inventaire, mais pas l'objet collectable lui-même.
 
-La scene doit être cohérente avec les scenes adjacentes:
+La scène doit être cohérente avec les scènes adjacentes:
 ${connectedText}
 
-Carte globale des pieces:
+Carte globale dés pièces:
 ${JSON.stringify(visualContext?.layout || {}, null, 2)}
 
 Chaque élément important doit être clairement visible et positionné logiquement dans l’image.
 La caméra doit être large pour permettre l’interaction.
-Ne crée pas de contradiction visuelle avec les pieces connectées.
+Ne crée pas de contradiction visuelle avec les pièces connectées.
 Priorité UX absolue: l’image doit être utilisable comme écran de jeu. Exposition moyenne claire, détails visibles dans les ombres, aucun centre noir, aucun couloir ou arrière-plan complètement bouché. Ajoute une lumière d’appoint douce et diffuse si nécessaire, en plus des bougies, lampes ou ouvertures visibles. Même dans un tunnel ou une cave, les murs, le sol, les portes et le fond doivent rester visibles.
 Les zones interactives doivent rester repérables au premier coup d’œil, avec silhouettes nettes, bords lisibles et contraste local. Une ambiance mystérieuse est autorisée, mais pas une image sous-exposée.
 Évite absolument: image trop noire, noirs bouchés, grand tunnel noir au centre, objet important noyé dans l’ombre, vignettage excessif, flou décoratif. Le décor complet doit rester inspectable.
@@ -243,7 +246,7 @@ Les zones interactives doivent rester repérables au premier coup d’œil, avec
 Réponse attendue de l'API image:
 {
   "imageData": "data:image/...",
-  "imageName": "scene.png",
+  "imageName": "scène.png",
   "elements": [
     { "id": "door", "label": "Porte", "x": 85, "y": 50, "width": 12, "height": 40 }
   ]

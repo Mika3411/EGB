@@ -35,8 +35,9 @@ import {
   isTabAllowedForProject,
 } from './utils/tutorialHelpers';
 import { exportProjectJson } from './utils/exportProjectJson';
+import { exportAuthorSummary } from './utils/exportAuthorSummary';
 import { mergeProjectPatch, validateProject } from './utils/projectValidation';
-import { calculateProjectScore } from './utils/projectScore';
+import { calculateProjectScore } from './lib/projectScoreEngine';
 import { useProjectEditor } from './hooks/useProjectEditor.jsx';
 import { usePreviewPlayer } from './hooks/usePreviewPlayer';
 import { useSharedPlayableRoute } from './hooks/useSharedPlayableRoute';
@@ -44,7 +45,7 @@ import { useAutosaveProject } from './hooks/useAutosaveProject';
 import { useAccountStorage } from './hooks/useAccountStorage';
 import { useProfileProjectActions } from './hooks/useProfileProjectActions';
 import { collectDescendantSceneIds } from './lib/sceneHelpers';
-import { collectProjectAssets, upsertProjectAsset } from './lib/assetManager';
+import { collectProjectAssetManifest, collectProjectAssets, upsertProjectAsset } from './lib/assetManager';
 import { formatStorageSize } from './lib/storageQuota';
 import { isAdminAccount } from './lib/authStorage';
 import { buildStoragePath, generateStorageFilename, getSupabaseClient, hasSupabaseConfig, uploadToStorage } from './supabaseStorage';
@@ -114,9 +115,9 @@ function BuilderApp({
     confirm: confirmDialog,
     dialog: accessibleDialog,
   } = useAccessibleDialog();
-  const projectScore = useMemo(() => calculateProjectScore(editor.project), [editor.project]);
   const [saveStatus, setSaveStatus] = useState('');
   const [screen, setScreen] = useState(initialScreen);
+  const [projectScore, setProjectScore] = useState(null);
   const [showAuthPanel, setShowAuthPanel] = useState(false);
   const [authEntryMode, setAuthEntryMode] = useState('login');
   const [sharedLoadStatus, setSharedLoadStatus] = useState('');
@@ -124,11 +125,36 @@ function BuilderApp({
   const [selectedTutorialTab, setSelectedTutorialTab] = useState('scenes');
   const [tutorialSteps, setTutorialSteps] = useState([]);
   const [aiCreditBalance, setAiCreditBalance] = useState(0);
+  const [heroCharacterPreviewRequestKey, setHeroCharacterPreviewRequestKey] = useState(0);
   const hydratedProjectRef = useRef('');
   const profileTutorialAutoStartedRef = useRef('');
   const tutorialStepsPromiseRef = useRef(null);
   const initialProjectLoadRef = useRef('');
   const initialTutorialStartRef = useRef('');
+  useEffect(() => {
+    if (screen !== 'editor') {
+      setProjectScore(null);
+      return undefined;
+    }
+
+    let isCancelled = false;
+    setProjectScore(null);
+    const calculate = () => {
+      if (!isCancelled) setProjectScore(calculateProjectScore(editor.project));
+    };
+    const idleId = typeof window !== 'undefined' && window.requestIdleCallback
+      ? window.requestIdleCallback(calculate, { timeout: 1200 })
+      : window.setTimeout(calculate, 0);
+
+    return () => {
+      isCancelled = true;
+      if (typeof window !== 'undefined' && window.cancelIdleCallback && typeof idleId === 'number') {
+        window.cancelIdleCallback(idleId);
+      } else {
+        window.clearTimeout(idleId);
+      }
+    };
+  }, [editor.project, screen]);
   const openLoginPanel = useCallback(() => {
     setAuthEntryMode('login');
     setShowAuthPanel(true);
@@ -289,7 +315,11 @@ function BuilderApp({
     };
   }, [auth.isReady, auth.user, loadTutorialSteps, screen, tutorialStepIndex]);
 
-  useAutosaveProject({
+  const {
+    markProjectSaveFailed,
+    markProjectSaveStarted,
+    markProjectSaved,
+  } = useAutosaveProject({
     activeProjectId: auth.activeProjectId,
     hydratedProjectRef,
     project: editor.project,
@@ -297,10 +327,30 @@ function BuilderApp({
     screen,
     selectedSceneId: editor.selectedSceneId,
     setSaveStatus,
+    skipInitialProjectSave: true,
     tab: editor.tab,
     userId: auth.user?.id,
     writeBuilderUiState,
   });
+
+  const saveProjectAndAcknowledge = useCallback(async (projectToSave, projectId = auth.activeProjectId, uiState = {}, saveOptions = {}) => {
+    const savedProjectId = projectId || auth.activeProjectId;
+    markProjectSaveStarted(projectToSave, savedProjectId);
+    try {
+      const result = await auth.saveProject(projectToSave, projectId, uiState, saveOptions);
+      markProjectSaved(projectToSave, savedProjectId, result?.syncStatus || {});
+      return result;
+    } catch (error) {
+      markProjectSaveFailed(projectToSave, savedProjectId, uiState);
+      throw error;
+    }
+  }, [
+    auth.activeProjectId,
+    auth.saveProject,
+    markProjectSaveFailed,
+    markProjectSaveStarted,
+    markProjectSaved,
+  ]);
 
   useEffect(() => {
     if (!auth.user?.id) {
@@ -428,7 +478,10 @@ function BuilderApp({
     if (!file) return null;
     if (validationMessage) {
       setSaveStatus(validationMessage);
-      alert(validationMessage);
+      await alertDialog({
+        title: 'Import impossible',
+        message: validationMessage,
+      });
       return null;
     }
 
@@ -440,7 +493,11 @@ function BuilderApp({
       if (usageBytes + preparedMedia.size > accountStorageQuotaBytes) {
         const message = `Stockage insuffisant : ${formatStorageSize(usageBytes)} / ${formatStorageSize(accountStorageQuotaBytes)} utilisés. Ce fichier pèse ${formatStorageSize(preparedMedia.size)}.`;
         setSaveStatus(message);
-        alert(`${message}\n\nSupprime des médias inactifs ou augmente le stockage du compte.`);
+        await alertDialog({
+          title: 'Stockage insuffisant',
+          message: `${message}\n\nSupprime des médias inactifs ou augmente le stockage du compte.`,
+          variant: 'danger',
+        });
         return null;
       }
 
@@ -462,7 +519,7 @@ function BuilderApp({
 
         editor.loadProject(nextProject);
         preview.syncWithProject(nextProject);
-        if (auth.user?.id) await auth.saveProject(nextProject, auth.activeProjectId, {
+        if (auth.user?.id) await saveProjectAndAcknowledge(nextProject, auth.activeProjectId, {
           tab: editor.tab,
           selectedSceneId: editor.selectedSceneId,
         });
@@ -490,17 +547,19 @@ function BuilderApp({
     } catch (error) {
       console.error('Erreur import média', error);
       setSaveStatus('Import média impossible');
-      alert(
-        hasSupabaseConfig() ?
+      await alertDialog({
+        title: 'Import média impossible',
+        message: hasSupabaseConfig() ?
            "Impossible d'envoyer ce fichier vers Supabase Storage. Vérifie le bucket et les policies."
           : 'Configuration Supabase manquante. Ajoute VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY (ou VITE_SUPABASE_ANON_KEY) et éventuellement VITE_SUPABASE_STORAGE_BUCKET.',
-      );
+        variant: 'danger',
+      });
       return null;
     }
   }, [
     accountStorageQuotaBytes,
+    alertDialog,
     auth.activeProjectId,
-    auth.saveProject,
     auth.user?.id,
     editor.loadProject,
     editor.patchProject,
@@ -512,6 +571,7 @@ function BuilderApp({
     invalidateStorageUsage,
     prepareMediaFileForUpload,
     preview.syncWithProject,
+    saveProjectAndAcknowledge,
     uploadMediaFile,
     validateMediaFile,
   ]);
@@ -552,29 +612,47 @@ function BuilderApp({
     };
   }, [auth.user?.id]);
 
-  const handleDeleteItem = useCallback((itemId) => {
+  const handleDeleteItem = useCallback(async (itemId) => {
     const item = editor.project.items.find((entry) => entry.id === itemId);
-    if (!window.confirm(`Supprimer l'objet "${item?.name || 'sélectionné'}" ?`)) return;
+    const confirmed = await confirmDialog({
+      title: "Supprimer l'objet",
+      message: `Supprimer l'objet "${item?.name || 'sélectionné'}" ?`,
+      confirmLabel: 'Supprimer',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     preview.removeInventoryItemReferences(itemId);
     editor.deleteItem(itemId);
-  }, [editor.deleteItem, editor.project.items, preview.removeInventoryItemReferences]);
+  }, [confirmDialog, editor.deleteItem, editor.project.items, preview.removeInventoryItemReferences]);
 
-  const handleDeleteScene = useCallback((sceneId) => {
+  const handleDeleteScene = useCallback(async (sceneId) => {
     const deletedSceneIds = collectDescendantSceneIds(editor.project.scenes, sceneId);
     const scene = editor.project.scenes.find((entry) => entry.id === sceneId);
     const suffix = deletedSceneIds.size > 1 ? ` et ses ${deletedSceneIds.size - 1} sous-scène(s)` : '';
-    if (!window.confirm(`Supprimer la scène "${scene?.name || 'sélectionnée'}"${suffix} ?`)) return;
+    const confirmed = await confirmDialog({
+      title: 'Supprimer la scène',
+      message: `Supprimer la scène "${scene?.name || 'sélectionnée'}"${suffix} ?`,
+      confirmLabel: 'Supprimer',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     const remainingScenes = editor.project.scenes.filter((scene) => !deletedSceneIds.has(scene.id));
     const fallbackScene = remainingScenes[0] || null;
     editor.deleteScene(sceneId);
     preview.removeDeletedSceneReferences(deletedSceneIds, fallbackScene);
-  }, [editor.deleteScene, editor.project.scenes, preview.removeDeletedSceneReferences]);
+  }, [confirmDialog, editor.deleteScene, editor.project.scenes, preview.removeDeletedSceneReferences]);
 
-  const handleDeleteEnigma = useCallback((enigmaId) => {
+  const handleDeleteEnigma = useCallback(async (enigmaId) => {
     const enigma = editor.project.enigmas.find((entry) => entry.id === enigmaId);
-    if (!window.confirm(`Supprimer l'énigme "${enigma?.name || 'sélectionnée'}" ?`)) return;
+    const confirmed = await confirmDialog({
+      title: "Supprimer l'énigme",
+      message: `Supprimer l'énigme "${enigma?.name || 'sélectionnée'}" ?`,
+      confirmLabel: 'Supprimer',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     editor.deleteEnigma(enigmaId);
-  }, [editor.deleteEnigma, editor.project.enigmas]);
+  }, [confirmDialog, editor.deleteEnigma, editor.project.enigmas]);
 
   const handlePreviewScene = useCallback((sceneId) => {
     const scene = editor.project.scenes.find((entry) => entry.id === sceneId);
@@ -606,7 +684,13 @@ function BuilderApp({
     editor.setTab('preview');
   }, [editor.project.cinematics, editor.setTab, preview.closeEnigma, preview.launchCinematic, preview.setViewerImage]);
 
+  const handlePreviewHeroCharacter = useCallback(() => {
+    setHeroCharacterPreviewRequestKey(Date.now());
+    editor.setTab('preview');
+  }, [editor.setTab]);
+
   const handleExportProjectJson = useCallback(() => exportProjectJson(editor.project), [editor.project]);
+  const handleExportAuthorSummary = useCallback(() => exportAuthorSummary(editor.project), [editor.project]);
   const handleExportStandalone = useCallback(async () => {
     const { exportStandalone } = await import('./utils/exportStandalone');
     await exportStandalone(editor.project);
@@ -631,6 +715,7 @@ function BuilderApp({
     confirmDialog,
     hydratedProjectRef,
     preview,
+    saveProject: saveProjectAndAcknowledge,
     setSaveStatus,
     setScreen,
   });
@@ -808,7 +893,7 @@ function BuilderApp({
       await auth.saveProjects(persistedProjects, auth.activeProjectId);
     } else {
       for (const projectRecord of affectedProjects) {
-        if (projectRecord.id) await auth.saveProject(projectRecord.data, projectRecord.id, projectRecord.uiState || {});
+        if (projectRecord.id) await saveProjectAndAcknowledge(projectRecord.data, projectRecord.id, projectRecord.uiState || {});
       }
     }
 
@@ -822,7 +907,6 @@ function BuilderApp({
   }, [
     auth.activeProjectId,
     auth.projects,
-    auth.saveProject,
     auth.saveProjects,
     confirmDialog,
     editor.loadProject,
@@ -831,6 +915,7 @@ function BuilderApp({
     editor.tab,
     invalidateStorageUsage,
     preview.syncWithProject,
+    saveProjectAndAcknowledge,
   ]);
 
   const buyStorageFromProfile = useCallback(async ({ credits = 0, bytes = 0, label = '' } = {}) => {
@@ -859,7 +944,7 @@ function BuilderApp({
       const response = await fetch(STORAGE_UPGRADE_ENDPOINT, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ credits: storageCredits }),
+        body: JSON.stringify({ credits: storageCredits, userId: auth.user?.id }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Achat stockage impossible.');
@@ -877,6 +962,7 @@ function BuilderApp({
   }, [
     aiCreditBalance,
     alertDialog,
+    auth.user?.id,
     confirmDialog,
     updateStorageQuotaBytes,
   ]);
@@ -895,33 +981,52 @@ function BuilderApp({
   }, []);
 
   const openProfileFromBuilder = useCallback(async () => {
+    const shouldSaveOnExit = Boolean(
+      auth.user?.id
+      && auth.activeProjectId
+      && hydratedProjectRef.current === auth.activeProjectId,
+    );
+    const projectToSave = editor.project;
+    const projectIdToSave = auth.activeProjectId;
+    const uiStateToSave = {
+      tab: editor.tab,
+      selectedSceneId: editor.selectedSceneId,
+    };
+
     if (auth.user?.id && auth.activeProjectId) {
       writeBuilderUiState(auth.user.id, auth.activeProjectId, {
         screen: 'profile',
-        tab: editor.tab,
-        selectedSceneId: editor.selectedSceneId,
+        ...uiStateToSave,
       });
-      if (hydratedProjectRef.current === auth.activeProjectId) {
-        await auth.saveProject(editor.project, auth.activeProjectId, {
-          tab: editor.tab,
-          selectedSceneId: editor.selectedSceneId,
-        });
-      }
     }
+
     if (onExitToProfile) {
       onExitToProfile();
-      return;
+    } else {
+      setScreen('profile');
     }
-    setScreen('profile');
+
+    if (shouldSaveOnExit) {
+      const runBackgroundSave = () => {
+        saveProjectAndAcknowledge(projectToSave, projectIdToSave, uiStateToSave).catch((error) => {
+          console.error('Sauvegarde en arrière-plan du projet impossible', error);
+        });
+      };
+      if (typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(() => window.setTimeout(runBackgroundSave, 0));
+      } else {
+        window.setTimeout(runBackgroundSave, 0);
+      }
+    }
   }, [
     auth.activeProjectId,
-    auth.saveProject,
     auth.user?.id,
     editor.project,
     editor.selectedSceneId,
     editor.tab,
     hydratedProjectRef,
     onExitToProfile,
+    saveProjectAndAcknowledge,
   ]);
 
   const importProjectJson = useCallback(async (event) => {
@@ -931,10 +1036,10 @@ function BuilderApp({
     const parsed = normalizeProject(JSON.parse(text));
     editor.loadProject(parsed);
     preview.syncWithProject(parsed);
-    if (auth.activeProjectId) await auth.saveProject(parsed, auth.activeProjectId);
+    if (auth.activeProjectId) await saveProjectAndAcknowledge(parsed, auth.activeProjectId);
     setSaveStatus('Projet importé et sauvegardé');
     event.target.value = '';
-  }, [auth.activeProjectId, auth.saveProject, editor.loadProject, preview.syncWithProject]);
+  }, [auth.activeProjectId, editor.loadProject, preview.syncWithProject, saveProjectAndAcknowledge]);
 
   const applyAiProject = useCallback(async (generatedProject, options = {}) => {
     const candidateProject = options.isPatch || options.mode === 'improve' ?
@@ -961,7 +1066,7 @@ function BuilderApp({
     preview.syncWithProject(projectToLoad);
     editor.setTab('ai');
     if (auth.activeProjectId) {
-      await auth.saveProject(projectToLoad, auth.activeProjectId, {
+      await saveProjectAndAcknowledge(projectToLoad, auth.activeProjectId, {
         tab: 'ai',
         selectedSceneId,
       });
@@ -970,13 +1075,13 @@ function BuilderApp({
     return validation;
   }, [
     auth.activeProjectId,
-    auth.saveProject,
     editor.loadProject,
     editor.project,
     editor.setSelectedHotspotId,
     editor.setSelectedSceneId,
     editor.setTab,
     preview.syncWithProject,
+    saveProjectAndAcknowledge,
   ]);
 
   const saveAiDraft = useCallback(async (draft) => {
@@ -989,7 +1094,7 @@ function BuilderApp({
         delete current.__aiDraft;
       }, { rememberHistory: false });
       if (auth.activeProjectId) {
-        await auth.saveProject(nextProject, auth.activeProjectId, {
+        await saveProjectAndAcknowledge(nextProject, auth.activeProjectId, {
           tab: 'ai',
           selectedSceneId: editor.selectedSceneId,
         });
@@ -1004,7 +1109,7 @@ function BuilderApp({
     }, { rememberHistory: false });
 
     if (auth.activeProjectId) {
-      await auth.saveProject(nextProject, auth.activeProjectId, {
+      await saveProjectAndAcknowledge(nextProject, auth.activeProjectId, {
         tab: 'ai',
         selectedSceneId: editor.selectedSceneId,
       });
@@ -1013,10 +1118,10 @@ function BuilderApp({
     return draft;
   }, [
     auth.activeProjectId,
-    auth.saveProject,
     editor.patchProject,
     editor.project,
     editor.selectedSceneId,
+    saveProjectAndAcknowledge,
   ]);
 
   const saveAnime2dDraft = useCallback(async (draft) => {
@@ -1051,7 +1156,7 @@ function BuilderApp({
 
     if (auth.activeProjectId) {
       try {
-        await auth.saveProject(nextProject, auth.activeProjectId, {
+        await saveProjectAndAcknowledge(nextProject, auth.activeProjectId, {
           tab: 'animation',
           selectedSceneId: editor.selectedSceneId,
         });
@@ -1069,17 +1174,19 @@ function BuilderApp({
     return draft;
   }, [
     auth.activeProjectId,
-    auth.saveProject,
     editor.patchProject,
     editor.project,
     editor.selectedSceneId,
+    saveProjectAndAcknowledge,
   ]);
 
   const confirmAnimationExit = useCallback(async () => {
     if (editor.tab !== 'animation' || !anime2dHasUnsavedChanges) return true;
-    const shouldSave = window.confirm(
-      "Des modifications 2D Anime ne sont pas sauvegardées. Voulez-vous sauvegarder avant de changer d'onglet ?",
-    );
+    const shouldSave = await confirmDialog({
+      title: 'Sauvegarder 2D Anime',
+      message: "Des modifications 2D Anime ne sont pas sauvegardées. Voulez-vous sauvegarder avant de changer d'onglet ?",
+      confirmLabel: 'Sauvegarder',
+    });
     if (!shouldSave) return false;
 
     try {
@@ -1088,10 +1195,14 @@ function BuilderApp({
       return true;
     } catch (error) {
       console.warn('Sauvegarde 2D Anime avant sortie impossible.', error);
-      window.alert("La sauvegarde 2D Anime a échoué. Vous restez sur l'onglet Animation.");
+      await alertDialog({
+        title: 'Sauvegarde impossible',
+        message: "La sauvegarde 2D Anime a échoué. Vous restez sur l'onglet Animation.",
+        variant: 'danger',
+      });
       return false;
     }
-  }, [anime2dHasUnsavedChanges, editor.tab]);
+  }, [alertDialog, anime2dHasUnsavedChanges, confirmDialog, editor.tab]);
 
   const handleBuilderTabChange = useCallback(async (nextTab) => {
     if (nextTab === editor.tab) return;
@@ -1193,7 +1304,7 @@ function BuilderApp({
     }, { rememberHistory: false });
 
     if (auth.activeProjectId) {
-      await auth.saveProject(nextProject, auth.activeProjectId, {
+      await saveProjectAndAcknowledge(nextProject, auth.activeProjectId, {
         tab: 'ai',
         selectedSceneId: type === 'scene' ? id : editor.selectedSceneId,
       });
@@ -1203,40 +1314,51 @@ function BuilderApp({
     return { project: nextProject, patch: nextPatch };
   }, [
     auth.activeProjectId,
-    auth.saveProject,
     auth.user?.id,
     editor.patchProject,
     editor.project,
     editor.selectedSceneId,
+    saveProjectAndAcknowledge,
   ]);
 
   const anime2dStorageId = getAnime2dStorageId(auth.activeProjectId, editor.project);
-  const mediaLibrary = useMemo(() => [
-    ...new Map([
+  const mediaLibrary = useMemo(() => {
+    if (screen !== 'editor') return [];
+
+    const sourceProjects = [
       ...auth.projects.map((projectRecord) => ({
         id: projectRecord.id,
         name: projectRecord.name || projectRecord.data?.title,
-        data: projectRecord.data,
+        data: projectRecord.id === auth.activeProjectId ? editor.project : projectRecord.data,
+        isActive: projectRecord.id === auth.activeProjectId,
       })),
-      {
-        id: auth.activeProjectId || 'active-project',
+      auth.activeProjectId ? null : {
+        id: 'active-project',
         name: editor.project?.title,
         data: editor.project,
+        isActive: true,
       },
-    ].filter((entry) => entry?.data).flatMap((entry) => collectProjectAssets(entry.data).map((asset) => ({
-      ...asset,
-      projectId: entry.id,
-      projectName: entry.name || entry.data?.title,
-    })))
-      .filter((asset) => asset.url)
-      .map((asset) => [asset.url, asset])).values(),
-  ], [auth.activeProjectId, auth.projects, editor.project]);
+    ].filter((entry) => entry?.data);
+
+    return [
+      ...new Map(sourceProjects.flatMap((entry) => (
+        (entry.isActive ? collectProjectAssets(entry.data) : collectProjectAssetManifest(entry.data)).map((asset) => ({
+          ...asset,
+          projectId: entry.id,
+          projectName: entry.name || entry.data?.title,
+        }))
+      ))
+        .filter((asset) => asset.url)
+        .map((asset) => [asset.url, asset])).values(),
+    ];
+  }, [auth.activeProjectId, auth.projects, editor.project, screen]);
   const registerAnime2dSaveBeforeLeave = useCallback((saveHandler) => {
     anime2dSaveBeforeLeaveRef.current = saveHandler;
   }, []);
   const tabContext = useMemo(() => ({
     editor,
     preview,
+    heroCharacterPreviewRequestKey,
     user: auth.user,
     projectStorageKey: auth.activeProjectId || editor.project?.title || 'default',
     anime2dStorageId,
@@ -1250,6 +1372,7 @@ function BuilderApp({
       persistAiImage,
       previewCinematic: handlePreviewCinematic,
       previewEnigma: handlePreviewEnigma,
+      previewHeroCharacter: handlePreviewHeroCharacter,
       previewScene: handlePreviewScene,
       registerAnime2dSaveBeforeLeave,
       saveAiDraft,
@@ -1268,7 +1391,9 @@ function BuilderApp({
     handleDeleteScene,
     handlePreviewCinematic,
     handlePreviewEnigma,
+    handlePreviewHeroCharacter,
     handlePreviewScene,
+    heroCharacterPreviewRequestKey,
     handleUpload,
     mediaLibrary,
     persistAiImage,
@@ -1324,6 +1449,16 @@ function BuilderApp({
     handleTutorialPrevious,
     tutorialUserName,
   ]);
+  const activeTab = getTabKey(editor.tab);
+  const ActiveComponent = TABS[activeTab]?.component;
+  const activeTabProps = useMemo(() => ({
+    project: editor.project,
+    onUpdateProject: editor.patchProject,
+    tabContext,
+  }), [editor.patchProject, editor.project, tabContext]);
+  const activeTabRenderKey = activeTab === 'animation'
+    ? anime2dStorageId
+    : activeTab;
 
   if (screen === 'shared-preview') {
     return (
@@ -1402,6 +1537,7 @@ function BuilderApp({
             canOpenAdmin={isAdminUser(auth.user)}
             projects={profileProjects}
             activeProjectId={auth.activeProjectId}
+            authorProfile={auth.authorProfile}
             isBusy={auth.isBusy}
             statusMessage={saveStatus}
             syncStatus={auth.isBusy ? 'syncing' : hasSupabaseConfig() ? 'synced' : 'offline'}
@@ -1423,7 +1559,10 @@ function BuilderApp({
             onDeleteMedia={deleteMediaFromProfile}
             onImportProject={importProjectFromProfile}
             onImportMediaFile={importProfileMediaFile}
+            onUpdateAuthorProfile={auth.updateAuthorProfile}
+            onUpdatePassword={auth.updatePassword}
             mediaLibrary={mediaLibrary}
+            onRefreshStorageUsage={getCurrentStorageUsageBytes}
             storageSummary={storageSummary}
             aiCreditBalance={aiCreditBalance}
             onBuyStorage={buyStorageFromProfile}
@@ -1474,17 +1613,6 @@ function BuilderApp({
     );
   }
 
-  const activeTab = getTabKey(editor.tab);
-  const ActiveComponent = TABS[activeTab]?.component;
-  const activeTabProps = useMemo(() => ({
-    project: editor.project,
-    onUpdateProject: editor.patchProject,
-    tabContext,
-  }), [editor.patchProject, editor.project, tabContext]);
-  const activeTabRenderKey = activeTab === 'animation'
-    ? anime2dStorageId
-    : activeTab;
-
   return (
     <div className="app-shell">
       <Header
@@ -1492,6 +1620,7 @@ function BuilderApp({
         onExportJson={handleExportProjectJson}
         onImportJson={importProjectJson}
         onExportStandalone={handleExportStandalone}
+        onExportAuthorSummary={handleExportAuthorSummary}
         user={auth.user}
         onLogout={auth.logout}
         saveStatus={saveStatus || 'Sauvegarde active'}

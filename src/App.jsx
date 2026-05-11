@@ -2,7 +2,7 @@ import React, { Suspense, useCallback, useMemo, useState } from 'react';
 import { useAccessibleDialog } from './components/AccessibleDialog';
 import { useAccountStorage } from './hooks/useAccountStorage';
 import { useLocalAuth } from './hooks/useLocalAuth';
-import { collectProjectAssets, upsertProjectAsset } from './lib/assetManager';
+import { upsertProjectAsset } from './lib/assetManager';
 import { isAdminAccount } from './lib/authStorage';
 import { hasSupabaseConfig } from './supabaseStorage';
 
@@ -64,6 +64,7 @@ function ShellApp() {
     alert: alertDialog,
     confirm: confirmDialog,
     dialog: accessibleDialog,
+    prompt: promptDialog,
   } = useAccessibleDialog();
   const [screen, setScreen] = useState(createShellInitialScreen);
   const [showAuthPanel, setShowAuthPanel] = useState(false);
@@ -152,7 +153,7 @@ function ShellApp() {
       import('./lib/projectTemplates'),
     ]);
     const project = applyCreationTemplate(createInitialProject(), templateId, name);
-    project.creationMode = ['beginner', 'intermediate', 'expert'].includes(creationMode) ? creationMode : 'beginner';
+    project.creationMode = ['beginner', 'intermediate', 'expert', 'adventure', 'hero_adventure'].includes(creationMode) ? creationMode : 'beginner';
     const record = await auth.createProject(project, name || project.title);
     if (record?.id) openBuilder(record.id);
   }, [auth.createProject, openBuilder]);
@@ -205,10 +206,15 @@ function ShellApp() {
       await navigator.clipboard.writeText(url.toString());
       setSaveStatus('Lien joueur public copié');
     } catch {
-      window.prompt('Lien jouable', url.toString());
+      await promptDialog({
+        title: 'Lien jouable',
+        message: 'Copie ce lien pour partager le projet.',
+        defaultValue: url.toString(),
+        confirmLabel: 'Fermer',
+      });
       setSaveStatus('Lien joueur public généré');
     }
-  }, [auth.markProjectLinkCopied, auth.user?.id]);
+  }, [auth.markProjectLinkCopied, auth.user?.id, promptDialog]);
 
   const publishProjectFromProfile = useCallback(async (projectId) => {
     await auth.publishProject(projectId);
@@ -216,11 +222,16 @@ function ShellApp() {
   }, [auth.publishProject]);
 
   const unpublishProjectFromProfile = useCallback(async (projectId) => {
-    const confirmed = window.confirm('Retirer ce jeu de la galerie publique ? Le projet restera dans ton profil.');
+    const confirmed = await confirmDialog({
+      title: 'Retirer de la galerie',
+      message: 'Retirer ce jeu de la galerie publique ? Le projet restera dans ton profil.',
+      confirmLabel: 'Retirer',
+      variant: 'danger',
+    });
     if (!confirmed) return;
     await auth.unpublishProject(projectId);
     setSaveStatus('Jeu retiré de la galerie');
-  }, [auth.unpublishProject]);
+  }, [auth.unpublishProject, confirmDialog]);
 
   const updatePublicSettingsFromProfile = useCallback(async (projectId, settings) => {
     await auth.updateProjectShareSettings(projectId, settings);
@@ -273,7 +284,7 @@ function ShellApp() {
     await auth.saveProject(nextProject, projectRecord.id, projectRecord.uiState || {});
     invalidateStorageUsage();
     setSaveStatus('Média importé');
-    return asset || collectProjectAssets(nextProject).find((item) => item.url === dataUrl) || null;
+    return asset || null;
   }, [auth.activeProjectId, auth.projects, auth.saveProject, invalidateStorageUsage]);
 
   const deleteMediaFromProfile = useCallback(async (asset) => {
@@ -307,19 +318,6 @@ function ShellApp() {
     updateStorageQuotaBytes(usageBytes + 100 * 1024 * 1024);
     setSaveStatus('Stockage mis à jour');
   }, [getCurrentStorageUsageBytes, updateStorageQuotaBytes]);
-
-  const mediaLibrary = useMemo(() => [
-    ...new Map((auth.projects || [])
-      .flatMap((projectRecord) => collectProjectAssets(projectRecord.data).map((asset) => [
-        asset.url || asset.assetId,
-        {
-          ...asset,
-          projectId: projectRecord.id,
-          projectName: projectRecord.name || projectRecord.data?.title,
-        },
-      ]))
-      .filter(([key]) => Boolean(key))).values(),
-  ], [auth.projects]);
 
   const profileTutorialIndexes = useMemo(() => profileTutorialSteps
     .map((step, index) => ({ step, index }))
@@ -468,6 +466,7 @@ function ShellApp() {
           canOpenAdmin={isAdminAccount(auth.user)}
           projects={auth.projects}
           activeProjectId={auth.activeProjectId}
+          authorProfile={auth.authorProfile}
           isBusy={auth.isBusy}
           statusMessage={saveStatus}
           syncStatus={auth.isBusy ? 'syncing' : hasSupabaseConfig() ? 'synced' : 'offline'}
@@ -495,7 +494,9 @@ function ShellApp() {
           onDeleteMedia={deleteMediaFromProfile}
           onImportProject={importProjectFromProfile}
           onImportMediaFile={importProfileMediaFile}
-          mediaLibrary={mediaLibrary}
+          onUpdateAuthorProfile={auth.updateAuthorProfile}
+          onUpdatePassword={auth.updatePassword}
+          onRefreshStorageUsage={getCurrentStorageUsageBytes}
           storageSummary={storageSummary}
           aiCreditBalance={aiCreditBalance}
           onBuyStorage={buyStorageFromProfile}

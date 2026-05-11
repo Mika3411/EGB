@@ -12,15 +12,15 @@ import ratingImage from '../assets/landing-rating.png';
 import reviewsImage from '../assets/landing-reviews.png';
 
 const featureCards = [
-  ['Gratuit pour créer', "Construis tes projets sans payer. Seules les fonctions d'IA utilisent des credits."],
-  ['Sans code', 'Crée des scenes, objets, enigmes, cinematics et règles de logique avec des formulaires simples.'],
+  ['Gratuit pour créer', "Construis tes projets sans payer. Seules les fonctions d'IA utilisent des crédits."],
+  ['Sans code', 'Crée des scènes, objets, énigmes, cinématiques et règles de logique avec des formulaires simples.'],
   ['Prêt à partager', 'Publie dans la galerie ou exporte une version jouable de ton escape game.'],
 ];
 
 const workflowSteps = [
   'Choisis un modèle ou pars de zéro.',
-  'Ajoute tes scenes, indices et objets.',
-  'Ajoute ta logique, tes enigmes et tes cinematics.',
+  'Ajoute tes scènes, indices et objets.',
+  'Ajoute ta logique, tes énigmes et tes cinématiques.',
   'Teste, publie, partage.',
 ];
 
@@ -41,11 +41,11 @@ export default function LandingPage({ onLogin, onRegister, onOpenGallery }) {
             <span className="section-kicker">Builder no-code</span>
             <h1>Crée ton escape game en ligne, sans code.</h1>
             <p>
-              Construis des scenes interactives, des objets, des enigmes, des cinematics,
+              Construis des scènes interactives, des objets, des énigmes, des cinématiques,
               de la logique conditionnelle et un parcours jouable directement dans le navigateur.
             </p>
             <div className="landing-free-note">
-              Gratuit pour créer et publier. IA optionnelle avec credits.
+              Gratuit pour créer et publier. IA optionnelle avec crédits.
             </div>
             <div className="landing-hero-actions">
               <button type="button" onClick={onRegister}>Commencer gratuitement</button>
@@ -66,7 +66,7 @@ export default function LandingPage({ onLogin, onRegister, onOpenGallery }) {
 
       <section className="landing-image-band" aria-label="Aperçus à remplacer par vos images">
         <div className="landing-image-slot main with-image">
-          <img src={builderPreviewImage} alt="Aperçu du builder avec une scene et ses zones interactives" />
+          <img src={builderPreviewImage} alt="Aperçu du builder avec une scène et ses zones interactives" />
         </div>
         <div className="landing-image-slot with-image">
           <img src={galleryPageImage} alt="Galerie publique avec les escape games à découvrir" />
@@ -80,7 +80,7 @@ export default function LandingPage({ onLogin, onRegister, onOpenGallery }) {
         <div className="landing-section-head">
           <span className="section-kicker">Facile</span>
           <h2>Un studio complet, pensé pour les créateurs.</h2>
-          <p>Tu ne programmes pas : tu remplis, tu places, tu reliés et tu testés.</p>
+          <p>Tu ne programmes pas : tu remplis, tu places, tu relies et tu testes.</p>
         </div>
         <div className="landing-card-grid">
           {featureCards.map(([title, text]) => (
@@ -97,12 +97,12 @@ export default function LandingPage({ onLogin, onRegister, onOpenGallery }) {
           <span className="section-kicker">Logique & IA</span>
           <h2>Des jeux plus riches, sans devenir développeur.</h2>
           <p>
-            Crée des règles conditionnelles : objets requis, portes verrouillées, scenes débloquées,
-            enigmes réussies, cinematics lancées ou deuxièmes clics. Et si tu veux aller plus vite,
+            Crée des règles conditionnelles : objets requis, portes verrouillées, scènes débloquées,
+            énigmes réussies, cinématiques lancées ou deuxièmes clics. Et si tu veux aller plus vite,
             l'IA peut t'aider à générer, continuer ou améliorer un projet.
           </p>
           <p className="landing-note">
-            Le builder reste gratuit. Les outils IA sont optionnels et consomment des credits.
+            Le builder reste gratuit. Les outils IA sont optionnels et consomment des crédits.
           </p>
         </div>
         <div className="landing-highlight-grid">
@@ -115,15 +115,15 @@ export default function LandingPage({ onLogin, onRegister, onOpenGallery }) {
             <span>Inventaire</span>
           </div>
           <div className="landing-highlight-shot">
-            <img src={enigmasImage} alt="Création d'une enigme avec code et apparence joueur" />
-            <span>Enigmes</span>
+            <img src={enigmasImage} alt="Création d'une énigme avec code et apparence joueur" />
+            <span>Énigmes</span>
           </div>
           <div className="landing-highlight-shot">
             <img src={cinematicsImage} alt="Éditeur de cinematic avec plusieurs slides et narrations" />
-            <span>Cinematics</span>
+            <span>Cinématiques</span>
           </div>
           <div className="landing-highlight-shot wide">
-            <img src={aiImage} alt="Assistant IA générant des scenes, objets et contraintes visuelles" />
+            <img src={aiImage} alt="Assistant IA générant des scènes, objets et contraintes visuelles" />
             <span>IA optionnelle</span>
           </div>
         </div>
@@ -134,8 +134,8 @@ export default function LandingPage({ onLogin, onRegister, onOpenGallery }) {
           <span className="section-kicker">Boutique</span>
           <h2>Des packs de projets complets, uniques, prêts à continuer.</h2>
           <p>
-            La boutique permet d'achétér des packs de projets complets : une base déjà structurée,
-            avec scenes, idées, ambiance et progression. Tu peux ensuite les compléter, les modifiér
+            La boutique permet d'acheter des packs de projets complets : une base déjà structurée,
+            avec scènes, idées, ambiance et progression. Tu peux ensuite les compléter, les modifier
             et continuer l'histoire à ta façon dans le builder.
           </p>
         </div>
@@ -160,7 +160,7 @@ export default function LandingPage({ onLogin, onRegister, onOpenGallery }) {
           <span className="section-kicker">Galerie</span>
           <h2>Publie tes jeux et laisse les joueurs les découvrir.</h2>
           <p>
-            La galerie met en avant les escape games publics, les auteurs, les categories,
+            La galerie met en avant les escape games publics, les auteurs, les catégories,
             les avis et les parties jouées.
           </p>
           <button type="button" onClick={onOpenGallery}>Explorer la galerie</button>
@@ -170,7 +170,7 @@ export default function LandingPage({ onLogin, onRegister, onOpenGallery }) {
             <img src={gameGalleryImage} alt="Liste de jeux publiés dans la galerie" />
           </div>
           <div className="landing-gallery-card with-image">
-            <img src={ratingImage} alt="Paramètrès de publication avec note et bouton publier" />
+            <img src={ratingImage} alt="Paramètres de publication avec note et bouton publier" />
           </div>
           <div className="landing-gallery-card with-image">
             <img src={reviewsImage} alt="Formulaire d'avis avec note en étoiles" />
@@ -181,7 +181,7 @@ export default function LandingPage({ onLogin, onRegister, onOpenGallery }) {
       <section className="landing-section landing-workflow">
         <div className="landing-section-head">
           <span className="section-kicker">Méthode</span>
-          <h2>De l'idée au jeu jouable en quelques steps.</h2>
+          <h2>De l'idée au jeu jouable en quelques étapes.</h2>
         </div>
         <div className="landing-steps">
           {workflowSteps.map((step, index) => (

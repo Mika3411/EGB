@@ -30,11 +30,18 @@ import { COLOR_OPTIONS, POPUP_OVERLAY_GRADIENTS } from '../data/enigmaConfig';
 import { CODE_KEYPAD_KEYS } from '../data/playerConfig';
 import {
   GAME_ACTIONS as SHARED_GAME_ACTIONS,
+  addRewardItemToInventory,
+  applyHotspotBlockState,
+  consumeInventoryItem,
+  createHotspotViewerImage,
   createSceneTransitionOverlay,
   formatTimerSeconds as sharedFormatTimerSeconds,
   gameActions as SHARED_GAME_ACTION_CREATORS,
+  getHotspotRewardItemId,
   getSceneAmbientSoundKey as sharedGetSceneAmbientSoundKey,
   getSceneMusicKey as sharedGetSceneMusicKey,
+  resolveHotspotInteraction as sharedResolveHotspotInteraction,
+  selectRewardInventoryItem,
 } from '../lib/gameEngine';
 import {
   CINEMATIC_END_ACTIONS,
@@ -48,6 +55,20 @@ import {
   getCombinationItem2,
   getCombinationResult,
 } from '../lib/combinationEngine';
+import {
+  evaluateCondition,
+  evaluateLogicRuleCondition,
+  evaluateReplyCondition,
+  evaluateStoryVariableCondition,
+  getConditionArray,
+  getConditionItemIds,
+  getReplyCondition,
+  hasConditionValue,
+  isHeroAdventureEnabled,
+  isHeroLogicCondition,
+  isLogicRuleAvailable,
+  isLogicRuleConfigured,
+} from '../lib/conditionEngine';
 
 const escapeHtml = (value = '') => String(value)
   .replace(/&/g, '&amp;')
@@ -133,8 +154,27 @@ const buildStandaloneGameEngineScript = () => ([
   `const normalizeCinematicEndAction = ${normalizeCinematicEndAction.toString()};`,
   `const normalizeCinematicType = ${normalizeCinematicType.toString()};`,
   createSceneTransitionOverlay,
+  getHotspotRewardItemId,
+  consumeInventoryItem,
+  addRewardItemToInventory,
+  selectRewardInventoryItem,
+  createHotspotViewerImage,
+  applyHotspotBlockState,
   hasConditionToken,
   isConditionMet,
+  getConditionArray,
+  hasConditionValue,
+  getConditionItemIds,
+  evaluateStoryVariableCondition,
+  evaluateCondition,
+  isHeroLogicCondition,
+  isHeroAdventureEnabled,
+  isLogicRuleAvailable,
+  isLogicRuleConfigured,
+  evaluateLogicRuleCondition,
+  `const sharedResolveHotspotInteraction = ${sharedResolveHotspotInteraction.toString()};`,
+  getReplyCondition,
+  evaluateReplyCondition,
   getCombinationItem1,
   getCombinationItem2,
   getCombinationResult,
@@ -207,18 +247,53 @@ body.game-fullscreen .scene-inline-viewer{padding:40px}
 .player-shell.is-shared-player .scene-player{width:min(100vw,calc(100vh * var(--scene-aspect,1.6)));height:min(100vh,calc(100vw / var(--scene-aspect,1.6)));aspect-ratio:var(--scene-aspect,1.6);border-radius:0;border:0}
 .player-narration-bar{position:absolute;left:18px;right:18px;bottom:18px;z-index:24;display:flex;align-items:flex-end;justify-content:space-between;gap:14px;pointer-events:none}
 .player-shell.is-shared-player .player-narration-bar{left:24px;right:24px;bottom:24px}
-.player-narration-bar p{max-width:min(780px,72%);margin:0;padding:12px 15px;border-radius:16px;background:rgba(2,6,23,.42);border:1px solid rgba(255,255,255,.10);color:#fff;line-height:1.55;box-shadow:0 16px 42px rgba(0,0,0,.28);backdrop-filter:blur(8px);pointer-events:auto;cursor:pointer}
+.player-narration-bar p{max-width:min(780px,72%);margin:0;padding:12px 15px;border-radius:16px;background:var(--player-narration-bg,rgba(2,6,23,.42));border:1px solid rgba(255,255,255,.10);color:#fff;line-height:1.55;box-shadow:0 16px 42px rgba(0,0,0,.28);backdrop-filter:blur(8px);pointer-events:auto;cursor:pointer}
 .player-shell.is-shared-player .player-narration-bar p{font-size:20px;max-width:min(860px,72vw)}
 .player-narration-bar.is-collapsed{justify-content:flex-end}
 .narration-discreet-button,.inventory-discreet-button{pointer-events:auto;min-height:38px;padding:9px 13px;border-radius:999px;background:rgba(15,23,42,.42)!important;border:1px solid rgba(148,163,184,.20)!important;color:#eaf2ff!important;box-shadow:0 12px 30px rgba(0,0,0,.22)!important}
 .narration-discreet-button{min-height:34px;padding:7px 12px;background:rgba(15,23,42,.34)!important;color:#dbeafe!important}
+.player-shell :is(.player-actions button,.secondary-action,.secondary-button,.code-primary-button,.code-secondary-button,.code-key-button,.inventory-discreet-button,.narration-discreet-button,.inventory-item,.player-pause-actions button,.overlay-card .panel-head button,.overlay-card .inline-actions button){font-family:var(--player-button-font,inherit)}
+.player-shell :is(.player-narration-bar p,.dialogue-box,.narration,.anime2d-player-narration,.enigma-overlay-question){font-family:var(--player-narration-font,inherit)}
+.player-button-font-system{--player-button-font:Inter,Arial,sans-serif}.player-button-font-serif{--player-button-font:Georgia,"Times New Roman",serif}.player-button-font-story{--player-button-font:"Palatino Linotype",Palatino,Georgia,serif}.player-button-font-fantasy{--player-button-font:Copperplate,Papyrus,Georgia,serif}.player-button-font-medieval{--player-button-font:"Book Antiqua","Palatino Linotype",Palatino,Georgia,serif}.player-button-font-gothic{--player-button-font:"Old English Text MT","UnifrakturCook","Blackletter",Georgia,serif}.player-button-font-mono{--player-button-font:"Courier New",Consolas,monospace}
+.player-narration-font-system{--player-narration-font:Inter,Arial,sans-serif}.player-narration-font-serif{--player-narration-font:Georgia,"Times New Roman",serif}.player-narration-font-story{--player-narration-font:"Palatino Linotype",Palatino,Georgia,serif}.player-narration-font-fantasy{--player-narration-font:Copperplate,Papyrus,Georgia,serif}.player-narration-font-medieval{--player-narration-font:"Book Antiqua","Palatino Linotype",Palatino,Georgia,serif}.player-narration-font-gothic{--player-narration-font:"Old English Text MT","UnifrakturCook","Blackletter",Georgia,serif}.player-narration-font-mono{--player-narration-font:"Courier New",Consolas,monospace}
 .player-inventory-drawer{position:absolute;top:14px;right:14px;bottom:72px;z-index:30;width:min(360px,86%);overflow:auto;padding:14px;border-radius:18px;background:rgba(8,16,30,.94);border:1px solid rgba(148,163,184,.18);box-shadow:0 24px 70px rgba(0,0,0,.36);backdrop-filter:blur(12px)}
+.player-inventory-drawer--adventure{position:fixed!important;top:50%!important;left:50%!important;right:auto!important;bottom:auto!important;z-index:120!important;width:min(920px,calc(100vw - 56px))!important;max-height:calc(100vh - 56px)!important;transform:translate(-50%,-50%)!important}
+.conversation-player-card{width:min(980px,calc(100vw - 40px));display:grid;gap:16px;padding:18px;border-color:rgba(147,197,253,.28);background:rgba(8,16,30,.94)}
+.conversation-player-card .panel-head{align-items:flex-start;gap:14px}.conversation-player-card .panel-head>div{min-width:0;flex:1 1 auto}.conversation-player-card h2{margin:0 0 6px}.conversation-player-card .small-note{margin:0;color:#f8fbff;font-size:18px;line-height:1.45}
+.conversation-player-replies{display:grid;gap:10px}.conversation-player-replies-2{grid-template-columns:repeat(2,minmax(0,1fr))}.conversation-player-replies-3{grid-template-columns:repeat(3,minmax(0,1fr))}.conversation-player-replies .secondary-action{display:grid;gap:4px;min-height:54px;justify-content:center;white-space:normal;line-height:1.25}.conversation-player-replies .secondary-action small{color:#cbd5e1;font-size:11px;font-weight:800}.conversation-player-replies .conversation-reply-locked,.conversation-player-replies .conversation-reply-locked:disabled{cursor:not-allowed;opacity:.68;color:#cbd5e1!important;background:rgba(15,23,42,.72)!important;border-color:rgba(148,163,184,.28)!important;box-shadow:none!important;transform:none!important}
+.choice-effect-floating{position:absolute;left:18px;right:18px;top:78px;z-index:42;display:flex;justify-content:center;pointer-events:none}.choice-effect-floating .choice-effect-summary{width:min(760px,100%);pointer-events:auto}.choice-effect-summary{display:grid;gap:10px;padding:12px;border:1px solid rgba(147,197,253,.24);border-radius:12px;color:#f8fbff;background:rgba(8,16,30,.9);box-shadow:0 18px 48px rgba(0,0,0,.28);backdrop-filter:blur(10px)}.choice-effect-summary.compact{padding:10px;box-shadow:none}.choice-effect-summary-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.choice-effect-summary-head strong{font-size:13px;letter-spacing:.02em;text-transform:uppercase}.choice-effect-summary-head button{min-height:30px;padding:5px 9px;font-size:12px}.choice-effect-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}.choice-effect-pill{display:grid;gap:3px;min-width:0;padding:9px 10px;border:1px solid rgba(148,163,184,.2);border-radius:8px;background:rgba(15,23,42,.74)}.choice-effect-pill strong,.choice-effect-pill small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.choice-effect-pill strong{color:#eaf2ff;font-size:13px}.choice-effect-pill small{color:#cbd7ea;font-size:12px}.choice-effect-item{border-color:rgba(251,191,36,.36)}.choice-effect-variable{border-color:rgba(34,197,94,.34)}.choice-effect-journal{border-color:rgba(96,165,250,.34)}.choice-effect-route{border-color:rgba(168,85,247,.32)}.choice-effect-ending{border-color:rgba(248,113,113,.38)}.choice-effect-media{border-color:rgba(45,212,191,.34)}
+@media (max-width:820px){.conversation-player-replies-2,.conversation-player-replies-3{grid-template-columns:1fr}.player-inventory-drawer--adventure{width:min(520px,calc(100vw - 28px))!important;max-height:calc(100vh - 28px)!important}}
 .player-combine-button{width:100%;justify-content:center;margin-bottom:12px}
 .player-pause-overlay{position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:24px;background:rgba(2,6,23,.48);backdrop-filter:blur(8px)}
-.player-pause-menu{width:min(420px,92vw);padding:22px;border-radius:22px;background:rgba(8,16,30,.94);border:1px solid rgba(148,163,184,.2);box-shadow:0 30px 90px rgba(0,0,0,.42);color:#fff}
+.player-pause-menu{width:min(680px,92vw);max-height:min(760px,90vh);overflow:auto;padding:22px;border-radius:22px;background:rgba(8,16,30,.94);border:1px solid rgba(148,163,184,.2);box-shadow:0 30px 90px rgba(0,0,0,.42);color:#fff}
 .player-pause-menu h2{margin:8px 0 18px;font-size:28px}
 .player-pause-actions{display:grid;gap:10px}
 .player-pause-actions button{justify-content:center;min-height:42px;border-radius:13px}
+.player-shell.player-button-style-modern :is(.player-actions button,.secondary-action,.secondary-button,.code-primary-button,.code-secondary-button,.code-key-button,.inventory-discreet-button,.narration-discreet-button,.inventory-item,.player-pause-actions button,.overlay-card .panel-head button,.overlay-card .inline-actions button){border-radius:12px!important;color:#f8fbff!important;background:linear-gradient(180deg,#3b82f6,#1d4ed8)!important;border-color:rgba(147,197,253,.42)!important;box-shadow:0 14px 30px rgba(37,99,235,.24)!important}
+.player-shell.player-button-style-parchment :is(.player-actions button,.secondary-action,.secondary-button,.code-primary-button,.code-secondary-button,.code-key-button,.inventory-discreet-button,.narration-discreet-button,.inventory-item,.player-pause-actions button,.overlay-card .panel-head button,.overlay-card .inline-actions button){border-radius:7px!important;color:#2c1a08!important;background:linear-gradient(180deg,#f6e7bd,#b98b45)!important;border-color:rgba(255,237,178,.72)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.62),0 10px 24px rgba(73,46,15,.28)!important}
+.player-shell.player-button-style-arcane :is(.player-actions button,.secondary-action,.secondary-button,.code-primary-button,.code-secondary-button,.code-key-button,.inventory-discreet-button,.narration-discreet-button,.inventory-item,.player-pause-actions button,.overlay-card .panel-head button,.overlay-card .inline-actions button){border-radius:999px!important;color:#faf5ff!important;background:linear-gradient(135deg,#4c1d95,#7c3aed 48%,#0891b2)!important;border-color:rgba(216,180,254,.56)!important;box-shadow:0 0 0 1px rgba(168,85,247,.16),0 16px 34px rgba(76,29,149,.32)!important}
+.player-shell.player-button-style-stone :is(.player-actions button,.secondary-action,.secondary-button,.code-primary-button,.code-secondary-button,.code-key-button,.inventory-discreet-button,.narration-discreet-button,.inventory-item,.player-pause-actions button,.overlay-card .panel-head button,.overlay-card .inline-actions button){border-radius:4px!important;color:#f8fafc!important;background:linear-gradient(180deg,#64748b,#334155 58%,#1e293b)!important;border-color:rgba(203,213,225,.34)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 12px 22px rgba(2,6,23,.36)!important}
+.player-shell.player-button-style-neon :is(.player-actions button,.secondary-action,.secondary-button,.code-primary-button,.code-secondary-button,.code-key-button,.inventory-discreet-button,.narration-discreet-button,.inventory-item,.player-pause-actions button,.overlay-card .panel-head button,.overlay-card .inline-actions button){border-radius:10px!important;color:#cffafe!important;background:linear-gradient(180deg,#06111f,#0f172a)!important;border-color:rgba(34,211,238,.78)!important;box-shadow:0 0 0 1px rgba(34,211,238,.22),0 0 22px rgba(34,211,238,.22)!important;text-shadow:0 0 8px rgba(103,232,249,.72)}
+.player-shell.player-button-style-blood :is(.player-actions button,.secondary-action,.secondary-button,.code-primary-button,.code-secondary-button,.code-key-button,.inventory-discreet-button,.narration-discreet-button,.inventory-item,.player-pause-actions button,.overlay-card .panel-head button,.overlay-card .inline-actions button){border-radius:9px!important;color:#fff7ed!important;background:linear-gradient(180deg,#7f1d1d,#450a0a)!important;border-color:rgba(248,113,113,.42)!important;box-shadow:0 14px 28px rgba(69,10,10,.34)!important}
+.adventure-state-card{display:grid;gap:10px;margin:0 0 14px;padding:10px;border:1px solid rgba(147,197,253,.18);border-radius:12px;background:rgba(15,23,42,.45)}
+.adventure-state-card>strong{color:#f8fafc;font-size:13px}
+.adventure-state-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.adventure-state-grid span{display:grid;gap:2px;min-width:0;padding:7px;border:1px solid rgba(148,163,184,.16);border-radius:8px;background:rgba(2,6,23,.45);color:#cbd5e1;font-size:11px;text-align:center}
+.adventure-state-grid strong{color:#f8fafc;font-size:15px}
+.adventure-state-list{display:grid;gap:5px;max-height:110px;overflow:auto}
+.adventure-state-list span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#bfdbfe;font-size:12px}
+.adventure-state-list strong{color:#f8fafc}
+.adventure-journal-card{display:grid;gap:10px;margin:0 0 14px;padding:10px;border:1px solid rgba(147,197,253,.18);border-radius:12px;background:rgba(15,23,42,.45)}
+.adventure-journal-card>strong{color:#f8fafc;font-size:13px}
+.adventure-journal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.adventure-journal-grid section{display:grid;gap:7px;min-width:0}
+.adventure-journal-grid section>strong{color:#f8fafc;font-size:12px}
+.adventure-journal-list{display:grid;gap:6px;max-height:140px;overflow:auto}
+.adventure-journal-list span{display:grid;gap:2px;min-width:0;padding:7px;border:1px solid rgba(148,163,184,.14);border-radius:8px;background:rgba(2,6,23,.45);color:#cbd5e1;font-size:12px}
+.adventure-journal-list strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#f8fafc}
+.adventure-journal-list small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#93c5fd}
+@media (max-width:720px){.adventure-journal-grid{grid-template-columns:1fr}}
+.conversation-portrait{width:76px;height:76px;object-fit:cover;border-radius:12px;border:1px solid rgba(147,197,253,.25);background:#020617}
 body.game-fullscreen .fullscreen-hud{display:flex;position:fixed;left:20px;right:20px;bottom:20px;z-index:35;align-items:flex-end;justify-content:space-between;gap:16px;pointer-events:none}
 body.game-fullscreen .fullscreen-dialogue{max-width:min(70vw,900px);padding:16px 20px;border-radius:20px;background:rgba(3,10,24,.72);border:1px solid rgba(255,255,255,.10);backdrop-filter:blur(10px);box-shadow:0 20px 50px rgba(0,0,0,.35);font-size:28px;line-height:1.5;color:#fff}
 body.game-fullscreen .fullscreen-actions{display:flex;gap:12px;pointer-events:auto}
@@ -291,7 +366,7 @@ body.game-fullscreen .inventory-drawer__backdrop{position:fixed;inset:0;z-index:
 .scene-visual-effect--fog:before,.scene-visual-effect--fog:after{content:"";position:absolute;inset:-24%;background:radial-gradient(ellipse at 18% 48%,rgba(226,232,240,.24),transparent 34%),radial-gradient(ellipse at 56% 42%,rgba(203,213,225,.20),transparent 32%),radial-gradient(ellipse at 88% 58%,rgba(226,232,240,.18),transparent 36%),linear-gradient(90deg,transparent,rgba(226,232,240,.13),transparent);filter:blur(18px);opacity:.78;animation:sceneFogDrift 18s ease-in-out infinite alternate}.scene-visual-effect--fog:after{opacity:.45;animation-duration:26s;animation-delay:-7s;transform:scale(1.2)}@keyframes sceneFogDrift{from{transform:translate3d(-8%,2%,0) scale(1.05)}to{transform:translate3d(8%,-2%,0) scale(1.18)}}
 .scene-visual-effect--hearts:before,.scene-visual-effect--hearts:after{content:"";position:absolute;inset:-18% 0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='34' height='30' viewBox='0 0 34 30'%3E%3Cpath fill='%23fb7185' fill-opacity='.72' d='M17 28S2 19 2 9.6C2 4.7 5.4 2 9.2 2c2.6 0 5 1.5 6.3 3.8C16.9 3.5 19.3 2 21.9 2 25.7 2 29 4.7 29 9.6 29 19 17 28 17 28Z'/%3E%3C/svg%3E"),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='22' viewBox='0 0 34 30'%3E%3Cpath fill='%23f472b6' fill-opacity='.64' d='M17 28S2 19 2 9.6C2 4.7 5.4 2 9.2 2c2.6 0 5 1.5 6.3 3.8C16.9 3.5 19.3 2 21.9 2 25.7 2 29 4.7 29 9.6 29 19 17 28 17 28Z'/%3E%3C/svg%3E"),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='16' viewBox='0 0 34 30'%3E%3Cpath fill='%23fecdd3' fill-opacity='.78' d='M17 28S2 19 2 9.6C2 4.7 5.4 2 9.2 2c2.6 0 5 1.5 6.3 3.8C16.9 3.5 19.3 2 21.9 2 25.7 2 29 4.7 29 9.6 29 19 17 28 17 28Z'/%3E%3C/svg%3E");background-repeat:repeat;background-size:150px 130px,210px 180px,270px 220px;background-position:12px 10px,82px 46px,142px 88px;opacity:.72;animation:sceneHeartsFloat 10s linear infinite}.scene-visual-effect--hearts:after{background-size:230px 190px,310px 260px,360px 300px;opacity:.42;filter:blur(.15px);animation-duration:16s;animation-delay:-6s}@keyframes sceneHeartsFloat{from{transform:translate3d(-1%,20%,0)}to{transform:translate3d(2%,-24%,0)}}
 .scene-visual-effect--glow:before,.scene-visual-effect--glow:after{content:"";position:absolute;inset:-16%;background:radial-gradient(circle at 50% 48%,rgba(250,250,210,.56),transparent 18%),radial-gradient(circle at 50% 50%,rgba(96,165,250,.35),transparent 42%),radial-gradient(circle at 50% 50%,rgba(255,255,255,.24),transparent 66%);mix-blend-mode:screen;opacity:.78;animation:sceneGlowPulse 4.8s ease-in-out infinite alternate}.scene-visual-effect--glow:after{filter:blur(20px);opacity:.42;animation-duration:7s}@keyframes sceneGlowPulse{from{transform:scale(.92);opacity:.42}to{transform:scale(1.08);opacity:.88}}
-.scene-visual-effect--firefliés:before,.scene-visual-effect--firefliés:after{content:"";position:absolute;inset:-10%;background-image:radial-gradient(circle,rgba(254,240,138,.95) 0 2px,rgba(250,204,21,.34) 3px,transparent 8px),radial-gradient(circle,rgba(187,247,208,.9) 0 1.5px,rgba(74,222,128,.26) 3px,transparent 7px),radial-gradient(circle,rgba(255,255,255,.85) 0 1px,transparent 4px);background-size:160px 130px,230px 190px,310px 250px;background-position:24px 22px,95px 80px,180px 120px;filter:drop-shadow(0 0 8px rgba(250,204,21,.75));opacity:.62;animation:sceneFirefliés 7s ease-in-out infinite alternate}.scene-visual-effect--firefliés:after{opacity:.36;animation-duration:11s;animation-delay:-4s}@keyframes sceneFirefliés{from{transform:translate3d(-3%,2%,0);opacity:.24}45%{opacity:.82}to{transform:translate3d(4%,-3%,0);opacity:.52}}
+.scene-visual-effect--fireflies:before,.scene-visual-effect--fireflies:after{content:"";position:absolute;inset:-10%;background-image:radial-gradient(circle,rgba(254,240,138,.95) 0 2px,rgba(250,204,21,.34) 3px,transparent 8px),radial-gradient(circle,rgba(187,247,208,.9) 0 1.5px,rgba(74,222,128,.26) 3px,transparent 7px),radial-gradient(circle,rgba(255,255,255,.85) 0 1px,transparent 4px);background-size:160px 130px,230px 190px,310px 250px;background-position:24px 22px,95px 80px,180px 120px;filter:drop-shadow(0 0 8px rgba(250,204,21,.75));opacity:.62;animation:sceneFireflies 7s ease-in-out infinite alternate}.scene-visual-effect--fireflies:after{opacity:.36;animation-duration:11s;animation-delay:-4s}@keyframes sceneFireflies{from{transform:translate3d(-3%,2%,0);opacity:.24}45%{opacity:.82}to{transform:translate3d(4%,-3%,0);opacity:.52}}
 .scene-visual-effect--rain:before,.scene-visual-effect--rain:after{content:"";position:absolute;inset:-30% -10%;background-image:repeating-linear-gradient(105deg,rgba(191,219,254,0) 0 16px,rgba(191,219,254,.44) 17px 19px,rgba(191,219,254,0) 20px 34px);background-size:90px 90px;opacity:.42;transform:skewX(-14deg);animation:sceneRainFall .85s linear infinite}.scene-visual-effect--rain:after{opacity:.22;filter:blur(.7px);animation-duration:1.25s}@keyframes sceneRainFall{from{background-position:0 -90px}to{background-position:0 90px}}
 .scene-visual-effect--magic:before,.scene-visual-effect--magic:after{content:"";position:absolute;inset:-12%;background:radial-gradient(circle at 20% 26%,rgba(216,180,254,.9) 0 1px,transparent 7px),radial-gradient(circle at 72% 34%,rgba(125,211,252,.86) 0 2px,transparent 8px),radial-gradient(circle at 42% 72%,rgba(244,114,182,.78) 0 1.5px,transparent 7px),conic-gradient(from 90deg at 50% 50%,transparent,rgba(168,85,247,.18),transparent,rgba(14,165,233,.16),transparent);mix-blend-mode:screen;opacity:.72;animation:sceneMagicSwirl 8s ease-in-out infinite}.scene-visual-effect--magic:after{filter:blur(8px);opacity:.34;animation-duration:12s;animation-direction:reverse}@keyframes sceneMagicSwirl{0%{transform:rotate(0deg) scale(1)}50%{transform:rotate(9deg) scale(1.08)}100%{transform:rotate(0deg) scale(1)}}
 .scene-visual-effect--embers:before,.scene-visual-effect--embers:after{content:"";position:absolute;inset:-14% 0;background-image:radial-gradient(circle,rgba(251,146,60,.92) 0 2px,rgba(239,68,68,.26) 3px,transparent 8px),radial-gradient(circle,rgba(254,215,170,.82) 0 1px,transparent 5px),radial-gradient(circle,rgba(248,113,113,.78) 0 1.5px,transparent 6px);background-size:120px 150px,190px 210px,260px 260px;background-position:18px 120px,76px 180px,150px 220px;filter:drop-shadow(0 0 8px rgba(249,115,22,.7));opacity:.58;animation:sceneEmbersRise 12s linear infinite}.scene-visual-effect--embers:after{opacity:.32;filter:blur(.8px);animation-duration:18s;animation-delay:-7s}@keyframes sceneEmbersRise{from{transform:translate3d(0,18%,0)}to{transform:translate3d(4%,-26%,0)}}
@@ -334,6 +409,13 @@ button,.button-like{border:1px solid transparent;background:linear-gradient(180d
 .inventory-thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.76);display:flex;align-items:center;justify-content:center;padding:20px;z-index:40}
 .overlay-card{width:min(92vw,980px);max-height:90vh;overflow:auto;border-radius:24px;padding:18px;background:linear-gradient(180deg, rgba(12,20,37,.98) 0%, rgba(8,16,30,.98) 100%);border:1px solid rgba(148,163,184,.16);box-shadow:0 20px 60px rgba(0,0,0,.34)}
+.ending-card{width:min(92vw,560px);display:grid;gap:14px;text-align:center}
+.ending-card h2{margin:0;font-size:30px}
+.ending-card p{margin:0;color:#e5edf8;line-height:1.6}
+.ending-badge{justify-self:center;padding:6px 10px;border-radius:999px;border:1px solid rgba(148,163,184,.28);font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;color:#dbeafe;background:rgba(15,23,42,.76)}
+.ending-card-good{border-color:rgba(34,197,94,.36);box-shadow:0 20px 60px rgba(0,0,0,.34),0 0 32px rgba(34,197,94,.12)}
+.ending-card-bad{border-color:rgba(248,113,113,.42);box-shadow:0 20px 60px rgba(0,0,0,.34),0 0 32px rgba(248,113,113,.13)}
+.ending-card-secret{border-color:rgba(168,85,247,.5);box-shadow:0 20px 60px rgba(0,0,0,.34),0 0 38px rgba(168,85,247,.16)}
 .overlay-media{width:100%;max-height:62vh;object-fit:contain;display:block;border-radius:16px;background:#020617}
 .narration{font-size:18px;line-height:1.8}
 .anime2d-player{position:relative;width:100%;aspect-ratio:16 / 10;overflow:hidden;border-radius:16px;background:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(180deg,#101827 0%,#182033 62%,#273040 63%,#111827 100%);background-size:40px 40px,40px 40px,auto}
@@ -390,6 +472,11 @@ button,.button-like{border:1px solid transparent;background:linear-gradient(180d
 <script>
 const project = ${serializedProject};
 const root = document.getElementById('game-root');
+const GAME_TITLE = String(project?.title || 'Escape game').trim() || 'Escape game';
+const PLAYER_BUTTON_STYLE = ['modern', 'parchment', 'arcane', 'stone', 'neon', 'blood'].includes(project?.ui?.buttonStyle) ? project.ui.buttonStyle : 'modern';
+const PLAYER_BUTTON_FONT = ['system', 'serif', 'story', 'fantasy', 'medieval', 'gothic', 'mono'].includes(project?.ui?.buttonFont) ? project.ui.buttonFont : 'system';
+const PLAYER_NARRATION_FONT = ['system', 'serif', 'story', 'fantasy', 'medieval', 'gothic', 'mono'].includes(project?.ui?.narrationFont) ? project.ui.narrationFont : 'system';
+const PLAYER_NARRATION_BACKGROUND = project?.ui?.narrationBackground || 'rgba(2, 6, 23, .62)';
 let hasRenderedOnce = false;
 let sceneTransitionTimer = null;
 let sceneTimerInterval = null;
@@ -407,6 +494,8 @@ let actPreloadRunId = 0;
 const PREVIEW_COLOR_OPTIONS = ${serializedColorOptions};
 const POPUP_OVERLAY_GRADIENTS = ${serializedPopupOverlayGradients};
 const CODE_KEYPAD_KEYS = ${serializedCodeKeypadKeys};
+const IS_HERO_ADVENTURE = Boolean(project?.heroAdventure?.enabled || project?.creationMode === 'hero_adventure');
+const IS_CHOICE_ADVENTURE = !IS_HERO_ADVENTURE && ['adventure', 'adventure_choices'].includes(project?.creationMode);
 
 const DEFAULT_STATE = () => {
   const start = project.start || { type: 'scene', targetSceneId: project.scenes?.[0]?.id || '', targetCinematicId: '' };
@@ -414,10 +503,14 @@ const DEFAULT_STATE = () => {
   const initialCinematic = start.type === 'cinematic' && start.targetCinematicId ?
      (project.cinematics || []).find((entry) => entry.id === start.targetCinematicId) || null
     : null;
+  const initialStoryVariables = Object.fromEntries((project.storyVariables || []).filter((variable) => variable.key).map((variable) => [variable.key, variable.defaultValue]));
 
   return {
     playSceneId: initialScene?.id || '',
     inventory: [],
+    visitedSceneIds: initialScene?.id ? [initialScene.id] : [],
+    storyVariables: initialStoryVariables,
+    adventureJournalEntries: [],
     playerLives: 3,
     dialogue: initialScene?.introText || '',
     viewerImage: null,
@@ -431,6 +524,9 @@ const DEFAULT_STATE = () => {
     showInteractionHints: true,
     controlsVisible: false,
     activeEnigma: null,
+    activeConversation: null,
+    activeEnding: null,
+    choiceEffectNotices: [],
     enigmaCodeInput: '',
     enigmaColorAttempt: [],
     enigmaPuzzleOrder: [],
@@ -441,6 +537,9 @@ const DEFAULT_STATE = () => {
     enigmaRotationAngles: [],
     completedHotspotIds: [],
     solvedEnigmaIds: [],
+    chosenConversationReplyIds: [],
+    askedConversationNodeIds: [],
+    hiddenConversationReplyIds: [],
     launchedCinematicIds: initialCinematic?.id ? [initialCinematic.id] : [],
     completedCombinationIds: [],
     usedLogicRuleIds: [],
@@ -497,6 +596,9 @@ function getSerializableState() {
   return {
     playSceneId: state.playSceneId,
     inventory: Array.isArray(state.inventory) ? state.inventory : [],
+    visitedSceneIds: Array.isArray(state.visitedSceneIds) ? state.visitedSceneIds : [],
+    storyVariables: state.storyVariables && typeof state.storyVariables === 'object' ? state.storyVariables : {},
+    adventureJournalEntries: Array.isArray(state.adventureJournalEntries) ? state.adventureJournalEntries : [],
     dialogue: state.dialogue || '',
     viewerImage: state.viewerImage || null,
     playerLives: Number.isFinite(Number(state.playerLives)) ? Number(state.playerLives) : 3,
@@ -505,12 +607,17 @@ function getSerializableState() {
     selectedInventoryIds: Array.isArray(state.selectedInventoryIds) ? state.selectedInventoryIds : [],
     completedHotspotIds: Array.isArray(state.completedHotspotIds) ? state.completedHotspotIds : [],
     solvedEnigmaIds: Array.isArray(state.solvedEnigmaIds) ? state.solvedEnigmaIds : [],
+    chosenConversationReplyIds: Array.isArray(state.chosenConversationReplyIds) ? state.chosenConversationReplyIds : [],
+    askedConversationNodeIds: Array.isArray(state.askedConversationNodeIds) ? state.askedConversationNodeIds : [],
+    hiddenConversationReplyIds: Array.isArray(state.hiddenConversationReplyIds) ? state.hiddenConversationReplyIds : [],
     launchedCinematicIds: Array.isArray(state.launchedCinematicIds) ? state.launchedCinematicIds : [],
     completedCombinationIds: Array.isArray(state.completedCombinationIds) ? state.completedCombinationIds : [],
     usedLogicRuleIds: Array.isArray(state.usedLogicRuleIds) ? state.usedLogicRuleIds : [],
     removedSceneObjectIds: Array.isArray(state.removedSceneObjectIds) ? state.removedSceneObjectIds : [],
     revealedSceneObjectIds: Array.isArray(state.revealedSceneObjectIds) ? state.revealedSceneObjectIds : [],
     sceneObjectTextOverrides: state.sceneObjectTextOverrides && typeof state.sceneObjectTextOverrides === 'object' ? state.sceneObjectTextOverrides : {},
+    activeEnding: state.activeEnding && typeof state.activeEnding === 'object' ? state.activeEnding : null,
+    choiceEffectNotices: Array.isArray(state.choiceEffectNotices) ? state.choiceEffectNotices : [],
   };
 }
 
@@ -527,7 +634,7 @@ function saveGame(manual = false) {
     console.error('Erreur sauvegarde', error);
     updateSaveStatus('Sauvegarde impossible.');
     if (manual) {
-      state.dialogue = 'Impossible de sauvegarder la partie.';
+      state.dialogue = 'Impossible dé sauvegarder la partie.';
       render(false);
     }
     return false;
@@ -551,10 +658,16 @@ function loadGame(manual = false) {
     expiredSceneTimerKey = '';
     Object.assign(state, DEFAULT_STATE(), savedState, {
       inventory: Array.isArray(savedState.inventory) ? savedState.inventory : [],
+      visitedSceneIds: Array.isArray(savedState.visitedSceneIds) ? savedState.visitedSceneIds : [],
+      storyVariables: { ...DEFAULT_STATE().storyVariables, ...(savedState.storyVariables && typeof savedState.storyVariables === 'object' ? savedState.storyVariables : {}) },
+      adventureJournalEntries: Array.isArray(savedState.adventureJournalEntries) ? savedState.adventureJournalEntries : [],
       playerLives: Number.isFinite(Number(savedState.playerLives)) ? Math.max(0, Number(savedState.playerLives)) : 3,
       selectedInventoryIds: Array.isArray(savedState.selectedInventoryIds) ? savedState.selectedInventoryIds : [],
       completedHotspotIds: Array.isArray(savedState.completedHotspotIds) ? savedState.completedHotspotIds : [],
       solvedEnigmaIds: Array.isArray(savedState.solvedEnigmaIds) ? savedState.solvedEnigmaIds : [],
+      chosenConversationReplyIds: Array.isArray(savedState.chosenConversationReplyIds) ? savedState.chosenConversationReplyIds : [],
+      askedConversationNodeIds: Array.isArray(savedState.askedConversationNodeIds) ? savedState.askedConversationNodeIds : [],
+      hiddenConversationReplyIds: Array.isArray(savedState.hiddenConversationReplyIds) ? savedState.hiddenConversationReplyIds : [],
       launchedCinematicIds: Array.isArray(savedState.launchedCinematicIds) ? savedState.launchedCinematicIds : [],
       completedCombinationIds: Array.isArray(savedState.completedCombinationIds) ? savedState.completedCombinationIds : [],
       usedLogicRuleIds: Array.isArray(savedState.usedLogicRuleIds) ? savedState.usedLogicRuleIds : [],
@@ -563,6 +676,8 @@ function loadGame(manual = false) {
       sceneObjectTextOverrides: savedState.sceneObjectTextOverrides && typeof savedState.sceneObjectTextOverrides === 'object' ? savedState.sceneObjectTextOverrides : {},
       inventoryDrawerOpen: false,
       activeEnigma: null,
+      activeEnding: savedState.activeEnding && typeof savedState.activeEnding === 'object' ? savedState.activeEnding : null,
+      choiceEffectNotices: Array.isArray(savedState.choiceEffectNotices) ? savedState.choiceEffectNotices : [],
       enigmaCodeInput: '',
       enigmaColorAttempt: [],
       enigmaPuzzleOrder: [],
@@ -588,7 +703,7 @@ function loadGame(manual = false) {
     console.error('Erreur chargement sauvegarde', error);
     updateSaveStatus('Chargement impossible.');
     if (manual) {
-      state.dialogue = 'Impossible de charger cette sauvegarde.';
+      state.dialogue = 'Impossible dé charger cette sauvegarde.';
       render(false);
     }
     return false;
@@ -605,7 +720,7 @@ function deleteSave(manual = false) {
   } catch (error) {
     console.error('Erreur suppression sauvegarde', error);
     updateSaveStatus('Suppression impossible.');
-    if (manual) state.dialogue = 'Impossible de supprimer la sauvegarde.';
+    if (manual) state.dialogue = 'Impossible dé supprimer la sauvegarde.';
   }
   if (manual) render(false);
 }
@@ -683,7 +798,7 @@ function renameCurrentSave() {
     state.dialogue = 'Sauvegarde renommée : ' + cleanName + '.';
   } catch (error) {
     console.error('Erreur renommage sauvegarde', error);
-    state.dialogue = 'Impossible de renommer la sauvegarde localement.';
+    state.dialogue = 'Impossible dé renommer la sauvegarde localement.';
   }
   render(false);
 }
@@ -742,7 +857,7 @@ function importSaveFromJsonFile(file) {
       render(false);
     } catch (error) {
       console.error('Erreur import sauvegarde', error);
-      state.dialogue = 'Impossible de lire ce fichier JSON.';
+      state.dialogue = 'Impossible dé lire ce fichier JSON.';
       render(false);
     }
   };
@@ -757,13 +872,15 @@ function importSaveFromJsonFile(file) {
 
 loadGame(false);
 const sceneAudio = new Audio();
-sceneAudio.preload = 'auto';
+  sceneAudio.preload = 'auto';
 let sceneAudioSource = '';
 const ambientAudio = new Audio();
 ambientAudio.preload = 'auto';
 let ambientAudioSource = '';
 const hotspotAudio = new Audio();
 hotspotAudio.preload = 'auto';
+const responseAmbienceAudio = new Audio();
+responseAmbienceAudio.preload = 'auto';
 let cinematicAudio = null;
 let simonTimeouts = [];
 
@@ -811,6 +928,42 @@ function safeHtml(value = '') {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function escapeAttr(value = '') {
+  return safeHtml(String(value).replace(/[\\x00-\\x1f\\x7f]/g, ''))
+    .replace(/'/g, '&#39;')
+    .replaceAll(String.fromCharCode(96), '&#96;');
+}
+
+function isInternalAssetUrl(value = '') {
+  return /^(?:\\.\\/)?assets\\/[a-z0-9._~!$&()*+,;=:@%\\/-]+$/i.test(value);
+}
+
+function isAllowedDataMediaUrl(raw = '', kind = 'image') {
+  return kind === 'image' && raw.toLowerCase().startsWith('data:image/');
+}
+
+function safeMediaUrl(value = '', kind = 'image') {
+  const raw = String(value || '').trim();
+  if (!raw || /[\\x00-\\x1f\\x7f]/.test(raw)) return '';
+  if (isInternalAssetUrl(raw)) return raw;
+  if (isAllowedDataMediaUrl(raw, kind)) return raw;
+  try {
+    const parsed = new URL(raw);
+    return parsed.protocol === 'https:' ? parsed.href : '';
+  } catch {
+    return '';
+  }
+}
+
+function escapeMediaAttr(value = '', kind = 'image') {
+  return escapeAttr(safeMediaUrl(value, kind));
+}
+
+function cssMediaUrl(value = '', kind = 'image') {
+  const url = safeMediaUrl(value, kind);
+  return url ? 'url(&quot;' + escapeAttr(url) + '&quot;)' : 'none';
 }
 
 function clampPercent(value) {
@@ -888,7 +1041,7 @@ function makePieceStyle(imageData, rows, cols, pieceIndex, rotation = 0) {
   const row = Math.floor(pieceIndex / cols);
   const col = pieceIndex % cols;
   return [
-    'background-image:url(' + imageData + ')',
+    'background-image:' + cssMediaUrl(imageData, 'image'),
     'background-size:' + (cols * 100) + '% ' + (rows * 100) + '%',
     'background-position:' + (cols === 1 ? 0 : (col / (cols - 1)) * 100) + '% ' + (rows === 1 ? 0 : (row / (rows - 1)) * 100) + '%',
     'transform:rotate(' + rotation + 'deg)',
@@ -903,8 +1056,8 @@ function findAssetById(assetId) {
   return (project.assets || []).find((asset) => asset.id === assetId) || null;
 }
 
-function resolveAssetUrl(assetId, fallbackUrl = '') {
-  return findAssetById(assetId)?.url || fallbackUrl || '';
+function resolveAssetUrl(assetId, fallbackUrl = '', kind = 'image') {
+  return safeMediaUrl(findAssetById(assetId)?.url, kind) || safeMediaUrl(fallbackUrl, kind);
 }
 
 function resolveAnime2dLayerSrc(layer) {
@@ -931,9 +1084,9 @@ function getActById(id) {
 
 function getSceneLabel(id) {
   const scene = getSceneById(id);
-  if (!scene) return 'Aucune scene';
+  if (!scene) return 'Aucune scène';
   const act = getActById(scene.actId);
-  return (act?.name ? act.name + ' · ' : '') + (scene.parentSceneId ? 'Sous-scene · ' : 'Scene · ') + scene.name;
+  return (act?.name ? act.name + ' · ' : '') + (scene.parentSceneId ? 'Sous-scène · ' : 'Scène · ') + scene.name;
 }
 
 function getProjectCinematic(id) {
@@ -1007,7 +1160,7 @@ function renderAnime2dEmbedded(spec, time = 0) {
   return '<span class="anime2d-embedded">'
     + visibleLayers.map((layer) => '<span class="anime2d-embedded-layer" style="left:' + safeHtml(layer.x || 50) + '%;top:' + safeHtml(layer.y || 50) + '%;width:' + safeHtml(layer.width || 28) + '%;height:' + safeHtml(layer.height || ((layer.width || 28) * 1.6)) + '%;opacity:' + safeHtml((Number(layer.opacity || 100) / 100).toFixed(3)) + ';z-index:' + safeHtml(layers.length - layers.findIndex((entry) => entry.id === layer.id) + 2) + '">'
       + '<span class="anime2d-embedded-animated anime2d-preset-' + safeHtml(layer.preset || 'none') + '" style="animation-duration:' + safeHtml(layer.duration || 1000) + 'ms;animation-delay:' + safeHtml(layer.delay || 0) + 'ms;animation-iteration-count:' + (layer.loop === false ? '1' : 'infinite') + '">'
-      + (resolveAnime2dLayerSrc(layer) ? '<img src="' + resolveAnime2dLayerSrc(layer) + '" alt="' + safeHtml(layer.name || '') + '" />' : '')
+      + (resolveAnime2dLayerSrc(layer) ? '<img src="' + escapeMediaAttr(resolveAnime2dLayerSrc(layer), 'image') + '" alt="' + escapeAttr(layer.name || '') + '" />' : '')
       + '</span></span>').join('')
     + '</span>';
 }
@@ -1103,26 +1256,34 @@ function addPreloadUrl(set, value) {
 function collectSceneMediaUrls(scene, imageUrls, audioUrls) {
   if (!scene) return;
   addPreloadUrl(imageUrls, resolveAssetUrl(scene.backgroundId, scene.backgroundData));
-  addPreloadUrl(audioUrls, resolveAssetUrl(scene.musicId, scene.musicData));
-  addPreloadUrl(audioUrls, resolveAssetUrl(scene.ambientSoundId, scene.ambientSoundData));
+  addPreloadUrl(audioUrls, resolveAssetUrl(scene.musicId, scene.musicData, 'audio'));
+  addPreloadUrl(audioUrls, resolveAssetUrl(scene.ambientSoundId, scene.ambientSoundData, 'audio'));
   (scene.sceneObjects || []).forEach((object) => {
     addPreloadUrl(imageUrls, resolveAssetUrl(object.imageId, object.imageData));
     addPreloadUrl(imageUrls, resolveAssetUrl(object.popupImageId, object.popupImageData || object.popupImage));
     addPreloadUrl(imageUrls, resolveAssetUrl(object.objectImageId, object.objectImageData));
-    addPreloadUrl(audioUrls, resolveAssetUrl(object.soundId, object.soundData));
+    addPreloadUrl(audioUrls, resolveAssetUrl(object.soundId, object.soundData, 'audio'));
     (object.logicRules || []).forEach((rule) => {
-      addPreloadUrl(audioUrls, resolveAssetUrl(rule.successSoundId, rule.successSoundData));
-      addPreloadUrl(audioUrls, resolveAssetUrl(rule.failureSoundId, rule.failureSoundData));
+      addPreloadUrl(audioUrls, resolveAssetUrl(rule.successSoundId, rule.successSoundData, 'audio'));
+      addPreloadUrl(audioUrls, resolveAssetUrl(rule.failureSoundId, rule.failureSoundData, 'audio'));
     });
     (object.anime2dSpec?.layers || []).forEach((layer) => addPreloadUrl(imageUrls, resolveAnime2dLayerSrc(normalizeAnime2dLayer(layer))));
   });
   (scene.hotspots || []).forEach((spot) => {
     addPreloadUrl(imageUrls, resolveAssetUrl(spot.objectImageId, spot.objectImageData));
     addPreloadUrl(imageUrls, resolveAssetUrl(spot.secondObjectImageId, spot.secondObjectImageData));
-    addPreloadUrl(audioUrls, resolveAssetUrl(spot.soundId, spot.soundData));
+    addPreloadUrl(audioUrls, resolveAssetUrl(spot.soundId, spot.soundData, 'audio'));
+    (spot.conversation?.nodes || []).forEach((node) => {
+      (node.replies || []).forEach((reply) => {
+        addPreloadUrl(imageUrls, safeMediaUrl(reply.responseImageData, 'image'));
+        addPreloadUrl(imageUrls, safeMediaUrl(reply.npcPortraitData, 'image'));
+        addPreloadUrl(audioUrls, safeMediaUrl(reply.responseSoundData, 'audio'));
+        addPreloadUrl(audioUrls, safeMediaUrl(reply.ambienceSoundData, 'audio'));
+      });
+    });
     (spot.logicRules || []).forEach((rule) => {
-      addPreloadUrl(audioUrls, resolveAssetUrl(rule.successSoundId, rule.successSoundData));
-      addPreloadUrl(audioUrls, resolveAssetUrl(rule.failureSoundId, rule.failureSoundData));
+      addPreloadUrl(audioUrls, resolveAssetUrl(rule.successSoundId, rule.successSoundData, 'audio'));
+      addPreloadUrl(audioUrls, resolveAssetUrl(rule.failureSoundId, rule.failureSoundData, 'audio'));
     });
   });
 }
@@ -1133,7 +1294,7 @@ function collectSceneMedia(scene, imageUrls, audioUrls) {
 
 function collectCinematicMediaUrls(cinematic, imageUrls, audioUrls, videoUrls) {
   if (!cinematic) return;
-  addPreloadUrl(videoUrls, resolveAssetUrl(cinematic.videoId, cinematic.videoData));
+  addPreloadUrl(videoUrls, resolveAssetUrl(cinematic.videoId, cinematic.videoData, 'video'));
   if (cinematic.cinematicType === 'anime2d') {
     (cinematic.anime2dSpec?.layers || []).forEach((layer) => {
       addPreloadUrl(imageUrls, resolveAnime2dLayerSrc(normalizeAnime2dLayer(layer)));
@@ -1147,7 +1308,7 @@ function collectCinematicMediaUrls(cinematic, imageUrls, audioUrls, videoUrls) {
   }
   (cinematic.slides || []).forEach((slide) => {
     addPreloadUrl(imageUrls, resolveAssetUrl(slide.imageId, slide.imageData));
-    addPreloadUrl(audioUrls, resolveAssetUrl(slide.audioId, slide.audioData));
+    addPreloadUrl(audioUrls, resolveAssetUrl(slide.audioId, slide.audioData, 'audio'));
   });
 }
 
@@ -1310,7 +1471,11 @@ function applyEnterSceneAction(sceneId, fallbackText = 'Nouvelle scene.') {
 }
 
 function goToScene(sceneId, fallbackText = 'Nouvelle scene.') {
-  return dispatch({ ...gameActions.enterScene(sceneId), fallbackText });
+  const result = dispatch({ ...gameActions.enterScene(sceneId), fallbackText });
+  if (sceneId && !state.visitedSceneIds.includes(sceneId)) {
+    state.visitedSceneIds = [...state.visitedSceneIds, sceneId];
+  }
+  return result;
 }
 
 function toggleInventorySelection(itemId) {
@@ -1336,7 +1501,7 @@ function getSceneAmbientSoundKey(scene) {
 
 function playSceneMusic() {
   const playScene = getPlayScene();
-  const nextMusicData = resolveAssetUrl(playScene?.musicId, playScene?.musicData);
+  const nextMusicData = resolveAssetUrl(playScene?.musicId, playScene?.musicData, 'audio');
   const nextMusicKey = getSceneMusicKey(playScene);
   if (!nextMusicData) {
     sceneAudio.pause();
@@ -1360,7 +1525,7 @@ function playSceneMusic() {
 
 function playSceneAmbientSound() {
   const playScene = getPlayScene();
-  const nextSoundData = resolveAssetUrl(playScene?.ambientSoundId, playScene?.ambientSoundData);
+  const nextSoundData = resolveAssetUrl(playScene?.ambientSoundId, playScene?.ambientSoundData, 'audio');
   const nextSoundKey = getSceneAmbientSoundKey(playScene);
   if (!nextSoundData) {
     ambientAudio.pause();
@@ -1383,7 +1548,7 @@ function playSceneAmbientSound() {
 }
 
 function playHotspotSound(spot) {
-  const soundUrl = resolveAssetUrl(spot?.soundId, spot?.soundData);
+  const soundUrl = resolveAssetUrl(spot?.soundId, spot?.soundData, 'audio');
   if (!soundUrl) return;
   hotspotAudio.pause();
   hotspotAudio.currentTime = 0;
@@ -1391,6 +1556,19 @@ function playHotspotSound(spot) {
   hotspotAudio.src = soundUrl;
   hotspotAudio.volume = typeof spot.soundVolume === 'number' ? spot.soundVolume : 0.8;
   hotspotAudio.play().catch(() => {});
+}
+
+function playConversationReplyAudio(audioData = '', options = {}) {
+  const safeAudioData = safeMediaUrl(audioData, 'audio');
+  if (!safeAudioData) return;
+  const audio = options.ambience ? responseAmbienceAudio : hotspotAudio;
+  audio.pause();
+  audio.currentTime = 0;
+  audio.preload = 'auto';
+  audio.src = safeAudioData;
+  audio.volume = options.ambience ? 0.45 : 0.85;
+  audio.loop = Boolean(options.ambience);
+  audio.play().catch(() => {});
 }
 
 function formatSceneTimerSeconds(seconds = 0) {
@@ -1563,118 +1741,37 @@ function markLogicRuleUsed(ruleId) {
   state.usedLogicRuleIds = [...state.usedLogicRuleIds, ruleId];
 }
 
+function getStandaloneConditionContext() {
+  return {
+    inventory: state.inventory,
+    visitedSceneIds: state.visitedSceneIds,
+    completedHotspotIds: state.completedHotspotIds,
+    solvedEnigmaIds: state.solvedEnigmaIds,
+    chosenConversationReplyIds: state.chosenConversationReplyIds,
+    storyVariables: state.storyVariables,
+  };
+}
+
 function resolveHotspotInteraction(spot) {
   if (!spot) return null;
-  const usedRule = (spot.logicRules || []).find((rule) => rule.disableAfterUse && state.usedLogicRuleIds.includes(rule.id));
-  const isRuleAvailable = (rule) => !(rule.disableAfterUse && state.usedLogicRuleIds.includes(rule.id));
-  const doesRuleMatch = (rule) => {
-    if (!isRuleAvailable(rule)) return false;
-    if (rule.conditionType === 'always') return true;
-    if (rule.conditionType === 'missing_item') return rule.itemId && !state.inventory.includes(rule.itemId);
-    if (rule.conditionType === 'completed_hotspot') return rule.hotspotId && state.completedHotspotIds.includes(rule.hotspotId);
-    if (rule.conditionType === 'solved_enigma') return rule.conditionEnigmaId && state.solvedEnigmaIds.includes(rule.conditionEnigmaId);
-    if (rule.conditionType === 'launched_cinematic') return rule.cinematicId ?
-       state.launchedCinematicIds.includes(rule.cinematicId)
-      : state.launchedCinematicIds.length > 0;
-    if (rule.conditionType === 'completed_combination') return rule.combinationId && state.completedCombinationIds.includes(rule.combinationId);
-    if (rule.conditionType === 'second_click') return state.completedHotspotIds.includes(spot.id);
-    return rule.itemId && state.inventory.includes(rule.itemId);
-  };
-  const isRuleConfigured = (rule) => {
-    if (['has_item', 'missing_item'].includes(rule.conditionType || 'has_item')) return Boolean(rule.itemId);
-    if (rule.conditionType === 'always') return true;
-    if (rule.conditionType === 'completed_hotspot') return Boolean(rule.hotspotId);
-    if (rule.conditionType === 'solved_enigma') return Boolean(rule.conditionEnigmaId);
-    if (rule.conditionType === 'completed_combination') return Boolean(rule.combinationId);
-    return true;
-  };
-  const matchingRule = (spot.logicRules || []).find(doesRuleMatch);
-
-  if (matchingRule) {
-    const useDefaultAction = matchingRule.actionType === 'default';
-    return {
-      ...spot,
-      actionType: useDefaultAction ? spot.actionType : matchingRule.actionType || 'dialogue',
-      dialogue: matchingRule.dialogue || spot.dialogue || '',
-      requiredItemId: matchingRule.conditionType === 'has_item' ? matchingRule.itemId || '' : '',
-      consumeRequiredItemOnUse: Boolean(matchingRule.consumeRequiredItemOnUse),
-      rewardItemId: matchingRule.rewardItemId || (useDefaultAction ? spot.rewardItemId || '' : ''),
-      targetSceneId: useDefaultAction ? spot.targetSceneId || '' : matchingRule.targetSceneId || '',
-      targetCinematicId: useDefaultAction ? spot.targetCinematicId || '' : matchingRule.targetCinematicId || '',
-        enigmaId: useDefaultAction ? spot.enigmaId || '' : matchingRule.enigmaId || '',
-        blockActionType: matchingRule.blockActionType || 'show',
-        targetBlockId: matchingRule.targetBlockId || '',
-        targetBlockText: matchingRule.targetBlockText || '',
-        objectImageData: useDefaultAction ? spot.objectImageData || '' : matchingRule.objectImageData || '',
-      objectImageName: useDefaultAction ? spot.objectImageName || '' : matchingRule.objectImageName || '',
-      soundId: matchingRule.successSoundId || (useDefaultAction ? spot.soundId || '' : ''),
-      soundData: matchingRule.successSoundData || (useDefaultAction ? spot.soundData || '' : ''),
-      soundName: matchingRule.successSoundName || (useDefaultAction ? spot.soundName || '' : ''),
-      logicRuleId: matchingRule.id || '',
-      disableAfterUse: Boolean(matchingRule.disableAfterUse),
-    };
-  }
-
-  const unmetRule = (spot.logicRules || []).find((rule) => (
-    isRuleAvailable(rule)
-    && isRuleConfigured(rule)
-    && (rule.failureDialogue || rule.failureSoundData || rule.failureSoundId)
-    && !doesRuleMatch(rule)
-  ));
-  if (unmetRule) {
-    return {
-      ...spot,
-      actionType: 'dialogue',
-      dialogue: unmetRule.failureDialogue,
-      requiredItemId: '',
-      consumeRequiredItemOnUse: false,
-      rewardItemId: '',
-      targetSceneId: '',
-      targetCinematicId: '',
-      enigmaId: '',
-      objectImageData: '',
-      objectImageName: '',
-      soundId: unmetRule.failureSoundId || '',
-      soundData: unmetRule.failureSoundData || '',
-      soundName: unmetRule.failureSoundName || '',
-    };
-  }
-
-  const useSecondAction = Boolean(spot.hasSecondAction && state.completedHotspotIds.includes(spot.id));
-  if (!useSecondAction) {
-    return usedRule?.conditionType === 'has_item' ? {
-      ...spot,
-      requiredItemId: '',
-      consumeRequiredItemOnUse: false,
-      soundId: '',
-      soundData: '',
-      soundName: '',
-    } : spot;
-  }
-  return {
-    ...spot,
-    actionType: spot.secondActionType || 'dialogue',
-    dialogue: spot.secondDialogue || '',
-    requiredItemId: spot.secondRequiredItemId || '',
-    consumeRequiredItemOnUse: Boolean(spot.secondConsumeRequiredItemOnUse),
-    rewardItemId: spot.secondRewardItemId || '',
-    targetSceneId: spot.secondTargetSceneId || '',
-    targetCinematicId: spot.secondTargetCinematicId || '',
-    enigmaId: spot.secondEnigmaId || '',
-    objectImageId: spot.secondObjectImageId || '',
-    objectImageData: spot.secondObjectImageData || '',
-    objectImageName: spot.secondObjectImageName || '',
-  };
+  return sharedResolveHotspotInteraction(spot, {
+    ...getStandaloneConditionContext(),
+    usedLogicRuleIds: state.usedLogicRuleIds,
+    launchedCinematicIds: state.launchedCinematicIds,
+    completedCombinationIds: state.completedCombinationIds,
+    heroState: state.heroState || {},
+    lastDiceRoll: state.lastDiceRoll || {},
+    heroAdventureEnabled: IS_HERO_ADVENTURE,
+    completedHotspotIds: state.completedHotspotIds,
+    hotspotId: spot.id,
+  });
 }
 
 function applyHotspotSideEffects(spot, sourceHotspotId = spot?.id) {
   if (!spot) return;
 
   if (spot.consumeRequiredItemOnUse && spot.requiredItemId) {
-    const nextInventory = [...state.inventory];
-    const usedIndex = nextInventory.indexOf(spot.requiredItemId);
-    if (usedIndex >= 0) nextInventory.splice(usedIndex, 1);
-    state.inventory = nextInventory;
+    state.inventory = consumeInventoryItem(state.inventory, spot.requiredItemId);
     state.selectedInventoryIds = state.selectedInventoryIds.filter((id) => id !== spot.requiredItemId);
     if (state.viewerImage?.id === spot.requiredItemId) {
       state.viewerImage = null;
@@ -1683,47 +1780,27 @@ function applyHotspotSideEffects(spot, sourceHotspotId = spot?.id) {
 
   const spotObjectImageUrl = resolveAssetUrl(spot.objectImageId, spot.objectImageData);
   if (spotObjectImageUrl) {
-    state.viewerImage = {
-      src: spotObjectImageUrl,
-      name: spot.objectImageName || spot.name,
-      caption: spot.dialogue || spot.name || '',
-    };
+    state.viewerImage = createHotspotViewerImage(spot, spotObjectImageUrl);
   }
 
   if (spot.dialogue) state.dialogue = spot.dialogue;
 
-  const linkedInventoryItemId = ['inventory', 'both'].includes(spot.interactionMode) ? spot.linkedItemId : '';
-  const rewardItemId = spot.rewardItemId || linkedInventoryItemId;
+  const rewardItemId = getHotspotRewardItemId(spot);
   if (rewardItemId && !state.inventory.includes(rewardItemId)) {
-    state.inventory = [...state.inventory, rewardItemId];
+    state.inventory = addRewardItemToInventory(state.inventory, rewardItemId);
     if (!state.selectedInventoryIds.includes(rewardItemId)) {
-      state.selectedInventoryIds = [...state.selectedInventoryIds, rewardItemId].slice(-2);
+      state.selectedInventoryIds = selectRewardInventoryItem(state.selectedInventoryIds, rewardItemId);
     }
+    addAdventureJournalEntry({
+      type: 'item',
+      title: getJournalItemLabel(rewardItemId),
+      detail: spot.name || 'Zone exploree',
+    });
   }
 
-  if (spot.actionType === 'block' && spot.targetBlockId) {
-    if ((spot.blockActionType || 'show') === 'hide') {
-      if (!state.removedSceneObjectIds.includes(spot.targetBlockId)) {
-        state.removedSceneObjectIds = [...state.removedSceneObjectIds, spot.targetBlockId];
-      }
-    } else if (spot.blockActionType === 'update_text') {
-      state.revealedSceneObjectIds = state.revealedSceneObjectIds.includes(spot.targetBlockId)
-        ? state.revealedSceneObjectIds
-        : [...state.revealedSceneObjectIds, spot.targetBlockId];
-      state.removedSceneObjectIds = state.removedSceneObjectIds.filter((id) => id !== spot.targetBlockId);
-      state.sceneObjectTextOverrides = {
-        ...(state.sceneObjectTextOverrides || {}),
-        [spot.targetBlockId]: spot.targetBlockText || '',
-      };
-    } else {
-      state.revealedSceneObjectIds = state.revealedSceneObjectIds.includes(spot.targetBlockId)
-        ? state.revealedSceneObjectIds
-        : [...state.revealedSceneObjectIds, spot.targetBlockId];
-      state.removedSceneObjectIds = state.removedSceneObjectIds.filter((id) => id !== spot.targetBlockId);
-    }
-  }
+  Object.assign(state, applyHotspotBlockState(state, spot, { removedKey: 'removedSceneObjectIds' }));
 
-  markHotspotCompleted(sourceHotspotId || spot.id);
+  if (!spot.logicRuleFailed) markHotspotCompleted(sourceHotspotId || spot.id);
   if (spot.disableAfterUse && spot.logicRuleId) markLogicRuleUsed(spot.logicRuleId);
 }
 
@@ -1739,6 +1816,357 @@ function applyHotspotAction(spot, sourceHotspotId = spot?.id) {
   if (spot.actionType === 'cinematic' && spot.targetCinematicId) {
     launchCinematic(spot.targetCinematicId);
   }
+}
+
+function openConversation(spot) {
+  const nodes = Array.isArray(spot?.conversation?.nodes) ? spot.conversation.nodes : [];
+  const startNodeId = spot?.conversation?.startNodeId || nodes[0]?.id || '';
+  const node = nodes.find((entry) => entry.id === startNodeId) || nodes[0] || null;
+  if (!node) {
+    if (spot?.dialogue) state.dialogue = spot.dialogue;
+    return false;
+  }
+  if (node.askOnce && state.askedConversationNodeIds.includes(node.id)) {
+    state.dialogue = spot?.dialogue || 'Cette question a déjà été posée.';
+    return false;
+  }
+  state.activeConversation = {
+    sourceHotspotId: spot.id,
+    conversation: spot.conversation,
+    nodeId: node.id,
+  };
+  if (!state.askedConversationNodeIds.includes(node.id)) state.askedConversationNodeIds = [...state.askedConversationNodeIds, node.id];
+  state.dialogue = node.text || spot.dialogue || state.dialogue;
+  return true;
+}
+
+function closeConversation() {
+  state.activeConversation = null;
+}
+
+function isSingleConversationConditionAvailable(condition = {}) {
+  return evaluateCondition(condition, getStandaloneConditionContext());
+}
+
+function isConversationReplyAvailable(reply = {}) {
+  if (reply.id && state.hiddenConversationReplyIds.includes(reply.id)) return false;
+  if (reply.hideAfterChosen && reply.id && state.chosenConversationReplyIds.includes(reply.id)) return false;
+  return evaluateReplyCondition(reply, getStandaloneConditionContext());
+}
+
+function getSingleConversationConditionReason(condition = {}) {
+  const conditionType = condition.type || 'none';
+  if (conditionType === 'none' || isSingleConversationConditionAvailable(condition)) return '';
+  if (conditionType === 'has_item') return 'Nécessite: ' + (getItemById(condition.itemId)?.name || 'objet manquant');
+  if (conditionType === 'visited_scene') return 'Nécessite une scene visitee';
+  if (conditionType === 'completed_hotspot') return 'Nécessite une action faite';
+  if (conditionType === 'solved_enigma') return 'Nécessite une énigme resolue';
+  if (conditionType === 'chose_reply') return 'Nécessite un choix précédent';
+  if (conditionType === 'story_variable') {
+    const operators = { equals: '=', not_equals: '!=', greater_or_equal: '>=', less_or_equal: '<=', truthy: 'vrai', falsy: 'faux' };
+    const operator = condition.operator || 'equals';
+    const suffix = ['truthy', 'falsy'].includes(operator) ? operators[operator] : (operators[operator] || '=') + ' ' + (condition.value ?? '');
+    return 'Nécessite: ' + (condition.variableKey || 'variable') + ' ' + suffix;
+  }
+  return 'Condition non remplie';
+}
+
+function getConversationReplyLockReason(reply = {}) {
+  if (isConversationReplyAvailable(reply)) return '';
+  if (reply.id && state.hiddenConversationReplyIds.includes(reply.id)) return 'Choix masque par une autre réponse';
+  if (reply.hideAfterChosen && reply.id && state.chosenConversationReplyIds.includes(reply.id)) return 'Choix déjà utilisé';
+  if (reply.lockedLabel) return reply.lockedLabel;
+  const conditionType = reply.conditionType || 'none';
+  if (conditionType === 'has_item') return getSingleConversationConditionReason({ type: 'has_item', itemId: reply.conditionItemId });
+  if (conditionType === 'visited_scene') return getSingleConversationConditionReason({ type: 'visited_scene', sceneId: reply.conditionSceneId });
+  if (conditionType === 'completed_hotspot') return getSingleConversationConditionReason({ type: 'completed_hotspot', hotspotId: reply.conditionHotspotId });
+  if (conditionType === 'solved_enigma') return getSingleConversationConditionReason({ type: 'solved_enigma', enigmaId: reply.conditionEnigmaId });
+  if (conditionType === 'chose_reply') return getSingleConversationConditionReason({ type: 'chose_reply', replyId: reply.conditionReplyId });
+  if (conditionType === 'story_variable') return getSingleConversationConditionReason({ type: 'story_variable', variableKey: reply.conditionVariableKey, operator: reply.conditionVariableOperator, value: reply.conditionVariableValue });
+  if (conditionType === 'advanced') {
+    const conditions = Array.isArray(reply.advancedConditions) ? reply.advancedConditions : [];
+    const missing = conditions.map(getSingleConversationConditionReason).filter(Boolean);
+    if ((reply.advancedConditionMode || 'all') === 'any') return missing.length === conditions.length ? 'Il faut au moins une condition: ' + missing.slice(0, 2).join(' ou ') : '';
+    return missing.slice(0, 3).join(' + ') || 'Condition non remplie';
+  }
+  return 'Condition non remplie';
+}
+
+function applyStoryVariableEffect(reply = {}) {
+  if (!reply.storyVariableKey || (reply.storyVariableOperation || 'none') === 'none') return;
+  const key = String(reply.storyVariableKey || '').trim();
+  if (!key) return;
+  const operation = reply.storyVariableOperation || 'none';
+  const rawValue = reply.storyVariableValue;
+  if (!state.storyVariables || typeof state.storyVariables !== 'object') state.storyVariables = {};
+  if (operation === 'increment' || operation === 'decrement') {
+    const amount = Number(rawValue) || 1;
+    const current = Number(state.storyVariables[key]) || 0;
+    state.storyVariables = { ...state.storyVariables, [key]: operation === 'increment' ? current + amount : current - amount };
+    return;
+  }
+  let nextValue = rawValue;
+  if (rawValue === 'true') nextValue = true;
+  if (rawValue === 'false') nextValue = false;
+  state.storyVariables = { ...state.storyVariables, [key]: nextValue };
+}
+
+function applyStoryVariableValue(key, operation, rawValue) {
+  const variableKey = String(key || '').trim();
+  if (!variableKey) return;
+  if (!state.storyVariables || typeof state.storyVariables !== 'object') state.storyVariables = {};
+  if (operation === 'increment' || operation === 'decrement') {
+    const amount = Number(rawValue) || 1;
+    const current = Number(state.storyVariables[variableKey]) || 0;
+    state.storyVariables = { ...state.storyVariables, [variableKey]: operation === 'increment' ? current + amount : current - amount };
+    return;
+  }
+  let nextValue = rawValue;
+  if (rawValue === 'true') nextValue = true;
+  if (rawValue === 'false') nextValue = false;
+  state.storyVariables = { ...state.storyVariables, [variableKey]: nextValue };
+}
+
+function getTargetLabel(collection = [], id = '', fallback = 'Cible') {
+  const entry = collection.find((item) => item.id === id);
+  return entry?.name || entry?.title || fallback;
+}
+
+function makeVariableEffectNotice(key, operation, rawValue) {
+  const variableKey = String(key || '').trim();
+  if (!variableKey || operation === 'none') return null;
+  const label = getStoryVariableJournalLabel(variableKey);
+  if (operation === 'increment') return { type: 'variable', title: 'Variable', detail: label + ' +' + (Number(rawValue) || 1) };
+  if (operation === 'decrement') return { type: 'variable', title: 'Variable', detail: label + ' -' + (Number(rawValue) || 1) };
+  return { type: 'variable', title: 'Variable', detail: label + ' = ' + String(rawValue) };
+}
+
+function applyConversationReplyEffects(reply = {}) {
+  const effects = Array.isArray(reply.effects) ? reply.effects : [];
+  const result = { messages: [], notices: [], nextNodeId: '', targetSceneId: '', targetCinematicId: '', enigmaId: '', ending: null };
+  effects.forEach((effect) => {
+    const type = effect.type || 'message';
+    if (type === 'message' && effect.message) {
+      result.messages.push(effect.message);
+      result.notices.push({ type: 'message', title: 'Message', detail: effect.message });
+    }
+    if (type === 'add_item' && effect.itemId && !state.inventory.includes(effect.itemId)) {
+      state.inventory = [...state.inventory, effect.itemId];
+      state.selectedInventoryIds = [...state.selectedInventoryIds.filter((id) => id !== effect.itemId), effect.itemId].slice(-2);
+      const itemLabel = getJournalItemLabel(effect.itemId);
+      addAdventureJournalEntry({ type: 'item', title: itemLabel, detail: effect.journalDetail || 'Objet obtenu.' });
+      result.notices.push({ type: 'item', title: 'Objet obtenu', detail: itemLabel });
+    }
+    if (type === 'remove_item' && effect.itemId) {
+      state.inventory = state.inventory.filter((itemId) => itemId !== effect.itemId);
+      state.selectedInventoryIds = state.selectedInventoryIds.filter((itemId) => itemId !== effect.itemId);
+      result.notices.push({ type: 'item', title: 'Objet retire', detail: getJournalItemLabel(effect.itemId) });
+    }
+    if (type === 'set_variable') {
+      applyStoryVariableValue(effect.variableKey, 'set', effect.value);
+      const notice = makeVariableEffectNotice(effect.variableKey, 'set', effect.value);
+      if (notice) result.notices.push(notice);
+    }
+    if (type === 'increment_variable') {
+      applyStoryVariableValue(effect.variableKey, 'increment', effect.value);
+      const notice = makeVariableEffectNotice(effect.variableKey, 'increment', effect.value);
+      if (notice) result.notices.push(notice);
+    }
+    if (type === 'decrement_variable') {
+      applyStoryVariableValue(effect.variableKey, 'decrement', effect.value);
+      const notice = makeVariableEffectNotice(effect.variableKey, 'decrement', effect.value);
+      if (notice) result.notices.push(notice);
+    }
+    if (type === 'journal') {
+      const title = effect.journalTitle || 'Note';
+      const detail = effect.journalDetail || effect.message || '';
+      addAdventureJournalEntry({ type: 'note', title, detail });
+      result.notices.push({ type: 'journal', title: 'Journal mis a jour', detail: [title, detail].filter(Boolean).join(' - ') });
+    }
+    if (type === 'next_node') {
+      result.nextNodeId = effect.nextNodeId || result.nextNodeId;
+      const node = (state.activeConversation?.conversation?.nodes || []).find((entry) => entry.id === effect.nextNodeId);
+      result.notices.push({ type: 'route', title: 'Suite', detail: node?.text || node?.speaker || 'Autre question' });
+    }
+    if (type === 'scene') {
+      result.targetSceneId = effect.targetSceneId || result.targetSceneId;
+      result.notices.push({ type: 'route', title: 'Nouvelle scene', detail: getTargetLabel(project.scenes || [], effect.targetSceneId, 'Scene') });
+    }
+    if (type === 'cinematic') {
+      result.targetCinematicId = effect.targetCinematicId || result.targetCinematicId;
+      result.notices.push({ type: 'media', title: 'Cinématique', detail: getTargetLabel(project.cinematics || [], effect.targetCinematicId, 'Cinématique') });
+    }
+    if (type === 'enigma') {
+      result.enigmaId = effect.enigmaId || result.enigmaId;
+      result.notices.push({ type: 'route', title: 'Énigme', detail: getTargetLabel(project.enigmas || [], effect.enigmaId, 'Énigme') });
+    }
+    if (type === 'ending') {
+      result.ending = { endingType: effect.endingType || reply.endingType || 'neutral', endingTitle: effect.endingTitle || reply.endingTitle || '', endingSummary: effect.endingSummary || reply.endingSummary || '', dialogue: effect.message || reply.dialogue || '' };
+      result.notices.push({ type: 'ending', title: 'Fin déclenchée', detail: effect.endingTitle || reply.endingTitle || 'Fin' });
+    }
+  });
+  return result;
+}
+
+function addAdventureJournalEntry(entry = {}) {
+  if (!entry.title && !entry.detail) return;
+  const nextEntry = {
+    id: Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+    type: entry.type || 'note',
+    title: entry.title || '',
+    detail: entry.detail || '',
+  };
+  state.adventureJournalEntries = [nextEntry].concat(Array.isArray(state.adventureJournalEntries) ? state.adventureJournalEntries : []).slice(0, 60);
+}
+
+function getStoryVariableJournalLabel(key) {
+  const variable = (project.storyVariables || []).find((entry) => entry.key === key);
+  return variable?.journalLabel || key;
+}
+
+function getJournalItemLabel(itemId) {
+  const item = getItemById(itemId);
+  return item ? ((item.icon || '') + ' ' + (item.name || 'Objet')).trim() : 'Objet';
+}
+
+function openEnding(reply = {}) {
+  const typeLabels = {
+    good: 'Bonne fin',
+    bad: 'Mauvaise fin',
+    secret: 'Fin secrete',
+    neutral: 'Fin neutre',
+  };
+  const endingType = reply.endingType || 'neutral';
+  state.activeEnding = {
+    type: endingType,
+    label: typeLabels[endingType] || 'Fin',
+    title: reply.endingTitle || typeLabels[endingType] || 'Fin',
+    summary: reply.endingSummary || reply.dialogue || 'Ton aventure se termine ici.',
+    message: reply.dialogue || '',
+  };
+}
+
+function chooseConversationReply(reply = {}) {
+  if (!state.activeConversation?.conversation) return;
+  if (!isConversationReplyAvailable(reply)) return;
+  const currentNode = (state.activeConversation.conversation.nodes || []).find((node) => node.id === state.activeConversation.nodeId);
+  addAdventureJournalEntry({
+    type: 'choice',
+    title: reply.label || 'Choix',
+    detail: currentNode?.text || '',
+  });
+  const replyResponseImageData = safeMediaUrl(reply.responseImageData, 'image');
+  const replyResponseSoundData = safeMediaUrl(reply.responseSoundData, 'audio');
+  const replyAmbienceSoundData = safeMediaUrl(reply.ambienceSoundData, 'audio');
+  if (replyResponseImageData) {
+    state.viewerImage = {
+      src: replyResponseImageData,
+      name: reply.responseImageName || reply.label || 'Image',
+      caption: reply.dialogue || reply.label || '',
+    };
+  }
+  if (replyResponseSoundData) playConversationReplyAudio(replyResponseSoundData);
+  if (replyAmbienceSoundData) playConversationReplyAudio(replyAmbienceSoundData, { ambience: true });
+  applyStoryVariableEffect(reply);
+  const effectResult = applyConversationReplyEffects(reply);
+  if (reply.id && !state.chosenConversationReplyIds.includes(reply.id)) {
+    state.chosenConversationReplyIds = [...state.chosenConversationReplyIds, reply.id];
+  }
+  const replyIdsToHide = Array.isArray(reply.hideReplyIdsAfterChosen) ? reply.hideReplyIdsAfterChosen.filter(Boolean) : [];
+  if (replyIdsToHide.length) {
+    state.hiddenConversationReplyIds = [...new Set([...(state.hiddenConversationReplyIds || []), ...replyIdsToHide])];
+  }
+  const actionType = reply.actionType || (reply.nextNodeId ? 'node' : 'end');
+  const message = reply.dialogue || reply.label || '';
+  const combinedMessage = [message, ...effectResult.messages].filter(Boolean).join(' ');
+  if (combinedMessage) state.dialogue = combinedMessage;
+  const legacyVariableNotice = makeVariableEffectNotice(reply.storyVariableKey, reply.storyVariableOperation || 'none', reply.storyVariableValue);
+  const nextChoiceNotices = [
+    combinedMessage ? { type: 'message', title: 'Message affiché', detail: combinedMessage } : null,
+    replyResponseImageData ? { type: 'media', title: 'Image affichée', detail: reply.responseImageName || reply.label || 'Image de réponse' } : null,
+    replyResponseSoundData ? { type: 'media', title: 'Son joue', detail: 'Effet sonore' } : null,
+    replyAmbienceSoundData ? { type: 'media', title: 'Ambiance lancée', detail: 'Son d’ambiance' } : null,
+    legacyVariableNotice,
+    ...effectResult.notices,
+  ].filter(Boolean);
+  if (reply.rewardItemId && !state.inventory.includes(reply.rewardItemId)) {
+    state.inventory = [...state.inventory, reply.rewardItemId];
+    state.selectedInventoryIds = [...state.selectedInventoryIds.filter((id) => id !== reply.rewardItemId), reply.rewardItemId].slice(-2);
+    addAdventureJournalEntry({
+      type: 'item',
+      title: getJournalItemLabel(reply.rewardItemId),
+      detail: 'Indice ou objet obtenu.',
+    });
+    nextChoiceNotices.push({ type: 'item', title: 'Objet obtenu', detail: getJournalItemLabel(reply.rewardItemId) });
+  }
+  if (effectResult.ending) {
+    state.choiceEffectNotices = nextChoiceNotices;
+    markHotspotCompleted(state.activeConversation.sourceHotspotId);
+    closeConversation();
+    openEnding(effectResult.ending);
+    return;
+  }
+  const targetSceneId = effectResult.targetSceneId || reply.targetSceneId;
+  if (targetSceneId && (actionType === 'scene' || effectResult.targetSceneId)) {
+    if (!effectResult.targetSceneId) nextChoiceNotices.push({ type: 'route', title: 'Nouvelle scene', detail: getTargetLabel(project.scenes || [], targetSceneId, 'Scene') });
+    state.choiceEffectNotices = nextChoiceNotices;
+    closeConversation();
+    goToScene(targetSceneId, combinedMessage || 'Nouvelle scene.');
+    return;
+  }
+  const targetCinematicId = effectResult.targetCinematicId || reply.targetCinematicId;
+  if (targetCinematicId && (actionType === 'cinematic' || effectResult.targetCinematicId)) {
+    if (!effectResult.targetCinematicId) nextChoiceNotices.push({ type: 'media', title: 'Cinématique', detail: getTargetLabel(project.cinematics || [], targetCinematicId, 'Cinématique') });
+    state.choiceEffectNotices = nextChoiceNotices;
+    closeConversation();
+    launchCinematic(targetCinematicId);
+    return;
+  }
+  const targetEnigmaId = effectResult.enigmaId || reply.enigmaId;
+  if (targetEnigmaId && (actionType === 'enigma' || effectResult.enigmaId)) {
+    const enigma = getEnigmaById(targetEnigmaId);
+    if (enigma) {
+      if (!effectResult.enigmaId) nextChoiceNotices.push({ type: 'route', title: 'Énigme', detail: enigma.name || 'Énigme' });
+      state.choiceEffectNotices = nextChoiceNotices;
+      closeConversation();
+      openEnigma(enigma, null);
+      return;
+    }
+  }
+  if (actionType === 'ending') {
+    nextChoiceNotices.push({ type: 'ending', title: 'Fin déclenchée', detail: reply.endingTitle || 'Fin' });
+    state.choiceEffectNotices = nextChoiceNotices;
+    markHotspotCompleted(state.activeConversation.sourceHotspotId);
+    closeConversation();
+    openEnding(reply);
+    return;
+  }
+  if (actionType === 'end') {
+    state.choiceEffectNotices = nextChoiceNotices;
+    markHotspotCompleted(state.activeConversation.sourceHotspotId);
+    closeConversation();
+    return;
+  }
+  const nextNodeId = effectResult.nextNodeId || reply.nextNodeId;
+  const nextNode = (state.activeConversation.conversation.nodes || []).find((node) => node.id === nextNodeId);
+  if (nextNode) {
+    if (nextNode.askOnce && state.askedConversationNodeIds.includes(nextNode.id)) {
+      state.choiceEffectNotices = nextChoiceNotices;
+      state.dialogue = combinedMessage || 'Cette question a déjà été posée.';
+      closeConversation();
+      return;
+    }
+    if (!effectResult.nextNodeId) nextChoiceNotices.push({ type: 'route', title: 'Suite', detail: nextNode.text || nextNode.speaker || 'Autre question' });
+    state.choiceEffectNotices = nextChoiceNotices;
+    if (!state.askedConversationNodeIds.includes(nextNode.id)) state.askedConversationNodeIds = [...state.askedConversationNodeIds, nextNode.id];
+    state.activeConversation.nodeId = nextNode.id;
+    state.activeConversation.portraitData = safeMediaUrl(reply.npcPortraitData, 'image') || state.activeConversation.portraitData || '';
+    state.activeConversation.portraitName = reply.npcPortraitName || state.activeConversation.portraitName || '';
+    state.dialogue = [combinedMessage, nextNode.text].filter(Boolean).join(' ');
+    return;
+  }
+  state.choiceEffectNotices = nextChoiceNotices;
+  closeConversation();
 }
 
 function applyEnigmaSuccess(enigma, hotspot) {
@@ -1907,14 +2335,14 @@ function rotatePuzzlePiece(index) {
   }
 }
 
-function moveDragPieceToSlot(piece, slotIndex) {
-  if (piece === null || piece === undefined) return;
-  const bankWithoutPiece = state.enigmaDragBank.filter((entry) => entry !== piece);
+function moveDragPieceToSlot(pièce, slotIndex) {
+  if (pièce === null || pièce === undefined) return;
+  const bankWithoutPiece = state.enigmaDragBank.filter((entry) => entry !== pièce);
   const nextSlots = [...state.enigmaDragSlots];
-  const previousSlotIndex = nextSlots.findIndex((entry) => entry === piece);
+  const previousSlotIndex = nextSlots.findIndex((entry) => entry === pièce);
   if (previousSlotIndex >= 0) nextSlots[previousSlotIndex] = null;
   const displacedPiece = nextSlots[slotIndex];
-  nextSlots[slotIndex] = piece;
+  nextSlots[slotIndex] = pièce;
 
   state.enigmaDragSlots = nextSlots;
   state.enigmaDragBank = displacedPiece === null || displacedPiece === undefined ?
@@ -1929,11 +2357,11 @@ function moveDragPieceToSlot(piece, slotIndex) {
 
 function returnDragPieceToBank(slotIndex) {
   const nextSlots = [...state.enigmaDragSlots];
-  const piece = nextSlots[slotIndex];
-  if (piece !== null && piece !== undefined) {
+  const pièce = nextSlots[slotIndex];
+  if (pièce !== null && pièce !== undefined) {
     nextSlots[slotIndex] = null;
     state.enigmaDragSlots = nextSlots;
-    state.enigmaDragBank = [...state.enigmaDragBank, piece];
+    state.enigmaDragBank = [...state.enigmaDragBank, pièce];
     render();
   }
 }
@@ -2004,6 +2432,17 @@ function getSceneObjectBlockType(obj) {
   return ['object', 'text', 'image', 'button', 'input', 'code', 'hint'].includes(value) ? value : 'object';
 }
 
+function applySceneObjectTextOverride(obj, textOverride) {
+  if (textOverride === undefined || textOverride === null) return obj;
+  const text = String(textOverride);
+  const blockType = getSceneObjectBlockType(obj);
+  if (blockType === 'button') return { ...obj, buttonLabel: text };
+  if (blockType === 'input') return { ...obj, placeholder: text };
+  if (blockType === 'code') return { ...obj, blockLabel: text, placeholder: text };
+  if (blockType === 'image') return { ...obj, blockLabel: text };
+  return { ...obj, blockText: text, dialogue: text };
+}
+
 function normalizeBlockAnswer(value) {
   return String(value || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
@@ -2015,8 +2454,9 @@ function getSceneObjectFontSize(obj) {
 
 function triggerSceneObject(objectId) {
   const scene = getPlayScene();
-  const obj = scene?.sceneObjects?.find((entry) => entry.id === objectId);
-  if (!obj || state.removedSceneObjectIds.includes(obj.id)) return;
+  const sourceObj = scene?.sceneObjects?.find((entry) => entry.id === objectId);
+  if (!sourceObj || state.removedSceneObjectIds.includes(sourceObj.id)) return;
+  const obj = applySceneObjectTextOverride(sourceObj, state.sceneObjectTextOverrides?.[objectId]);
   const clickMode = getSceneObjectClickMode(obj);
   if (clickMode === 'none') return;
   if (clickMode === 'action') {
@@ -2109,6 +2549,12 @@ function applyTriggerHotspotAction(spotId) {
 
   playHotspotSound(activeSpot);
 
+  if (activeSpot.actionType === 'conversation') {
+    openConversation(activeSpot);
+    render();
+    return;
+  }
+
   if (activeSpot.enigmaId) {
     const enigma = getEnigmaById(activeSpot.enigmaId);
     if (enigma) {
@@ -2145,6 +2591,11 @@ function applyCinematicEnd(cinematic) {
     const rewardItem = getItemById(cinematic.rewardItemId);
     if (!state.inventory.includes(cinematic.rewardItemId)) {
       state.inventory = [...state.inventory, cinematic.rewardItemId];
+      addAdventureJournalEntry({
+        type: 'item',
+        title: getJournalItemLabel(cinematic.rewardItemId),
+        detail: cinematic.name || 'Cinématique',
+      });
     }
     if (!state.selectedInventoryIds.includes(cinematic.rewardItemId)) {
       state.selectedInventoryIds = [...state.selectedInventoryIds, cinematic.rewardItemId].slice(-2);
@@ -2209,6 +2660,9 @@ function resetPreview() {
     cinematicAudio.pause();
     cinematicAudio = null;
   }
+  responseAmbienceAudio.pause();
+  responseAmbienceAudio.removeAttribute('src');
+  responseAmbienceAudio.load();
   render();
 }
 
@@ -2287,6 +2741,27 @@ function bindEvents() {
     state.showInteractionHints = !state.showInteractionHints;
     state.pauseOpen = false;
     render();
+  });
+  root.querySelector('#close-conversation')?.addEventListener('click', () => {
+    closeConversation();
+    render();
+  });
+  root.querySelector('#close-choice-effects')?.addEventListener('click', () => {
+    state.choiceEffectNotices = [];
+    render();
+  });
+  root.querySelector('#close-ending')?.addEventListener('click', () => {
+    state.activeEnding = null;
+    render();
+  });
+  root.querySelector('#restart-ending')?.addEventListener('click', resetPreview);
+  root.querySelectorAll('[data-conversation-reply]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const node = state.activeConversation?.conversation?.nodes?.find((entry) => entry.id === state.activeConversation.nodeId);
+      const reply = node?.replies?.find((entry) => entry.id === button.dataset.conversationReply);
+      chooseConversationReply(reply);
+      render();
+    });
   });
   root.querySelector('#pause-save-game')?.addEventListener('click', () => {
     saveGame(true);
@@ -2532,7 +3007,7 @@ function renderCinematic(cinematic, slide) {
       + (!layers.some((layer) => resolveAnime2dLayerSrc(layer)) ? '<p class="anime2d-player-empty">Aucune image embarquée dans ce JSON 2D Anime.</p>' : '')
       + visibleLayers.map((layer) => '<div class="anime2d-player-layer" style="left:' + safeHtml(layer.x || 50) + '%;top:' + safeHtml(layer.y || 50) + '%;width:' + safeHtml(layer.width || 28) + '%;height:' + safeHtml(layer.height || ((layer.width || 28) * 1.6)) + '%;opacity:' + safeHtml(Number(layer.opacity || 100) / 100) + ';z-index:' + safeHtml(layers.length - layers.findIndex((entry) => entry.id === layer.id) + 2) + '">'
         + '<span class="anime2d-embedded-animated anime2d-preset-' + safeHtml(layer.preset || 'none') + '" style="animation-duration:' + safeHtml(layer.duration || 1000) + 'ms;animation-delay:' + safeHtml(layer.delay || 0) + 'ms;animation-iteration-count:' + (layer.loop === false ? '1' : 'infinite') + '">'
-        + (resolveAnime2dLayerSrc(layer) ? '<img src="' + resolveAnime2dLayerSrc(layer) + '" alt="' + safeHtml(layer.name || '') + '" loading="eager" decoding="sync" />' : '')
+        + (resolveAnime2dLayerSrc(layer) ? '<img src="' + escapeMediaAttr(resolveAnime2dLayerSrc(layer), 'image') + '" alt="' + escapeAttr(layer.name || '') + '" loading="eager" decoding="sync" />' : '')
         + '</span>'
         + '</div>').join('')
       + (narration ? '<p class="anime2d-player-narration">' + safeHtml(narration) + '</p>' : '')
@@ -2542,21 +3017,24 @@ function renderCinematic(cinematic, slide) {
       + '</div></div>';
   }
   if ((cinematic.cinematicType || 'slides') === 'video') {
+    const videoSrc = resolveAssetUrl(cinematic.videoId, cinematic.videoData, 'video');
     return '<div class="overlay" id="cinematic-overlay"><div class="overlay-card">'
-      + (resolveAssetUrl(cinematic.videoId, cinematic.videoData) ?
-         '<video id="cinematic-video" class="overlay-media" preload="auto" src="' + resolveAssetUrl(cinematic.videoId, cinematic.videoData) + '" '
+      + (videoSrc ?
+         '<video id="cinematic-video" class="overlay-media" preload="auto" src="' + escapeMediaAttr(videoSrc, 'video') + '" '
           + (cinematic.videoControls === false ? '' : 'controls ') + (cinematic.videoAutoplay === false ? '' : 'autoplay ')
           + '></video>'
         : '<p class="small-note">Ajoute une vidéo dans l’éditeur de cinematic.</p>')
-      + '<p class="narration">' + safeHtml(cinematic.name || 'Cinematic') + '</p>'
+      + '<p class="narration">' + safeHtml(cinematic.name || 'Cinématique') + '</p>'
       + '<div class="panel-head"><span></span><button id="close-cinematic">Terminer</button></div></div></div>';
   }
 
   if (!slide) return '';
+  const slideImageSrc = resolveAssetUrl(slide.imageId, slide.imageData, 'image');
+  const slideAudioSrc = resolveAssetUrl(slide.audioId, slide.audioData, 'audio');
 
   return '<div class="overlay" id="cinematic-overlay"><div class="overlay-card">'
-    + (resolveAssetUrl(slide.imageId, slide.imageData) ? '<img class="overlay-media" loading="eager" decoding="async" src="' + resolveAssetUrl(slide.imageId, slide.imageData) + '" alt="' + safeHtml(slide.imageName || slide.narration || 'Cinematic') + '" />' : '')
-    + (resolveAssetUrl(slide.audioId, slide.audioData) ? '<audio id="cinematic-audio" autoplay src="' + resolveAssetUrl(slide.audioId, slide.audioData) + '" style="display:none"></audio>' : '')
+    + (slideImageSrc ? '<img class="overlay-media" loading="eager" decoding="async" src="' + escapeMediaAttr(slideImageSrc, 'image') + '" alt="' + escapeAttr(slide.imageName || slide.narration || 'Cinématique') + '" />' : '')
+    + (slideAudioSrc ? '<audio id="cinematic-audio" autoplay src="' + escapeMediaAttr(slideAudioSrc, 'audio') + '" style="display:none"></audio>' : '')
     + '<p class="narration">' + safeHtml(slide.narration || '') + '</p>'
     + '<div class="panel-head">'
     + '<button id="prev-cinematic" class="secondary-button">Précédent</button>'
@@ -2575,7 +3053,7 @@ function renderEnigma(enigma) {
   const enigmaPopupBackgroundUrl = resolveAssetUrl(enigma.popupBackgroundId, enigma.popupBackgroundData);
   const overlayGradient = POPUP_OVERLAY_GRADIENTS[enigma.popupBackgroundOverlay] || POPUP_OVERLAY_GRADIENTS.dark;
   const overlayStyle = enigmaPopupBackgroundUrl ?
-     ' style="background-image:' + overlayGradient + ', url(' + enigmaPopupBackgroundUrl + ');background-size:' + Math.round((Number(enigma.popupBackgroundZoom) || 1) * 100) + '%;background-position:' + (Number(enigma.popupBackgroundX) || 50) + '% ' + (Number(enigma.popupBackgroundY) || 50) + '%;background-repeat:no-repeat"'
+     ' style="background-image:' + overlayGradient + ', ' + cssMediaUrl(enigmaPopupBackgroundUrl, 'image') + ';background-size:' + Math.round((Number(enigma.popupBackgroundZoom) || 1) * 100) + '%;background-position:' + (Number(enigma.popupBackgroundX) || 50) + '% ' + (Number(enigma.popupBackgroundY) || 50) + '%;background-repeat:no-repeat"'
     : '';
 
   let body = '';
@@ -2592,25 +3070,25 @@ function renderEnigma(enigma) {
     if (codeSkin === 'safe-wheels') {
       body = '<div><label>Roulettes du coffre</label><div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:10px">'
         + codeSlots.map((char, index) => '<input data-code-index="' + index + '" data-code-length="' + codeLength + '" maxlength="1" value="' + safeHtml(char) + '" style="' + slotInputStyle + ';background:linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,.04))" />').join('')
-        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’enigme</button></div></div>';
+        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
     } else if (codeSkin === 'digicode') {
       body = '<div><label>Digicode</label><div style="display:flex;gap:8px;justify-content:center;margin:10px 0 14px">'
         + codeSlots.map((char) => '<span style="width:42px;height:46px;border-radius:10px;border:1px solid rgba(255,255,255,.22);display:grid;place-items:center;font-size:22px;font-weight:900;background:rgba(15,23,42,.68)">' + safeHtml(char || '?') + '</span>').join('')
         + '</div><div style="display:grid;grid-template-columns:repeat(3,64px);gap:10px;justify-content:center">'
         + keypadKeys.map((key) => '<button type="button" data-code-key="' + key + '" data-code-length="' + codeLength + '" style="height:52px;font-size:20px;font-weight:900;color:#f8fbff;background:linear-gradient(180deg, rgba(59,130,246,.32), rgba(30,41,59,.96));border:1px solid rgba(147,197,253,.34);box-shadow:0 10px 22px rgba(15,23,42,.28)">' + key + '</button>').join('')
-        + '</div><div class="inventory-actions"><button id="clear-code" style="color:#dbeafe;background:rgba(15,23,42,.92);border:1px solid rgba(147,197,253,.28)">Effacer</button><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’enigme</button></div></div>';
+        + '</div><div class="inventory-actions"><button id="clear-code" style="color:#dbeafe;background:rgba(15,23,42,.92);border:1px solid rgba(147,197,253,.28)">Effacer</button><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
     } else if (codeSkin === 'boxes') {
       body = '<div><label>Cases du code</label><div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:10px">'
         + codeSlots.map((char, index) => '<input data-code-index="' + index + '" data-code-length="' + codeLength + '" maxlength="1" value="' + safeHtml(char) + '" style="' + boxInputStyle + '" />').join('')
-        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’enigme</button></div></div>';
+        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
     } else if (codeSkin === 'paper-strip') {
       body = '<div><label>Bande papier</label><input id="enigma-input" value="' + safeHtml(state.enigmaCodeInput) + '" '
         + 'style="width:100%;padding:12px 14px;border-radius:8px;border:1px solid rgba(148,163,184,.16);background:rgba(255,255,255,.92);color:#0f172a;outline:none;text-align:center;font-family:monospace;font-size:24px;font-weight:900;letter-spacing:8px;text-transform:uppercase" />'
-        + '<div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’enigme</button></div></div>';
+        + '<div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
     } else {
       body = '<div><label>Code</label><input id="enigma-input" value="' + safeHtml(state.enigmaCodeInput) + '" '
         + 'style="width:100%;padding:12px 14px;border-radius:14px;border:1px solid rgba(148,163,184,.16);background:rgba(12,21,39,.9);color:white;outline:none" />'
-        + '<div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’enigme</button></div></div>';
+        + '<div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
     }
   }
 
@@ -2621,7 +3099,7 @@ function renderEnigma(enigma) {
         : '<span class="small-note">Aucune couleur choisie.</span>')
       + '</div><div class="color-picker-grid">'
       + PREVIEW_COLOR_OPTIONS.map(([value, label]) => '<button type="button" class="color-picker-button" data-enigma-color="' + value + '" title="' + label + '" style="background:' + value + '"></button>').join('')
-      + '</div><div class="panel-head"><button id="clear-colors" class="secondary-button">Effacer la suite</button><button id="submit-enigma">Valider l’enigme</button></div></div>';
+      + '</div><div class="panel-head"><button id="clear-colors" class="secondary-button">Effacer la suite</button><button id="submit-enigma">Valider l’énigme</button></div></div>';
   }
 
   if (enigma.type === 'misc') {
@@ -2631,11 +3109,11 @@ function renderEnigma(enigma) {
     if (miscMode === 'multiple-choice') {
       body = '<div><label>Choisis une réponse</label><div style="display:grid;gap:10px;margin-top:10px">'
         + (enigma.miscChoices || []).map((choice) => '<button type="button" data-misc-choice="' + safeHtml(choice) + '" style="' + (state.enigmaCodeInput === choice ? primaryButtonStyle : secondaryButtonStyle) + '">' + safeHtml(choice) + '</button>').join('')
-        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’enigme</button></div></div>';
+        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
     } else if (miscMode === 'true-false') {
       body = '<div><label>Choisis une réponse</label><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">'
         + ['vrai', 'faux'].map((choice) => '<button type="button" data-misc-choice="' + choice + '" style="' + (state.enigmaCodeInput === choice ? primaryButtonStyle : secondaryButtonStyle) + '">' + (choice === 'vrai' ? 'Vrai' : 'Faux') + '</button>').join('')
-        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’enigme</button></div></div>';
+        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
     } else if (miscMode === 'ordering') {
       const current = parseJsonValue(state.enigmaCodeInput, []);
       body = '<div><label>Remets dans l’ordre</label><div style="display:grid;gap:10px;margin-top:10px">'
@@ -2643,33 +3121,33 @@ function renderEnigma(enigma) {
         + (current.length ? current.map((choice, index) => '<button type="button" data-misc-order-remove="' + index + '" style="' + secondaryButtonStyle + '">' + (index + 1) + '. ' + safeHtml(choice) + '</button>').join('') : '<span class="small-note">Clique les éléments dans le bon ordre.</span>')
         + '</div>'
         + (enigma.miscChoices || []).filter((choice) => !current.includes(choice)).map((choice) => '<button type="button" data-misc-order="' + safeHtml(choice) + '" style="' + secondaryButtonStyle + '">' + safeHtml(choice) + '</button>').join('')
-        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’enigme</button></div></div>';
+        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
     } else if (miscMode === 'matching') {
       const answers = parseJsonValue(state.enigmaCodeInput, {});
       body = '<div><label>Associe les paires</label><div style="display:grid;gap:10px;margin-top:10px">'
         + (enigma.miscPairs || []).map((pair) => '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:center"><strong>' + safeHtml(pair.left || '') + '</strong><select data-misc-match-left="' + safeHtml(pair.left || '') + '"><option value="">Choisir</option>'
           + (enigma.miscPairs || []).map((entry) => '<option value="' + safeHtml(entry.right || '') + '"' + (answers[pair.left] === entry.right ? ' selected' : '') + '>' + safeHtml(entry.right || '') + '</option>').join('')
           + '</select></div>').join('')
-        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’enigme</button></div></div>';
+        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
     } else if (miscMode === 'numeric-range' || miscMode === 'exact-number') {
       body = '<div><label>' + (miscMode === 'exact-number' ? 'Nombre exact' : 'Nombre') + '</label><input id="enigma-input" type="number" value="' + safeHtml(state.enigmaCodeInput) + '" '
         + 'style="width:100%;padding:12px 14px;border-radius:14px;border:1px solid rgba(148,163,184,.16);background:rgba(12,21,39,.9);color:white;outline:none" />'
         + '<p class="small-note">' + (miscMode === 'exact-number' ? 'La réponse doit correspondre au nombre attendu.' : 'La réponse doit être comprise entre ' + safeHtml(enigma.miscMin ?? '') + ' et ' + safeHtml(enigma.miscMax ?? '') + '.') + '</p>'
-        + '<div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’enigme</button></div></div>';
+        + '<div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
     } else if (miscMode === 'item-select') {
       body = '<div><label>Choisis l’objet</label><div style="display:grid;gap:10px;margin-top:10px">'
         + (project.items || []).map((item) => '<button type="button" data-misc-choice="' + safeHtml(item.id) + '" style="' + (state.enigmaCodeInput === item.id ? primaryButtonStyle : secondaryButtonStyle) + '">' + safeHtml(item.name || 'Objet') + '</button>').join('')
-        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’enigme</button></div></div>';
+        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
     } else if (miscMode === 'multi-select') {
       const current = parseJsonValue(state.enigmaCodeInput, []);
       body = '<div><label>Selectionne toutes les bonnes réponses</label><div style="display:grid;gap:10px;margin-top:10px">'
         + (enigma.miscChoices || []).map((choice) => '<button type="button" data-misc-toggle="' + safeHtml(choice) + '" style="' + (current.includes(choice) ? primaryButtonStyle : secondaryButtonStyle) + '">' + safeHtml(choice) + '</button>').join('')
-        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’enigme</button></div></div>';
+        + '</div><div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
     } else {
       body = '<div><label>' + (miscMode === 'fill-blank' ? 'Mot manquant' : 'Réponse') + '</label><input id="enigma-input" value="' + safeHtml(state.enigmaCodeInput) + '" placeholder="Écris ta réponse..." '
         + 'style="width:100%;padding:12px 14px;border-radius:14px;border:1px solid rgba(148,163,184,.16);background:rgba(12,21,39,.9);color:white;outline:none" />'
         + '<p class="small-note">La réponse est acceptée même avec des majuscules différentes ou des mots en plus.</p>'
-        + '<div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’enigme</button></div></div>';
+        + '<div class="inventory-actions"><button id="submit-enigma" style="' + primaryButtonStyle + '">Valider l’énigme</button></div></div>';
     }
   }
 
@@ -2687,7 +3165,7 @@ function renderEnigma(enigma) {
   }
 
   if (enigma.type === 'puzzle' && enigmaImageUrl) {
-    body = '<div><p class="small-note">Clique une piece, puis une deuxième pour les échanger.</p>'
+    body = '<div><p class="small-note">Clique une pièce, puis une deuxième pour les échanger.</p>'
       + '<div class="enigma-grid" style="grid-template-columns:repeat(' + cols + ', 1fr)">'
       + state.enigmaPuzzleOrder.map((pieceIndex, index) => '<button type="button" data-puzzle-index="' + index + '" class="puzzle-piece'
         + (state.enigmaPuzzleSelectedIndex === index ? ' selected' : '') + '" style="' + makePieceStyle(enigmaImageUrl, rows, cols, pieceIndex) + '"></button>').join('')
@@ -2695,7 +3173,7 @@ function renderEnigma(enigma) {
   }
 
   if (enigma.type === 'rotation' && enigmaImageUrl) {
-    body = '<div><p class="small-note">Clique sur chaque piece pour la remettre à l’endroit.</p>'
+    body = '<div><p class="small-note">Clique sur chaque pièce pour la remettre à l’endroit.</p>'
       + '<div class="enigma-grid" style="grid-template-columns:repeat(' + cols + ', 1fr)">'
       + Array.from({ length: pieceCount }, (_, index) => '<button type="button" data-rotation-index="' + index + '" class="puzzle-piece" style="'
         + makePieceStyle(enigmaImageUrl, rows, cols, index, state.enigmaRotationAngles[index] || 0) + '"></button>').join('')
@@ -2703,26 +3181,118 @@ function renderEnigma(enigma) {
   }
 
   if (enigma.type === 'dragdrop' && enigmaImageUrl) {
-    body = '<div><p class="small-note">Glisse les pieces vers la bonne case. Clique une case remplie pour renvoyer sa piece dans la réserve.</p>'
+    body = '<div><p class="small-note">Glisse les pièces vers la bonne case. Clique une case remplie pour renvoyer sa pièce dans la réserve.</p>'
       + '<div class="dragdrop-layout"><div><h3>Plateau</h3><div class="enigma-grid" style="grid-template-columns:repeat(' + cols + ', 1fr)">'
       + state.enigmaDragSlots.map((pieceIndex, slotIndex) => '<button type="button" data-slot-index="' + slotIndex + '" class="puzzle-slot">'
         + (pieceIndex !== null && pieceIndex !== undefined ?
            '<span class="puzzle-piece static" style="' + makePieceStyle(enigmaImageUrl, rows, cols, pieceIndex) + '"></span>'
           : '<span class="slot-index">' + (slotIndex + 1) + '</span>') + '</button>').join('')
-      + '</div></div><div><h3>Pieces</h3><div class="bank-grid">'
+      + '</div></div><div><h3>Pièces</h3><div class="bank-grid">'
       + state.enigmaDragBank.map((pieceIndex) => '<button type="button" data-bank-piece="' + pieceIndex + '" class="puzzle-piece" draggable="true" style="'
         + makePieceStyle(enigmaImageUrl, rows, cols, pieceIndex) + '"></button>').join('')
       + '</div></div></div></div>';
   }
 
   if (usesImage(enigma.type) && !enigmaImageUrl) {
-    body = '<p class="small-note">Ajoute une image dans l’éditeur d’enigmes pour jouer cette enigme.</p>';
+    body = '<p class="small-note">Ajoute une image dans l’éditeur d’énigmes pour jouer cette énigme.</p>';
   }
 
   return '<div class="overlay" id="enigma-overlay"><div class="overlay-card"' + overlayStyle + '><div class="panel-head"><div><h2 style="margin:0">'
-    + safeHtml(enigma.name || 'enigme') + '</h2><p class="small-note" style="margin:6px 0 0">'
+    + safeHtml(enigma.name || 'énigme') + '</h2><p class="small-note" style="margin:6px 0 0">'
     + safeHtml(enigma.question || '') + '</p></div><button id="close-enigma" class="danger-button">Fermer</button></div>'
     + body + '</div></div>';
+}
+
+function renderConversation() {
+  const conversation = state.activeConversation?.conversation;
+  const node = conversation?.nodes?.find((entry) => entry.id === state.activeConversation.nodeId);
+  if (!node) return '';
+  const visibleReplies = (node.replies || []).filter(isConversationReplyAvailable);
+  const lockedReplies = IS_CHOICE_ADVENTURE ? (node.replies || []).filter((reply) => {
+    const isConsumed = reply.id && (
+      state.hiddenConversationReplyIds.includes(reply.id)
+      || (reply.hideAfterChosen && state.chosenConversationReplyIds.includes(reply.id))
+    );
+    return !isConversationReplyAvailable(reply) && reply.showWhenLocked && !isConsumed;
+  }) : [];
+  const displayedReplies = visibleReplies.concat(lockedReplies);
+  const replyColumnClass = 'conversation-player-replies-' + Math.min(3, Math.max(1, displayedReplies.length || 1));
+  const portraitSrc = safeMediaUrl(state.activeConversation?.portraitData, 'image');
+  return '<div class="overlay' + (IS_CHOICE_ADVENTURE ? ' conversation-player-overlay' : '') + '"><div class="overlay-card wide' + (IS_CHOICE_ADVENTURE ? ' conversation-player-card' : '') + '">'
+    + '<div class="panel-head">'
+    + (portraitSrc ? '<img class="conversation-portrait" src="' + escapeMediaAttr(portraitSrc, 'image') + '" alt="' + escapeAttr(state.activeConversation.portraitName || node.speaker || 'Portrait') + '" />' : '')
+    + '<div><h2>' + safeHtml(node.speaker || 'Conversation') + '</h2><p class="small-note">' + safeHtml(node.text || '') + '</p></div><button id="close-conversation" class="danger-button" type="button">Fermer</button></div>'
+    + renderChoiceEffectSummary(true)
+    + '<div class="stack-10' + (IS_CHOICE_ADVENTURE ? ' conversation-player-replies ' + replyColumnClass : '') + '">'
+    + (displayedReplies.length ? displayedReplies.map((reply) => {
+      const isLocked = !isConversationReplyAvailable(reply);
+      const reason = isLocked ? getConversationReplyLockReason(reply) : '';
+      return '<button type="button" class="secondary-action' + (isLocked ? ' conversation-reply-locked' : '') + '" ' + (isLocked ? 'disabled title="' + safeHtml(reason || 'Choix verrouille') + '"' : 'data-conversation-reply="' + safeHtml(reply.id) + '"') + '><span>' + safeHtml(reply.label || 'Repondre') + '</span>' + (isLocked ? '<small>' + safeHtml(reason || 'Choix verrouille') + '</small>' : '') + '</button>';
+    }).join('') : '<button id="close-conversation" type="button">Continuer</button>')
+    + '</div></div></div>';
+}
+
+function renderChoiceEffectSummary(compact = false) {
+  const notices = Array.isArray(state.choiceEffectNotices) ? state.choiceEffectNotices : [];
+  if (!notices.length) return '';
+  return '<div class="choice-effect-summary' + (compact ? ' compact' : '') + '">'
+    + '<div class="choice-effect-summary-head"><strong>Conséquences du choix</strong><button id="close-choice-effects" type="button" class="secondary-action">Masquer</button></div>'
+    + '<div class="choice-effect-list">'
+    + notices.map((notice, index) => '<span class="choice-effect-pill choice-effect-' + safeHtml(notice.type || 'effect') + '" data-effect-index="' + index + '"><strong>' + safeHtml(notice.title || 'Effet') + '</strong>' + (notice.detail ? '<small>' + safeHtml(notice.detail) + '</small>' : '') + '</span>').join('')
+    + '</div></div>';
+}
+
+function renderChoiceEffectFloating() {
+  if (state.activeConversation || state.activeEnding || !Array.isArray(state.choiceEffectNotices) || !state.choiceEffectNotices.length) return '';
+  return '<div class="choice-effect-floating">' + renderChoiceEffectSummary(false) + '</div>';
+}
+
+function renderEnding() {
+  if (!state.activeEnding) return '';
+  const ending = state.activeEnding;
+  return '<div class="overlay"><div class="overlay-card ending-card ending-card-' + safeHtml(ending.type || 'neutral') + '">'
+    + '<span class="ending-badge">' + safeHtml(ending.label || 'Fin') + '</span>'
+    + '<h2>' + safeHtml(ending.title || ending.label || 'Fin') + '</h2>'
+    + (ending.message ? '<p class="small-note">' + safeHtml(ending.message) + '</p>' : '')
+    + '<p>' + safeHtml(ending.summary || 'Ton aventure se termine ici.') + '</p>'
+    + renderChoiceEffectSummary(true)
+    + '<div class="inline-actions"><button id="close-ending" type="button" class="secondary-action">Fermer</button><button id="restart-ending" type="button">Recommencer</button></div>'
+    + '</div></div>';
+}
+
+function renderAdventureStateSummary() {
+  const variableEntries = Object.entries(state.storyVariables || {}).filter(([key]) => {
+    const variable = (project.storyVariables || []).find((entry) => entry.key === key);
+    return variable ? variable.journalVisible !== false : true;
+  });
+  const journalEntries = Array.isArray(state.adventureJournalEntries) ? state.adventureJournalEntries : [];
+  const activeEndingCount = state.activeEnding ? 1 : 0;
+  return '<div class="adventure-state-card"><strong>Progression narrative</strong>'
+    + '<div class="adventure-state-grid">'
+    + '<span><strong>' + safeHtml(String(state.chosenConversationReplyIds?.length || 0)) + '</strong> choix</span>'
+    + '<span><strong>' + safeHtml(String(state.completedHotspotIds?.length || 0)) + '</strong> actions</span>'
+    + '<span><strong>' + safeHtml(String(variableEntries.length)) + '</strong> variables</span>'
+    + '<span><strong>' + safeHtml(String(activeEndingCount)) + '</strong> fin</span>'
+    + '</div>'
+    + '<div class="adventure-state-list">'
+    + (variableEntries.length
+      ? variableEntries.map(([key, value]) => '<span><strong>' + safeHtml(getStoryVariableJournalLabel(key)) + '</strong> = ' + safeHtml(String(value)) + '</span>').join('')
+      : '<span>Aucune variable d’histoire modifiée.</span>')
+    + (state.activeEnding ? '<span><strong>Fin active</strong> = ' + safeHtml(state.activeEnding.title || state.activeEnding.label || 'Fin') + '</span>' : '')
+    + '</div></div>'
+    + '<div class="adventure-journal-card"><strong>Journal joueur</strong><div class="adventure-journal-grid">'
+    + '<section><strong>Historique</strong><div class="adventure-journal-list">'
+    + (journalEntries.length
+      ? journalEntries.slice(0, 4).map((entry) => '<span><strong>' + safeHtml(entry.title || 'Note') + '</strong>' + (entry.detail ? '<small>' + safeHtml(entry.detail) + '</small>' : '') + '</span>').join('')
+      : '<span>Aucun choix important note.</span>')
+    + '</div></section><section><strong>Indices et état</strong><div class="adventure-state-list">'
+    + (state.inventory?.length
+      ? state.inventory.slice(0, 4).map((itemId) => '<span>' + safeHtml(getJournalItemLabel(itemId)) + '</span>').join('')
+      : '<span>Aucun indice obtenu.</span>')
+    + (variableEntries.length
+      ? variableEntries.map(([key, value]) => '<span><strong>' + safeHtml(getStoryVariableJournalLabel(key)) + '</strong> = ' + safeHtml(String(value)) + '</span>').join('')
+      : '')
+    + '</div></section></div></div>';
 }
 
 function render(shouldSave = true) {
@@ -2732,12 +3302,15 @@ function render(shouldSave = true) {
   const enigma = state.activeEnigma?.enigma || null;
   const sceneAspectRatio = Number(playScene?.backgroundAspectRatio) > 0 ? Number(playScene.backgroundAspectRatio) : 1.6;
   const playSceneBackgroundUrl = resolveAssetUrl(playScene?.backgroundId, playScene?.backgroundData);
+  const viewerImageSrc = safeMediaUrl(state.viewerImage?.src, 'image');
+  const transitionSceneBackgroundUrl = resolveAssetUrl(state.sceneTransitionOverlay?.scene?.backgroundId, state.sceneTransitionOverlay?.scene?.backgroundData);
+  const inventoryDrawerTitle = project?.heroAdventure?.enabled ? GAME_TITLE : IS_CHOICE_ADVENTURE ? 'Carnet d’aventure' : 'Inventaire';
   if (!hasRenderedOnce && !loadedActId) loadedActId = playScene?.actId || '';
 
-  root.innerHTML = '<div class="player-shell is-shared-player ' + (state.showInteractionHints ? 'show-hints' : 'hide-hints') + ' ' + (state.controlsVisible ? '' : 'controls-hidden') + '">'
+  root.innerHTML = '<div class="player-shell is-shared-player ' + (IS_CHOICE_ADVENTURE ? 'is-choice-adventure ' : '') + 'player-button-style-' + safeHtml(PLAYER_BUTTON_STYLE) + ' player-button-font-' + safeHtml(PLAYER_BUTTON_FONT) + ' player-narration-font-' + safeHtml(PLAYER_NARRATION_FONT) + ' ' + (state.showInteractionHints ? 'show-hints' : 'hide-hints') + ' ' + (state.controlsVisible ? '' : 'controls-hidden') + '" style="--player-narration-bg:' + safeHtml(PLAYER_NARRATION_BACKGROUND) + '">'
     + '<section class="panel player-stage-panel">'
     + '<div class="player-topbar">'
-    + '<div><span class="eyebrow">Player</span><strong>' + safeHtml(playScene ? getSceneLabel(playScene.id) : 'Aucune scene') + '</strong></div>'
+    + '<div><span class="eyebrow">Player</span><strong>' + safeHtml(playScene ? getSceneLabel(playScene.id) : 'Aucune scène') + '</strong></div>'
     + '<div class="player-actions">'
     + '<button id="pause-game" type="button" class="secondary-action">Pause</button>'
     + '<button id="reset-preview" type="button" class="secondary-action player-reset-button">Recommencer</button>'
@@ -2748,15 +3321,15 @@ function render(shouldSave = true) {
     + '</div></div>'
     + '<div class="scene-player" id="scene-layer" style="--scene-aspect:' + sceneAspectRatio + '">'
     + (playSceneBackgroundUrl ?
-       '<img class="bg" src="' + playSceneBackgroundUrl + '" alt="' + safeHtml(playScene.name || 'Scene') + '" onload="setSceneAspectFromImage(this)" />'
-      : '<div class="placeholder">Ajoute un fond pour jouer la scene.</div>')
+       '<img class="bg" src="' + escapeMediaAttr(playSceneBackgroundUrl, 'image') + '" alt="' + escapeAttr(playScene.name || 'Scene') + '" onload="setSceneAspectFromImage(this)" />'
+      : '<div class="placeholder">Ajoute un fond pour jouer la scène.</div>')
     + (playScene?.visualEffect && playScene.visualEffect !== 'none' ? '<div class="scene-visual-effect scene-visual-effect--' + safeHtml(playScene.visualEffect) + ' scene-visual-effect--' + safeHtml(playScene.visualEffectIntensity || 'normal') + '"></div>' : '')
     + (playScene?.visualEffectZones || []).filter((zone) => !zone.isHidden).map((zone) => '<div class="scene-visual-effect scene-visual-effect-zone scene-visual-effect--' + safeHtml(zone.effect || 'sparkles') + ' scene-visual-effect--' + safeHtml(zone.intensity || 'normal') + '" style="left:' + zone.x + '%;top:' + zone.y + '%;width:' + zone.width + '%;height:' + zone.height + '%;z-index:' + getVisualEffectZoneZIndex(zone.layer) + ';' + getElementShapeStyle(zone) + '"></div>').join('')
     + (playScene?.hotspots || []).map((spot) => '<button type="button" class="player-hotspot" data-hotspot-id="' + spot.id + '" '
       + 'style="left:' + spot.x + '%;top:' + spot.y + '%;width:' + spot.width + '%;height:' + spot.height + '%;z-index:20;cursor:pointer;' + getElementShapeStyle(spot) + '" title="' + safeHtml(spot.name || '') + '"></button>').join('')
     + (playScene?.sceneObjects || []).filter((obj) => !state.removedSceneObjectIds.includes(obj.id) && (!obj.isHidden || state.revealedSceneObjectIds.includes(obj.id))).map((obj) => {
       const objectTextOverride = state.sceneObjectTextOverrides?.[obj.id];
-      const renderObject = objectTextOverride ? { ...obj, blockText: objectTextOverride, dialogue: objectTextOverride } : obj;
+      const renderObject = applySceneObjectTextOverride(obj, objectTextOverride);
       const linkedItem = obj.linkedItemId ? getItemById(obj.linkedItemId) : null;
       const displayImage = resolveAssetUrl(obj.imageId, obj.imageData) || resolveAssetUrl(linkedItem?.imageId, linkedItem?.imageData);
       const clickMode = getSceneObjectClickMode(renderObject);
@@ -2768,7 +3341,7 @@ function render(shouldSave = true) {
       if (!renderObject.isInvisible && renderObject.anime2dSpec) {
         content = renderAnime2dEmbedded(renderObject.anime2dSpec, getSceneAnime2dElapsed(playScene));
       } else if (!renderObject.isInvisible && displayImage) {
-        content = '<img src="' + displayImage + '" alt="' + safeHtml(title) + '" />';
+        content = '<img src="' + escapeMediaAttr(displayImage, 'image') + '" alt="' + escapeAttr(title) + '" />';
       } else if (!renderObject.isInvisible && blockType === 'text') {
         content = '<span class="interactive-block interactive-block--text"' + blockStyle + '>' + safeHtml(text) + '</span>';
       } else if (!renderObject.isInvisible && blockType === 'hint') {
@@ -2776,7 +3349,7 @@ function render(shouldSave = true) {
       } else if (!renderObject.isInvisible && blockType === 'button') {
         content = '<span class="interactive-block interactive-block--button"' + blockStyle + '>' + safeHtml(renderObject.buttonLabel || title || 'Bouton') + '</span>';
       } else if (!renderObject.isInvisible && blockType === 'input') {
-        content = '<span class="interactive-block interactive-block--field"' + blockStyle + '><strong>' + safeHtml(title || 'Reponse') + '</strong><small>' + safeHtml(renderObject.placeholder || 'Saisir une réponse...') + '</small></span>';
+        content = '<span class="interactive-block interactive-block--field"' + blockStyle + '><strong>' + safeHtml(title || 'Réponse') + '</strong><small>' + safeHtml(renderObject.placeholder || 'Saisir une réponse...') + '</small></span>';
       } else if (!renderObject.isInvisible && blockType === 'code') {
         const slots = Math.max(3, Math.min(8, String(renderObject.expectedAnswer || '0000').length || 4));
         content = '<span class="interactive-block interactive-block--code"' + blockStyle + '><strong>' + safeHtml(title || 'Code') + '</strong><span>' + Array.from({ length: slots }, () => '&bull;').join(' ') + '</span></span>';
@@ -2793,24 +3366,24 @@ function render(shouldSave = true) {
     + (playScene?.timerEnabled ? '<div class="scene-timer-hud"><strong id="scene-timer-count">' + formatSceneTimerSeconds(state.sceneTimerRemaining || playScene.timerSeconds || 0) + '</strong>'
       + (playScene.timerEndAction === 'damage-life' ? '<span>Vies: ' + safeHtml(state.playerLives ?? 3) + '</span>' : '')
       + '</div>' : '')
-    + (state.viewerImage ? '<div class="scene-inline-viewer"><div class="scene-inline-viewer__backdrop"></div><div class="scene-inline-viewer__card">'
-      + '<img class="scene-inline-viewer__image" src="' + state.viewerImage.src + '" alt="' + safeHtml(state.viewerImage.name || 'Objet') + '" />'
+    + (viewerImageSrc ? '<div class="scene-inline-viewer"><div class="scene-inline-viewer__backdrop"></div><div class="scene-inline-viewer__card">'
+      + '<img class="scene-inline-viewer__image" src="' + escapeMediaAttr(viewerImageSrc, 'image') + '" alt="' + escapeAttr(state.viewerImage.name || 'Objet') + '" />'
       + '<div class="scene-inline-viewer__name">' + safeHtml(state.viewerImage.caption || state.viewerImage.name || 'Objet') + '</div></div></div>' : '')
     + (state.sceneTransitionOverlay ? '<div class="scene-transition-overlay scene-transition-overlay--' + safeHtml(state.sceneTransitionOverlay.type || 'fade') + '" style="--scene-transition-duration:' + (Number(state.sceneTransitionOverlay.duration) || 700) + 'ms">'
-      + (resolveAssetUrl(state.sceneTransitionOverlay.scene?.backgroundId, state.sceneTransitionOverlay.scene?.backgroundData) ?
-        '<img src="' + resolveAssetUrl(state.sceneTransitionOverlay.scene?.backgroundId, state.sceneTransitionOverlay.scene?.backgroundData) + '" alt="" />'
-        : '<div class="placeholder">Scene precedente</div>')
+      + (transitionSceneBackgroundUrl ?
+        '<img src="' + escapeMediaAttr(transitionSceneBackgroundUrl, 'image') + '" alt="" />'
+        : '<div class="placeholder">Scène précédente</div>')
       + '</div>' : '')
     + (state.actPreload?.active ? '<div class="act-preload-overlay" role="status" aria-live="polite"><div class="act-preload-card"><span class="eyebrow">Chargement</span><strong>'
       + safeHtml(state.actPreload.label || 'Acte suivant') + '</strong><div class="act-preload-bar" aria-label="Chargement ' + safeHtml(state.actPreload.progress || 0) + '%"><span style="width:'
-      + safeHtml(state.actPreload.progress || 0) + '%"></span></div><small>' + safeHtml(state.actPreload.progress || 0) + '% des medias de l\\'acte sont prêts</small></div></div>' : '')
+      + safeHtml(state.actPreload.progress || 0) + '%"></span></div><small>' + safeHtml(state.actPreload.progress || 0) + '% des médias de l\\'acte sont prêts</small></div></div>' : '')
     + '<div class="player-narration-bar ' + (state.narrationCollapsed ? 'is-collapsed' : '') + '">'
     + (state.narrationCollapsed ?
        '<button id="open-narration" type="button" class="narration-discreet-button">Texte</button>'
       : '<p id="collapse-narration" role="button" tabindex="0">' + safeHtml(state.dialogue || 'Aucun message.') + '</p>')
-    + '<button id="open-inventory-drawer" type="button" class="inventory-discreet-button">Inventaire' + (state.inventory.length ? ' (' + state.inventory.length + ')' : '') + '</button>'
+    + '<button id="open-inventory-drawer" type="button" class="inventory-discreet-button">' + (IS_CHOICE_ADVENTURE ? 'Carnet' : 'Inventaire') + (state.inventory.length ? ' (' + state.inventory.length + ')' : '') + '</button>'
     + '</div>'
-    + (state.inventoryDrawerOpen ? '<div class="player-inventory-drawer"><div class="panel-head"><h3>Inventaire</h3><button id="close-inventory-drawer" class="secondary-button" type="button">Fermer</button></div><button id="combine-items" class="secondary-action player-combine-button" type="button">Combiner les 2 objets</button><div class="inventory-grid">'
+    + (state.inventoryDrawerOpen ? '<div class="player-inventory-drawer' + (IS_CHOICE_ADVENTURE ? ' player-inventory-drawer--adventure' : '') + '"><div class="panel-head"><h3>' + safeHtml(inventoryDrawerTitle) + '</h3><button id="close-inventory-drawer" class="secondary-button" type="button">Fermer</button></div>' + (IS_CHOICE_ADVENTURE ? renderAdventureStateSummary() : '') + '<button id="combine-items" class="secondary-action player-combine-button" type="button">Combiner les 2 objets</button><div class="inventory-grid">'
       + (state.inventory.length ? state.inventory.map((itemId) => {
         const item = getItemById(itemId);
         if (!item) return '';
@@ -2818,14 +3391,14 @@ function render(shouldSave = true) {
         return '<button type="button" class="inventory-tile'
           + (state.selectedInventoryIds.includes(itemId) ? ' selected' : '') + '" data-item-id="' + itemId + '">'
           + '<div class="inventory-thumb">'
-          + (itemImageUrl ? '<img src="' + itemImageUrl + '" alt="' + safeHtml(item.name || '') + '" />' : '<span>' + safeHtml(item.icon || '📦') + '</span>')
+          + (itemImageUrl ? '<img src="' + escapeMediaAttr(itemImageUrl, 'image') + '" alt="' + escapeAttr(item.name || '') + '" />' : '<span>' + safeHtml(item.icon || '📦') + '</span>')
           + '</div><strong>' + safeHtml(item.name || '') + '</strong></button>';
       }).join('') : '<p>Aucun objet.</p>')
       + '</div></div>' : '')
     + '</div></section>'
 
     + '<section class="panel side player-side-panel">'
-    + '<div class="badge-line">' + safeHtml(playScene ? getSceneLabel(playScene.id) : 'Aucune scene') + '</div>'
+    + '<div class="badge-line">' + safeHtml(playScene ? getSceneLabel(playScene.id) : 'Aucune scène') + '</div>'
     + '<div class="dialogue-box"><p>' + safeHtml(state.dialogue || 'Aucun message.') + '</p></div>'
     + '<div class="panel-head"><h3>Inventaire</h3><button id="combine-items">Combiner les 2 objets</button></div>'
     + '<div class="inventory-grid">'
@@ -2836,16 +3409,16 @@ function render(shouldSave = true) {
       return '<button type="button" class="inventory-tile'
         + (state.selectedInventoryIds.includes(itemId) ? ' selected' : '') + '" data-item-id="' + itemId + '">'
         + '<div class="inventory-thumb">'
-        + (itemImageUrl ? '<img src="' + itemImageUrl + '" alt="' + safeHtml(item.name || '') + '" />' : '<span>' + safeHtml(item.icon || '📦') + '</span>')
+        + (itemImageUrl ? '<img src="' + escapeMediaAttr(itemImageUrl, 'image') + '" alt="' + escapeAttr(item.name || '') + '" />' : '<span>' + safeHtml(item.icon || '📦') + '</span>')
         + '</div><strong>' + safeHtml(item.name || '') + '</strong></button>';
     }).join('') : '<p>Aucun objet dans l’inventaire.</p>')
     + '</div><p class="small-note">Cliquer = voir l’image. Glisser-déposer un objet sur un autre = tenter une combinaison.</p></section>'
     + '</div>'
     + '<div class="fullscreen-hud">'
     + '<div class="fullscreen-dialogue">' + safeHtml(state.dialogue || 'Aucun message.') + '</div>'
-    + '<div class="fullscreen-actions"><button id="save-game" class="hud-button" type="button">Sauvegarder</button><button id="load-game" class="hud-button" type="button">Charger</button><button id="export-save-json" class="hud-button" type="button">Exporter JSON</button><button id="import-save-json" class="hud-button" type="button">Importer JSON</button><button id="open-inventory-drawer" class="hud-button" type="button">Inventaire</button></div>'
+    + '<div class="fullscreen-actions"><button id="save-game" class="hud-button" type="button">Sauvegarder</button><button id="load-game" class="hud-button" type="button">Charger</button><button id="export-save-json" class="hud-button" type="button">Exporter JSON</button><button id="import-save-json" class="hud-button" type="button">Importer JSON</button><button id="open-inventory-drawer" class="hud-button" type="button">' + (IS_CHOICE_ADVENTURE ? 'Carnet' : 'Inventaire') + '</button></div>'
     + '</div>'
-    + (state.inventoryDrawerOpen ? '<div id="inventory-drawer-backdrop" class="inventory-drawer__backdrop"></div><aside class="inventory-drawer open"><div class="inventory-drawer__head"><h3>Inventaire</h3><button id="close-inventory-drawer" class="secondary-button" type="button">Fermer</button></div><div class="inventory-actions"><button id="combine-items" type="button">Combiner les 2 objets</button></div><div class="inventory-grid">'
+    + (state.inventoryDrawerOpen ? '<div id="inventory-drawer-backdrop" class="inventory-drawer__backdrop"></div><aside class="inventory-drawer open"><div class="inventory-drawer__head"><h3>' + safeHtml(inventoryDrawerTitle) + '</h3><button id="close-inventory-drawer" class="secondary-button" type="button">Fermer</button></div><div class="inventory-actions"><button id="combine-items" type="button">Combiner les 2 objets</button></div><div class="inventory-grid">'
     + (state.inventory.length ? state.inventory.map((itemId) => {
       const item = getItemById(itemId);
       if (!item) return '';
@@ -2853,11 +3426,11 @@ function render(shouldSave = true) {
       return '<button type="button" class="inventory-tile'
         + (state.selectedInventoryIds.includes(itemId) ? ' selected' : '') + '" data-item-id="' + itemId + '">'
         + '<div class="inventory-thumb">'
-        + (itemImageUrl ? '<img src="' + itemImageUrl + '" alt="' + safeHtml(item.name || '') + '" />' : '<span>' + safeHtml(item.icon || '📦') + '</span>')
+        + (itemImageUrl ? '<img src="' + escapeMediaAttr(itemImageUrl, 'image') + '" alt="' + escapeAttr(item.name || '') + '" />' : '<span>' + safeHtml(item.icon || '📦') + '</span>')
         + '</div><strong>' + safeHtml(item.name || '') + '</strong></button>';
     }).join('') : '<p>Aucun objet dans l’inventaire.</p>')
     + '</div><p class="small-note">Cliquer = voir l’image. Glisser-déposer un objet sur un autre = tenter une combinaison.</p></aside>' : '')
-    + (state.pauseOpen ? '<div class="player-pause-overlay"><div class="player-pause-menu"><span class="eyebrow">Pause</span><h2>' + safeHtml(project.title || 'Escape game') + '</h2><div class="player-pause-actions">'
+    + (state.pauseOpen ? '<div class="player-pause-overlay"><div class="player-pause-menu"><span class="eyebrow">Pause</span><h2>' + safeHtml(GAME_TITLE) + '</h2>' + renderAdventureStateSummary() + '<div class="player-pause-actions">'
       + '<button id="resume-game" type="button">Reprendre</button>'
       + '<button id="pause-save-game" type="button" class="secondary-action">Sauvegarder</button>'
       + '<button id="pause-load-game" type="button" class="secondary-action">Charger</button>'
@@ -2865,6 +3438,9 @@ function render(shouldSave = true) {
       + '<button id="pause-toggle-hints" type="button" class="secondary-action">' + (state.showInteractionHints ? 'Masquer l’aide visuelle' : 'Afficher l’aide visuelle') + '</button>'
       + '</div></div></div>' : '')
     + renderCinematic(cinematic, currentSlide)
+    + renderConversation()
+    + renderChoiceEffectFloating()
+    + renderEnding()
     + renderEnigma(enigma);
 
   bindEvents();

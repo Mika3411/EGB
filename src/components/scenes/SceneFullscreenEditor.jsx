@@ -4,7 +4,9 @@ import {
   MiniMap,
 } from './SceneEditorChrome.jsx';
 import Anime2DPreview from '../Anime2DPreview.jsx';
+import NumberInput from '../forms/NumberInput.jsx';
 import MediaSourcePicker from '../MediaSourcePicker.jsx';
+import { showConfirm } from '../AccessibleDialog';
 import SceneObjectInspector, { SceneObjectBlockContent, getSceneObjectClickMode } from './SceneObjectInspector.jsx';
 import SceneVisualEffect, { getVisualEffectZoneZIndex } from '../SceneVisualEffect.jsx';
 import HotspotAssetsPanel from './HotspotAssetsPanel.jsx';
@@ -75,6 +77,12 @@ export default function SceneFullscreenEditor({
 }) {
   const getLinkedItem = (itemId) => project.items?.find((item) => item.id === itemId) || null;
   const getSceneObjectDisplayImage = (obj) => obj?.imageData || getLinkedItem(obj?.linkedItemId)?.imageData || '';
+  const isBeginnerMode = project?.creationMode === 'beginner';
+  const canUseQuickLogic = !isBeginnerMode && project?.creationMode !== 'intermediate';
+  const selectedHotspotActionType = selectedHotspot?.actionType || 'dialogue';
+  const displayedHotspotActionType = isBeginnerMode && !['dialogue', 'dialogue_item', 'scene'].includes(selectedHotspotActionType)
+    ? 'dialogue'
+    : selectedHotspotActionType;
 
   return (
                 <div style={{ position: 'fixed', inset: 0, zIndex: 20000, background: '#020617', padding: 12, overflow: 'hidden' }}>
@@ -170,7 +178,7 @@ export default function SceneFullscreenEditor({
                                 userSelect: 'none',
                               }}
                             />
-                          ) : <div className="placeholder">Ajoute une image de scene</div>}
+                          ) : <div className="placeholder">Ajoute une image de scène</div>}
                           <SceneVisualEffect effect={selectedScene.visualEffect} intensity={selectedScene.visualEffectIntensity} />
                           {(selectedScene.visualEffectZones || []).filter((zone) => !zone.isHidden).map((zone) => (
                             <button
@@ -307,64 +315,78 @@ export default function SceneFullscreenEditor({
                             const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.name = e.target.value;
                           })} />
                           <div className="grid-two small-gap">
-                            <div><HelpLabel help="Position horizontale du centre de la zone, en pourcentage de la largeur de l’image.">X</HelpLabel><input type="number" value={selectedHotspot.x} onChange={(e) => patchProject((draft) => { const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.x = Number(e.target.value); })} /></div>
-                            <div><HelpLabel help="Position verticale du centre de la zone, en pourcentage de la hauteur de l’image.">Y</HelpLabel><input type="number" value={selectedHotspot.y} onChange={(e) => patchProject((draft) => { const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.y = Number(e.target.value); })} /></div>
-                            <div><HelpLabel help="Largeur de la zone cliquable. Augmente-la si le joueur risque de manquer la cible.">Largeur</HelpLabel><input type="number" value={selectedHotspot.width} onChange={(e) => patchProject((draft) => { const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.width = Number(e.target.value); })} /></div>
-                            <div><HelpLabel help="Hauteur de la zone cliquable. Une zone trop petite peut être difficile à trouvér sur mobile.">Hauteur</HelpLabel><input type="number" value={selectedHotspot.height} onChange={(e) => patchProject((draft) => { const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.height = Number(e.target.value); })} /></div>
+                            <div><HelpLabel help="Position horizontale du centre de la zone, en pourcentage de la largeur de l’image.">X</HelpLabel><NumberInput value={selectedHotspot.x} onValueChange={(nextValue) => patchProject((draft) => { const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.x = nextValue; })} /></div>
+                            <div><HelpLabel help="Position verticale du centre de la zone, en pourcentage de la hauteur de l’image.">Y</HelpLabel><NumberInput value={selectedHotspot.y} onValueChange={(nextValue) => patchProject((draft) => { const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.y = nextValue; })} /></div>
+                            <div><HelpLabel help="Largeur de la zone cliquable. Augmente-la si le joueur risque de manquer la cible.">Largeur</HelpLabel><NumberInput value={selectedHotspot.width} onValueChange={(nextValue) => patchProject((draft) => { const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.width = nextValue; })} /></div>
+                            <div><HelpLabel help="Hauteur de la zone cliquable. Une zone trop petite peut être difficile à trouvér sur mobile.">Hauteur</HelpLabel><NumberInput value={selectedHotspot.height} onValueChange={(nextValue) => patchProject((draft) => { const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.height = nextValue; })} /></div>
                           </div>
                           {renderShapeControls?.('hotspot', selectedHotspotId)}
-                          <button type="button" className="secondary-action full" onClick={() => openQuickLogicForTarget?.('hotspot', selectedHotspotId)}>
-                            Logique
-                          </button>
-                          <HelpLabel help="Action principale déclénchée par cette zone après validation des prérequis éventuels : dialogue, objet, changement de scene ou cinematic.">Action</HelpLabel>
-                          <select value={selectedHotspot.actionType} onChange={(e) => patchProject((draft) => {
+                          {canUseQuickLogic ? (
+                            <button type="button" className="secondary-action full" onClick={() => openQuickLogicForTarget?.('hotspot', selectedHotspotId)}>
+                              Logique
+                            </button>
+                          ) : null}
+                          <HelpLabel help="Action principale déclénchée par cette zone après validation des prérequis éventuels : dialogue, objet, changement de scène ou cinematic.">Action</HelpLabel>
+                          <select value={displayedHotspotActionType} onChange={(e) => patchProject((draft) => {
                             const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.actionType = e.target.value;
                           })}>
                             <option value="dialogue">Dialogue</option>
                             <option value="dialogue_item">Dialogue + objet</option>
-                            <option value="scene">Changer de scene</option>
-                            <option value="cinematic">Lancer une cinematic</option>
+                            <option value="scene">Changer de scène</option>
+                            {!isBeginnerMode ? <option value="cinematic">Lancer une cinématique</option> : null}
                           </select>
                           <HelpLabel help="Texte affiché lors de l’interaction principale. Il peut donner une réaction, un indice ou confirmer une action réussie.">Dialogue</HelpLabel>
                           <textarea value={selectedHotspot.dialogue} onChange={(e) => patchProject((draft) => {
                             const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.dialogue = e.target.value;
                           })} />
-                          <HelpLabel help="Destination utilisée si l’action est “Changer de scene”. Laisse vide si la zone doit seulement parler ou donner un objet.">Scene cible</HelpLabel>
+                          <HelpLabel help="Destination utilisée si l’action est “Changer de scène”. Laisse vide si la zone doit seulement parler ou donner un objet.">Scène cible</HelpLabel>
                           <select value={selectedHotspot.targetSceneId} onChange={(e) => patchProject((draft) => {
                             const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.targetSceneId = e.target.value;
                           })}>
                             <option value="">Aucune</option>
                             {project.scenes.filter((scene) => scene.id !== selectedSceneId).map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
                           </select>
-                          <HelpLabel help="Cinematic lancée après l’interaction réussie. Elle peut servir de transition, révélation ou fin de sequence.">Cinematic cible</HelpLabel>
-                          <select value={selectedHotspot.targetCinematicId} onChange={(e) => patchProject((draft) => {
-                            const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.targetCinematicId = e.target.value;
-                          })}>
-                            <option value="">Aucune</option>
-                            {project.cinematics.map((cinematic) => <option key={cinematic.id} value={cinematic.id}>{cinematic.name}</option>)}
-                          </select>
-                          <HelpLabel help="Enigme à résoudre avant d’exécuter l’action de la zone. Si elle échoue ou reste ouverte, la suite ne se déclénche pas encore.">Enigme liée</HelpLabel>
+                          {!isBeginnerMode ? (
+                            <>
+                              <HelpLabel help="Cinématique lancée après l’interaction réussie. Elle peut servir de transition, révélation ou fin de sequence.">Cinématique cible</HelpLabel>
+                              <select value={selectedHotspot.targetCinematicId} onChange={(e) => patchProject((draft) => {
+                                const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.targetCinematicId = e.target.value;
+                              })}>
+                                <option value="">Aucune</option>
+                                {project.cinematics.map((cinematic) => <option key={cinematic.id} value={cinematic.id}>{cinematic.name}</option>)}
+                              </select>
+                            </>
+                          ) : null}
+                          <HelpLabel help="Énigme à résoudre avant d’exécuter l’action de la zone. Si elle échoue ou reste ouverte, la suite ne se déclénche pas encore.">Énigme liée</HelpLabel>
                           <select value={selectedHotspot.enigmaId || ''} onChange={(e) => patchProject((draft) => {
                             const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.enigmaId = e.target.value;
                           })}>
                             <option value="">Aucune</option>
                             {(project.enigmas || []).map((enigma) => <option key={enigma.id} value={enigma.id}>{enigma.name}</option>)}
                           </select>
-                          <button className="danger-button" style={{ marginTop: 12 }} onClick={() => {
-                            if (!window.confirm(`Supprimer la zone "${selectedHotspot.name}" ?`)) return;
+                          <button className="danger-button" style={{ marginTop: 12 }} onClick={async () => {
+                            const confirmed = await showConfirm({
+                              title: 'Supprimer la zone',
+                              message: `Supprimer la zone "${selectedHotspot.name}" ?`,
+                              confirmLabel: 'Supprimer',
+                              variant: 'danger',
+                            });
+                            if (!confirmed) return;
                             deleteHotspot(selectedSceneId, selectedHotspotId);
                           }}>Supprimer la zone</button>
                         </>
                       ) : (
-                        <div className="placeholder small">Selectionne une zone, un objet visible ou un objet d’inventaire.</div>
+                        <div className="placeholder small">Sélectionne une zone, un objet visible ou un objet d’inventaire.</div>
                       )}
                     </section>
+                    {canUseQuickLogic ? (
                     <div className="logic-reminder-card logic-reminder-card--fullscreen">
-                      <p>Besoin de conditions ? Ajoute des règles dans l’onglet Logique pour changer le comportement d’une zone selon l’inventaire, une enigme, une cinematic ou une autre action.</p>
+                      <p>Besoin de conditions ? Ajoute des règles dans l’onglet Logique pour changer le comportement d’une zone selon l’inventaire, une énigme, une cinématique ou une autre action.</p>
                       <button type="button" className="secondary-action" onClick={() => setTab?.('logic')}>
                         Ouvrir l’onglet Logique
                       </button>
                     </div>
+                    ) : null}
                     </div>
                   </div>
                 </div>

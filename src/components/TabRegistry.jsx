@@ -63,7 +63,36 @@ const MediaTab = React.lazy(() => import('./MediaTab').then(({ default: Componen
   ),
 })));
 
+const ObjectsTab = React.lazy(() => import('./ObjectsTab.jsx').then(({ default: Component }) => ({
+  default: ({ project, onUpdateProject, tabContext }) => (
+    <Component
+      project={project}
+      patchProject={onUpdateProject}
+      addItem={tabContext.editor.addItem}
+      deleteItem={tabContext.actions.deleteItem}
+      selectedItemId={tabContext.editor.selectedItemId}
+      setSelectedItemId={tabContext.editor.setSelectedItemId}
+      selectedItem={tabContext.editor.selectedItem}
+      handleUpload={tabContext.actions.handleUpload}
+      mediaLibrary={tabContext.mediaLibrary}
+    />
+  ),
+})));
+
 const RouteMapTab = React.lazy(() => import('./RouteMapTab').then(({ default: Component }) => ({
+  default: ({ project, onUpdateProject, tabContext }) => (
+    <Component
+      project={project}
+      patchProject={onUpdateProject}
+      getSceneLabel={tabContext.editor.getSceneLabel}
+      setSelectedSceneId={tabContext.editor.setSelectedSceneId}
+      setSelectedHotspotId={tabContext.editor.setSelectedHotspotId}
+      setTab={tabContext.editor.setTab}
+    />
+  ),
+})));
+
+const AdventureTab = React.lazy(() => import('./AdventureTab.jsx').then(({ default: Component }) => ({
   default: ({ project, onUpdateProject, tabContext }) => (
     <Component
       project={project}
@@ -136,6 +165,17 @@ const LogicTab = React.lazy(() => import('./LogicTab').then(({ default: Componen
   ),
 })));
 
+const HeroTab = React.lazy(() => import('./HeroTab.jsx').then(({ default: Component }) => ({
+  default: ({ project, onUpdateProject, tabContext }) => (
+    <Component
+      project={project}
+      patchProject={onUpdateProject}
+      onPreviewHeroCharacter={tabContext.actions.previewHeroCharacter}
+      setTab={tabContext.editor.setTab}
+    />
+  ),
+})));
+
 const ScoreTab = React.lazy(() => import('./ScoreTab').then(({ default: Component }) => ({
   default: ({ project }) => <Component project={project} />,
 })));
@@ -159,12 +199,23 @@ const ShopTab = React.lazy(() => import('./ShopTab').then(({ default: Component 
 })));
 
 const HelpTab = React.lazy(() => import('./HelpTab').then(({ default: Component }) => ({
-  default: ({ tabContext }) => <Component onStartTutorial={tabContext.actions.startBuilderTutorialFromProfile} />,
+  default: ({ project, tabContext }) => (
+    <Component
+      user={tabContext.user}
+      projectMode={project?.creationMode}
+      onStartTutorial={tabContext.actions.startBuilderTutorialFromProfile}
+    />
+  ),
 })));
 
 const PreviewPlayerPanel = React.lazy(() => import('./PreviewPlayerPanel').then(({ default: Component }) => ({
   default: ({ tabContext, sharedPlayerMode = false }) => (
-    <Component editor={tabContext.editor} preview={tabContext.preview} sharedPlayerMode={sharedPlayerMode} />
+    <Component
+      editor={tabContext.editor}
+      preview={tabContext.preview}
+      heroCharacterPreviewRequestKey={tabContext.heroCharacterPreviewRequestKey}
+      sharedPlayerMode={sharedPlayerMode}
+    />
   ),
 })));
 
@@ -184,13 +235,16 @@ const TwoDAnimeEditor = React.lazy(() => import('./TwoDAnimeEditor.jsx').then(({
 })));
 
 export const TABS = {
-  scenes: { component: ScenesTab, label: 'Scenes' },
+  scenes: { component: ScenesTab, label: 'Scènes' },
   media: { component: MediaTab, label: 'Média' },
+  objects: { component: ObjectsTab, label: 'Objets' },
   plan: { component: RouteMapTab, label: 'Plan', value: 'map' },
-  cinematics: { component: CinematicsTab, label: 'Cinematics' },
+  adventure: { component: AdventureTab, label: 'Narration' },
+  cinematics: { component: CinematicsTab, label: 'Cinématiques' },
   combinations: { component: CombinationsTab, label: 'Combinaisons' },
-  enigmas: { component: EnigmasTab, label: 'Enigmes' },
+  enigmas: { component: EnigmasTab, label: 'Énigmes' },
   logic: { component: LogicTab, label: 'Logique' },
+  hero: { component: HeroTab, label: 'Héros' },
   preview: { component: PreviewPlayerPanel, label: 'Preview' },
   animation: { component: TwoDAnimeEditor, label: 'Animation' },
   ai: { component: AiTab, label: 'IA' },

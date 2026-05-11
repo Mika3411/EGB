@@ -1,7 +1,7 @@
 import { fileToDataURL } from '../utils/fileHelpers';
+import { showAlert, showConfirm } from './AccessibleDialog';
 import MediaSourcePicker from './MediaSourcePicker.jsx';
 import {
-  applyProjectStartType,
   createCinematicFromAnime2dPayload,
   deleteCinematicFromProject,
   normalizeAnime2dSpecForCinematic,
@@ -11,22 +11,19 @@ import {
 const makeId = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 const FIELD_HELP = {
-  addCinematic: "Crée une nouvelle cinematic. Elle peut servir d’intro, de transition, de révélation ou de récompense après une enigme.",
-  startType: "Détermine le premier écran du joueur au lancement: une scene jouable ou une cinematic d’introduction.",
-  startScene: "Scene ouverte au début du jeu si le démarrage est réglé sur une scene.",
-  startCinematic: "Cinematic jouée au début du jeu si le démarrage est réglé sur une cinematic.",
-  name: "Nom interne de la cinematic. Il apparaît dans les listes de choix et aide à retrouver les transitions.",
+  addCinematic: "Crée une nouvelle cinematic. Elle peut servir d’intro, de transition, de révélation ou de récompense après une énigme.",
+  name: "Nom interne de la cinématique. Il apparaît dans les listes de choix et aide à retrouver les transitions.",
   type: "Choisis entre un diaporama de slides narratifs ou une vidéo importée.",
   videoFile: "Fichier vidéo joué par cette cinematic. MP4 est le format le plus fiable pour le navigateur.",
-  videoAutoplay: "Lance automatiquement la vidéo quand la cinematic démarre. Selon le navigateur, le son peut demander une interaction utilisateur.",
+  videoAutoplay: "Lance automatiquement la vidéo quand la cinématique démarre. Selon le navigateur, le son peut demander une interaction utilisateur.",
   videoControls: "Affiche les contrôles vidéo au joueur: lecture, pause, barre de progression et volume.",
   slideImage: "Image affichée pendant ce slide. Elle peut poser une ambiance, montrer un indice ou illustrer une transition.",
   slideNarration: "Texte affiché avec le slide. Utilise-le pour raconter, guider ou révéler une information.",
-  slideAudio: "Son ou voix associé à ce slide. Il se joué pendant la cinematic si le navigateur l’autorise.",
-  endAction: "Action déclénchée quand la cinematic se terminé: rester sur place, aller à un acte, ouvrir une scene ou donner un objet.",
-  targetAct: "Acte vers lequel rediriger après la cinematic. Utile pour passer à un nouveau chapitre.",
-  targetScene: "Scene ouverte après la cinematic si l’action de fin est un changement de scene.",
-  rewardItem: "Objet ajouté à l’inventaire à la fin de la cinematic si l’action de fin donné une récompense.",
+  slideAudio: "Son ou voix associé à ce slide. Il se joué pendant la cinématique si le navigateur l’autorise.",
+  endAction: "Action déclenchée quand la cinématique se termine: rester sur place, aller à un acte, ouvrir une scène ou donner un objet.",
+  targetAct: "Acte vers lequel rediriger après la cinématique. Utile pour passer à un nouveau chapitre.",
+  targetScene: "Scène ouverte après la cinématique si l’action de fin est un changement de scène.",
+  rewardItem: "Objet ajouté à l’inventaire à la fin de la cinématique si l’action de fin donné une récompense.",
 };
 
 const HelpLabel = ({ children, help, className = '' }) => (
@@ -53,8 +50,6 @@ export default function CinematicsTab({
   mediaLibrary = [],
   previewCinematic,
 }) {
-  const rootSceneOptions = project.scenes.filter((scene) => !scene.parentSceneId);
-
   const import2dAnimeJson = async (event) => {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -73,7 +68,11 @@ export default function CinematicsTab({
       }, { rememberHistory: false });
       setSelectedCinematicId(cinematic.id);
     } catch (error) {
-      alert(error.message || 'Import 2D Anime impossible.');
+      await showAlert({
+        title: 'Import 2D Anime impossible',
+        message: error.message || 'Import 2D Anime impossible.',
+        variant: 'danger',
+      });
     }
   };
 
@@ -93,15 +92,24 @@ export default function CinematicsTab({
       });
     } catch (error) {
       console.error('Erreur import vidéo', error);
-      alert("Impossible d'importer cette vidéo. Essaie un autre fichier.");
+      await showAlert({
+        title: 'Import vidéo impossible',
+        message: "Impossible d'importer cette vidéo. Essaie un autre fichier.",
+        variant: 'danger',
+      });
     } finally {
       event.target.value = '';
     }
   };
 
-  const deleteSlide = (slideId) => {
+  const deleteSlide = async (slideId) => {
     if (!selectedCinematic) return;
-    const confirmed = window.confirm('Supprimer ce slide ?');
+    const confirmed = await showConfirm({
+      title: 'Supprimer le slide',
+      message: 'Supprimer ce slide ?',
+      confirmLabel: 'Supprimer',
+      variant: 'danger',
+    });
     if (!confirmed) return;
 
     patchProject((draft) => {
@@ -112,9 +120,14 @@ export default function CinematicsTab({
     });
   };
 
-  const deleteCinematic = () => {
+  const deleteCinematic = async () => {
     if (!selectedCinematic) return;
-    const confirmed = window.confirm(`Supprimer la cinematic \"${selectedCinematic.name}\" ?`);
+    const confirmed = await showConfirm({
+      title: 'Supprimer la cinématique',
+      message: `Supprimer la cinématique "${selectedCinematic.name}" ?`,
+      confirmLabel: 'Supprimer',
+      variant: 'danger',
+    });
     if (!confirmed) return;
 
     let nextSelectedCinematicId = '';
@@ -129,9 +142,9 @@ export default function CinematicsTab({
     <div className="layout two-cols-wide">
       <section className="panel side" data-tour="cinematic-sidebar">
         <div className="panel-head">
-          <h2>Cinematics</h2>
+          <h2>Cinématiques</h2>
           <div className="label-with-help">
-            <button data-tour="cinematic-add" onClick={addCinematic}>+ Cinematic</button>
+            <button data-tour="cinematic-add" onClick={addCinematic}>+ Cinématique</button>
             <span className="help-dot" data-help={FIELD_HELP.addCinematic} aria-label={FIELD_HELP.addCinematic} tabIndex={0}>?</span>
           </div>
         </div>
@@ -140,56 +153,6 @@ export default function CinematicsTab({
           Importer 2D Anime
           <input type="file" accept="application/json,.json" hidden onChange={import2dAnimeJson} />
         </label>
-
-        <div className="stack" data-tour="cinematic-start-settings" style={{ marginBottom: 18 }}>
-          <h3 style={{ margin: '6px 0 0' }}>Démarrage du jeu</h3>
-          <HelpLabel help={FIELD_HELP.startType}>Le jeu commence par</HelpLabel>
-          <select
-            value={project.start?.type || 'scene'}
-            onChange={(e) => patchProject((draft) => {
-              applyProjectStartType(draft, e.target.value);
-            })}
-          >
-            <option value="scene">Une scene</option>
-            <option value="cinematic">Une cinematic</option>
-          </select>
-
-          {(project.start?.type || 'scene') === 'scene' ? (
-            <>
-              <HelpLabel help={FIELD_HELP.startScene}>Scene de départ</HelpLabel>
-              <select
-                value={project.start?.targetSceneId || rootSceneOptions[0]?.id || ''}
-                onChange={(e) => patchProject((draft) => {
-                  if (!draft.start) {
-                    draft.start = { type: 'scene', targetSceneId: '', targetCinematicId: '' };
-                  }
-                  draft.start.targetSceneId = e.target.value;
-                })}
-              >
-                {rootSceneOptions.map((scene) => (
-                  <option key={scene.id} value={scene.id}>{scene.name}</option>
-                ))}
-              </select>
-            </>
-          ) : (
-            <>
-              <HelpLabel help={FIELD_HELP.startCinematic}>Cinematic de départ</HelpLabel>
-              <select
-                value={project.start?.targetCinematicId || project.cinematics[0]?.id || ''}
-                onChange={(e) => patchProject((draft) => {
-                  if (!draft.start) {
-                    draft.start = { type: 'scene', targetSceneId: '', targetCinematicId: '' };
-                  }
-                  draft.start.targetCinematicId = e.target.value;
-                })}
-              >
-                {project.cinematics.map((cine) => (
-                  <option key={cine.id} value={cine.id}>{cine.name}</option>
-                ))}
-              </select>
-            </>
-          )}
-        </div>
 
         <div data-tour="cinematic-list">
           {project.cinematics.map((cine) => (
@@ -209,13 +172,13 @@ export default function CinematicsTab({
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {(selectedCinematic.cinematicType || 'slides') === 'slides' ?
                    <button data-tour="cinematic-add-slide" onClick={addSlide}>+ Slide</button>
-                  : <span className="small-note">{selectedCinematic.cinematicType === 'anime2d' ? 'Mode 2D Anime actif' : 'Mode video actif'}</span>}
-                <button type="button" onClick={() => previewCinematic?.(selectedCinematic.id)}>Previsualiser</button>
-                <button type="button" onClick={deleteCinematic}>Supprimer la cinematic</button>
+                  : <span className="small-note">{selectedCinematic.cinematicType === 'anime2d' ? 'Mode 2D Anime actif' : 'Mode vidéo actif'}</span>}
+                <button type="button" onClick={() => previewCinematic?.(selectedCinematic.id)}>Prévisualiser</button>
+                <button type="button" onClick={deleteCinematic}>Supprimer la cinématique</button>
               </div>
             </div>
 
-            <HelpLabel help={FIELD_HELP.name}>Nom de la cinematic</HelpLabel>
+            <HelpLabel help={FIELD_HELP.name}>Nom de la cinématique</HelpLabel>
             <input data-tour="cinematic-name" value={selectedCinematic.name} onChange={(e) => patchProject((draft) => {
               const cine = draft.cinematics.find((c) => c.id === selectedCinematicId); if (cine) cine.name = e.target.value;
             })} />
@@ -293,7 +256,11 @@ export default function CinematicsTab({
                         }
                       }, { rememberHistory: false });
                     } catch (error) {
-                      alert(error.message || 'Import 2D Anime impossible.');
+                      await showAlert({
+                        title: 'Import 2D Anime impossible',
+                        message: error.message || 'Import 2D Anime impossible.',
+                        variant: 'danger',
+                      });
                     }
                   }} />
                 </label>
@@ -354,7 +321,7 @@ export default function CinematicsTab({
             )}
 
             <div className="stack" data-tour="cinematic-end-settings" style={{ marginBottom: 18 }}>
-              <h3 style={{ margin: '6px 0 0' }}>À la fin de la cinematic</h3>
+              <h3 style={{ margin: '6px 0 0' }}>À la fin de la cinématique</h3>
               <HelpLabel help={FIELD_HELP.endAction}>Action de fin</HelpLabel>
               <select
                 data-tour="cinematic-end-action"
@@ -369,7 +336,7 @@ export default function CinematicsTab({
               >
                 <option value="none">Ne rien faire</option>
                 <option value="act">Aller à un acte</option>
-                <option value="scene">Aller à une scene</option>
+                <option value="scene">Aller à une scène</option>
                 <option value="item">Donner un objet</option>
               </select>
 
@@ -395,7 +362,7 @@ export default function CinematicsTab({
 
               {(selectedCinematic.onEndType || 'none') === 'scene' && (
                 <>
-                  <HelpLabel help={FIELD_HELP.targetScene}>Scene de destination</HelpLabel>
+                  <HelpLabel help={FIELD_HELP.targetScene}>Scène de destination</HelpLabel>
                   <select
                     value={selectedCinematic.targetSceneId || project.scenes[0]?.id || ''}
                     onChange={(e) => patchProject((draft) => {
@@ -437,8 +404,8 @@ export default function CinematicsTab({
           </>
         ) : (
           <div className="stack">
-            <h2>Aucune cinematic selectionnée</h2>
-            <p className="small-note">Ajoute une cinematic ou selectionne-en une dans la liste.</p>
+            <h2>Aucune cinématique selectionnée</h2>
+            <p className="small-note">Ajoute une cinématique ou sélectionne-en une dans la liste.</p>
           </div>
         )}
       </section>

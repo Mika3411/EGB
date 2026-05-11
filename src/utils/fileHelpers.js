@@ -34,7 +34,7 @@ function loadImageFromFile(file) {
     };
     image.onerror = (error) => {
       URL.revokeObjectURL(objectUrl);
-      reject(error || new Error("Impossible de charger cette image."));
+      reject(error || new Error("Impossible dé charger cette image."));
     };
     image.src = objectUrl;
   });

@@ -1,6 +1,7 @@
 import { getAllAccounts, normalizeEmail, updateStoredAccount } from './authStorage';
 import { getSupabaseClient, hasSupabaseConfig } from '../supabaseStorage';
 import { fileToDataURL, uploadFileToSupabase } from '../utils/fileHelpers';
+import { safeParseJson } from '../utils/storageHelpers';
 
 const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || 'thorez.m@hotmail.fr';
 const ADMIN_USERS_ENDPOINT = import.meta.env.VITE_ADMIN_USERS_ENDPOINT || '/api/admin/users';
@@ -8,14 +9,6 @@ const ADMIN_CREDITS_ENDPOINT = import.meta.env.VITE_ADMIN_CREDITS_ENDPOINT || '/
 const ADMIN_PROJECTS_ENDPOINT = import.meta.env.VITE_ADMIN_PROJECTS_ENDPOINT || '/api/admin/projects';
 const ADMIN_MODERATION_ENDPOINT = import.meta.env.VITE_ADMIN_MODERATION_ENDPOINT || '/api/admin/moderation';
 const LOCAL_PROJECTS_KEY_PREFIX = 'escapeGameBuilder.projects';
-
-const safeParse = (value, fallback) => {
-  try {
-    return value ? JSON.parse(value) : fallback;
-  } catch {
-    return fallback;
-  }
-};
 
 const readJsonResponse = async (response, fallbackMessage) => {
   const payload = await response.json().catch(() => ({}));
@@ -31,11 +24,20 @@ const fallbackAdminPayload = (result, fallback, warning) => {
 
 const readLocalProjects = (userId) => {
   if (!userId || typeof window === 'undefined') return [];
-  return safeParse(window.localStorage.getItem(`${LOCAL_PROJECTS_KEY_PREFIX}.${userId}`), []);
+  return safeParseJson(window.localStorage.getItem(`${LOCAL_PROJECTS_KEY_PREFIX}.${userId}`), []);
 };
 
 export const getDisplayName = (account) =>
   account?.name || account?.email || account?.userId || 'Utilisateur';
+
+export const getAdminProjectCount = (account) => Number.isFinite(Number(account?.projectCount))
+  ? Number(account.projectCount)
+  : (account?.projects || []).length;
+
+const getRemoteProjectCount = (userId, account = {}, projectCounts = {}) => Math.max(
+  Number(projectCounts[userId] || 0),
+  Number(account.projectCount || 0),
+);
 
 export const getAdminAuthHeaders = async () => {
   if (!hasSupabaseConfig()) return {};
@@ -57,11 +59,12 @@ export const buildModerationState = (actions = []) => actions.reduce((state, act
   actions: [],
 });
 
-export const getManagedUsers = ({ accounts = [], supabaseUsers = [], creditUsers = [] }) => {
+export const getManagedUsers = ({ accounts = [], supabaseUsers = [], creditUsers = [], projectCounts = {} }) => {
   const byId = new Map();
 
   accounts.forEach((account) => {
     const projects = readLocalProjects(account.id);
+    const projectCount = Math.max(projects.length, getRemoteProjectCount(account.id, account, projectCounts));
     byId.set(account.id, {
       userId: account.id,
       name: account.name,
@@ -70,12 +73,14 @@ export const getManagedUsers = ({ accounts = [], supabaseUsers = [], creditUsers
       status: account.status || 'active',
       createdAt: account.createdAt,
       projects,
+      projectCount,
       publicProjects: projects.filter((project) => project.shareState?.isPublic).length,
     });
   });
 
   supabaseUsers.forEach((account) => {
     const projects = readLocalProjects(account.id);
+    const projectCount = Math.max(projects.length, getRemoteProjectCount(account.id, account, projectCounts));
     byId.set(account.id, {
       userId: account.id,
       name: account.name,
@@ -86,6 +91,7 @@ export const getManagedUsers = ({ accounts = [], supabaseUsers = [], creditUsers
       updatedAt: account.updatedAt,
       lastSignInAt: account.lastSignInAt,
       projects,
+      projectCount,
       publicProjects: projects.filter((project) => project.shareState?.isPublic).length,
     });
   });
@@ -100,11 +106,16 @@ export const getManagedUsers = ({ accounts = [], supabaseUsers = [], creditUsers
       status: 'active',
       createdAt: creditAccount.createdAt,
       projects: [],
+      projectCount: getRemoteProjectCount(creditAccount.userId, creditAccount, projectCounts),
       publicProjects: 0,
     };
     byId.set(creditAccount.userId, {
       ...existing,
       credits: creditAccount,
+      projectCount: Math.max(
+        Number(existing.projectCount || 0),
+        getRemoteProjectCount(creditAccount.userId, creditAccount, projectCounts),
+      ),
     });
   });
 
@@ -150,11 +161,21 @@ export const loadAdminDashboard = async () => {
     'Moderation indisponible.',
   );
 
+  const supabaseUsers = Array.isArray(usersPayload.users) ? usersPayload.users : [];
+  const projectCounts = Object.fromEntries(supabaseUsers.map((account) => [
+    account.id,
+    Number(account.projectCount || 0),
+  ]));
+  Object.entries(projectsPayload.projectCounts || {}).forEach(([userId, count]) => {
+    projectCounts[userId] = Math.max(Number(projectCounts[userId] || 0), Number(count || 0));
+  });
+
   return {
     accounts: localAccounts,
     warning: usersWarning,
-    supabaseUsers: Array.isArray(usersPayload.users) ? usersPayload.users : [],
+    supabaseUsers,
     creditUsers: Array.isArray(creditsPayload.users) ? creditsPayload.users : [],
+    projectCounts,
     publicGames: (projectsPayload.projects || []).filter((game) => normalizeEmail(game.authorEmail) !== normalizeEmail(ADMIN_EMAIL)),
     moderation: buildModerationState(Array.isArray(moderationPayload.actions) ? moderationPayload.actions : []),
   };
@@ -169,7 +190,7 @@ export const updateAdminCredits = async ({ userId, action, amount, reason }) => 
     },
     body: JSON.stringify({ userId, action, amount, reason }),
   });
-  return readJsonResponse(response, 'Modification credits impossible.');
+  return readJsonResponse(response, 'Modification crédits impossible.');
 };
 
 export const updateAdminUser = async ({ userId, action, ...options }) => {

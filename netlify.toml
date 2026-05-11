@@ -22,6 +22,21 @@
   status = 200
 
 [[redirects]]
+  from = "/api/admin/credits"
+  to = "/.netlify/functions/ai-credits-admin"
+  status = 200
+
+[[redirects]]
+  from = "/api/admin/projects"
+  to = "/.netlify/functions/admin-projects"
+  status = 200
+
+[[redirects]]
+  from = "/api/admin/moderation"
+  to = "/.netlify/functions/moderation"
+  status = 200
+
+[[redirects]]
   from = "/api/ai-credits/admin"
   to = "/.netlify/functions/ai-credits-admin"
   status = 200
@@ -32,8 +47,23 @@
   status = 200
 
 [[redirects]]
+  from = "/api/storage-upgrade"
+  to = "/.netlify/functions/storage-upgrade"
+  status = 200
+
+[[redirects]]
+  from = "/api/shop/packs"
+  to = "/.netlify/functions/shop-packs"
+  status = 200
+
+[[redirects]]
   from = "/api/shop/purchase"
   to = "/.netlify/functions/shop-purchase"
+  status = 200
+
+[[redirects]]
+  from = "/api/projects/publication"
+  to = "/.netlify/functions/project-publication"
   status = 200
 
 [[redirects]]

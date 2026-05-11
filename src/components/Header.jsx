@@ -4,6 +4,7 @@ export default function Header({
   projectTitle,
   onImportJson,
   onExportStandalone,
+  onExportAuthorSummary,
   user,
   onLogout,
   saveStatus,
@@ -11,7 +12,10 @@ export default function Header({
 }) {
   const isBeginnerMode = projectMode === 'beginner';
   const isIntermediateMode = projectMode === 'intermediate';
-  const modeLabel = isBeginnerMode ? 'Mode debutant' : isIntermediateMode ? 'Mode intermediaire' : 'Mode expert';
+  const isAdventureMode = projectMode === 'adventure';
+  const modeLabel = isBeginnerMode
+    ? 'Mode debutant'
+    : isIntermediateMode ? 'Mode intermediaire' : isAdventureMode ? 'Mode narration' : 'Mode expert';
 
   return (
     <header className="topbar topbar-pro">
@@ -27,24 +31,21 @@ export default function Header({
 
       <div className="project-actions-card">
         <div className="project-actions-head">
-          <div>
-            <strong>Projet</strong>
-            <small>{saveStatus || 'Sauvegarde active'}</small>
-          </div>
           <span className={`mode-badge ${projectMode}`}>
             {modeLabel}
           </span>
         </div>
-        {!isBeginnerMode ? (
+        {!isBeginnerMode && !isIntermediateMode ? (
           <div className="toolbar project-actions">
-            {!isIntermediateMode ? (
-              <label className="button like secondary-action">
-                Importer JSON
-                <input type="file" accept="application/json" onChange={onImportJson} hidden />
-              </label>
-            ) : null}
+            <label className="button like secondary-action">
+              Importer JSON
+              <input type="file" accept="application/json" onChange={onImportJson} hidden />
+            </label>
             <button className="ghost-action" onClick={onExportStandalone}>
               Exporter jeu
+            </button>
+            <button className="ghost-action" onClick={onExportAuthorSummary}>
+              Fiche auteur HTML
             </button>
           </div>
         ) : null}
