@@ -26,6 +26,7 @@ import {
   getAnime2dDraftMeta,
   getAnime2dStorageId,
   readBuilderUiState,
+  writeAppUiState,
   writeBuilderUiState,
 } from './utils/storageHelpers';
 import {
@@ -100,6 +101,57 @@ const LandingLoadingFallback = () => (
   </main>
 );
 
+const getWindowScrollPosition = () => {
+  if (typeof window === 'undefined') return { x: 0, y: 0 };
+  return {
+    x: Math.max(0, Math.round(window.scrollX || window.pageXOffset || document.documentElement?.scrollLeft || 0)),
+    y: Math.max(0, Math.round(window.scrollY || window.pageYOffset || document.documentElement?.scrollTop || 0)),
+  };
+};
+
+const restoreWindowScrollPosition = (position) => {
+  if (typeof window === 'undefined' || !position) return;
+  const x = Number.isFinite(Number(position.x)) ? Number(position.x) : 0;
+  const y = Number.isFinite(Number(position.y)) ? Number(position.y) : 0;
+  window.scrollTo(x, y);
+};
+
+const EDITOR_SCROLL_SELECTORS = [
+  '.panel-nav-pro',
+  '.panel-context-pro',
+  '.scene-left-nav',
+  '.side-editor-pro',
+];
+
+const getEditorScrollPosition = () => {
+  if (typeof document === 'undefined') return { window: getWindowScrollPosition(), elements: [] };
+  const elements = EDITOR_SCROLL_SELECTORS.flatMap((selector) => (
+    Array.from(document.querySelectorAll(selector)).map((element, index) => ({
+      selector,
+      index,
+      left: Math.max(0, Math.round(element.scrollLeft || 0)),
+      top: Math.max(0, Math.round(element.scrollTop || 0)),
+    }))
+  ));
+  return {
+    window: getWindowScrollPosition(),
+    elements,
+  };
+};
+
+const restoreEditorScrollPosition = (position) => {
+  if (!position) return;
+  restoreWindowScrollPosition(position.window || position);
+  if (typeof document === 'undefined' || !Array.isArray(position.elements)) return;
+  position.elements.forEach(({ selector, index, left = 0, top = 0 }) => {
+    const element = document.querySelectorAll(selector)?.[index];
+    if (element) {
+      element.scrollLeft = left;
+      element.scrollTop = top;
+    }
+  });
+};
+
 function BuilderApp({
   auth,
   initialProjectId = '',
@@ -131,6 +183,9 @@ function BuilderApp({
   const tutorialStepsPromiseRef = useRef(null);
   const initialProjectLoadRef = useRef('');
   const initialTutorialStartRef = useRef('');
+  const restoredScrollKeyRef = useRef('');
+  const saveScrollTimerRef = useRef(null);
+  const activeBuilderProjectId = hydratedProjectRef.current || auth.activeProjectId || initialProjectId || '';
   useEffect(() => {
     if (screen !== 'editor') {
       setProjectScore(null);
@@ -332,6 +387,99 @@ function BuilderApp({
     userId: auth.user?.id,
     writeBuilderUiState,
   });
+
+  useEffect(() => {
+    if (!auth.isReady) return;
+    const shellScreen = screen === 'editor' || screen === 'shared-preview' ? 'builder' : screen;
+    writeAppUiState({
+      screen: shellScreen,
+      builderScreen: screen,
+      projectId: activeBuilderProjectId,
+      selectedSceneId: editor.selectedSceneId,
+      tab: editor.tab,
+      userId: auth.user?.id || '',
+    });
+  }, [
+    activeBuilderProjectId,
+    auth.isReady,
+    auth.user?.id,
+    editor.selectedSceneId,
+    editor.tab,
+    screen,
+  ]);
+
+  useEffect(() => {
+    if (screen !== 'editor') return undefined;
+    if (!auth.user?.id || !activeBuilderProjectId || !isBuilderTab(editor.tab)) return undefined;
+
+    const restoreKey = `${auth.user.id}:${activeBuilderProjectId}:${editor.tab}`;
+    if (restoredScrollKeyRef.current === restoreKey) return undefined;
+    restoredScrollKeyRef.current = restoreKey;
+
+    const state = readBuilderUiState(auth.user.id, activeBuilderProjectId);
+    const scrollPosition = state.scrollByTab?.[editor.tab] || null;
+    if (!scrollPosition) return undefined;
+
+    let cancelled = false;
+    const timers = [0, 80, 260, 650, 1200].map((delay) => window.setTimeout(() => {
+      if (!cancelled) restoreEditorScrollPosition(scrollPosition);
+    }, delay));
+
+    return () => {
+      cancelled = true;
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [activeBuilderProjectId, auth.user?.id, editor.tab, screen]);
+
+  useEffect(() => {
+    if (screen !== 'editor') return undefined;
+    if (!auth.user?.id || !activeBuilderProjectId || !isBuilderTab(editor.tab)) return undefined;
+
+    const saveScrollPosition = () => {
+      const previousState = readBuilderUiState(auth.user.id, activeBuilderProjectId);
+      const previousScrollByTab = previousState.scrollByTab && typeof previousState.scrollByTab === 'object'
+        ? previousState.scrollByTab
+        : {};
+      writeBuilderUiState(auth.user.id, activeBuilderProjectId, {
+        screen: 'editor',
+        selectedSceneId: editor.selectedSceneId,
+        tab: editor.tab,
+        scrollByTab: {
+          ...previousScrollByTab,
+          [editor.tab]: getEditorScrollPosition(),
+        },
+      });
+    };
+
+    const scheduleSave = () => {
+      if (saveScrollTimerRef.current) window.clearTimeout(saveScrollTimerRef.current);
+      saveScrollTimerRef.current = window.setTimeout(() => {
+        saveScrollTimerRef.current = null;
+        saveScrollPosition();
+      }, 140);
+    };
+
+    window.addEventListener('scroll', scheduleSave, { passive: true });
+    document.addEventListener('scroll', scheduleSave, true);
+    window.addEventListener('beforeunload', saveScrollPosition);
+
+    return () => {
+      window.removeEventListener('scroll', scheduleSave);
+      document.removeEventListener('scroll', scheduleSave, true);
+      window.removeEventListener('beforeunload', saveScrollPosition);
+      if (saveScrollTimerRef.current) {
+        window.clearTimeout(saveScrollTimerRef.current);
+        saveScrollTimerRef.current = null;
+      }
+      saveScrollPosition();
+    };
+  }, [
+    activeBuilderProjectId,
+    auth.user?.id,
+    editor.selectedSceneId,
+    editor.tab,
+    screen,
+  ]);
 
   const saveProjectAndAcknowledge = useCallback(async (projectToSave, projectId = auth.activeProjectId, uiState = {}, saveOptions = {}) => {
     const savedProjectId = projectId || auth.activeProjectId;

@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   canUseLocalStorage,
+  readAppUiState,
   readBuilderUiState,
   readJsonStorage,
   removeStorageKey,
   safeParseJson,
+  writeAppUiState,
   writeBuilderUiState,
   writeJsonStorage,
 } from '../utils/storageHelpers';
@@ -58,6 +60,29 @@ describe('storage helpers', () => {
     expect(readBuilderUiState('user-1', 'project-1')).toMatchObject({
       screen: 'editor',
       tab: 'scenes',
+    });
+  });
+
+  it('merges app and builder UI state updates', () => {
+    expect(writeAppUiState({ screen: 'builder', projectId: 'project-1' })).toBe(true);
+    expect(writeAppUiState({ tab: 'media' })).toBe(true);
+    expect(readAppUiState()).toMatchObject({
+      screen: 'builder',
+      projectId: 'project-1',
+      tab: 'media',
+    });
+
+    expect(writeBuilderUiState('user-1', 'project-1', {
+      screen: 'editor',
+      tab: 'scenes',
+      scrollByTab: { scenes: { window: { x: 0, y: 120 } } },
+    })).toBe(true);
+    expect(writeBuilderUiState('user-1', 'project-1', { selectedSceneId: 'scene-2' })).toBe(true);
+    expect(readBuilderUiState('user-1', 'project-1')).toMatchObject({
+      screen: 'editor',
+      selectedSceneId: 'scene-2',
+      tab: 'scenes',
+      scrollByTab: { scenes: { window: { x: 0, y: 120 } } },
     });
   });
 });

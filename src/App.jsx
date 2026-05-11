@@ -5,6 +5,7 @@ import { useLocalAuth } from './hooks/useLocalAuth';
 import { upsertProjectAsset } from './lib/assetManager';
 import { isAdminAccount } from './lib/authStorage';
 import { hasSupabaseConfig } from './supabaseStorage';
+import { readAppUiState, writeAppUiState } from './utils/storageHelpers';
 
 const LandingPage = React.lazy(() => import('./components/LandingPage'));
 const AuthPanel = React.lazy(() => import('./components/AuthPanel'));
@@ -55,7 +56,21 @@ const createShellInitialScreen = () => {
   const params = new URLSearchParams(window.location.search);
   if (params.get('playUser') && params.get('playProject')) return 'shared-preview';
   if (params.get('gallery') === '1' || window.__escapeInitialGalleryGame) return 'gallery';
+  const savedState = readAppUiState();
+  if (savedState.screen === 'builder' && savedState.builderScreen !== 'shared-preview') return 'builder';
   return 'profile';
+};
+
+const createInitialBuilderLaunch = () => {
+  const savedState = readAppUiState();
+  const shouldResumeBuilder = savedState.screen === 'builder' && savedState.builderScreen !== 'shared-preview';
+  return {
+    projectId: shouldResumeBuilder ? savedState.projectId || '' : '',
+    tab: shouldResumeBuilder ? savedState.tab || '' : '',
+    tutorialTab: '',
+    screen: createShellInitialScreen() === 'shared-preview' ? 'shared-preview' : 'editor',
+    key: 0,
+  };
 };
 
 function ShellApp() {
@@ -73,13 +88,7 @@ function ShellApp() {
   const [aiCreditBalance] = useState(0);
   const [profileTutorialSteps, setProfileTutorialSteps] = useState([]);
   const [profileTutorialStepIndex, setProfileTutorialStepIndex] = useState(null);
-  const [builderLaunch, setBuilderLaunch] = useState({
-    projectId: '',
-    tab: '',
-    tutorialTab: '',
-    screen: createShellInitialScreen() === 'shared-preview' ? 'shared-preview' : 'editor',
-    key: 0,
-  });
+  const [builderLaunch, setBuilderLaunch] = useState(createInitialBuilderLaunch);
 
   const {
     getCurrentStorageUsageBytes,
@@ -107,14 +116,17 @@ function ShellApp() {
   }, []);
 
   const openProfileScreen = useCallback(() => {
+    writeAppUiState({ screen: 'profile' });
     setScreen('profile');
   }, []);
 
   const openGalleryScreen = useCallback(() => {
+    writeAppUiState({ screen: 'gallery' });
     setScreen('gallery');
   }, []);
 
   const openAdminScreen = useCallback(() => {
+    writeAppUiState({ screen: 'admin' });
     setScreen('admin');
   }, []);
 
@@ -137,6 +149,12 @@ function ShellApp() {
   }, []);
 
   const openBuilder = useCallback((projectId = '', tab = '', builderScreen = 'editor', tutorialTab = '') => {
+    writeAppUiState({
+      screen: 'builder',
+      builderScreen,
+      projectId,
+      tab,
+    });
     setBuilderLaunch((current) => ({
       projectId,
       tab,

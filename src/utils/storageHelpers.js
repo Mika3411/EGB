@@ -1,5 +1,6 @@
 const BUILDER_UI_STATE_KEY_PREFIX = 'escapeGameBuilder.builderUiState';
 const ANIME_2D_DRAFT_STORAGE_KEY_PREFIX = 'escapeGameBuilder.2dAnimeDraft.v2';
+const APP_UI_STATE_KEY = 'escapeGameBuilder.appUiState.v1';
 
 export const safeParseJson = (value, fallback) => {
   try {
@@ -52,8 +53,24 @@ export const readBuilderUiState = (userId, projectId) => {
 
 export const writeBuilderUiState = (userId, projectId, state) => {
   if (!userId || !projectId) return false;
+  const previous = readBuilderUiState(userId, projectId);
   return writeJsonStorage(getBuilderUiStateKey(userId, projectId), {
+    ...previous,
     ...state,
+    updatedAt: new Date().toISOString(),
+  });
+};
+
+export const readAppUiState = () => {
+  const parsed = readJsonStorage(APP_UI_STATE_KEY, {});
+  return parsed && typeof parsed === 'object' ? parsed : {};
+};
+
+export const writeAppUiState = (state) => {
+  const previous = readAppUiState();
+  return writeJsonStorage(APP_UI_STATE_KEY, {
+    ...previous,
+    ...(state || {}),
     updatedAt: new Date().toISOString(),
   });
 };
