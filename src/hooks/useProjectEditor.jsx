@@ -46,25 +46,91 @@ const ensureSceneObjects = (scene) => {
 };
 
 const LARGE_MEDIA_FIELD_PATTERN = /^(backgroundData|imageData|objectImageData|popupImageData|popupBackgroundData|musicData|soundData|videoData|videoPoster|audioData|responseImageData|responseSoundData|ambienceSoundData|setupMusicData|setupBackgroundImageData|characterImageData|backgroundImageData|src|originalSrc)$/i;
+const UNDO_HISTORY_LIMIT = 25;
+const HISTORY_MEDIA_REF_KEY = '__escapeBuilderUndoMediaRef';
 
-const countEmbeddedMediaBytes = (value, key = '') => {
-  if (typeof value === 'string') {
-    if (!value.startsWith('data:') && !LARGE_MEDIA_FIELD_PATTERN.test(key)) return 0;
-    return value.length * 2;
+const getUndoHistoryLimit = () => UNDO_HISTORY_LIMIT;
+
+const createHistoryMediaCache = () => ({
+  nextId: 1,
+  byId: new Map(),
+  byValue: new Map(),
+});
+
+const shouldExternalizeHistoryString = (value, key = '') => (
+  typeof value === 'string'
+  && value.length > 1024
+  && (value.startsWith('data:') || LARGE_MEDIA_FIELD_PATTERN.test(key))
+);
+
+const storeHistoryMediaRef = (cache, value) => {
+  let id = cache.byValue.get(value);
+  if (!id) {
+    id = `media_${cache.nextId}`;
+    cache.nextId += 1;
+    cache.byValue.set(value, id);
+    cache.byId.set(id, value);
   }
-  if (Array.isArray(value)) {
-    return value.reduce((total, entry) => total + countEmbeddedMediaBytes(entry, key), 0);
-  }
-  if (!value || typeof value !== 'object') return 0;
-  return Object.entries(value).reduce((total, [entryKey, entry]) => total + countEmbeddedMediaBytes(entry, entryKey), 0);
+  return { [HISTORY_MEDIA_REF_KEY]: id };
 };
 
-const getUndoHistoryLimit = (project) => {
-  const embeddedMediaBytes = countEmbeddedMediaBytes(project);
-  if (embeddedMediaBytes > 24 * 1024 * 1024) return 0;
-  if (embeddedMediaBytes > 8 * 1024 * 1024) return 1;
-  if (embeddedMediaBytes > 3 * 1024 * 1024) return 3;
-  return 25;
+const isHistoryMediaRef = (value) => (
+  value
+  && typeof value === 'object'
+  && !Array.isArray(value)
+  && typeof value[HISTORY_MEDIA_REF_KEY] === 'string'
+  && Object.keys(value).length === 1
+);
+
+const createHistorySnapshot = (value, cache, key = '', seen = new WeakMap()) => {
+  if (shouldExternalizeHistoryString(value, key)) {
+    return storeHistoryMediaRef(cache, value);
+  }
+  if (!value || typeof value !== 'object') return value;
+  if (seen.has(value)) return seen.get(value);
+
+  const snapshot = Array.isArray(value) ? [] : {};
+  seen.set(value, snapshot);
+  Object.entries(value).forEach(([entryKey, entry]) => {
+    snapshot[entryKey] = createHistorySnapshot(entry, cache, entryKey, seen);
+  });
+  return snapshot;
+};
+
+const restoreHistorySnapshot = (value, cache, seen = new WeakMap()) => {
+  if (isHistoryMediaRef(value)) {
+    return cache.byId.get(value[HISTORY_MEDIA_REF_KEY]) || '';
+  }
+  if (!value || typeof value !== 'object') return value;
+  if (seen.has(value)) return seen.get(value);
+
+  const restored = Array.isArray(value) ? [] : {};
+  seen.set(value, restored);
+  Object.entries(value).forEach(([entryKey, entry]) => {
+    restored[entryKey] = restoreHistorySnapshot(entry, cache, seen);
+  });
+  return restored;
+};
+
+const collectHistoryMediaRefs = (value, mediaIds, seen = new WeakSet()) => {
+  if (!value || typeof value !== 'object') return;
+  if (isHistoryMediaRef(value)) {
+    mediaIds.add(value[HISTORY_MEDIA_REF_KEY]);
+    return;
+  }
+  if (seen.has(value)) return;
+  seen.add(value);
+  Object.values(value).forEach((entry) => collectHistoryMediaRefs(entry, mediaIds, seen));
+};
+
+const pruneHistoryMediaCache = (cache, undoStack, redoStack) => {
+  const usedMediaIds = new Set();
+  [...undoStack, ...redoStack].forEach((snapshot) => collectHistoryMediaRefs(snapshot, usedMediaIds));
+  Array.from(cache.byId.entries()).forEach(([id, value]) => {
+    if (usedMediaIds.has(id)) return;
+    cache.byId.delete(id);
+    cache.byValue.delete(value);
+  });
 };
 
 const keepUndoHistoryRoomForNextSnapshot = (stack, limit) => (
@@ -90,10 +156,15 @@ export function useProjectEditor() {
   const [selectedSceneObjectId, setSelectedSceneObjectId] = useState(initialProject.scenes[0]?.sceneObjects?.[0]?.id || '');
   const [collapsedNavigationActIds, setCollapsedNavigationActIds] = useState(() => new Set());
   const [collapsedNavigationSceneIds, setCollapsedNavigationSceneIds] = useState(() => new Set());
+  const historyMediaCacheRef = useRef(createHistoryMediaCache());
 
   useEffect(() => {
     projectRef.current = project;
   }, [project]);
+
+  useEffect(() => {
+    pruneHistoryMediaCache(historyMediaCacheRef.current, undoStack, redoStack);
+  }, [redoStack, undoStack]);
 
   const rememberProjectState = useCallback(() => {
     const undoLimit = getUndoHistoryLimit(projectRef.current);
@@ -102,7 +173,7 @@ export function useProjectEditor() {
       setRedoStack([]);
       return;
     }
-    const snapshot = structuredClone(projectRef.current);
+    const snapshot = createHistorySnapshot(projectRef.current, historyMediaCacheRef.current);
     setUndoStack((previous) => [...keepUndoHistoryRoomForNextSnapshot(previous, undoLimit), snapshot]);
     setRedoStack([]);
   }, []);
@@ -122,10 +193,10 @@ export function useProjectEditor() {
     setUndoStack((previous) => {
       if (!previous.length) return previous;
       const nextUndoStack = previous.slice(0, -1);
-      const previousProject = previous[previous.length - 1];
+      const previousProject = restoreHistorySnapshot(previous[previous.length - 1], historyMediaCacheRef.current);
       const redoLimit = getUndoHistoryLimit(projectRef.current);
       if (redoLimit > 0) {
-        const currentProject = structuredClone(projectRef.current);
+        const currentProject = createHistorySnapshot(projectRef.current, historyMediaCacheRef.current);
         setRedoStack((nextRedoStack) => [...keepUndoHistoryRoomForNextSnapshot(nextRedoStack, redoLimit), currentProject]);
       } else {
         setRedoStack([]);
@@ -140,10 +211,10 @@ export function useProjectEditor() {
     setRedoStack((previous) => {
       if (!previous.length) return previous;
       const nextRedoStack = previous.slice(0, -1);
-      const nextProject = previous[previous.length - 1];
+      const nextProject = restoreHistorySnapshot(previous[previous.length - 1], historyMediaCacheRef.current);
       const undoLimit = getUndoHistoryLimit(projectRef.current);
       if (undoLimit > 0) {
-        const currentProject = structuredClone(projectRef.current);
+        const currentProject = createHistorySnapshot(projectRef.current, historyMediaCacheRef.current);
         setUndoStack((nextUndoStack) => [...keepUndoHistoryRoomForNextSnapshot(nextUndoStack, undoLimit), currentProject]);
       } else {
         setUndoStack([]);
@@ -448,6 +519,7 @@ export function useProjectEditor() {
     setProject(nextProject);
     setUndoStack([]);
     setRedoStack([]);
+    historyMediaCacheRef.current = createHistoryMediaCache();
     setSelectedSceneId(nextProject.scenes?.[0]?.id || '');
     setSelectedHotspotId(nextProject.scenes?.[0]?.hotspots?.[0]?.id || '');
     setSelectedSceneObjectId(nextProject.scenes?.[0]?.sceneObjects?.[0]?.id || '');
