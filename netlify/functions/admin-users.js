@@ -23,6 +23,11 @@ const sanitizeStorageSegment = (value = '') => String(value || '')
   .replace(/^-+|-+$/g, '')
   .toLowerCase();
 
+const isMissingStorageResource = (error) => Number(error?.statusCode || error?.status) === 404
+  || /not found/i.test(String(error?.message || ''));
+
+const getErrorMessage = (error) => error?.message || String(error || 'Erreur inconnue');
+
 const getStoredProjectCountForUser = async (supabase, userId) => {
   const safeUserId = sanitizeStorageSegment(userId);
   if (!safeUserId) return 0;
@@ -32,14 +37,29 @@ const getStoredProjectCountForUser = async (supabase, userId) => {
     .download(`users/${safeUserId}/projects.json`);
 
   if (error) {
-    if (error.statusCode === 404 || error.status === 404) return 0;
+    if (isMissingStorageResource(error)) return 0;
     throw error;
   }
 
   const text = await data.text();
   if (!text.trim()) return 0;
-  const records = JSON.parse(text);
+  let records = [];
+  try {
+    records = JSON.parse(text);
+  } catch (error) {
+    console.warn(`Index projets illisible pour ${userId}: ${getErrorMessage(error)}`);
+    return 0;
+  }
   return Array.isArray(records) ? records.filter((project) => project?.id).length : 0;
+};
+
+const getSafeStoredProjectCountForUser = async (supabase, userId) => {
+  try {
+    return await getStoredProjectCountForUser(supabase, userId);
+  } catch (error) {
+    console.warn(`Compteur projets indisponible pour ${userId}: ${getErrorMessage(error)}`);
+    return 0;
+  }
 };
 
 const supabaseUserToAdminRecord = (user, projectCount = 0) => ({
@@ -70,7 +90,7 @@ export const handler = async (event) => withErrors(event, async () => {
     const users = await Promise.all((data.users || [])
       .map(async (user) => supabaseUserToAdminRecord(
         user,
-        await getStoredProjectCountForUser(supabase, user.id),
+        await getSafeStoredProjectCountForUser(supabase, user.id),
       )));
 
     const visibleUsers = users
@@ -103,7 +123,7 @@ export const handler = async (event) => withErrors(event, async () => {
     return json(200, {
       user: supabaseUserToAdminRecord(
         data.user,
-        await getStoredProjectCountForUser(supabase, data.user.id),
+        await getSafeStoredProjectCountForUser(supabase, data.user.id),
       ),
     });
   }

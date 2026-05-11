@@ -16,10 +16,14 @@ const readJsonResponse = async (response, fallbackMessage) => {
   return payload;
 };
 
+const getErrorMessage = (error) => error?.message || String(error || '');
+
 const fallbackAdminPayload = (result, fallback, warning) => {
   if (result.status === 'fulfilled') return { payload: result.value, warning: '' };
-  console.warn(warning, result.reason);
-  return { payload: fallback, warning };
+  const details = getErrorMessage(result.reason);
+  const nextWarning = details ? `${warning} ${details}` : warning;
+  console.warn(nextWarning, result.reason);
+  return { payload: fallback, warning: nextWarning };
 };
 
 const readLocalProjects = (userId) => {

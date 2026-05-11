@@ -22,6 +22,11 @@ const sanitizeStorageSegment = (value = '') => String(value || '')
   .replace(/^-+|-+$/g, '')
   .toLowerCase();
 
+const isMissingStorageResource = (error) => Number(error?.statusCode || error?.status) === 404
+  || /not found/i.test(String(error?.message || ''));
+
+const getErrorMessage = (error) => error?.message || String(error || 'Erreur inconnue');
+
 const getProjectTitle = (project = {}, record = {}) =>
   record?.name || project?.title || project?.name || 'Escape game sans titre';
 
@@ -76,13 +81,19 @@ const getAdminProjectPayload = (record = {}) => {
 const downloadPublicProjects = async (supabase) => {
   const { data, error } = await supabase.storage.from(aiJobBucket).download(publicProjectsStoragePath);
   if (error) {
-    if (error.statusCode === 404 || error.status === 404) return [];
+    if (isMissingStorageResource(error)) return [];
     throw error;
   }
 
   const text = await data.text();
   if (!text.trim()) return [];
-  const records = JSON.parse(text);
+  let records = [];
+  try {
+    records = JSON.parse(text);
+  } catch (error) {
+    console.warn(`Index projets publics illisible: ${getErrorMessage(error)}`);
+    return [];
+  }
   return Array.isArray(records) ? records : [];
 };
 
@@ -95,13 +106,20 @@ const downloadProjectIndexForUser = async (supabase, userId) => {
     .download(`users/${safeUserId}/projects.json`);
 
   if (error) {
-    if (error.statusCode === 404 || error.status === 404) return [];
-    throw error;
+    if (isMissingStorageResource(error)) return [];
+    console.warn(`Index projets indisponible pour ${userId}: ${getErrorMessage(error)}`);
+    return [];
   }
 
   const text = await data.text();
   if (!text.trim()) return [];
-  const records = JSON.parse(text);
+  let records = [];
+  try {
+    records = JSON.parse(text);
+  } catch (error) {
+    console.warn(`Index projets illisible pour ${userId}: ${getErrorMessage(error)}`);
+    return [];
+  }
   return Array.isArray(records) ? records : [];
 };
 
@@ -111,7 +129,10 @@ const getProjectCountsByUser = async (supabase) => {
     perPage: 1000,
   });
 
-  if (error) throw error;
+  if (error) {
+    console.warn(`Comptage projets indisponible: ${getErrorMessage(error)}`);
+    return {};
+  }
 
   const entries = await Promise.all((data.users || []).map(async (user) => {
     const projects = await downloadProjectIndexForUser(supabase, user.id);
