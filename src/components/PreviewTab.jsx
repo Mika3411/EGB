@@ -49,6 +49,48 @@ const resolveAnime2dLayerSrc = (project, layer) => {
   return resolveAssetUrl(sourceProject, assetId, rawSrc);
 };
 
+const getCombatEntryValue = (entry, key, fallback) => (
+  entry?.[key] === undefined || entry?.[key] === '' || entry?.[key] === null ? fallback : entry[key]
+);
+
+const HERO_POWER_TYPE_LABELS = {
+  water: 'Eau',
+  earth: 'Terre',
+  fire: 'Feu',
+  lightning: 'Foudre',
+};
+
+const HERO_RESISTANCE_SUMMARY_FIELDS = [
+  { id: 'water', label: 'Eau', field: 'resistanceWater' },
+  { id: 'earth', label: 'Terre', field: 'resistanceEarth' },
+  { id: 'fire', label: 'Feu', field: 'resistanceFire' },
+  { id: 'lightning', label: 'Foudre', field: 'resistanceLightning' },
+];
+
+const normalizeHeroStatKey = (value = '') => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .trim()
+  .toLowerCase();
+
+const getHeroForceSkill = (skills = []) => (
+  skills.find((skill) => (
+    normalizeHeroStatKey(skill.id) === 'force'
+    || normalizeHeroStatKey(skill.name) === 'force'
+  )) || skills[0] || null
+);
+
+const getCombatActorMedia = (entry, combat, actor, fallbackImage = '') => {
+  const entryPrefix = actor === 'hero' ? 'combatHero' : 'combatEnemy';
+  const globalPrefix = actor;
+  const mediaType = getCombatEntryValue(entry, `${entryPrefix}MediaType`, combat?.[`${globalPrefix}MediaType`] || 'image');
+  return {
+    mediaType: mediaType === 'anime2d' ? 'anime2d' : 'image',
+    imageData: entry?.[`${entryPrefix}ImageData`] || combat?.[`${globalPrefix}ImageData`] || fallbackImage || '',
+    anime2dSpec: entry?.[`${entryPrefix}Anime2dSpec`] || combat?.[`${globalPrefix}Anime2dSpec`] || null,
+  };
+};
+
 function Anime2DCinematicPlayer({ cinematic, spec, project, onEnd }) {
   const previewModel = useMemo(() => createAnime2dPreviewModel(spec || cinematic?.anime2dSpec), [cinematic?.anime2dSpec, spec]);
   const { layers, duration } = previewModel;
@@ -189,6 +231,10 @@ export default function PreviewTab(props) {
     heroAdventure = { enabled: false },
     heroState = null,
     heroSetupComplete = true,
+    activeHeroCombat = null,
+    attackActiveHeroCombat,
+    rollActiveEnemyCombat,
+    closeHeroCombat,
     equippedHeroItemIds = [],
     equippedHeroSlotMap = {},
     lastChoiceSnapshot = null,
@@ -285,6 +331,7 @@ export default function PreviewTab(props) {
   const [heroPanelRollingSkillId, setHeroPanelRollingSkillId] = useState(null);
   const [heroPanelDieFace, setHeroPanelDieFace] = useState(1);
   const [heroRewardNotice, setHeroRewardNotice] = useState(null);
+  const [selectedHeroCombatPowerId, setSelectedHeroCombatPowerId] = useState('');
   const heroSetupRollTimerRef = useRef(null);
   const heroSetupRollIntervalRef = useRef(null);
   const heroSetupDiceFacesRef = useRef([]);
@@ -333,6 +380,12 @@ export default function PreviewTab(props) {
   useEffect(() => {
     if (!isHeroAdventure) setIsHeroPanelOpen(false);
   }, [isHeroAdventure]);
+
+  useEffect(() => {
+    if (!activeHeroCombat || activeHeroCombat.phase !== 'hero' || activeHeroCombat.status !== 'active') {
+      setSelectedHeroCombatPowerId('');
+    }
+  }, [activeHeroCombat?.id, activeHeroCombat?.phase, activeHeroCombat?.round, activeHeroCombat?.status]);
 
   useEffect(() => () => {
     if (heroSetupRollTimerRef.current) window.clearTimeout(heroSetupRollTimerRef.current);
@@ -1441,6 +1494,256 @@ export default function PreviewTab(props) {
     );
   };
 
+  const renderHeroCombatEffectMedia = (effect) => {
+    const media = effect?.media;
+    if (!media) return null;
+    const audioNode = media.audioData ? (
+      <audio src={media.audioData} autoPlay preload="auto" style={{ display: 'none' }} />
+    ) : null;
+    if (media.mediaType === 'anime2d' && media.anime2dSpec) {
+      return (
+        <>
+          {audioNode}
+          <span className="hero-combat-fx-media hero-combat-fx-media--anime">
+            <Anime2DPreview spec={media.anime2dSpec} project={project} />
+          </span>
+        </>
+      );
+    }
+    if (media.mediaType === 'video' && media.videoData) {
+      return (
+        <>
+          {audioNode}
+          <span className="hero-combat-fx-media hero-combat-fx-media--video">
+            <video src={media.videoData} autoPlay muted playsInline />
+          </span>
+        </>
+      );
+    }
+    if (media.mediaType === 'image' && media.imageData) {
+      return (
+        <>
+          {audioNode}
+          <span className="hero-combat-fx-media hero-combat-fx-media--image">
+            <img src={media.imageData} alt="" />
+          </span>
+        </>
+      );
+    }
+    return audioNode;
+  };
+
+  const renderHeroCombatActor = (media, label, side, vitals = {}, visualEffects = []) => {
+    const maxHealth = Math.max(1, Number(vitals.maxHealth) || 1);
+    const health = Math.max(0, Math.min(maxHealth, Number(vitals.health) || 0));
+    const maxMana = Math.max(0, Number(vitals.maxMana) || 0);
+    const mana = Math.max(0, Math.min(maxMana, Number(vitals.mana) || 0));
+    const healthPercent = (health / maxHealth) * 100;
+    const manaPercent = maxMana > 0 ? (mana / maxMana) * 100 : 0;
+    const actorEffects = visualEffects.filter((effect) => effect.target === side);
+
+    return (
+      <div className={`hero-combat-actor hero-combat-actor--${side} ${media.mediaType === 'anime2d' && media.anime2dSpec ? 'has-anime' : media.imageData ? 'has-image' : 'is-empty'}`}>
+        <div className="hero-combat-actor-bars" aria-label={`Jauges ${label}`}>
+          <div className="hero-combat-actor-bar hero-combat-actor-bar--health">
+            <span>PV</span>
+            <strong>{health}/{maxHealth}</strong>
+            <i style={{ width: `${healthPercent}%` }} />
+          </div>
+          <div className="hero-combat-actor-bar hero-combat-actor-bar--mana">
+            <span>Mana</span>
+            <strong>{mana}/{maxMana}</strong>
+            <i style={{ width: `${manaPercent}%` }} />
+          </div>
+        </div>
+        <div className="hero-combat-actor-media">
+          {media.mediaType === 'anime2d' && media.anime2dSpec ? (
+            <Anime2DPreview spec={media.anime2dSpec} project={project} />
+          ) : media.imageData ? (
+            <img src={media.imageData} alt={label} />
+          ) : (
+            <span>{label.slice(0, 1).toUpperCase()}</span>
+          )}
+        </div>
+        {actorEffects.length ? (
+          <div className="hero-combat-actor-fx" aria-live="polite">
+            {actorEffects.map((effect, index) => (
+              <span
+                key={effect.id}
+                className={`hero-combat-fx hero-combat-fx--${effect.type || 'damage'} ${effect.media ? 'hero-combat-fx--has-media' : ''}`}
+                style={{ '--fx-delay': `${index * 90}ms`, '--fx-offset': `${index * 12}px` }}
+              >
+                {renderHeroCombatEffectMedia(effect)}
+                <span className="hero-combat-fx-text">{effect.text}</span>
+              </span>
+            ))}
+          </div>
+        ) : null}
+        <strong>{label}</strong>
+      </div>
+    );
+  };
+
+  const renderHeroCombatOverlay = () => {
+    if (!activeHeroCombat || !isHeroAdventure) return null;
+    const entry = activeHeroCombat.entry || {};
+    const combatSettings = heroAdventure.combat || {};
+    const backgroundImageData = entry.combatBackgroundImageData || combatSettings.backgroundImageData || playSceneBackgroundUrl || '';
+    const heroMedia = getCombatActorMedia(entry, combatSettings, 'hero', heroState?.characterImageData || '');
+    const enemyMedia = getCombatActorMedia(entry, combatSettings, 'enemy');
+    const heroLabel = heroState?.name || 'Héros';
+    const enemyLabel = activeHeroCombat.enemyName || entry.combatEnemyName || combatSettings.enemyName || 'Ennemi';
+    const enemyMaxHealth = Math.max(1, Number(activeHeroCombat.enemyMaxHealth) || Number(entry.combatEnemyMaxHealth) || 1);
+    const enemyHealth = Math.max(0, Math.min(enemyMaxHealth, Number(activeHeroCombat.enemyHealth) || 0));
+    const enemyMaxMana = Math.max(0, Number(activeHeroCombat.enemyMaxMana) || Number(entry.combatEnemyMaxMana) || Number(combatSettings.enemyMaxMana) || 0);
+    const enemyMana = Math.max(0, Math.min(enemyMaxMana, Number(activeHeroCombat.enemyMana) || 0));
+    const heroMaxHealth = Math.max(1, Number(heroState?.maxHealth) || 1);
+    const heroHealth = Math.max(0, Math.min(heroMaxHealth, Number(heroState?.health) || 0));
+    const heroMaxMana = Math.max(0, Number(heroState?.maxMana) || 0);
+    const heroMana = Math.max(0, Math.min(heroMaxMana, Number(heroState?.mana) || 0));
+    const heroPowers = Array.isArray(heroState?.powers) ? heroState.powers : [];
+    const combatManaCost = Math.max(0, Number(entry.combatManaCost) || 0);
+    const selectedHeroCombatPower = heroPowers.find((power) => power.id === selectedHeroCombatPowerId) || null;
+    const selectedHeroCombatPowerMissing = Boolean(selectedHeroCombatPowerId && !selectedHeroCombatPower);
+    const selectedHeroCombatPowerManaCost = selectedHeroCombatPower ? Math.max(0, Number(selectedHeroCombatPower.manaCost) || 0) : 0;
+    const selectedHeroCombatManaCost = combatManaCost + selectedHeroCombatPowerManaCost;
+    const selectedHeroCombatManaUnavailable = selectedHeroCombatManaCost > heroMana;
+    const selectedHeroCombatActionLabel = selectedHeroCombatPower
+      ? `Utiliser ${selectedHeroCombatPower.name || 'Pouvoir'}`
+      : 'Attaque normale';
+    const showDice = getCombatEntryValue(entry, 'combatShowDice', combatSettings.showDice !== false) !== false;
+    const lastCombatRoll = activeHeroCombat.lastEnemyRoll
+      || activeHeroCombat.lastRoll
+      || (['hero_combat', 'enemy_combat'].includes(lastDiceRoll?.actionType) ? lastDiceRoll : null);
+    const overlayStyle = backgroundImageData
+      ? { backgroundImage: `linear-gradient(180deg, rgba(2,6,23,.18), rgba(2,6,23,.82)), url(${backgroundImageData})` }
+      : undefined;
+    const isEnded = ['victory', 'defeat'].includes(activeHeroCombat.status);
+    const isEnemyTurn = activeHeroCombat.phase === 'enemy';
+    const canChooseHeroAction = !isEnded && !isEnemyTurn && !isHeroDefeated;
+    const combatActionHandler = isEnemyTurn ? rollActiveEnemyCombat : () => attackActiveHeroCombat?.(selectedHeroCombatPower?.id || '');
+    const combatActionDisabled = isEnded
+      || isHeroDefeated
+      || (isEnemyTurn ? !rollActiveEnemyCombat : !attackActiveHeroCombat)
+      || (!isEnemyTurn && (selectedHeroCombatPowerMissing || selectedHeroCombatManaUnavailable));
+    const combatVisualEffects = Array.isArray(activeHeroCombat.visualEffects) ? activeHeroCombat.visualEffects : [];
+
+    return (
+      <div className={`hero-combat-overlay hero-combat-overlay--${activeHeroCombat.status || 'active'}${isEnemyTurn ? ' hero-combat-overlay--enemy-turn' : ''}`} style={overlayStyle}>
+        <div className="hero-combat-topline">
+          <span>{isEnemyTurn ? 'Tour ennemi' : `Tour ${activeHeroCombat.round || 1}`}</span>
+          <strong>{enemyLabel}</strong>
+          <button type="button" className="secondary-action compact" onClick={closeHeroCombat}>
+            Fermer
+          </button>
+        </div>
+
+        <div className="hero-combat-stage">
+          {renderHeroCombatActor(heroMedia, heroLabel, 'hero', {
+            health: heroHealth,
+            maxHealth: heroMaxHealth,
+            mana: heroMana,
+            maxMana: heroMaxMana,
+          }, combatVisualEffects)}
+
+          {showDice ? (
+            <div className="hero-combat-dice-spotlight">
+              <button
+                type="button"
+                className="hero-combat-die-button"
+                onClick={combatActionHandler}
+                disabled={combatActionDisabled}
+              >
+                <span className={`hero-combat-die hero-die-face hero-die-face--${heroDiceSkin}`}>
+                  <span className="hero-roll-die-value">{lastCombatRoll?.raw || '?'}</span>
+                </span>
+              </button>
+              <strong>{lastCombatRoll ? `${lastCombatRoll.total} total` : heroAdventure.dice?.label || 'Dé'}</strong>
+              <small>{isEnded ? 'Combat terminé' : isEnemyTurn ? 'Lance le dé ennemi' : selectedHeroCombatActionLabel}</small>
+            </div>
+          ) : null}
+
+          {renderHeroCombatActor(enemyMedia, enemyLabel, 'enemy', {
+            health: enemyHealth,
+            maxHealth: enemyMaxHealth,
+            mana: enemyMana,
+            maxMana: enemyMaxMana,
+          }, combatVisualEffects)}
+        </div>
+
+        <div className="hero-combat-hud">
+          <div className="hero-combat-meter">
+            <span>{heroLabel}</span>
+            <strong>{heroHealth}/{heroMaxHealth} PV</strong>
+            <i style={{ width: `${(heroHealth / heroMaxHealth) * 100}%` }} />
+          </div>
+          {heroMaxMana > 0 ? (
+            <div className="hero-combat-meter hero-combat-meter--hero-mana">
+              <span>Mana héros</span>
+              <strong>{heroMana}/{heroMaxMana}</strong>
+              <i style={{ width: `${(heroMana / heroMaxMana) * 100}%` }} />
+            </div>
+          ) : null}
+          <div className="hero-combat-meter hero-combat-meter--enemy">
+            <span>{enemyLabel}</span>
+            <strong>{enemyHealth}/{enemyMaxHealth} PV</strong>
+            <i style={{ width: `${(enemyHealth / enemyMaxHealth) * 100}%` }} />
+          </div>
+          {enemyMaxMana > 0 ? (
+            <div className="hero-combat-meter hero-combat-meter--mana">
+              <span>Mana ennemi</span>
+              <strong>{enemyMana}/{enemyMaxMana}</strong>
+              <i style={{ width: `${(enemyMana / enemyMaxMana) * 100}%` }} />
+            </div>
+          ) : null}
+        </div>
+
+        <div className="hero-combat-log">
+          <p>{activeHeroCombat.message || 'Le combat commence.'}</p>
+          {!isEnemyTurn && !isEnded ? (
+            <div className="hero-combat-action-choice" aria-label="Action du héros">
+              <button
+                type="button"
+                className={`hero-combat-action-choice-button ${!selectedHeroCombatPowerId ? 'active' : ''}`}
+                onClick={() => setSelectedHeroCombatPowerId('')}
+                disabled={!canChooseHeroAction}
+              >
+                <strong>Attaque normale</strong>
+                <span>{combatManaCost} mana</span>
+              </button>
+              {heroPowers.map((power) => {
+                const manaCost = Math.max(0, Number(power.manaCost) || 0);
+                const totalManaCost = combatManaCost + manaCost;
+                const disabled = !canChooseHeroAction || totalManaCost > heroMana;
+                return (
+                  <button
+                    key={power.id}
+                    type="button"
+                    className={`hero-combat-action-choice-button ${selectedHeroCombatPowerId === power.id ? 'active' : ''}`}
+                    onClick={() => setSelectedHeroCombatPowerId(power.id)}
+                    disabled={disabled}
+                    title={disabled && totalManaCost > heroMana ? 'Mana insuffisante' : `${power.force || 0} force`}
+                  >
+                    <strong>{power.name || 'Pouvoir'}</strong>
+                    <span>{HERO_POWER_TYPE_LABELS[power.type] || power.type || 'Pouvoir'} · {totalManaCost} mana · {power.force || 0}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+          <div className="inline-actions">
+            <button type="button" onClick={combatActionHandler} disabled={combatActionDisabled}>
+              {isEnemyTurn ? 'Lancer le dé ennemi' : selectedHeroCombatActionLabel}
+            </button>
+            <button type="button" className="secondary-action" onClick={closeHeroCombat}>
+              {isEnded ? 'Revenir à la scène' : 'Quitter le combat'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderInventoryTiles = (itemIds, emptyLabel = 'Aucun objet.') => (
     <div className="inventory-grid">
       {itemIds.length ? itemIds.map((itemId) => {
@@ -1481,6 +1784,17 @@ export default function PreviewTab(props) {
     const heroBackgroundStyle = heroState?.backgroundImageData
       ? { backgroundImage: `linear-gradient(180deg, rgba(2,6,23,.28), rgba(2,6,23,.88)), url(${heroState.backgroundImageData})` }
       : undefined;
+    const heroSkills = heroState?.skills || [];
+    const heroPowers = heroState?.powers || [];
+    const forceSkill = getHeroForceSkill(heroSkills);
+    const heroForceDamage = Math.max(0, Number(forceSkill?.value) || 0);
+    const criticalSuccess = Math.max(1, Number(heroAdventure?.rules?.criticalSuccess) || Number(heroAdventure?.dice?.sides) || 20);
+    const criticalChance = Math.max(0, Math.min(100, Number(heroAdventure?.rules?.criticalChance) || 0));
+    const criticalMultiplier = Math.max(1, Number(heroAdventure?.rules?.criticalMultiplier) || 2);
+    const strongestPower = heroPowers.reduce((best, power) => (
+      Math.max(0, Number(power.force) || 0) > Math.max(0, Number(best?.force) || 0) ? power : best
+    ), null);
+    const strongestMagicDamage = strongestPower ? heroForceDamage + Math.max(0, Number(strongestPower.force) || 0) : heroForceDamage;
     return (
       <div className={`hero-character-page ${compact ? 'hero-character-page--compact' : ''}`} style={heroBackgroundStyle}>
         <div className="hero-paper-doll">
@@ -1516,13 +1830,63 @@ export default function PreviewTab(props) {
             <span className="eyebrow">Personnage</span>
             <h3>{heroState?.name || 'Héros'}</h3>
             <small>{heroAdventure.dice?.label || 'de'} principal</small>
+            <div className="hero-character-core-stats">
+              <span>Force {heroForceDamage}</span>
+              <span>Crit {criticalChance}% x{criticalMultiplier}</span>
+              <span>Magie {strongestMagicDamage}</span>
+            </div>
           </div>
         </div>
 
         <div className="hero-character-skills">
-          {(heroState?.skills || []).map((skill) => (
+          {heroSkills.map((skill) => (
             <span key={skill.id}><strong>{skill.name}</strong> +{skill.value}</span>
           ))}
+        </div>
+
+        <div className="hero-character-combat">
+          <div className="hero-character-combat-stats">
+            <span>
+              <small>Attaque</small>
+              <strong>{heroForceDamage}</strong>
+              <em>force</em>
+            </span>
+            <span>
+              <small>Critique</small>
+              <strong>{criticalChance}%</strong>
+              <em>sur {criticalSuccess}, x{criticalMultiplier}</em>
+            </span>
+            <span>
+              <small>Magie max</small>
+              <strong>{strongestMagicDamage}</strong>
+              <em>{strongestPower?.name || 'sans pouvoir'}</em>
+            </span>
+          </div>
+
+          {heroPowers.length ? (
+            <div className="hero-character-power-list">
+              {heroPowers.map((power) => {
+                const manaCost = Math.max(0, Number(power.manaCost) || 0);
+                const powerForce = Math.max(0, Number(power.force) || 0);
+                return (
+                  <article className="hero-character-power" key={power.id}>
+                    <strong>{power.name || 'Pouvoir'}</strong>
+                    <span>{HERO_POWER_TYPE_LABELS[power.type] || power.type || 'Pouvoir'}</span>
+                    <small>{manaCost} mana · +{powerForce} force · {heroForceDamage + powerForce} dégâts</small>
+                  </article>
+                );
+              })}
+            </div>
+          ) : null}
+
+          <div className="hero-character-resistances">
+            {HERO_RESISTANCE_SUMMARY_FIELDS.map((resistance) => (
+              <span key={resistance.id}>
+                <strong>{resistance.label}</strong>
+                <em>{Math.max(0, Math.min(100, Number(heroState?.[resistance.field]) || 0))}%</em>
+              </span>
+            ))}
+          </div>
         </div>
 
         <div className="hero-character-section">
@@ -1756,6 +2120,7 @@ export default function PreviewTab(props) {
         <div className="scene-player" style={{ aspectRatio: sceneAspectRatio, '--scene-aspect': sceneAspectRatio }} onClick={() => viewerImage && setViewerImage(null)}>
           {renderHeroSetupScreen()}
           {renderHeroRewardNotice()}
+          {renderHeroCombatOverlay()}
 
           {playSceneBackgroundUrl ? (
             <img

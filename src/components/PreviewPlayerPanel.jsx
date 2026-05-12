@@ -39,6 +39,10 @@ export default function PreviewPlayerPanel({
       heroAdventure={preview.heroAdventure}
       heroState={preview.heroState}
       heroSetupComplete={preview.heroSetupComplete}
+      activeHeroCombat={preview.activeHeroCombat}
+      attackActiveHeroCombat={preview.attackActiveHeroCombat}
+      rollActiveEnemyCombat={preview.rollActiveEnemyCombat}
+      closeHeroCombat={preview.closeHeroCombat}
       equippedHeroItemIds={preview.equippedHeroItemIds}
       equippedHeroSlotMap={preview.equippedHeroSlotMap}
       lastChoiceSnapshot={preview.lastChoiceSnapshot}

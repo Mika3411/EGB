@@ -211,7 +211,7 @@ const BEGINNER_FAQ_ITEMS = [
 const FAQ_ITEMS = [
   {
     question: 'Par quoi commencer quand on decouvre le builder ?',
-    answer: 'Commence par le didacticiel Profil pour comprendre les projets, puis Scènes et Éditeur pour créer les lieux, objets et zones cliquables. Pour un mode choix multiples, ajoute Narration afin de vérifier les branches. Passe ensuite par Énigmes, Logique, Plan et Preview. Le plus simple est de créer une petite boucle jouable, de la tester, puis de l enrichir.',
+    answer: "Commence par le didacticiel Profil pour comprendre les projets, puis Scènes et Éditeur pour créer les lieux, objets et zones cliquables. Pour un mode choix multiples, ajoute Narration afin de vérifier les branches. Passe ensuite par Énigmes, Logique, Plan et Preview. Le plus simple est de créer une petite boucle jouable, de la tester, puis de l'enrichir.",
   },
   {
     question: 'Quelle différence entre une scène et une sous-scène ?',

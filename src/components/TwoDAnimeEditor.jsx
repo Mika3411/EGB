@@ -1810,7 +1810,7 @@ export default function TwoDAnimeEditor({
 
   const downloadSelectedImage = async () => {
     try {
-      if (!selectedLayer?.src) throw new Error('Sélectionne une image a enregistrer.');
+      if (!selectedLayer?.src) throw new Error('Sélectionne une image à enregistrer.');
       const blob = await dataUrlToBlob(selectedLayer.src);
       downloadBlob(blob, `${makeSafeFilename(selectedLayer.name || 'image')}.png`);
       setExportNotice('Image sélectionnée enregistrée.');

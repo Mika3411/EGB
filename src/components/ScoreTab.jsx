@@ -280,7 +280,7 @@ export default function ScoreTab({ project }) {
           <div>
             <span>Temps de jeu approximatif</span>
             <strong>{playtime.min}-{playtime.max} min</strong>
-            <small>Basé sur les scènes, énigmes, cinématiques, objets et détours du plan.</small>
+            <small>{`Basé sur les scènes, énigmes, cinématiques, objets, détours du plan${isHeroMode ? ', combats Hero' : ''}.`}</small>
           </div>
         </div>
       </section>

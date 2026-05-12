@@ -45,7 +45,7 @@ const ensureSceneObjects = (scene) => {
   return scene.sceneObjects;
 };
 
-const LARGE_MEDIA_FIELD_PATTERN = /^(backgroundData|imageData|objectImageData|popupImageData|popupBackgroundData|musicData|soundData|videoData|videoPoster|audioData|responseImageData|responseSoundData|ambienceSoundData|setupMusicData|setupBackgroundImageData|characterImageData|backgroundImageData|src|originalSrc)$/i;
+const LARGE_MEDIA_FIELD_PATTERN = /^(backgroundData|imageData|objectImageData|popupImageData|popupBackgroundData|musicData|soundData|videoData|videoPoster|audioData|responseImageData|responseSoundData|ambienceSoundData|setupMusicData|setupBackgroundImageData|characterImageData|backgroundImageData|combatBackgroundImageData|combatHeroImageData|combatEnemyImageData|(?:hero|enemy)(?:Hit|Death)Effect(?:Image|Video)Data|src|originalSrc)$/i;
 const UNDO_HISTORY_LIMIT = 25;
 const HISTORY_MEDIA_REF_KEY = '__escapeBuilderUndoMediaRef';
 

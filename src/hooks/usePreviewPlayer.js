@@ -10,6 +10,20 @@ import {
 } from '../lib/gameEngine';
 import { resolveAssetUrl } from '../lib/assetManager';
 import {
+  getCombatSimulationStats,
+  getPowerTypeLabel as getCombatPowerTypeLabel,
+  resolveCombatVictoryReward,
+  resolveEnemyCombatAttack,
+  resolveHeroCombatAttack,
+} from '../lib/combatEngine.js';
+import {
+  COMBAT_EFFECT_MEDIA_TYPES,
+  COMBAT_EFFECT_SLOTS,
+  COMBAT_MEDIA_TYPES,
+  DEFAULT_COMBAT_SETTINGS,
+  getCombatEffectFieldBase,
+} from '../lib/combatDefaults.js';
+import {
   evaluateCondition,
   evaluateReplyCondition,
 } from '../lib/conditionEngine';
@@ -18,6 +32,7 @@ const DEFAULT_COLOR_SEQUENCE = [];
 const DEFAULT_PLAYER_LIVES = 3;
 const DEFAULT_EQUIPMENT_SLOT_LABELS = ['Casque', 'Bouclier', 'Arme', 'Armure', 'Anneau', 'Jambieres', 'Amulette', 'Sac'];
 const HERO_DICE_SKIN_IDS = new Set(['classic', 'bone', 'royal', 'ember', 'mana', 'forest', 'shadow', 'divine', 'cursed']);
+const HERO_POWER_TYPE_IDS = new Set(['water', 'earth', 'fire', 'lightning']);
 const DEFAULT_HERO_ADVENTURE = {
   enabled: false,
   dice: { sides: 20, label: 'd20', skin: 'classic' },
@@ -40,11 +55,29 @@ const DEFAULT_HERO_ADVENTURE = {
       { id: 'ruse', name: 'Ruse', value: 1, manaCost: 0 },
       { id: 'magie', name: 'Magie', value: 1, manaCost: 1 },
     ],
+    powers: [
+      { id: 'flamme', name: 'Flamme', type: 'fire', manaCost: 2, force: 4 },
+    ],
+    resistanceWater: 0,
+    resistanceEarth: 0,
+    resistanceFire: 0,
+    resistanceLightning: 0,
   },
+  rules: {
+    criticalSuccess: 20,
+    criticalFailure: 1,
+    criticalChance: 0,
+    criticalMultiplier: 2,
+  },
+  combat: DEFAULT_COMBAT_SETTINGS,
 };
 const addUnique = (items = [], item) => (item && !items.includes(item) ? [...items, item] : items);
 
 const clampNumber = (value, min, max) => Math.max(min, Math.min(max, Number(value) || 0));
+const clampCombatNumber = (value, fallback, min, max) => {
+  const next = Number(value);
+  return Math.max(min, Math.min(max, Number.isFinite(next) ? next : fallback));
+};
 
 const normalizeHeroAdventure = (project = {}) => {
   const raw = project.heroAdventure && typeof project.heroAdventure === 'object'
@@ -52,18 +85,44 @@ const normalizeHeroAdventure = (project = {}) => {
     : {};
   const enabled = raw.enabled ?? project.creationMode === 'hero_adventure';
   const rawHero = raw.hero && typeof raw.hero === 'object' ? raw.hero : {};
+  const rawDice = raw.dice && typeof raw.dice === 'object' ? raw.dice : {};
+  const diceSides = Math.max(2, Number(rawDice.sides) || DEFAULT_HERO_ADVENTURE.dice.sides);
   const maxHealth = Math.max(1, Number(rawHero.maxHealth || rawHero.health || DEFAULT_HERO_ADVENTURE.hero.maxHealth));
   const maxMana = Math.max(0, Number(rawHero.maxMana || rawHero.mana || DEFAULT_HERO_ADVENTURE.hero.maxMana));
   const skills = Array.isArray(rawHero.skills) && rawHero.skills.length
     ? rawHero.skills
     : DEFAULT_HERO_ADVENTURE.hero.skills;
+  const powers = Array.isArray(rawHero.powers) && rawHero.powers.length
+    ? rawHero.powers
+    : DEFAULT_HERO_ADVENTURE.hero.powers;
+  const rawCombat = raw.combat && typeof raw.combat === 'object' ? raw.combat : {};
+  const normalizeCombatMediaType = (value) => (COMBAT_MEDIA_TYPES.has(value) ? value : 'image');
+  const normalizeCombatEffectMediaType = (value) => (COMBAT_EFFECT_MEDIA_TYPES.has(value) ? value : 'none');
+  const normalizeCombatEffectMedia = (actor, outcome) => {
+    const base = getCombatEffectFieldBase(actor, outcome);
+    return {
+      [`${base}MediaType`]: normalizeCombatEffectMediaType(rawCombat[`${base}MediaType`]),
+      [`${base}ImageData`]: rawCombat[`${base}ImageData`] || '',
+      [`${base}ImageName`]: rawCombat[`${base}ImageName`] || '',
+      [`${base}Anime2dSpec`]: rawCombat[`${base}Anime2dSpec`] && typeof rawCombat[`${base}Anime2dSpec`] === 'object'
+        ? rawCombat[`${base}Anime2dSpec`]
+        : null,
+      [`${base}Anime2dName`]: rawCombat[`${base}Anime2dName`] || '',
+      [`${base}VideoData`]: rawCombat[`${base}VideoData`] || '',
+      [`${base}VideoName`]: rawCombat[`${base}VideoName`] || '',
+      [`${base}AudioData`]: rawCombat[`${base}AudioData`] || '',
+      [`${base}AudioName`]: rawCombat[`${base}AudioName`] || '',
+    };
+  };
+  const normalizeHeroAttackType = (value) => (['physical', 'water', 'earth', 'fire', 'lightning'].includes(value) ? value : 'physical');
+  const normalizePowerType = (value) => (['water', 'earth', 'fire', 'lightning'].includes(value) ? value : 'fire');
 
   return {
     enabled: Boolean(enabled),
     dice: {
-      sides: Math.max(2, Number(raw.dice?.sides || DEFAULT_HERO_ADVENTURE.dice.sides)),
-      label: raw.dice?.label || `d${Math.max(2, Number(raw.dice?.sides || DEFAULT_HERO_ADVENTURE.dice.sides))}`,
-      skin: HERO_DICE_SKIN_IDS.has(raw.dice?.skin) ? raw.dice.skin : DEFAULT_HERO_ADVENTURE.dice.skin,
+      sides: diceSides,
+      label: rawDice.label || `d${diceSides}`,
+      skin: HERO_DICE_SKIN_IDS.has(rawDice.skin) ? rawDice.skin : DEFAULT_HERO_ADVENTURE.dice.skin,
     },
     hero: {
       name: rawHero.name || DEFAULT_HERO_ADVENTURE.hero.name,
@@ -88,6 +147,51 @@ const normalizeHeroAdventure = (project = {}) => {
         value: Number(skill.value) || 0,
         manaCost: Math.max(0, Number(skill.manaCost) || 0),
       })),
+      powers: powers.map((power, index) => ({
+        id: power.id || `power_${index}`,
+        name: power.name || `Pouvoir ${index + 1}`,
+        type: HERO_POWER_TYPE_IDS.has(power.type) ? power.type : 'fire',
+        manaCost: clampCombatNumber(power.manaCost, 0, 0, 999),
+        force: clampCombatNumber(power.force, 1, 0, 999),
+      })),
+      resistanceWater: clampCombatNumber(rawHero.resistanceWater, 0, 0, 100),
+      resistanceEarth: clampCombatNumber(rawHero.resistanceEarth, 0, 0, 100),
+      resistanceFire: clampCombatNumber(rawHero.resistanceFire, 0, 0, 100),
+      resistanceLightning: clampCombatNumber(rawHero.resistanceLightning, 0, 0, 100),
+    },
+    rules: {
+      criticalSuccess: clampCombatNumber(raw.rules?.criticalSuccess, DEFAULT_HERO_ADVENTURE.rules.criticalSuccess, 1, diceSides),
+      criticalFailure: clampCombatNumber(raw.rules?.criticalFailure, DEFAULT_HERO_ADVENTURE.rules.criticalFailure, 1, diceSides),
+      criticalChance: clampCombatNumber(raw.rules?.criticalChance, DEFAULT_HERO_ADVENTURE.rules.criticalChance, 0, 100),
+      criticalMultiplier: Math.max(1, Math.min(20, Number(raw.rules?.criticalMultiplier) || DEFAULT_HERO_ADVENTURE.rules.criticalMultiplier)),
+    },
+    combat: {
+      ...DEFAULT_COMBAT_SETTINGS,
+      ...rawCombat,
+      turnMode: rawCombat.turnMode !== false,
+      showDice: rawCombat.showDice !== false,
+      enemyAutoTurn: rawCombat.enemyAutoTurn !== false,
+      heroMediaType: normalizeCombatMediaType(rawCombat.heroMediaType),
+      enemyMediaType: normalizeCombatMediaType(rawCombat.enemyMediaType),
+      heroAnime2dSpec: rawCombat.heroAnime2dSpec && typeof rawCombat.heroAnime2dSpec === 'object' ? rawCombat.heroAnime2dSpec : null,
+      enemyAnime2dSpec: rawCombat.enemyAnime2dSpec && typeof rawCombat.enemyAnime2dSpec === 'object' ? rawCombat.enemyAnime2dSpec : null,
+      heroAttackType: normalizeHeroAttackType(rawCombat.heroAttackType),
+      enemyPowerType: normalizePowerType(rawCombat.enemyPowerType),
+      enemyStrength: clampCombatNumber(rawCombat.enemyStrength, DEFAULT_COMBAT_SETTINGS.enemyStrength, 0, 999),
+      enemyMaxMana: clampCombatNumber(rawCombat.enemyMaxMana, DEFAULT_COMBAT_SETTINGS.enemyMaxMana, 0, 999),
+      enemyPowerManaCost: clampCombatNumber(rawCombat.enemyPowerManaCost, DEFAULT_COMBAT_SETTINGS.enemyPowerManaCost, 0, 999),
+      enemyPowerDamage: clampCombatNumber(rawCombat.enemyPowerDamage, DEFAULT_COMBAT_SETTINGS.enemyPowerDamage, 0, 999),
+      enemyPowerUsageChance: clampCombatNumber(rawCombat.enemyPowerUsageChance, DEFAULT_COMBAT_SETTINGS.enemyPowerUsageChance, 0, 100),
+      enemyCriticalChance: clampCombatNumber(rawCombat.enemyCriticalChance, DEFAULT_COMBAT_SETTINGS.enemyCriticalChance, 0, 100),
+      enemyCriticalMultiplier: Math.max(1, Math.min(20, Number(rawCombat.enemyCriticalMultiplier) || DEFAULT_COMBAT_SETTINGS.enemyCriticalMultiplier)),
+      enemyResistanceWater: clampCombatNumber(rawCombat.enemyResistanceWater, 0, 0, 100),
+      enemyResistanceEarth: clampCombatNumber(rawCombat.enemyResistanceEarth, 0, 0, 100),
+      enemyResistanceFire: clampCombatNumber(rawCombat.enemyResistanceFire, 0, 0, 100),
+      enemyResistanceLightning: clampCombatNumber(rawCombat.enemyResistanceLightning, 0, 0, 100),
+      ...COMBAT_EFFECT_SLOTS.reduce((settings, slot) => ({
+        ...settings,
+        ...normalizeCombatEffectMedia(slot.actor, slot.outcome),
+      }), {}),
     },
   };
 };
@@ -116,6 +220,7 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
   const [heroSetupComplete, setHeroSetupComplete] = useState(!initialHeroAdventure.enabled);
   const [lastDiceRoll, setLastDiceRoll] = useState(null);
   const [heroCombatStates, setHeroCombatStates] = useState({});
+  const [activeHeroCombat, setActiveHeroCombat] = useState(null);
   const [equippedHeroItemIds, setEquippedHeroItemIds] = useState([]);
   const [equippedHeroSlotMap, setEquippedHeroSlotMap] = useState({});
   const [lastChoiceSnapshot, setLastChoiceSnapshot] = useState(null);
@@ -222,6 +327,11 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
         setupMusicData: heroAdventure.hero.setupMusicData || '',
         setupMusicName: heroAdventure.hero.setupMusicName || '',
         defeatSceneId: heroAdventure.hero.defeatSceneId || '',
+        powers: heroAdventure.hero.powers || [],
+        resistanceWater: heroAdventure.hero.resistanceWater || 0,
+        resistanceEarth: heroAdventure.hero.resistanceEarth || 0,
+        resistanceFire: heroAdventure.hero.resistanceFire || 0,
+        resistanceLightning: heroAdventure.hero.resistanceLightning || 0,
       };
       engineRef.current.setState({ heroState: nextHero });
       return nextHero;
@@ -235,6 +345,11 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     heroAdventure.hero.setupMusicData,
     heroAdventure.hero.setupMusicName,
     heroAdventure.hero.defeatSceneId,
+    heroAdventure.hero.powers,
+    heroAdventure.hero.resistanceWater,
+    heroAdventure.hero.resistanceEarth,
+    heroAdventure.hero.resistanceFire,
+    heroAdventure.hero.resistanceLightning,
   ]);
 
   const getEnigmaById = (enigmaId) => (
@@ -272,10 +387,10 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
   const applySceneTimerEnd = (scene) => {
     if (!scene) return false;
     const action = scene.timerEndAction || 'none';
-    const message = scene.timerEndMessage || 'Le temps est ecoule.';
+    const message = scene.timerEndMessage || 'Le temps est écoulé.';
 
     if (action === 'scene' && scene.timerTargetSceneId) {
-      return goToScene(scene.timerTargetSceneId, message || 'Le temps est ecoule.');
+      return goToScene(scene.timerTargetSceneId, message || 'Le temps est écoulé.');
     }
 
     if (action === 'restart-scene') {
@@ -308,12 +423,12 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
         setHeroState(nextHero);
         triggerHeroDefeatScene(nextHero);
       }
-      setDialogue(message || `Temps ecoule: -${loss} vie${loss > 1 ? 's' : ''}.`);
+      setDialogue(message || `Temps écoulé: -${loss} vie${loss > 1 ? 's' : ''}.`);
       return true;
     }
 
     if (action === 'dialogue') {
-      setDialogue(message || 'Le temps est ecoule.');
+      setDialogue(message || 'Le temps est écoulé.');
       return true;
     }
 
@@ -682,7 +797,7 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
       const item = (getItemById?.(condition.itemId) || project.items.find((entry) => entry.id === condition.itemId));
       return `Nécessite: ${item?.name || 'objet manquant'}`;
     }
-    if (conditionType === 'visited_scene') return `Nécessite une scène visitee: ${project.scenes.find((scene) => scene.id === condition.sceneId)?.name || 'scène manquante'}`;
+    if (conditionType === 'visited_scene') return `Nécessite une scène visitée: ${project.scenes.find((scene) => scene.id === condition.sceneId)?.name || 'scène manquante'}`;
     if (conditionType === 'completed_hotspot') {
       const hotspot = project.scenes.flatMap((scene) => scene.hotspots || []).find((entry) => entry.id === condition.hotspotId);
       return `Nécessite une action faite: ${hotspot?.name || 'zone manquante'}`;
@@ -824,7 +939,7 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
         const title = effect.journalTitle || 'Note';
         const detail = effect.journalDetail || effect.message || '';
         addAdventureJournalEntry({ type: 'note', title, detail });
-        result.notices.push({ type: 'journal', title: 'Journal mis a jour', detail: [title, detail].filter(Boolean).join(' - ') });
+        result.notices.push({ type: 'journal', title: 'Journal mis à jour', detail: [title, detail].filter(Boolean).join(' - ') });
       }
       if (type === 'next_node') {
         result.nextNodeId = effect.nextNodeId || result.nextNodeId;
@@ -1280,74 +1395,530 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     return true;
   };
 
+  const getPreviewCombatStats = (entry = {}) => (
+    getCombatSimulationStats({
+      ...project,
+      heroAdventure: {
+        ...(project.heroAdventure || {}),
+        ...heroAdventure,
+        hero: engineRef.current.getState().heroState || heroState,
+      },
+    }, entry, heroAdventure.combat || DEFAULT_COMBAT_SETTINGS)
+  );
+
+  const getCombatEnemyStats = (entry = {}) => (
+    getPreviewCombatStats(entry).enemyStats
+  );
+
+  const getPowerTypeLabel = (type) => getCombatPowerTypeLabel(type).toLowerCase();
+
+  const getHeroPowerById = (powerId = '') => (
+    ((engineRef.current.getState().heroState || heroState).powers || []).find((power) => power.id === powerId) || null
+  );
+
+  const getCombatEffectMedia = (target, outcome) => {
+    const combatSettings = heroAdventure.combat || {};
+    const base = getCombatEffectFieldBase(target, outcome);
+    const mediaType = COMBAT_EFFECT_MEDIA_TYPES.has(combatSettings[`${base}MediaType`])
+      ? combatSettings[`${base}MediaType`]
+      : 'none';
+    const audioData = combatSettings[`${base}AudioData`] || '';
+    const audioName = combatSettings[`${base}AudioName`] || '';
+    const withAudio = (media) => (audioData ? { ...media, audioData, audioName } : media);
+    if (mediaType === 'image' && combatSettings[`${base}ImageData`]) {
+      return withAudio({
+        mediaType,
+        imageData: combatSettings[`${base}ImageData`],
+        name: combatSettings[`${base}ImageName`] || '',
+      });
+    }
+    if (mediaType === 'anime2d' && combatSettings[`${base}Anime2dSpec`]) {
+      return withAudio({
+        mediaType,
+        anime2dSpec: combatSettings[`${base}Anime2dSpec`],
+        name: combatSettings[`${base}Anime2dName`] || '',
+      });
+    }
+    if (mediaType === 'video' && combatSettings[`${base}VideoData`]) {
+      return withAudio({
+        mediaType,
+        videoData: combatSettings[`${base}VideoData`],
+        name: combatSettings[`${base}VideoName`] || '',
+      });
+    }
+    if (audioData) return { mediaType: 'none', audioData, audioName };
+    return null;
+  };
+
+  const makeCombatVisualEffect = (target, type, text, media = null) => ({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    target,
+    type,
+    text,
+    media,
+  });
+
+  const makeCombatOutcomeEffect = (target, outcome, text) => (
+    makeCombatVisualEffect(
+      target,
+      outcome === 'death' ? 'death' : 'damage',
+      text,
+      getCombatEffectMedia(target, outcome)
+    )
+  );
+
+  const rollEnemyCombatDie = (enemyName = 'Ennemi') => {
+    const sides = Math.max(2, Number(heroAdventure.dice?.sides) || 20);
+    const raw = Math.floor(Math.random() * sides) + 1;
+    return {
+      id: Date.now(),
+      die: heroAdventure.dice?.label || `d${sides}`,
+      sides,
+      raw,
+      modifier: 0,
+      total: raw,
+      actionType: 'enemy_combat',
+      enemyName,
+    };
+  };
+
+  const buildEnemyCombatAction = (stats, currentEnemyMana, enemyName) => {
+    const enemyStats = stats.enemyStats;
+    const enemyRoll = rollEnemyCombatDie(enemyName);
+    const currentHero = engineRef.current.getState().heroState || heroState;
+    const enemyAttack = resolveEnemyCombatAttack({
+      stats,
+      hero: currentHero,
+      heroHealth: Number(currentHero.health) || 0,
+      enemyMana: currentEnemyMana,
+    });
+    const enemyActionLabel = enemyAttack.usesPower
+      ? `${enemyName} lance ${enemyStats.powerName} (${getPowerTypeLabel(enemyStats.powerType)})`
+      : `${enemyName} riposte`;
+    const criticalText = enemyAttack.critical ? ` Critique x${enemyAttack.criticalMultiplier}.` : '';
+    const heroResistanceText = enemyAttack.resistance ? ` Résistance héros ${enemyAttack.resistance}%: ${enemyAttack.rawDamage} -> ${enemyAttack.damage}.` : '';
+    const manaText = enemyAttack.usesPower ? ` Mana ${enemyAttack.enemyMana}/${enemyStats.maxMana}.` : '';
+    const attackText = enemyAttack.baseDamage || enemyAttack.usesPower
+      ? `${enemyActionLabel}: -${enemyAttack.damage} PV.${criticalText}${heroResistanceText}${manaText}`
+      : `${enemyName} n'inflige aucun dégât.`;
+    const visualEffects = [
+      enemyAttack.usesPower && enemyStats.powerManaCost > 0 ? makeCombatVisualEffect('enemy', 'mana', `-${enemyStats.powerManaCost} Mana`) : null,
+      enemyAttack.critical ? makeCombatVisualEffect('hero', 'critical', `CRITIQUE x${enemyAttack.criticalMultiplier}`) : null,
+    ].filter(Boolean);
+
+    return {
+      enemyRoll,
+      nextEnemyMana: enemyAttack.enemyMana,
+      enemyDamage: enemyAttack.damage,
+      retaliationText: `Dé ennemi ${enemyRoll.die} = ${enemyRoll.raw}. ${attackText}`,
+      visualEffects,
+    };
+  };
+
+  const getHeroCombatRuntime = (entry = {}, options = {}) => {
+    const combatId = entry.id || options.sourceHotspotId || `${playSceneId}-combat`;
+    const stats = getPreviewCombatStats(entry);
+    const enemyName = stats.enemyName;
+    const enemyMaxHealth = stats.enemyMaxHealth;
+    const enemyStats = stats.enemyStats;
+    const currentCombat = (engineRef.current.getState().heroCombatStates || heroCombatStates || {})[combatId] || {};
+    const currentEnemyHealth = currentCombat.defeated
+      ? 0
+      : clampNumber(currentCombat.enemyHealth ?? enemyMaxHealth, 0, enemyMaxHealth);
+    const currentEnemyMana = clampNumber(currentCombat.enemyMana ?? enemyStats.maxMana, 0, enemyStats.maxMana);
+    return { combatId, stats, enemyStats, enemyName, enemyMaxHealth, currentEnemyHealth, enemyMaxMana: enemyStats.maxMana, currentEnemyMana };
+  };
+
+  const resolveEnemyCombatTurn = (entry = {}, options = {}) => {
+    const { combatId, stats, enemyStats, enemyName, enemyMaxHealth, currentEnemyHealth, currentEnemyMana } = getHeroCombatRuntime(entry, options);
+
+    if (currentEnemyHealth <= 0) {
+      const message = `${enemyName} est déjà vaincu.`;
+      setDialogue(message);
+      return {
+        ok: true,
+        ended: true,
+        victory: true,
+        enemyHealth: 0,
+        enemyMaxHealth,
+        enemyMana: currentEnemyMana,
+        enemyMaxMana: enemyStats.maxMana,
+        message,
+      };
+    }
+
+    const enemyAction = buildEnemyCombatAction(stats, currentEnemyMana, enemyName);
+    setLastDiceRoll(enemyAction.enemyRoll);
+    engineRef.current.setState({ lastDiceRoll: enemyAction.enemyRoll });
+    setHeroCombatState(combatId, {
+      enemyHealth: currentEnemyHealth,
+      enemyMaxHealth,
+      enemyMana: enemyAction.nextEnemyMana,
+      enemyMaxMana: enemyStats.maxMana,
+      defeated: false,
+    });
+
+    const nextHero = applyHeroHealthLoss(enemyAction.enemyDamage);
+    const defeat = Number(nextHero.health || 0) <= 0;
+    const defeatText = defeat ? ` ${entry.combatDefeatDialogue || 'Défaite.'}` : '';
+    const message = `${enemyAction.retaliationText}${defeatText}`.trim();
+    const visualEffects = [
+      ...enemyAction.visualEffects,
+      enemyAction.enemyDamage > 0
+        ? makeCombatOutcomeEffect('hero', defeat ? 'death' : 'hit', defeat ? 'KO' : `-${enemyAction.enemyDamage} PV`)
+        : null,
+    ].filter(Boolean);
+
+    if (defeat && entry.combatDefeatTargetSceneId) {
+      const movedScene = goToScene(entry.combatDefeatTargetSceneId, message);
+      return {
+        ok: Boolean(movedScene),
+        ended: true,
+        defeat: true,
+        movedScene: Boolean(movedScene),
+        enemyHealth: currentEnemyHealth,
+        enemyMaxHealth,
+        enemyMana: enemyAction.nextEnemyMana,
+        enemyMaxMana: enemyStats.maxMana,
+        message,
+        roll: enemyAction.enemyRoll,
+        enemyRoll: enemyAction.enemyRoll,
+        visualEffects,
+      };
+    }
+
+    setDialogue(message);
+    return {
+      ok: true,
+      ended: defeat,
+      defeat,
+      enemyHealth: currentEnemyHealth,
+      enemyMaxHealth,
+      enemyMana: enemyAction.nextEnemyMana,
+      enemyMaxMana: enemyStats.maxMana,
+      message,
+      roll: enemyAction.enemyRoll,
+      enemyRoll: enemyAction.enemyRoll,
+      visualEffects,
+    };
+  };
+
+  const resolveHeroCombatTurn = (entry = {}, options = {}) => {
+    const { combatId, stats, enemyStats, enemyName, enemyMaxHealth, currentEnemyHealth, enemyMaxMana, currentEnemyMana } = getHeroCombatRuntime(entry, options);
+
+    if (currentEnemyHealth <= 0) {
+      const message = `${enemyName} est déjà vaincu.`;
+      setDialogue(message);
+      if (options.sourceHotspotId) markHotspotCompleted(options.sourceHotspotId);
+      return {
+        ok: true,
+        ended: true,
+        victory: true,
+        enemyHealth: 0,
+        enemyMaxHealth,
+        enemyMana: currentEnemyMana,
+        enemyMaxMana,
+        message,
+      };
+    }
+
+    const heroPower = getHeroPowerById(options.heroPowerId);
+    const skillId = entry.combatSkillId || heroState.skills?.[0]?.id || '';
+    const heroPowerManaCost = heroPower ? Math.max(0, Number(heroPower.manaCost) || 0) : 0;
+    const currentHero = engineRef.current.getState().heroState || heroState;
+    const heroAttack = resolveHeroCombatAttack({
+      stats,
+      enemyHealth: currentEnemyHealth,
+      heroMana: Number(currentHero.mana) || 0,
+      power: heroPower,
+    });
+    if (!heroAttack.ok) {
+      setDialogue(`Mana insuffisante pour ${heroPower?.name || stats.skillName || 'cette attaque'}.`);
+      return { ok: false };
+    }
+    const roll = {
+      id: Date.now(),
+      die: stats.diceLabel,
+      sides: stats.diceSides,
+      raw: heroAttack.roll.raw,
+      modifier: heroAttack.roll.modifier,
+      total: heroAttack.roll.total,
+      skillId,
+      skillName: stats.skillName,
+      isCriticalSuccess: heroAttack.roll.isCriticalSuccess,
+      isCriticalFailure: heroAttack.roll.isCriticalFailure,
+    };
+    const outcomeRoll = {
+      ...roll,
+      success: heroAttack.roll.success,
+      difficulty: stats.difficulty,
+      actionType: 'hero_combat',
+      heroPowerId: heroPower?.id || '',
+      heroPowerName: heroPower?.name || '',
+      heroForceDamage: stats.heroForce,
+      heroPowerDamage: heroAttack.powerDamage,
+      heroCritical: heroAttack.critical,
+      heroCriticalChance: stats.heroCriticalChance,
+      heroRandomCritical: heroAttack.randomCritical,
+      heroCriticalMultiplier: heroAttack.criticalMultiplier,
+      rawHeroDamage: heroAttack.rawDamage,
+    };
+    const nextHeroAfterMana = { ...currentHero, mana: heroAttack.mana };
+    setHeroState(nextHeroAfterMana);
+    setLastDiceRoll(outcomeRoll);
+    engineRef.current.setState({ heroState: nextHeroAfterMana, lastDiceRoll: outcomeRoll });
+    const hit = heroAttack.roll.success;
+    const difficulty = stats.difficulty;
+    const heroPowerDamage = heroAttack.powerDamage;
+    const baseHeroDamage = heroAttack.baseDamage;
+    const heroCritical = heroAttack.critical;
+    const heroCriticalMultiplier = heroAttack.criticalMultiplier;
+    const rawHeroDamage = heroAttack.rawDamage;
+    const heroAttackType = heroAttack.attackType;
+    const enemyResistance = heroAttack.resistance;
+    const heroDamage = heroAttack.damage;
+    const nextEnemyHealth = heroAttack.enemyHealth;
+    const rollText = `${roll.skillName ? `${roll.skillName}: ` : ''}${roll.die} = ${roll.raw}${roll.modifier ? ` + ${roll.modifier}` : ''} => ${roll.total}`;
+    const heroPowerText = heroPower ? ` ${heroPower.name} (${getPowerTypeLabel(heroAttackType)}, ${heroPowerManaCost} mana, +${heroPowerDamage} force).` : '';
+    const heroCriticalText = heroCritical ? ` Critique x${heroCriticalMultiplier}: ${baseHeroDamage} -> ${rawHeroDamage} dégâts.` : '';
+    const resistanceText = hit && enemyResistance
+      ? ` Résistance ${getPowerTypeLabel(heroAttackType)} ${enemyResistance}%: ${rawHeroDamage} -> ${heroDamage} dégâts.`
+      : '';
+    const heroManaSpent = heroAttack.manaSpent;
+    const heroVisualEffects = [
+      heroManaSpent > 0 ? makeCombatVisualEffect('hero', 'mana', `-${heroManaSpent} Mana`) : null,
+      heroCritical ? makeCombatVisualEffect('enemy', 'critical', `CRITIQUE x${heroCriticalMultiplier}`) : null,
+      hit && heroDamage > 0
+        ? makeCombatOutcomeEffect('enemy', nextEnemyHealth <= 0 ? 'death' : 'hit', nextEnemyHealth <= 0 ? 'KO' : `-${heroDamage} PV`)
+        : null,
+    ].filter(Boolean);
+
+    if (nextEnemyHealth <= 0) {
+      setHeroCombatState(combatId, { enemyHealth: 0, enemyMaxHealth, enemyMana: currentEnemyMana, enemyMaxMana, defeated: true });
+      const reward = resolveCombatVictoryReward(entry, project.items, getItemById);
+      if (reward.itemId) addInventoryItem(reward.itemId);
+      if (options.sourceHotspotId) markHotspotCompleted(options.sourceHotspotId);
+      const victoryMessage = `${rollText}.${heroPowerText} Touche contre ${difficulty}: -${heroDamage} PV à ${enemyName}.${heroCriticalText}${resistanceText} ${entry.combatVictoryDialogue || 'Victoire.'}${reward.message}`.trim();
+      if (entry.combatVictoryTargetSceneId) {
+        const movedScene = goToScene(entry.combatVictoryTargetSceneId, victoryMessage);
+        return {
+          ok: Boolean(movedScene),
+          ended: true,
+          victory: true,
+          movedScene: Boolean(movedScene),
+          enemyHealth: 0,
+          enemyMaxHealth,
+          enemyMana: currentEnemyMana,
+          enemyMaxMana,
+          message: victoryMessage,
+          roll: outcomeRoll,
+          visualEffects: heroVisualEffects,
+        };
+      }
+      setDialogue(victoryMessage);
+      return {
+        ok: true,
+        ended: true,
+        victory: true,
+        enemyHealth: 0,
+        enemyMaxHealth,
+        enemyMana: currentEnemyMana,
+        enemyMaxMana,
+        message: victoryMessage,
+        roll: outcomeRoll,
+        visualEffects: heroVisualEffects,
+      };
+    }
+
+    const attackText = hit
+      ? `${heroPowerText} Touche contre ${difficulty}: -${heroDamage} PV à ${enemyName}.${heroCriticalText}${resistanceText}`
+      : `Raté contre ${difficulty}.`;
+    const healthText = ` ${enemyName}: ${nextEnemyHealth}/${enemyMaxHealth} PV.`;
+    if (options.allowManualEnemyTurn && enemyStats.enemyAutoTurn === false) {
+      setHeroCombatState(combatId, { enemyHealth: nextEnemyHealth, enemyMaxHealth, enemyMana: currentEnemyMana, enemyMaxMana: enemyStats.maxMana, defeated: false });
+      const message = `${rollText}. ${attackText}${healthText} Lance le dé ennemi pour la riposte.`.trim();
+      setDialogue(message);
+      return {
+        ok: true,
+        ended: false,
+        pendingEnemyTurn: true,
+        enemyHealth: nextEnemyHealth,
+        enemyMaxHealth,
+        enemyMana: currentEnemyMana,
+        enemyMaxMana: enemyStats.maxMana,
+        message,
+        roll: outcomeRoll,
+        visualEffects: heroVisualEffects,
+      };
+    }
+
+    const enemyAction = buildEnemyCombatAction(stats, currentEnemyMana, enemyName);
+    setLastDiceRoll(enemyAction.enemyRoll);
+    engineRef.current.setState({ lastDiceRoll: enemyAction.enemyRoll });
+    setHeroCombatState(combatId, { enemyHealth: nextEnemyHealth, enemyMaxHealth, enemyMana: enemyAction.nextEnemyMana, enemyMaxMana: enemyStats.maxMana, defeated: false });
+    const nextHero = applyHeroHealthLoss(enemyAction.enemyDamage);
+    const defeat = Number(nextHero.health || 0) <= 0;
+    const defeatText = defeat ? ` ${entry.combatDefeatDialogue || 'Défaite.'}` : '';
+    const message = `${rollText}. ${attackText}${healthText} ${enemyAction.retaliationText}${defeatText}`.trim();
+    const enemyRetaliationVisualEffects = [
+      ...enemyAction.visualEffects,
+      enemyAction.enemyDamage > 0
+        ? makeCombatOutcomeEffect('hero', defeat ? 'death' : 'hit', defeat ? 'KO' : `-${enemyAction.enemyDamage} PV`)
+        : null,
+    ].filter(Boolean);
+
+    if (defeat && entry.combatDefeatTargetSceneId) {
+      const movedScene = goToScene(entry.combatDefeatTargetSceneId, message);
+      return {
+        ok: Boolean(movedScene),
+        ended: true,
+        defeat: true,
+        movedScene: Boolean(movedScene),
+        enemyHealth: nextEnemyHealth,
+        enemyMaxHealth,
+        enemyMana: enemyAction.nextEnemyMana,
+        enemyMaxMana: enemyStats.maxMana,
+        message,
+        roll: outcomeRoll,
+        enemyRoll: enemyAction.enemyRoll,
+        visualEffects: [...heroVisualEffects, ...enemyRetaliationVisualEffects],
+      };
+    }
+    setDialogue(message);
+    return {
+      ok: true,
+      ended: defeat,
+      defeat,
+      enemyHealth: nextEnemyHealth,
+      enemyMaxHealth,
+      enemyMana: enemyAction.nextEnemyMana,
+      enemyMaxMana: enemyStats.maxMana,
+      message,
+      roll: outcomeRoll,
+      enemyRoll: enemyAction.enemyRoll,
+      visualEffects: [...heroVisualEffects, ...enemyRetaliationVisualEffects],
+    };
+  };
+
   const runHeroCombatAction = (entry = {}, options = {}) => {
-    if (blockDefeatedHeroAction()) return false;
+    if (!options.previewOnly && blockDefeatedHeroAction()) return false;
     if (!heroAdventure.enabled) {
       setDialogue('Active le mode Hero Adventure pour utiliser un combat.');
       return false;
     }
     captureLastChoiceSnapshot(entry.name || entry.combatEnemyName || 'Avant combat');
 
-    const combatId = entry.id || options.sourceHotspotId || `${playSceneId}-combat`;
-    const enemyName = entry.combatEnemyName || entry.name || 'Ennemi';
-    const enemyMaxHealth = Math.max(1, Number(entry.combatEnemyMaxHealth) || 8);
-    const currentCombat = (engineRef.current.getState().heroCombatStates || heroCombatStates || {})[combatId] || {};
-    const currentEnemyHealth = currentCombat.defeated
-      ? 0
-      : clampNumber(currentCombat.enemyHealth ?? enemyMaxHealth, 0, enemyMaxHealth);
-
-    if (currentEnemyHealth <= 0) {
-      const message = `${enemyName} est déjà vaincu.`;
-      setDialogue(message);
-      if (options.sourceHotspotId) markHotspotCompleted(options.sourceHotspotId);
+    const runtime = getHeroCombatRuntime(entry, options);
+    const enemyStats = getCombatEnemyStats(entry);
+    const turnMode = (entry.combatTurnMode ?? heroAdventure.combat?.turnMode ?? true) !== false;
+    if (turnMode && !options.resolveTurn) {
+      if (runtime.currentEnemyHealth <= 0) {
+        setDialogue(`${runtime.enemyName} est déjà vaincu.`);
+        if (options.sourceHotspotId) markHotspotCompleted(options.sourceHotspotId);
+        return true;
+      }
+      if (options.closeConversation) closeConversation();
+      setActiveHeroCombat({
+        id: runtime.combatId,
+        entry: { ...entry },
+        options: {
+          sourceHotspotId: options.sourceHotspotId || '',
+        },
+        enemyName: runtime.enemyName,
+        enemyHealth: runtime.currentEnemyHealth,
+        enemyMaxHealth: runtime.enemyMaxHealth,
+        enemyMana: runtime.currentEnemyMana,
+        enemyMaxMana: runtime.enemyMaxMana,
+        round: 1,
+        phase: 'hero',
+        pendingEnemyTurn: false,
+        status: 'active',
+        message: enemyStats.enemyAutoTurn === false
+          ? `Combat contre ${runtime.enemyName}. À toi de jouer, puis lance le dé ennemi.`
+          : `Combat contre ${runtime.enemyName}. À toi de jouer.`,
+        lastRoll: null,
+        lastEnemyRoll: null,
+        visualEffects: [],
+      });
+      setDialogue(`Combat contre ${runtime.enemyName}.`);
       return true;
     }
 
-    const skillId = entry.combatSkillId || heroState.skills?.[0]?.id || '';
-    const difficulty = Math.max(1, Number(entry.combatAttackDifficulty) || 10);
-    const roll = rollHeroDie(skillId, {
-      silent: true,
-      manaCost: Math.max(0, Number(entry.combatManaCost) || 0),
+    const result = resolveHeroCombatTurn(entry, options);
+    return Boolean(result?.ok);
+  };
+
+  const attackActiveHeroCombat = (heroPowerId = '') => {
+    if (!activeHeroCombat || activeHeroCombat.status !== 'active') return false;
+    if (activeHeroCombat.phase === 'enemy') {
+      setDialogue('Lance le dé ennemi avant la prochaine attaque.');
+      return false;
+    }
+    const result = resolveHeroCombatTurn(activeHeroCombat.entry, {
+      ...(activeHeroCombat.options || {}),
+      resolveTurn: true,
+      allowManualEnemyTurn: true,
+      heroPowerId,
     });
-    if (!roll) return false;
+    if (!result?.ok) return false;
+    const hasMediaEffect = (result.visualEffects || []).some((effect) => effect.media);
+    if (result.movedScene && !hasMediaEffect) {
+      setActiveHeroCombat(null);
+      return true;
+    }
+    setActiveHeroCombat((current) => {
+      if (!current || current.id !== activeHeroCombat.id) return current;
+      return {
+        ...current,
+        enemyHealth: result.enemyHealth,
+        enemyMaxHealth: result.enemyMaxHealth,
+        enemyMana: result.enemyMana,
+        enemyMaxMana: result.enemyMaxMana,
+        round: result.pendingEnemyTurn ? current.round : current.round + 1,
+        phase: result.pendingEnemyTurn ? 'enemy' : 'hero',
+        pendingEnemyTurn: Boolean(result.pendingEnemyTurn),
+        status: result.victory ? 'victory' : result.defeat ? 'defeat' : 'active',
+        message: result.message,
+        lastRoll: result.roll || current.lastRoll,
+        lastEnemyRoll: result.pendingEnemyTurn || result.victory ? null : result.enemyRoll || current.lastEnemyRoll,
+        visualEffects: result.visualEffects || [],
+      };
+    });
+    return true;
+  };
 
-    const hit = roll.total >= difficulty;
-    const outcomeRoll = { ...roll, success: hit, difficulty, actionType: 'hero_combat' };
-    setLastDiceRoll(outcomeRoll);
-    engineRef.current.setState({ lastDiceRoll: outcomeRoll });
-    const heroDamage = hit ? Math.max(1, Number(entry.combatDamage) || 3) : 0;
-    const nextEnemyHealth = clampNumber(currentEnemyHealth - heroDamage, 0, enemyMaxHealth);
-    const rollText = `${roll.skillName ? `${roll.skillName}: ` : ''}${roll.die} = ${roll.raw}${roll.modifier ? ` + ${roll.modifier}` : ''} => ${roll.total}`;
+  const rollActiveEnemyCombat = () => {
+    if (!activeHeroCombat || activeHeroCombat.status !== 'active') return false;
+    if (activeHeroCombat.phase !== 'enemy') {
+      setDialogue("C'est au héros de jouer.");
+      return false;
+    }
 
-    if (nextEnemyHealth <= 0) {
-      setHeroCombatState(combatId, { enemyHealth: 0, enemyMaxHealth, defeated: true });
-      if (entry.combatRewardItemId) addInventoryItem(entry.combatRewardItemId);
-      if (options.sourceHotspotId) markHotspotCompleted(options.sourceHotspotId);
-      const reward = entry.combatRewardItemId
-        ? ` R?compense : ${(getItemById?.(entry.combatRewardItemId) || project.items.find((item) => item.id === entry.combatRewardItemId))?.name || 'objet obtenu'}.`
-        : '';
-      const victoryMessage = `${rollText}. Touche contre ${difficulty}: -${heroDamage} PV a ${enemyName}. ${entry.combatVictoryDialogue || 'Victoire.'}${reward}`.trim();
-      if (entry.combatVictoryTargetSceneId) return goToScene(entry.combatVictoryTargetSceneId, victoryMessage);
-      setDialogue(victoryMessage);
+    const result = resolveEnemyCombatTurn(activeHeroCombat.entry, activeHeroCombat.options || {});
+    if (!result?.ok) return false;
+    const hasMediaEffect = (result.visualEffects || []).some((effect) => effect.media);
+    if (result.movedScene && !hasMediaEffect) {
+      setActiveHeroCombat(null);
       return true;
     }
 
-    setHeroCombatState(combatId, { enemyHealth: nextEnemyHealth, enemyMaxHealth, defeated: false });
-    const enemyDamage = Math.max(0, Number(entry.combatEnemyDamage) || 0);
-    const nextHero = applyHeroHealthLoss(enemyDamage);
-    const attackText = hit
-      ? `Touche contre ${difficulty}: -${heroDamage} PV a ${enemyName}.`
-      : `Rate contre ${difficulty}.`;
-    const retaliationText = enemyDamage
-      ? ` ${enemyName} riposte: -${enemyDamage} PV.`
-      : '';
-    const healthText = ` ${enemyName}: ${nextEnemyHealth}/${enemyMaxHealth} PV.`;
-    const defeat = Number(nextHero.health || 0) <= 0;
-    const defeatText = defeat ? ` ${entry.combatDefeatDialogue || 'Défaite.'}` : '';
-    const message = `${rollText}. ${attackText}${healthText}${retaliationText}${defeatText}`.trim();
-
-    if (defeat && entry.combatDefeatTargetSceneId) return goToScene(entry.combatDefeatTargetSceneId, message);
-    setDialogue(message);
+    setActiveHeroCombat((current) => {
+      if (!current || current.id !== activeHeroCombat.id) return current;
+      return {
+        ...current,
+        enemyHealth: result.enemyHealth,
+        enemyMaxHealth: result.enemyMaxHealth,
+        enemyMana: result.enemyMana,
+        enemyMaxMana: result.enemyMaxMana,
+        round: current.round + 1,
+        phase: 'hero',
+        pendingEnemyTurn: false,
+        status: result.defeat ? 'defeat' : 'active',
+        message: result.message,
+        lastEnemyRoll: result.enemyRoll || current.lastEnemyRoll,
+        visualEffects: result.visualEffects || [],
+      };
+    });
     return true;
   };
 
@@ -1393,7 +1964,7 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     const nextChoiceNotices = [
       combinedMessage ? { type: 'message', title: 'Message affiché', detail: combinedMessage } : null,
       reply.responseImageData ? { type: 'media', title: 'Image affichée', detail: reply.responseImageName || reply.label || 'Image de réponse' } : null,
-      reply.responseSoundData ? { type: 'media', title: 'Son joue', detail: 'Effet sonore' } : null,
+      reply.responseSoundData ? { type: 'media', title: 'Son joué', detail: 'Effet sonore' } : null,
       reply.ambienceSoundData ? { type: 'media', title: 'Ambiance lancée', detail: 'Son d’ambiance' } : null,
       legacyVariableNotice,
       ...effectResult.notices,
@@ -1418,6 +1989,14 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     if (actionType === 'skill_check') {
       setChoiceEffectNotices(nextChoiceNotices);
       return runSkillCheckAction(reply, {
+        closeConversation: true,
+        conversation: activeConversation.conversation,
+        sourceHotspotId: activeConversation.sourceHotspotId,
+      });
+    }
+    if (actionType === 'hero_combat') {
+      setChoiceEffectNotices(nextChoiceNotices);
+      return runHeroCombatAction(reply, {
         closeConversation: true,
         conversation: activeConversation.conversation,
         sourceHotspotId: activeConversation.sourceHotspotId,
@@ -1702,6 +2281,7 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     setHeroSetupComplete(!nextHeroAdventure.enabled);
     setLastDiceRoll(null);
     setHeroCombatStates({});
+    setActiveHeroCombat(null);
     setEquippedHeroItemIds([]);
     setEquippedHeroSlotMap({});
     setLastChoiceSnapshot(null);
@@ -1843,6 +2423,7 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
       setHeroSetupComplete(Boolean(payload.heroSetupComplete || !heroAdventure.enabled));
       setLastDiceRoll(payload.lastDiceRoll && typeof payload.lastDiceRoll === 'object' ? payload.lastDiceRoll : null);
       setHeroCombatStates(payload.heroCombatStates && typeof payload.heroCombatStates === 'object' ? payload.heroCombatStates : {});
+      setActiveHeroCombat(null);
       setEquippedHeroItemIds(Array.isArray(payload.equippedHeroItemIds) ? payload.equippedHeroItemIds : []);
       setEquippedHeroSlotMap(payload.equippedHeroSlotMap && typeof payload.equippedHeroSlotMap === 'object' ? payload.equippedHeroSlotMap : {});
       setLastChoiceSnapshot(null);
@@ -1859,6 +2440,38 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
 
   const syncWithProject = (nextProject) => {
     initializeFromProject(nextProject);
+  };
+
+  const previewHeroCombat = (entry = {}, options = {}) => {
+    if (!entry) return false;
+    const sourceScene = project.scenes.find((scene) => scene.id === options.sceneId) || playScene || project.scenes[0] || null;
+    const nextHeroAdventure = normalizeHeroAdventure(project);
+
+    initializeFromProject(project);
+    engineRef.current.setState({
+      currentSceneId: sourceScene?.id || '',
+      dialogue: sourceScene?.introText || '',
+      heroState: nextHeroAdventure.hero,
+      heroSetupComplete: true,
+      heroCombatStates: {},
+      viewerImage: null,
+      playingCinematic: null,
+      activeEnigma: null,
+    });
+    setPlaySceneId(sourceScene?.id || '');
+    setDialogue(sourceScene?.introText || '');
+    setHeroState(nextHeroAdventure.hero);
+    setHeroSetupComplete(true);
+    setHeroCombatStates({});
+    setViewerImage(null);
+    setPlayingCinematic(null);
+    setActiveEnigma(null);
+    setActiveHeroCombat(null);
+
+    return runHeroCombatAction(entry, {
+      sceneId: sourceScene?.id || '',
+      previewOnly: true,
+    });
   };
 
   const removeInventoryItemReferences = (itemId) => {
@@ -1912,6 +2525,8 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
       : Math.floor(Math.random() * sides) + 1;
     const modifier = Number(skill?.value) || 0;
     const total = raw + modifier;
+    const criticalSuccess = clampNumber(heroAdventure.rules?.criticalSuccess, sides, 1, sides);
+    const criticalFailure = clampNumber(heroAdventure.rules?.criticalFailure, 1, 1, sides);
     const roll = {
       id: Date.now(),
       die: heroAdventure.dice.label,
@@ -1921,6 +2536,8 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
       total,
       skillId: skill?.id || '',
       skillName: skill?.name || '',
+      isCriticalSuccess: raw === criticalSuccess,
+      isCriticalFailure: raw === criticalFailure,
     };
     const nextHeroState = manaCost
       ? { ...heroState, mana: Math.max(0, Number(heroState.mana || 0) - manaCost) }
@@ -1978,6 +2595,7 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     heroAdventure,
     heroState,
     heroSetupComplete,
+    activeHeroCombat,
     equippedHeroItemIds,
     equippedHeroSlotMap,
     lastChoiceSnapshot,
@@ -1985,6 +2603,9 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     adjustHeroStat,
     lastDiceRoll,
     rollHeroDie,
+    attackActiveHeroCombat,
+    rollActiveEnemyCombat,
+    closeHeroCombat: () => setActiveHeroCombat(null),
     rollHeroSetupSkills,
     completeHeroSetup,
     sceneTimerResetKey,
@@ -2052,6 +2673,7 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     launchCinematic,
     applySceneTimerEnd,
     triggerHotspot,
+    previewHeroCombat,
     resetPreview,
     saveGameState,
     loadGameState,

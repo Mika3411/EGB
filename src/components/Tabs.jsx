@@ -17,11 +17,12 @@ import {
   Puzzle,
   ShoppingBag,
   Shield,
+  Swords,
   User,
   Workflow,
 } from 'lucide-react';
 
-const primaryTabKeys = ['scenes', 'media', 'plan', 'adventure', 'hero', 'preview'];
+const primaryTabKeys = ['scenes', 'media', 'plan', 'adventure', 'hero', 'combat', 'preview'];
 const creationTabKeys = ['objects', 'cinematics', 'enigmas', 'combinations', 'logic', 'animation'];
 const assistantTabKeys = ['ai'];
 const mainTabKeys = [...primaryTabKeys, ...creationTabKeys, ...assistantTabKeys];
@@ -32,7 +33,7 @@ const beginnerUtilityTabs = new Set(['shop', 'help']);
 const intermediateTabs = new Set(['scenes', 'media', 'map', 'objects', 'cinematics', 'enigmas', 'ai', 'preview']);
 const intermediateUtilityTabs = new Set(['shop', 'help']);
 const adventureTabs = new Set(['scenes', 'media', 'map', 'adventure', 'objects', 'cinematics', 'enigmas', 'logic', 'preview', 'animation']);
-const heroAdventureTabs = new Set(['scenes', 'media', 'map', 'adventure', 'hero', 'objects', 'cinematics', 'enigmas', 'logic', 'preview', 'animation', 'ai']);
+const heroAdventureTabs = new Set(['scenes', 'media', 'map', 'adventure', 'hero', 'combat', 'objects', 'cinematics', 'enigmas', 'logic', 'preview', 'animation', 'ai']);
 const adventureUtilityTabs = new Set(['shop', 'help', 'score']);
 
 const getTabEntries = (tabKeys) => tabKeys.map((tabKey) => [getTabValue(tabKey), TABS[tabKey]]);
@@ -48,6 +49,7 @@ const tabIcons = {
   enigmas: Puzzle,
   logic: Workflow,
   hero: Shield,
+  combat: Swords,
   ai: Bot,
   preview: Play,
   animation: Brush,

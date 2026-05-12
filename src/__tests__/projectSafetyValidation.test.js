@@ -57,7 +57,7 @@ describe('project safety validation', () => {
     const result = validateProjectSafety(project, { mode: 'ai' });
 
     expect(result.ok).toBe(false);
-    expect(result.errors.some((error) => error.includes('champ media non vide'))).toBe(true);
+    expect(result.errors.some((error) => error.includes('champ média non vide'))).toBe(true);
   });
 
   it('blocks active content through the project validator', () => {

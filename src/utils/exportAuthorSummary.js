@@ -63,7 +63,7 @@ const getNodeLabel = (conversation, nodeId) => {
 const conditionToText = (project, condition = {}, conversation = null) => {
   const operators = { equals: '=', not_equals: '!=', greater_or_equal: '>=', less_or_equal: '<=', truthy: 'est vrai/rempli', falsy: 'est faux/vide' };
   if (condition.type === 'has_item') return `objet possède: ${getItemLabel(project, condition.itemId)}`;
-  if (condition.type === 'visited_scene') return `scène visitee: ${getSceneLabel(project, condition.sceneId)}`;
+  if (condition.type === 'visited_scene') return `scène visitée: ${getSceneLabel(project, condition.sceneId)}`;
   if (condition.type === 'completed_hotspot') return `zone utilisée: ${getHotspotLabel(project, condition.hotspotId)}`;
   if (condition.type === 'solved_enigma') return `énigme résolue: ${getEnigmaLabel(project, condition.enigmaId)}`;
   if (condition.type === 'chose_reply') return `choix précédent: ${getReplyLabel(conversation, condition.replyId)}`;
@@ -128,7 +128,7 @@ const getVariableEffectText = (reply = {}) => {
 const getConversationEffectText = (project, effect = {}, conversation = null) => {
   const type = effect.type || 'message';
   if (type === 'message') return `message: ${line(effect.message) || 'vide'}`;
-  if (type === 'add_item') return `objet ajoute: ${getItemLabel(project, effect.itemId)}`;
+  if (type === 'add_item') return `objet ajouté: ${getItemLabel(project, effect.itemId)}`;
   if (type === 'remove_item') return `objet retire: ${getItemLabel(project, effect.itemId)}`;
   if (type === 'set_variable') return `variable: ${effect.variableKey || 'non choisie'} = ${effect.value ?? ''}`;
   if (type === 'increment_variable') return `variable: ${effect.variableKey || 'non choisie'} +${effect.value || 1}`;

@@ -554,6 +554,417 @@
     transform: translate(-50%, -8px) scale(.98);
   }
 }
+.hero-combat-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 58;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: 12px;
+  padding: 18px;
+  color: #f8fbff;
+  background: linear-gradient(180deg, rgba(6, 10, 18, .78), rgba(6, 10, 18, .94));
+  background-position: center;
+  background-size: cover;
+  backdrop-filter: blur(3px);
+}
+.hero-combat-topline {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid rgba(251, 191, 36, .26);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, .66);
+}
+.hero-combat-topline span {
+  color: #fde68a;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.hero-combat-topline strong {
+  min-width: 0;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hero-combat-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 16px;
+  align-items: end;
+  min-height: 0;
+}
+.hero-combat-actor {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.hero-combat-actor-bars {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  gap: 4px;
+  width: min(220px, 100%);
+  min-width: min(170px, 100%);
+}
+.hero-combat-actor-bar {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  min-height: 22px;
+  overflow: hidden;
+  padding: 3px 7px;
+  border: 1px solid rgba(148, 163, 184, .24);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, .72);
+  color: #f8fafc;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, .25);
+}
+.hero-combat-actor-bar span,
+.hero-combat-actor-bar strong {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.hero-combat-actor-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: linear-gradient(90deg, rgba(34, 197, 94, .78), rgba(132, 204, 22, .66));
+}
+.hero-combat-actor--enemy .hero-combat-actor-bar--health i {
+  background: linear-gradient(90deg, rgba(239, 68, 68, .82), rgba(251, 113, 133, .64));
+}
+.hero-combat-actor-bar--mana i {
+  background: linear-gradient(90deg, rgba(34, 211, 238, .76), rgba(129, 140, 248, .7));
+}
+.hero-combat-actor-media {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(220px, 100%);
+  height: min(330px, 48vh);
+  min-height: 150px;
+  overflow: visible;
+}
+.hero-combat-actor-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 20px 24px rgba(0, 0, 0, .52));
+}
+.hero-combat-actor-media .anime2d-embedded {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.hero-combat-actor.is-empty .hero-combat-actor-media {
+  border: 1px solid rgba(147, 197, 253, .2);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, .62);
+}
+.hero-combat-actor-media>span {
+  color: #dbeafe;
+  font-size: 54px;
+  font-weight: 950;
+}
+.hero-combat-actor-fx {
+  position: absolute;
+  top: 44%;
+  left: 50%;
+  z-index: 5;
+  display: grid;
+  gap: 5px;
+  justify-items: center;
+  width: min(230px, 100%);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+.hero-combat-fx {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  min-width: max-content;
+  padding: 5px 9px;
+  border: 1px solid rgba(248, 250, 252, .2);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, .82);
+  color: #f8fafc;
+  font-size: 18px;
+  font-weight: 950;
+  line-height: 1;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, .55);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, .3);
+  animation: heroCombatFloat 1.35s ease-out both;
+  animation-delay: var(--fx-delay, 0ms);
+}
+.hero-combat-fx--has-media {
+  min-width: 150px;
+  padding: 7px;
+  border-radius: 12px;
+  animation-duration: 2.2s;
+}
+.hero-combat-fx--damage {
+  border-color: rgba(248, 113, 113, .42);
+  background: rgba(127, 29, 29, .78);
+  color: #fecaca;
+}
+.hero-combat-fx--death {
+  border-color: rgba(248, 113, 113, .68);
+  background: rgba(69, 10, 10, .88);
+  color: #fee2e2;
+  font-size: 22px;
+  box-shadow: 0 0 0 1px rgba(248, 113, 113, .18), 0 0 34px rgba(248, 113, 113, .22);
+}
+.hero-combat-fx--mana {
+  border-color: rgba(96, 165, 250, .42);
+  background: rgba(30, 64, 175, .74);
+  color: #dbeafe;
+}
+.hero-combat-fx--critical {
+  border-color: rgba(251, 191, 36, .7);
+  background: rgba(120, 53, 15, .86);
+  color: #fde68a;
+  font-size: 21px;
+  letter-spacing: .06em;
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, .2), 0 0 30px rgba(251, 191, 36, .28);
+  animation-name: heroCombatCriticalFloat;
+}
+.hero-combat-fx-media {
+  display: grid;
+  place-items: center;
+  width: min(190px, 42vw);
+  height: min(132px, 24vh);
+  overflow: hidden;
+  border-radius: 10px;
+  background: rgba(2, 6, 23, .72);
+}
+.hero-combat-fx-media img,
+.hero-combat-fx-media video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.hero-combat-fx-media .anime2d-embedded {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.hero-combat-fx-text {
+  display: block;
+}
+@keyframes heroCombatFloat {
+  0% { opacity: 0; transform: translateY(12px) scale(.92); }
+  16% { opacity: 1; transform: translateY(0) scale(1); }
+  72% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(calc(-46px - var(--fx-offset, 0px))) scale(1.06); }
+}
+@keyframes heroCombatCriticalFloat {
+  0% { opacity: 0; transform: translateY(14px) scale(.72); }
+  18% { opacity: 1; transform: translateY(0) scale(1.16); }
+  36% { transform: translateY(-4px) scale(1); }
+  76% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(calc(-54px - var(--fx-offset, 0px))) scale(1.08); }
+}
+.hero-combat-actor strong {
+  max-width: 100%;
+  overflow: hidden;
+  color: #fff;
+  text-overflow: ellipsis;
+  text-shadow: 0 3px 12px rgba(0, 0, 0, .75);
+  white-space: nowrap;
+}
+.hero-combat-dice-spotlight {
+  align-self: center;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  min-width: 118px;
+  padding: 13px;
+  border: 1px solid rgba(251, 191, 36, .35);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, .68);
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, .08), 0 0 38px rgba(251, 191, 36, .18);
+}
+.hero-combat-die-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.hero-combat-die-button:not(:disabled) {
+  cursor: pointer;
+}
+.hero-combat-die-button:not(:disabled):hover .hero-combat-die,
+.hero-combat-die-button:not(:disabled):focus-visible .hero-combat-die {
+  outline: 3px solid rgba(251, 191, 36, .82);
+  outline-offset: 4px;
+  transform: translateY(-2px);
+}
+.hero-combat-die {
+  --die-size: 88px;
+  display: grid;
+  place-items: center;
+  transition: transform .16s ease;
+}
+.hero-combat-dice-spotlight strong {
+  color: #fde68a;
+  font-size: 13px;
+}
+.hero-combat-dice-spotlight small {
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 800;
+}
+.hero-combat-hud {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 10px;
+  }
+.hero-combat-meter {
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 48px;
+  padding: 8px 10px;
+  border: 1px solid rgba(96, 165, 250, .24);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, .72);
+}
+.hero-combat-meter--enemy {
+    border-color: rgba(248, 113, 113, .28);
+  }
+.hero-combat-meter--mana {
+    border-color: rgba(129, 140, 248, .3);
+  }
+.hero-combat-meter--hero-mana {
+    border-color: rgba(45, 212, 191, .3);
+  }
+.hero-combat-meter span,
+.hero-combat-meter strong {
+  position: relative;
+  z-index: 1;
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hero-combat-meter span {
+  color: #cbd5e1;
+  font-size: 12px;
+}
+.hero-combat-meter strong {
+  margin-top: 2px;
+}
+.hero-combat-meter i {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 5px;
+  background: #60a5fa;
+}
+.hero-combat-meter--enemy i {
+    background: #ef4444;
+  }
+.hero-combat-meter--mana i {
+    background: #818cf8;
+  }
+.hero-combat-meter--hero-mana i {
+    background: #2dd4bf;
+  }
+.hero-combat-log {
+  display: grid;
+  gap: 10px;
+  padding: 11px;
+  border: 1px solid rgba(148, 163, 184, .2);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, .72);
+}
+.hero-combat-log p {
+  margin: 0;
+  color: #e5edf9;
+  line-height: 1.45;
+}
+.hero-combat-log .inline-actions {
+  justify-content: center;
+}
+.hero-combat-action-choice {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+.hero-combat-action-choice-button {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  min-height: 58px;
+  padding: 9px 10px;
+  border: 1px solid rgba(148, 163, 184, .28);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, .78);
+  color: #dbeafe;
+  text-align: left;
+  box-shadow: none;
+}
+.hero-combat-action-choice-button.active {
+  border-color: rgba(251, 191, 36, .7);
+  background: rgba(120, 53, 15, .52);
+  color: #fff7ed;
+}
+.hero-combat-action-choice-button:disabled {
+  cursor: not-allowed;
+  opacity: .52;
+}
+.hero-combat-action-choice-button strong,
+.hero-combat-action-choice-button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hero-combat-action-choice-button strong {
+  font-size: 13px;
+}
+.hero-combat-action-choice-button span {
+  color: #bfdbfe;
+  font-size: 11px;
+  font-weight: 850;
+}
+.hero-combat-action-choice-button.active span {
+  color: #fde68a;
+}
+.hero-combat-overlay--victory .hero-combat-topline {
+  border-color: rgba(74, 222, 128, .42);
+}
+.hero-combat-overlay--defeat .hero-combat-topline {
+  border-color: rgba(248, 113, 113, .46);
+}
+.hero-combat-overlay--enemy-turn .hero-combat-topline,
+.hero-combat-overlay--enemy-turn .hero-combat-dice-spotlight {
+  border-color: rgba(248, 113, 113, .44);
+}
+.hero-combat-overlay--enemy-turn .hero-combat-dice-spotlight {
+  box-shadow: 0 0 0 1px rgba(248, 113, 113, .08), 0 0 38px rgba(248, 113, 113, .18);
+}
 .hero-setup-overlay {
   position: absolute;
   inset: 0;
@@ -1027,6 +1438,12 @@
   .conversation-player-replies-3 {
     grid-template-columns: 1fr;
   }
+.hero-combat-action-choice {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
   .choice-effect-floating {
     top: 66px;
     left: 10px;
@@ -1041,6 +1458,33 @@
   }
 }
 @media (max-width: 720px) {
+  .hero-combat-overlay {
+    padding: 12px;
+    gap: 9px;
+  }
+  .hero-combat-topline,
+  .hero-combat-hud {
+    grid-template-columns: 1fr;
+  }
+  .hero-combat-topline strong {
+    text-align: left;
+  }
+  .hero-combat-stage {
+    grid-template-columns: 1fr;
+    align-items: center;
+    gap: 10px;
+  }
+  .hero-combat-dice-spotlight {
+    order: 2;
+    justify-self: center;
+    padding: 10px;
+  }
+  .hero-combat-die {
+    --die-size: 72px;
+  }
+  .hero-combat-actor-media {
+    height: min(170px, 24vh);
+  }
   .hero-setup-overlay {
     padding: 14px;
   }

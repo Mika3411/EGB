@@ -45,7 +45,7 @@ export default function ProfileSettingsPanel({
   const saveProfile = async (event) => {
     event.preventDefault();
     await onUpdateAuthorProfile?.(profileDraft);
-    setProfileNotice('Informations du profil mises a jour.');
+      setProfileNotice('Informations du profil mises à jour.');
   };
 
   const savePassword = async (event) => {
@@ -69,9 +69,9 @@ export default function ProfileSettingsPanel({
         password: passwordDraft.password,
       });
       setPasswordDraft({ currentPassword: '', password: '', confirmPassword: '' });
-      setPasswordNotice('Mot de passe mis a jour.');
+      setPasswordNotice('Mot de passe mis à jour.');
     } catch (error) {
-      setPasswordError(error?.message || 'Mise a jour du mot de passe impossible.');
+      setPasswordError(error?.message || 'Mise à jour du mot de passe impossible.');
     }
   };
 
@@ -107,7 +107,7 @@ export default function ProfileSettingsPanel({
             maxLength={600}
             placeholder="Présente ton style, tes thèmes, ton rythme de création..."
           />
-          <label>Site ou reseau</label>
+          <label>Site ou réseau</label>
           <input
             value={profileDraft.website}
             onChange={(event) => updateProfileField('website', event.target.value)}

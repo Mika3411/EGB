@@ -256,7 +256,7 @@ export default function ShopTab({ user }) {
         <div className="combo-card shop-afterbuy-card">
           <h3>Après paiement</h3>
           <p>
-            Les credits sont ajoutes au compte associe à ton identifiant d'achat. Si le credit n'apparait pas tout de suite, envoie ton identifiant et le recu Gumroad{supportEmail ? ` a ${supportEmail}` : ' au support'}.
+            Les crédits sont ajoutés au compte associé à ton identifiant d'achat. Si le crédit n'apparaît pas tout de suite, envoie ton identifiant et le reçu Gumroad{supportEmail ? ` à ${supportEmail}` : ' au support'}.
           </p>
         </div>
 

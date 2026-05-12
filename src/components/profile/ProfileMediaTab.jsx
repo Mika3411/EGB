@@ -962,7 +962,7 @@ export default function ProfileMediaTab({
               className="secondary-action profile-media-load-more"
               onClick={() => setVisibleMediaLimit((limit) => limit + VISIBLE_MEDIA_INCREMENT)}
             >
-              Afficher {Math.min(VISIBLE_MEDIA_INCREMENT, hiddenMediaCount)} mÃ©dia{hiddenMediaCount > 1 ? 's' : ''} de plus
+              Afficher {Math.min(VISIBLE_MEDIA_INCREMENT, hiddenMediaCount)} média{hiddenMediaCount > 1 ? 's' : ''} de plus
             </button>
           ) : null}
           </div>

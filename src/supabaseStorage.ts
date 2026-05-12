@@ -131,7 +131,7 @@ const SUPABASE_BROWSER_KEY = SUPABASE_PUBLISHABLE_KEY || SUPABASE_ANON_KEY;
 export const STORAGE_BUCKET = import.meta.env.VITE_SUPABASE_STORAGE_BUCKET || '';
 export const PUBLIC_ASSETS_BUCKET = import.meta.env.VITE_SUPABASE_PUBLIC_ASSETS_BUCKET || STORAGE_BUCKET;
 export const PRIVATE_DATA_BUCKET = import.meta.env.VITE_SUPABASE_PRIVATE_DATA_BUCKET || STORAGE_BUCKET;
-export const LEGACY_STORAGE_BUCKET_DEPRECATION_MESSAGE = 'VITE_SUPABASE_STORAGE_BUCKET est deprecated : configure VITE_SUPABASE_PUBLIC_ASSETS_BUCKET et VITE_SUPABASE_PRIVATE_DATA_BUCKET.';
+export const LEGACY_STORAGE_BUCKET_DEPRECATION_MESSAGE = 'VITE_SUPABASE_STORAGE_BUCKET est dépréciée : configure VITE_SUPABASE_PUBLIC_ASSETS_BUCKET et VITE_SUPABASE_PRIVATE_DATA_BUCKET.';
 
 let supabaseClient: SupabaseClientInstance | null = null;
 let storageDebugEnabled = /^(1|true|yes|debug)$/i.test(String(import.meta.env.VITE_SUPABASE_STORAGE_DEBUG || ''));
@@ -233,7 +233,7 @@ const getStorageErrorDetails = ({ action = 'operation', bucket = STORAGE_BUCKET,
   if (getCauseName(cause) === 'StorageTimeoutError' || /timeout|timed out|delai/i.test(causeText)) {
     return {
       code: 'timeout',
-      message: `Delai depasse pendant ${action}${target}. Reessaie dans un instant.`,
+      message: `Délai dépassé pendant ${action}${target}. Réessaie dans un instant.`,
     };
   }
 
@@ -247,28 +247,28 @@ const getStorageErrorDetails = ({ action = 'operation', bucket = STORAGE_BUCKET,
   if (/bucket.*not found|bucket not found|no such bucket/i.test(causeText)) {
     return {
       code: 'bucket-not-found',
-      message: `Bucket Supabase introuvable pour ${action}${target}. Verifie le bucket "${bucket}".`,
+      message: `Bucket Supabase introuvable pour ${action}${target}. Vérifie le bucket "${bucket}".`,
     };
   }
 
   if (status === 401 || status === 403 || /permission|forbidden|not authorized|unauthorized|row-level security|policy/i.test(causeText)) {
     return {
       code: 'permission-denied',
-      message: `Permission refusee pour ${action}${target}. Verifie les policies Supabase Storage.`,
+      message: `Permission refusée pour ${action}${target}. Vérifie les policies Supabase Storage.`,
     };
   }
 
   if (status === 413 || /payload too large|file too large|entity too large|maximum file size|taille.*max/i.test(causeText)) {
     return {
       code: 'file-too-large',
-      message: `Fichier trop gros pour ${action}${target}. Reduis la taille du fichier.`,
+      message: `Fichier trop gros pour ${action}${target}. Réduis la taille du fichier.`,
     };
   }
 
   if (status === 402 || status === 429 || /quota|storage limit|rate limit|too many requests|insufficient storage/i.test(causeText)) {
     return {
       code: 'quota-exceeded',
-      message: `Quota Supabase atteint pendant ${action}${target}. Libere de l'espace ou reessaie plus tard.`,
+      message: `Quota Supabase atteint pendant ${action}${target}. Libère de l'espace ou réessaie plus tard.`,
     };
   }
 
@@ -282,7 +282,7 @@ const getStorageErrorDetails = ({ action = 'operation', bucket = STORAGE_BUCKET,
   if (/failed to fetch|network|load failed|fetch failed|internet|offline/i.test(causeText)) {
     return {
       code: 'network',
-      message: `Reseau indisponible pendant ${action}${target}. Verifie la connexion internet.`,
+      message: `Réseau indisponible pendant ${action}${target}. Vérifie la connexion internet.`,
     };
   }
 
@@ -469,7 +469,7 @@ const validateUploadFile = (path: string, file: UploadFile, { contentType, maxFi
       action,
       path,
       code: 'empty-file',
-      message: `Fichier vide refuse pour upload "${path}".`,
+      message: `Fichier vide refusé pour upload "${path}".`,
     });
   }
 
@@ -488,7 +488,7 @@ const validateUploadFile = (path: string, file: UploadFile, { contentType, maxFi
         action,
         path,
         code: 'unsupported-mime-type',
-        message: `Type de fichier non autorise pour upload "${path}" : ${mimeType || 'type inconnu'}.`,
+      message: `Type de fichier non autorisé pour upload "${path}" : ${mimeType || 'type inconnu'}.`,
       });
     }
   }
@@ -505,7 +505,7 @@ const validateUploadFile = (path: string, file: UploadFile, { contentType, maxFi
 };
 
 const createTimeoutError = (timeoutMs: number): Error => {
-  const error = new Error(`Delai depasse apres ${timeoutMs} ms.`);
+    const error = new Error(`Délai dépassé après ${timeoutMs} ms.`);
   error.name = 'StorageTimeoutError';
   return error;
 };
@@ -614,7 +614,7 @@ const sanitizeSegment = (value: unknown = ''): string => {
     .replace(/^-+|-+$/g, '');
 
   if (!sanitizedSegment || FORBIDDEN_STORAGE_SEGMENTS.has(sanitizedSegment)) {
-    throw new Error(`Segment de chemin Supabase invalide apres nettoyage : "${rawSegment}".`);
+    throw new Error(`Segment de chemin Supabase invalide après nettoyage : "${rawSegment}".`);
   }
 
   return sanitizedSegment;
@@ -683,11 +683,11 @@ export function validateStoragePath(path: string): string {
     }
 
     if (part.length > MAX_STORAGE_SEGMENT_LENGTH) {
-      throw new Error(`Chemin Supabase invalide : le segment "${part}" depasse ${MAX_STORAGE_SEGMENT_LENGTH} caracteres.`);
+    throw new Error(`Chemin Supabase invalide : le segment "${part}" dépasse ${MAX_STORAGE_SEGMENT_LENGTH} caractères.`);
     }
 
     if (!/^[a-zA-Z0-9._-]+$/.test(part)) {
-      throw new Error(`Chemin Supabase invalide : le segment "${part}" contient des caracteres non autorises.`);
+    throw new Error(`Chemin Supabase invalide : le segment "${part}" contient des caractères non autorisés.`);
     }
   }
 
@@ -704,7 +704,7 @@ export async function uploadPublicAsset(path: string, file: UploadFile, options:
 
 export async function uploadPrivateUserFile(userId: string, path: string, file: UploadFile, options: UploadOptions = {}): Promise<UploadResult> {
   if (!String(userId || '').trim()) {
-    throw new Error('Upload prive impossible : identifiant utilisateur manquant.');
+  throw new Error('Upload privé impossible : identifiant utilisateur manquant.');
   }
 
   const userPrefix = buildStoragePath('users', userId);
@@ -712,7 +712,7 @@ export async function uploadPrivateUserFile(userId: string, path: string, file: 
   const storagePath = validateStoragePath(`${userPrefix}/${relativePath}`);
 
   if (!storagePath.startsWith(`${userPrefix}/`)) {
-    throw new Error('Upload prive impossible : le chemin doit rester dans le dossier de l\'utilisateur.');
+  throw new Error('Upload privé impossible : le chemin doit rester dans le dossier de l\'utilisateur.');
   }
 
   return uploadToStorage(storagePath, file, {

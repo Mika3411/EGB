@@ -68,9 +68,17 @@ const ACTION_KEYS = [
   'skillCheckSuccessNextNodeId', 'skillCheckSuccessTargetSceneId', 'skillCheckFailureDialogue',
   'skillCheckFailureNextNodeId', 'skillCheckFailureTargetSceneId',
   'skillCheckFailureHealthLoss', 'skillCheckSuccessRewardItemId', 'combatEnemyName',
-  'combatEnemyMaxHealth', 'combatSkillId', 'combatAttackDifficulty', 'combatDamage',
-  'combatEnemyDamage', 'combatManaCost', 'combatVictoryDialogue', 'combatDefeatDialogue',
+  'combatEnemyMaxHealth', 'combatHeroAttackType', 'combatSkillId', 'combatAttackDifficulty',
+  'combatDamage', 'combatEnemyStrength', 'combatEnemyDamage', 'combatEnemyMaxMana',
+  'combatEnemyPowerName', 'combatEnemyPowerType', 'combatEnemyPowerManaCost',
+  'combatEnemyPowerDamage', 'combatEnemyPowerUsageChance', 'combatEnemyCriticalChance',
+  'combatEnemyCriticalMultiplier', 'combatEnemyResistanceWater', 'combatEnemyResistanceEarth',
+  'combatEnemyResistanceFire', 'combatEnemyResistanceLightning', 'combatManaCost', 'combatVictoryDialogue', 'combatDefeatDialogue',
   'combatVictoryTargetSceneId', 'combatDefeatTargetSceneId', 'combatRewardItemId',
+  'combatTurnMode', 'combatShowDice', 'combatEnemyAutoTurn', 'combatBackgroundImageData', 'combatBackgroundImageName',
+  'combatHeroMediaType', 'combatHeroImageData', 'combatHeroImageName', 'combatHeroAnime2dSpec',
+  'combatHeroAnime2dName', 'combatEnemyMediaType', 'combatEnemyImageData', 'combatEnemyImageName',
+  'combatEnemyAnime2dSpec', 'combatEnemyAnime2dName',
   'blockActionType', 'targetBlockId', 'targetBlockText',
 ];
 
@@ -389,19 +397,19 @@ const validateUrlValue = (key, value, path, options, errors, warnings, mediaStat
       } catch {
         decoded = '';
       }
-      if (SVG_RISK_PATTERN.test(decoded)) addLimited(errors, `${label}: SVG media actif interdit.`);
+      if (SVG_RISK_PATTERN.test(decoded)) addLimited(errors, `${label}: SVG média actif interdit.`);
     }
     mediaStats.total += text.length;
     if (isAiMode(options)) {
-      addLimited(errors, `${label}: media embarque interdit dans une reponse IA.`);
+      addLimited(errors, `${label}: média embarqué interdit dans une réponse IA.`);
     } else if (text.length > PROJECT_SAFETY_LIMITS.maxMediaFieldLength) {
-      addLimited(errors, `${label}: media trop volumineux (${Math.round(text.length / 1024 / 1024)} Mo).`);
+      addLimited(errors, `${label}: média trop volumineux (${Math.round(text.length / 1024 / 1024)} Mo).`);
     }
     return;
   }
 
   if (MEDIA_KEY_PATTERN.test(key) && isAiMode(options)) {
-    addLimited(errors, `${label}: champ media non vide interdit dans une reponse IA.`);
+    addLimited(errors, `${label}: champ média non vide interdit dans une réponse IA.`);
     return;
   }
 
@@ -426,7 +434,7 @@ const validateUrlValue = (key, value, path, options, errors, warnings, mediaStat
   if (/^[a-z][a-z0-9+.-]*:/i.test(text)) {
     addLimited(errors, `${label}: protocole URL non autorise.`);
   } else if (MEDIA_KEY_PATTERN.test(key) && /\/\//.test(text)) {
-    addLimited(warnings, `${label}: URL media ambigue.`);
+    addLimited(warnings, `${label}: URL média ambiguë.`);
   }
 };
 

@@ -139,7 +139,7 @@ function ConversationGraph({ conversation, project, getSceneLabel }) {
     const conditionType = reply.conditionType || 'none';
     if (conditionType === 'none') return '';
     if (conditionType === 'has_item') return `Objet: ${project.items.find((item) => item.id === reply.conditionItemId)?.name || 'non choisi'}`;
-    if (conditionType === 'visited_scene') return `Scène visitee: ${getSceneLabel(reply.conditionSceneId) || 'non choisie'}`;
+    if (conditionType === 'visited_scene') return `Scène visitée: ${getSceneLabel(reply.conditionSceneId) || 'non choisie'}`;
     if (conditionType === 'completed_hotspot') {
       const conditionSpot = project.scenes.flatMap((scene) => scene.hotspots || []).find((spot) => spot.id === reply.conditionHotspotId);
       return `Zone utilisée: ${conditionSpot?.name || 'non choisie'}`;
@@ -1191,7 +1191,7 @@ export default function ScenesTab(props) {
         ))}
       </select>
 
-      <HelpLabel help="Seuil a atteindre avec dé + bonus. Exemple : difficulté 12, Force +3, jet 9 donne 12 et réussit.">Difficulté</HelpLabel>
+      <HelpLabel help="Seuil à atteindre avec dé + bonus. Exemple : difficulté 12, Force +3, jet 9 donne 12 et réussit.">Difficulté</HelpLabel>
       <NumberInput
         min="1"
         max="99"
@@ -1201,7 +1201,7 @@ export default function ScenesTab(props) {
         })}
       />
 
-      <HelpLabel help="Mana retiree avant le jet. Si le héros n'a pas assez de mana, le test ne se lance pas et affiche Mana insuffisante.">Coût mana du test</HelpLabel>
+                  <HelpLabel help="Mana retirée avant le jet. Si le héros n'a pas assez de mana, le test ne se lance pas et affiche Mana insuffisante.">Coût mana du test</HelpLabel>
       <NumberInput
         min="0"
         max="99"
@@ -1211,7 +1211,7 @@ export default function ScenesTab(props) {
         })}
       />
 
-      <HelpLabel help="Texte ajoute au résultat du jet quand le total atteint ou depasse la difficulté. Exemple : Tu franchis le pont.">Message de réussite</HelpLabel>
+                  <HelpLabel help="Texte ajouté au résultat du jet quand le total atteint ou dépasse la difficulté. Exemple : Tu franchis le pont.">Message de réussite</HelpLabel>
       <textarea value={entry.skillCheckSuccessDialogue || ''} placeholder="Tu reussis le test." onChange={(event) => updateEntry((target) => {
         target.skillCheckSuccessDialogue = event.target.value;
       })} />
@@ -1238,7 +1238,7 @@ export default function ScenesTab(props) {
         {project.scenes.map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
       </select>
 
-      <HelpLabel help="Texte ajoute au résultat du jet quand le total est inferieur à la difficulté. Indique clairement la conséquence.">Message d'échec</HelpLabel>
+      <HelpLabel help="Texte ajouté au résultat du jet quand le total est inférieur à la difficulté. Indique clairement la conséquence.">Message d'échec</HelpLabel>
       <textarea value={entry.skillCheckFailureDialogue || ''} placeholder="Tu rates le test." onChange={(event) => updateEntry((target) => {
         target.skillCheckFailureDialogue = event.target.value;
       })} />
@@ -1265,7 +1265,7 @@ export default function ScenesTab(props) {
         {project.scenes.map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
       </select>
 
-      <HelpLabel help="PV retires au héros en cas d'échec. Évite une valeur egale ou superieure aux PV max sauf si tu veux une défaite immediate.">Perte de PV en échec</HelpLabel>
+                    <HelpLabel help="PV retirés au héros en cas d'échec. Évite une valeur égale ou supérieure aux PV max sauf si tu veux une défaite immédiate.">Perte de PV en échec</HelpLabel>
       <NumberInput
         min="0"
         max="99"
@@ -1312,7 +1312,7 @@ export default function ScenesTab(props) {
         ))}
       </select>
 
-      <HelpLabel help="Seuil a atteindre avec dé + bonus pour toucher. Si le total est plus bas, l'attaque rate et l'ennemi peut riposter.">Difficulté pour toucher</HelpLabel>
+                <HelpLabel help="Seuil à atteindre avec dé + bonus pour toucher. Si le total est plus bas, l'attaque rate et l'ennemi peut riposter.">Difficulté pour toucher</HelpLabel>
       <NumberInput
         min="1"
         max="99"
@@ -1322,27 +1322,18 @@ export default function ScenesTab(props) {
         })}
       />
 
-      <HelpLabel help="PV retirés à l'ennemi quand l'attaque touche. Si l'ennemi tombe à 0, la victoire se déclenche.">Dégâts du héros</HelpLabel>
-      <NumberInput
-        min="1"
-        max="99"
-        value={entry.combatDamage || 3}
-        onValueChange={(nextValue) => updateEntry((target) => {
-          target.combatDamage = nextValue;
-        })}
-      />
-
-      <HelpLabel help="PV retires au héros si l'ennemi survit après l'attaque. Mets 0 pour un obstacle sans riposte.">Dégâts ennemis</HelpLabel>
+                <HelpLabel help="PV retirés au héros si l'ennemi survit après l'attaque. Mets 0 pour un obstacle sans riposte.">Dégâts ennemis</HelpLabel>
       <NumberInput
         min="0"
         max="99"
-        value={entry.combatEnemyDamage || 2}
+        value={entry.combatEnemyStrength ?? entry.combatEnemyDamage ?? 2}
         onValueChange={(nextValue) => updateEntry((target) => {
+          target.combatEnemyStrength = nextValue;
           target.combatEnemyDamage = nextValue;
         })}
       />
 
-      <HelpLabel help="Mana retiree a chaque tentative d'attaque. Si le héros n'a pas assez de mana, le combat ne lance pas le jet.">Coût mana par attaque</HelpLabel>
+                <HelpLabel help="Mana retirée à chaque tentative d'attaque. Si le héros n'a pas assez de mana, le combat ne lance pas le jet.">Coût mana par attaque</HelpLabel>
       <NumberInput
         min="0"
         max="99"
@@ -1352,12 +1343,12 @@ export default function ScenesTab(props) {
         })}
       />
 
-      <HelpLabel help="Texte ajoute quand l'ennemi tombe à 0 PV, avant de donner la récompense ou changer de scène.">Message de victoire</HelpLabel>
+      <HelpLabel help="Texte ajouté quand l'ennemi tombe à 0 PV, avant de donner la récompense ou changer de scène.">Message de victoire</HelpLabel>
       <textarea value={entry.combatVictoryDialogue || ''} placeholder="L'ennemi s'effondre." onChange={(event) => updateEntry((target) => {
         target.combatVictoryDialogue = event.target.value;
       })} />
 
-      <HelpLabel help="Texte ajoute si la riposte fait tomber le héros a 0 PV. Tu peux aussi envoyer vers une scène de défaite.">Message de défaite</HelpLabel>
+      <HelpLabel help="Texte ajouté si la riposte fait tomber le héros à 0 PV. Tu peux aussi envoyer vers une scène de défaite.">Message de défaite</HelpLabel>
       <textarea value={entry.combatDefeatDialogue || ''} placeholder="Tu n'as plus la force de continuer." onChange={(event) => updateEntry((target) => {
         target.combatDefeatDialogue = event.target.value;
       })} />
@@ -1876,7 +1867,7 @@ export default function ScenesTab(props) {
 
                         {['health_potion', 'mana_potion'].includes(selectedItem.heroItemType || 'none') ? (
                           <>
-                            <HelpLabel help="Nombre de PV ou de mana rendus. La jauge ne depasse jamais le maximum configure dans l'onglet Héros.">Quantite restauree</HelpLabel>
+              <HelpLabel help="Nombre de PV ou de mana rendus. La jauge ne dépasse jamais le maximum configuré dans l'onglet Héros.">Quantité restaurée</HelpLabel>
                             <NumberInput
                               min="1"
                               max="99"
@@ -2120,7 +2111,7 @@ export default function ScenesTab(props) {
                                       const conditionType = reply.conditionType || 'none';
                                       if (conditionType === 'none') return '';
                                       if (conditionType === 'has_item') return `Débloquée si objet: ${project.items.find((item) => item.id === reply.conditionItemId)?.name || 'non choisi'}`;
-                                      if (conditionType === 'visited_scene') return `Débloquée si scène visitee: ${getSceneLabel(reply.conditionSceneId) || 'non choisie'}`;
+                                      if (conditionType === 'visited_scene') return `Débloquée si scène visitée: ${getSceneLabel(reply.conditionSceneId) || 'non choisie'}`;
                                       if (conditionType === 'completed_hotspot') {
                                         const conditionSpot = project.scenes.flatMap((scene) => scene.hotspots || []).find((spot) => spot.id === reply.conditionHotspotId);
                                         return `Débloquée si zone utilisée: ${conditionSpot?.name || 'non choisie'}`;
@@ -2271,7 +2262,7 @@ export default function ScenesTab(props) {
                                     const targetReply = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId)?.conversation?.nodes?.[nodeIndex]?.replies?.[replyIndex];
                                     if (targetReply) targetReply.branchTags = parseBranchTags(e.target.value);
                                   })} />
-                                  <HelpLabel help="Note interne non visible par le joueur. Exemples : intention de ce choix, conséquence à vérifier, indice a ajouter dans une scène, branche a retravailler.">Note auteur réponse</HelpLabel>
+                                  <HelpLabel help="Note interne non visible par le joueur. Exemples : intention de ce choix, conséquence à vérifier, indice à ajouter dans une scène, branche à retravailler.">Note auteur réponse</HelpLabel>
                                   <textarea value={reply.authorNote || ''} placeholder="Intention, indice à placer, ? revoir..." onChange={(e) => patchProject((draft) => {
                                     const targetReply = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId)?.conversation?.nodes?.[nodeIndex]?.replies?.[replyIndex];
                                     if (targetReply) targetReply.authorNote = e.target.value;
@@ -2355,7 +2346,7 @@ export default function ScenesTab(props) {
                                   })}>
                                     <option value="none">Visible tout de suite</option>
                                     <option value="has_item">Débloquée par un objet / indice</option>
-                                    <option value="visited_scene">Débloquée par une scène visitee</option>
+                                    <option value="visited_scene">Débloquée par une scène visitée</option>
                                     <option value="completed_hotspot">Débloquée par une zone utilisée</option>
                                     <option value="solved_enigma">Débloquée par une énigme résolue</option>
                                     <option value="chose_reply">Débloquée par un choix précédent</option>
@@ -2376,7 +2367,7 @@ export default function ScenesTab(props) {
                                   ) : null}
                                   {(reply.conditionType || 'none') === 'visited_scene' ? (
                                     <>
-                                      <HelpLabel help="Scène que le joueur doit avoir visitee pour voir cette réponse.">Scène visitee</HelpLabel>
+                                      <HelpLabel help="Scène que le joueur doit avoir visitée pour voir cette réponse.">Scène visitée</HelpLabel>
                                       <select value={reply.conditionSceneId || ''} onChange={(e) => patchProject((draft) => {
                                         const targetReply = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId)?.conversation?.nodes?.[nodeIndex]?.replies?.[replyIndex];
                                         if (targetReply) targetReply.conditionSceneId = e.target.value;
@@ -2476,7 +2467,7 @@ export default function ScenesTab(props) {
                                             if (targetCondition) targetCondition.type = e.target.value;
                                           })}>
                                             <option value="has_item">Objet possède</option>
-                                            <option value="visited_scene">Scène visitee</option>
+                                            <option value="visited_scene">Scène visitée</option>
                                             <option value="completed_hotspot">Zone utilisée</option>
                                             <option value="solved_enigma">Énigme résolue</option>
                                             <option value="chose_reply">Choix précédent</option>
@@ -2646,7 +2637,7 @@ export default function ScenesTab(props) {
                                             </select>
                                             {['message', 'ending'].includes(effect.type || 'message') ? (
                                               <>
-                                                <HelpLabel help="Texte ajoute au message après ce choix.">Message</HelpLabel>
+                                                <HelpLabel help="Texte ajouté au message après ce choix.">Message</HelpLabel>
                                                 <textarea value={effect.message || ''} placeholder="Le garde hesite et baisse sa lance." onChange={(e) => patchProject((draft) => {
                                                   const targetEffect = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId)?.conversation?.nodes?.[nodeIndex]?.replies?.[replyIndex]?.effects?.[effectIndex];
                                                   if (targetEffect) targetEffect.message = e.target.value;
@@ -2672,7 +2663,7 @@ export default function ScenesTab(props) {
                                                   const targetEffect = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId)?.conversation?.nodes?.[nodeIndex]?.replies?.[replyIndex]?.effects?.[effectIndex];
                                                   if (targetEffect) targetEffect.variableKey = e.target.value;
                                                 })} />
-                                                <HelpLabel help={effect.type === 'set_variable' ? 'Valeur a enregistrer : true, false, texte ou nombre.' : 'Nombre a ajouter ou retirer.'}>Valeur</HelpLabel>
+                                                <HelpLabel help={effect.type === 'set_variable' ? 'Valeur à enregistrer : true, false, texte ou nombre.' : 'Nombre à ajouter ou retirer.'}>Valeur</HelpLabel>
                                                 <input value={effect.value ?? ''} placeholder={effect.type === 'set_variable' ? 'true, false, accuse...' : '1'} onChange={(e) => patchProject((draft) => {
                                                   const targetEffect = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId)?.conversation?.nodes?.[nodeIndex]?.replies?.[replyIndex]?.effects?.[effectIndex];
                                                   if (targetEffect) targetEffect.value = e.target.value;
@@ -2681,12 +2672,12 @@ export default function ScenesTab(props) {
                                             ) : null}
                                             {(effect.type || 'message') === 'journal' ? (
                                               <>
-                                                <HelpLabel help="Titre ajoute au journal joueur.">Titre journal</HelpLabel>
+                                                <HelpLabel help="Titre ajouté au journal joueur.">Titre journal</HelpLabel>
                                                 <input value={effect.journalTitle || ''} placeholder="Le garde doute" onChange={(e) => patchProject((draft) => {
                                                   const targetEffect = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId)?.conversation?.nodes?.[nodeIndex]?.replies?.[replyIndex]?.effects?.[effectIndex];
                                                   if (targetEffect) targetEffect.journalTitle = e.target.value;
                                                 })} />
-                                                <HelpLabel help="Detail ajoute au journal joueur.">Detail journal</HelpLabel>
+                                                <HelpLabel help="Détail ajouté au journal joueur.">Détail journal</HelpLabel>
                                                 <textarea value={effect.journalDetail || ''} placeholder="Il semble sensible aux preuves." onChange={(e) => patchProject((draft) => {
                                                   const targetEffect = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId)?.conversation?.nodes?.[nodeIndex]?.replies?.[replyIndex]?.effects?.[effectIndex];
                                                   if (targetEffect) targetEffect.journalDetail = e.target.value;

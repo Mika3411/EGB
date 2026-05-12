@@ -176,6 +176,22 @@ const HeroTab = React.lazy(() => import('./HeroTab.jsx').then(({ default: Compon
   ),
 })));
 
+const CombatTab = React.lazy(() => import('./CombatTab.jsx').then(({ default: Component }) => ({
+  default: ({ project, onUpdateProject, tabContext }) => (
+    <Component
+      project={project}
+      patchProject={onUpdateProject}
+      handleUpload={tabContext.actions.handleUpload}
+      mediaLibrary={tabContext.mediaLibrary}
+      getSceneLabel={tabContext.editor.getSceneLabel}
+      setSelectedSceneId={tabContext.editor.setSelectedSceneId}
+      setSelectedHotspotId={tabContext.editor.setSelectedHotspotId}
+      setTab={tabContext.editor.setTab}
+      previewHeroCombat={tabContext.preview.previewHeroCombat}
+    />
+  ),
+})));
+
 const ScoreTab = React.lazy(() => import('./ScoreTab').then(({ default: Component }) => ({
   default: ({ project }) => <Component project={project} />,
 })));
@@ -245,6 +261,7 @@ export const TABS = {
   enigmas: { component: EnigmasTab, label: 'Énigmes' },
   logic: { component: LogicTab, label: 'Logique' },
   hero: { component: HeroTab, label: 'Héros' },
+  combat: { component: CombatTab, label: 'Combat' },
   preview: { component: PreviewPlayerPanel, label: 'Preview' },
   animation: { component: TwoDAnimeEditor, label: 'Animation' },
   ai: { component: AiTab, label: 'IA' },

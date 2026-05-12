@@ -224,7 +224,7 @@ describe('supabaseStorage', () => {
     expect(result.bucket).toBe('legacy-bucket');
     expect(resolveStorageBucket('public')).toBe('legacy-bucket');
     expect(resolveStorageBucket('private')).toBe('legacy-bucket');
-    expect(LEGACY_STORAGE_BUCKET_DEPRECATION_MESSAGE).toMatch(/deprecated/i);
+    expect(LEGACY_STORAGE_BUCKET_DEPRECATION_MESSAGE).toMatch(/dépréciée/i);
   });
 
   test('logs Supabase Storage desactives par defaut', async () => {
@@ -298,7 +298,7 @@ describe('supabaseStorage', () => {
     await expect(uploadToStorage('users/user-1/empty.json', new Blob([], { type: 'application/json' }))).rejects.toMatchObject({
       name: 'StorageError',
       code: 'empty-file',
-      message: 'Fichier vide refuse pour upload "users/user-1/empty.json".',
+      message: 'Fichier vide refusé pour upload "users/user-1/empty.json".',
     });
     expect(supabaseMock.upload).not.toHaveBeenCalled();
   });
@@ -473,7 +473,7 @@ describe('supabaseStorage', () => {
     const { uploadPrivateUserFile } = await setupSupabaseStorage();
 
     await expect(uploadPrivateUserFile('', 'file.txt', new Blob(['data']))).rejects.toThrow(
-      'Upload prive impossible : identifiant utilisateur manquant.',
+      'Upload privé impossible : identifiant utilisateur manquant.',
     );
   });
 

@@ -210,9 +210,20 @@ const collectHeroSkillChecks = (project = {}, scenes = []) => {
   };
 };
 
-const getCombatSkillId = (combat = {}) => combat.combatSkillId || combat.skillCheckSkillId || combat.skillId || '';
-const getCombatDifficulty = (combat = {}) => Number(combat.combatAttackDifficulty || combat.combatDifficulty || combat.skillCheckDifficulty || 0);
-const getCombatEnemyHealth = (combat = {}) => Number(combat.combatEnemyMaxHealth || combat.enemyHealth || combat.enemyMaxHealth || 0);
+const getCombatSkillId = (combat = {}, hero = {}) => (
+  combat.combatSkillId
+  || combat.skillCheckSkillId
+  || combat.skillId
+  || asArray(hero.skills)[0]?.id
+  || ''
+);
+const readCombatNumber = (values, fallback) => {
+  const value = values.find((entry) => entry !== undefined && entry !== null && entry !== '');
+  const numberValue = value === undefined ? fallback : Number(value);
+  return Number.isFinite(numberValue) ? numberValue : fallback;
+};
+const getCombatDifficulty = (combat = {}) => readCombatNumber([combat.combatAttackDifficulty, combat.combatDifficulty, combat.skillCheckDifficulty], 10);
+const getCombatEnemyHealth = (combat = {}) => readCombatNumber([combat.combatEnemyMaxHealth, combat.enemyHealth, combat.enemyMaxHealth], 8);
 const getCombatRewardItemId = (combat = {}) => combat.combatRewardItemId || combat.rewardItemId || '';
 const getCombatVictoryTargetSceneId = (combat = {}) => combat.combatVictoryTargetSceneId || combat.victoryTargetSceneId || combat.targetSceneId || '';
 const getCombatDefeatTargetSceneId = (combat = {}) => combat.combatDefeatTargetSceneId || combat.defeatTargetSceneId || '';
@@ -250,12 +261,12 @@ const collectHeroCombats = (project = {}, scenes = []) => {
 
   const withoutEnemy = combats.filter(({ combat }) => !hasText(combat.combatEnemyName || combat.enemyName || combat.name));
   const withoutEnemyHealth = combats.filter(({ combat }) => getCombatEnemyHealth(combat) <= 0);
-  const withoutSkill = combats.filter(({ combat }) => !getCombatSkillId(combat) || !skillIds.has(getCombatSkillId(combat)));
+  const withoutSkill = combats.filter(({ combat }) => !getCombatSkillId(combat, hero) || !skillIds.has(getCombatSkillId(combat, hero)));
   const withoutDifficulty = combats.filter(({ combat }) => getCombatDifficulty(combat) <= 0);
   const withoutVictoryBranch = combats.filter(({ combat }) => !getCombatVictoryTargetSceneId(combat));
   const withoutDefeatBranch = combats.filter(({ combat }) => !getCombatDefeatTargetSceneId(combat));
   const withoutRewardOrNarrativePayoff = combats.filter(({ combat }) => !hasCombatNarrativePayoff(combat));
-  const lethalEnemyDamage = combats.filter(({ combat }) => Number(combat.combatEnemyDamage || combat.enemyDamage || 0) >= maxHealth);
+  const lethalEnemyDamage = combats.filter(({ combat }) => Number(combat.combatEnemyStrength ?? combat.combatEnemyDamage ?? combat.enemyDamage ?? 0) >= maxHealth);
 
   return {
     enabled,
@@ -271,6 +282,35 @@ const collectHeroCombats = (project = {}, scenes = []) => {
     lethalEnemyDamage,
     maxHealth,
   };
+};
+
+const getHeroCombatIssueCount = (heroCombat = {}) => (
+  asArray(heroCombat.withoutEnemy).length
+  + asArray(heroCombat.withoutEnemyHealth).length
+  + asArray(heroCombat.withoutSkill).length
+  + asArray(heroCombat.withoutDifficulty).length
+  + asArray(heroCombat.withoutVictoryBranch).length
+  + asArray(heroCombat.withoutDefeatBranch).length
+  + asArray(heroCombat.withoutRewardOrNarrativePayoff).length
+  + asArray(heroCombat.lethalEnemyDamage).length
+);
+
+const getHeroCombatQualityScore = (heroCombat = {}) => {
+  if (!heroCombat.enabled) return SCORE_MAX;
+  if (!heroCombat.count) return 0;
+  const issuesPerCombat = getHeroCombatIssueCount(heroCombat) / Math.max(1, heroCombat.count);
+  return clamp(roundTo(SCORE_MAX - Math.min(SCORE_MAX, issuesPerCombat * 2.5)), 0, SCORE_MAX);
+};
+
+const estimateHeroCombatMinutes = (heroCombat = {}) => {
+  if (!heroCombat.enabled || !heroCombat.count) return 0;
+  return heroCombat.combats.reduce((total, { combat }) => {
+    const enemyHealth = getCombatEnemyHealth(combat);
+    const difficulty = getCombatDifficulty(combat);
+    const healthWeight = Math.min(4, enemyHealth / 8);
+    const difficultyWeight = Math.max(0, difficulty - 10) * 0.15;
+    return total + clamp(2 + healthWeight + difficultyWeight, 2, 8);
+  }, 0);
 };
 
 const buildAdvancedAnalysis = ({ project, scenes, items, enigmas, cinematics, map, content, transitions }) => {
@@ -468,8 +508,15 @@ const buildContentSection = ({ project, scenes, enigmas, cinematics }) => {
   const solvedEnigmas = enigmas.filter(hasPlayableEnigmaSolution).length;
   const enigmaRatio = enigmas.length ? solvedEnigmas / enigmas.length : 0;
   const deadEndActions = countDeadEndActions({ scenes, enigmas, cinematics });
+  const heroCombat = collectHeroCombats(project, scenes);
+  const heroCombatQuality = heroCombat.enabled ? getHeroCombatQualityScore(heroCombat) / SCORE_MAX : null;
 
-  const criteria = [
+  const criteria = heroCombat.enabled ? [
+    { id: 'actions', label: 'Scènes interactives', score: actionRatio * 0.8, max: 0.8 },
+    { id: 'enigmaSolutions', label: 'Solutions énigmes', score: enigmaRatio * 0.5, max: 0.5 },
+    { id: 'start', label: 'Point de départ', score: startValid ? 0.3 : 0, max: 0.3 },
+    { id: 'heroCombats', label: 'Combats héros', score: heroCombatQuality * 0.4, max: 0.4 },
+  ] : [
     { id: 'actions', label: 'Scènes interactives', score: actionRatio * 1, max: 1 },
     { id: 'enigmaSolutions', label: 'Solutions énigmes', score: enigmaRatio * 0.7, max: 0.7 },
     { id: 'start', label: 'Point de départ', score: startValid ? 0.3 : 0, max: 0.3 },
@@ -486,6 +533,7 @@ const buildContentSection = ({ project, scenes, enigmas, cinematics }) => {
       solvedEnigmas,
       enigmaRatio,
       deadEndActions,
+      heroCombatQuality: heroCombat.enabled ? roundTo(heroCombatQuality * SCORE_MAX) : null,
     },
   };
 };
@@ -527,17 +575,20 @@ const buildPolishSection = ({ scenes, cinematics }) => {
   };
 };
 
-const getPlaytimeRange = ({ scenes, items, enigmas, cinematics, connections }) => {
+const getPlaytimeRange = ({ scenes, items, enigmas, cinematics, connections, heroCombat }) => {
+  const heroCombatMinutes = estimateHeroCombatMinutes(heroCombat);
   const estimatedMinutes = Math.max(5, Math.round(
     scenes.length * 2.5
     + enigmas.length * 5
     + cinematics.length * 1.5
     + items.length * 0.8
     + Math.max(0, connections - scenes.length) * 1.2
+    + heroCombatMinutes
   ));
 
   return {
     estimatedMinutes,
+    heroCombatMinutes: roundTo(heroCombatMinutes),
     playtimeRange: {
       min: Math.max(5, Math.round(estimatedMinutes * 0.75)),
       max: Math.max(8, Math.round(estimatedMinutes * 1.25)),
@@ -551,14 +602,16 @@ const getBalancedRangeScore = (value, idealMin, idealMax, hardMin, hardMax) => {
   return clamp(roundTo(((hardMax - value) / (hardMax - idealMax)) * SCORE_MAX), 0, SCORE_MAX);
 };
 
-const buildExpectedPlayerRanges = ({ acts, scenes }) => {
+const buildExpectedPlayerRanges = ({ acts, scenes, heroCombatCount = 0 }) => {
   const actCount = Math.max(1, acts.length);
   const sceneCount = Math.max(1, scenes.length);
-  const timeIdealMin = clamp(Math.round((actCount * 8) + (sceneCount * 2.5)), 20, 120);
-  const timeIdealMax = clamp(Math.round((actCount * 18) + (sceneCount * 6)), timeIdealMin + 20, 240);
-  const actionIdealMin = clamp(Math.round((actCount * 2) + (sceneCount * 1.2)), 8, 90);
-  const actionIdealMax = clamp(Math.round((actCount * 6) + (sceneCount * 4)), actionIdealMin + 12, 220);
-  const complexityIdealMax = clamp(roundTo(7 + (actCount * 0.25) + (sceneCount * 0.03)), 7, 9);
+  const combatTimeBoost = heroCombatCount * 3;
+  const combatActionBoost = heroCombatCount;
+  const timeIdealMin = clamp(Math.round((actCount * 8) + (sceneCount * 2.5) + (combatTimeBoost * 0.7)), 20, 120);
+  const timeIdealMax = clamp(Math.round((actCount * 18) + (sceneCount * 6) + (combatTimeBoost * 1.4)), timeIdealMin + 20, 240);
+  const actionIdealMin = clamp(Math.round((actCount * 2) + (sceneCount * 1.2) + combatActionBoost), 8, 90);
+  const actionIdealMax = clamp(Math.round((actCount * 6) + (sceneCount * 4) + (combatActionBoost * 2)), actionIdealMin + 12, 220);
+  const complexityIdealMax = clamp(roundTo(7 + (actCount * 0.25) + (sceneCount * 0.03) + Math.min(1, heroCombatCount * 0.2)), 7, 9.5);
 
   return {
     time: {
@@ -608,6 +661,8 @@ const buildPlayerScore = ({ acts, scenes, items, enigmas, cinematics, transition
   const branchDensity = scenes.length ? transitions.length / scenes.length : 0;
   const inventoryPressure = scenes.length ? items.length / scenes.length : 0;
   const enigmaPressure = scenes.length ? enigmas.length / scenes.length : 0;
+  const heroCombatCount = advancedAnalysis.heroCombat?.enabled ? advancedAnalysis.heroCombat.count : 0;
+  const heroCombatPressure = scenes.length ? heroCombatCount / scenes.length : heroCombatCount;
   const complexity = clamp(roundTo(
     averageDifficulty
     + Math.min(2, logicRuleCount / 4)
@@ -615,9 +670,10 @@ const buildPlayerScore = ({ acts, scenes, items, enigmas, cinematics, transition
     + Math.min(1, inventoryPressure / 2)
     + Math.min(1, enigmaPressure)
     + Math.min(1, timedScenes / 2)
+    + Math.min(1.2, heroCombatPressure * 2)
   ), 0, SCORE_MAX);
 
-  const expectedRanges = buildExpectedPlayerRanges({ acts, scenes });
+  const expectedRanges = buildExpectedPlayerRanges({ acts, scenes, heroCombatCount });
   const time = getBalancedRangeScore(
     estimatedMinutes,
     expectedRanges.time.idealMin,
@@ -676,6 +732,7 @@ const buildPlayerScore = ({ acts, scenes, items, enigmas, cinematics, transition
       branchDensity: roundTo(branchDensity, 2),
       inventoryPressure: roundTo(inventoryPressure, 2),
       enigmaPressure: roundTo(enigmaPressure, 2),
+      heroCombatPressure: roundTo(heroCombatPressure, 2),
       timedScenes,
     },
     depth: {
@@ -726,6 +783,10 @@ const buildMotivationBadges = ({ dimensions, playerScore, advancedAnalysis, scen
     badges.push(makeBadge('clean-map', 'Plan propre', 'Toutes les scènes importantes sont mappees avec des liaisons solides.'));
   }
 
+  if (advancedAnalysis.heroCombat.enabled && advancedAnalysis.heroCombat.count && getHeroCombatIssueCount(advancedAnalysis.heroCombat) === 0) {
+    badges.push(makeBadge('hero-combat-ready', 'Combats prêts', 'Les combats Hero ont une difficulté, des issues et un gain lisibles.', 'expert'));
+  }
+
   return badges.slice(0, 6);
 };
 
@@ -751,7 +812,7 @@ const buildFeedback = ({ acts, scenes, items, enigmas, cinematics, map, content,
   if (enigmas.length < 2) feedback.push(makeFeedback('warning', 'Trop peu d énigmes', 'Ajoute des énigmes pour renforcer la progression du joueur.', `${enigmas.length}/2`));
   if (!cinematics.length) feedback.push(makeFeedback('warning', 'Pas de cinematic', 'Ajoute une cinématique d introduction, de transition ou de fin.'));
   if (map.details.mappedRatio < 1 && scenes.length) feedback.push(makeFeedback('warning', 'Scènes non mappees', 'Associe toutes les scènes importantes à une pièce du plan.', `${map.details.mappedSceneCount}/${scenes.length}`));
-  if (connectionCounts.partial) feedback.push(makeFeedback('warning', 'Allers simples a confirmer', 'Valide les allers simples voulus ou ajoute la zone d’action de retour.', String(connectionCounts.partial)));
+  if (connectionCounts.partial) feedback.push(makeFeedback('warning', 'Allers simples à confirmer', 'Valide les allers simples voulus ou ajoute la zone d’action de retour.', String(connectionCounts.partial)));
   if (content.details.actionRatio < 0.75 && scenes.length) feedback.push(makeFeedback('warning', 'Interactions inegales', 'Ajoute des zones d’action utiles dans les scènes encore peu interactives.'));
   if (content.details.enigmaRatio < 1 && enigmas.length) feedback.push(makeFeedback('warning', 'Énigmes incompletes', 'Complete les solutions des énigmes incompletes.', `${content.details.solvedEnigmas}/${enigmas.length}`));
   if (polish.details.moodRatio < 0.5 && scenes.length) feedback.push(makeFeedback('warning', 'Ambiance à renforcer', 'Ajoute quelques médias, sons ou effets visuels sur les scènes clés.'));
@@ -829,14 +890,16 @@ const buildNarrationDimension = ({ scenes, cinematics, polish }) => {
   return clamp(roundTo((introRatio * 4) + (cinematicRatio * 4) + (polish.details.moodRatio * 2)), 0, SCORE_MAX);
 };
 
-const buildGameplayDimension = ({ content, transitions, scenes }) => {
+const buildGameplayDimension = ({ content, transitions, scenes, advancedAnalysis }) => {
   const transitionRatio = scenes.length > 1 ? clamp(transitions.length / scenes.length, 0, 1) : 0;
-  return clamp(roundTo(
+  const baseScore = clamp(roundTo(
     (content.details.actionRatio * 4)
     + (content.details.enigmaRatio * 3)
     + (content.details.startValid ? 1 : 0)
     + (transitionRatio * 2)
   ), 0, SCORE_MAX);
+  if (!advancedAnalysis?.heroCombat?.enabled) return baseScore;
+  return clamp(roundTo((baseScore * 0.85) + (getHeroCombatQualityScore(advancedAnalysis.heroCombat) * 0.15)), 0, SCORE_MAX);
 };
 
 const buildCompletionDimension = ({ structure, map, content, polish }) => (
@@ -848,9 +911,9 @@ const buildCompletionDimension = ({ structure, map, content, polish }) => (
   ), 0, SCORE_MAX)
 );
 
-const buildScoreDimensions = ({ structure, map, content, polish, scenes, cinematics, transitions }) => ({
+const buildScoreDimensions = ({ structure, map, content, polish, scenes, cinematics, transitions, advancedAnalysis }) => ({
   structure: normalizeSectionScore(structure),
-  gameplay: buildGameplayDimension({ content, transitions, scenes }),
+  gameplay: buildGameplayDimension({ content, transitions, scenes, advancedAnalysis }),
   narration: buildNarrationDimension({ scenes, cinematics, polish }),
   coherence: normalizeSectionScore(map),
   completion: buildCompletionDimension({ structure, map, content, polish }),
@@ -870,14 +933,6 @@ export function calculateProjectScore(project = {}) {
   const polish = buildPolishSection({ scenes, cinematics });
   const rawScore = structure.score + map.score + content.score + polish.score;
   const score = clamp(roundTo(rawScore), 0, SCORE_MAX);
-  const { estimatedMinutes, playtimeRange } = getPlaytimeRange({
-    scenes,
-    items,
-    enigmas,
-    cinematics,
-    connections: map.details.validConnections.length,
-  });
-
   const advancedAnalysis = buildAdvancedAnalysis({
     project,
     scenes,
@@ -887,6 +942,14 @@ export function calculateProjectScore(project = {}) {
     map,
     content,
     transitions,
+  });
+  const { estimatedMinutes, heroCombatMinutes, playtimeRange } = getPlaytimeRange({
+    scenes,
+    items,
+    enigmas,
+    cinematics,
+    connections: map.details.validConnections.length,
+    heroCombat: advancedAnalysis.heroCombat,
   });
   const playerScore = buildPlayerScore({
     acts,
@@ -916,6 +979,7 @@ export function calculateProjectScore(project = {}) {
     scenes,
     cinematics,
     transitions,
+    advancedAnalysis,
   });
   const badges = buildMotivationBadges({
     dimensions,
@@ -954,6 +1018,7 @@ export function calculateProjectScore(project = {}) {
       enigmas: enigmas.length,
       cinematics: cinematics.length,
       estimatedMinutes,
+      heroCombatMinutes,
       playtimeRange,
       playerActions: playerScore.actions.count,
       playerComplexity: playerScore.complexity.value,
@@ -977,14 +1042,7 @@ export function calculateProjectScore(project = {}) {
         + advancedAnalysis.heroAdventure.costly.length
         + advancedAnalysis.heroAdventure.punishing.length,
       heroCombats: advancedAnalysis.heroCombat.count,
-      heroCombatIssues: advancedAnalysis.heroCombat.withoutEnemy.length
-        + advancedAnalysis.heroCombat.withoutEnemyHealth.length
-        + advancedAnalysis.heroCombat.withoutSkill.length
-        + advancedAnalysis.heroCombat.withoutDifficulty.length
-        + advancedAnalysis.heroCombat.withoutVictoryBranch.length
-        + advancedAnalysis.heroCombat.withoutDefeatBranch.length
-        + advancedAnalysis.heroCombat.withoutRewardOrNarrativePayoff.length
-        + advancedAnalysis.heroCombat.lethalEnemyDamage.length,
+      heroCombatIssues: getHeroCombatIssueCount(advancedAnalysis.heroCombat),
     },
     summary: [
       `Structure: ${sections.structure.toFixed(1)}/4`,
@@ -992,7 +1050,8 @@ export function calculateProjectScore(project = {}) {
       `Contenu: ${sections.content.toFixed(1)}/2`,
       `Polish: ${sections.polish.toFixed(1)}/0,3`,
       `${acts.length} acte(s), ${scenes.length} scène(s), ${items.length} objet(s), ${enigmas.length} énigme(s), ${cinematics.length} cinematic(s)`,
-    ].join(' - '),
+      advancedAnalysis.heroCombat.enabled ? `${advancedAnalysis.heroCombat.count} combat(s) Hero` : '',
+    ].filter(Boolean).join(' - '),
   };
 }
 

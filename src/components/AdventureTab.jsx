@@ -1157,7 +1157,7 @@ const buildAdventureAudit = (project, getSceneLabel) => {
 function EmptyAdventureState() {
   return (
     <div className="empty-state-inline">
-      Aucun choix narratif pour l instant. Crée une zone dans Scènes, choisis "Conversation texte", puis ajoute des réponses.
+      Aucun choix narratif pour l'instant. Crée une zone dans Scènes, choisis "Conversation texte", puis ajoute des réponses.
     </div>
   );
 }

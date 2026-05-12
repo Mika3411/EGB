@@ -615,7 +615,7 @@ export default function LogicTab({
                     onChange={(event) => updateScene((scene) => {
                       scene.timerEndMessage = event.target.value;
                     })}
-                    placeholder="Le temps est ecoule."
+                    placeholder="Le temps est écoulé."
                   />
                 </div>
               </div>

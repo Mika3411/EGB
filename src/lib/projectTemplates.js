@@ -206,7 +206,7 @@ const applyNarrativeTemplate = (project, templateId) => {
             text: config.opening,
             replies: [
               { id: 'reply_careful', label: 'Je pose une question prudente.', actionType: 'node', nextNodeId: 'trust', dialogue: 'La discussion devient possible.', storyVariableKey: config.variableKey, storyVariableOperation: 'increment', storyVariableValue: '1' },
-              { id: 'reply_direct', label: 'Je force une réponse immediate.', actionType: 'ending', endingType: 'bad', endingTitle: config.badTitle, endingSummary: 'Tu obtiens une réponse trop vite, mais tu perds la branche importante de l histoire.', dialogue: 'La tension monte et la discussion se ferme.' },
+              { id: 'reply_direct', label: 'Je force une réponse immédiate.', actionType: 'ending', endingType: 'bad', endingTitle: config.badTitle, endingSummary: "Tu obtiens une réponse trop vite, mais tu perds la branche importante de l'histoire.", dialogue: 'La tension monte et la discussion se ferme.' },
               { id: 'reply_item', label: 'Je cherche un indice utile.', actionType: 'multiple', rewardItemId: item.id, nextNodeId: 'after_item', dialogue: `${config.npc} te remet: ${config.itemName}.` },
             ],
           },
@@ -225,7 +225,7 @@ const applyNarrativeTemplate = (project, templateId) => {
             speaker: config.npc,
             text: 'Cet objet ne sert que si tu comprends son contexte.',
             replies: [
-              { id: 'reply_enigma', label: 'Je veux vérifier l indice.', actionType: 'enigma', enigmaId: enigma.id, dialogue: 'L indice demande une interpretation precise.' },
+              { id: 'reply_enigma', label: "Je veux vérifier l'indice.", actionType: 'enigma', enigmaId: enigma.id, dialogue: "L'indice demande une interprétation précise." },
               { id: 'reply_neutral', label: 'Je m arrete avec cet indice.', actionType: 'ending', endingType: 'neutral', endingTitle: 'Fin neutre', endingSummary: 'Tu conserves une partie de la verite, mais l histoire garde ses zones d ombre.', dialogue: 'Tu choisis de ne pas pousser plus loin.' },
             ],
           },

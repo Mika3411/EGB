@@ -69,6 +69,30 @@ import {
   isLogicRuleAvailable,
   isLogicRuleConfigured,
 } from '../lib/conditionEngine';
+import { DEFAULT_COMBAT_SETTINGS } from '../lib/combatDefaults.js';
+import {
+  applyResistance,
+  clampDecimal,
+  clampNumber,
+  getCombatEnemyStats,
+  getCombatSimulationStats,
+  getElementResistance,
+  getEntryValue,
+  getHeroForceSkill,
+  getHeroForceValue,
+  getPowerTypeLabel,
+  normalizeHeroAttackType,
+  normalizePowerType,
+  normalizeStatKey,
+  numberValue,
+  resolveCombatVictoryReward,
+  resolveCritical,
+  resolveEnemyCombatAttack,
+  resolveHeroCombatAttack,
+  resolveRollOutcome,
+  rollDie,
+  spendMana,
+} from '../lib/combatEngine.js';
 
 const escapeHtml = (value = '') => String(value)
   .replace(/&/g, '&amp;')
@@ -78,13 +102,15 @@ const escapeHtml = (value = '') => String(value)
 
 const serializeForScript = (value) => JSON.stringify(value).replace(/<\/script/gi, '<\\/script');
 
+const serializeFunctionSource = (handler) => handler.toString().replace(/__vite_ssr_import_\d+__\./g, '');
+
 const serializeFunctionMap = (name, handlers) => {
-  const entries = Object.entries(handlers).map(([key, handler]) => `${JSON.stringify(key)}: ${handler.toString()}`);
+  const entries = Object.entries(handlers).map(([key, handler]) => `${JSON.stringify(key)}: ${serializeFunctionSource(handler)}`);
   return `const ${name} = {\n${entries.join(',\n')}\n};`;
 };
 
 const serializeValueForScript = (value) => {
-  if (typeof value === 'function') return value.toString();
+  if (typeof value === 'function') return serializeFunctionSource(value);
   if (Array.isArray(value)) return `[${value.map(serializeValueForScript).join(',')}]`;
   if (value && typeof value === 'object') {
     return `{${Object.entries(value).map(([key, entry]) => `${JSON.stringify(key)}:${serializeValueForScript(entry)}`).join(',')}}`;
@@ -130,8 +156,8 @@ const buildStandaloneGameEngineScript = () => ([
   sameNormalizedSet,
   serializeFunctionMap('miscAnswerHandlers', miscAnswerHandlers),
   validateMiscAnswer,
-  `const getConfiguredPieceCount = ${getConfiguredPieceCount.toString()};`,
-  `const getContextAnswer = ${getContextAnswer.toString()};`,
+  `const getConfiguredPieceCount = ${serializeFunctionSource(getConfiguredPieceCount)};`,
+  `const getContextAnswer = ${serializeFunctionSource(getContextAnswer)};`,
   `const enigmaHandlers = ${serializeValueForScript(enigmaHandlers)};`,
   'function getEnigmaHandler(type) { return enigmaHandlers[type] || enigmaHandlers.default; }',
   createEnigmaRuntime,
@@ -151,15 +177,15 @@ const buildStandaloneGameEngineScript = () => ([
   createAnime2dPreviewModel,
   `const CINEMATIC_END_ACTIONS = ${serializeForScript(CINEMATIC_END_ACTIONS)};`,
   `const CINEMATIC_TYPES = ${serializeForScript(CINEMATIC_TYPES)};`,
-  `const normalizeCinematicEndAction = ${normalizeCinematicEndAction.toString()};`,
-  `const normalizeCinematicType = ${normalizeCinematicType.toString()};`,
+  `const normalizeCinematicEndAction = ${serializeFunctionSource(normalizeCinematicEndAction)};`,
+  `const normalizeCinematicType = ${serializeFunctionSource(normalizeCinematicType)};`,
   createSceneTransitionOverlay,
-  getHotspotRewardItemId,
-  consumeInventoryItem,
-  addRewardItemToInventory,
-  selectRewardInventoryItem,
-  createHotspotViewerImage,
-  applyHotspotBlockState,
+  `const getHotspotRewardItemId = ${serializeFunctionSource(getHotspotRewardItemId)};`,
+  `const consumeInventoryItem = ${serializeFunctionSource(consumeInventoryItem)};`,
+  `const addRewardItemToInventory = ${serializeFunctionSource(addRewardItemToInventory)};`,
+  `const selectRewardInventoryItem = ${serializeFunctionSource(selectRewardInventoryItem)};`,
+  `const createHotspotViewerImage = ${serializeFunctionSource(createHotspotViewerImage)};`,
+  `const applyHotspotBlockState = ${serializeFunctionSource(applyHotspotBlockState)};`,
   hasConditionToken,
   isConditionMet,
   getConditionArray,
@@ -172,14 +198,38 @@ const buildStandaloneGameEngineScript = () => ([
   isLogicRuleAvailable,
   isLogicRuleConfigured,
   evaluateLogicRuleCondition,
-  `const sharedResolveHotspotInteraction = ${sharedResolveHotspotInteraction.toString()};`,
+  `const sharedResolveHotspotInteraction = ${serializeFunctionSource(sharedResolveHotspotInteraction)};`,
   getReplyCondition,
   evaluateReplyCondition,
   getCombinationItem1,
   getCombinationItem2,
   getCombinationResult,
   combineItems,
-].map((entry) => (typeof entry === 'function' ? entry.toString() : entry)).join('\n\n'));
+  `const DEFAULT_COMBAT_SETTINGS = ${serializeForScript(DEFAULT_COMBAT_SETTINGS)};`,
+  "const HERO_ATTACK_TYPES = ['physical', 'water', 'earth', 'fire', 'lightning'];",
+  "const POWER_TYPES = ['water', 'earth', 'fire', 'lightning'];",
+  `const numberValue = ${serializeFunctionSource(numberValue)};`,
+  `const clampNumber = ${serializeFunctionSource(clampNumber)};`,
+  `const clampDecimal = ${serializeFunctionSource(clampDecimal)};`,
+  `const normalizeHeroAttackType = ${serializeFunctionSource(normalizeHeroAttackType)};`,
+  `const normalizePowerType = ${serializeFunctionSource(normalizePowerType)};`,
+  `const getPowerTypeLabel = ${serializeFunctionSource(getPowerTypeLabel)};`,
+  `const getEntryValue = ${serializeFunctionSource(getEntryValue)};`,
+  `const normalizeStatKey = ${serializeFunctionSource(normalizeStatKey)};`,
+  `const getHeroForceSkill = ${serializeFunctionSource(getHeroForceSkill)};`,
+  `const getHeroForceValue = ${serializeFunctionSource(getHeroForceValue)};`,
+  `const getElementResistance = ${serializeFunctionSource(getElementResistance)};`,
+  `const applyResistance = ${serializeFunctionSource(applyResistance)};`,
+  `const spendMana = ${serializeFunctionSource(spendMana)};`,
+  `const rollDie = ${serializeFunctionSource(rollDie)};`,
+  `const resolveRollOutcome = ${serializeFunctionSource(resolveRollOutcome)};`,
+  `const resolveCritical = ${serializeFunctionSource(resolveCritical)};`,
+  `const getCombatEnemyStats = ${serializeFunctionSource(getCombatEnemyStats)};`,
+  `const getCombatSimulationStats = ${serializeFunctionSource(getCombatSimulationStats)};`,
+  `const resolveHeroCombatAttack = ${serializeFunctionSource(resolveHeroCombatAttack)};`,
+  `const resolveEnemyCombatAttack = ${serializeFunctionSource(resolveEnemyCombatAttack)};`,
+  `const resolveCombatVictoryReward = ${serializeFunctionSource(resolveCombatVictoryReward)};`,
+].map((entry) => (typeof entry === 'function' ? serializeFunctionSource(entry) : entry)).join('\n\n'));
 
 export function buildStandaloneHtml(project) {
   const safeTitle = escapeHtml(project?.title || 'Escape Game');
@@ -190,9 +240,9 @@ export function buildStandaloneHtml(project) {
   const serializedGameActions = serializeForScript(SHARED_GAME_ACTIONS);
   const serializedGameActionCreators = serializeFunctionMap('gameActions', SHARED_GAME_ACTION_CREATORS);
   const serializedSceneAudioHelpers = [
-    `const getSharedSceneMusicKey = ${sharedGetSceneMusicKey.toString()};`,
-    `const getSharedSceneAmbientSoundKey = ${sharedGetSceneAmbientSoundKey.toString()};`,
-    `const getSharedFormatTimerSeconds = ${sharedFormatTimerSeconds.toString()};`,
+    `const getSharedSceneMusicKey = ${serializeFunctionSource(sharedGetSceneMusicKey)};`,
+    `const getSharedSceneAmbientSoundKey = ${serializeFunctionSource(sharedGetSceneAmbientSoundKey)};`,
+    `const getSharedFormatTimerSeconds = ${serializeFunctionSource(sharedFormatTimerSeconds)};`,
   ].join('\n');
   const standaloneGameEngineScript = buildStandaloneGameEngineScript();
 
@@ -407,6 +457,17 @@ button,.button-like{border:1px solid transparent;background:linear-gradient(180d
 .inventory-tile.selected{outline:2px solid #60a5fa;background:#1d4ed8}
 .inventory-thumb{width:72px;height:72px;border-radius:14px;background:#0f172a;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:28px}
 .inventory-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.hero-combat-overlay{position:absolute;inset:0;z-index:75;display:grid;grid-template-rows:auto 1fr auto;gap:14px;padding:18px;background:linear-gradient(180deg,rgba(2,6,23,.18),rgba(2,6,23,.86));background-size:cover;background-position:center;color:#f8fbff}
+.hero-combat-topline,.hero-combat-hud,.hero-combat-log{border:1px solid rgba(255,255,255,.12);background:rgba(2,6,23,.72);backdrop-filter:blur(10px);border-radius:14px}
+.hero-combat-topline{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px}.hero-combat-topline span{color:#bfdbfe;font-size:12px;font-weight:900;text-transform:uppercase}.hero-combat-topline strong{font-size:18px}
+.hero-combat-stage{display:grid;grid-template-columns:minmax(0,1fr) minmax(116px,160px) minmax(0,1fr);gap:14px;align-items:center;min-height:0}
+.hero-combat-actor{position:relative;display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:10px;min-height:0;padding:12px;border-radius:16px;background:rgba(8,16,30,.76);border:1px solid rgba(255,255,255,.1);text-align:center}.hero-combat-actor-media{position:relative;min-height:160px;border-radius:14px;overflow:hidden;background:rgba(15,23,42,.92);display:grid;place-items:center}.hero-combat-actor-media img{width:100%;height:100%;object-fit:contain;display:block}.hero-combat-actor-media>span{font-size:48px;font-weight:900;color:#dbeafe}.hero-combat-actor strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hero-combat-actor-bars{display:grid;gap:6px}.hero-combat-actor-bar{height:9px;border-radius:999px;overflow:hidden;background:rgba(15,23,42,.92);border:1px solid rgba(148,163,184,.2)}.hero-combat-actor-bar i{display:block;height:100%;background:#22c55e}.hero-combat-actor-bar--mana i{background:#38bdf8}.hero-combat-actor--enemy .hero-combat-actor-bar--health i{background:#ef4444}
+.hero-combat-dice-spotlight{display:grid;place-items:center;gap:8px;padding:12px;border-radius:16px;background:rgba(15,23,42,.76);border:1px solid rgba(147,197,253,.2);text-align:center}.hero-combat-die-button{width:82px;height:82px;padding:0;border-radius:18px}.hero-combat-die{width:64px;height:64px;display:grid;place-items:center;border-radius:14px;background:#f8fafc;color:#0f172a;font-size:28px;font-weight:900}.hero-combat-dice-spotlight small{color:#bfdbfe}
+.hero-combat-hud{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:10px}.hero-combat-meter{display:grid;gap:4px;min-width:0}.hero-combat-meter span,.hero-combat-meter strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.hero-combat-meter span{font-size:11px;color:#cbd5e1}.hero-combat-meter strong{font-size:13px}.hero-combat-meter i{display:block;height:7px;border-radius:999px;background:#22c55e}.hero-combat-meter--enemy i{background:#ef4444}.hero-combat-meter--mana i,.hero-combat-meter--hero-mana i{background:#38bdf8}
+.hero-combat-log{display:grid;gap:10px;padding:12px}.hero-combat-log p{margin:0;line-height:1.45}.hero-combat-action-choice{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}.hero-combat-action-choice-button{display:grid!important;gap:3px;justify-items:start;text-align:left;padding:9px!important;border-radius:10px!important;background:rgba(15,23,42,.88)!important;border:1px solid rgba(148,163,184,.22)!important}.hero-combat-action-choice-button.active{border-color:rgba(96,165,250,.78)!important;background:rgba(30,64,175,.82)!important}.hero-combat-action-choice-button span{font-size:11px;color:#bfdbfe}
+.hero-combat-overlay--victory .hero-combat-topline{border-color:rgba(34,197,94,.4)}.hero-combat-overlay--defeat .hero-combat-topline{border-color:rgba(248,113,113,.48)}
+@media (max-width:760px){.hero-combat-overlay{padding:12px}.hero-combat-stage{grid-template-columns:1fr}.hero-combat-hud{grid-template-columns:1fr 1fr}.hero-combat-actor-media{min-height:116px}}
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.76);display:flex;align-items:center;justify-content:center;padding:20px;z-index:40}
 .overlay-card{width:min(92vw,980px);max-height:90vh;overflow:auto;border-radius:24px;padding:18px;background:linear-gradient(180deg, rgba(12,20,37,.98) 0%, rgba(8,16,30,.98) 100%);border:1px solid rgba(148,163,184,.16);box-shadow:0 20px 60px rgba(0,0,0,.34)}
 .ending-card{width:min(92vw,560px);display:grid;gap:14px;text-align:center}
@@ -497,6 +558,26 @@ const CODE_KEYPAD_KEYS = ${serializedCodeKeypadKeys};
 const IS_HERO_ADVENTURE = Boolean(project?.heroAdventure?.enabled || project?.creationMode === 'hero_adventure');
 const IS_CHOICE_ADVENTURE = !IS_HERO_ADVENTURE && ['adventure', 'adventure_choices'].includes(project?.creationMode);
 
+function getInitialHeroState() {
+  const hero = project?.heroAdventure?.hero || {};
+  const maxHealth = Math.max(1, Number(hero.maxHealth) || Number(hero.health) || 12);
+  const maxMana = Math.max(0, Number(hero.maxMana) || Number(hero.mana) || 0);
+  return {
+    ...hero,
+    name: hero.name || 'Héros',
+    health: Math.max(0, Math.min(maxHealth, Number(hero.health) || maxHealth)),
+    maxHealth,
+    mana: Math.max(0, Math.min(maxMana, Number(hero.mana) || maxMana)),
+    maxMana,
+    skills: Array.isArray(hero.skills) ? hero.skills : [],
+    powers: Array.isArray(hero.powers) ? hero.powers : [],
+    resistanceWater: Math.max(0, Math.min(100, Number(hero.resistanceWater) || 0)),
+    resistanceEarth: Math.max(0, Math.min(100, Number(hero.resistanceEarth) || 0)),
+    resistanceFire: Math.max(0, Math.min(100, Number(hero.resistanceFire) || 0)),
+    resistanceLightning: Math.max(0, Math.min(100, Number(hero.resistanceLightning) || 0)),
+  };
+}
+
 const DEFAULT_STATE = () => {
   const start = project.start || { type: 'scene', targetSceneId: project.scenes?.[0]?.id || '', targetCinematicId: '' };
   const initialScene = project.scenes.find((scene) => scene.id === start.targetSceneId) || project.scenes[0] || null;
@@ -546,6 +627,11 @@ const DEFAULT_STATE = () => {
     removedSceneObjectIds: [],
     revealedSceneObjectIds: [],
     sceneObjectTextOverrides: {},
+    heroState: getInitialHeroState(),
+    lastDiceRoll: null,
+    heroCombatStates: {},
+    activeHeroCombat: null,
+    selectedHeroCombatPowerId: '',
     sceneTransitionOverlay: null,
     actPreload: { active: false, progress: 100, label: '' },
     sceneTimerRemaining: 0,
@@ -616,6 +702,10 @@ function getSerializableState() {
     removedSceneObjectIds: Array.isArray(state.removedSceneObjectIds) ? state.removedSceneObjectIds : [],
     revealedSceneObjectIds: Array.isArray(state.revealedSceneObjectIds) ? state.revealedSceneObjectIds : [],
     sceneObjectTextOverrides: state.sceneObjectTextOverrides && typeof state.sceneObjectTextOverrides === 'object' ? state.sceneObjectTextOverrides : {},
+    heroState: state.heroState && typeof state.heroState === 'object' ? state.heroState : getInitialHeroState(),
+    lastDiceRoll: state.lastDiceRoll && typeof state.lastDiceRoll === 'object' ? state.lastDiceRoll : null,
+    heroCombatStates: state.heroCombatStates && typeof state.heroCombatStates === 'object' ? state.heroCombatStates : {},
+    selectedHeroCombatPowerId: state.selectedHeroCombatPowerId || '',
     activeEnding: state.activeEnding && typeof state.activeEnding === 'object' ? state.activeEnding : null,
     choiceEffectNotices: Array.isArray(state.choiceEffectNotices) ? state.choiceEffectNotices : [],
   };
@@ -674,6 +764,11 @@ function loadGame(manual = false) {
       removedSceneObjectIds: Array.isArray(savedState.removedSceneObjectIds) ? savedState.removedSceneObjectIds : [],
       revealedSceneObjectIds: Array.isArray(savedState.revealedSceneObjectIds) ? savedState.revealedSceneObjectIds : [],
       sceneObjectTextOverrides: savedState.sceneObjectTextOverrides && typeof savedState.sceneObjectTextOverrides === 'object' ? savedState.sceneObjectTextOverrides : {},
+      heroState: savedState.heroState && typeof savedState.heroState === 'object' ? { ...getInitialHeroState(), ...savedState.heroState } : getInitialHeroState(),
+      lastDiceRoll: savedState.lastDiceRoll && typeof savedState.lastDiceRoll === 'object' ? savedState.lastDiceRoll : null,
+      heroCombatStates: savedState.heroCombatStates && typeof savedState.heroCombatStates === 'object' ? savedState.heroCombatStates : {},
+      activeHeroCombat: null,
+      selectedHeroCombatPowerId: savedState.selectedHeroCombatPowerId || '',
       inventoryDrawerOpen: false,
       activeEnigma: null,
       activeEnding: savedState.activeEnding && typeof savedState.activeEnding === 'object' ? savedState.activeEnding : null,
@@ -844,7 +939,12 @@ function importSaveFromJsonFile(file) {
       const importedState = imported.state || {};
       stopSceneTimer();
       expiredSceneTimerKey = '';
-      Object.assign(state, DEFAULT_STATE(), importedState);
+      Object.assign(state, DEFAULT_STATE(), importedState, {
+        heroState: importedState.heroState && typeof importedState.heroState === 'object' ? { ...getInitialHeroState(), ...importedState.heroState } : getInitialHeroState(),
+        lastDiceRoll: importedState.lastDiceRoll && typeof importedState.lastDiceRoll === 'object' ? importedState.lastDiceRoll : null,
+        heroCombatStates: importedState.heroCombatStates && typeof importedState.heroCombatStates === 'object' ? importedState.heroCombatStates : {},
+        activeHeroCombat: null,
+      });
 
       try {
         localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(getSerializableState()));
@@ -1450,7 +1550,7 @@ function beginActPreload(scene) {
   return true;
 }
 
-function applyEnterSceneAction(sceneId, fallbackText = 'Nouvelle scene.') {
+function applyEnterSceneAction(sceneId, fallbackText = 'Nouvelle scène.') {
   const nextScene = getSceneById(sceneId);
   if (!nextScene) return false;
   const currentScene = getPlayScene();
@@ -1470,7 +1570,7 @@ function applyEnterSceneAction(sceneId, fallbackText = 'Nouvelle scene.') {
   return true;
 }
 
-function goToScene(sceneId, fallbackText = 'Nouvelle scene.') {
+function goToScene(sceneId, fallbackText = 'Nouvelle scène.') {
   const result = dispatch({ ...gameActions.enterScene(sceneId), fallbackText });
   if (sceneId && !state.visitedSceneIds.includes(sceneId)) {
     state.visitedSceneIds = [...state.visitedSceneIds, sceneId];
@@ -1591,7 +1691,7 @@ function updateSceneTimerHud(seconds) {
 function applySceneTimerEnd(scene) {
   if (!scene) return;
   const action = scene.timerEndAction || 'none';
-  const message = scene.timerEndMessage || 'Le temps est ecoule.';
+const message = scene.timerEndMessage || 'Le temps est écoulé.';
 
   if (action === 'scene' && scene.timerTargetSceneId) {
     goToScene(scene.timerTargetSceneId, message);
@@ -1601,7 +1701,7 @@ function applySceneTimerEnd(scene) {
 
   if (action === 'restart-scene') {
     expiredSceneTimerKey = '';
-    goToScene(scene.id, message || scene.introText || 'La scene recommence.');
+goToScene(scene.id, message || scene.introText || 'La scène recommence.');
     render();
     return;
   }
@@ -1616,7 +1716,7 @@ function applySceneTimerEnd(scene) {
   if (action === 'damage-life') {
     const loss = Math.max(1, Number(scene.timerLifeLoss) || 1);
     state.playerLives = Math.max(0, (Number(state.playerLives) || 0) - loss);
-    state.dialogue = message || ('Temps ecoule: -' + loss + ' vie' + (loss > 1 ? 's' : '') + '.');
+    state.dialogue = message || ('Temps écoulé: -' + loss + ' vie' + (loss > 1 ? 's' : '') + '.');
     if (state.playerLives <= 0 && scene.timerTargetSceneId) {
       goToScene(scene.timerTargetSceneId, state.dialogue);
     }
@@ -1625,7 +1725,7 @@ function applySceneTimerEnd(scene) {
   }
 
   if (action === 'dialogue') {
-    state.dialogue = message || 'Le temps est ecoule.';
+    state.dialogue = message || 'Le temps est écoulé.';
     render();
     return;
   }
@@ -1810,7 +1910,7 @@ function applyHotspotAction(spot, sourceHotspotId = spot?.id) {
   applyHotspotSideEffects(spot, sourceHotspotId);
 
   if (spot.actionType === 'scene' && spot.targetSceneId) {
-    goToScene(spot.targetSceneId, spot.dialogue || 'Nouvelle scene.');
+goToScene(spot.targetSceneId, spot.dialogue || 'Nouvelle scène.');
   }
 
   if (spot.actionType === 'cinematic' && spot.targetCinematicId) {
@@ -1858,7 +1958,7 @@ function getSingleConversationConditionReason(condition = {}) {
   const conditionType = condition.type || 'none';
   if (conditionType === 'none' || isSingleConversationConditionAvailable(condition)) return '';
   if (conditionType === 'has_item') return 'Nécessite: ' + (getItemById(condition.itemId)?.name || 'objet manquant');
-  if (conditionType === 'visited_scene') return 'Nécessite une scene visitee';
+if (conditionType === 'visited_scene') return 'Nécessite une scène visitée';
   if (conditionType === 'completed_hotspot') return 'Nécessite une action faite';
   if (conditionType === 'solved_enigma') return 'Nécessite une énigme resolue';
   if (conditionType === 'chose_reply') return 'Nécessite un choix précédent';
@@ -1981,7 +2081,7 @@ function applyConversationReplyEffects(reply = {}) {
       const title = effect.journalTitle || 'Note';
       const detail = effect.journalDetail || effect.message || '';
       addAdventureJournalEntry({ type: 'note', title, detail });
-      result.notices.push({ type: 'journal', title: 'Journal mis a jour', detail: [title, detail].filter(Boolean).join(' - ') });
+result.notices.push({ type: 'journal', title: 'Journal mis à jour', detail: [title, detail].filter(Boolean).join(' - ') });
     }
     if (type === 'next_node') {
       result.nextNodeId = effect.nextNodeId || result.nextNodeId;
@@ -1990,7 +2090,7 @@ function applyConversationReplyEffects(reply = {}) {
     }
     if (type === 'scene') {
       result.targetSceneId = effect.targetSceneId || result.targetSceneId;
-      result.notices.push({ type: 'route', title: 'Nouvelle scene', detail: getTargetLabel(project.scenes || [], effect.targetSceneId, 'Scene') });
+result.notices.push({ type: 'route', title: 'Nouvelle scène', detail: getTargetLabel(project.scenes || [], effect.targetSceneId, 'Scène') });
     }
     if (type === 'cinematic') {
       result.targetCinematicId = effect.targetCinematicId || result.targetCinematicId;
@@ -2027,6 +2127,492 @@ function getStoryVariableJournalLabel(key) {
 function getJournalItemLabel(itemId) {
   const item = getItemById(itemId);
   return item ? ((item.icon || '') + ' ' + (item.name || 'Objet')).trim() : 'Objet';
+}
+
+function getCombatEntryValue(entry, key, fallback) {
+  return entry?.[key] === undefined || entry?.[key] === '' || entry?.[key] === null ? fallback : entry[key];
+}
+
+function getStandaloneCombatSettings() {
+  const combat = project?.heroAdventure?.combat && typeof project.heroAdventure.combat === 'object' ? project.heroAdventure.combat : {};
+  return {
+    ...DEFAULT_COMBAT_SETTINGS,
+    ...combat,
+  };
+}
+
+function getStandaloneCombatStats(entry = {}) {
+  return getCombatSimulationStats({
+    ...project,
+    heroAdventure: {
+      ...(project.heroAdventure || {}),
+      hero: state.heroState || getInitialHeroState(),
+    },
+  }, entry, getStandaloneCombatSettings());
+}
+
+function getHeroPowerById(powerId = '') {
+  return ((state.heroState?.powers || []).find((power) => power.id === powerId) || null);
+}
+
+function getCombatPowerTypeLabel(type) {
+  return getPowerTypeLabel(type).toLowerCase();
+}
+
+function setHeroCombatState(combatId, nextCombatState) {
+  if (!combatId) return {};
+  const currentStates = state.heroCombatStates && typeof state.heroCombatStates === 'object' ? state.heroCombatStates : {};
+  state.heroCombatStates = {
+    ...currentStates,
+    [combatId]: {
+      ...(currentStates[combatId] || {}),
+      ...nextCombatState,
+    },
+  };
+  return state.heroCombatStates[combatId];
+}
+
+function applyHeroHealthLoss(loss = 0) {
+  const damage = Math.max(0, Number(loss) || 0);
+  const currentHero = state.heroState || getInitialHeroState();
+  if (!damage) return currentHero;
+  state.heroState = {
+    ...currentHero,
+    health: Math.max(0, (Number(currentHero.health) || 0) - damage),
+  };
+  return state.heroState;
+}
+
+function addInventoryItem(itemId) {
+  if (!itemId) return false;
+  if (!state.inventory.includes(itemId)) {
+    state.inventory = addRewardItemToInventory(state.inventory, itemId);
+  }
+  if (!state.selectedInventoryIds.includes(itemId)) {
+    state.selectedInventoryIds = selectRewardInventoryItem(state.selectedInventoryIds, itemId);
+  }
+  return true;
+}
+
+function getHeroCombatRuntime(entry = {}, options = {}) {
+  const combatId = entry.id || options.sourceHotspotId || (state.playSceneId + '-combat');
+  const stats = getStandaloneCombatStats(entry);
+  const enemyStats = stats.enemyStats;
+  const enemyName = stats.enemyName;
+  const enemyMaxHealth = stats.enemyMaxHealth;
+  const currentCombat = (state.heroCombatStates || {})[combatId] || {};
+  const currentEnemyHealth = currentCombat.defeated
+    ? 0
+    : clampNumber(currentCombat.enemyHealth ?? enemyMaxHealth, enemyMaxHealth, 0, enemyMaxHealth);
+  const currentEnemyMana = clampNumber(currentCombat.enemyMana ?? enemyStats.maxMana, enemyStats.maxMana, 0, enemyStats.maxMana);
+  return {
+    combatId,
+    stats,
+    enemyStats,
+    enemyName,
+    enemyMaxHealth,
+    currentEnemyHealth,
+    enemyMaxMana: enemyStats.maxMana,
+    currentEnemyMana,
+  };
+}
+
+function rollEnemyCombatDie(enemyName = 'Ennemi') {
+  const sides = Math.max(2, Number(project?.heroAdventure?.dice?.sides) || 20);
+  const raw = Math.floor(Math.random() * sides) + 1;
+  return {
+    id: Date.now(),
+    die: project?.heroAdventure?.dice?.label || ('d' + sides),
+    sides,
+    raw,
+    modifier: 0,
+    total: raw,
+    actionType: 'enemy_combat',
+    enemyName,
+  };
+}
+
+function buildEnemyCombatAction(stats, currentEnemyMana, enemyName) {
+  const enemyStats = stats.enemyStats;
+  const enemyRoll = rollEnemyCombatDie(enemyName);
+  const currentHero = state.heroState || getInitialHeroState();
+  const enemyAttack = resolveEnemyCombatAttack({
+    stats,
+    hero: currentHero,
+    heroHealth: Number(currentHero.health) || 0,
+    enemyMana: currentEnemyMana,
+  });
+  const enemyActionLabel = enemyAttack.usesPower
+    ? enemyName + ' lance ' + enemyStats.powerName + ' (' + getCombatPowerTypeLabel(enemyStats.powerType) + ')'
+    : enemyName + ' riposte';
+  const criticalText = enemyAttack.critical ? ' Critique x' + enemyAttack.criticalMultiplier + '.' : '';
+  const heroResistanceText = enemyAttack.resistance ? ' Résistance héros ' + enemyAttack.resistance + '%: ' + enemyAttack.rawDamage + ' -> ' + enemyAttack.damage + '.' : '';
+  const manaText = enemyAttack.usesPower ? ' Mana ' + enemyAttack.enemyMana + '/' + enemyStats.maxMana + '.' : '';
+  const attackText = enemyAttack.baseDamage || enemyAttack.usesPower
+    ? enemyActionLabel + ': -' + enemyAttack.damage + ' PV.' + criticalText + heroResistanceText + manaText
+    : enemyName + ' n’inflige aucun dégât.';
+  return {
+    enemyRoll,
+    nextEnemyMana: enemyAttack.enemyMana,
+    enemyDamage: enemyAttack.damage,
+    retaliationText: 'Dé ennemi ' + enemyRoll.die + ' = ' + enemyRoll.raw + '. ' + attackText,
+  };
+}
+
+function resolveEnemyCombatTurn(entry = {}, options = {}) {
+  const runtime = getHeroCombatRuntime(entry, options);
+  const { combatId, stats, enemyStats, enemyName, enemyMaxHealth, currentEnemyHealth, currentEnemyMana } = runtime;
+
+  if (currentEnemyHealth <= 0) {
+    const message = enemyName + ' est déjà vaincu.';
+    state.dialogue = message;
+    return {
+      ok: true,
+      ended: true,
+      victory: true,
+      enemyHealth: 0,
+      enemyMaxHealth,
+      enemyMana: currentEnemyMana,
+      enemyMaxMana: enemyStats.maxMana,
+      message,
+    };
+  }
+
+  const enemyAction = buildEnemyCombatAction(stats, currentEnemyMana, enemyName);
+  state.lastDiceRoll = enemyAction.enemyRoll;
+  setHeroCombatState(combatId, {
+    enemyHealth: currentEnemyHealth,
+    enemyMaxHealth,
+    enemyMana: enemyAction.nextEnemyMana,
+    enemyMaxMana: enemyStats.maxMana,
+    defeated: false,
+  });
+
+  const nextHero = applyHeroHealthLoss(enemyAction.enemyDamage);
+  const defeat = Number(nextHero.health || 0) <= 0;
+  const defeatText = defeat ? ' ' + (entry.combatDefeatDialogue || 'Défaite.') : '';
+  const message = (enemyAction.retaliationText + defeatText).trim();
+
+  if (defeat && entry.combatDefeatTargetSceneId) {
+    const movedScene = goToScene(entry.combatDefeatTargetSceneId, message);
+    return {
+      ok: Boolean(movedScene),
+      ended: true,
+      defeat: true,
+      movedScene: Boolean(movedScene),
+      enemyHealth: currentEnemyHealth,
+      enemyMaxHealth,
+      enemyMana: enemyAction.nextEnemyMana,
+      enemyMaxMana: enemyStats.maxMana,
+      message,
+      enemyRoll: enemyAction.enemyRoll,
+    };
+  }
+
+  state.dialogue = message;
+  return {
+    ok: true,
+    ended: defeat,
+    defeat,
+    enemyHealth: currentEnemyHealth,
+    enemyMaxHealth,
+    enemyMana: enemyAction.nextEnemyMana,
+    enemyMaxMana: enemyStats.maxMana,
+    message,
+    enemyRoll: enemyAction.enemyRoll,
+  };
+}
+
+function resolveHeroCombatTurn(entry = {}, options = {}) {
+  const runtime = getHeroCombatRuntime(entry, options);
+  const { combatId, stats, enemyStats, enemyName, enemyMaxHealth, currentEnemyHealth, enemyMaxMana, currentEnemyMana } = runtime;
+
+  if (currentEnemyHealth <= 0) {
+    const message = enemyName + ' est déjà vaincu.';
+    state.dialogue = message;
+    if (options.sourceHotspotId) markHotspotCompleted(options.sourceHotspotId);
+    return {
+      ok: true,
+      ended: true,
+      victory: true,
+      enemyHealth: 0,
+      enemyMaxHealth,
+      enemyMana: currentEnemyMana,
+      enemyMaxMana,
+      message,
+    };
+  }
+
+  const heroPower = getHeroPowerById(options.heroPowerId);
+  const currentHero = state.heroState || getInitialHeroState();
+  const heroAttack = resolveHeroCombatAttack({
+    stats,
+    enemyHealth: currentEnemyHealth,
+    heroMana: Number(currentHero.mana) || 0,
+    power: heroPower,
+  });
+  if (!heroAttack.ok) {
+    state.dialogue = 'Mana insuffisante pour ' + (heroPower?.name || stats.skillName || 'cette attaque') + '.';
+    return { ok: false, reason: heroAttack.reason, message: state.dialogue };
+  }
+
+  const skillId = entry.combatSkillId || state.heroState?.skills?.[0]?.id || '';
+  const roll = {
+    id: Date.now(),
+    die: stats.diceLabel,
+    sides: stats.diceSides,
+    raw: heroAttack.roll.raw,
+    modifier: heroAttack.roll.modifier,
+    total: heroAttack.roll.total,
+    skillId,
+    skillName: stats.skillName,
+    success: heroAttack.roll.success,
+    difficulty: stats.difficulty,
+    actionType: 'hero_combat',
+    heroPowerId: heroPower?.id || '',
+    heroPowerName: heroPower?.name || '',
+    heroCritical: heroAttack.critical,
+    rawHeroDamage: heroAttack.rawDamage,
+  };
+  state.heroState = { ...currentHero, mana: heroAttack.mana };
+  state.lastDiceRoll = roll;
+
+  const hit = heroAttack.roll.success;
+  const heroPowerManaCost = heroPower ? Math.max(0, Number(heroPower.manaCost) || 0) : 0;
+  const heroPowerText = heroPower ? ' ' + (heroPower.name || 'Pouvoir') + ' (' + getCombatPowerTypeLabel(heroAttack.attackType) + ', ' + heroPowerManaCost + ' mana, +' + heroAttack.powerDamage + ' force).' : '';
+  const heroCriticalText = heroAttack.critical ? ' Critique x' + heroAttack.criticalMultiplier + ': ' + heroAttack.baseDamage + ' -> ' + heroAttack.rawDamage + ' dégâts.' : '';
+  const resistanceText = hit && heroAttack.resistance
+    ? ' Résistance ' + getCombatPowerTypeLabel(heroAttack.attackType) + ' ' + heroAttack.resistance + '%: ' + heroAttack.rawDamage + ' -> ' + heroAttack.damage + ' dégâts.'
+    : '';
+  const rollText = (roll.skillName ? roll.skillName + ': ' : '') + roll.die + ' = ' + roll.raw + (roll.modifier ? ' + ' + roll.modifier : '') + ' => ' + roll.total;
+  const attackText = hit
+    ? heroPowerText + ' Touche contre ' + stats.difficulty + ': -' + heroAttack.damage + ' PV à ' + enemyName + '.' + heroCriticalText + resistanceText
+: 'Raté contre ' + stats.difficulty + '.';
+
+  if (heroAttack.victory) {
+    setHeroCombatState(combatId, { enemyHealth: 0, enemyMaxHealth, enemyMana: currentEnemyMana, enemyMaxMana, defeated: true });
+    const reward = resolveCombatVictoryReward(entry, project.items, getItemById);
+    if (reward.itemId) {
+      addInventoryItem(reward.itemId);
+      addAdventureJournalEntry({
+        type: 'item',
+        title: getJournalItemLabel(reward.itemId),
+        detail: entry.name || enemyName,
+      });
+    }
+    if (options.sourceHotspotId) markHotspotCompleted(options.sourceHotspotId);
+    const victoryMessage = (rollText + '. ' + attackText + ' ' + (entry.combatVictoryDialogue || 'Victoire.') + reward.message).trim();
+    if (entry.combatVictoryTargetSceneId) {
+      const movedScene = goToScene(entry.combatVictoryTargetSceneId, victoryMessage);
+      return {
+        ok: Boolean(movedScene),
+        ended: true,
+        victory: true,
+        movedScene: Boolean(movedScene),
+        enemyHealth: 0,
+        enemyMaxHealth,
+        enemyMana: currentEnemyMana,
+        enemyMaxMana,
+        message: victoryMessage,
+        roll,
+      };
+    }
+    state.dialogue = victoryMessage;
+    return {
+      ok: true,
+      ended: true,
+      victory: true,
+      enemyHealth: 0,
+      enemyMaxHealth,
+      enemyMana: currentEnemyMana,
+      enemyMaxMana,
+      message: victoryMessage,
+      roll,
+    };
+  }
+
+  const nextEnemyHealth = heroAttack.enemyHealth;
+  const healthText = ' ' + enemyName + ': ' + nextEnemyHealth + '/' + enemyMaxHealth + ' PV.';
+  if (options.allowManualEnemyTurn && enemyStats.enemyAutoTurn === false) {
+    setHeroCombatState(combatId, { enemyHealth: nextEnemyHealth, enemyMaxHealth, enemyMana: currentEnemyMana, enemyMaxMana: enemyStats.maxMana, defeated: false });
+    const message = (rollText + '. ' + attackText + healthText + ' Lance le dé ennemi pour la riposte.').trim();
+    state.dialogue = message;
+    return {
+      ok: true,
+      ended: false,
+      pendingEnemyTurn: true,
+      enemyHealth: nextEnemyHealth,
+      enemyMaxHealth,
+      enemyMana: currentEnemyMana,
+      enemyMaxMana: enemyStats.maxMana,
+      message,
+      roll,
+    };
+  }
+
+  const enemyAction = buildEnemyCombatAction(stats, currentEnemyMana, enemyName);
+  state.lastDiceRoll = enemyAction.enemyRoll;
+  setHeroCombatState(combatId, { enemyHealth: nextEnemyHealth, enemyMaxHealth, enemyMana: enemyAction.nextEnemyMana, enemyMaxMana: enemyStats.maxMana, defeated: false });
+  const nextHero = applyHeroHealthLoss(enemyAction.enemyDamage);
+  const defeat = Number(nextHero.health || 0) <= 0;
+  const defeatText = defeat ? ' ' + (entry.combatDefeatDialogue || 'Défaite.') : '';
+  const message = (rollText + '. ' + attackText + healthText + ' ' + enemyAction.retaliationText + defeatText).trim();
+
+  if (defeat && entry.combatDefeatTargetSceneId) {
+    const movedScene = goToScene(entry.combatDefeatTargetSceneId, message);
+    return {
+      ok: Boolean(movedScene),
+      ended: true,
+      defeat: true,
+      movedScene: Boolean(movedScene),
+      enemyHealth: nextEnemyHealth,
+      enemyMaxHealth,
+      enemyMana: enemyAction.nextEnemyMana,
+      enemyMaxMana: enemyStats.maxMana,
+      message,
+      roll,
+      enemyRoll: enemyAction.enemyRoll,
+    };
+  }
+
+  state.dialogue = message;
+  return {
+    ok: true,
+    ended: defeat,
+    defeat,
+    enemyHealth: nextEnemyHealth,
+    enemyMaxHealth,
+    enemyMana: enemyAction.nextEnemyMana,
+    enemyMaxMana: enemyStats.maxMana,
+    message,
+    roll,
+    enemyRoll: enemyAction.enemyRoll,
+  };
+}
+
+function runHeroCombatAction(entry = {}, options = {}) {
+  if (!IS_HERO_ADVENTURE) {
+    state.dialogue = 'Active le mode Hero Adventure pour utiliser un combat.';
+    return false;
+  }
+  const runtime = getHeroCombatRuntime(entry, options);
+  const enemyStats = runtime.enemyStats;
+  const turnMode = (entry.combatTurnMode ?? getStandaloneCombatSettings().turnMode ?? true) !== false;
+  if (turnMode && !options.resolveTurn) {
+    if (runtime.currentEnemyHealth <= 0) {
+      state.dialogue = runtime.enemyName + ' est déjà vaincu.';
+      if (options.sourceHotspotId) markHotspotCompleted(options.sourceHotspotId);
+      return true;
+    }
+    if (options.closeConversation) closeConversation();
+    state.activeHeroCombat = {
+      id: runtime.combatId,
+      entry: { ...entry },
+      options: { sourceHotspotId: options.sourceHotspotId || '' },
+      enemyName: runtime.enemyName,
+      enemyHealth: runtime.currentEnemyHealth,
+      enemyMaxHealth: runtime.enemyMaxHealth,
+      enemyMana: runtime.currentEnemyMana,
+      enemyMaxMana: runtime.enemyMaxMana,
+      round: 1,
+      phase: 'hero',
+      status: 'active',
+      message: enemyStats.enemyAutoTurn === false
+? 'Combat contre ' + runtime.enemyName + '. À toi de jouer, puis lance le dé ennemi.'
+: 'Combat contre ' + runtime.enemyName + '. À toi de jouer.',
+      lastRoll: null,
+      lastEnemyRoll: null,
+    };
+    state.selectedHeroCombatPowerId = '';
+    state.dialogue = 'Combat contre ' + runtime.enemyName + '.';
+    return true;
+  }
+
+  const result = resolveHeroCombatTurn(entry, options);
+  return Boolean(result.ok);
+}
+
+function attackActiveHeroCombat(heroPowerId = '') {
+  const current = state.activeHeroCombat;
+  if (!current || current.status !== 'active') return false;
+  if (current.phase === 'enemy') {
+    state.dialogue = 'C’est au tour ennemi.';
+    render();
+    return false;
+  }
+  const result = resolveHeroCombatTurn(current.entry, {
+    ...(current.options || {}),
+    allowManualEnemyTurn: true,
+    resolveTurn: true,
+    heroPowerId,
+  });
+  if (!result.ok) {
+    render();
+    return false;
+  }
+  if (result.ended) {
+    state.activeHeroCombat = {
+      ...current,
+      status: result.victory ? 'victory' : result.defeat ? 'defeat' : 'ended',
+      phase: 'ended',
+      message: result.message,
+      enemyHealth: result.enemyHealth,
+      enemyMaxHealth: result.enemyMaxHealth,
+      enemyMana: result.enemyMana,
+      enemyMaxMana: result.enemyMaxMana,
+      lastRoll: result.roll || current.lastRoll,
+      lastEnemyRoll: result.enemyRoll || current.lastEnemyRoll,
+    };
+  } else {
+    state.activeHeroCombat = {
+      ...current,
+      phase: result.pendingEnemyTurn ? 'enemy' : 'hero',
+      round: result.pendingEnemyTurn ? current.round : (Number(current.round) || 1) + 1,
+      message: result.message,
+      enemyHealth: result.enemyHealth,
+      enemyMaxHealth: result.enemyMaxHealth,
+      enemyMana: result.enemyMana,
+      enemyMaxMana: result.enemyMaxMana,
+      lastRoll: result.roll || current.lastRoll,
+      lastEnemyRoll: result.enemyRoll || current.lastEnemyRoll,
+    };
+  }
+  render();
+  return true;
+}
+
+function rollActiveEnemyCombat() {
+  const current = state.activeHeroCombat;
+  if (!current || current.status !== 'active') return false;
+  if (current.phase !== 'enemy') {
+    state.dialogue = 'Le héros doit agir avant la riposte.';
+    render();
+    return false;
+  }
+  const result = resolveEnemyCombatTurn(current.entry, current.options || {});
+  if (!result.ok) {
+    render();
+    return false;
+  }
+  state.activeHeroCombat = {
+    ...current,
+    status: result.defeat ? 'defeat' : 'active',
+    phase: result.defeat ? 'ended' : 'hero',
+    round: result.defeat ? current.round : (Number(current.round) || 1) + 1,
+    message: result.message,
+    enemyHealth: result.enemyHealth,
+    enemyMaxHealth: result.enemyMaxHealth,
+    enemyMana: result.enemyMana,
+    enemyMaxMana: result.enemyMaxMana,
+    lastEnemyRoll: result.enemyRoll || current.lastEnemyRoll,
+  };
+  render();
+  return true;
+}
+
+function closeHeroCombat() {
+  state.activeHeroCombat = null;
+  render();
 }
 
 function openEnding(reply = {}) {
@@ -2084,7 +2670,7 @@ function chooseConversationReply(reply = {}) {
   const nextChoiceNotices = [
     combinedMessage ? { type: 'message', title: 'Message affiché', detail: combinedMessage } : null,
     replyResponseImageData ? { type: 'media', title: 'Image affichée', detail: reply.responseImageName || reply.label || 'Image de réponse' } : null,
-    replyResponseSoundData ? { type: 'media', title: 'Son joue', detail: 'Effet sonore' } : null,
+replyResponseSoundData ? { type: 'media', title: 'Son joué', detail: 'Effet sonore' } : null,
     replyAmbienceSoundData ? { type: 'media', title: 'Ambiance lancée', detail: 'Son d’ambiance' } : null,
     legacyVariableNotice,
     ...effectResult.notices,
@@ -2099,6 +2685,14 @@ function chooseConversationReply(reply = {}) {
     });
     nextChoiceNotices.push({ type: 'item', title: 'Objet obtenu', detail: getJournalItemLabel(reply.rewardItemId) });
   }
+  if (actionType === 'hero_combat') {
+    state.choiceEffectNotices = nextChoiceNotices;
+    return runHeroCombatAction(reply, {
+      closeConversation: true,
+      conversation: state.activeConversation.conversation,
+      sourceHotspotId: state.activeConversation.sourceHotspotId,
+    });
+  }
   if (effectResult.ending) {
     state.choiceEffectNotices = nextChoiceNotices;
     markHotspotCompleted(state.activeConversation.sourceHotspotId);
@@ -2108,10 +2702,10 @@ function chooseConversationReply(reply = {}) {
   }
   const targetSceneId = effectResult.targetSceneId || reply.targetSceneId;
   if (targetSceneId && (actionType === 'scene' || effectResult.targetSceneId)) {
-    if (!effectResult.targetSceneId) nextChoiceNotices.push({ type: 'route', title: 'Nouvelle scene', detail: getTargetLabel(project.scenes || [], targetSceneId, 'Scene') });
+if (!effectResult.targetSceneId) nextChoiceNotices.push({ type: 'route', title: 'Nouvelle scène', detail: getTargetLabel(project.scenes || [], targetSceneId, 'Scène') });
     state.choiceEffectNotices = nextChoiceNotices;
     closeConversation();
-    goToScene(targetSceneId, combinedMessage || 'Nouvelle scene.');
+goToScene(targetSceneId, combinedMessage || 'Nouvelle scène.');
     return;
   }
   const targetCinematicId = effectResult.targetCinematicId || reply.targetCinematicId;
@@ -2176,7 +2770,7 @@ function applyEnigmaSuccess(enigma, hotspot) {
   if (enigma.successMessage) state.dialogue = enigma.successMessage;
 
   if (enigma.unlockType === 'scene' && enigma.targetSceneId) {
-    goToScene(enigma.targetSceneId, enigma.successMessage || 'Nouvelle scene débloquée.');
+goToScene(enigma.targetSceneId, enigma.successMessage || 'Nouvelle scène débloquée.');
   } else if (enigma.unlockType === 'cinematic' && enigma.targetCinematicId) {
     launchCinematic(enigma.targetCinematicId);
   } else if (hotspot) {
@@ -2564,6 +3158,12 @@ function applyTriggerHotspotAction(spotId) {
     }
   }
 
+  if (activeSpot.actionType === 'hero_combat') {
+    runHeroCombatAction(activeSpot, { sourceHotspotId: activeSpot.id });
+    render();
+    return;
+  }
+
   applyHotspotAction(activeSpot, spot.id);
   render();
 }
@@ -2577,7 +3177,7 @@ function applyCinematicEnd(cinematic) {
   if (!cinematic || endType === 'none') return;
 
   if (endType === 'scene' && cinematic.targetSceneId) {
-    goToScene(cinematic.targetSceneId, 'Nouvelle scene débloquée.');
+goToScene(cinematic.targetSceneId, 'Nouvelle scène débloquée.');
     return;
   }
 
@@ -2755,6 +3355,20 @@ function bindEvents() {
     render();
   });
   root.querySelector('#restart-ending')?.addEventListener('click', resetPreview);
+  root.querySelectorAll('#close-hero-combat').forEach((button) => button.addEventListener('click', closeHeroCombat));
+  root.querySelectorAll('[data-hero-combat-power]').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.selectedHeroCombatPowerId = button.dataset.heroCombatPower || '';
+      render();
+    });
+  });
+  root.querySelectorAll('#hero-combat-action').forEach((button) => button.addEventListener('click', () => {
+    if (state.activeHeroCombat?.phase === 'enemy') {
+      rollActiveEnemyCombat();
+    } else {
+      attackActiveHeroCombat(state.selectedHeroCombatPowerId || '');
+    }
+  }));
   root.querySelectorAll('[data-conversation-reply]').forEach((button) => {
     button.addEventListener('click', () => {
       const node = state.activeConversation?.conversation?.nodes?.find((entry) => entry.id === state.activeConversation.nodeId);
@@ -3260,6 +3874,110 @@ function renderEnding() {
     + '</div></div>';
 }
 
+function getCombatActorMedia(entry, combat, actor, fallbackImage = '') {
+  const entryPrefix = actor === 'hero' ? 'combatHero' : 'combatEnemy';
+  const globalPrefix = actor;
+  const mediaType = getCombatEntryValue(entry, entryPrefix + 'MediaType', combat?.[globalPrefix + 'MediaType'] || 'image');
+  return {
+    mediaType: mediaType === 'anime2d' ? 'anime2d' : 'image',
+    imageData: resolveAssetUrl(entry?.[entryPrefix + 'ImageId'], entry?.[entryPrefix + 'ImageData'] || combat?.[globalPrefix + 'ImageData'] || fallbackImage || ''),
+    anime2dSpec: entry?.[entryPrefix + 'Anime2dSpec'] || combat?.[globalPrefix + 'Anime2dSpec'] || null,
+  };
+}
+
+function combatBarPercent(value, maxValue) {
+  const max = Math.max(1, Number(maxValue) || 1);
+  return Math.max(0, Math.min(100, Math.round(((Number(value) || 0) / max) * 100)));
+}
+
+function renderCombatActor(media, label, actor, stats = {}) {
+  const health = Math.max(0, Number(stats.health) || 0);
+  const maxHealth = Math.max(1, Number(stats.maxHealth) || 1);
+  const mana = Math.max(0, Number(stats.mana) || 0);
+  const maxMana = Math.max(0, Number(stats.maxMana) || 0);
+  const mediaBody = media?.mediaType === 'anime2d' && media.anime2dSpec
+    ? renderAnime2dEmbedded(media.anime2dSpec, 0)
+    : media?.imageData
+      ? '<img src="' + escapeMediaAttr(media.imageData, 'image') + '" alt="' + escapeAttr(label) + '" />'
+      : '<span>' + safeHtml(String(label || actor || '?').slice(0, 1).toUpperCase()) + '</span>';
+  return '<div class="hero-combat-actor hero-combat-actor--' + safeHtml(actor) + '">'
+    + '<div class="hero-combat-actor-bars">'
+    + '<span class="hero-combat-actor-bar hero-combat-actor-bar--health" title="' + safeHtml(health + '/' + maxHealth + ' PV') + '"><i style="width:' + combatBarPercent(health, maxHealth) + '%"></i></span>'
+    + (maxMana > 0 ? '<span class="hero-combat-actor-bar hero-combat-actor-bar--mana" title="' + safeHtml(mana + '/' + maxMana + ' mana') + '"><i style="width:' + combatBarPercent(mana, maxMana) + '%"></i></span>' : '')
+    + '</div>'
+    + '<div class="hero-combat-actor-media">' + mediaBody + '</div>'
+    + '<strong>' + safeHtml(label) + '</strong>'
+    + '</div>';
+}
+
+function renderHeroCombatOverlay() {
+  const combat = state.activeHeroCombat;
+  if (!combat || !IS_HERO_ADVENTURE) return '';
+  const entry = combat.entry || {};
+  const combatSettings = getStandaloneCombatSettings();
+  const playScene = getPlayScene();
+  const playSceneBackgroundUrl = resolveAssetUrl(playScene?.backgroundId, playScene?.backgroundData);
+  const backgroundImageData = entry.combatBackgroundImageData || combatSettings.backgroundImageData || playSceneBackgroundUrl || '';
+  const backgroundImage = backgroundImageData ? cssMediaUrl(backgroundImageData, 'image') : '';
+  const overlayStyle = backgroundImage ? ' style="background-image:linear-gradient(180deg,rgba(2,6,23,.18),rgba(2,6,23,.86)), ' + backgroundImage + '"' : '';
+  const hero = state.heroState || getInitialHeroState();
+  const heroLabel = hero.name || 'Héros';
+  const enemyLabel = combat.enemyName || entry.combatEnemyName || combatSettings.enemyName || 'Ennemi';
+  const heroMedia = getCombatActorMedia(entry, combatSettings, 'hero', hero.characterImageData || '');
+  const enemyMedia = getCombatActorMedia(entry, combatSettings, 'enemy');
+  const enemyMaxHealth = Math.max(1, Number(combat.enemyMaxHealth) || Number(entry.combatEnemyMaxHealth) || 1);
+  const enemyHealth = Math.max(0, Math.min(enemyMaxHealth, Number(combat.enemyHealth) || 0));
+  const enemyMaxMana = Math.max(0, Number(combat.enemyMaxMana) || Number(entry.combatEnemyMaxMana) || Number(combatSettings.enemyMaxMana) || 0);
+  const enemyMana = Math.max(0, Math.min(enemyMaxMana, Number(combat.enemyMana) || 0));
+  const heroMaxHealth = Math.max(1, Number(hero.maxHealth) || 1);
+  const heroHealth = Math.max(0, Math.min(heroMaxHealth, Number(hero.health) || 0));
+  const heroMaxMana = Math.max(0, Number(hero.maxMana) || 0);
+  const heroMana = Math.max(0, Math.min(heroMaxMana, Number(hero.mana) || 0));
+  const heroPowers = Array.isArray(hero.powers) ? hero.powers : [];
+  const combatManaCost = Math.max(0, Number(entry.combatManaCost) || 0);
+  const selectedPower = heroPowers.find((power) => power.id === state.selectedHeroCombatPowerId) || null;
+  const selectedPowerMissing = Boolean(state.selectedHeroCombatPowerId && !selectedPower);
+  const selectedPowerManaCost = selectedPower ? Math.max(0, Number(selectedPower.manaCost) || 0) : 0;
+  const selectedManaCost = combatManaCost + selectedPowerManaCost;
+  const manaUnavailable = selectedManaCost > heroMana;
+  const isEnded = ['victory', 'defeat', 'ended'].includes(combat.status);
+  const isEnemyTurn = combat.phase === 'enemy';
+  const showDice = getCombatEntryValue(entry, 'combatShowDice', combatSettings.showDice !== false) !== false;
+  const lastCombatRoll = combat.lastEnemyRoll || combat.lastRoll || (['hero_combat', 'enemy_combat'].includes(state.lastDiceRoll?.actionType) ? state.lastDiceRoll : null);
+  const actionLabel = isEnemyTurn
+    ? 'Lancer le dé ennemi'
+    : selectedPower
+      ? 'Utiliser ' + (selectedPower.name || 'Pouvoir')
+      : 'Attaque normale';
+  const actionDisabled = isEnded || (!isEnemyTurn && (selectedPowerMissing || manaUnavailable));
+
+  return '<div class="hero-combat-overlay hero-combat-overlay--' + safeHtml(combat.status || 'active') + (isEnemyTurn ? ' hero-combat-overlay--enemy-turn' : '') + '"' + overlayStyle + '>'
+    + '<div class="hero-combat-topline"><span>' + safeHtml(isEnemyTurn ? 'Tour ennemi' : 'Tour ' + (combat.round || 1)) + '</span><strong>' + safeHtml(enemyLabel) + '</strong><button id="close-hero-combat" type="button" class="secondary-action compact">' + safeHtml(isEnded ? 'Fermer' : 'Quitter') + '</button></div>'
+    + '<div class="hero-combat-stage">'
+    + renderCombatActor(heroMedia, heroLabel, 'hero', { health: heroHealth, maxHealth: heroMaxHealth, mana: heroMana, maxMana: heroMaxMana })
+    + (showDice ? '<div class="hero-combat-dice-spotlight"><button id="hero-combat-action" type="button" class="hero-combat-die-button"' + (actionDisabled ? ' disabled' : '') + '><span class="hero-combat-die"><span>' + safeHtml(lastCombatRoll?.raw || '?') + '</span></span></button><strong>' + safeHtml(lastCombatRoll ? lastCombatRoll.total + ' total' : project?.heroAdventure?.dice?.label || 'Dé') + '</strong><small>' + safeHtml(isEnded ? 'Combat terminé' : actionLabel) + '</small></div>' : '<div></div>')
+    + renderCombatActor(enemyMedia, enemyLabel, 'enemy', { health: enemyHealth, maxHealth: enemyMaxHealth, mana: enemyMana, maxMana: enemyMaxMana })
+    + '</div>'
+    + '<div class="hero-combat-hud">'
+    + '<div class="hero-combat-meter"><span>' + safeHtml(heroLabel) + '</span><strong>' + heroHealth + '/' + heroMaxHealth + ' PV</strong><i style="width:' + combatBarPercent(heroHealth, heroMaxHealth) + '%"></i></div>'
+    + '<div class="hero-combat-meter hero-combat-meter--hero-mana"><span>Mana héros</span><strong>' + heroMana + '/' + heroMaxMana + '</strong><i style="width:' + combatBarPercent(heroMana, Math.max(1, heroMaxMana)) + '%"></i></div>'
+    + '<div class="hero-combat-meter hero-combat-meter--enemy"><span>' + safeHtml(enemyLabel) + '</span><strong>' + enemyHealth + '/' + enemyMaxHealth + ' PV</strong><i style="width:' + combatBarPercent(enemyHealth, enemyMaxHealth) + '%"></i></div>'
+    + '<div class="hero-combat-meter hero-combat-meter--mana"><span>Mana ennemi</span><strong>' + enemyMana + '/' + enemyMaxMana + '</strong><i style="width:' + combatBarPercent(enemyMana, Math.max(1, enemyMaxMana)) + '%"></i></div>'
+    + '</div>'
+    + '<div class="hero-combat-log"><p>' + safeHtml(combat.message || 'Le combat commence.') + '</p>'
+    + (!isEnemyTurn && !isEnded ? '<div class="hero-combat-action-choice">'
+      + '<button type="button" class="hero-combat-action-choice-button ' + (!state.selectedHeroCombatPowerId ? 'active' : '') + '" data-hero-combat-power=""><strong>Attaque normale</strong><span>' + combatManaCost + ' mana</span></button>'
+      + heroPowers.map((power) => {
+        const manaCost = Math.max(0, Number(power.manaCost) || 0);
+        const totalManaCost = combatManaCost + manaCost;
+        const disabled = totalManaCost > heroMana;
+        return '<button type="button" class="hero-combat-action-choice-button ' + (state.selectedHeroCombatPowerId === power.id ? 'active' : '') + '" data-hero-combat-power="' + safeHtml(power.id || '') + '"' + (disabled ? ' disabled title="Mana insuffisante"' : '') + '><strong>' + safeHtml(power.name || 'Pouvoir') + '</strong><span>' + safeHtml((getPowerTypeLabel(power.type) || power.type || 'Pouvoir') + ' · ' + totalManaCost + ' mana · ' + (power.force || 0)) + '</span></button>';
+      }).join('')
+      + '</div>' : '')
+    + '<div class="inline-actions"><button id="hero-combat-action" type="button"' + (actionDisabled ? ' disabled' : '') + '>' + safeHtml(actionLabel) + '</button><button id="close-hero-combat" type="button" class="secondary-action">' + safeHtml(isEnded ? 'Revenir à la scène' : 'Quitter le combat') + '</button></div>'
+    + '</div></div>';
+}
+
 function renderAdventureStateSummary() {
   const variableEntries = Object.entries(state.storyVariables || {}).filter(([key]) => {
     const variable = (project.storyVariables || []).find((entry) => entry.key === key);
@@ -3321,7 +4039,7 @@ function render(shouldSave = true) {
     + '</div></div>'
     + '<div class="scene-player" id="scene-layer" style="--scene-aspect:' + sceneAspectRatio + '">'
     + (playSceneBackgroundUrl ?
-       '<img class="bg" src="' + escapeMediaAttr(playSceneBackgroundUrl, 'image') + '" alt="' + escapeAttr(playScene.name || 'Scene') + '" onload="setSceneAspectFromImage(this)" />'
+'<img class="bg" src="' + escapeMediaAttr(playSceneBackgroundUrl, 'image') + '" alt="' + escapeAttr(playScene.name || 'Scène') + '" onload="setSceneAspectFromImage(this)" />'
       : '<div class="placeholder">Ajoute un fond pour jouer la scène.</div>')
     + (playScene?.visualEffect && playScene.visualEffect !== 'none' ? '<div class="scene-visual-effect scene-visual-effect--' + safeHtml(playScene.visualEffect) + ' scene-visual-effect--' + safeHtml(playScene.visualEffectIntensity || 'normal') + '"></div>' : '')
     + (playScene?.visualEffectZones || []).filter((zone) => !zone.isHidden).map((zone) => '<div class="scene-visual-effect scene-visual-effect-zone scene-visual-effect--' + safeHtml(zone.effect || 'sparkles') + ' scene-visual-effect--' + safeHtml(zone.intensity || 'normal') + '" style="left:' + zone.x + '%;top:' + zone.y + '%;width:' + zone.width + '%;height:' + zone.height + '%;z-index:' + getVisualEffectZoneZIndex(zone.layer) + ';' + getElementShapeStyle(zone) + '"></div>').join('')
@@ -3374,6 +4092,7 @@ function render(shouldSave = true) {
         '<img src="' + escapeMediaAttr(transitionSceneBackgroundUrl, 'image') + '" alt="" />'
         : '<div class="placeholder">Scène précédente</div>')
       + '</div>' : '')
+    + renderHeroCombatOverlay()
     + (state.actPreload?.active ? '<div class="act-preload-overlay" role="status" aria-live="polite"><div class="act-preload-card"><span class="eyebrow">Chargement</span><strong>'
       + safeHtml(state.actPreload.label || 'Acte suivant') + '</strong><div class="act-preload-bar" aria-label="Chargement ' + safeHtml(state.actPreload.progress || 0) + '%"><span style="width:'
       + safeHtml(state.actPreload.progress || 0) + '%"></span></div><small>' + safeHtml(state.actPreload.progress || 0) + '% des médias de l\\'acte sont prêts</small></div></div>' : '')
