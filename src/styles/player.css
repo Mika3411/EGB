@@ -228,14 +228,18 @@
 }
 .player-inventory-drawer.player-inventory-drawer--hero {
   position: fixed !important;
-  top: 50% !important;
-  left: 50% !important;
-  right: auto !important;
-  bottom: auto !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
   z-index: 120 !important;
-  width: min(980px, calc(100vw - 56px)) !important;
-  max-height: calc(100vh - 56px) !important;
-  transform: translate(-50%, -50%) !important;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: auto !important;
+  max-height: none !important;
+  overflow: hidden;
+  border-radius: 0;
+  transform: none !important;
   container-type: inline-size;
 }
 .player-inventory-drawer.player-inventory-drawer--adventure {

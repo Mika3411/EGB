@@ -1270,19 +1270,19 @@
 .hero-equipped-item strong,.hero-equipped-item small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hero-equipped-item small{color:#a7f3d0}
 .hero-character-page--compact{padding:0;border:0;background-color:transparent}
-.hero-character-page--compact{aspect-ratio:16/9;max-height:calc(100vh - 170px);grid-template-columns:minmax(0,1fr) minmax(170px,220px);grid-template-rows:minmax(0,1fr) auto auto auto;grid-template-areas:"doll inventory" "combat inventory" "skills inventory" "equipped inventory";align-items:stretch;overflow:hidden}
+.hero-character-page--compact{height:100%;min-height:0;aspect-ratio:auto;max-height:none;grid-template-columns:minmax(250px,.95fr) minmax(360px,1.35fr) minmax(250px,.9fr);grid-template-rows:minmax(0,1fr) minmax(150px,.42fr);grid-template-areas:"doll combat inventory" "equipped skills inventory";align-items:stretch;overflow:hidden}
 .hero-character-page--compact .hero-paper-doll{grid-area:doll}
-.hero-character-page--compact .hero-character-combat{grid-area:combat;min-width:0}
+.hero-character-page--compact .hero-character-combat{grid-area:combat;min-width:0;min-height:0;align-content:start;overflow:auto;padding-right:2px}
 .hero-character-page--compact .hero-character-combat-stats{grid-template-columns:repeat(3,minmax(0,1fr))}
 .hero-character-page--compact .hero-character-resistances{grid-template-columns:repeat(4,minmax(0,1fr))}
-.hero-character-page--compact .hero-character-skills{grid-area:skills}
-.hero-character-page--compact .hero-character-section:not(.hero-inventory-dropzone){grid-area:equipped}
-.hero-character-page--compact .hero-inventory-dropzone{grid-area:inventory;align-self:stretch;min-height:0}
+.hero-character-page--compact .hero-character-skills{grid-area:skills;min-height:0;align-content:start;overflow:auto;padding-right:2px}
+.hero-character-page--compact .hero-character-section:not(.hero-inventory-dropzone){grid-area:equipped;min-height:0;overflow:auto;padding-right:2px}
+.hero-character-page--compact .hero-inventory-dropzone{grid-area:inventory;display:grid;grid-template-rows:auto minmax(0,1fr);align-self:stretch;min-height:0;overflow:hidden}
 .hero-character-page--compact .hero-inventory-dropzone h4{flex:0 0 auto}
-.hero-character-page--compact .hero-inventory-dropzone .inventory-grid{grid-template-columns:1fr;align-content:start;max-height:100%;overflow:auto;padding-right:2px}
+.hero-character-page--compact .hero-inventory-dropzone .inventory-grid{grid-template-columns:1fr;align-content:start;max-height:none;min-height:0;overflow:auto;padding-right:2px}
 .hero-character-page--compact .hero-inventory-dropzone .inventory-item{min-height:76px}
 .hero-paper-doll{position:relative;min-height:292px;display:grid;place-items:center;padding:10px 70px;border-radius:12px;overflow:hidden;background:linear-gradient(180deg,rgba(2,6,23,.08),rgba(2,6,23,.32))}
-.hero-character-page--compact .hero-paper-doll{min-height:0;padding:12px 118px}
+.hero-character-page--compact .hero-paper-doll{min-height:0;height:100%;padding:12px 94px}
 .hero-character-page--compact .hero-character-core .hero-character-portrait{width:116px}
 .hero-character-page--compact .hero-character-core h3{font-size:22px;max-width:210px}
 .hero-character-page--compact .hero-equipment-slot{width:94px;height:108px;grid-template-rows:62px 1fr;padding:8px}
