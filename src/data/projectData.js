@@ -7,7 +7,7 @@ const VISUAL_EFFECT_INTENSITY_VALUES = ['subtle', 'normal', 'strong'];
 const SCENE_TRANSITION_VALUES = ['none', 'fade', 'blur', 'dissolve', 'slide-left', 'slide-right', 'slide-up', 'slide-down', 'wipe-left', 'wipe-right', 'wipe-up', 'wipe-down', 'zoom', 'zoom-spin', 'iris', 'flip', 'rotate', 'curtain', 'split-horizontal', 'split-vertical', 'cinematic-bars', 'glitch', 'pixel', 'burn', 'flash'];
 const SCENE_TIMER_ACTION_VALUES = ['none', 'scene', 'restart-scene', 'restart-preview', 'damage-life', 'dialogue', 'cinematic'];
 const ADVANCED_CONDITION_VALUES = ['has_item', 'visited_scene', 'completed_hotspot', 'solved_enigma', 'chose_reply', 'story_variable'];
-const CONVERSATION_EFFECT_VALUES = ['message', 'add_item', 'remove_item', 'set_variable', 'increment_variable', 'decrement_variable', 'journal', 'next_node', 'scene', 'cinematic', 'enigma', 'ending'];
+const CONVERSATION_EFFECT_VALUES = ['message', 'add_item', 'remove_item', 'heal_health', 'heal_mana', 'set_variable', 'increment_variable', 'decrement_variable', 'journal', 'next_node', 'scene', 'cinematic', 'enigma', 'ending'];
 const CONVERSATION_REPLY_ACTION_VALUES = ['node', 'dialogue', 'item', 'multiple', 'skill_check', 'hero_combat', 'scene', 'cinematic', 'enigma', 'ending', 'end'];
 const CONVERSATION_CONDITION_VALUES = ['none', 'has_item', 'visited_scene', 'completed_hotspot', 'solved_enigma', 'chose_reply', 'story_variable', 'advanced'];
 const HOTSPOT_ACTION_VALUES = ['dialogue', 'conversation', 'skill_check', 'hero_combat', 'dialogue_item', 'scene', 'cinematic'];
@@ -152,14 +152,22 @@ const makeHotspot = () => ({
   combatSkillId: '',
   combatAttackDifficulty: 10,
   combatDamage: 3,
+  combatHeroDieDamagePercent: 100,
+  combatEnemyInitiative: 0,
   combatEnemyStrength: 2,
   combatEnemyDamage: 2,
+  combatEnemyDieDamagePercent: 100,
+  combatEnemyCunning: 10,
+  combatEnemyChaos: 10,
+  combatEnemyArmor: 0,
+  combatEnemyDodgeChance: 0,
   combatEnemyMaxMana: 0,
   combatEnemyPowerName: 'Pouvoir',
   combatEnemyPowerType: 'fire',
   combatEnemyPowerManaCost: 3,
   combatEnemyPowerDamage: 4,
   combatEnemyPowerUsageChance: 25,
+  combatEnemyAiMode: 'tactical',
   combatEnemyCriticalChance: 5,
   combatEnemyCriticalMultiplier: 2,
   combatEnemyResistanceWater: 0,
@@ -482,14 +490,22 @@ const normalizeConversationReply = (reply = {}) => ({
   combatSkillId: reply.combatSkillId || '',
   combatAttackDifficulty: Number.isFinite(Number(reply.combatAttackDifficulty)) ? Number(reply.combatAttackDifficulty) : 10,
   combatDamage: Number.isFinite(Number(reply.combatDamage)) ? Number(reply.combatDamage) : 3,
+  combatHeroDieDamagePercent: Number.isFinite(Number(reply.combatHeroDieDamagePercent)) ? Math.round(Number(reply.combatHeroDieDamagePercent)) : 100,
+  combatEnemyInitiative: Number.isFinite(Number(reply.combatEnemyInitiative)) ? Number(reply.combatEnemyInitiative) : 0,
   combatEnemyStrength: Number.isFinite(Number(reply.combatEnemyStrength)) ? Number(reply.combatEnemyStrength) : (Number.isFinite(Number(reply.combatEnemyDamage)) ? Number(reply.combatEnemyDamage) : 2),
   combatEnemyDamage: Number.isFinite(Number(reply.combatEnemyDamage)) ? Number(reply.combatEnemyDamage) : 2,
+  combatEnemyDieDamagePercent: Number.isFinite(Number(reply.combatEnemyDieDamagePercent)) ? Math.round(Number(reply.combatEnemyDieDamagePercent)) : 100,
+  combatEnemyCunning: Number.isFinite(Number(reply.combatEnemyCunning)) ? Number(reply.combatEnemyCunning) : 10,
+  combatEnemyChaos: Number.isFinite(Number(reply.combatEnemyChaos)) ? Number(reply.combatEnemyChaos) : 10,
+  combatEnemyArmor: Number.isFinite(Number(reply.combatEnemyArmor)) ? Number(reply.combatEnemyArmor) : 0,
+  combatEnemyDodgeChance: Number.isFinite(Number(reply.combatEnemyDodgeChance)) ? Number(reply.combatEnemyDodgeChance) : 0,
   combatEnemyMaxMana: Number.isFinite(Number(reply.combatEnemyMaxMana)) ? Number(reply.combatEnemyMaxMana) : 0,
   combatEnemyPowerName: reply.combatEnemyPowerName || 'Pouvoir',
   combatEnemyPowerType: ['water', 'earth', 'fire', 'lightning'].includes(reply.combatEnemyPowerType) ? reply.combatEnemyPowerType : 'fire',
   combatEnemyPowerManaCost: Number.isFinite(Number(reply.combatEnemyPowerManaCost)) ? Number(reply.combatEnemyPowerManaCost) : 3,
   combatEnemyPowerDamage: Number.isFinite(Number(reply.combatEnemyPowerDamage)) ? Number(reply.combatEnemyPowerDamage) : 4,
   combatEnemyPowerUsageChance: Number.isFinite(Number(reply.combatEnemyPowerUsageChance)) ? Number(reply.combatEnemyPowerUsageChance) : 25,
+  combatEnemyAiMode: reply.combatEnemyAiMode === 'random' ? 'random' : 'tactical',
   combatEnemyCriticalChance: Number.isFinite(Number(reply.combatEnemyCriticalChance)) ? Number(reply.combatEnemyCriticalChance) : 5,
   combatEnemyCriticalMultiplier: Number.isFinite(Number(reply.combatEnemyCriticalMultiplier)) ? Number(reply.combatEnemyCriticalMultiplier) : 2,
   combatEnemyResistanceWater: Number.isFinite(Number(reply.combatEnemyResistanceWater)) ? Number(reply.combatEnemyResistanceWater) : 0,

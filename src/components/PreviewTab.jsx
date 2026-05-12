@@ -67,6 +67,8 @@ const HERO_RESISTANCE_SUMMARY_FIELDS = [
   { id: 'lightning', label: 'Foudre', field: 'resistanceLightning' },
 ];
 
+const HERO_COMBAT_EFFECT_LOCK_MS = 3000;
+
 const normalizeHeroStatKey = (value = '') => String(value || '')
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
@@ -234,6 +236,8 @@ export default function PreviewTab(props) {
     activeHeroCombat = null,
     attackActiveHeroCombat,
     rollActiveEnemyCombat,
+    attemptSurvivalHeroCombat,
+    attemptEscapeHeroCombat,
     closeHeroCombat,
     equippedHeroItemIds = [],
     equippedHeroSlotMap = {},
@@ -241,6 +245,7 @@ export default function PreviewTab(props) {
     adjustHeroStat,
     lastDiceRoll,
     rollHeroDie,
+    selectHeroCharacter,
     rollHeroSetupSkills,
     completeHeroSetup,
     sceneTimerResetKey = 0,
@@ -328,15 +333,24 @@ export default function PreviewTab(props) {
   const [heroSetupDiceFaces, setHeroSetupDiceFaces] = useState([]);
   const [heroSetupFinalRolls, setHeroSetupFinalRolls] = useState([]);
   const [heroSetupResultsRevealed, setHeroSetupResultsRevealed] = useState(false);
+  const [heroSetupSelectionConfirmed, setHeroSetupSelectionConfirmed] = useState(false);
+  const [heroSetupGalleryIndex, setHeroSetupGalleryIndex] = useState(0);
   const [heroPanelRollingSkillId, setHeroPanelRollingSkillId] = useState(null);
   const [heroPanelDieFace, setHeroPanelDieFace] = useState(1);
   const [heroRewardNotice, setHeroRewardNotice] = useState(null);
   const [selectedHeroCombatPowerId, setSelectedHeroCombatPowerId] = useState('');
+  const [heroCombatRolling, setHeroCombatRolling] = useState(false);
+  const [heroCombatDieFace, setHeroCombatDieFace] = useState(1);
+  const [heroCombatEffectLocked, setHeroCombatEffectLocked] = useState(false);
   const heroSetupRollTimerRef = useRef(null);
   const heroSetupRollIntervalRef = useRef(null);
   const heroSetupDiceFacesRef = useRef([]);
   const heroPanelRollIntervalRef = useRef(null);
   const heroPanelDieFaceRef = useRef(1);
+  const heroCombatRollIntervalRef = useRef(null);
+  const heroCombatAutoStopTimeoutRef = useRef(null);
+  const heroCombatEffectLockTimeoutRef = useRef(null);
+  const heroCombatDieFaceRef = useRef(1);
   const heroRewardNoticeTimerRef = useRef(null);
   const draggedInventoryIdRef = useRef(null);
   const sceneAspectRatio = Number(loadedSceneAspectRatio || playScene?.backgroundAspectRatio) > 0 ?
@@ -378,6 +392,19 @@ export default function PreviewTab(props) {
   }, [heroCharacterPreviewRequestKey, isHeroAdventure]);
 
   useEffect(() => {
+    if (!isHeroSetupOpen) {
+      setHeroSetupSelectionConfirmed(false);
+      setHeroSetupGalleryIndex(0);
+      return;
+    }
+    const heroChoices = Array.isArray(heroAdventure?.heroes) && heroAdventure.heroes.length
+      ? heroAdventure.heroes
+      : [];
+    const selectedIndex = heroChoices.findIndex((choice) => choice.id === heroState?.id);
+    if (selectedIndex >= 0) setHeroSetupGalleryIndex(selectedIndex);
+  }, [heroAdventure?.heroes, heroState?.id, isHeroSetupOpen]);
+
+  useEffect(() => {
     if (!isHeroAdventure) setIsHeroPanelOpen(false);
   }, [isHeroAdventure]);
 
@@ -387,10 +414,51 @@ export default function PreviewTab(props) {
     }
   }, [activeHeroCombat?.id, activeHeroCombat?.phase, activeHeroCombat?.round, activeHeroCombat?.status]);
 
+  const activeHeroCombatEffectKey = Array.isArray(activeHeroCombat?.visualEffects)
+    ? activeHeroCombat.visualEffects.map((effect) => effect?.id).filter(Boolean).join('|')
+    : '';
+
+  useEffect(() => {
+    if (heroCombatEffectLockTimeoutRef.current) {
+      window.clearTimeout(heroCombatEffectLockTimeoutRef.current);
+      heroCombatEffectLockTimeoutRef.current = null;
+    }
+    if (!activeHeroCombatEffectKey) {
+      setHeroCombatEffectLocked(false);
+      return undefined;
+    }
+    setHeroCombatEffectLocked(true);
+    heroCombatEffectLockTimeoutRef.current = window.setTimeout(() => {
+      setHeroCombatEffectLocked(false);
+      heroCombatEffectLockTimeoutRef.current = null;
+    }, HERO_COMBAT_EFFECT_LOCK_MS);
+    return () => {
+      if (heroCombatEffectLockTimeoutRef.current) {
+        window.clearTimeout(heroCombatEffectLockTimeoutRef.current);
+        heroCombatEffectLockTimeoutRef.current = null;
+      }
+    };
+  }, [activeHeroCombatEffectKey]);
+
+  useEffect(() => {
+    if (heroCombatRollIntervalRef.current) {
+      window.clearInterval(heroCombatRollIntervalRef.current);
+      heroCombatRollIntervalRef.current = null;
+    }
+    if (heroCombatAutoStopTimeoutRef.current) {
+      window.clearTimeout(heroCombatAutoStopTimeoutRef.current);
+      heroCombatAutoStopTimeoutRef.current = null;
+    }
+    setHeroCombatRolling(false);
+  }, [activeHeroCombat?.id, activeHeroCombat?.phase, activeHeroCombat?.round, activeHeroCombat?.status]);
+
   useEffect(() => () => {
     if (heroSetupRollTimerRef.current) window.clearTimeout(heroSetupRollTimerRef.current);
     if (heroSetupRollIntervalRef.current) window.clearInterval(heroSetupRollIntervalRef.current);
     if (heroPanelRollIntervalRef.current) window.clearInterval(heroPanelRollIntervalRef.current);
+    if (heroCombatRollIntervalRef.current) window.clearInterval(heroCombatRollIntervalRef.current);
+    if (heroCombatAutoStopTimeoutRef.current) window.clearTimeout(heroCombatAutoStopTimeoutRef.current);
+    if (heroCombatEffectLockTimeoutRef.current) window.clearTimeout(heroCombatEffectLockTimeoutRef.current);
     if (heroRewardNoticeTimerRef.current) window.clearTimeout(heroRewardNoticeTimerRef.current);
   }, []);
 
@@ -1530,6 +1598,14 @@ export default function PreviewTab(props) {
         </>
       );
     }
+    if (media.mediaType === 'visual' && media.visualEffect && media.visualEffect !== 'none') {
+      return (
+        <>
+          {audioNode}
+          <span className={`hero-combat-fx-visual hero-combat-fx-visual--${media.visualEffect}`} aria-hidden="true" />
+        </>
+      );
+    }
     return audioNode;
   };
 
@@ -1541,9 +1617,15 @@ export default function PreviewTab(props) {
     const healthPercent = (health / maxHealth) * 100;
     const manaPercent = maxMana > 0 ? (mana / maxMana) * 100 : 0;
     const actorEffects = visualEffects.filter((effect) => effect.target === side);
+    const actorVisualEffect = actorEffects.find((effect) => (
+      effect?.media?.mediaType === 'visual'
+      && effect.media.visualEffect
+      && effect.media.visualEffect !== 'none'
+    ))?.media?.visualEffect || '';
+    const actorVisualEffectClass = actorVisualEffect ? `hero-combat-actor--visual-${actorVisualEffect}` : '';
 
     return (
-      <div className={`hero-combat-actor hero-combat-actor--${side} ${media.mediaType === 'anime2d' && media.anime2dSpec ? 'has-anime' : media.imageData ? 'has-image' : 'is-empty'}`}>
+      <div className={`hero-combat-actor hero-combat-actor--${side} ${actorVisualEffectClass} ${media.mediaType === 'anime2d' && media.anime2dSpec ? 'has-anime' : media.imageData ? 'has-image' : 'is-empty'}`}>
         <div className="hero-combat-actor-bars" aria-label={`Jauges ${label}`}>
           <div className="hero-combat-actor-bar hero-combat-actor-bar--health">
             <span>PV</span>
@@ -1556,7 +1638,7 @@ export default function PreviewTab(props) {
             <i style={{ width: `${manaPercent}%` }} />
           </div>
         </div>
-        <div className="hero-combat-actor-media">
+        <div className={`hero-combat-actor-media ${actorVisualEffect ? `hero-combat-actor-media--visual-${actorVisualEffect}` : ''}`}>
           {media.mediaType === 'anime2d' && media.anime2dSpec ? (
             <Anime2DPreview spec={media.anime2dSpec} project={project} />
           ) : media.imageData ? (
@@ -1614,27 +1696,93 @@ export default function PreviewTab(props) {
     const showDice = getCombatEntryValue(entry, 'combatShowDice', combatSettings.showDice !== false) !== false;
     const lastCombatRoll = activeHeroCombat.lastEnemyRoll
       || activeHeroCombat.lastRoll
-      || (['hero_combat', 'enemy_combat'].includes(lastDiceRoll?.actionType) ? lastDiceRoll : null);
+      || (['hero_combat', 'enemy_combat', 'hero_combat_escape', 'hero_combat_survival'].includes(lastDiceRoll?.actionType) ? lastDiceRoll : null);
     const overlayStyle = backgroundImageData
       ? { backgroundImage: `linear-gradient(180deg, rgba(2,6,23,.18), rgba(2,6,23,.82)), url(${backgroundImageData})` }
       : undefined;
     const isEnded = ['victory', 'defeat'].includes(activeHeroCombat.status);
     const isEnemyTurn = activeHeroCombat.phase === 'enemy';
-    const canChooseHeroAction = !isEnded && !isEnemyTurn && !isHeroDefeated;
-    const combatActionHandler = isEnemyTurn ? rollActiveEnemyCombat : () => attackActiveHeroCombat?.(selectedHeroCombatPower?.id || '');
-    const combatActionDisabled = isEnded
-      || isHeroDefeated
-      || (isEnemyTurn ? !rollActiveEnemyCombat : !attackActiveHeroCombat)
-      || (!isEnemyTurn && (selectedHeroCombatPowerMissing || selectedHeroCombatManaUnavailable));
+    const isSurvivalTurn = activeHeroCombat.phase === 'survival';
     const combatVisualEffects = Array.isArray(activeHeroCombat.visualEffects) ? activeHeroCombat.visualEffects : [];
+    const isCombatEffectLocked = heroCombatEffectLocked && combatVisualEffects.length > 0;
+    const canChooseHeroAction = !isEnded && !isEnemyTurn && !isSurvivalTurn && !isHeroDefeated && !isCombatEffectLocked;
+    const handleCombatExit = () => {
+      if (isEnded) {
+        closeHeroCombat?.();
+        return;
+      }
+      if (!isEnemyTurn && !isSurvivalTurn && !heroCombatRolling && !isCombatEffectLocked && attemptEscapeHeroCombat) {
+        attemptEscapeHeroCombat();
+      }
+    };
+    const combatActionHandler = (rawRoll) => (
+      isSurvivalTurn
+        ? attemptSurvivalHeroCombat?.({ rawRoll })
+        : isEnemyTurn
+        ? rollActiveEnemyCombat?.({ rawRoll })
+        : attackActiveHeroCombat?.(selectedHeroCombatPower?.id || '', { rawRoll })
+    );
+    const combatActionDisabled = isEnded
+      || (!isSurvivalTurn && isHeroDefeated)
+      || isCombatEffectLocked
+      || (isSurvivalTurn ? !attemptSurvivalHeroCombat : isEnemyTurn ? !rollActiveEnemyCombat : !attackActiveHeroCombat)
+      || (!isEnemyTurn && !isSurvivalTurn && (selectedHeroCombatPowerMissing || selectedHeroCombatManaUnavailable));
+    const finishHeroCombatRoll = () => {
+      if (heroCombatRollIntervalRef.current) {
+        window.clearInterval(heroCombatRollIntervalRef.current);
+        heroCombatRollIntervalRef.current = null;
+      }
+      if (heroCombatAutoStopTimeoutRef.current) {
+        window.clearTimeout(heroCombatAutoStopTimeoutRef.current);
+        heroCombatAutoStopTimeoutRef.current = null;
+      }
+      const sides = Math.max(2, Number(heroAdventure?.dice?.sides) || 20);
+      const finalRaw = Math.max(1, Math.min(sides, Number(heroCombatDieFaceRef.current) || 1));
+      setHeroCombatRolling(false);
+      combatActionHandler(finalRaw);
+    };
+    const stopHeroCombatRoll = () => {
+      if (!heroCombatRolling) return;
+      finishHeroCombatRoll();
+    };
+    const startHeroCombatRoll = () => {
+      if (combatActionDisabled || heroCombatRolling || isCombatEffectLocked) return;
+      const sides = Math.max(2, Number(heroAdventure?.dice?.sides) || 20);
+      const initialFace = Number(lastCombatRoll?.raw) || Math.floor(Math.random() * sides) + 1;
+      heroCombatDieFaceRef.current = Math.max(1, Math.min(sides, initialFace));
+      setHeroCombatDieFace(heroCombatDieFaceRef.current);
+      setHeroCombatRolling(true);
+      if (heroCombatRollIntervalRef.current) window.clearInterval(heroCombatRollIntervalRef.current);
+      heroCombatRollIntervalRef.current = window.setInterval(() => {
+        const nextFace = Math.floor(Math.random() * sides) + 1;
+        heroCombatDieFaceRef.current = nextFace;
+        setHeroCombatDieFace(nextFace);
+      }, 80);
+      if (isEnemyTurn) {
+        const duration = 1000 + Math.floor(Math.random() * 2001);
+        heroCombatAutoStopTimeoutRef.current = window.setTimeout(() => {
+          finishHeroCombatRoll();
+        }, duration);
+      }
+    };
+    const toggleHeroCombatRoll = () => {
+      if (isCombatEffectLocked) return;
+      if (heroCombatRolling && isEnemyTurn) return;
+      if (heroCombatRolling) {
+        stopHeroCombatRoll();
+        return;
+      }
+      startHeroCombatRoll();
+    };
+    const displayedCombatDieFace = heroCombatRolling ? heroCombatDieFace : lastCombatRoll?.raw || '?';
 
     return (
       <div className={`hero-combat-overlay hero-combat-overlay--${activeHeroCombat.status || 'active'}${isEnemyTurn ? ' hero-combat-overlay--enemy-turn' : ''}`} style={overlayStyle}>
         <div className="hero-combat-topline">
-          <span>{isEnemyTurn ? 'Tour ennemi' : `Tour ${activeHeroCombat.round || 1}`}</span>
+          <span>{isSurvivalTurn ? 'Survie' : isEnemyTurn ? 'Tour ennemi' : `Tour ${activeHeroCombat.round || 1}`}</span>
           <strong>{enemyLabel}</strong>
-          <button type="button" className="secondary-action compact" onClick={closeHeroCombat}>
-            Fermer
+          <button type="button" className="secondary-action compact" onClick={handleCombatExit} disabled={!isEnded && (isEnemyTurn || isSurvivalTurn || heroCombatRolling || isCombatEffectLocked)}>
+            {isEnded ? 'Fermer' : 'Fuir'}
           </button>
         </div>
 
@@ -1650,16 +1798,16 @@ export default function PreviewTab(props) {
             <div className="hero-combat-dice-spotlight">
               <button
                 type="button"
-                className="hero-combat-die-button"
-                onClick={combatActionHandler}
-                disabled={combatActionDisabled}
+                className={`hero-combat-die-button ${heroCombatRolling ? 'is-rolling' : ''}`}
+                onClick={toggleHeroCombatRoll}
+                disabled={combatActionDisabled && !heroCombatRolling}
               >
-                <span className={`hero-combat-die hero-die-face hero-die-face--${heroDiceSkin}`}>
-                  <span className="hero-roll-die-value">{lastCombatRoll?.raw || '?'}</span>
+                <span className={`hero-combat-die hero-die-face hero-die-face--${heroDiceSkin} ${heroCombatRolling ? 'is-rolling' : ''}`}>
+                  <span className="hero-roll-die-value">{displayedCombatDieFace}</span>
                 </span>
               </button>
-              <strong>{lastCombatRoll ? `${lastCombatRoll.total} total` : heroAdventure.dice?.label || 'Dé'}</strong>
-              <small>{isEnded ? 'Combat terminé' : isEnemyTurn ? 'Lance le dé ennemi' : selectedHeroCombatActionLabel}</small>
+              <strong>{heroCombatRolling ? '...' : lastCombatRoll ? `${lastCombatRoll.total} total` : heroAdventure.dice?.label || 'Dé'}</strong>
+              <small>{isEnded ? 'Combat terminé' : isCombatEffectLocked ? 'Impact...' : heroCombatRolling ? (isEnemyTurn ? 'Le dé ennemi tourne...' : 'Clique pour arrêter') : isEnemyTurn ? 'Clique pour la riposte' : isSurvivalTurn ? 'Lance Survie' : 'Clique pour lancer'}</small>
             </div>
           ) : null}
 
@@ -1671,42 +1819,21 @@ export default function PreviewTab(props) {
           }, combatVisualEffects)}
         </div>
 
-        <div className="hero-combat-hud">
-          <div className="hero-combat-meter">
-            <span>{heroLabel}</span>
-            <strong>{heroHealth}/{heroMaxHealth} PV</strong>
-            <i style={{ width: `${(heroHealth / heroMaxHealth) * 100}%` }} />
-          </div>
-          {heroMaxMana > 0 ? (
-            <div className="hero-combat-meter hero-combat-meter--hero-mana">
-              <span>Mana héros</span>
-              <strong>{heroMana}/{heroMaxMana}</strong>
-              <i style={{ width: `${(heroMana / heroMaxMana) * 100}%` }} />
-            </div>
-          ) : null}
-          <div className="hero-combat-meter hero-combat-meter--enemy">
-            <span>{enemyLabel}</span>
-            <strong>{enemyHealth}/{enemyMaxHealth} PV</strong>
-            <i style={{ width: `${(enemyHealth / enemyMaxHealth) * 100}%` }} />
-          </div>
-          {enemyMaxMana > 0 ? (
-            <div className="hero-combat-meter hero-combat-meter--mana">
-              <span>Mana ennemi</span>
-              <strong>{enemyMana}/{enemyMaxMana}</strong>
-              <i style={{ width: `${(enemyMana / enemyMaxMana) * 100}%` }} />
-            </div>
-          ) : null}
-        </div>
-
         <div className="hero-combat-log">
           <p>{activeHeroCombat.message || 'Le combat commence.'}</p>
-          {!isEnemyTurn && !isEnded ? (
+          {isSurvivalTurn && !isEnded ? (
+            <div className="hero-combat-survival-card" role="status" aria-live="polite">
+              <strong>Survie</strong>
+              <span>Lance le dé pour tenter de rester à 1 PV.</span>
+            </div>
+          ) : null}
+          {!isEnemyTurn && !isSurvivalTurn && !isEnded ? (
             <div className="hero-combat-action-choice" aria-label="Action du héros">
               <button
                 type="button"
                 className={`hero-combat-action-choice-button ${!selectedHeroCombatPowerId ? 'active' : ''}`}
                 onClick={() => setSelectedHeroCombatPowerId('')}
-                disabled={!canChooseHeroAction}
+                disabled={!canChooseHeroAction || heroCombatRolling || isCombatEffectLocked}
               >
                 <strong>Attaque normale</strong>
                 <span>{combatManaCost} mana</span>
@@ -1721,7 +1848,7 @@ export default function PreviewTab(props) {
                     type="button"
                     className={`hero-combat-action-choice-button ${selectedHeroCombatPowerId === power.id ? 'active' : ''}`}
                     onClick={() => setSelectedHeroCombatPowerId(power.id)}
-                    disabled={disabled}
+                    disabled={disabled || heroCombatRolling || isCombatEffectLocked}
                     title={disabled && totalManaCost > heroMana ? 'Mana insuffisante' : `${power.force || 0} force`}
                   >
                     <strong>{power.name || 'Pouvoir'}</strong>
@@ -1732,11 +1859,15 @@ export default function PreviewTab(props) {
             </div>
           ) : null}
           <div className="inline-actions">
-            <button type="button" onClick={combatActionHandler} disabled={combatActionDisabled}>
-              {isEnemyTurn ? 'Lancer le dé ennemi' : selectedHeroCombatActionLabel}
+            <button
+              type="button"
+              onClick={showDice ? toggleHeroCombatRoll : () => combatActionHandler()}
+              disabled={combatActionDisabled && !heroCombatRolling}
+            >
+              {isEnded ? 'Combat terminé' : isCombatEffectLocked ? 'Impact...' : heroCombatRolling && isEnemyTurn ? 'Le dé ennemi tourne...' : isEnemyTurn ? 'Lancer le dé ennemi' : heroCombatRolling ? 'Arrêter le dé' : isSurvivalTurn ? 'Lancer Survie' : selectedHeroCombatActionLabel}
             </button>
-            <button type="button" className="secondary-action" onClick={closeHeroCombat}>
-              {isEnded ? 'Revenir à la scène' : 'Quitter le combat'}
+            <button type="button" className="secondary-action" onClick={handleCombatExit} disabled={!isEnded && (isEnemyTurn || isSurvivalTurn || heroCombatRolling || isCombatEffectLocked)}>
+              {isEnded ? (activeHeroCombat.pendingSceneId ? 'Continuer' : 'Revenir à la scène') : 'Fuir'}
             </button>
           </div>
         </div>
@@ -1788,9 +1919,10 @@ export default function PreviewTab(props) {
     const heroPowers = heroState?.powers || [];
     const forceSkill = getHeroForceSkill(heroSkills);
     const heroForceDamage = Math.max(0, Number(forceSkill?.value) || 0);
-    const criticalSuccess = Math.max(1, Number(heroAdventure?.rules?.criticalSuccess) || Number(heroAdventure?.dice?.sides) || 20);
-    const criticalChance = Math.max(0, Math.min(100, Number(heroAdventure?.rules?.criticalChance) || 0));
-    const criticalMultiplier = Math.max(1, Number(heroAdventure?.rules?.criticalMultiplier) || 2);
+    const activeRules = heroState?.rules || heroAdventure?.rules || {};
+    const criticalSuccess = Math.max(1, Number(activeRules.criticalSuccess) || Number(heroAdventure?.dice?.sides) || 20);
+    const criticalChance = Math.max(0, Math.min(100, Number(activeRules.criticalChance) || 0));
+    const criticalMultiplier = Math.max(1, Number(activeRules.criticalMultiplier) || 2);
     const strongestPower = heroPowers.reduce((best, power) => (
       Math.max(0, Number(power.force) || 0) > Math.max(0, Number(best?.force) || 0) ? power : best
     ), null);
@@ -1861,6 +1993,21 @@ export default function PreviewTab(props) {
               <strong>{strongestMagicDamage}</strong>
               <em>{strongestPower?.name || 'sans pouvoir'}</em>
             </span>
+            <span>
+              <small>Armure</small>
+              <strong>{Math.max(0, Number(heroState?.armor) || 0)}</strong>
+              <em>réduction</em>
+            </span>
+            <span>
+              <small>Initiative</small>
+              <strong>{Math.max(-999, Math.min(999, Number(heroState?.initiative) || 0))}</strong>
+              <em>ordre</em>
+            </span>
+            <span>
+              <small>Esquive</small>
+              <strong>{Math.max(0, Math.min(100, Number(heroState?.dodgeChance) || 0))}%</strong>
+              <em>annulation</em>
+            </span>
           </div>
 
           {heroPowers.length ? (
@@ -1868,11 +2015,14 @@ export default function PreviewTab(props) {
               {heroPowers.map((power) => {
                 const manaCost = Math.max(0, Number(power.manaCost) || 0);
                 const powerForce = Math.max(0, Number(power.force) || 0);
+                const healHealth = Math.max(0, Number(power.healHealth) || 0);
+                const healMana = Math.max(0, Number(power.healMana) || 0);
+                const recoveryText = [healHealth ? `+${healHealth} PV` : '', healMana ? `+${healMana} mana` : ''].filter(Boolean).join(' · ');
                 return (
                   <article className="hero-character-power" key={power.id}>
                     <strong>{power.name || 'Pouvoir'}</strong>
                     <span>{HERO_POWER_TYPE_LABELS[power.type] || power.type || 'Pouvoir'}</span>
-                    <small>{manaCost} mana · +{powerForce} force · {heroForceDamage + powerForce} dégâts</small>
+                    <small>{manaCost} mana · +{powerForce} force · {heroForceDamage + powerForce} dégâts{recoveryText ? ` · ${recoveryText}` : ''}</small>
                   </article>
                 );
               })}
@@ -2000,89 +2150,198 @@ export default function PreviewTab(props) {
     setHeroSetupResultsRevealed(true);
   };
 
+  const resetHeroSetupRollState = () => {
+    setHeroSetupFinalRolls([]);
+    setHeroSetupDiceFaces([]);
+    heroSetupDiceFacesRef.current = [];
+    setHeroSetupRollingIndex(-1);
+    setIsHeroSetupRolling(false);
+    setHeroSetupResultsRevealed(false);
+    if (heroSetupRollTimerRef.current) window.clearTimeout(heroSetupRollTimerRef.current);
+    if (heroSetupRollIntervalRef.current) window.clearInterval(heroSetupRollIntervalRef.current);
+    heroSetupRollTimerRef.current = null;
+    heroSetupRollIntervalRef.current = null;
+  };
+
   const renderHeroSetupScreen = () => {
     if (!isHeroSetupOpen) return null;
     const hasRolledSkills = heroSetupResultsRevealed && (heroState?.skills || []).some((skill) => skill.rolledValue);
     const skillCount = Math.max(1, (heroState?.skills || []).length);
     const allDiceRolled = heroSetupFinalRolls.length >= skillCount;
-    const shouldShowDice = isHeroSetupRolling || !hasRolledSkills || allDiceRolled;
+    const heroChoices = Array.isArray(heroAdventure?.heroes) && heroAdventure.heroes.length
+      ? heroAdventure.heroes
+      : heroState
+        ? [heroState]
+        : [];
+    const safeGalleryIndex = heroChoices.length
+      ? ((heroSetupGalleryIndex % heroChoices.length) + heroChoices.length) % heroChoices.length
+      : 0;
+    const activeChoice = heroChoices[safeGalleryIndex] || heroState || {};
+    const activeChoiceDescription = String(activeChoice.description || '').trim();
+    const activeForceSkill = (activeChoice.skills || []).find((skill) => String(skill.name || skill.id).toLowerCase().includes('force')) || activeChoice.skills?.[0];
+    const activePortrait = resolveAssetUrl(activeChoice.characterImageId, activeChoice.characterImageData) || activeChoice.characterImageData || '';
+    const activeSkills = (activeChoice.skills || []).slice(0, 4);
+    const showCharacterGallery = !heroSetupSelectionConfirmed && !hasRolledSkills && !isHeroSetupRolling;
+    const shouldShowDice = !showCharacterGallery && (isHeroSetupRolling || !hasRolledSkills || allDiceRolled);
     const setupCardStyle = heroSetupBackgroundImageData
       ? { backgroundImage: `linear-gradient(180deg, rgba(8,16,30,.38), rgba(8,16,30,.66)), url(${heroSetupBackgroundImageData})` }
       : undefined;
     return (
       <div className="hero-setup-overlay">
         <div className={`hero-setup-card ${heroSetupBackgroundImageData ? 'has-hero-setup-background' : ''}`} style={setupCardStyle}>
-          <span className="eyebrow">Creation du héros</span>
-          <h2>{heroState?.name || 'Héros'}</h2>
+          <span className="eyebrow">{showCharacterGallery ? 'Choix du héros' : 'Création du héros'}</span>
+          <h2>{showCharacterGallery ? 'Choisis ton personnage' : heroState?.name || 'Héros'}</h2>
           <p>
-            Avant de commencer l'aventure, lance les dés pour connaître tes compétences.
-            Chaque compétence tire 1d6; le résultat devient le bonus utilisé dans les tests.
+            {showCharacterGallery
+              ? 'Parcours les fiches, compare le profil et valide ton héros avant de lancer les compétences.'
+              : 'Lance les dés de départ. Chaque compétence garde sa base et ajoute 1d6 pour obtenir sa valeur de jeu.'}
           </p>
-          {shouldShowDice ? (
-          <div
-            className={`hero-setup-dice-rack ${isHeroSetupRolling ? 'is-rolling' : ''}`}
-          >
-            {(heroState?.skills || []).map((skill, index) => {
-              const face = heroSetupDiceFaces[index] || ((index % 6) + 1);
-              const isCurrentDie = heroSetupRollingIndex === index;
-              const isFinalDie = heroSetupFinalRolls[index];
-              const isNextDie = index === heroSetupFinalRolls.length;
-              return (
+          {showCharacterGallery ? (
+            <>
+              <div className="hero-setup-gallery">
                 <button
                   type="button"
-                  className={`hero-setup-die-wrap ${isCurrentDie ? 'is-current' : ''} ${isFinalDie ? 'is-final' : ''} ${!isFinalDie && !isNextDie ? 'is-locked' : ''}`}
-                  key={skill.id}
-                  onClick={() => (isCurrentDie ? stopHeroSetupRoll() : startHeroSetupRoll(index))}
-                  disabled={isFinalDie || (!isCurrentDie && (isHeroSetupRolling || !isNextDie))}
+                  className="hero-setup-gallery-arrow"
+                  onClick={() => setHeroSetupGalleryIndex((index) => index - 1)}
+                  disabled={heroChoices.length < 2}
+                  aria-label="Fiche précédente"
                 >
-                  <span className={`hero-die-face hero-die-face--${heroDiceSkin} face-${face}`}>
-                    {getDiePips(face).map((position) => <i key={position} className={`pip pip-${position}`} />)}
-                  </span>
-                  <small>{isFinalDie ? `${skill.name} = ${face}` : skill.name}</small>
+                  {'<'}
                 </button>
-              );
-            })}
-            <strong>
-              {isHeroSetupRolling
-                ? heroSetupRollingIndex >= 0
-                  ? `Clique encore pour arreter ${heroState?.skills?.[heroSetupRollingIndex]?.name || 'le dé'}`
-                  : 'Résultats obtenus...'
-                : allDiceRolled
-                  ? 'Les dés ont parlé. Découvre tes compétences.'
-                  : `Clique le dé de ${heroState?.skills?.[heroSetupFinalRolls.length]?.name || 'la compétence'}`}
-            </strong>
-          </div>
-          ) : (
-          <div className="hero-setup-skill-grid">
-            {(heroState?.skills || []).map((skill) => (
-              <div key={skill.id} className={skill.rolledValue ? 'is-rolled' : ''}>
-                <span>{skill.name}</span>
-                <strong>{skill.rolledValue ? `+${skill.value}` : '-'}</strong>
-                <small>{skill.rolledValue ? `Jet : ${skill.rolledValue}` : 'A tirer'}</small>
+                <article className="hero-setup-profile-card">
+                  <div className="hero-setup-profile-portrait">
+                    {activePortrait ? (
+                      <img src={activePortrait} alt={activeChoice.name || 'Héros'} />
+                    ) : (
+                      <span>{String(activeChoice.name || 'H').trim().slice(0, 1).toUpperCase()}</span>
+                    )}
+                  </div>
+                  <div className="hero-setup-profile-content">
+                    <span className="hero-setup-profile-count">{safeGalleryIndex + 1}/{Math.max(1, heroChoices.length)}</span>
+                    <h3>{activeChoice.name || 'Héros'}</h3>
+                    <p className="hero-setup-character-description">
+                      {activeChoiceDescription || 'Aucun descriptif renseigné pour ce personnage.'}
+                    </p>
+                    <div className="hero-setup-stat-grid">
+                      <span><strong>{activeChoice.health ?? activeChoice.maxHealth ?? 0}/{activeChoice.maxHealth ?? activeChoice.health ?? 0}</strong><small>PV</small></span>
+                      <span><strong>{activeChoice.mana ?? activeChoice.maxMana ?? 0}/{activeChoice.maxMana ?? activeChoice.mana ?? 0}</strong><small>Mana</small></span>
+                      <span><strong>{activeChoice.armor ?? 0}</strong><small>Armure</small></span>
+                      <span><strong>{activeChoice.initiative ?? 0}</strong><small>Initiative</small></span>
+                      <span><strong>{activeChoice.dodgeChance ?? 0}%</strong><small>Esquive</small></span>
+                      <span><strong>{activeChoice.rules?.criticalChance ?? 0}%</strong><small>Critique</small></span>
+                    </div>
+                    <div className="hero-setup-skill-preview">
+                      {activeSkills.map((skill) => (
+                        <span key={skill.id || skill.name}>
+                          <strong>{skill.name || 'Compétence'}</strong>
+                          <small>{skill.value ?? 0}</small>
+                        </span>
+                      ))}
+                      {!activeSkills.length ? <span><strong>Force</strong><small>{activeForceSkill?.value ?? 0}</small></span> : null}
+                    </div>
+                  </div>
+                </article>
+                <button
+                  type="button"
+                  className="hero-setup-gallery-arrow"
+                  onClick={() => setHeroSetupGalleryIndex((index) => index + 1)}
+                  disabled={heroChoices.length < 2}
+                  aria-label="Fiche suivante"
+                >
+                  {'>'}
+                </button>
               </div>
-            ))}
-          </div>
-          )}
-          <div className="hero-setup-actions">
-            {shouldShowDice ? (
-              <button type="button" className="secondary-action" onClick={revealHeroSetupSkills} disabled={!allDiceRolled || isHeroSetupRolling}>
-                Decouvrir mes compétences
-              </button>
-            ) : (
-              <button type="button" className="secondary-action" onClick={() => {
-                setHeroSetupFinalRolls([]);
-                setHeroSetupDiceFaces([]);
-                heroSetupDiceFacesRef.current = [];
-                setHeroSetupRollingIndex(-1);
-                setHeroSetupResultsRevealed(false);
-              }}>
-                Relancer les compétences
-              </button>
-            )}
-            <button type="button" onClick={completeHeroSetup} disabled={!hasRolledSkills || isHeroSetupRolling || shouldShowDice}>
-              Commencer l'aventure
-            </button>
-          </div>
+              <div className="hero-setup-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (activeChoice?.id) selectHeroCharacter?.(activeChoice.id);
+                    resetHeroSetupRollState();
+                    setHeroSetupSelectionConfirmed(true);
+                  }}
+                >
+                  Sélectionner ce personnage
+                </button>
+              </div>
+            </>
+          ) : null}
+          {!showCharacterGallery ? (
+            <>
+              {shouldShowDice ? (
+              <div
+                className={`hero-setup-dice-rack ${isHeroSetupRolling ? 'is-rolling' : ''}`}
+              >
+                {(heroState?.skills || []).map((skill, index) => {
+                  const face = heroSetupDiceFaces[index] || ((index % 6) + 1);
+                  const isCurrentDie = heroSetupRollingIndex === index;
+                  const isFinalDie = heroSetupFinalRolls[index];
+                  const isNextDie = index === heroSetupFinalRolls.length;
+                  return (
+                    <button
+                      type="button"
+                      className={`hero-setup-die-wrap ${isCurrentDie ? 'is-current' : ''} ${isFinalDie ? 'is-final' : ''} ${!isFinalDie && !isNextDie ? 'is-locked' : ''}`}
+                      key={skill.id}
+                      onClick={() => (isCurrentDie ? stopHeroSetupRoll() : startHeroSetupRoll(index))}
+                      disabled={isFinalDie || (!isCurrentDie && (isHeroSetupRolling || !isNextDie))}
+                    >
+                      <span className={`hero-die-face hero-die-face--${heroDiceSkin} face-${face}`}>
+                        {getDiePips(face).map((position) => <i key={position} className={`pip pip-${position}`} />)}
+                      </span>
+                      <small>{isFinalDie ? `${skill.name} = ${face}` : skill.name}</small>
+                    </button>
+                  );
+                })}
+                <strong>
+                  {isHeroSetupRolling
+                    ? heroSetupRollingIndex >= 0
+                      ? `Clique encore pour arreter ${heroState?.skills?.[heroSetupRollingIndex]?.name || 'le dé'}`
+                      : 'Résultats obtenus...'
+                    : allDiceRolled
+                      ? 'Les dés ont parlé. Découvre tes compétences.'
+                      : `Clique le dé de ${heroState?.skills?.[heroSetupFinalRolls.length]?.name || 'la compétence'}`}
+                </strong>
+              </div>
+              ) : (
+              <div className="hero-setup-skill-grid">
+                {(heroState?.skills || []).map((skill) => (
+                  <div key={skill.id} className={skill.rolledValue ? 'is-rolled' : ''}>
+                    <span>{skill.name}</span>
+                    <strong>{skill.rolledValue ? `+${skill.value}` : '-'}</strong>
+                    <small>{skill.rolledValue ? `Base ${skill.baseValue ?? (Number(skill.value) - Number(skill.rolledValue))} + jet ${skill.rolledValue}` : 'A tirer'}</small>
+                  </div>
+                ))}
+              </div>
+              )}
+              <div className="hero-setup-actions">
+                {!hasRolledSkills && !isHeroSetupRolling ? (
+                  <button type="button" className="secondary-action" onClick={() => {
+                    resetHeroSetupRollState();
+                    setHeroSetupSelectionConfirmed(false);
+                  }}>
+                    Changer de personnage
+                  </button>
+                ) : null}
+                {shouldShowDice ? (
+                  <button type="button" className="secondary-action" onClick={revealHeroSetupSkills} disabled={!allDiceRolled || isHeroSetupRolling}>
+                    Decouvrir mes compétences
+                  </button>
+                ) : (
+                  <button type="button" className="secondary-action" onClick={() => {
+                    setHeroSetupFinalRolls([]);
+                    setHeroSetupDiceFaces([]);
+                    heroSetupDiceFacesRef.current = [];
+                    setHeroSetupRollingIndex(-1);
+                    setHeroSetupResultsRevealed(false);
+                  }}>
+                    Relancer les compétences
+                  </button>
+                )}
+                <button type="button" onClick={completeHeroSetup} disabled={!hasRolledSkills || isHeroSetupRolling || shouldShowDice}>
+                  Commencer l'aventure
+                </button>
+              </div>
+            </>
+          ) : null}
         </div>
       </div>
     );
@@ -2608,7 +2867,7 @@ export default function PreviewTab(props) {
         </div>
       ) : null}
 
-      {isHeroDefeated && !activeEnding && !isCustomHeroDefeatScene ? (
+      {isHeroDefeated && !activeHeroCombat && !activeEnding && !isCustomHeroDefeatScene ? (
         <div className="overlay hero-defeat-overlay">
           <div className="overlay-card hero-defeat-card">
             <span className="ending-badge">Défaite</span>

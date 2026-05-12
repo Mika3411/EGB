@@ -42,6 +42,8 @@ export default function PreviewPlayerPanel({
       activeHeroCombat={preview.activeHeroCombat}
       attackActiveHeroCombat={preview.attackActiveHeroCombat}
       rollActiveEnemyCombat={preview.rollActiveEnemyCombat}
+      attemptSurvivalHeroCombat={preview.attemptSurvivalHeroCombat}
+      attemptEscapeHeroCombat={preview.attemptEscapeHeroCombat}
       closeHeroCombat={preview.closeHeroCombat}
       equippedHeroItemIds={preview.equippedHeroItemIds}
       equippedHeroSlotMap={preview.equippedHeroSlotMap}
@@ -49,6 +51,7 @@ export default function PreviewPlayerPanel({
       adjustHeroStat={preview.adjustHeroStat}
       lastDiceRoll={preview.lastDiceRoll}
       rollHeroDie={preview.rollHeroDie}
+      selectHeroCharacter={preview.selectHeroCharacter}
       rollHeroSetupSkills={preview.rollHeroSetupSkills}
       completeHeroSetup={preview.completeHeroSetup}
       sceneTimerResetKey={preview.sceneTimerResetKey}

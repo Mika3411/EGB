@@ -6,6 +6,7 @@ import { COMBAT_MEDIA_TYPES, DEFAULT_COMBAT_SETTINGS } from '../lib/combatDefaul
 const DEFAULT_SKILLS = [
   { id: 'force', name: 'Force', value: 3, manaCost: 0 },
   { id: 'ruse', name: 'Ruse', value: 2, manaCost: 0 },
+  { id: 'survie', name: 'Survie', value: 2, manaCost: 0 },
   { id: 'magie', name: 'Magie', value: 4, manaCost: 2 },
 ];
 
@@ -49,6 +50,23 @@ const HERO_POWER_TYPES = [
   { id: 'lightning', label: 'Foudre' },
 ];
 const HERO_POWER_TYPE_IDS = new Set(HERO_POWER_TYPES.map((type) => type.id));
+const HERO_STATUS_EFFECT_TYPES = [
+  { id: '', label: 'Aucun' },
+  { id: 'poison', label: 'Poison' },
+  { id: 'burn', label: 'Brûlure' },
+  { id: 'stun', label: 'Étourdissement' },
+  { id: 'bleed', label: 'Saignement' },
+  { id: 'shield', label: 'Bouclier' },
+  { id: 'force_buff', label: 'Bonus force' },
+  { id: 'force_debuff', label: 'Malus force' },
+  { id: 'difficulty_buff', label: 'Bonus difficulté' },
+  { id: 'difficulty_debuff', label: 'Malus difficulté' },
+  { id: 'resistance_buff', label: 'Bonus résistance' },
+  { id: 'resistance_debuff', label: 'Malus résistance' },
+  { id: 'critical_buff', label: 'Bonus critique' },
+  { id: 'critical_debuff', label: 'Malus critique' },
+];
+const HERO_STATUS_EFFECT_TYPE_IDS = new Set(HERO_STATUS_EFFECT_TYPES.map((type) => type.id));
 const HERO_RESISTANCE_FIELDS = [
   { id: 'water', label: 'Eau', field: 'resistanceWater' },
   { id: 'earth', label: 'Terre', field: 'resistanceEarth' },
@@ -68,10 +86,14 @@ const DEFAULT_HERO_ADVENTURE = {
   dice: { sides: 20, label: 'd20', skin: 'classic' },
   hero: {
     name: 'Aventurier',
+    description: '',
     health: 18,
     maxHealth: 18,
     mana: 10,
     maxMana: 10,
+    initiative: 0,
+    armor: 0,
+    dodgeChance: 0,
     backgroundImageData: '',
     characterImageData: '',
     setupBackgroundImageData: '',
@@ -103,6 +125,7 @@ const DEFAULT_HERO_ADVENTURE = {
 const FIELD_HELP = {
   enabled: "Affiche les options Hero aventure dans le jeu : fiche personnage, PV, mana, compétences, équipements, tests et combats.",
   heroName: "Nom du personnage joué par le joueur. Il apparaît sur la fiche personnage et dans le panneau Hero.",
+  heroDescription: "Texte affiché au joueur au début, pendant le choix du personnage.",
   dice: "Le dé lancé pendant l'aventure. Exemple : avec d20, le joueur tire un nombre entre 1 et 20 pour les tests et les combats.",
   diceSkin: "Apparence des dés vus par le joueur pendant la création du héros, les tests et les combats.",
   buttonStyle: "Apparence des boutons vus par le joueur : choix, énigmes, inventaire, cinématiques et actions Hero.",
@@ -111,6 +134,9 @@ const FIELD_HELP = {
   narrationBackground: "Couleur du fond derrière la narration en Preview et dans le jeu exporté.",
   health: "Points de vie du héros. À 0 PV, le joueur est en danger ou perd selon les règles de ton jeu.",
   mana: "Réserve magique ou énergie du héros. Certaines actions peuvent coûter de la mana.",
+  initiative: "Valeur comparée à l'initiative ennemie au début d'un combat. La plus haute agit en premier.",
+  armor: "Réduction plate appliquée aux dégâts subis après critique et résistance.",
+  dodgeChance: "Chance en pourcentage d'annuler une attaque ennemie avant l'armure.",
   characterBackground: "Image derrière la fiche personnage : salle, carte, parchemin, décor de ton univers.",
   characterImage: "Image du héros au centre de la fiche personnage. Un PNG transparent marche très bien.",
   setupBackground: "Image affichée derrière l'écran où le joueur lance les dés et découvre ses compétences.",
@@ -133,7 +159,7 @@ const HERO_INTERNAL_TABS = [
   { id: 'sheet', label: 'Fiche' },
   { id: 'powers', label: 'Pouvoirs' },
   { id: 'skills', label: 'Compétences' },
-  { id: 'rules', label: 'Règles' },
+  { id: 'rules', label: 'Affichage' },
   { id: 'balance', label: 'Équilibrage' },
   { id: 'guide', label: 'Guide' },
 ];
@@ -156,6 +182,81 @@ const normalizeSkillId = (name = 'competence') => (
     || `compétence_${Math.random().toString(36).slice(2, 7)}`
 );
 
+const textOrDefault = (value, fallback = '') => (
+  value === undefined || value === null ? fallback : String(value)
+);
+
+const createHeroSheetId = () => `hero_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+const normalizeHeroRules = (rawRules = {}, diceSides = DEFAULT_HERO_ADVENTURE.dice.sides) => ({
+  ...DEFAULT_HERO_ADVENTURE.rules,
+  ...(rawRules && typeof rawRules === 'object' ? rawRules : {}),
+  criticalSuccess: clampNumber(rawRules?.criticalSuccess, DEFAULT_HERO_ADVENTURE.rules.criticalSuccess, 1, diceSides),
+  criticalFailure: clampNumber(rawRules?.criticalFailure, DEFAULT_HERO_ADVENTURE.rules.criticalFailure, 1, diceSides),
+  criticalChance: clampNumber(rawRules?.criticalChance, DEFAULT_HERO_ADVENTURE.rules.criticalChance, 0, 100),
+  criticalMultiplier: clampNumber(rawRules?.criticalMultiplier, DEFAULT_HERO_ADVENTURE.rules.criticalMultiplier, 1, 20),
+});
+
+const normalizeHeroSheet = (rawHero = {}, index = 0, diceSides = DEFAULT_HERO_ADVENTURE.dice.sides, fallbackRules = {}) => {
+  const sourceHero = rawHero && typeof rawHero === 'object' ? rawHero : {};
+  const maxHealth = clampNumber(sourceHero.maxHealth, DEFAULT_HERO_ADVENTURE.hero.maxHealth, 1, 999);
+  const maxMana = clampNumber(sourceHero.maxMana, DEFAULT_HERO_ADVENTURE.hero.maxMana, 0, 999);
+  const skills = Array.isArray(sourceHero.skills) && sourceHero.skills.length ? sourceHero.skills : DEFAULT_SKILLS;
+  const powers = Array.isArray(sourceHero.powers) && sourceHero.powers.length ? sourceHero.powers : DEFAULT_HERO_ADVENTURE.hero.powers;
+
+  return {
+    id: sourceHero.id || `hero_${index + 1}`,
+    name: textOrDefault(sourceHero.name, DEFAULT_HERO_ADVENTURE.hero.name),
+    description: textOrDefault(sourceHero.description, DEFAULT_HERO_ADVENTURE.hero.description),
+    health: clampNumber(sourceHero.health, maxHealth, 0, maxHealth),
+    maxHealth,
+    mana: clampNumber(sourceHero.mana, maxMana, 0, maxMana),
+    maxMana,
+    initiative: clampNumber(sourceHero.initiative, DEFAULT_HERO_ADVENTURE.hero.initiative, -999, 999),
+    armor: clampNumber(sourceHero.armor, DEFAULT_HERO_ADVENTURE.hero.armor, 0, 999),
+    dodgeChance: clampNumber(sourceHero.dodgeChance, DEFAULT_HERO_ADVENTURE.hero.dodgeChance, 0, 100),
+    backgroundImageData: sourceHero.backgroundImageData || '',
+    characterImageData: sourceHero.characterImageData || '',
+    setupBackgroundImageData: sourceHero.setupBackgroundImageData || '',
+    setupMusicData: sourceHero.setupMusicData || '',
+    setupMusicName: sourceHero.setupMusicName || '',
+    defeatSceneId: sourceHero.defeatSceneId || '',
+    equipmentSlotCount: clampNumber(sourceHero.equipmentSlotCount, DEFAULT_HERO_ADVENTURE.hero.equipmentSlotCount, 1, 8),
+    equipmentSlotLabels: DEFAULT_EQUIPMENT_SLOT_LABELS.map((label, slotIndex) => {
+      const customLabel = Array.isArray(sourceHero.equipmentSlotLabels) ? sourceHero.equipmentSlotLabels[slotIndex] : undefined;
+      return textOrDefault(customLabel, label);
+    }),
+    skills: skills.map((skill, skillIndex) => ({
+      id: skill.id || normalizeSkillId(skill.name || `competence_${skillIndex + 1}`),
+      name: textOrDefault(skill.name, `Competence ${skillIndex + 1}`),
+      value: clampNumber(skill.value, 0, -20, 50),
+      baseValue: Number.isFinite(Number(skill.baseValue))
+        ? clampNumber(skill.baseValue, 0, -20, 50)
+        : clampNumber((Number(skill.value) || 0) - (Number(skill.rolledValue) || 0), 0, -20, 50),
+      rolledValue: skill.rolledValue ? clampNumber(skill.rolledValue, 0, 1, 6) : 0,
+      rollFormula: skill.rollFormula || '',
+      manaCost: clampNumber(skill.manaCost, 0, 0, 99),
+    })),
+    powers: powers.map((power, powerIndex) => ({
+      id: power.id || normalizeSkillId(power.name || `pouvoir_${powerIndex + 1}`),
+      name: textOrDefault(power.name, `Pouvoir ${powerIndex + 1}`),
+      type: HERO_POWER_TYPE_IDS.has(power.type) ? power.type : 'fire',
+      manaCost: clampNumber(power.manaCost, 0, 0, 999),
+      force: clampNumber(power.force, 1, 0, 999),
+      healHealth: clampNumber(power.healHealth, 0, 0, 999),
+      healMana: clampNumber(power.healMana, 0, 0, 999),
+      statusType: HERO_STATUS_EFFECT_TYPE_IDS.has(power.statusType) ? power.statusType : '',
+      statusAmount: clampNumber(power.statusAmount, 0, 0, 999),
+      statusDuration: clampNumber(power.statusDuration, 1, 1, 99),
+    })),
+    resistanceWater: clampNumber(sourceHero.resistanceWater, 0, 0, 100),
+    resistanceEarth: clampNumber(sourceHero.resistanceEarth, 0, 0, 100),
+    resistanceFire: clampNumber(sourceHero.resistanceFire, 0, 0, 100),
+    resistanceLightning: clampNumber(sourceHero.resistanceLightning, 0, 0, 100),
+    rules: normalizeHeroRules(sourceHero.rules || fallbackRules, diceSides),
+  };
+};
+
 const normalizeHeroAdventure = (project = {}) => {
   const raw = project.heroAdventure && typeof project.heroAdventure === 'object'
     ? project.heroAdventure
@@ -174,12 +275,19 @@ const normalizeHeroAdventure = (project = {}) => {
   const normalizeCombatMediaType = (value) => (COMBAT_MEDIA_TYPES.has(value) ? value : 'image');
   const normalizeHeroAttackType = (value) => (['physical', 'water', 'earth', 'fire', 'lightning'].includes(value) ? value : 'physical');
   const normalizePowerType = (value) => (['water', 'earth', 'fire', 'lightning'].includes(value) ? value : 'fire');
+  const diceSides = clampNumber(rawDice.sides, DEFAULT_HERO_ADVENTURE.dice.sides, 2, 100);
+  const sourceHeroes = Array.isArray(raw.heroes) && raw.heroes.length ? raw.heroes : [rawHero];
+  const heroes = sourceHeroes.map((entry, index) => normalizeHeroSheet(entry, index, diceSides, raw.rules));
+  const fallbackHero = normalizeHeroSheet(rawHero, 0, diceSides, raw.rules);
+  const selectedHeroId = raw.selectedHeroId || fallbackHero.id || heroes[0]?.id || 'hero_1';
+  const selectedHero = heroes.find((entry) => entry.id === selectedHeroId) || heroes[0] || fallbackHero;
+  const selectedRules = normalizeHeroRules(selectedHero.rules || raw.rules, diceSides);
 
   return {
     enabled: raw.enabled ?? project.creationMode === 'hero_adventure',
     dice: {
-      sides: clampNumber(rawDice.sides, DEFAULT_HERO_ADVENTURE.dice.sides, 2, 100),
-      label: rawDice.label || `d${clampNumber(rawDice.sides, DEFAULT_HERO_ADVENTURE.dice.sides, 2, 100)}`,
+      sides: diceSides,
+      label: rawDice.label || `d${diceSides}`,
       skin: HERO_DICE_SKIN_IDS.has(rawDice.skin) ? rawDice.skin : DEFAULT_HERO_ADVENTURE.dice.skin,
     },
     hero: {
@@ -188,6 +296,9 @@ const normalizeHeroAdventure = (project = {}) => {
       maxHealth,
       mana: clampNumber(rawHero.mana, maxMana, 0, maxMana),
       maxMana,
+      initiative: clampNumber(rawHero.initiative, DEFAULT_HERO_ADVENTURE.hero.initiative, -999, 999),
+      armor: clampNumber(rawHero.armor, DEFAULT_HERO_ADVENTURE.hero.armor, 0, 999),
+      dodgeChance: clampNumber(rawHero.dodgeChance, DEFAULT_HERO_ADVENTURE.hero.dodgeChance, 0, 100),
       backgroundImageData: rawHero.backgroundImageData || '',
       characterImageData: rawHero.characterImageData || '',
       setupBackgroundImageData: rawHero.setupBackgroundImageData || '',
@@ -203,6 +314,9 @@ const normalizeHeroAdventure = (project = {}) => {
         id: skill.id || normalizeSkillId(skill.name || `compétence_${index + 1}`),
         name: skill.name || `Compétence ${index + 1}`,
         value: clampNumber(skill.value, 0, -20, 50),
+        baseValue: Number.isFinite(Number(skill.baseValue))
+          ? clampNumber(skill.baseValue, 0, -20, 50)
+          : clampNumber((Number(skill.value) || 0) - (Number(skill.rolledValue) || 0), 0, -20, 50),
         rolledValue: skill.rolledValue ? clampNumber(skill.rolledValue, 0, 1, 6) : 0,
         rollFormula: skill.rollFormula || '',
         manaCost: clampNumber(skill.manaCost, 0, 0, 99),
@@ -213,6 +327,11 @@ const normalizeHeroAdventure = (project = {}) => {
         type: HERO_POWER_TYPE_IDS.has(power.type) ? power.type : 'fire',
         manaCost: clampNumber(power.manaCost, 0, 0, 999),
         force: clampNumber(power.force, 1, 0, 999),
+        healHealth: clampNumber(power.healHealth, 0, 0, 999),
+        healMana: clampNumber(power.healMana, 0, 0, 999),
+        statusType: HERO_STATUS_EFFECT_TYPE_IDS.has(power.statusType) ? power.statusType : '',
+        statusAmount: clampNumber(power.statusAmount, 0, 0, 999),
+        statusDuration: clampNumber(power.statusDuration, 1, 1, 99),
       })),
       resistanceWater: clampNumber(rawHero.resistanceWater, 0, 0, 100),
       resistanceEarth: clampNumber(rawHero.resistanceEarth, 0, 0, 100),
@@ -227,6 +346,10 @@ const normalizeHeroAdventure = (project = {}) => {
       criticalChance: clampNumber(raw.rules?.criticalChance, DEFAULT_HERO_ADVENTURE.rules.criticalChance, 0, 100),
       criticalMultiplier: clampNumber(raw.rules?.criticalMultiplier, DEFAULT_HERO_ADVENTURE.rules.criticalMultiplier, 1, 20),
     },
+    selectedHeroId: selectedHero.id,
+    heroes,
+    hero: { ...selectedHero, rules: selectedRules },
+    rules: selectedRules,
     combat: {
       ...DEFAULT_COMBAT_SETTINGS,
       ...rawCombat,
@@ -239,11 +362,15 @@ const normalizeHeroAdventure = (project = {}) => {
       enemyAnime2dSpec: rawCombat.enemyAnime2dSpec && typeof rawCombat.enemyAnime2dSpec === 'object' ? rawCombat.enemyAnime2dSpec : null,
       heroAttackType: normalizeHeroAttackType(rawCombat.heroAttackType),
       enemyPowerType: normalizePowerType(rawCombat.enemyPowerType),
+      enemyInitiative: clampNumber(rawCombat.enemyInitiative, DEFAULT_COMBAT_SETTINGS.enemyInitiative, -999, 999),
       enemyStrength: clampNumber(rawCombat.enemyStrength, DEFAULT_COMBAT_SETTINGS.enemyStrength, 0, 999),
+      enemyArmor: clampNumber(rawCombat.enemyArmor, DEFAULT_COMBAT_SETTINGS.enemyArmor, 0, 999),
+      enemyDodgeChance: clampNumber(rawCombat.enemyDodgeChance, DEFAULT_COMBAT_SETTINGS.enemyDodgeChance, 0, 100),
       enemyMaxMana: clampNumber(rawCombat.enemyMaxMana, DEFAULT_COMBAT_SETTINGS.enemyMaxMana, 0, 999),
       enemyPowerManaCost: clampNumber(rawCombat.enemyPowerManaCost, DEFAULT_COMBAT_SETTINGS.enemyPowerManaCost, 0, 999),
       enemyPowerDamage: clampNumber(rawCombat.enemyPowerDamage, DEFAULT_COMBAT_SETTINGS.enemyPowerDamage, 0, 999),
       enemyPowerUsageChance: clampNumber(rawCombat.enemyPowerUsageChance, DEFAULT_COMBAT_SETTINGS.enemyPowerUsageChance, 0, 100),
+      enemyAiMode: rawCombat.enemyAiMode === 'random' ? 'random' : DEFAULT_COMBAT_SETTINGS.enemyAiMode,
       enemyCriticalChance: clampNumber(rawCombat.enemyCriticalChance, DEFAULT_COMBAT_SETTINGS.enemyCriticalChance, 0, 100),
       enemyCriticalMultiplier: Math.max(1, Math.min(20, Number(rawCombat.enemyCriticalMultiplier) || DEFAULT_COMBAT_SETTINGS.enemyCriticalMultiplier)),
       enemyResistanceWater: clampNumber(rawCombat.enemyResistanceWater, 0, 0, 100),
@@ -749,6 +876,9 @@ export default function HeroTab({ project, patchProject, onPreviewHeroCharacter,
   const [activeHeroTab, setActiveHeroTab] = useState('sheet');
   const hero = heroAdventure.hero;
   const rules = heroAdventure.rules || DEFAULT_HERO_ADVENTURE.rules;
+  const heroRoster = Array.isArray(heroAdventure.heroes) && heroAdventure.heroes.length
+    ? heroAdventure.heroes
+    : [hero];
   const playerButtonStyle = BUTTON_STYLE_IDS.has(project?.ui?.buttonStyle)
     ? project.ui.buttonStyle
     : 'modern';
@@ -765,20 +895,94 @@ export default function HeroTab({ project, patchProject, onPreviewHeroCharacter,
     patchProject((draft) => {
       const next = normalizeHeroAdventure(draft);
       updater(next);
+      const activeHeroId = next.selectedHeroId || next.hero?.id || 'hero_1';
+      next.hero = { ...(next.hero || DEFAULT_HERO_ADVENTURE.hero), id: activeHeroId, rules: next.rules };
+      next.heroes = (Array.isArray(next.heroes) && next.heroes.length ? next.heroes : [next.hero]).map((entry) => (
+        entry.id === activeHeroId ? { ...next.hero, rules: next.rules } : entry
+      ));
+      next.selectedHeroId = activeHeroId;
       draft.heroAdventure = next;
       if (next.enabled) draft.creationMode = 'hero_adventure';
     });
   };
 
+  const selectHeroSheet = (heroId) => updateHeroAdventure((draft) => {
+    const selected = (draft.heroes || []).find((entry) => entry.id === heroId);
+    if (!selected) return;
+    draft.selectedHeroId = selected.id;
+    draft.hero = { ...selected };
+    draft.rules = normalizeHeroRules(selected.rules || draft.rules, draft.dice.sides);
+  });
+
+  const addHeroSheet = () => updateHeroAdventure((draft) => {
+    const index = (draft.heroes || []).length + 1;
+    const nextHero = normalizeHeroSheet(
+      {
+        ...DEFAULT_HERO_ADVENTURE.hero,
+        id: createHeroSheetId(),
+        name: `Nouveau heros ${index}`,
+        rules: draft.rules,
+      },
+      index,
+      draft.dice.sides,
+      draft.rules,
+    );
+    draft.heroes = [...(draft.heroes || []), nextHero];
+    draft.selectedHeroId = nextHero.id;
+    draft.hero = { ...nextHero };
+    draft.rules = nextHero.rules;
+  });
+
+  const duplicateHeroSheet = () => updateHeroAdventure((draft) => {
+    const index = (draft.heroes || []).length + 1;
+    const nextHero = normalizeHeroSheet(
+      {
+        ...draft.hero,
+        id: createHeroSheetId(),
+        name: `${draft.hero.name || 'Heros'} ${index}`,
+        rules: draft.rules,
+      },
+      index,
+      draft.dice.sides,
+      draft.rules,
+    );
+    draft.heroes = [...(draft.heroes || []), nextHero];
+    draft.selectedHeroId = nextHero.id;
+    draft.hero = { ...nextHero };
+    draft.rules = nextHero.rules;
+  });
+
+  const removeHeroSheet = (heroId) => updateHeroAdventure((draft) => {
+    if ((draft.heroes || []).length <= 1) return;
+    const nextHeroes = (draft.heroes || []).filter((entry) => entry.id !== heroId);
+    const nextHero = nextHeroes[0];
+    draft.heroes = nextHeroes;
+    draft.selectedHeroId = nextHero.id;
+    draft.hero = { ...nextHero };
+    draft.rules = normalizeHeroRules(nextHero.rules || draft.rules, draft.dice.sides);
+  });
+
   const updateHero = (changes) => updateHeroAdventure((draft) => {
+    const previousHealth = Number(draft.hero.health) || 0;
+    const previousMaxHealth = Math.max(1, Number(draft.hero.maxHealth) || 1);
+    const previousMana = Number(draft.hero.mana) || 0;
+    const previousMaxMana = Math.max(0, Number(draft.hero.maxMana) || 0);
     draft.hero = { ...draft.hero, ...changes };
-    if ('maxHealth' in changes) draft.hero.health = Math.min(draft.hero.health, draft.hero.maxHealth);
-    if ('maxMana' in changes) draft.hero.mana = Math.min(draft.hero.mana, draft.hero.maxMana);
+    if ('maxHealth' in changes) {
+      draft.hero.health = previousHealth >= previousMaxHealth
+        ? draft.hero.maxHealth
+        : Math.min(draft.hero.health, draft.hero.maxHealth);
+    }
+    if ('maxMana' in changes) {
+      draft.hero.mana = previousMana >= previousMaxMana
+        ? draft.hero.maxMana
+        : Math.min(draft.hero.mana, draft.hero.maxMana);
+    }
   });
 
   const updateEquipmentSlotLabel = (index, value) => updateHeroAdventure((draft) => {
     draft.hero.equipmentSlotLabels = DEFAULT_EQUIPMENT_SLOT_LABELS.map((label, slotIndex) => (
-      slotIndex === index ? value : (draft.hero.equipmentSlotLabels?.[slotIndex] || label)
+      slotIndex === index ? value : (draft.hero.equipmentSlotLabels?.[slotIndex] ?? label)
     ));
   });
 
@@ -817,6 +1021,11 @@ export default function HeroTab({ project, patchProject, onPreviewHeroCharacter,
         type: 'fire',
         manaCost: 2,
         force: 4,
+        healHealth: 0,
+        healMana: 0,
+        statusType: '',
+        statusAmount: 0,
+        statusDuration: 1,
       },
     ];
   });
@@ -825,28 +1034,19 @@ export default function HeroTab({ project, patchProject, onPreviewHeroCharacter,
     draft.hero.powers = (draft.hero.powers || []).filter((power) => power.id !== powerId);
   });
 
-  const addSkill = () => updateHeroAdventure((draft) => {
-    const index = draft.hero.skills.length + 1;
-    draft.hero.skills.push({
-      id: `competence_${Date.now()}`,
-      name: `Compétence ${index}`,
-      value: 1,
-      manaCost: 0,
-    });
-  });
-
-  const removeSkill = (skillId) => updateHeroAdventure((draft) => {
-    draft.hero.skills = draft.hero.skills.filter((skill) => skill.id !== skillId);
-  });
-
   const rollHeroSkills = () => updateHeroAdventure((draft) => {
     draft.hero.skills = draft.hero.skills.map((skill) => {
       const rawRoll = rollDie(6);
+      const previousRoll = Number(skill.rolledValue) || 0;
+      const baseValue = Number.isFinite(Number(skill.baseValue))
+        ? Number(skill.baseValue)
+        : (Number(skill.value) || 0) - previousRoll;
       return {
         ...skill,
-        value: rawRoll,
+        baseValue,
+        value: baseValue + rawRoll,
         rolledValue: rawRoll,
-        rollFormula: '1d6',
+        rollFormula: `${baseValue} + 1d6`,
       };
     });
   });
@@ -980,6 +1180,63 @@ export default function HeroTab({ project, patchProject, onPreviewHeroCharacter,
           ))}
         </div>
 
+        <div className="subpanel hero-roster-panel">
+          <div className="subpanel-head">
+            <div>
+              <h3>Personnages jouables</h3>
+              <p>Chaque fiche garde ses PV, mana, competences, pouvoirs, resistances et critiques. Le joueur choisira son personnage au debut de la Preview.</p>
+            </div>
+            <div className="toolbar">
+              <button type="button" className="secondary-action" onClick={duplicateHeroSheet}>
+                Dupliquer
+              </button>
+              <button type="button" onClick={addHeroSheet}>
+                <Plus size={16} aria-hidden="true" />
+                Ajouter une fiche
+              </button>
+            </div>
+          </div>
+          <div className="hero-roster-grid">
+            {heroRoster.map((sheet) => {
+              const isActive = sheet.id === heroAdventure.selectedHeroId;
+              const forceSkill = (sheet.skills || []).find((skill) => normalizeSkillId(skill.name || skill.id).includes('force')) || sheet.skills?.[0];
+              return (
+                <button
+                  key={sheet.id}
+                  type="button"
+                  className={`hero-roster-card ${isActive ? 'active' : ''}`}
+                  onClick={() => selectHeroSheet(sheet.id)}
+                  aria-pressed={isActive}
+                >
+                  <strong>{sheet.name || 'Heros'}</strong>
+                  {sheet.description ? <p className="hero-roster-description">{sheet.description}</p> : null}
+                  <span>{sheet.health}/{sheet.maxHealth} PV - {sheet.mana}/{sheet.maxMana} Mana</span>
+                  <small>Force {forceSkill?.value ?? 0} - Crit {sheet.rules?.criticalChance ?? 0}%</small>
+                  {heroRoster.length > 1 ? (
+                    <em
+                      role="button"
+                      tabIndex={0}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        removeHeroSheet(sheet.id);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          removeHeroSheet(sheet.id);
+                        }
+                      }}
+                    >
+                      Supprimer
+                    </em>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <div className="subpanel-grid">
           {activeHeroTab === 'sheet' ? (
           <div className="subpanel" data-tour="hero-sheet-panel">
@@ -1000,7 +1257,7 @@ export default function HeroTab({ project, patchProject, onPreviewHeroCharacter,
                 />
               </div>
               <div>
-                <HelpLabel help={FIELD_HELP.dice}>D? principal</HelpLabel>
+                <HelpLabel help={FIELD_HELP.dice}>Dé principal</HelpLabel>
                 <select
                   value={heroAdventure.dice.sides}
                   onChange={(event) => setDiceSides(Number(event.target.value))}
@@ -1010,6 +1267,16 @@ export default function HeroTab({ project, patchProject, onPreviewHeroCharacter,
                   ))}
                 </select>
               </div>
+            </div>
+
+            <div className="hero-description-field">
+              <HelpLabel help={FIELD_HELP.heroDescription}>Descriptif de choix</HelpLabel>
+              <textarea
+                value={hero.description || ''}
+                onChange={(event) => updateHero({ description: event.target.value })}
+                placeholder="Ex. Rapide et rusée, elle trouve les passages cachés mais encaisse mal les coups."
+                rows={3}
+              />
             </div>
 
             <div className="grid-two hero-gauge-grid">
@@ -1049,6 +1316,60 @@ export default function HeroTab({ project, patchProject, onPreviewHeroCharacter,
                   min="0"
                   value={hero.maxMana}
                   onChange={(event) => updateHero({ maxMana: clampNumber(event.target.value, hero.maxMana, 0, 999) })}
+                />
+              </div>
+              <div>
+                <HelpLabel help={FIELD_HELP.armor}>Armure</HelpLabel>
+                <input
+                  type="number"
+                  min="0"
+                  max="999"
+                  value={hero.armor || 0}
+                  onChange={(event) => updateHero({ armor: clampNumber(event.target.value, hero.armor || 0, 0, 999) })}
+                />
+              </div>
+              <div>
+                <HelpLabel help={FIELD_HELP.initiative}>Initiative</HelpLabel>
+                <input
+                  type="number"
+                  min="-999"
+                  max="999"
+                  value={hero.initiative || 0}
+                  onChange={(event) => updateHero({ initiative: clampNumber(event.target.value, hero.initiative || 0, -999, 999) })}
+                />
+              </div>
+              <div>
+                <HelpLabel help={FIELD_HELP.dodgeChance}>Esquive (%)</HelpLabel>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={hero.dodgeChance || 0}
+                  onChange={(event) => updateHero({ dodgeChance: clampNumber(event.target.value, hero.dodgeChance || 0, 0, 100) })}
+                />
+              </div>
+              <div>
+                <HelpLabel help={FIELD_HELP.criticalChance}>Critique (%)</HelpLabel>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={rules.criticalChance}
+                  onChange={(event) => updateHeroAdventure((draft) => {
+                    draft.rules.criticalChance = clampNumber(event.target.value, rules.criticalChance, 0, 100);
+                  })}
+                />
+              </div>
+              <div>
+                <HelpLabel help={FIELD_HELP.criticalMultiplier}>Multiplicateur critique</HelpLabel>
+                <input
+                  type="number"
+                  min="1"
+                  max="20"
+                  value={rules.criticalMultiplier}
+                  onChange={(event) => updateHeroAdventure((draft) => {
+                    draft.rules.criticalMultiplier = clampNumber(event.target.value, rules.criticalMultiplier, 1, 20);
+                  })}
                 />
               </div>
             </div>
@@ -1155,7 +1476,7 @@ export default function HeroTab({ project, patchProject, onPreviewHeroCharacter,
                   <label key={defaultLabel}>
                     <span>Slot {index + 1}</span>
                     <input
-                      value={hero.equipmentSlotLabels?.[index] || defaultLabel}
+                      value={hero.equipmentSlotLabels?.[index] ?? defaultLabel}
                       onChange={(event) => updateEquipmentSlotLabel(index, event.target.value)}
                       placeholder={defaultLabel}
                     />
@@ -1178,16 +1499,12 @@ export default function HeroTab({ project, patchProject, onPreviewHeroCharacter,
                   <Dices size={16} aria-hidden="true" />
                   Tirer les compétences
                 </button>
-                <button type="button" onClick={addSkill}>
-                  <Plus size={16} aria-hidden="true" />
-                  Ajouter
-                </button>
               </div>
             </div>
 
             <div className="hero-skill-roll-note">
               <Dices size={18} aria-hidden="true" />
-              <span>Règle actuelle : chaque compétence lance 1d6. Le résultat devient le bonus de départ utilisé dans les tests.</span>
+              <span>Règle actuelle : chaque compétence garde sa base, puis ajoute 1d6 au début du jeu.</span>
             </div>
 
             <div className="hero-skill-list">
@@ -1205,9 +1522,12 @@ export default function HeroTab({ project, patchProject, onPreviewHeroCharacter,
                     <input
                       type="number"
                       value={skill.value}
-                      onChange={(event) => updateSkill(skill.id, { value: clampNumber(event.target.value, skill.value, -20, 50) })}
+                      onChange={(event) => {
+                        const value = clampNumber(event.target.value, skill.value, -20, 50);
+                        updateSkill(skill.id, { value, baseValue: value, rolledValue: 0, rollFormula: '' });
+                      }}
                     />
-                    {skill.rolledValue ? <small className="hero-roll-source">Tire: {skill.rollFormula || '1d6'} = {skill.rolledValue}</small> : null}
+                    {skill.rolledValue ? <small className="hero-roll-source">Base {skill.baseValue ?? (Number(skill.value) - Number(skill.rolledValue))} + 1d6 ({skill.rolledValue}) = {skill.value}</small> : null}
                   </div>
                   <div>
                     <HelpLabel help={FIELD_HELP.manaCost}>Coût mana</HelpLabel>
@@ -1218,15 +1538,6 @@ export default function HeroTab({ project, patchProject, onPreviewHeroCharacter,
                       onChange={(event) => updateSkill(skill.id, { manaCost: clampNumber(event.target.value, skill.manaCost, 0, 99) })}
                     />
                   </div>
-                  <button
-                    type="button"
-                    className="danger-button hero-skill-delete"
-                    onClick={() => removeSkill(skill.id)}
-                    disabled={hero.skills.length <= 1}
-                    title="Supprimer la compétence"
-                  >
-                    <Trash2 size={16} aria-hidden="true" />
-                  </button>
                 </div>
               ))}
             </div>
@@ -1283,6 +1594,50 @@ export default function HeroTab({ project, patchProject, onPreviewHeroCharacter,
                         onChange={(event) => updatePower(power.id, { force: clampNumber(event.target.value, power.force, 0, 999) })}
                       />
                     </div>
+                    <div>
+                      <HelpLabel help="PV rendus au héros quand ce pouvoir est lancé. Le soin est limité aux PV max.">Soin PV</HelpLabel>
+                      <input
+                        type="number"
+                        min="0"
+                        value={power.healHealth || 0}
+                        onChange={(event) => updatePower(power.id, { healHealth: clampNumber(event.target.value, power.healHealth || 0, 0, 999) })}
+                      />
+                    </div>
+                    <div>
+                      <HelpLabel help="Mana rendue au héros après paiement du coût. La récupération est limitée à la mana max.">Soin mana</HelpLabel>
+                      <input
+                        type="number"
+                        min="0"
+                        value={power.healMana || 0}
+                        onChange={(event) => updatePower(power.id, { healMana: clampNumber(event.target.value, power.healMana || 0, 0, 999) })}
+                      />
+                    </div>
+                    <div>
+                      <HelpLabel help="Altération appliquée par ce pouvoir. Le bouclier protège le héros, les autres ciblent l'ennemi.">État</HelpLabel>
+                      <select value={power.statusType || ''} onChange={(event) => updatePower(power.id, { statusType: event.target.value })}>
+                        {HERO_STATUS_EFFECT_TYPES.map((type) => (
+                          <option key={type.id || 'none'} value={type.id}>{type.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <HelpLabel help="Dégâts par tour pour poison, brûlure et saignement. Points absorbés pour bouclier.">Valeur</HelpLabel>
+                      <input
+                        type="number"
+                        min="0"
+                        value={power.statusAmount || 0}
+                        onChange={(event) => updatePower(power.id, { statusAmount: clampNumber(event.target.value, power.statusAmount || 0, 0, 999) })}
+                      />
+                    </div>
+                    <div>
+                      <HelpLabel help="Nombre de tours pendant lesquels l'altération reste active.">Tours</HelpLabel>
+                      <input
+                        type="number"
+                        min="1"
+                        value={power.statusDuration || 1}
+                        onChange={(event) => updatePower(power.id, { statusDuration: clampNumber(event.target.value, power.statusDuration || 1, 1, 99) })}
+                      />
+                    </div>
                     <button
                       type="button"
                       className="danger-button hero-skill-delete"
@@ -1326,56 +1681,9 @@ export default function HeroTab({ project, patchProject, onPreviewHeroCharacter,
           {activeHeroTab === 'rules' ? (
           <div className="subpanel" data-tour="hero-rules-panel">
             <div className="subpanel-head">
-              <h3>Règles de jet</h3>
-            </div>
-            <div className="grid-two">
               <div>
-                <HelpLabel help={FIELD_HELP.criticalSuccess}>Réussite critique</HelpLabel>
-                <input
-                  type="number"
-                  min="1"
-                  max={heroAdventure.dice.sides}
-                  value={rules.criticalSuccess}
-                  onChange={(event) => updateHeroAdventure((draft) => {
-                    draft.rules.criticalSuccess = clampNumber(event.target.value, rules.criticalSuccess, 1, draft.dice.sides);
-                  })}
-                />
-              </div>
-              <div>
-                <HelpLabel help={FIELD_HELP.criticalFailure}>échec critique</HelpLabel>
-                <input
-                  type="number"
-                  min="1"
-                  max={heroAdventure.dice.sides}
-                  value={rules.criticalFailure}
-                  onChange={(event) => updateHeroAdventure((draft) => {
-                    draft.rules.criticalFailure = clampNumber(event.target.value, rules.criticalFailure, 1, draft.dice.sides);
-                  })}
-                />
-              </div>
-              <div>
-                <HelpLabel help={FIELD_HELP.criticalChance}>Taux critique (%)</HelpLabel>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={rules.criticalChance}
-                  onChange={(event) => updateHeroAdventure((draft) => {
-                    draft.rules.criticalChance = clampNumber(event.target.value, rules.criticalChance, 0, 100);
-                  })}
-                />
-              </div>
-              <div>
-                <HelpLabel help={FIELD_HELP.criticalMultiplier}>Multiplicateur critique</HelpLabel>
-                <input
-                  type="number"
-                  min="1"
-                  max="20"
-                  value={rules.criticalMultiplier}
-                  onChange={(event) => updateHeroAdventure((draft) => {
-                    draft.rules.criticalMultiplier = clampNumber(event.target.value, rules.criticalMultiplier, 1, 20);
-                  })}
-                />
+                <h3>Affichage</h3>
+                <p>Réglages d'interface et de confort visibles pendant la Preview et dans le player.</p>
               </div>
             </div>
             <label className="checkbox-row">

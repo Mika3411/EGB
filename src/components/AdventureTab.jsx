@@ -382,6 +382,8 @@ const getDebugEffectLabel = (effect = {}, entry, project, getSceneLabel) => {
   if (type === 'message') return effect.message ? `Message: ${clipDebugText(effect.message, 90)}` : 'Message vide';
   if (type === 'add_item') return `Donne objet: ${getProjectItemLabel(project, effect.itemId)}`;
   if (type === 'remove_item') return `Retire objet: ${getProjectItemLabel(project, effect.itemId)}`;
+  if (type === 'heal_health') return `Soigne PV: +${Number(effect.value) || 0}`;
+  if (type === 'heal_mana') return `Rend mana: +${Number(effect.value) || 0}`;
   if (type === 'set_variable') return getDebugVariableEffectLabel(effect.variableKey, 'set', effect.value);
   if (type === 'increment_variable') return getDebugVariableEffectLabel(effect.variableKey, 'increment', effect.value);
   if (type === 'decrement_variable') return getDebugVariableEffectLabel(effect.variableKey, 'decrement', effect.value);
@@ -415,6 +417,8 @@ const getDebugReplyBadges = (entry, project, getSceneLabel, entries = []) => {
     const type = effect.type || 'message';
     const kind = ['add_item', 'remove_item'].includes(type)
       ? 'item'
+      : ['heal_health', 'heal_mana'].includes(type)
+        ? 'hero'
       : ['set_variable', 'increment_variable', 'decrement_variable'].includes(type)
         ? 'variable'
         : ['next_node', 'scene', 'enigma'].includes(type)

@@ -303,7 +303,7 @@ const FAQ_ITEMS = [
   },
   {
     question: 'Que vérifier avant de publier ?',
-    answer: 'Teste le jeu du d?but ? la fin, vérifie le point de départ, les zones non reliées, les énigmes sans solution, les objets impossibles a obtenir, les combinaisons utiles, les cinématiques avec action de fin, le Plan, le Bilan, la catégorie, la mention d??ge et la miniature.',
+    answer: 'Teste le jeu du début à la fin, vérifie le point de départ, les zones non reliées, les énigmes sans solution, les objets impossibles à obtenir, les combinaisons utiles, les cinématiques avec action de fin, le Plan, le Bilan, la catégorie, la mention d\'âge et la miniature.',
   },
   {
     question: 'Pourquoi mon objet n’apparaît pas dans l’inventaire ?',

@@ -8,6 +8,7 @@ import {
   clampDecimal,
   clampNumber,
   estimateCombatBalance,
+  getCombatSimulationStats,
   getEntryValue,
   normalizeHeroAttackType,
   normalizePowerType,
@@ -16,16 +17,18 @@ import {
 import {
   COMBAT_EFFECT_MEDIA_TYPES,
   COMBAT_EFFECT_SLOTS,
+  COMBAT_VISUAL_EFFECT_OPTIONS,
+  COMBAT_VISUAL_EFFECT_TYPES,
   COMBAT_MEDIA_TYPES,
   DEFAULT_COMBAT_SETTINGS,
   getCombatEffectFieldBase,
 } from '../lib/combatDefaults.js';
 
 const COMBAT_EFFECT_EDITOR_SLOTS = [
-  { actor: 'hero', outcome: 'hit', title: 'Héros touché', help: "Média affiché par-dessus le héros quand il perd des PV sans mourir." },
-  { actor: 'hero', outcome: 'death', title: 'Héros vaincu', help: "Média affiché par-dessus le héros quand ses PV tombent à 0." },
-  { actor: 'enemy', outcome: 'hit', title: 'Ennemi touché', help: "Média affiché par-dessus l'ennemi quand il perd des PV sans mourir." },
-  { actor: 'enemy', outcome: 'death', title: 'Ennemi vaincu', help: "Média affiché par-dessus l'ennemi quand ses PV tombent à 0." },
+  { actor: 'hero', outcome: 'hit', title: 'Héros touché', help: "Effet joué sur le héros quand il reçoit des dégâts et reste en vie." },
+  { actor: 'hero', outcome: 'death', title: 'Héros vaincu', help: "Effet joué sur le héros quand il tombe à 0 PV." },
+  { actor: 'enemy', outcome: 'hit', title: 'Ennemi touché', help: "Effet joué sur l'ennemi quand il reçoit des dégâts et reste en vie." },
+  { actor: 'enemy', outcome: 'death', title: 'Ennemi vaincu', help: "Effet joué sur l'ennemi quand il tombe à 0 PV." },
 ];
 const HERO_ATTACK_TYPES = [
   { id: 'physical', label: 'Physique' },
@@ -35,6 +38,10 @@ const HERO_ATTACK_TYPES = [
   { id: 'lightning', label: 'Foudre' },
 ];
 const POWER_TYPES = HERO_ATTACK_TYPES.filter((type) => type.id !== 'physical');
+const ENEMY_AI_MODES = [
+  { id: 'tactical', label: 'Tactique' },
+  { id: 'random', label: 'Aléatoire' },
+];
 const RESISTANCE_FIELDS = [
   { id: 'water', label: 'Eau', field: 'combatEnemyResistanceWater' },
   { id: 'earth', label: 'Terre', field: 'combatEnemyResistanceEarth' },
@@ -70,6 +77,7 @@ const getBalanceVerdict = (balance) => {
 
 const normalizeMediaType = (value) => (COMBAT_MEDIA_TYPES.has(value) ? value : 'image');
 const normalizeEffectMediaType = (value) => (COMBAT_EFFECT_MEDIA_TYPES.has(value) ? value : 'none');
+const normalizeCombatVisualEffect = (value) => (COMBAT_VISUAL_EFFECT_TYPES.has(value) ? value : 'none');
 const normalizeEffectMediaSettings = (combat = {}, actor, outcome) => {
   const base = getCombatEffectFieldBase(actor, outcome);
   return {
@@ -82,6 +90,7 @@ const normalizeEffectMediaSettings = (combat = {}, actor, outcome) => {
     [`${base}Anime2dName`]: combat?.[`${base}Anime2dName`] || '',
     [`${base}VideoData`]: combat?.[`${base}VideoData`] || '',
     [`${base}VideoName`]: combat?.[`${base}VideoName`] || '',
+    [`${base}VisualEffect`]: normalizeCombatVisualEffect(combat?.[`${base}VisualEffect`]),
     [`${base}AudioData`]: combat?.[`${base}AudioData`] || '',
     [`${base}AudioName`]: combat?.[`${base}AudioName`] || '',
   };
@@ -107,13 +116,21 @@ const normalizeCombatSettings = (combat = {}) => ({
   enemyAnime2dName: combat?.enemyAnime2dName || '',
   enemyName: combat?.enemyName || DEFAULT_COMBAT_SETTINGS.enemyName,
   heroAttackType: normalizeHeroAttackType(combat?.heroAttackType),
+  heroDieDamagePercent: clampNumber(combat?.heroDieDamagePercent, DEFAULT_COMBAT_SETTINGS.heroDieDamagePercent, 0, 999),
+  enemyInitiative: clampNumber(combat?.enemyInitiative, DEFAULT_COMBAT_SETTINGS.enemyInitiative, -999, 999),
   enemyStrength: clampNumber(combat?.enemyStrength, DEFAULT_COMBAT_SETTINGS.enemyStrength, 0, 999),
+  enemyDieDamagePercent: clampNumber(combat?.enemyDieDamagePercent, DEFAULT_COMBAT_SETTINGS.enemyDieDamagePercent, 0, 999),
+  enemyCunning: clampNumber(combat?.enemyCunning, DEFAULT_COMBAT_SETTINGS.enemyCunning, 1, 999),
+  enemyChaos: clampNumber(combat?.enemyChaos, DEFAULT_COMBAT_SETTINGS.enemyChaos, 1, 999),
+  enemyArmor: clampNumber(combat?.enemyArmor, DEFAULT_COMBAT_SETTINGS.enemyArmor, 0, 999),
+  enemyDodgeChance: clampNumber(combat?.enemyDodgeChance, DEFAULT_COMBAT_SETTINGS.enemyDodgeChance, 0, 100),
   enemyMaxMana: clampNumber(combat?.enemyMaxMana, DEFAULT_COMBAT_SETTINGS.enemyMaxMana, 0, 999),
   enemyPowerName: combat?.enemyPowerName || DEFAULT_COMBAT_SETTINGS.enemyPowerName,
   enemyPowerType: normalizePowerType(combat?.enemyPowerType),
   enemyPowerManaCost: clampNumber(combat?.enemyPowerManaCost, DEFAULT_COMBAT_SETTINGS.enemyPowerManaCost, 0, 999),
   enemyPowerDamage: clampNumber(combat?.enemyPowerDamage, DEFAULT_COMBAT_SETTINGS.enemyPowerDamage, 0, 999),
   enemyPowerUsageChance: clampNumber(combat?.enemyPowerUsageChance, DEFAULT_COMBAT_SETTINGS.enemyPowerUsageChance, 0, 100),
+  enemyAiMode: ENEMY_AI_MODES.some((mode) => mode.id === combat?.enemyAiMode) ? combat.enemyAiMode : DEFAULT_COMBAT_SETTINGS.enemyAiMode,
   enemyCriticalChance: clampNumber(combat?.enemyCriticalChance, DEFAULT_COMBAT_SETTINGS.enemyCriticalChance, 0, 100),
   enemyCriticalMultiplier: clampDecimal(combat?.enemyCriticalMultiplier, DEFAULT_COMBAT_SETTINGS.enemyCriticalMultiplier, 1, 20),
   enemyResistanceWater: clampNumber(combat?.enemyResistanceWater, 0, 0, 100),
@@ -200,6 +217,7 @@ const getEffectMedia = (combat, actor, outcome) => {
     anime2dName: combat?.[`${base}Anime2dName`] || '',
     videoData: combat?.[`${base}VideoData`] || '',
     videoName: combat?.[`${base}VideoName`] || '',
+    visualEffect: normalizeCombatVisualEffect(combat?.[`${base}VisualEffect`]),
     audioData: combat?.[`${base}AudioData`] || '',
     audioName: combat?.[`${base}AudioName`] || '',
   };
@@ -359,6 +377,7 @@ function EffectMediaSlotEditor({
   onAnimeClear,
   onVideoSelect,
   onVideoClear,
+  onVisualEffectChange,
   onAudioSelect,
   onAudioClear,
   onJsonError,
@@ -380,7 +399,9 @@ function EffectMediaSlotEditor({
       ? media.anime2dName
       : media.mediaType === 'video'
         ? media.videoName
-        : '';
+        : media.mediaType === 'visual'
+          ? COMBAT_VISUAL_EFFECT_OPTIONS.find((option) => option.id === media.visualEffect)?.label
+          : '';
   const mediaName = [
     visualMediaName,
     media.audioName ? `Son: ${media.audioName}` : '',
@@ -392,6 +413,7 @@ function EffectMediaSlotEditor({
         <HelpLabel help={help}>{title}</HelpLabel>
         <select value={media.mediaType} onChange={(event) => onMediaTypeChange(event.target.value)}>
           <option value="none">Aucun</option>
+          <option value="visual">Animation visuelle</option>
           <option value="image">Image</option>
           <option value="anime2d">Animation 2D Anime</option>
           <option value="video">Video courte</option>
@@ -404,10 +426,25 @@ function EffectMediaSlotEditor({
           <img src={media.imageData} alt={title} />
         ) : media.mediaType === 'video' && media.videoData ? (
           <video src={media.videoData} muted playsInline autoPlay loop />
+        ) : media.mediaType === 'visual' ? (
+          <span className={`combat-visual-effect-preview combat-visual-effect-preview--${media.visualEffect || 'none'}`}>
+            {COMBAT_VISUAL_EFFECT_OPTIONS.find((option) => option.id === media.visualEffect)?.label || 'Aucune'}
+          </span>
         ) : (
         <span>{media.mediaType === 'none' ? (media.audioData ? 'Son configuré' : 'Aucun média') : 'À choisir'}</span>
         )}
       </div>
+
+      {media.mediaType === 'visual' ? (
+        <div>
+          <HelpLabel help="Animation visuelle jouée directement sur le personnage touché. Elle ne nécessite pas d'image ou de vidéo.">Animation</HelpLabel>
+          <select value={media.visualEffect || 'none'} onChange={(event) => onVisualEffectChange(event.target.value)}>
+            {COMBAT_VISUAL_EFFECT_OPTIONS.map((option) => (
+              <option key={option.id} value={option.id}>{option.label}</option>
+            ))}
+          </select>
+        </div>
+      ) : null}
 
       {media.mediaType === 'image' ? (
         <div className="inline-actions">
@@ -507,14 +544,21 @@ export default function CombatTab({
   const previewEnemyMedia = getActorMedia(selectedEntry, combat, 'enemy');
   const previewEnemyName = selectedEntry?.combatEnemyName || combat.enemyName || 'Adversaire';
   const heroName = project.heroAdventure?.hero?.name || 'Héros';
+  const selectedHeroInitiative = clampNumber(project.heroAdventure?.hero?.initiative, 0, -999, 999);
   const diceLabel = project.heroAdventure?.dice?.label || 'd20';
   const selectedTurnMode = getEntryValue(selectedEntry, 'combatTurnMode', combat.turnMode) !== false;
   const selectedShowDice = getEntryValue(selectedEntry, 'combatShowDice', combat.showDice) !== false;
-  const selectedEnemyAutoTurn = getEntryValue(selectedEntry, 'combatEnemyAutoTurn', combat.enemyAutoTurn) !== false;
   const selectedHeroAttackType = normalizeHeroAttackType(getEntryValue(selectedEntry, 'combatHeroAttackType', combat.heroAttackType));
+  const selectedHeroDieDamagePercent = clampNumber(getEntryValue(selectedEntry, 'combatHeroDieDamagePercent', combat.heroDieDamagePercent), combat.heroDieDamagePercent, 0, 999);
+  const selectedEnemyInitiative = clampNumber(getEntryValue(selectedEntry, 'combatEnemyInitiative', combat.enemyInitiative), combat.enemyInitiative, -999, 999);
+  const selectedFirstActorLabel = selectedEnemyInitiative > selectedHeroInitiative ? 'Ennemi commence' : 'Héros commence';
   const selectedEnemyStrength = clampNumber(getEntryValue(selectedEntry, 'combatEnemyStrength', getEntryValue(selectedEntry, 'combatEnemyDamage', combat.enemyStrength)), combat.enemyStrength, 0, 999);
+  const selectedEnemyDieDamagePercent = clampNumber(getEntryValue(selectedEntry, 'combatEnemyDieDamagePercent', combat.enemyDieDamagePercent), combat.enemyDieDamagePercent, 0, 999);
+  const selectedEnemyCunning = clampNumber(getEntryValue(selectedEntry, 'combatEnemyCunning', combat.enemyCunning), combat.enemyCunning, 1, 999);
+  const selectedEnemyChaos = clampNumber(getEntryValue(selectedEntry, 'combatEnemyChaos', combat.enemyChaos), combat.enemyChaos, 1, 999);
+  const selectedEnemyArmor = clampNumber(getEntryValue(selectedEntry, 'combatEnemyArmor', combat.enemyArmor), combat.enemyArmor, 0, 999);
+  const selectedEnemyDodgeChance = clampNumber(getEntryValue(selectedEntry, 'combatEnemyDodgeChance', combat.enemyDodgeChance), combat.enemyDodgeChance, 0, 100);
   const selectedEnemyMaxMana = clampNumber(getEntryValue(selectedEntry, 'combatEnemyMaxMana', combat.enemyMaxMana), combat.enemyMaxMana, 0, 999);
-  const selectedEnemyPowerName = getEntryValue(selectedEntry, 'combatEnemyPowerName', combat.enemyPowerName) || 'Pouvoir';
   const selectedEnemyPowerType = normalizePowerType(getEntryValue(selectedEntry, 'combatEnemyPowerType', combat.enemyPowerType));
   const selectedEnemyPowerManaCost = clampNumber(getEntryValue(selectedEntry, 'combatEnemyPowerManaCost', combat.enemyPowerManaCost), combat.enemyPowerManaCost, 0, 999);
   const selectedEnemyPowerDamage = clampNumber(getEntryValue(selectedEntry, 'combatEnemyPowerDamage', combat.enemyPowerDamage), combat.enemyPowerDamage, 0, 999);
@@ -529,14 +573,11 @@ export default function CombatTab({
       })
       : null
   ), [combat, project, selectedEntry, selectedSource?.id]);
+  const combatBalanceStats = useMemo(() => (
+    selectedEntry ? getCombatSimulationStats(project, selectedEntry, combat) : null
+  ), [combat, project, selectedEntry]);
   const combatBalanceTone = getBalanceTone(combatBalance);
   const heroSkills = Array.isArray(project.heroAdventure?.hero?.skills) ? project.heroAdventure.hero.skills : [];
-  const heroPreviewMaxHealth = Math.max(1, Number(project.heroAdventure?.hero?.maxHealth) || Number(project.heroAdventure?.hero?.health) || 1);
-  const heroPreviewHealth = Math.max(0, Math.min(heroPreviewMaxHealth, Number(project.heroAdventure?.hero?.health) || heroPreviewMaxHealth));
-  const heroPreviewMaxMana = Math.max(0, Number(project.heroAdventure?.hero?.maxMana) || 0);
-  const heroPreviewMana = Math.max(0, Math.min(heroPreviewMaxMana, Number(project.heroAdventure?.hero?.mana) || heroPreviewMaxMana));
-  const enemyPreviewMaxHealth = Math.max(1, Number(selectedEntry?.combatEnemyMaxHealth) || 8);
-  const enemyPreviewMaxMana = Math.max(0, selectedEnemyMaxMana);
   const getSelectedResistance = (field, combatField) => clampNumber(getEntryValue(selectedEntry, field, combat[combatField]), 0, 0, 100);
 
   useEffect(() => {
@@ -617,25 +658,6 @@ export default function CombatTab({
     });
   };
 
-  const addHeroSkill = () => {
-    patchHeroSkills((skills) => {
-      const nextIndex = skills.length + 1;
-      skills.push({
-        id: `skill_${Date.now()}`,
-        name: `Compétence ${nextIndex}`,
-        value: 1,
-        manaCost: 0,
-      });
-    });
-  };
-
-  const removeHeroSkill = (index) => {
-    patchHeroSkills((skills) => {
-      if (skills.length <= 1) return;
-      skills.splice(index, 1);
-    });
-  };
-
   const makeDefaultActorHandlers = (actor) => ({
     onMediaTypeChange: (mediaType) => updateDefaultCombat({ [`${actor}MediaType`]: normalizeMediaType(mediaType) }),
     onImageSelect: (imageData, imageName = '') => updateDefaultCombat({
@@ -677,6 +699,10 @@ export default function CombatTab({
         [`${base}MediaType`]: 'video',
       }),
       onVideoClear: () => updateDefaultCombat({ [`${base}VideoData`]: '', [`${base}VideoName`]: '' }),
+      onVisualEffectChange: (visualEffect) => updateDefaultCombat({
+        [`${base}VisualEffect`]: normalizeCombatVisualEffect(visualEffect),
+        [`${base}MediaType`]: 'visual',
+      }),
       onAudioSelect: (audioData, audioName = '') => updateDefaultCombat({
         [`${base}AudioData`]: audioData,
         [`${base}AudioName`]: audioName,
@@ -771,31 +797,19 @@ export default function CombatTab({
             media={previewHeroMedia}
             label={heroName}
             project={project}
-            vitals={{
-              health: heroPreviewHealth,
-              maxHealth: heroPreviewMaxHealth,
-              mana: heroPreviewMana,
-              maxMana: heroPreviewMaxMana,
-            }}
           />
           {selectedShowDice ? (
             <div className="combat-dice-preview">
               <span className={`hero-die-face hero-die-face--${project.heroAdventure?.dice?.skin || 'classic'}`}>
                 <span className="hero-roll-die-value">{diceLabel.replace(/^d/i, '')}</span>
               </span>
-              <strong>{selectedTurnMode ? (selectedEnemyAutoTurn ? 'Tour du héros' : 'Héros puis ennemi') : 'Jet direct'}</strong>
+              <strong>{selectedTurnMode ? selectedFirstActorLabel : 'Jet direct'}</strong>
             </div>
           ) : null}
           <CombatActorPreview
             media={previewEnemyMedia}
             label={previewEnemyName}
             project={project}
-            vitals={{
-              health: enemyPreviewMaxHealth,
-              maxHealth: enemyPreviewMaxHealth,
-              mana: enemyPreviewMaxMana,
-              maxMana: enemyPreviewMaxMana,
-            }}
           />
         </div>
 
@@ -868,7 +882,7 @@ export default function CombatTab({
             </div>
 
             <div className="combat-background-picker">
-              <HelpLabel help="Image de fond affichée derrière le héros, le dé et l'ennemi pendant les combats.">Fond d'écran combat</HelpLabel>
+              <HelpLabel help="Image affichée derrière les personnages et le dé pendant un combat.">Fond d'écran combat</HelpLabel>
               <div className="inline-actions">
                 <MediaSourcePicker
                   accept="image/*"
@@ -891,7 +905,7 @@ export default function CombatTab({
             </div>
 
             <div className="combat-turn-mode-picker">
-              <HelpLabel help="En tour par tour, choisis si la riposte ennemie se résout seule ou si le joueur doit cliquer pour lancer le dé ennemi.">Tour de l'ennemi</HelpLabel>
+              <HelpLabel help="Détermine si l'ennemi attaque automatiquement ou si le joueur doit cliquer pour lancer son dé.">Tour de l'ennemi</HelpLabel>
               <div className="combat-mode-switch" role="group" aria-label="Mode du tour ennemi">
                 <button
                   type="button"
@@ -917,7 +931,7 @@ export default function CombatTab({
 
             <MediaSlotEditor
               title="Héros par défaut"
-              help="Image ou animation JSON 2D Anime du héros dans l'écran de combat."
+              help="Visuel utilisé pour représenter le héros pendant le combat."
               mediaType={combat.heroMediaType}
               imageData={combat.heroImageData}
               imageName={combat.heroImageName}
@@ -934,7 +948,7 @@ export default function CombatTab({
 
             <MediaSlotEditor
               title="Ennemi par défaut"
-              help="Image ou animation JSON 2D Anime utilisée pour les ennemis sans visuel propre."
+              help="Visuel utilisé pour les ennemis qui n'ont pas de visuel personnalisé."
               mediaType={combat.enemyMediaType}
               imageData={combat.enemyImageData}
               imageName={combat.enemyImageName}
@@ -995,19 +1009,76 @@ export default function CombatTab({
                 <>
                   <div className="combat-enemy-stat-strip">
                     <span><strong>{selectedEnemyStrength}</strong> force</span>
+                    <span><strong>{selectedEnemyDieDamagePercent}%</strong> dé</span>
                     <span><strong>{selectedEntry.combatEnemyMaxHealth || 8}</strong> PV</span>
+                    <span><strong>{selectedEnemyCunning}</strong> ruse</span>
+                    <span><strong>{selectedEnemyChaos}</strong> chaos</span>
+                    <span><strong>{selectedEnemyInitiative}</strong> init.</span>
+                    <span><strong>{selectedEnemyArmor}</strong> armure</span>
+                    <span><strong>{selectedEnemyDodgeChance}%</strong> esquive</span>
                     <span><strong>{selectedEnemyMaxMana}</strong> mana</span>
                     <span><strong>{selectedEnemyPowerUsageChance}%</strong> pouvoir</span>
                     <span><strong>{selectedEnemyCriticalChance}%</strong> critique</span>
                   </div>
 
+                  <div className="combat-enemy-section">
+                    <div className="subpanel-head compact">
+                      <div>
+                        <h4>Narration</h4>
+                        <p>Textes affichés au lancement et au dénouement du combat.</p>
+                      </div>
+                    </div>
+                    <div className="combat-narration-grid">
+                      <div>
+                        <HelpLabel help="Texte affiché au joueur au moment où ce combat commence.">Phrase de début</HelpLabel>
+                        <textarea
+                          value={selectedEntry.combatStartDialogue || ''}
+                          placeholder={`Combat contre ${previewEnemyName}. À toi de jouer.`}
+                          onChange={(event) => updateCombatEntry({ combatStartDialogue: event.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <HelpLabel help="Texte affiché quand le combat se termine, juste avant le résultat final.">Phrase de fin</HelpLabel>
+                        <textarea
+                          value={selectedEntry.combatEndDialogue || ''}
+                          placeholder="Le silence retombe sur l'arène."
+                          onChange={(event) => updateCombatEntry({ combatEndDialogue: event.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <HelpLabel help="Scène vers laquelle le joueur est envoyé après une victoire.">Cible victoire</HelpLabel>
+                        <select
+                          value={selectedEntry.combatVictoryTargetSceneId || ''}
+                          onChange={(event) => updateCombatEntry({ combatVictoryTargetSceneId: event.target.value })}
+                        >
+                          <option value="">Rester sur place</option>
+                          {(project.scenes || []).map((scene) => (
+                            <option key={scene.id} value={scene.id}>{getSceneLabel?.(scene.id) || scene.name || scene.id}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <HelpLabel help="Scène vers laquelle le joueur est envoyé après une défaite.">Cible défaite</HelpLabel>
+                        <select
+                          value={selectedEntry.combatDefeatTargetSceneId || ''}
+                          onChange={(event) => updateCombatEntry({ combatDefeatTargetSceneId: event.target.value })}
+                        >
+                          <option value="">Rester sur place</option>
+                          {(project.scenes || []).map((scene) => (
+                            <option key={scene.id} value={scene.id}>{getSceneLabel?.(scene.id) || scene.name || scene.id}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="combat-enemy-grid">
                     <div>
-                      <HelpLabel help="Nom affiché dans le HUD et les messages de combat.">Nom ennemi</HelpLabel>
+                      <HelpLabel help="Nom de l'ennemi affiché au joueur pendant le combat.">Nom ennemi</HelpLabel>
                       <input value={selectedEntry.combatEnemyName || ''} placeholder={combat.enemyName} onChange={(event) => updateCombatEntry({ combatEnemyName: event.target.value })} />
                     </div>
                     <div>
-                      <HelpLabel help="Force de base utilisée pour les ripostes normales. Elle remplace les anciens dégâts ennemis.">Force</HelpLabel>
+                      <HelpLabel help="Dégâts de base ajoutés à chaque attaque normale de l'ennemi.">Force</HelpLabel>
                       <NumberInput
                         min="0"
                         max="999"
@@ -1019,7 +1090,17 @@ export default function CombatTab({
                       />
                     </div>
                     <div>
-                      <HelpLabel help="Points de vie de départ de cet ennemi.">PV</HelpLabel>
+                      <HelpLabel help="Part du résultat du dé ajoutée aux dégâts ennemis. 100% ajoute tout le résultat du dé; 50% en ajoute la moitié; 0% utilise seulement la force.">% du dé</HelpLabel>
+                      <NumberInput
+                        min="0"
+                        max="999"
+                        step="1"
+                        value={selectedEnemyDieDamagePercent}
+                        onValueChange={(nextValue) => updateCombatEntry({ combatEnemyDieDamagePercent: clampNumber(nextValue, DEFAULT_COMBAT_SETTINGS.enemyDieDamagePercent, 0, 999) })}
+                      />
+                    </div>
+                    <div>
+                      <HelpLabel help="Nombre de points de vie de l'ennemi au début du combat.">PV</HelpLabel>
                       <NumberInput
                         min="1"
                         max="999"
@@ -1028,12 +1109,57 @@ export default function CombatTab({
                       />
                     </div>
                     <div>
-                      <HelpLabel help="Réserve de mana de l'ennemi. Son pouvoir ne peut se lancer que s'il a assez de mana.">Mana</HelpLabel>
+                      <HelpLabel help="Difficulté à battre pour fuir. Le héros lance le dé avec sa Ruse; s'il échoue, il reste au combat et perd son tour.">Ruse</HelpLabel>
+                      <NumberInput
+                        min="1"
+                        max="999"
+                        value={selectedEnemyCunning}
+                        onValueChange={(nextValue) => updateCombatEntry({ combatEnemyCunning: clampNumber(nextValue, 10, 1, 999) })}
+                      />
+                    </div>
+                    <div>
+                      <HelpLabel help="Difficulté à battre quand le héros tombe à 0 PV. S'il réussit son jet de Survie, il reste en vie avec 1 PV.">Chaos</HelpLabel>
+                      <NumberInput
+                        min="1"
+                        max="999"
+                        value={selectedEnemyChaos}
+                        onValueChange={(nextValue) => updateCombatEntry({ combatEnemyChaos: clampNumber(nextValue, 10, 1, 999) })}
+                      />
+                    </div>
+                    <div>
+                      <HelpLabel help="Réserve de mana de l'ennemi. Son pouvoir ne peut être utilisé que s'il a assez de mana.">Mana</HelpLabel>
                       <NumberInput
                         min="0"
                         max="999"
                         value={selectedEnemyMaxMana}
                         onValueChange={(nextValue) => updateCombatEntry({ combatEnemyMaxMana: clampNumber(nextValue, 0, 0, 999) })}
+                      />
+                    </div>
+                    <div>
+                      <HelpLabel help="Valeur comparée à l'initiative du héros au début du combat. Le plus haut résultat commence.">Initiative</HelpLabel>
+                      <NumberInput
+                        min="-999"
+                        max="999"
+                        value={selectedEnemyInitiative}
+                        onValueChange={(nextValue) => updateCombatEntry({ combatEnemyInitiative: clampNumber(nextValue, 0, -999, 999) })}
+                      />
+                    </div>
+                    <div>
+                      <HelpLabel help="Nombre de points retirés aux dégâts reçus par l'ennemi.">Armure</HelpLabel>
+                      <NumberInput
+                        min="0"
+                        max="999"
+                        value={selectedEnemyArmor}
+                        onValueChange={(nextValue) => updateCombatEntry({ combatEnemyArmor: clampNumber(nextValue, 0, 0, 999) })}
+                      />
+                    </div>
+                    <div>
+                      <HelpLabel help="Chance que l'ennemi évite complètement une attaque du héros.">Esquive (%)</HelpLabel>
+                      <NumberInput
+                        min="0"
+                        max="100"
+                        value={selectedEnemyDodgeChance}
+                        onValueChange={(nextValue) => updateCombatEntry({ combatEnemyDodgeChance: clampNumber(nextValue, 0, 0, 100) })}
                       />
                     </div>
                   </div>
@@ -1047,17 +1173,13 @@ export default function CombatTab({
                     </div>
                     <div className="combat-enemy-grid">
                       <div>
-                        <HelpLabel help="Nom du pouvoir affiché dans le journal du combat.">Nom du pouvoir</HelpLabel>
-                        <input value={selectedEnemyPowerName} placeholder="Brasier" onChange={(event) => updateCombatEntry({ combatEnemyPowerName: event.target.value })} />
-                      </div>
-                      <div>
-                        <HelpLabel help="Type élémentaire du pouvoir ennemi.">Type</HelpLabel>
+                        <HelpLabel help="Élément du pouvoir ennemi. Les résistances du héros peuvent réduire ses dégâts.">Type</HelpLabel>
                         <select value={selectedEnemyPowerType} onChange={(event) => updateCombatEntry({ combatEnemyPowerType: normalizePowerType(event.target.value) })}>
                           {POWER_TYPES.map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}
                         </select>
                       </div>
                       <div>
-                        <HelpLabel help="Mana consommée à chaque lancement du pouvoir.">Coût mana</HelpLabel>
+                        <HelpLabel help="Quantité de mana dépensée par l'ennemi à chaque utilisation du pouvoir.">Coût mana</HelpLabel>
                         <NumberInput
                           min="0"
                           max="999"
@@ -1066,7 +1188,7 @@ export default function CombatTab({
                         />
                       </div>
                       <div>
-                        <HelpLabel help="Dégâts du pouvoir avant critique. Mets 0 pour un pouvoir narratif sans dégâts.">Puissance</HelpLabel>
+                        <HelpLabel help="Dégâts de base du pouvoir avant les critiques, résistances et armures. Mets 0 si le pouvoir ne doit pas blesser.">Puissance</HelpLabel>
                         <NumberInput
                           min="0"
                           max="999"
@@ -1075,7 +1197,7 @@ export default function CombatTab({
                         />
                       </div>
                       <div>
-                        <HelpLabel help="Chance en pourcentage que l'ennemi utilise son pouvoir à la place d'une attaque normale.">Utilisation aléatoire (%)</HelpLabel>
+                        <HelpLabel help="Probabilité de base que l'ennemi choisisse son pouvoir au lieu d'une attaque normale.">Tendance pouvoir (%)</HelpLabel>
                         <NumberInput
                           min="0"
                           max="100"
@@ -1084,7 +1206,7 @@ export default function CombatTab({
                         />
                       </div>
                       <div>
-                        <HelpLabel help="Type des dégâts du héros. Les résistances de l'ennemi réduisent ces dégâts si ce type est eau, terre, feu ou foudre.">Type subi par l'ennemi</HelpLabel>
+                        <HelpLabel help="Type des dégâts infligés par le héros. Les résistances de l'ennemi réduisent les dégâts élémentaires.">Type subi par l'ennemi</HelpLabel>
                         <select value={selectedHeroAttackType} onChange={(event) => updateCombatEntry({ combatHeroAttackType: normalizeHeroAttackType(event.target.value) })}>
                           {HERO_ATTACK_TYPES.map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}
                         </select>
@@ -1101,7 +1223,7 @@ export default function CombatTab({
                     </div>
                     <div className="combat-enemy-grid">
                       <div>
-                        <HelpLabel help="Chance en pourcentage que l'attaque ou le pouvoir ennemi devienne critique.">Apparition (%)</HelpLabel>
+                        <HelpLabel help="Chance que l'attaque de l'ennemi fasse un coup critique.">Apparition (%)</HelpLabel>
                         <NumberInput
                           min="0"
                           max="100"
@@ -1110,7 +1232,7 @@ export default function CombatTab({
                         />
                       </div>
                       <div>
-                        <HelpLabel help="Multiplicateur appliqué à la force ou à la puissance du pouvoir. Exemple : 2 double les dégâts.">Multiplication de force</HelpLabel>
+                        <HelpLabel help="Multiplicateur appliqué aux dégâts en cas de coup critique. Exemple: 2 double les dégâts.">Multiplication de force</HelpLabel>
                         <NumberInput
                           min="1"
                           max="20"
@@ -1146,7 +1268,7 @@ export default function CombatTab({
                   </div>
                 </>
               ) : (
-                <div className="empty-state-inline">Passe une zone ou une réponse en action “Combat simple” pour créer un ennemi réglable ici.</div>
+                <div className="empty-state-inline">Passe une zone ou une réponse en action ?Combat simple? pour créer un ennemi réglable ici.</div>
               )}
             </section>
           </div>
@@ -1155,7 +1277,7 @@ export default function CombatTab({
             <section className={`subpanel combat-config-card combat-balance-panel combat-balance-panel--${combatBalanceTone}`}>
               <div className="subpanel-head">
                 <div>
-                  <h3>Mode équilibrage</h3>
+                  <h3>Mode Équilibrage</h3>
                   <p>{selectedEntry ? `Lecture statistique de ${previewEnemyName}.` : 'Sélectionne un combat pour estimer son équilibre.'}</p>
                 </div>
                 {combatBalance ? (
@@ -1166,6 +1288,26 @@ export default function CombatTab({
               {combatBalance ? (
                 <>
                   <div className="combat-balance-summary">
+                    {combatBalanceStats ? (
+                      <>
+                        <span>
+                          <strong>{combatBalanceStats.heroHealth}/{combatBalanceStats.heroMaxHealth}</strong>
+                          <small>PV héros pris en compte</small>
+                        </span>
+                        <span>
+                          <strong>{combatBalanceStats.heroForce}</strong>
+                          <small>force héros prise en compte</small>
+                        </span>
+                        <span>
+                          <strong>{combatBalanceStats.heroDieDamagePercent}%</strong>
+                          <small>dé héros pris en compte</small>
+                        </span>
+                        <span>
+                          <strong>{combatBalanceStats.enemyStats.dieDamagePercent}%</strong>
+                          <small>dé ennemi pris en compte</small>
+                        </span>
+                      </>
+                    ) : null}
                     <span>
                       <strong>{formatBalancePercent(combatBalance.winChance)}</strong>
                       <small>chance de victoire</small>
@@ -1201,7 +1343,7 @@ export default function CombatTab({
                   </p>
                 </>
               ) : (
-                <div className="empty-state-inline">Ajoute un combat simple pour activer le mode équilibrage.</div>
+                <div className="empty-state-inline">Ajoute un combat simple pour activer le mode Équilibrage.</div>
               )}
             </section>
           </div>
@@ -1211,18 +1353,28 @@ export default function CombatTab({
               <div className="subpanel-head">
                 <div>
                   <h3>Compétences du héros</h3>
-                  <p>Réglages de test disponibles uniquement dans l'éditeur.</p>
+                  <p>Valeurs de base utilisées par les tests et les combats.</p>
                 </div>
-                <button type="button" className="secondary-action compact" onClick={addHeroSkill}>
-                  Ajouter
-                </button>
               </div>
 
               <div className="combat-hero-skill-grid">
+                <div className="combat-hero-skill-row">
+                  <div>
+                    <HelpLabel help="Part du résultat du dé ajoutée aux dégâts du héros. 100% ajoute tout le résultat du dé; 50% en ajoute la moitié; 0% utilise seulement la force.">% du dé héros</HelpLabel>
+                    <NumberInput
+                      min="0"
+                      max="999"
+                      step="1"
+                      value={selectedHeroDieDamagePercent}
+                      onValueChange={(nextValue) => updateCombatEntry({ combatHeroDieDamagePercent: clampNumber(nextValue, DEFAULT_COMBAT_SETTINGS.heroDieDamagePercent, 0, 999) })}
+                      disabled={!selectedEntry}
+                    />
+                  </div>
+                </div>
                 {heroSkills.length ? heroSkills.map((skill, index) => (
                   <div className="combat-hero-skill-row" key={skill.id || index}>
                     <div>
-                      <HelpLabel help="Nom affiché dans la Preview et dans les jets de combat.">Nom</HelpLabel>
+                      <HelpLabel help="Nom de la compétence du héros affiché pendant les jets de dé.">Nom</HelpLabel>
                       <input
                         value={skill.name || ''}
                         placeholder={`Compétence ${index + 1}`}
@@ -1230,16 +1382,20 @@ export default function CombatTab({
                       />
                     </div>
                     <div>
-                      <HelpLabel help="Bonus ajouté au dé quand cette compétence est utilisée.">Bonus</HelpLabel>
+                      <HelpLabel help="Valeur ajoutée au résultat du dé quand le héros utilise cette compétence.">Bonus</HelpLabel>
                       <NumberInput
                         min="0"
                         max="999"
                         value={Number(skill.value) || 0}
-                        onValueChange={(nextValue) => updateHeroSkill(index, { value: clampNumber(nextValue, 0, 0, 999) })}
+                        onValueChange={(nextValue) => {
+                          const value = clampNumber(nextValue, 0, 0, 999);
+                          updateHeroSkill(index, { value, baseValue: value, rolledValue: 0, rollFormula: '' });
+                        }}
                       />
+                      {skill.rolledValue ? <small>Base {skill.baseValue ?? (Number(skill.value) - Number(skill.rolledValue))} + 1d6 ({skill.rolledValue}) = {skill.value}</small> : null}
                     </div>
                     <div>
-                      <HelpLabel help="Mana consommée par un jet manuel de cette compétence.">Mana</HelpLabel>
+                      <HelpLabel help="Mana dépensée par le héros quand il utilise cette compétence.">Mana</HelpLabel>
                       <NumberInput
                         min="0"
                         max="999"
@@ -1247,14 +1403,6 @@ export default function CombatTab({
                         onValueChange={(nextValue) => updateHeroSkill(index, { manaCost: clampNumber(nextValue, 0, 0, 999) })}
                       />
                     </div>
-                    <button
-                      type="button"
-                      className="danger-button compact"
-                      onClick={() => removeHeroSkill(index)}
-                      disabled={heroSkills.length <= 1}
-                    >
-                      Retirer
-                    </button>
                   </div>
                 )) : (
                   <div className="empty-state-inline">Aucune compétence configurée.</div>

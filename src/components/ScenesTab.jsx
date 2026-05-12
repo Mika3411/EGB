@@ -86,6 +86,8 @@ const makeConversationEffect = (type = 'message') => ({
 const CONVERSATION_EFFECT_BUTTONS = [
   ['message', '+ Message'],
   ['add_item', '+ Objet'],
+  ['heal_health', '+ PV'],
+  ['heal_mana', '+ Mana'],
   ['set_variable', '+ Variable'],
   ['journal', '+ Journal'],
   ['next_node', '+ Aller vers...'],
@@ -95,6 +97,8 @@ const CONVERSATION_EFFECT_LABELS = {
   message: 'Message',
   add_item: 'Donner objet',
   remove_item: 'Retirer objet',
+  heal_health: 'Soigner PV',
+  heal_mana: 'Rendre mana',
   set_variable: 'Definir variable',
   increment_variable: 'Ajouter variable',
   decrement_variable: 'Retirer variable',
@@ -2665,6 +2669,15 @@ export default function ScenesTab(props) {
                                                 })} />
                                                 <HelpLabel help={effect.type === 'set_variable' ? 'Valeur à enregistrer : true, false, texte ou nombre.' : 'Nombre à ajouter ou retirer.'}>Valeur</HelpLabel>
                                                 <input value={effect.value ?? ''} placeholder={effect.type === 'set_variable' ? 'true, false, accuse...' : '1'} onChange={(e) => patchProject((draft) => {
+                                                  const targetEffect = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId)?.conversation?.nodes?.[nodeIndex]?.replies?.[replyIndex]?.effects?.[effectIndex];
+                                                  if (targetEffect) targetEffect.value = e.target.value;
+                                                })} />
+                                              </>
+                                            ) : null}
+                                            {['heal_health', 'heal_mana'].includes(effect.type || 'message') ? (
+                                              <>
+                                                <HelpLabel help={effect.type === 'heal_health' ? 'PV rendus au héros, limités aux PV max.' : 'Mana rendue au héros, limitée à la mana max.'}>Quantité</HelpLabel>
+                                                <input value={effect.value ?? ''} placeholder={effect.type === 'heal_health' ? '4' : '3'} onChange={(e) => patchProject((draft) => {
                                                   const targetEffect = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId)?.conversation?.nodes?.[nodeIndex]?.replies?.[replyIndex]?.effects?.[effectIndex];
                                                   if (targetEffect) targetEffect.value = e.target.value;
                                                 })} />

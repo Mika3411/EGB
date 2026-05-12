@@ -452,14 +452,14 @@ ${brief.beginnerBrief ? `
 - Les deblocages doivent rester accessibles depuis les onglets intermediaires: objet requis ou enigme liee, sans logicRules ni conditions composees.
 - Les actes peuvent organiser le parcours, mais sans logique narrative avancee, choix multiples ou variables.
 `.trim() : `
-- Les zones doivent relier les sc?nes, objets, ?nigmes et cin?matiques.
-- Les conditions de d?blocage doivent utiliser logicRules si une interaction d?pend d'un ?tat de jeu.
-- Si Actes = 3 et Sc?nes totales maximum = 24, produis au plus 8 sc?nes par acte. Plus g?n?ralement, r?partis les sc?nes de fa?on ?quilibr?e entre les actes sans d?passer le total demand?.
-- Structure chaque acte comme un mini-labyrinthe logique non lin?aire: au moins une sc?ne pivot, au moins deux branches, au moins deux sc?nes reli?es ? plusieurs autres sc?nes, et au moins un retour utile vers une sc?ne d?j? visit?e.
-- Le joueur doit parfois revenir en arri?re dans le m?me acte pour utiliser un objet, une information ou un ?tat obtenu ailleurs.
-- S?pare strictement les actes: une fois l'acte suivant atteint, aucune zone ne doit permettre de revenir ? un acte pr?c?dent. Les transitions inter-actes doivent ?tre ? sens unique dans routeMap.connections avec allowOneWay: true.
-- Dans routeMap, relie toutes les sc?nes qui ont une zone d'action commune ou une transition directe. Marque locked: true si le lien d?pend d'un objet, d'une ?nigme, d'une cin?matique ou d'une r?gle logique.
-- Dans routeMap, chaque canvas contient 15 rooms maximum; si un acte d?passe 15 sc?nes ou sous-sc?nes, cr?e un canvas suppl?mentaire et renseigne room.canvasId.
+- Les zones doivent relier les scènes, objets, énigmes et cinématiques.
+- Les conditions de déblocage doivent utiliser logicRules si une interaction dépend d'un état de jeu.
+- Si Actes = 3 et Scènes totales maximum = 24, produis au plus 8 scènes par acte. Plus généralement, répartis les scènes de façon Équilibrée entre les actes sans dépasser le total demandé.
+- Structure chaque acte comme un mini-labyrinthe logique non linéaire: au moins une scène pivot, au moins deux branches, au moins deux scènes reliées à plusieurs autres scènes, et au moins un retour utile vers une scène déjà visitée.
+- Le joueur doit parfois revenir en arrière dans le même acte pour utiliser un objet, une information ou un état obtenu ailleurs.
+- Sépare strictement les actes: une fois l'acte suivant atteint, aucune zone ne doit permettre de revenir à un acte précédent. Les transitions inter-actes doivent être à sens unique dans routeMap.connections avec allowOneWay: true.
+- Dans routeMap, relie toutes les scènes qui ont une zone d'action commune ou une transition directe. Marque locked: true si le lien dépend d'un objet, d'une énigme, d'une cinématique ou d'une règle logique.
+- Dans routeMap, chaque canvas contient 15 rooms maximum; si un acte dépasse 15 scènes ou sous-scènes, crée un canvas supplémentaire et renseigne room.canvasId.
 `.trim()}
 - Aucune impasse bloquante: tout objet requis doit être obtenable avant son usage, toute énigme doit avoir ses indices avant d'être résolue, et aucune ressource consommée ne doit être indispensable plus tard sauf si une autre solution existe.
 - Les indices d'une énigme ne doivent jamais être dans la même scène que l'énigme. Utilise clueSceneIds et explique la logique dans logicNotes.

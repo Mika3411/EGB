@@ -435,7 +435,25 @@
 
 .hero-preview-meter svg:first-child{color:#93c5fd}
 
+.hero-roster-panel{margin-top:12px}
+
+.hero-roster-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+
+.hero-roster-card{position:relative;display:grid;gap:5px;text-align:left;padding:12px;border:1px solid rgba(148,163,184,.2);border-radius:10px;background:#08111f;color:#dbeafe}
+
+.hero-roster-card.active{border-color:rgba(251,191,36,.75);box-shadow:0 0 0 1px rgba(251,191,36,.22),0 16px 32px rgba(15,23,42,.22)}
+
+.hero-roster-card strong{font-size:16px;color:#fff}
+
+.hero-roster-card span,.hero-roster-card small{color:#9fb3d0;font-weight:750}
+
+.hero-roster-description{margin:0;color:#cbd5e1;font-size:12px;line-height:1.35;font-weight:650}
+
+.hero-roster-card em{justify-self:start;margin-top:4px;color:#fecaca;font-style:normal;font-size:12px;font-weight:850}
+
 .hero-gauge-grid{margin-top:12px}
+
+.hero-description-field{display:grid;gap:6px;margin-top:12px}
 
 .hero-skill-list{display:grid;gap:8px}
 
@@ -521,7 +539,7 @@
 
 .hero-power-list{display:grid;gap:8px}
 
-.hero-power-editor{display:grid;grid-template-columns:minmax(150px,1fr) minmax(116px,.7fr) 96px 96px auto;gap:8px;align-items:end;padding:10px;border:1px solid rgba(148,163,184,.16);border-radius:10px;background:#08111f8c}
+.hero-power-editor{display:grid;grid-template-columns:minmax(150px,1fr) minmax(116px,.7fr) repeat(7,minmax(82px,96px)) auto;gap:8px;align-items:end;padding:10px;border:1px solid rgba(148,163,184,.16);border-radius:10px;background:#08111f8c}
 
 .hero-resistance-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 
@@ -739,13 +757,17 @@
 
 .combat-hero-skill-row>div{min-width:0}
 
-.combat-enemy-stat-strip{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.combat-enemy-stat-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:8px}
 
 .combat-enemy-stat-strip span{display:grid;gap:2px;min-width:0;padding:10px;border:1px solid rgba(147,197,253,.17);border-radius:10px;background:#02061770;color:#bfdbfe;font-size:11px;font-weight:850;text-transform:uppercase}
 
 .combat-enemy-stat-strip strong{color:#f8fafc;font-size:18px}
 
 .combat-enemy-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:end}
+
+.combat-narration-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:start}
+
+.combat-narration-grid textarea{min-height:86px;resize:vertical}
 
 .combat-enemy-section{display:grid;gap:10px;padding:12px;border:1px solid rgba(148,163,184,.16);border-radius:10px;background:#08111fb8}
 
@@ -795,6 +817,17 @@
 
 .combat-media-preview--effect img,.combat-media-preview--effect video,.combat-media-preview--effect .anime2d-embedded{height:128px}
 
+.combat-visual-effect-preview{display:grid;place-items:center;width:100%;height:100%;color:#dbeafe;font-size:13px;font-weight:900;text-align:center;background:radial-gradient(circle, rgba(59,130,246,.18), rgba(2,6,23,.2));border-radius:8px}
+.combat-visual-effect-preview--shake{animation:combatPreviewShake .55s linear infinite}
+.combat-visual-effect-preview--fire{color:#fed7aa;background:radial-gradient(circle at 50% 70%, #fef08a, #fb923c 34%, #7f1d1d 70%)}
+.combat-visual-effect-preview--lightning{color:#dbeafe;background:linear-gradient(135deg, #0f172a, #1d4ed8 48%, #fef9c3 50%, #1d4ed8 54%, #0f172a)}
+.combat-visual-effect-preview--wave{color:#e0f2fe;background:linear-gradient(180deg, rgba(14,165,233,.25), rgba(125,211,252,.62))}
+.combat-visual-effect-preview--rockfall{color:#e2e8f0;background:linear-gradient(180deg, #475569, #111827)}
+.combat-visual-effect-preview--horizontal-spin{animation:combatPreviewSpin .9s ease-in-out infinite}
+
+@keyframes combatPreviewShake{0%,100%{transform:translate(0)}25%{transform:translate(-4px,2px)}50%{transform:translate(4px,-2px)}75%{transform:translate(-2px,-1px)}}
+@keyframes combatPreviewSpin{0%{transform:perspective(260px) rotateY(0)}100%{transform:perspective(260px) rotateY(360deg)}}
+
 .combat-entry-toggles{display:grid;gap:8px}
 
 .combat-json-error{margin:-4px 0 12px;padding:9px 11px;border:1px solid rgba(248,113,113,.32);border-radius:10px;background:rgba(127,29,29,.26);color:#fecaca;font-size:12px;font-weight:850}
@@ -840,7 +873,7 @@
 .combat-balance-meter i{position:absolute;inset:0 auto 0 0;width:0;border-radius:inherit;background:linear-gradient(90deg,#f87171,#fbbf24 48%,#22c55e)}
 .combat-balance-note{margin:0;padding:10px;border:1px solid rgba(148,163,184,.14);border-radius:10px;background:#08111fb8;color:#cbd5e1;font-size:12px;font-weight:800;line-height:1.45}
 
-@media (max-width: 760px){.hero-skill-editor,.hero-power-editor,.hero-resistance-grid,.hero-equipment-slot-editor-grid,.hero-guide-grid,.hero-balance-summary,.hero-balance-grid,.hero-balance-skill-grid,.hero-balance-reward-grid,.combat-config-grid,.combat-enemy-grid,.combat-resistance-grid,.combat-enemy-stat-strip,.combat-mode-switch,.combat-effect-media-grid,.combat-simulation-metrics,.combat-balance-summary,.combat-balance-outcomes,.combat-hero-skill-row{grid-template-columns:1fr}.hero-equipment-slot-editor-head{display:grid}.hero-skill-delete{width:100%}.hero-check-preview{grid-template-columns:1fr}.hero-dice-skin-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hero-balance-panel--wide{grid-column:auto}.hero-balance-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.combat-arena-preview{grid-template-columns:1fr;min-height:auto;padding:18px}.combat-dice-preview{order:2}.combat-media-head{grid-template-columns:1fr}.combat-editor-tabs{display:grid;grid-template-columns:1fr}.combat-resistance-row,.hero-resistance-row{grid-template-columns:minmax(0,1fr) 84px auto}.combat-balance-badge{justify-self:start}}
+@media (max-width: 760px){.hero-skill-editor,.hero-power-editor,.hero-resistance-grid,.hero-equipment-slot-editor-grid,.hero-guide-grid,.hero-balance-summary,.hero-balance-grid,.hero-balance-skill-grid,.hero-balance-reward-grid,.combat-config-grid,.combat-enemy-grid,.combat-narration-grid,.combat-resistance-grid,.combat-enemy-stat-strip,.combat-mode-switch,.combat-effect-media-grid,.combat-simulation-metrics,.combat-balance-summary,.combat-balance-outcomes,.combat-hero-skill-row{grid-template-columns:1fr}.hero-equipment-slot-editor-head{display:grid}.hero-skill-delete{width:100%}.hero-check-preview{grid-template-columns:1fr}.hero-dice-skin-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hero-balance-panel--wide{grid-column:auto}.hero-balance-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.combat-arena-preview{grid-template-columns:1fr;min-height:auto;padding:18px}.combat-dice-preview{order:2}.combat-media-head{grid-template-columns:1fr}.combat-editor-tabs{display:grid;grid-template-columns:1fr}.combat-resistance-row,.hero-resistance-row{grid-template-columns:minmax(0,1fr) 84px auto}.combat-balance-badge{justify-self:start}}
 
 .dialogue-box{line-height:1.7;background:#0c1527eb;border-radius:var(--radius-xl);padding:14px;border:1px solid var(--line)}
 
@@ -1273,7 +1306,7 @@
 .hero-character-core-stats{display:flex;flex-wrap:wrap;justify-content:center;gap:5px;max-width:210px}
 .hero-character-core-stats span{padding:4px 7px;border:1px solid rgba(251,191,36,.24);border-radius:999px;background:rgba(63,38,9,.34);color:#fde68a;font-size:11px;font-weight:900;white-space:nowrap}
 .hero-character-combat{display:grid;gap:8px}
-.hero-character-combat-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.hero-character-combat-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:8px}
 .hero-character-combat-stats span{display:grid;gap:1px;min-width:0;padding:8px;border:1px solid rgba(251,191,36,.22);border-radius:9px;background:rgba(63,38,9,.28);color:#fde68a}
 .hero-character-combat-stats small,.hero-character-combat-stats em{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fcd34d;font-size:10px;font-style:normal;font-weight:800;text-transform:uppercase}
 .hero-character-combat-stats strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff7ed;font-size:18px;line-height:1}

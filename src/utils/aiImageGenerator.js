@@ -171,7 +171,7 @@ const buildPrompt = ({ type, entity, projectTitle, visualConstraints, visualCont
     const isThumbnail = variant === 'thumbnail';
     return `
 Objet d'inventaire pour un escape game: ${entity?.name}.
-${visualContext?.useEntityImagePrompt ? `Prompt fourni par le brief IA: ${entity?.imagePrompt || 'aucun prompt sp?cifique, inventer un objet cohérent'}.` : ''}
+${visualContext?.useEntityImagePrompt ? `Prompt fourni par le brief IA: ${entity?.imagePrompt || 'aucun prompt spécifique, inventer un objet cohérent'}.` : ''}
 Style lisible, isolé, iconique, cohérent avec "${projectTitle}".
 Style d'image: ${visualContext?.style || 'rendu cohérent avec le projet'}.
 
@@ -193,7 +193,7 @@ Image cinematic 16:9 pour un escape game.
 Cinématique: ${entity?.cinematicName || entity?.name || projectTitle || 'Cinématique'}
 Slide: ${entity?.name || 'Slide'}
 Narration: ${entity?.narration || 'Révélation narrative.'}
-${visualContext?.useEntityImagePrompt ? `Prompt fourni par le brief IA: ${entity?.imagePrompt || 'aucun prompt sp?cifique, illustrer la narration'}.` : ''}
+${visualContext?.useEntityImagePrompt ? `Prompt fourni par le brief IA: ${entity?.imagePrompt || 'aucun prompt spécifique, illustrer la narration'}.` : ''}
 Thème global: ${visualContext?.globalTheme || projectTitle || 'escape game'}
 Style visuel: ${visualContext?.style || 'réaliste, cinématographique, lisible, dramatique'}
 
@@ -218,7 +218,7 @@ Tu génères une scène pour un escape game.
 
 Scène actuelle: ${entity?.name}
 Résumé narratif: ${entity?.introText || 'Scène interactive.'}
-${visualContext?.useEntityImagePrompt ? `Prompt fourni par le brief IA: ${entity?.imagePrompt || 'aucun prompt sp?cifique, créer une scène coh?rente avec le r?sum?'}.` : ''}
+${visualContext?.useEntityImagePrompt ? `Prompt fourni par le brief IA: ${entity?.imagePrompt || 'aucun prompt spécifique, créer une scène cohérente avec le résumé'}.` : ''}
 Thème global: ${visualContext?.globalTheme || projectTitle || 'escape game'}
 Style visuel: ${safeStyle}, éclairage de jeu vidéo lisible, luminosité globale moyenne, pas de sous-exposition ?
 Héritage visuel: ${visualContext?.visualInheritance || 'même époque, mêmes matériaux, mêmes portes, même lumière'}
