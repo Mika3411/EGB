@@ -77,7 +77,21 @@ const updateLocalProjectCache = (userId, project) => {
   return entry;
 };
 
-export const normalizeEmail = (value = '') => value.trim().toLowerCase();
+export const normalizeEmail = (value = '') => String(value).trim().toLowerCase();
+const ADMIN_EMAIL = normalizeEmail(import.meta.env.VITE_ADMIN_EMAIL || '');
+const normalizeRole = (value = '') => String(value).trim().toLowerCase();
+const hasTruthyAdminFlag = (value) => value === true || /^(1|true|yes)$/i.test(String(value || ''));
+const getMetadataRoles = (metadata = {}) => {
+  const roles = Array.isArray(metadata.roles)
+    ? metadata.roles
+    : typeof metadata.roles === 'string'
+      ? metadata.roles.split(/[,\s]+/)
+      : [];
+  return [...roles, metadata.role].map(normalizeRole).filter(Boolean);
+};
+const isConfiguredAdminEmail = (email = '') => Boolean(
+  ADMIN_EMAIL && normalizeEmail(email) === ADMIN_EMAIL,
+);
 
 export async function hashPassword(password, salt) {
   const input = `${salt}:${password}`;
@@ -143,14 +157,12 @@ export const supabaseUserToAccount = (user) => {
     ...(user.app_metadata || {}),
     ...(user.user_metadata || {}),
   };
-  const roles = Array.isArray(metadata.roles)
-    ? metadata.roles
-    : [metadata.role || (metadata.isAdmin || metadata.is_admin ? 'admin' : 'user')].filter(Boolean);
+  const roles = getMetadataRoles(metadata);
   const isAdmin = Boolean(
-    metadata.isAdmin
-    || metadata.is_admin
+    hasTruthyAdminFlag(metadata.isAdmin)
+    || hasTruthyAdminFlag(metadata.is_admin)
     || roles.includes('admin')
-    || normalizeEmail(user.email || '') === normalizeEmail(import.meta.env.VITE_ADMIN_EMAIL || 'thorez.m@hotmail.fr')
+    || isConfiguredAdminEmail(user.email)
   );
   return {
     id: user.id,
@@ -266,7 +278,7 @@ export async function registerUser({
     marketingConsent: Boolean(marketingConsent),
     acceptedTerms: Boolean(acceptedTerms),
     acceptedTermsAt: acceptedTerms ? new Date().toISOString() : '',
-    role: normalizeEmail(email) === normalizeEmail(import.meta.env.VITE_ADMIN_EMAIL || 'thorez.m@hotmail.fr') ? 'admin' : 'user',
+    role: isConfiguredAdminEmail(email) ? 'admin' : 'user',
     salt,
     passwordHash,
     createdAt: new Date().toISOString(),
@@ -319,7 +331,7 @@ export async function loginUser({ email, password }) {
   window.localStorage.setItem(SESSION_KEY, account.id);
   return rememberAccount({
     ...account,
-    role: account.role || (normalizeEmail(account.email) === normalizeEmail(import.meta.env.VITE_ADMIN_EMAIL || 'thorez.m@hotmail.fr') ? 'admin' : 'user'),
+    role: account.role || (isConfiguredAdminEmail(account.email) ? 'admin' : 'user'),
     roles: account.roles || [account.role || 'user'],
     isAdmin: Boolean(account.isAdmin || account.role === 'admin'),
   });

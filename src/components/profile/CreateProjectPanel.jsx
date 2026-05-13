@@ -4,6 +4,7 @@ import { CREATION_MODES } from '../../lib/projectAnalysis';
 import { CREATION_TEMPLATES } from './profileUtils';
 
 const ADVENTURE_TEMPLATE_IDS = new Set([
+  'book_hero',
   'adventure_choices',
   'hero_adventure',
   'narrative_investigation',
@@ -36,7 +37,7 @@ export default function CreateProjectPanel({
   const handleCreate = async (event) => {
     event.preventDefault();
     const templateLabel = CREATION_TEMPLATES.find(([value]) => value === creationTemplate)?.[1] || 'Nouveau projet';
-    const effectiveCreationMode = creationTemplate === 'hero_adventure'
+    const effectiveCreationMode = creationTemplate === 'hero_adventure' || creationTemplate === 'book_hero'
       ? 'hero_adventure'
       : ADVENTURE_TEMPLATE_IDS.has(creationTemplate) ? 'adventure' : creationMode;
     await onCreateProject?.(newProjectName.trim() || templateLabel, creationTemplate, effectiveCreationMode);
@@ -109,7 +110,7 @@ export default function CreateProjectPanel({
                   className={creationTemplate === value ? 'selected' : ''}
                   onClick={() => {
                     setCreationTemplate(value);
-                    if (value === 'hero_adventure') setCreationMode('hero_adventure');
+                    if (value === 'hero_adventure' || value === 'book_hero') setCreationMode('hero_adventure');
                     else if (ADVENTURE_TEMPLATE_IDS.has(value)) setCreationMode('adventure');
                   }}
                   disabled={isBusy}

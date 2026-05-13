@@ -1153,6 +1153,9 @@ export const estimateCombatBalance = (project = {}, entry = {}, combat = DEFAULT
   let totalRounds = 0;
   let totalHeroDamage = 0;
   let totalEnemyDamage = 0;
+  let totalHeroHealthRemaining = 0;
+  let totalHeroManaRemaining = 0;
+  let totalHeroManaSpent = 0;
 
   for (let iteration = 0; iteration < iterations; iteration += 1) {
     const result = simulateCombat(project, entry, combat, {
@@ -1163,6 +1166,9 @@ export const estimateCombatBalance = (project = {}, entry = {}, combat = DEFAULT
     totalRounds += result.rounds || 0;
     totalHeroDamage += result.heroDamageTotal || 0;
     totalEnemyDamage += result.enemyDamageTotal || 0;
+    totalHeroHealthRemaining += Math.max(0, numberValue(result.heroHealth, 0));
+    totalHeroManaRemaining += Math.max(0, numberValue(result.heroMana, 0));
+    totalHeroManaSpent += Math.max(0, numberValue(stats.heroMana, 0) - Math.max(0, numberValue(result.heroMana, 0)));
   }
 
   const averageRounds = totalRounds / iterations;
@@ -1172,17 +1178,22 @@ export const estimateCombatBalance = (project = {}, entry = {}, combat = DEFAULT
   const blockedCount = outcomes[COMBAT_OUTCOMES.BLOCKED] || 0;
   const timeoutCount = outcomes[COMBAT_OUTCOMES.TIMEOUT] || 0;
   const winChance = (victoryCount / iterations) * 100;
+  const survivalChance = ((iterations - defeatCount) / iterations) * 100;
 
   return {
     iterations,
     maxRounds,
     winChance,
+    survivalChance,
     averageRounds,
     averageHeroDamagePerRound: totalHeroDamage / safeRounds,
     averageEnemyDamagePerRound: totalEnemyDamage / safeRounds,
     averageTotalDamagePerRound: (totalHeroDamage + totalEnemyDamage) / safeRounds,
     averageHeroDamage: totalHeroDamage / iterations,
     averageEnemyDamage: totalEnemyDamage / iterations,
+    averageHeroHealthRemaining: totalHeroHealthRemaining / iterations,
+    averageHeroManaRemaining: totalHeroManaRemaining / iterations,
+    averageHeroManaSpent: totalHeroManaSpent / iterations,
     victoryCount,
     defeatCount,
     blockedCount,

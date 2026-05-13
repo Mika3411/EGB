@@ -1,8 +1,8 @@
 import {
-  aiJobBucket,
   getSupabaseAdminClient,
   json,
   parseBody,
+  resolveServerStorageBucket,
   verifyUser,
   withErrors,
 } from './_shared.js';
@@ -28,8 +28,9 @@ const isStorageNotFoundError = (error) => {
   return status === 404 || code === '404' || code === 'not_found' || code === 'not-found';
 };
 
-const downloadStorageJson = async (supabase, path, fallback) => {
-  const { data, error } = await supabase.storage.from(aiJobBucket).download(path);
+const downloadStorageJson = async (supabase, path, fallback, options = {}) => {
+  const bucket = options.bucket || resolveServerStorageBucket(options.visibility);
+  const { data, error } = await supabase.storage.from(bucket).download(path);
   if (error) {
     if (isStorageNotFoundError(error)) return fallback;
     throw error;
@@ -44,9 +45,10 @@ const downloadStorageJson = async (supabase, path, fallback) => {
   }
 };
 
-const uploadStorageJson = async (supabase, path, value) => {
+const uploadStorageJson = async (supabase, path, value, options = {}) => {
+  const bucket = options.bucket || resolveServerStorageBucket(options.visibility);
   const { error } = await supabase.storage
-    .from(aiJobBucket)
+    .from(bucket)
     .upload(path, Buffer.from(JSON.stringify(value, null, 2)), {
       upsert: true,
       contentType: 'application/json; charset=utf-8',
@@ -153,10 +155,10 @@ const savePublicProjectIndexForUser = async (supabase, userId, projects = []) =>
       };
     });
 
-  const existingIndex = await downloadStorageJson(supabase, publicProjectsStoragePath, []);
+  const existingIndex = await downloadStorageJson(supabase, publicProjectsStoragePath, [], { visibility: 'public' });
   const safeIndex = Array.isArray(existingIndex) ? existingIndex : [];
   const withoutUser = safeIndex.filter((project) => project.userId !== userId);
-  return uploadStorageJson(supabase, publicProjectsStoragePath, [...withoutUser, ...publicRecords]);
+  return uploadStorageJson(supabase, publicProjectsStoragePath, [...withoutUser, ...publicRecords], { visibility: 'public' });
 };
 
 const saveProjectsForUser = async (supabase, userId, projects = []) => {

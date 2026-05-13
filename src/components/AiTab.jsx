@@ -6,6 +6,33 @@ import { mergeProjectPatch, validateProject } from '../utils/projectValidation';
 import { downloadBlob } from '../utils/fileHelpers';
 import { createIndexedDraftStorage } from '../utils/indexedDraftStorage';
 import { showConfirm } from './AccessibleDialog';
+import AiBriefForm from './ai/AiBriefForm.jsx';
+import AiControlsPanel from './ai/AiControlsPanel.jsx';
+import AiDiffPanel from './ai/AiDiffPanel.jsx';
+import AiDraftPreview from './ai/AiDraftPreview.jsx';
+import AiGenerationStatus from './ai/AiGenerationStatus.jsx';
+import AiImageWorkbench from './ai/AiImageWorkbench.jsx';
+import {
+  HelpLabel,
+  formatChronologyEntries,
+  getCoherenceLabel,
+  getCoherenceScore,
+  getDiffLines,
+  getDisplayItemName,
+  getHeroItemPreviewLabel,
+  getItemFallbackIcon,
+  getLastSceneIdFromChronology,
+  getNarrativeEndScene,
+  isTechnicalItemName,
+  makeIdeaSuggestions,
+  makeProjectStorySummary,
+  makeSceneChronology,
+  makeSceneVisualConstraints,
+  markAiChanges,
+  parseChronologyEntries,
+  placeHotspotsFromElements,
+  stripLargeMediaFields,
+} from './ai/aiTabHelpers.js';
 
 const FIELD_HELP = {
   title: "Nom du jeu. Si tu laisses vide, l'IA invente un titre cohérent avec le thème.",
@@ -54,366 +81,10 @@ const IMAGE_STYLE_PRESETS = {
 const AI_DRAFT_DB = 'escape-game-builder-ai-drafts';
 const AI_DRAFT_AUTOSAVE_DELAY_MS = 2_500;
 const AI_CREDITS_ENDPOINT = import.meta.env.VITE_AI_CREDITS_ENDPOINT || '/api/ai-credits';
-const AI_PROJECT_PRIVACY_NOTICE = "Quand tu lances une génération IA, les informations nécessaires du projet peuvent être transmises au fournisseur IA: titres, scènes, dialogues, personnages, contraintes et consignes. Les médias volumineux ne sont pas inclus dans ce contexte texte compacté.";
 const aiDraftStorage = createIndexedDraftStorage(AI_DRAFT_DB);
 const readAiDraft = aiDraftStorage.read;
 const writeAiDraft = aiDraftStorage.write;
 const deleteAiDraft = aiDraftStorage.remove;
-
-const stripLargeMediaFields = (value) => {
-  if (Array.isArray(value)) return value.map(stripLargeMediaFields);
-  if (!value || typeof value !== 'object') return value;
-  return Object.fromEntries(Object.entries(value).map(([key, entryValue]) => {
-    const isLargeMediaField = /^(backgroundData|imageData|objectImageData|popupImageData|videoData|audioData)$/i.test(key);
-    if (isLargeMediaField) return [key, ''];
-    return [key, stripLargeMediaFields(entryValue)];
-  }));
-};
-
-const HelpLabel = ({ children, help, className = '' }) => (
-  <label className={`label-with-help${className ? ` ${className}` : ''}`}>
-    <span>{children}</span>
-    <span className="help-dot" data-help={help} aria-label={help} tabIndex={0}>?</span>
-  </label>
-);
-
-const AiPrivacyNotice = () => (
-  <div className="ai-privacy-notice" role="note">
-    <strong>Confidentialité IA</strong>
-    <p>{AI_PROJECT_PRIVACY_NOTICE}</p>
-  </div>
-);
-
-const shouldPreplaceHotspots = (hotspots = []) => {
-  if (!hotspots.length) return false;
-  const usable = hotspots.filter((spot) => Number.isFinite(Number(spot.x)) && Number.isFinite(Number(spot.y)));
-  if (usable.length !== hotspots.length) return true;
-  const uniquePositions = new Set(usable.map((spot) => `${Math.round(Number(spot.x))}:${Math.round(Number(spot.y))}`));
-  const allNearDefault = usable.every((spot) => Math.abs(Number(spot.x) - 50) <= 1 && Math.abs(Number(spot.y) - 50) <= 1);
-  return uniquePositions.size <= 1 || allNearDefault;
-};
-
-const preplaceHotspots = (hotspots = []) => {
-  if (!shouldPreplaceHotspots(hotspots)) return hotspots;
-  const slots = [
-    [24, 36], [50, 34], [76, 36],
-    [28, 58], [52, 58], [74, 58],
-    [22, 76], [50, 76], [78, 76],
-  ];
-  return hotspots.map((hotspot, index) => {
-    const [x, y] = slots[index % slots.length];
-    return {
-      ...hotspot,
-      x,
-      y,
-      width: Number(hotspot.width) > 0 ? hotspot.width : 14,
-      height: Number(hotspot.height) > 0 ? hotspot.height : 12,
-      placementStatus: 'ai_preplaced',
-    };
-  });
-};
-
-const normalizeLabel = (value) => String(value || '')
-  .toLowerCase()
-  .normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '')
-  .replace(/[^a-z0-9]/g, '');
-
-const placeHotspotsFromElements = (hotspots = [], elements = []) => {
-  if (!elements.length) return preplaceHotspots(hotspots);
-  const usedElementIds = new Set();
-  const placed = hotspots.map((hotspot, index) => {
-    const hotspotLabel = normalizeLabel(`${hotspot.name} ${hotspot.dialogue}`);
-    const matched = elements.find((element) => {
-      if (usedElementIds.has(element.id)) return false;
-      const elementLabel = normalizeLabel(`${element.label} ${element.id}`);
-      return elementLabel && (hotspotLabel.includes(elementLabel) || elementLabel.includes(normalizeLabel(hotspot.name)));
-    }) || elements[index % elements.length];
-    if (matched?.id) usedElementIds.add(matched.id);
-    return {
-      ...hotspot,
-      x: Number(matched?.x) || hotspot.x,
-      y: Number(matched?.y) || hotspot.y,
-      width: Number(matched?.width) || hotspot.width || 14,
-      height: Number(matched?.height) || hotspot.height || 12,
-      placementStatus: 'ai_element_estimate',
-    };
-  });
-  return shouldPreplaceHotspots(placed) ? preplaceHotspots(placed) : placed;
-};
-
-const getStepMeta = (status, locked, doneLabel, availableLabel, lockedLabel = 'verrouillé') => {
-  if (status === 'running') return { icon: '⏳', label: 'En cours' };
-  if (status === 'done') return { icon: '✔', label: doneLabel };
-  if (locked) return { icon: '🔒', label: lockedLabel };
-  return { icon: '→', label: availableLabel };
-};
-
-const getProjectDiff = (before = {}, after = {}) => {
-  const keys = [
-    ['scenes', 'scènes'],
-    ['items', 'objets'],
-    ['enigmas', 'énigmes'],
-    ['cinematics', 'cinématiques'],
-    ['combinations', 'combinaisons'],
-  ];
-  return keys.map(([key, label]) => {
-    const beforeMap = new Map((before[key] || []).map((entry) => [entry.id, entry]));
-    const afterEntries = after[key] || [];
-    const added = afterEntries.filter((entry) => entry?.id && !beforeMap.has(entry.id));
-    const changed = afterEntries.filter((entry) => entry?.id && beforeMap.has(entry.id) && JSON.stringify(beforeMap.get(entry.id)) !== JSON.stringify(entry));
-    return { key, label, added, changed };
-  });
-};
-
-const getDiffLines = (before, after) => getProjectDiff(before, after)
-  .flatMap((entry) => [
-    entry.added.length ? `+ ${entry.added.length} ${entry.label}` : '',
-    entry.changed.length ? `~ ${entry.changed.length} ${entry.label} modifié(e)(s)` : '',
-  ])
-  .filter(Boolean);
-
-const markAiChanges = (before = {}, after = {}, actionLabel = 'IA') => {
-  const next = structuredClone(after);
-  ['scenes', 'items', 'enigmas', 'cinematics', 'combinations'].forEach((key) => {
-    const beforeIds = new Set((before[key] || []).map((entry) => entry.id));
-    next[key] = (next[key] || []).map((entry) => (
-      beforeIds.has(entry.id) ?
-         entry
-        : { ...entry, aiGenerated: true, aiActionLabel: actionLabel }
-    ));
-  });
-  return next;
-};
-
-const getActionEstimate = (mode, action) => {
-  const estimates = {
-    generate: ['+ nouveau projet complet', '+ prompts images', '+ scènes', '+ objets', '+ énigmes'],
-    progressive: ['+ Acte 1', '+ Acte 2 ensuite', '~ enrichissement contrôlé'],
-    extend: ['+ ajouts ciblés', '~ projet existant conservé', '+ références validées'],
-    improve: ['~ 1 scène modifiée', '~ dialogues', '~ ambiance', '~ objets si utile'],
-    act1: ['+ 1 acte', '+ 3 à 6 scènes', '+ objets', '+ énigmes'],
-    improveAct1: ['~ Acte 1', '~ dialogues', '~ ambiance'],
-    act2_continuity: ['+ 1 acte', '+ 2 à 5 scènes', '+ objets', '+ énigmes'],
-    enrich: ['~ dialogues', '~ détails visuels', '~ interactions'],
-    continue_story: ['+ scènes de suite', '+ objets', '+ zones de liaison'],
-    add_scenes: ['+ 1 à 3 scènes', '+ zones de navigation'],
-    add_enigmas: ['+ 1 à 3 énigmes', '+ zones liées'],
-    enrich_interactions: ['~ zones', '~ dialogues', '~ objets'],
-  };
-  return estimates[action] || estimates[mode] || [];
-};
-
-const makeIdeaSuggestions = (theme, projectTitle) => [
-  `Ajouter une cave secrète liée à ${theme || projectTitle || 'l’histoire'}`,
-  'Introduire un fantôme lié à la famille',
-  'Créer une énigme sonore',
-  'Ajouter une clé rouillée et une serrure mécanique',
-  'Révéler une pièce cachée derrière un tableau',
-];
-
-const makeProjectStorySummary = (project = {}) => {
-  const scenes = project.scenes || [];
-  const startScene = scenes.find((scene) => scene.id === project.start?.targetSceneId) || scenes[0];
-  const lastScene = scenes[scenes.length - 1];
-  const sceneLines = scenes.slice(-5).map((scene) => {
-    const firstDialogue = (scene.hotspots || []).find((hotspot) => hotspot.dialogue)?.dialogue || '';
-    return `- ${scene.name}: ${(scene.introText || firstDialogue || 'Scène sans résumé.').split('\n')[0]}`;
-  });
-  return [
-    `Titre: ${project.title || 'Projet sans titre'}`,
-    startScene ? `Départ: ${startScene.name}` : '',
-    lastScene ? `Dernière scène actuelle: ${lastScene.name}` : '',
-    sceneLines.length ? 'Derniers événements:' : '',
-    ...sceneLines,
-  ].filter(Boolean).join('\n');
-};
-
-const makeSceneChronology = (project = {}) => {
-  const scenes = project.scenes || [];
-  if (!scenes.length) return '';
-  const ordered = [];
-  const byId = new Map(scenes.map((scene) => [scene.id, scene]));
-  const visited = new Set();
-  let current = byId.get(project.start?.targetSceneId) || scenes[0];
-
-  while (current && !visited.has(current.id)) {
-    ordered.push(current);
-    visited.add(current.id);
-    const nextId = (current.hotspots || []).find((hotspot) => (
-      hotspot.targetSceneId && byId.has(hotspot.targetSceneId) && !visited.has(hotspot.targetSceneId)
-    ))?.targetSceneId;
-    current = nextId ? byId.get(nextId) : null;
-  }
-
-  scenes.forEach((scene) => {
-    if (!visited.has(scene.id)) ordered.push(scene);
-  });
-
-  return ordered.map((scene, index) => (
-    `${index + 1}. [${scene.id}] ${scene.name || 'Scène sans nom'}`
-  )).join('\n');
-};
-
-const getLastSceneIdFromChronology = (chronology = '', project = {}) => {
-  const scenes = project.scenes || [];
-  const lines = String(chronology || '').split('\n').map((line) => line.trim()).filter(Boolean);
-  for (let index = lines.length - 1; index >= 0; index -= 1) {
-    const line = lines[index];
-    const bracketId = line.match(/\[([^\]]+)\]/)?.[1];
-    if (bracketId && scenes.some((scene) => scene.id === bracketId)) return bracketId;
-    const matchedByName = scenes.find((scene) => line.toLowerCase().includes(String(scene.name || '').toLowerCase()));
-    if (matchedByName) return matchedByName.id;
-  }
-  return getNarrativeEndScene(project)?.id || '';
-};
-
-const parseChronologyEntries = (chronology = '', project = {}) => {
-  const scenes = project.scenes || [];
-  return String(chronology || '')
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line, index) => {
-      const id = line.match(/\[([^\]]+)\]/)?.[1] || '';
-      const scene = scenes.find((entry) => entry.id === id)
-        || scenes.find((entry) => line.toLowerCase().includes(String(entry.name || '').toLowerCase()));
-      return {
-        id: scene?.id || id || `manual_${index}`,
-        sceneId: scene?.id || '',
-        name: scene?.name || line.replace(/^\d+\.\s*/, '').replace(/\[[^\]]+\]\s*/, ''),
-        raw: line,
-      };
-    });
-};
-
-const formatChronologyEntries = (entries = []) => entries.map((entry, index) => (
-  entry.sceneId ?
-     `${index + 1}. [${entry.sceneId}] ${entry.name || 'Scène sans nom'}`
-    : `${index + 1}. ${entry.name || entry.raw || 'Step manuelle'}`
-)).join('\n');
-
-const getNarrativeEndScene = (project = {}) => {
-  const scenes = project.scenes || [];
-  if (!scenes.length) return null;
-  const byId = new Map(scenes.map((scene) => [scene.id, scene]));
-  let current = byId.get(project.start?.targetSceneId) || scenes[0];
-  const visited = new Set();
-
-  while (current && !visited.has(current.id)) {
-    visited.add(current.id);
-    const nextId = (current.hotspots || []).find((hotspot) => (
-      hotspot.targetSceneId && byId.has(hotspot.targetSceneId) && !visited.has(hotspot.targetSceneId)
-    ))?.targetSceneId;
-    if (!nextId) break;
-    current = byId.get(nextId);
-  }
-
-  return current || scenes[scenes.length - 1] || null;
-};
-
-const uniqueLines = (lines) => Array.from(new Set(lines.filter(Boolean)));
-
-const getItemFallbackIcon = (item) => {
-  const icon = String(item?.icon || '').trim();
-  if (icon && icon.length <= 3 && !/^it[_-]/i.test(icon)) return icon;
-  return '•';
-};
-
-const isTechnicalItemName = (value) => {
-  const text = String(value || '').trim();
-  return !text
-    || /^[a-z0-9]{6,10}$/i.test(text)
-    || (/^[a-z]*\d+[a-z0-9]*$/i.test(text) && text.length <= 12)
-    || /^(it|obj|item)[_-]?[a-z0-9]+$/i.test(text);
-};
-
-const getDisplayItemName = (item) => (
-  isTechnicalItemName(item?.name) ? 'Objet à renommer' : item.name
-);
-
-const getHeroItemPreviewLabel = (item) => {
-  const type = item?.heroItemType || 'none';
-  if (type === 'health_potion') return `Potion soin +${Number(item.heroItemAmount) || 0} PV`;
-  if (type === 'mana_potion') return `Potion mana +${Number(item.heroItemAmount) || 0}`;
-  if (type === 'equipment') {
-    const bonus = Number(item.heroItemBonus) || 0;
-    const sign = bonus >= 0 ? '+' : '';
-    if ((item.heroItemBonusTarget || 'skill') === 'maxHealth') return `Équipement PV max ${sign}${bonus}`;
-    if ((item.heroItemBonusTarget || 'skill') === 'maxMana') return `Équipement mana max ${sign}${bonus}`;
-    return `Équipement ${item.heroItemSkillId || 'compétence'} ${sign}${bonus}`;
-  }
-  return '';
-};
-
-const makeSceneVisualConstraints = (scene, project = {}) => {
-  const lines = [];
-  const text = `${scene?.name || ''} ${scene?.introText || ''}`.toLowerCase();
-  const hotspots = scene?.hotspots || [];
-  const scenes = project?.scenes || [];
-  const enigmas = project?.enigmas || [];
-
-  lines.push(`- lieu principal clairement identifiable: ${scene?.name || 'scène'}`);
-
-  if (text.includes('vestibule') || text.includes('hall')) lines.push('- grand vestibule avec entrée, sol visible et profondeur vers le reste du lieu');
-  if (text.includes('bibliothèque')) lines.push('- bibliothèques hautes, livres nombreux et au moins un rayon manipulable');
-  if (text.includes('bureau')) lines.push('- bureau visible au centre ou sur un côté, avec documents et tiroirs lisibles');
-  if (text.includes('cuisine')) lines.push('- cuisine ancienne avec plan de travail, placards et objets manipulables visibles');
-  if (text.includes('cave')) lines.push('- cave sombre avec murs bruts, stockage et passage lisible vers la suite');
-  if (text.includes('grenier')) lines.push('- grenier encombré avec poutrès, malles et zones de fouille distinctes');
-  if (text.includes('jardin')) lines.push('- extérieur lisible avec chemin, végétation et point d’accès vers le bâtiment');
-  if (text.includes('chambre')) lines.push('- lit, table dé chevet et éléments personnels clairement séparés');
-  if (text.includes('salon')) lines.push('- salon avec assises, cheminée ou meuble central utilisable');
-  if (text.includes('couloir')) lines.push('- couloir profond avec portes ou bifurcation visibles');
-
-  hotspots.slice(0, 6).forEach((hotspot) => {
-    const name = hotspot.name || 'zone interactive';
-    if (hotspot.targetSceneId) {
-      const target = scenes.find((entry) => entry.id === hotspot.targetSceneId);
-      lines.push(`- sortie ou passage visible pour "${name}" vers ${target?.name || 'une autre scène'}`);
-    } else if (hotspot.enigmaId) {
-      const enigma = enigmas.find((entry) => entry.id === hotspot.enigmaId);
-      lines.push(`- mécanisme ou support d’énigme visible pour "${name}"${enigma?.name ? ` (${enigma.name})` : ''}`);
-    } else {
-      lines.push(`- élément interactif distinct pour "${name}"`);
-    }
-  });
-
-  if (!hotspots.length) lines.push('- décor large et lisible avec plusieurs zones interactives potentielles');
-  lines.push('- composition en caméra large, sans texte incrusté, utilisable comme scène cliquable');
-  lines.push('- exposition claire pour le jeu: ombres détaillées, aucun centre noir bouché, passages et objets inspectables');
-  lines.push('- ne pas afficher les objets d’inventaire dans l’image: ils seront ajoutés manuellement par l’utilisateur dans la scène');
-
-  return uniqueLines(lines).join('\n');
-};
-
-const getCoherenceScore = (project, validation) => {
-  if (!project) return null;
-  let score = 10;
-  score -= (validation?.errors?.length || 0) * 1.4;
-  score -= (validation?.warnings?.length || 0) * 0.35;
-
-  const scenes = project.scenes || [];
-  const orphanScenes = scenes.filter((scene) => scene.id !== project.start?.targetSceneId && !scenes.some((candidate) => (
-    (candidate.hotspots || []).some((hotspot) => hotspot.targetSceneId === scene.id)
-  )));
-  const emptyScenes = scenes.filter((scene) => !String(scene.introText || '').trim() || !(scene.hotspots || []).length);
-  const emptyDialogues = scenes.flatMap((scene) => scene.hotspots || []).filter((hotspot) => !String(hotspot.dialogue || '').trim());
-
-  score -= Math.min(2, orphanScenes.length * 0.35);
-  score -= Math.min(1.5, emptyScenes.length * 0.45);
-  score -= Math.min(1.2, emptyDialogues.length * 0.15);
-
-  return Math.max(0, Math.min(10, score));
-};
-
-const getCoherenceLabel = (score) => {
-  if (score == null) return '';
-  if (score >= 8.5) return 'Très cohérent';
-  if (score >= 7) return 'Solide';
-  if (score >= 5.5) return 'À vérifier';
-  return 'Fragile';
-};
 
 export default function AiTab({
   project,
@@ -730,103 +401,7 @@ export default function AiTab({
       setMode('generate');
     }
   }, [isBeginnerAi, mode]);
-  const briefForm = (
-    <>
-      {isChoiceAdventureAi ? (
-      <section className="ai-brief-document">
-        <span className="section-kicker">Document IA</span>
-        <HelpLabel help={FIELD_HELP.title}>Nom du jeu</HelpLabel>
-        <input value={brief.title} onChange={(event) => updateBrief('title', event.target.value)} placeholder="Vide = titre invente par l'IA" />
 
-        <HelpLabel help={FIELD_HELP.story}>Histoire</HelpLabel>
-        <textarea value={brief.story} onChange={(event) => updateBrief('story', event.target.value)} placeholder="Vide = histoire aléatoire mais cohérente avec le thème." />
-
-        <HelpLabel help={FIELD_HELP.characters}>Personnages</HelpLabel>
-        <textarea value={brief.characters} onChange={(event) => updateBrief('characters', event.target.value)} placeholder="Vide = personnages inventes par l'IA." />
-
-        <HelpLabel help={FIELD_HELP.places}>Lieux / univers</HelpLabel>
-        <textarea value={brief.places} onChange={(event) => updateBrief('places', event.target.value)} placeholder="Vide = lieux choisis par l'IA." />
-
-        <HelpLabel help={FIELD_HELP.constraints}>Contraintes libres</HelpLabel>
-        <textarea value={brief.constraints} onChange={(event) => updateBrief('constraints', event.target.value)} placeholder="Vide = choix aléatoires. Ex: familial, sans horreur, twist final, fin secrète..." />
-      </section>
-      ) : null}
-
-      <HelpLabel help={FIELD_HELP.theme}>Thème</HelpLabel>
-      <input value={brief.theme} onChange={(event) => updateBrief('theme', event.target.value)} />
-
-      <HelpLabel help={FIELD_HELP.difficulty}>Difficulté</HelpLabel>
-      <select value={brief.difficulty} onChange={(event) => updateBrief('difficulty', event.target.value)}>
-        <option value="easy">Facile</option>
-        <option value="normal">Intermediaire</option>
-        <option value="hard">Difficile</option>
-      </select>
-
-      <div className="grid-two small-gap">
-        {!isBeginnerAi ? (
-        <div>
-          <HelpLabel help={FIELD_HELP.actCount}>Actes</HelpLabel>
-          <input type="number" min="1" max="6" value={brief.actCount} onChange={(event) => updateBrief('actCount', event.target.value)} required />
-        </div>
-        ) : null}
-        <div>
-          <HelpLabel help={FIELD_HELP.sceneCount}>Scènes</HelpLabel>
-          <input type="number" min="1" max="24" value={brief.sceneCount} onChange={(event) => updateBrief('sceneCount', event.target.value)} required />
-        </div>
-        {!isBeginnerAi ? (
-
-        <div>
-          <HelpLabel help={FIELD_HELP.subsceneCount}>Sous-scenes</HelpLabel>
-          <input type="number" min="0" max="24" value={brief.subsceneCount} onChange={(event) => updateBrief('subsceneCount', event.target.value)} />
-
-        </div>
-
-        ) : null}
-        <div>
-          <HelpLabel help={FIELD_HELP.itemCount}>Objets</HelpLabel>
-          <input type="number" min="1" max="40" value={brief.itemCount} onChange={(event) => updateBrief('itemCount', event.target.value)} required />
-        </div>
-        {isHeroAdventureAi ? (
-        <div>
-          <HelpLabel help={FIELD_HELP.heroBonusObjects}>Objets avec bonus</HelpLabel>
-          <label className="checkbox-row ai-inline-check">
-            <input
-              type="checkbox"
-              checked={brief.heroBonusObjects !== false}
-              onChange={(event) => updateBrief('heroBonusObjects', event.target.checked)}
-            />
-            <span>Potions et équipements</span>
-          </label>
-        </div>
-        ) : null}
-        <div>
-          <HelpLabel help={FIELD_HELP.enigmaCount}>Énigmes</HelpLabel>
-          <input type="number" min="0" max="20" value={brief.enigmaCount} onChange={(event) => updateBrief('enigmaCount', event.target.value)} required />
-        </div>
-        {shouldGenerateCombinations ? (
-        <div>
-          <HelpLabel help={FIELD_HELP.combinationCount}>Combinaisons</HelpLabel>
-          <input type="number" min="0" max="30" value={brief.combinationCount} onChange={(event) => updateBrief('combinationCount', event.target.value)} required />
-        </div>
-        ) : null}
-        {!isBeginnerAi ? (
-
-        <div>
-          <HelpLabel help={FIELD_HELP.cinematicCount}>Cinematiques</HelpLabel>
-          <input type="number" min="0" max="12" value={brief.cinematicCount} onChange={(event) => updateBrief('cinematicCount', event.target.value)} required />
-
-        </div>
-
-        ) : null}
-      </div>
-
-      <HelpLabel help={FIELD_HELP.tone}>Ton</HelpLabel>
-      <input value={brief.tone} onChange={(event) => updateBrief('tone', event.target.value)} />
-
-      <HelpLabel help={FIELD_HELP.duration}>Durée visée</HelpLabel>
-      <input value={brief.duration} onChange={(event) => updateBrief('duration', event.target.value)} />
-    </>
-  );
 
   useEffect(() => {
     refreshAiCredits();
@@ -1060,6 +635,18 @@ export default function AiTab({
   const updateBrief = (key, value) => {
     setBrief((previous) => ({ ...previous, [key]: value }));
   };
+  const briefForm = (
+    <AiBriefForm
+      brief={brief}
+      updateBrief={updateBrief}
+      HelpLabel={HelpLabel}
+      FIELD_HELP={FIELD_HELP}
+      isChoiceAdventureAi={isChoiceAdventureAi}
+      isBeginnerAi={isBeginnerAi}
+      isHeroAdventureAi={isHeroAdventureAi}
+      shouldGenerateCombinations={shouldGenerateCombinations}
+    />
+  );
   const validateMandatoryBriefCounts = (targetBrief = brief) => {
     const constrainedBrief = getModeConstrainedBrief(targetBrief);
     const requiredCounts = [
@@ -1698,299 +1285,78 @@ export default function AiTab({
 
   return (
     <div className="layout two-cols-wide">
-      {isAiBusy ? (
-        <div className="ai-generation-overlay" role="status" aria-live="polite">
-          <div className="ai-generation-modal">
-            <span className="ai-generation-spinner" aria-hidden="true" />
-            <strong>génération en cours ...</strong>
-            <span>Veuillez patienter, cela peut prendre quelques minutes.</span>
-          </div>
-        </div>
-      ) : null}
-      {imagePreview ? (
-        <div className="ai-image-preview-overlay" role="dialog" aria-modal="true" onClick={() => setImagePreview(null)}>
-          <div className="ai-image-preview-modal" onClick={(event) => event.stopPropagation()}>
-            <button type="button" className="secondary-action" onClick={() => setImagePreview(null)}>Fermer</button>
-            <img src={imagePreview.src} alt={imagePreview.name || 'Aperçu'} />
-            <strong>{imagePreview.name || 'Aperçu'}</strong>
-            <button type="button" className="secondary-action" onClick={() => downloadImage(imagePreview.src, imagePreview.name || 'image.png')}>Télécharger</button>
-          </div>
-        </div>
-      ) : null}
-      {imageCompare ? (
-        <div className="ai-image-preview-overlay" role="dialog" aria-modal="true" onClick={() => setImageCompare(null)}>
-          <div className="ai-image-compare-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="ai-compare-head">
-              <strong>{imageCompare.title}</strong>
-              <button type="button" className="secondary-action" onClick={() => setImageCompare(null)}>Fermer</button>
-            </div>
-            <div className="ai-compare-grid">
-              {imageCompare.variants.map((variant, index) => {
-                const selected = variant.imageData === imageCompare.activeImageData;
-                return (
-                  <article key={variant.id || variant.imageData} className={selected ? 'selected' : ''}>
-                    <button type="button" className="ai-compare-image-button" onClick={() => {
-                      setImageCompare(null);
-                      setImagePreview({ src: variant.imageData, name: variant.imageName || imageCompare.title });
-                    }}>
-                      <img src={variant.imageData} alt={variant.label || `Image ${index + 1}`} />
-                    </button>
-                    <span>{variant.label || `Image ${index + 1}`}</span>
-                    <div>
-                      <button type="button" className="secondary-action" disabled={selected} onClick={() => selectImageVariant(variant)}>
-                        {selected ? 'Sélectionnée' : 'Choisir'}
-                      </button>
-                      <button type="button" className="secondary-action" onClick={() => downloadImage(variant.imageData, variant.imageName || `${imageCompare.title}-${index + 1}.png`)}>
-                        Télécharger
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      ) : null}
-      <section className="panel side" data-tour="ai-controls">
-        <div className="panel-head">
-          <h2>IA</h2>
-          <span className="status-badge soft">{mode === 'improve' ? 'Patch' : 'IA'}</span>
-        </div>
-        <div data-tour="ai-credits" className={`ai-credit-panel ${aiCredits.balance != null && aiCredits.balance < currentTextGenerationCost ? 'low' : ''}`}>
-          <div>
-            <span className="section-kicker">Crédits IA</span>
-            <strong>{aiCredits.isLoading ? '...' : `${aiCredits.balance ?? 0}`}</strong>
-          </div>
-          <button type="button" className="secondary-action" onClick={refreshAiCredits} disabled={aiCredits.isLoading}>
-            Actualiser
-          </button>
-          <p>
-            {isChoiceAdventureAi ?
-              `Projet: ${calculateProjectGenerationCreditCost()} crédits · Texte: ${Number(aiCredits.costs?.text ?? 2)} crédits · Chaque image: ${formatCreditCost(getAiCreditCost('image'))} · Combinaisons incluses dans le calcul`
-              : <>Projet: {calculateProjectGenerationCreditCost()} crédits · Texte: {Number(aiCredits.costs?.text ?? 2)} crédits · Scène: {getAiCreditCost('image')} crédits · Objet détaillé: {formatCreditCost(getAiCreditCost('objectImage'))} · Miniature éco: {formatCreditCost(getAiCreditCost('objectThumbnail'))}</>}
-          </p>
-          <p className="ai-current-cost">
-            Prochaine génération ({mode === 'generate' ? 'projet complet' : mode === 'progressive' ? 'step progressive' : mode === 'extend' ? 'continuer/enrichir' : 'amélioration'}): <strong>{formatCreditCost(currentTextGenerationCost)}</strong>
-          </p>
-          {isChoiceAdventureAi ? (
-            <p className="ai-current-cost">
-              Images du brief: <strong>{countCreditUnits(brief.sceneCount) + countCreditUnits(brief.itemCount) + countCreditUnits(brief.cinematicCount)} image(s) - {formatCreditCost(calculateBriefImageCreditCost())}</strong>
-              {' '}si tu génères toutes les scènes, objets et cinématiques. Total texte + images: <strong>{formatCreditCost(calculateBriefTotalCreditCost())}</strong>
-            </p>
-          ) : null}
-          {aiCredits.error ? <p className="small-note">{aiCredits.error}</p> : null}
-        </div>
-        <AiPrivacyNotice />
-        <p className="small-note">
-          Génère un projet complet ou améliore une scène existante avec un JSON partiel validé avant application.
-        </p>
-
-        <HelpLabel help="Choisis le rendu utilisé par les prochaines images IA: scènes, objets et cinématiques.">Style d'image</HelpLabel>
-        <div className="segmented-control compact ai-style-choice" data-tour="ai-image-style">
-          {Object.entries(IMAGE_STYLE_PRESETS).map(([value, preset]) => (
-            <button
-              type="button"
-              key={value}
-              className={imageStylePreset === value ? 'active' : ''}
-              onClick={() => setImageStylePreset(value)}
-            >
-              {preset.label}
-            </button>
-          ))}
-        </div>
-
-        <HelpLabel help="Style partagé par les images de scènes pour éviter que chaque pièce parte dans une direction visuelle différente.">Style visuel global</HelpLabel>
-        <input data-tour="ai-visual-style" value={globalVisualStyle} onChange={(event) => setGlobalVisualStyle(event.target.value)} />
-
-        <HelpLabel help="Ajuste automatiquement la luminosité après génération pour garder une image jouable sans trop délaver l'ambiance.">Lisibilité des images</HelpLabel>
-        <select data-tour="ai-image-readability" value={imageReadabilityLevel} onChange={(event) => setImageReadabilityLevel(event.target.value)}>
-          <option value="subtle">Ambiance sombre</option>
-          <option value="balanced">Lisibilité renforcée</option>
-          <option value="strong">Très lumineux</option>
-          <option value="none">Aucune correction</option>
-        </select>
-
-        <HelpLabel help="Détails récurrents à conserver entre les pièces: portes, parquet, lumière, époque, matériaux.">Héritage visuel</HelpLabel>
-        <textarea data-tour="ai-visual-inheritance" value={visualInheritance} onChange={(event) => setVisualInheritance(event.target.value)} />
-
-        <HelpLabel help={FIELD_HELP.mode}>Mode</HelpLabel>
-        <div className="segmented-control" data-tour="ai-mode">
-          <button type="button" className={mode === 'generate' ? 'active' : ''} onClick={() => setMode('generate')}>Nouveau</button>
-          {!isBeginnerAi ? (
-            <>
-              <button type="button" className={mode === 'progressive' ? 'active' : ''} onClick={() => setMode('progressive')}>Progressif</button>
-              <button type="button" className={mode === 'extend' ? 'active' : ''} onClick={() => setMode('extend')}>Continuer</button>
-            </>
-          ) : null}
-          <button type="button" className={mode === 'improve' ? 'active' : ''} onClick={() => setMode('improve')}>Améliorer</button>
-        </div>
-
-        <div className="ai-estimate-panel" data-tour="ai-estimate">
-          <strong>Modifiera probablement :</strong>
-          <b className="ai-cost-line">Coût annoncé avant lancement: {formatCreditCost(currentTextGenerationCost)}</b>
-          <div className="ai-estimate-tags">
-            {getActionEstimate(mode).map((line) => <span key={line}>{line}</span>)}
-          </div>
-        </div>
-
-        {mode === 'improve' ? (
-          <>
-            <HelpLabel help={FIELD_HELP.improve}>Scène à améliorer</HelpLabel>
-            <select value={targetSceneId} onChange={(event) => setTargetSceneId(event.target.value)}>
-              {scenes.map((scene) => (
-                <option key={scene.id} value={scene.id}>{getSceneLabel?.(scene) || scene.name}</option>
-              ))}
-            </select>
-
-            <HelpLabel help={FIELD_HELP.instruction}>Instruction</HelpLabel>
-            <textarea
-              value={instruction}
-              onChange={(event) => setInstruction(event.target.value)}
-              placeholder="Ex: Améliore cette scène pour la rendre plus stressante."
-            />
-            <p className="small-note">Structure protégée: seules l’ambiance, les dialogues et les objets peuvent être raffinés.</p>
-            <button type="button" className="secondary-action full" onClick={proposeIdeas}>Proposer des idées</button>
-            {ideaSuggestions.length ? (
-              <div className="ai-suggestion-list">
-                {ideaSuggestions.map((suggestion) => (
-                  <button type="button" key={suggestion} onClick={() => useSuggestion(suggestion)}>{suggestion}</button>
-                ))}
-              </div>
-            ) : null}
-          </>
-        ) : mode === 'progressive' ? (
-          <>
-            {briefForm}
-
-            <div className="ai-progressive-steps">
-              {progressiveActStages.map((stage, index) => {
-                const actNumber = index + 1;
-                const previousStage = index > 0 ? progressiveActStages[index - 1] : '';
-                const statusValue = progressiveStatus[stage] || 'pending';
-                const isAvailable = index === 0 || progressiveStatus[previousStage] === 'done';
-                const cost = getTextGenerationCreditCost('progressive', stage);
-                const meta = getStepMeta(statusValue, !isAvailable, `Acte ${actNumber} généré`, `Acte ${actNumber} disponible`);
-                if (!isAvailable && statusValue !== 'running' && statusValue !== 'done') return null;
-                return (
-                  <button type="button" key={stage} disabled={isGenerating || aiCredits.isLoading || !hasEnoughAiCredits('text', cost) || !isAvailable} onClick={() => generateProgressiveStep(stage)}>
-                    <strong>{meta.icon} Acte {actNumber}</strong>
-                    <span>{getProgressiveStageSummary(stage)} · {formatCreditCost(cost)}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-          </>
-        ) : mode === 'extend' ? (
-          <>
-            {briefForm}
-
-            <HelpLabel help={FIELD_HELP.source}>Source</HelpLabel>
-            <div className="segmented-control compact">
-              <button type="button" className={extendSource === 'current' ? 'active' : ''} onClick={() => setExtendSource('current')}>Projet actuel</button>
-              <button type="button" className={extendSource === 'imported' ? 'active' : ''} onClick={() => setExtendSource('imported')} disabled={!importedProject}>JSON importé</button>
-            </div>
-
-            <HelpLabel help={FIELD_HELP.importJson}>Importer un JSON existant</HelpLabel>
-            <label className="button like secondary-action full">
-              Importer un JSON existant
-              <input type="file" accept="application/json,.json" hidden onChange={importExtensionJson} />
-            </label>
-            {importedProject ? <p className="small-note">JSON chargé: {importedProject.title || 'Projet importé'}</p> : null}
-
-            <HelpLabel help={FIELD_HELP.storySummary}>Résumé de l'histoire</HelpLabel>
-            <textarea
-              value={storySummary}
-              onChange={(event) => setStorySummary(event.target.value)}
-              placeholder="Résume les événements, révélations et objectifs déjà posés."
-            />
-            <button type="button" className="secondary-action full" onClick={() => setStorySummary(makeProjectStorySummary(extensionSourceProject))}>
-              Refaire le résumé depuis le projet
-            </button>
-
-            <HelpLabel help={FIELD_HELP.sceneChronology}>Chronologie des scènes</HelpLabel>
-            <div className="ai-chronology-list">
-              {parseChronologyEntries(sceneChronology, extensionSourceProject).map((entry, index, entries) => (
-                <div className="ai-chronology-row" key={`${entry.id}:${index}`}>
-                  <span>{index + 1}</span>
-                  <strong>{entry.name || entry.raw}</strong>
-                  <button type="button" className="icon-button" title="Monter" disabled={index === 0} onClick={() => moveChronologyEntry(index, -1)}>↑</button>
-                  <button type="button" className="icon-button" title="Descendre" disabled={index === entries.length - 1} onClick={() => moveChronologyEntry(index, 1)}>↓</button>
-                </div>
-              ))}
-            </div>
-            <textarea
-              value={sceneChronology}
-              onChange={(event) => {
-                setSceneChronology(event.target.value);
-                setContinuationSceneId(getLastSceneIdFromChronology(event.target.value, extensionSourceProject));
-              }}
-              placeholder={[
-                '1. [id_scene] Première scène',
-                '2. [id_scene] Deuxième scène',
-                '3. [id_scene] Dernière scène actuelle',
-              ].join('\n')}
-            />
-            <button type="button" className="secondary-action full" onClick={() => {
-              const chronology = makeSceneChronology(extensionSourceProject);
-              setSceneChronology(chronology);
-              setContinuationSceneId(getLastSceneIdFromChronology(chronology, extensionSourceProject));
-            }}>
-              Reconstruire la chronologie depuis le projet
-            </button>
-
-            <HelpLabel help={FIELD_HELP.continuationScene}>Scène de départ détectée</HelpLabel>
-            <select value={continuationScene?.id || ''} onChange={(event) => setContinuationSceneId(event.target.value)}>
-              {extensionScenes.map((scene) => (
-                <option key={scene.id} value={scene.id}>{getSceneLabel?.(scene.id) || scene.name}</option>
-              ))}
-            </select>
-            <button type="button" className="secondary-action full" onClick={() => setContinuationSceneId(getLastSceneIdFromChronology(sceneChronology, extensionSourceProject))}>
-              Utiliser la dernière ligne de la chronologie
-            </button>
-
-            <HelpLabel help={FIELD_HELP.continuationWish}>Ce que tu aimerais pour la suite</HelpLabel>
-            <textarea
-              value={continuationWish}
-              onChange={(event) => {
-                setContinuationWish(event.target.value);
-                setExtendInstruction(event.target.value);
-              }}
-              placeholder="Vide = suite aléatoire mais cohérente. Ex: révéler une cave secrète avec une énigme mécanique."
-            />
-            <button type="button" className="secondary-action full" onClick={proposeIdeas}>Proposer des idées</button>
-            {ideaSuggestions.length ? (
-              <div className="ai-suggestion-list">
-                {ideaSuggestions.map((suggestion) => (
-                  <button type="button" key={suggestion} onClick={() => useSuggestion(suggestion)}>{suggestion}</button>
-                ))}
-              </div>
-            ) : null}
-
-            <div className="ai-progressive-steps">
-              {(() => {
-                const cost = getTextGenerationCreditCost('extend', 'continue_story');
-                return (
-                  <button type="button" disabled={isGenerating || aiCredits.isLoading || !hasEnoughAiCredits('text', cost)} onClick={() => extendExistingProject('continue_story')}>
-                    <strong>→ Continuer l’histoire</strong>
-                    <span>suite cohérente · {formatCreditCost(cost)}</span>
-                  </button>
-                );
-              })()}
-            </div>
-          </>
-        ) : (
-          <>
-            {briefForm}
-          </>
-        )}
-
-        {mode !== 'progressive' && mode !== 'extend' ? (
-          <button type="button" data-tour="ai-generate-button" disabled={isGenerating || !canRunTextAi || (mode === 'improve' && !targetSceneId)} onClick={generate}>
-            {isGenerating ? 'Traitement...' : `${mode === 'improve' ? 'Améliorer la scène' : 'Générer le jeu complet'} · ${formatCreditCost(currentTextGenerationCost)}`}
-          </button>
-        ) : null}
-      </section>
+      <AiGenerationStatus isBusy={isAiBusy} />
+      <AiImageWorkbench
+        imagePreview={imagePreview}
+        imageCompare={imageCompare}
+        onClosePreview={() => setImagePreview(null)}
+        onCloseCompare={() => setImageCompare(null)}
+        onOpenPreview={setImagePreview}
+        onDownloadImage={downloadImage}
+        onSelectImageVariant={selectImageVariant}
+      />
+      <AiControlsPanel
+        mode={mode}
+        setMode={setMode}
+        isGenerating={isGenerating}
+        aiCredits={aiCredits}
+        currentTextGenerationCost={currentTextGenerationCost}
+        refreshAiCredits={refreshAiCredits}
+        isChoiceAdventureAi={isChoiceAdventureAi}
+        isBeginnerAi={isBeginnerAi}
+        calculateProjectGenerationCreditCost={calculateProjectGenerationCreditCost}
+        formatCreditCost={formatCreditCost}
+        getAiCreditCost={getAiCreditCost}
+        countCreditUnits={countCreditUnits}
+        brief={brief}
+        calculateBriefImageCreditCost={calculateBriefImageCreditCost}
+        calculateBriefTotalCreditCost={calculateBriefTotalCreditCost}
+        imageStylePreset={imageStylePreset}
+        setImageStylePreset={setImageStylePreset}
+        imageStylePresets={IMAGE_STYLE_PRESETS}
+        globalVisualStyle={globalVisualStyle}
+        setGlobalVisualStyle={setGlobalVisualStyle}
+        imageReadabilityLevel={imageReadabilityLevel}
+        setImageReadabilityLevel={setImageReadabilityLevel}
+        visualInheritance={visualInheritance}
+        setVisualInheritance={setVisualInheritance}
+        fieldHelp={FIELD_HELP}
+        targetSceneId={targetSceneId}
+        setTargetSceneId={setTargetSceneId}
+        scenes={scenes}
+        getSceneLabel={getSceneLabel}
+        instruction={instruction}
+        setInstruction={setInstruction}
+        proposeIdeas={proposeIdeas}
+        ideaSuggestions={ideaSuggestions}
+        useSuggestion={useSuggestion}
+        briefForm={briefForm}
+        progressiveActStages={progressiveActStages}
+        progressiveStatus={progressiveStatus}
+        hasEnoughAiCredits={hasEnoughAiCredits}
+        getTextGenerationCreditCost={getTextGenerationCreditCost}
+        getProgressiveStageSummary={getProgressiveStageSummary}
+        generateProgressiveStep={generateProgressiveStep}
+        extendSource={extendSource}
+        setExtendSource={setExtendSource}
+        importedProject={importedProject}
+        importExtensionJson={importExtensionJson}
+        storySummary={storySummary}
+        setStorySummary={setStorySummary}
+        extensionSourceProject={extensionSourceProject}
+        sceneChronology={sceneChronology}
+        moveChronologyEntry={moveChronologyEntry}
+        setSceneChronology={setSceneChronology}
+        setContinuationSceneId={setContinuationSceneId}
+        continuationScene={continuationScene}
+        extensionScenes={extensionScenes}
+        continuationWish={continuationWish}
+        setContinuationWish={setContinuationWish}
+        setExtendInstruction={setExtendInstruction}
+        extendExistingProject={extendExistingProject}
+        canRunTextAi={canRunTextAi}
+        generate={generate}
+      />
 
       <section className="panel main" data-tour="ai-output">
         <div className="panel-head">
@@ -2016,322 +1382,44 @@ export default function AiTab({
         {imageStatus ? <p className="small-note">{imageStatus}</p> : null}
         {draftSaveStatus ? <p className="small-note">{draftSaveStatus}</p> : null}
 
-        {currentDiffLines.length ? (
-          <div className="combo-card ai-diff-panel" data-tour="ai-diff">
-            <strong>Modifications prévues</strong>
-            <div>
-              {currentDiffLines.map((line) => <span key={line}>{line}</span>)}
-            </div>
-          </div>
-        ) : null}
+        <AiDiffPanel
+          currentDiffLines={currentDiffLines}
+          coherenceScore={coherenceScore}
+          getCoherenceLabel={getCoherenceLabel}
+          aiHistory={aiHistory}
+          restoreHistory={restoreHistory}
+          validation={validation}
+        />
 
-        {coherenceScore != null ? (
-          <div className="combo-card ai-coherence-panel">
-            <div>
-              <strong>Cohérence IA</strong>
-              <span>{getCoherenceLabel(coherenceScore)}</span>
-            </div>
-            <meter min="0" max="10" value={coherenceScore} />
-            <b>{coherenceScore.toFixed(1)} / 10</b>
-          </div>
-        ) : null}
-
-        {aiHistory.length ? (
-          <div className="combo-card ai-history-panel">
-            <strong>Historique IA</strong>
-            {aiHistory.map((entry, index) => (
-              <button type="button" key={entry.id} className="secondary-action" onClick={() => restoreHistory(entry)}>
-                Version {index + 1} — {entry.label}
-              </button>
-            ))}
-          </div>
-        ) : null}
-
-        {validation ? (
-          <div data-tour="ai-validation" className={`combo-card ${validation.ok ? 'success-panel' : 'danger-panel'}`}>
-            <strong>{validation.ok ? 'Validation OK' : 'Validation bloquée'}</strong>
-            {validation.errors?.length ? (
-              <ul className="compact-list">
-                {validation.errors.slice(0, 6).map((error) => <li key={error}>{error}</li>)}
-              </ul>
-            ) : null}
-            {validation.warnings?.length ? (
-              <p className="small-note">{validation.warnings.slice(0, 3).join(' ')}</p>
-            ) : null}
-          </div>
-        ) : null}
-
-        {narrativePreview ? (
-          <div className="ai-narrative-preview" data-tour="ai-result-preview">
-            <section className="combo-card">
-              <span className="section-kicker">{isPatch ? 'Result narratif' : 'Projet proposé'}</span>
-              <h3>{narrativePreview.title}</h3>
-              <p className="small-note">{narrativePreview.subtitle}</p>
-            </section>
-
-            <section className="combo-card">
-              <h3>Scènes</h3>
-              <div className="ai-narrative-list">
-                {narrativePreview.scenes.map((scene) => (
-                  <article key={scene.id} className="ai-narrative-card">
-                    {scene.backgroundData ? (
-                      <img className="ai-generated-image-preview" src={scene.backgroundData} alt={scene.name} />
-                    ) : null}
-                    <strong>{scene.name}</strong>
-                    {scene.introText ? <p>{scene.introText}</p> : null}
-                    {isChoiceAdventureAi ? (
-                      <>
-                        <HelpLabel className="ai-visual-label" help={FIELD_HELP.imagePrompt}>Prompt image scène</HelpLabel>
-                        <textarea
-                          className="ai-image-prompt"
-                          value={scene.imagePrompt || ''}
-                          onChange={(event) => patchGeneratedScene(scene.id, { imagePrompt: event.target.value })}
-                          placeholder="Prompt image généré par l'IA pour cette scène."
-                        />
-                      </>
-                    ) : null}
-                    <HelpLabel className="ai-visual-label" help={FIELD_HELP.visualConstraints}>Contraintes visuelles de la scène</HelpLabel>
-                    <textarea
-                      className="ai-visual-constraints"
-                      data-tour="ai-scene-visual-constraints"
-                      value={getSceneVisualConstraints(scene)}
-                      onChange={(event) => updateSceneVisualConstraints(scene.id, event.target.value)}
-                      placeholder={[
-                        '- une porte à droite',
-                        '- une table au centre',
-                        '- une cachette ou un support visible, sans objet d’inventaire',
-                        '- une fenêtre à gauche',
-                      ].join('\n')}
-                    />
-                    <button
-                      type="button"
-                      className="secondary-action ai-image-action"
-                      data-tour="ai-scene-image-button"
-                      disabled={generatingImageKey === `scène:${scene.id}` || !canRunImageAi}
-                      onClick={() => generateSceneImage(scene)}
-                    >
-                      {generatingImageKey === `scène:${scene.id}` ?
-                         'Génération...'
-                        : `${scene.backgroundData ? 'Régénérer uniquement cette image' : 'Générer l’image de cette scène'} · ${formatCreditCost(getAiCreditCost('image'))}`}
-                    </button>
-                    {scene.aiImageVariants?.length > 1 ? (
-                      <button
-                        type="button"
-                        className="secondary-action ai-image-action"
-                        onClick={() => openImageCompare({
-                          type: 'scene',
-                          id: scene.id,
-                          title: scene.name,
-                          activeImageData: scene.backgroundData,
-                          variants: scene.aiImageVariants,
-                        })}
-                      >
-                        Comparer les images ({scene.aiImageVariants.length})
-                      </button>
-                    ) : null}
-                    {scene.backgroundData && scene.hotspots?.length ? (
-                      <p className="ai-placement-note">Zones préplacées automatiquement. Validation visuelle rapide dans l’éditeur après application.</p>
-                    ) : null}
-                    {scene.aiVisualElements?.length ? (
-                      <div className="ai-elements-list">
-                        {scene.aiVisualElements.slice(0, 6).map((element) => (
-                          <span key={element.id || element.label}>
-                            {element.label || element.id}: {Math.round(Number(element.x) || 0)}%, {Math.round(Number(element.y) || 0)}%
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-                    {scene.hotspots?.length ? (
-                      <div className="ai-dialogue-list">
-                        {scene.hotspots.slice(0, 5).map((hotspot) => (
-                          <p key={hotspot.id}>
-                            <span>{hotspot.name || 'Zone'}</span>
-                            {hotspot.dialogue || 'Interaction sans dialogue.'}
-                          </p>
-                        ))}
-                      </div>
-                    ) : null}
-                  </article>
-                ))}
-              </div>
-            </section>
-
-            {!isPatch ? (
-              <section className="combo-card ai-narrative-columns">
-                <div>
-                  <h3>Objets</h3>
-                  {narrativePreview.items.length ? (
-                    <div className="ai-object-grid">
-                      {narrativePreview.items.map((item) => (
-                        <article key={item.id} className="ai-object-card">
-                          {item.imageData ? (
-                            <button
-                              type="button"
-                              className="ai-object-preview-button"
-                              onClick={() => setImagePreview({ src: item.imageData, name: item.name })}
-                              title="Aperçu de l'image"
-                            >
-                              <img src={item.imageData} alt={item.name} />
-                            </button>
-                          ) : (
-                            <span>{getItemFallbackIcon(item)}</span>
-                          )}
-                          <input
-                            className="ai-object-name-input"
-                            value={isTechnicalItemName(item.name) ? '' : item.name}
-                            onChange={(event) => patchGeneratedItem(item.id, { name: event.target.value })}
-                            onBlur={(event) => renameGeneratedItem(item.id, event.target.value)}
-                            placeholder="Nom de l’objet"
-                          />
-                          {isHeroAdventureAi && getHeroItemPreviewLabel(item) ? (
-                            <small className="inventory-item-badge">{getHeroItemPreviewLabel(item)}</small>
-                          ) : null}
-                          {isChoiceAdventureAi ? (
-                            <>
-                              <HelpLabel className="ai-visual-label" help={FIELD_HELP.imagePrompt}>Prompt image objet</HelpLabel>
-                              <textarea
-                                className="ai-image-prompt"
-                                value={item.imagePrompt || ''}
-                                onChange={(event) => patchGeneratedItem(item.id, { imagePrompt: event.target.value })}
-                                placeholder="Prompt image généré par l'IA pour cet objet."
-                              />
-                            </>
-                          ) : null}
-                          <button
-                            type="button"
-                            className="secondary-action ai-image-action"
-                            disabled={generatingImageKey === `item:full:${item.id}` || !canRunObjectImageAi}
-                            onClick={() => generateItemImage(item)}
-                          >
-                            {generatingImageKey === `item:full:${item.id}` ?
-                               'Génération...'
-                              : `${item.imageData ? 'Régénérer l’image détaillée' : 'Générer image détaillée'} · ${formatCreditCost(getAiCreditCost('objectImage'))}`}
-                          </button>
-                          <button
-                            type="button"
-                            className="secondary-action ai-image-action"
-                            disabled={generatingImageKey === `item:thumbnail:${item.id}` || !canRunObjectThumbnailAi}
-                            onClick={() => generateItemImage(item, 'thumbnail')}
-                          >
-                            {generatingImageKey === `item:thumbnail:${item.id}` ?
-                               'Génération...'
-                              : `${item.imageData ? (isChoiceAdventureAi ? 'Régénérer miniature' : 'Régénérer miniature économique') : (isChoiceAdventureAi ? 'Générer miniature' : 'Générer miniature économique')} · ${formatCreditCost(getAiCreditCost('objectThumbnail'))}`}
-                          </button>
-                          {item.aiImageVariants?.length > 1 ? (
-                            <button
-                              type="button"
-                              className="secondary-action ai-image-action"
-                              onClick={() => openImageCompare({
-                                type: 'item',
-                                id: item.id,
-                                title: item.name,
-                                activeImageData: item.imageData,
-                                variants: item.aiImageVariants,
-                              })}
-                            >
-                              Comparer les images ({item.aiImageVariants.length})
-                            </button>
-                          ) : null}
-                        </article>
-                      ))}
-                    </div>
-                  ) : <p>Aucun objet.</p>}
-                </div>
-                <div>
-                  <h3>Énigmes</h3>
-                  <p>{narrativePreview.enigmas.map((enigma) => enigma.name).join(', ') || 'Aucune énigme.'}</p>
-                </div>
-                <div>
-                  <h3>Cinématiques</h3>
-                  {narrativePreview.cinematics.length ? (
-                    <div className="ai-cinematic-list">
-                      {narrativePreview.cinematics.map((cinematic) => (
-                        <article key={cinematic.id} className="ai-cinematic-card">
-                          <strong>{cinematic.name}</strong>
-                          <div className="ai-cinematic-slide-list">
-                            {(cinematic.slides?.length ? cinematic.slides : [{ id: `${cinematic.id}-slide-1`, narration: 'Cinématique sans narration.' }]).map((slide, index) => {
-                              const imageKey = `cinematic:${cinematic.id}:${slide.id}`;
-                              return (
-                                <div key={slide.id || index} className="ai-cinematic-slide-card">
-                                  {slide.imageData ? (
-                                    <button
-                                      type="button"
-                                      className="ai-cinematic-preview-button"
-                                      onClick={() => setImagePreview({ src: slide.imageData, name: `${cinematic.name} - image ${index + 1}` })}
-                                      title="Aperçu de l'image"
-                                    >
-                                      <img src={slide.imageData} alt={`${cinematic.name} - image ${index + 1}`} />
-                                    </button>
-                                  ) : (
-                                    <span>Image {index + 1}</span>
-                                  )}
-                                  <p>{slide.narration || `Prompt cinématique ${index + 1}`}</p>
-                                  {isChoiceAdventureAi ? (
-                                    <>
-                                      <HelpLabel className="ai-visual-label" help={FIELD_HELP.imagePrompt}>Prompt image cinématique</HelpLabel>
-                                      <textarea
-                                        className="ai-image-prompt"
-                                        value={slide.imagePrompt || ''}
-                                        onChange={(event) => patchGeneratedCinematicSlide(cinematic.id, slide.id, { imagePrompt: event.target.value })}
-                                        placeholder="Prompt image généré par l'IA pour cette image de cinématique."
-                                      />
-                                    </>
-                                  ) : null}
-                                  <button
-                                    type="button"
-                                    className="secondary-action ai-image-action"
-                                    disabled={!slide || generatingImageKey === imageKey || !canRunImageAi}
-                                    onClick={() => generateCinematicImage(cinematic, slide)}
-                                  >
-                                    {generatingImageKey === imageKey ?
-                                       'Génération...'
-                                      : `${slide.imageData ? 'Régénérer cette image' : 'Générer cette image'} · ${formatCreditCost(getAiCreditCost('image'))}`}
-                                  </button>
-                                  {slide.aiImageVariants?.length > 1 ? (
-                                    <button
-                                      type="button"
-                                      className="secondary-action ai-image-action"
-                                      onClick={() => openImageCompare({
-                                        type: 'cinematicSlide',
-                                        id: cinematic.id,
-                                        slideId: slide.id,
-                                        title: `${cinematic.name} - image ${index + 1}`,
-                                        activeImageData: slide.imageData,
-                                        variants: slide.aiImageVariants,
-                                      })}
-                                    >
-                                      Comparer les images ({slide.aiImageVariants.length})
-                                    </button>
-                                  ) : null}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                  ) : <p>Aucune cinématique.</p>}
-                </div>
-              </section>
-            ) : null}
-          </div>
-        ) : (
-          <div className="ai-narrative-preview">
-            <div className="empty-state-inline">Aucun result narratif pour le moment.</div>
-            <section className="combo-card ai-image-empty-panel" data-tour="ai-images-info">
-              <span className="section-kicker">Images à la demande</span>
-              <h3>Scènes et objets</h3>
-              <p className="small-note">
-                Génère d’abord le récit ou améliore une scène. Les boutons d’image apparaîtront ensuite sur chaque scène et chaque objet.
-              </p>
-              <div className="ai-disabled-actions">
-                <button type="button" className="secondary-action" disabled>Générer l’image de cette scène</button>
-                <button type="button" className="secondary-action" disabled>Générer l’image de cet objet</button>
-                <button type="button" className="secondary-action" disabled>Régénérer uniquement cette image</button>
-              </div>
-            </section>
-          </div>
-        )}
+        <AiDraftPreview
+          isEmpty={!narrativePreview}
+          narrativePreview={narrativePreview}
+          isPatch={isPatch}
+          isChoiceAdventureAi={isChoiceAdventureAi}
+          isHeroAdventureAi={isHeroAdventureAi}
+          HelpLabel={HelpLabel}
+          FIELD_HELP={FIELD_HELP}
+          patchGeneratedScene={patchGeneratedScene}
+          patchGeneratedItem={patchGeneratedItem}
+          patchGeneratedCinematicSlide={patchGeneratedCinematicSlide}
+          renameGeneratedItem={renameGeneratedItem}
+          getSceneVisualConstraints={getSceneVisualConstraints}
+          updateSceneVisualConstraints={updateSceneVisualConstraints}
+          getItemFallbackIcon={getItemFallbackIcon}
+          isTechnicalItemName={isTechnicalItemName}
+          getHeroItemPreviewLabel={getHeroItemPreviewLabel}
+          generatingImageKey={generatingImageKey}
+          canRunImageAi={canRunImageAi}
+          canRunObjectImageAi={canRunObjectImageAi}
+          canRunObjectThumbnailAi={canRunObjectThumbnailAi}
+          generateSceneImage={generateSceneImage}
+          generateItemImage={generateItemImage}
+          generateCinematicImage={generateCinematicImage}
+          formatCreditCost={formatCreditCost}
+          getAiCreditCost={getAiCreditCost}
+          openImageCompare={openImageCompare}
+          onOpenImagePreview={setImagePreview}
+        />
       </section>
     </div>
   );

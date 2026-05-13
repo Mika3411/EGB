@@ -17,6 +17,7 @@ import {
   updateCurrentUserPassword,
 } from '../lib/authStorage';
 import { getAuthorProfile, saveAuthorProfile } from '../lib/authorProfiles';
+import { MODE_RANKS as PROJECT_MODE_RANKS } from '../lib/projectAnalysis';
 import { getSupabaseClient, hasSupabaseConfig } from '../supabaseStorage';
 import { migrateProjectAssetReferences } from '../lib/assetManager';
 import { canUseLocalStorage, readJsonStorage, removeStorageKey } from '../utils/storageHelpers';
@@ -29,12 +30,6 @@ const PROJECTS_DB_STORE = 'project-lists';
 const PROJECT_PUBLICATION_ENDPOINT = import.meta.env.VITE_PROJECT_PUBLICATION_ENDPOINT || '/api/projects/publication';
 
 const nowIso = () => new Date().toISOString();
-const PROJECT_MODE_RANKS = {
-  beginner: 0,
-  intermediate: 1,
-  expert: 2,
-  adventure: 3,
-};
 
 const createId = () => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();

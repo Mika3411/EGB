@@ -699,7 +699,7 @@ function BuilderApp({
         title: 'Import média impossible',
         message: hasSupabaseConfig() ?
            "Impossible d'envoyer ce fichier vers Supabase Storage. Vérifie le bucket et les policies."
-          : 'Configuration Supabase manquante. Ajoute VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY (ou VITE_SUPABASE_ANON_KEY) et éventuellement VITE_SUPABASE_STORAGE_BUCKET.',
+          : 'Configuration Supabase manquante. Ajoute VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY (ou VITE_SUPABASE_ANON_KEY), VITE_SUPABASE_PUBLIC_ASSETS_BUCKET et VITE_SUPABASE_PRIVATE_DATA_BUCKET.',
         variant: 'danger',
       });
       return null;

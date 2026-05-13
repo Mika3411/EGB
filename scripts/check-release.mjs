@@ -17,22 +17,51 @@ const filesToCheck = [
 
 const failures = [];
 const textExtensions = new Set(['.js', '.jsx', '.css', '.md', '.json']);
+const sourceExtensions = new Set(['.js', '.jsx', '.ts', '.tsx']);
 const ignoredDirectories = new Set(['.git', 'dist', 'node_modules']);
 const mojibakePattern = /[\u00c3\u00c2\ufffd]|\u00e2[\u0080-\u00bf\u20ac\u2122\u0153\u009d]/;
+const maxSourceLineCount = 1200;
+const oversizedSourceAllowlist = new Map([
+  ['src/components/TwoDAnimeEditor.jsx', 2352],
+  ['src/components/AdventureTab.jsx', 2151],
+  ['src/components/RouteMapTab.jsx', 2135],
+  ['src/components/HeroTab.jsx', 1894],
+  ['src/utils/aiProjectGenerator.js', 1812],
+  ['src/BuilderApp.jsx', 1798],
+  ['src/utils/standalone/standaloneTemplate.js', 1610],
+  ['src/components/AiTab.jsx', 1426],
+  ['src/components/CombatTab.jsx', 1417],
+  ['src/data/tutorialStepData.js', 1383],
+  ['src/components/PreviewTab.jsx', 1269],
+  ['src/components/HelpTab.jsx', 1220],
+  ['src/data/projectData.js', 1209],
+  ['src/lib/combatEngine.js', 1203],
+]);
 
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const collectTextFiles = (directory) => {
+const toRelativePath = (file) => path.relative(root, file).split(path.sep).join('/');
+
+const countLines = (text) => {
+  if (!text) return 0;
+  const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const withoutFinalNewline = normalized.endsWith('\n') ? normalized.slice(0, -1) : normalized;
+  return withoutFinalNewline ? withoutFinalNewline.split('\n').length : 1;
+};
+
+const collectFilesWithExtensions = (directory, extensions) => {
   if (!fs.existsSync(directory)) return [];
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const fullPath = path.join(directory, entry.name);
     if (entry.isDirectory()) {
       if (ignoredDirectories.has(entry.name)) return [];
-      return collectTextFiles(fullPath);
+      return collectFilesWithExtensions(fullPath, extensions);
     }
-    return textExtensions.has(path.extname(entry.name)) ? [fullPath] : [];
+    return extensions.has(path.extname(entry.name)) ? [fullPath] : [];
   });
 };
+
+const collectTextFiles = (directory) => collectFilesWithExtensions(directory, textExtensions);
 
 const collectImportedNames = (statement) => {
   const names = [];
@@ -50,13 +79,31 @@ const collectImportedNames = (statement) => {
 };
 
 for (const file of collectTextFiles(path.join(root, 'src'))) {
-  const relativeFile = path.relative(root, file);
+  const relativeFile = toRelativePath(file);
   const text = fs.readFileSync(file, 'utf8');
   text.split(/\r?\n/).forEach((line, index) => {
     if (mojibakePattern.test(line)) {
       failures.push(`${relativeFile}:${index + 1}: possible mojibake detected`);
     }
   });
+}
+
+for (const file of collectFilesWithExtensions(root, sourceExtensions)) {
+  const relativeFile = toRelativePath(file);
+  const lineCount = countLines(fs.readFileSync(file, 'utf8'));
+  const allowedLineCount = oversizedSourceAllowlist.get(relativeFile);
+
+  if (lineCount <= maxSourceLineCount) continue;
+
+  if (allowedLineCount === undefined) {
+    failures.push(
+      `${relativeFile}: ${lineCount} lines exceeds ${maxSourceLineCount}-line limit for JS/JSX/TS/TSX files`,
+    );
+  } else if (lineCount > allowedLineCount) {
+    failures.push(
+      `${relativeFile}: ${lineCount} lines exceeds temporary allowlist cap of ${allowedLineCount} lines for JS/JSX/TS/TSX files`,
+    );
+  }
 }
 
 for (const relativeFile of filesToCheck) {

@@ -1,748 +1,41 @@
-import { AsyncLocalStorage } from 'node:async_hooks';
-import { randomUUID } from 'node:crypto';
-import { createServer } from 'node:http';
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
-import { extname, isAbsolute, join, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { createClient } from '@supabase/supabase-js';
+﻿import { createServer } from 'node:http';
 import { assertAiContentAllowed, makeImageModerationInput } from './src/utils/aiModeration.js';
 import { assertAiRateLimit, getClientIpFromHeaders } from './src/utils/aiRateLimit.js';
-import { assertCorsRequestAllowed, makeCorsHeaders } from './src/utils/corsConfig.js';
+import { assertCorsRequestAllowed } from './src/utils/corsConfig.js';
 import { assertProjectSafety, parseProjectJsonPayload } from './src/utils/projectSafetyValidation.js';
+import { port } from './server/config.js';
+import { getJsonHeaders, imageDataToBlob, readJsonBody, requestContext, sendJson } from './server/http.js';
+import { getSupabaseAdminClient } from './server/supabase.js';
+import {
+  isConfiguredAdminEmail,
+  normalizeEmail,
+  verifySupabaseAdminRequest,
+  verifySupabaseUserRequest,
+} from './server/auth.js';
+import { buildStoragePath, downloadStorageJson, uploadStorageJson } from './server/storage.js';
+import {
+  aiCreditCosts,
+  calculateImageCreditCost,
+  calculateTextCreditCost,
+  getCreditAccount,
+  handleAdminCredits,
+  handleCreditTopUp,
+  handleCredits,
+  handleCreditsAdminList,
+  handleCreditsAdminUpdate,
+  handleGumroadWebhook,
+  handleStorageUpgrade,
+  refundCredits,
+  releaseImageCreditReservation,
+  reserveImageCredits,
+  resolveCreditUserId,
+  spendCredits,
+} from './server/credits.js';
+import { serveStatic } from './server/staticFiles.js';
 
-const rootDir = fileURLToPath(new URL('.', import.meta.url));
-const publicDir = resolve(rootDir, 'dist');
-const port = Number(process.env.PORT || 8787);
-const ADMIN_EMAIL = String(process.env.ADMIN_EMAIL || process.env.VITE_ADMIN_EMAIL || 'thorez.m@hotmail.fr').trim().toLowerCase();
-
-const loadEnvFile = () => {
-  const envPath = join(rootDir, '.env');
-  if (!existsSync(envPath)) return;
-
-  const lines = readFileSync(envPath, 'utf8').split(/\r?\n/);
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#') || !trimmed.includes('=')) continue;
-    const [key, ...valueParts] = trimmed.split('=');
-    const value = valueParts.join('=').trim().replace(/^["']|["']$/g, '');
-    if (!process.env[key]) process.env[key] = value;
-  }
-};
-
-loadEnvFile();
-
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-let supabaseAdminClient = null;
-
-const creditStorePath = process.env.AI_CREDITS_FILE || join(rootDir, '.data', 'ai-credits.json');
-const creditStoreLockPath = `${creditStorePath}.lock`;
-const defaultAiCredits = Number(process.env.AI_DEFAULT_CREDITS || 20);
-const storageBucket = process.env.SUPABASE_STORAGE_BUCKET || process.env.VITE_SUPABASE_STORAGE_BUCKET || 'escape-game-assets';
 const shopPacksStoragePath = 'public/shop-packs.json';
 const publicProjectsStoragePath = 'public/projects.json';
 const aiJobs = new Map();
-const FREE_STORAGE_BYTES = 250 * 1024 * 1024;
-const STORAGE_BYTES_PER_CREDIT = 5 * 1024 * 1024;
-const aiCreditCosts = {
-  text: Number(process.env.AI_TEXT_CREDIT_COST || 2),
-  improve: Number(process.env.AI_IMPROVE_CREDIT_COST || 5),
-  image: Number(process.env.AI_IMAGE_CREDIT_COST || 5),
-  removeBackground: Number(process.env.REMOVE_BG_CREDIT_COST || 8),
-  objectImageBatchSize: Number(process.env.AI_OBJECT_IMAGE_BATCH_SIZE || 1),
-  objectImageBatchCost: Number(process.env.AI_OBJECT_IMAGE_BATCH_COST || 3),
-  objectThumbnail: Number(process.env.AI_OBJECT_THUMBNAIL_CREDIT_COST || 1),
-  projectGeneration: {
-    act: Number(process.env.AI_PROJECT_ACT_CREDIT_COST || 2),
-    scene: Number(process.env.AI_PROJECT_SCENE_CREDIT_COST || 1),
-    enigma: Number(process.env.AI_PROJECT_ENIGMA_CREDIT_COST || 1),
-    cinematic: Number(process.env.AI_PROJECT_CINEMATIC_CREDIT_COST || 1),
-    item: Number(process.env.AI_PROJECT_ITEM_CREDIT_COST || 1),
-  },
-};
-
-const toCount = (value) => {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return 0;
-  return Math.max(0, Math.round(number));
-};
-
-const calculateProjectGenerationCost = (brief = {}) => {
-  const units = aiCreditCosts.projectGeneration;
-  return Math.max(1, Math.ceil(
-    toCount(brief.actCount) * units.act
-    + toCount(brief.sceneCount) * units.scene
-    + toCount(brief.enigmaCount) * units.enigma
-    + toCount(brief.cinematicCount) * units.cinematic
-    + toCount(brief.itemCount) * units.item,
-  ));
-};
-
-const calculateTextCreditCost = (body = {}) => (
-  body.mode === 'repair_item_names' ? 0
-    : body.mode === 'generate'
-      || (body.mode === 'progressive' && /^act\d+$/.test(String(body.stage || '')))
-      || (body.mode === 'extend' && body.stage !== 'enrich_interactions')
-      ? calculateProjectGenerationCost(body.brief || {})
-      : body.mode === 'improve' ? aiCreditCosts.improve
-      : aiCreditCosts.text
-);
-
-const requestContext = new AsyncLocalStorage();
-const getActiveRequest = () => requestContext.getStore();
-const getJsonHeaders = (req = getActiveRequest()) => makeCorsHeaders(req?.headers || {}, process.env, {
-  'Content-Type': 'application/json; charset=utf-8',
-});
-
-const mimeTypes = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.svg': 'image/svg+xml',
-  '.webp': 'image/webp',
-};
-
-const sendJson = (res, status, payload) => {
-  res.writeHead(status, getJsonHeaders());
-  res.end(JSON.stringify(payload));
-};
-
-const readJsonBody = (req) => new Promise((resolveBody, rejectBody) => {
-  let raw = '';
-  req.on('data', (chunk) => {
-    raw += chunk;
-    if (raw.length > 20 * 1024 * 1024) {
-      req.destroy();
-      rejectBody(new Error('Payload trop volumineux.'));
-    }
-  });
-  req.on('end', () => {
-    try {
-      const contentType = String(req.headers['content-type'] || '').toLowerCase();
-      if (!raw) {
-        resolveBody({});
-        return;
-      }
-      if (contentType.includes('application/x-www-form-urlencoded')) {
-        resolveBody(Object.fromEntries(new URLSearchParams(raw)));
-        return;
-      }
-      resolveBody(JSON.parse(raw));
-    } catch {
-      rejectBody(new Error('Payload invalide.'));
-    }
-  });
-  req.on('error', rejectBody);
-});
-
-const imageDataToBlob = (imageData = '') => {
-  const value = String(imageData);
-  const match = value.match(/^data:([^;,]+)?(;base64)?,(.*)$/);
-  if (!match) {
-    const error = new Error('Image invalide.');
-    error.status = 400;
-    throw error;
-  }
-
-  const mimeType = match[1] || 'image/png';
-  const buffer = match[2]
-    ? Buffer.from(match[3], 'base64')
-    : Buffer.from(decodeURIComponent(match[3]));
-  return new Blob([buffer], { type: mimeType });
-};
-
-const readCreditStore = () => {
-  if (!existsSync(creditStorePath)) return { users: {}, gumroadSales: {} };
-  try {
-    const parsed = JSON.parse(readFileSync(creditStorePath, 'utf8'));
-    return parsed && typeof parsed === 'object' ?
-       { users: parsed.users || {}, gumroadSales: parsed.gumroadSales || {} }
-      : { users: {}, gumroadSales: {} };
-  } catch {
-    return { users: {}, gumroadSales: {} };
-  }
-};
-
-const writeCreditStore = (store) => {
-  mkdirSync(join(creditStorePath, '..'), { recursive: true });
-  const tempPath = `${creditStorePath}.${process.pid}.${Date.now()}.tmp`;
-  writeFileSync(tempPath, JSON.stringify(store, null, 2));
-  renameSync(tempPath, creditStorePath);
-};
-
-const sleepSync = (delayMs) => {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delayMs);
-};
-
-const withCreditStoreLock = (task) => {
-  mkdirSync(join(creditStorePath, '..'), { recursive: true });
-  const startedAt = Date.now();
-  let lockHandle = null;
-
-  while (lockHandle === null) {
-    try {
-      lockHandle = openSync(creditStoreLockPath, 'wx');
-    } catch (error) {
-      if (error.code !== 'EEXIST') throw error;
-      if (Date.now() - startedAt > 5000) {
-        const lockError = new Error('Store de credits occupe, reessaie dans un instant.');
-        lockError.status = 503;
-        throw lockError;
-      }
-      sleepSync(25);
-    }
-  }
-
-  try {
-    return task();
-  } finally {
-    closeSync(lockHandle);
-    try {
-      unlinkSync(creditStoreLockPath);
-    } catch {
-      // Le verrou est best-effort: s'il a deja disparu, la section critique est terminee.
-    }
-  }
-};
-
-const getCreditUserId = (req, body = {}) => {
-  const fromHeader = req.headers['x-ai-user-id'];
-  const raw = Array.isArray(fromHeader) ? fromHeader[0] : fromHeader || body.userId || 'anonymous';
-  return String(raw).trim().replace(/[^a-zA-Z0-9._:@-]/g, '-') || 'anonymous';
-};
-
-const sanitizeCreditUserId = (value = '') =>
-  String(value).trim().replace(/[^a-zA-Z0-9._:@-]/g, '-') || 'anonymous';
-
-const normalizeEmail = (value = '') => String(value).trim().toLowerCase();
-
-const sanitizeStorageSegment = (value = '') =>
-  String(value)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9._-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .toLowerCase() || 'asset';
-
-const buildStoragePath = (...segments) => segments
-  .filter(Boolean)
-  .map((segment) => sanitizeStorageSegment(segment))
-  .join('/');
-
-const getSupabaseAdminClient = () => {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
-  if (!supabaseAdminClient) {
-    supabaseAdminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
-  }
-  return supabaseAdminClient;
-};
-
-const getBearerToken = (req) => {
-  const authorization = req.headers.authorization || '';
-  const value = Array.isArray(authorization) ? authorization[0] : authorization;
-  return String(value).replace(/^Bearer\s+/i, '').trim();
-};
-
-const isAdminUser = (user = {}) => {
-  const metadata = {
-    ...(user.app_metadata || {}),
-    ...(user.user_metadata || {}),
-  };
-  return Boolean(
-    metadata.isAdmin
-    || metadata.is_admin
-    || metadata.role === 'admin'
-    || metadata.roles?.includes?.('admin')
-    || normalizeEmail(user.email || '') === ADMIN_EMAIL,
-  );
-};
-
-const verifySupabaseAdminRequest = async (req) => {
-  const client = getSupabaseAdminClient();
-  if (!client) {
-    const error = new Error('Configuration Supabase admin manquante.');
-    error.status = 500;
-    throw error;
-  }
-
-  const token = getBearerToken(req);
-  if (!token) {
-    const error = new Error('Session admin manquante.');
-    error.status = 401;
-    throw error;
-  }
-
-  const { data, error } = await client.auth.getUser(token);
-  const user = data.user || null;
-  if (error || !user) {
-    const accessError = new Error('Session admin invalide.');
-    accessError.status = 401;
-    throw accessError;
-  }
-
-  user.isAdmin = isAdminUser(user);
-  if (!user.isAdmin) {
-    const accessError = new Error('Acces admin refuse.');
-    accessError.status = 403;
-    throw accessError;
-  }
-
-  return user;
-};
-
-const verifySupabaseUserRequest = async (req) => {
-  const client = getSupabaseAdminClient();
-  if (!client) {
-    const error = new Error('Configuration Supabase manquante.');
-    error.status = 500;
-    throw error;
-  }
-
-  const token = getBearerToken(req);
-  if (!token) {
-    const error = new Error('Session manquante.');
-    error.status = 401;
-    throw error;
-  }
-
-  const { data, error } = await client.auth.getUser(token);
-  if (error || !data.user?.id) {
-    const accessError = new Error('Session invalide.');
-    accessError.status = 401;
-    throw accessError;
-  }
-
-  return data.user;
-};
-
-const resolveCreditUserId = async (req, body = {}) => {
-  const requestedUserId = getCreditUserId(req, body);
-  if (!getSupabaseAdminClient()) return requestedUserId;
-
-  const authUser = await verifySupabaseUserRequest(req);
-  const userId = sanitizeCreditUserId(authUser.id || authUser.email || requestedUserId);
-  if (requestedUserId !== 'anonymous' && requestedUserId !== userId && requestedUserId !== authUser.email) {
-    const error = new Error('Compte credits invalide.');
-    error.status = 403;
-    throw error;
-  }
-  return userId;
-};
-
-const isStorageNotFoundError = (error) => {
-  const status = Number(error?.statusCode || error?.status || 0);
-  const code = String(error?.code || error?.statusCode || '').toLowerCase();
-  return status === 404 || code === '404' || code === 'not_found' || code === 'not-found';
-};
-
-const downloadStorageJson = async (path, fallback) => {
-  const client = getSupabaseAdminClient();
-  if (!client) return fallback;
-
-  const { data, error } = await client.storage.from(storageBucket).download(path);
-  if (error) {
-    if (isStorageNotFoundError(error)) return fallback;
-    throw error;
-  }
-
-  const text = await data.text();
-  try {
-    const parsed = JSON.parse(text);
-    return parsed ?? fallback;
-  } catch {
-    return fallback;
-  }
-};
-
-const uploadStorageJson = async (path, value) => {
-  const client = getSupabaseAdminClient();
-  if (!client) {
-    const error = new Error('Configuration Supabase manquante.');
-    error.status = 500;
-    throw error;
-  }
-
-  const buffer = Buffer.from(JSON.stringify(value, null, 2), 'utf8');
-  const { error } = await client.storage.from(storageBucket).upload(path, buffer, {
-    upsert: true,
-    contentType: 'application/json',
-    cacheControl: '0',
-  });
-  if (error) throw error;
-  return value;
-};
-
-const ensureCreditAccount = (store, userId) => {
-  if (!store.users[userId]) {
-    const now = new Date().toISOString();
-    store.users[userId] = {
-      balance: Number.isFinite(defaultAiCredits) ? Math.max(0, defaultAiCredits) : 0,
-      objectImagesInCurrentBatch: 0,
-      createdAt: now,
-      updatedAt: now,
-      transactions: [{
-        type: 'grant',
-        amount: Number.isFinite(defaultAiCredits) ? Math.max(0, defaultAiCredits) : 0,
-        reason: 'initial_balance',
-        at: now,
-      }],
-    };
-  }
-  return store.users[userId];
-};
-
-const getCreditAccount = (userId) => {
-  return withCreditStoreLock(() => {
-    const store = readCreditStore();
-    const account = ensureCreditAccount(store, userId);
-    writeCreditStore(store);
-    return account;
-  });
-};
-
-const calculateImageCreditCost = (account, body = {}) => {
-  if (body.type !== 'item') return aiCreditCosts.image;
-  if (body.variant === 'thumbnail') return aiCreditCosts.objectThumbnail;
-  const batchSize = Math.max(1, toCount(aiCreditCosts.objectImageBatchSize) || 1);
-  const usedInBatch = toCount(account.objectImagesInCurrentBatch);
-  return usedInBatch % batchSize === 0 ? aiCreditCosts.objectImageBatchCost : 0;
-};
-
-const makeImageCreditReservationId = () => `image_${Date.now()}_${randomUUID()}`;
-
-const sanitizeCreditTrace = (value = '') => String(value || '')
-  .trim()
-  .replace(/[^a-zA-Z0-9_.:-]/g, '-')
-  .slice(0, 120);
-
-const getReservationRefundReason = (reason, reservation = {}) => {
-  const reservationId = sanitizeCreditTrace(reservation.id || reservation.reservationId);
-  return reservationId ? `${reason}:reservation:${reservationId}` : reason;
-};
-
-const reserveImageCredits = (userId, body = {}) => {
-  return withCreditStoreLock(() => {
-    const store = readCreditStore();
-    const account = ensureCreditAccount(store, userId);
-    const reservationId = makeImageCreditReservationId();
-    const batchSize = Math.max(1, toCount(aiCreditCosts.objectImageBatchSize) || 1);
-    const advancesBatch = body.type === 'item' && body.variant !== 'thumbnail';
-    const previousBatchCount = toCount(account.objectImagesInCurrentBatch);
-    const cost = calculateImageCreditCost(account, body);
-    const balance = Number(account.balance || 0);
-    if (balance < cost) {
-      const error = new Error(`Credits IA insuffisants (${balance}/${cost}).`);
-      error.status = 402;
-      error.code = 'AI_CREDITS_EXHAUSTED';
-      error.balance = balance;
-      error.required = cost;
-      throw error;
-    }
-    const now = new Date().toISOString();
-    const nextBatchCount = advancesBatch ? (previousBatchCount + 1) % batchSize : previousBatchCount;
-
-    if (cost > 0) {
-      addCreditTransaction(account, {
-        type: 'debit',
-        amount: -cost,
-        reason: `image:${body.type || 'image'}`,
-        at: now,
-      });
-      const lastTransaction = (account.transactions || [])[account.transactions.length - 1];
-      if (lastTransaction?.reason?.startsWith('image:item')) {
-        lastTransaction.batchProgress = `${nextBatchCount || batchSize}/${batchSize}`;
-      }
-    }
-
-    if (advancesBatch) {
-      account.objectImagesInCurrentBatch = nextBatchCount;
-      account.updatedAt = now;
-    }
-
-    writeCreditStore(store);
-    return {
-      id: reservationId,
-      account,
-      cost,
-      batchSize,
-      advancesBatch,
-      previousBatchCount,
-      nextBatchCount,
-    };
-  });
-};
-
-const releaseImageCreditReservation = (userId, reservation = {}, reason = 'failed_image') => {
-  return withCreditStoreLock(() => {
-    const store = readCreditStore();
-    const account = ensureCreditAccount(store, userId);
-    const cost = Math.max(0, Math.round(Number(reservation.cost || 0)));
-    const batchSize = Math.max(1, toCount(reservation.batchSize) || 1);
-    const currentBatchCount = toCount(account.objectImagesInCurrentBatch);
-    const refundReason = getReservationRefundReason(reason, reservation);
-    const alreadyRefunded = reservation.id && (account.transactions || []).some((transaction) => (
-      transaction.type === 'refund'
-      && Number(transaction.amount || 0) === cost
-      && transaction.reason === refundReason
-    ));
-    const now = new Date().toISOString();
-
-    if (cost > 0 && !alreadyRefunded) {
-      addCreditTransaction(account, {
-        type: 'refund',
-        amount: cost,
-        reason: refundReason,
-        at: now,
-      });
-    }
-
-    if (reservation.advancesBatch) {
-      account.objectImagesInCurrentBatch = (currentBatchCount - 1 + batchSize) % batchSize;
-      account.updatedAt = now;
-    }
-
-    writeCreditStore(store);
-    return account;
-  });
-};
-
-const addCreditTransaction = (account, transaction) => {
-  account.balance = Math.max(0, Number(account.balance || 0) + Number(transaction.amount || 0));
-  account.updatedAt = transaction.at;
-  account.transactions = [...(account.transactions || []), transaction].slice(-100);
-};
-
-const normalizeCreditAccount = (userId, account = {}) => ({
-  userId,
-  balance: Number(account.balance || 0),
-  objectImagesInCurrentBatch: toCount(account.objectImagesInCurrentBatch),
-  createdAt: account.createdAt || '',
-  updatedAt: account.updatedAt || '',
-  transactions: (account.transactions || []).slice(-10).reverse(),
-});
-
-const requireCreditAdmin = async (req) => {
-  await verifySupabaseAdminRequest(req);
-  return true;
-};
-
-const spendCredits = (userId, amount, reason) => {
-  return withCreditStoreLock(() => {
-    const store = readCreditStore();
-    const account = ensureCreditAccount(store, userId);
-    const safeAmount = Math.max(0, Number(amount || 0));
-    if (safeAmount > 0 && Number(account.balance || 0) < safeAmount) {
-      const error = new Error(`Crédits IA insuffisants (${account.balance || 0}/${safeAmount}).`);
-      error.status = 402;
-      error.code = 'AI_CREDITS_EXHAUSTED';
-      error.balance = account.balance || 0;
-      error.required = safeAmount;
-      throw error;
-    }
-    if (safeAmount > 0) {
-      addCreditTransaction(account, {
-        type: 'debit',
-        amount: -safeAmount,
-        reason,
-        at: new Date().toISOString(),
-      });
-      writeCreditStore(store);
-    }
-    return account;
-  });
-};
-
-const refundCredits = (userId, amount, reason) => {
-  const safeAmount = Math.max(0, Number(amount || 0));
-  if (!safeAmount) return;
-  withCreditStoreLock(() => {
-    const store = readCreditStore();
-    const account = ensureCreditAccount(store, userId);
-    addCreditTransaction(account, {
-      type: 'refund',
-      amount: safeAmount,
-      reason,
-      at: new Date().toISOString(),
-    });
-    writeCreditStore(store);
-  });
-};
-
-const grantCredits = (userId, amount, reason) => {
-  return withCreditStoreLock(() => {
-    const store = readCreditStore();
-    const account = ensureCreditAccount(store, userId);
-    addCreditTransaction(account, {
-      type: 'grant',
-      amount,
-      reason,
-      at: new Date().toISOString(),
-    });
-    writeCreditStore(store);
-    return account;
-  });
-};
-
-const getStorageQuotaFromTransactions = (account = {}) => (
-  (account.transactions || []).reduce((quota, entry) => {
-    const [, , bytes] = String(entry.reason || '').split(':');
-    return Math.max(quota, Math.round(Number(bytes) || 0));
-  }, FREE_STORAGE_BYTES)
-);
-
-const handleCredits = async (req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host}`);
-  const userId = await resolveCreditUserId(req, { userId: url.searchParams.get('userId') });
-  const account = getCreditAccount(userId);
-  const objectImageBatchSize = Math.max(1, toCount(aiCreditCosts.objectImageBatchSize) || 1);
-  sendJson(res, 200, {
-    userId,
-    balance: account.balance || 0,
-    costs: aiCreditCosts,
-    nextObjectImageCost: calculateImageCreditCost(account, { type: 'item' }),
-    nextObjectThumbnailCost: calculateImageCreditCost(account, { type: 'item', variant: 'thumbnail' }),
-    objectImagesInCurrentBatch: toCount(account.objectImagesInCurrentBatch),
-    objectImageBatchSize,
-    storageQuotaBytes: getStorageQuotaFromTransactions(account),
-    transactions: (account.transactions || []).slice(-10).reverse(),
-  });
-};
-
-const handleStorageUpgrade = async (req, res) => {
-  if (req.method !== 'POST') {
-    sendJson(res, 405, { error: 'Methode non autorisee.' });
-    return;
-  }
-
-  const body = await readJsonBody(req);
-  const credits = Math.max(0, Math.round(Number(body.credits || 0)));
-  if (!credits) {
-    sendJson(res, 400, { error: 'Nombre de credits invalide.' });
-    return;
-  }
-
-  const userId = await resolveCreditUserId(req, body);
-  if (!userId || (userId === 'anonymous' && getSupabaseAdminClient())) {
-    sendJson(res, 400, { error: 'Utilisateur manquant.' });
-    return;
-  }
-
-  const storageQuotaBytes = credits * STORAGE_BYTES_PER_CREDIT;
-  const account = spendCredits(userId, credits, `storage_upgrade:${credits}:${storageQuotaBytes}`);
-  sendJson(res, 200, {
-    ok: true,
-    balance: Number(account.balance || 0),
-    storageQuotaBytes: getStorageQuotaFromTransactions(account),
-    storagePackCredits: credits,
-  });
-};
-
-const handleCreditTopUp = async (req, res) => {
-  const body = await readJsonBody(req);
-  await requireCreditAdmin(req);
-
-  const userId = getCreditUserId(req, body);
-  const amount = Math.max(0, Math.round(Number(body.amount || 0)));
-  if (!amount) {
-    sendJson(res, 400, { error: 'Montant de crédits invalide.' });
-    return;
-  }
-
-  const account = grantCredits(userId, amount, body.reason || 'manual_top_up');
-  sendJson(res, 200, { userId, balance: account.balance, costs: aiCreditCosts });
-};
-
-const handleCreditsAdminList = async (req, res) => {
-  await requireCreditAdmin(req);
-
-  const store = readCreditStore();
-  const users = Object.entries(store.users || {})
-    .map(([userId, account]) => normalizeCreditAccount(userId, account))
-    .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
-
-  sendJson(res, 200, {
-    users,
-    costs: aiCreditCosts,
-    defaultCredits: Number.isFinite(defaultAiCredits) ? Math.max(0, defaultAiCredits) : 0,
-  });
-};
-
-const handleCreditsAdminUpdate = async (req, res) => {
-  const body = await readJsonBody(req);
-  await requireCreditAdmin(req);
-
-  const userId = getCreditUserId(req, body);
-  if (!userId || userId === 'anonymous') {
-    sendJson(res, 400, { error: 'Utilisateur invalide.' });
-    return;
-  }
-
-  const action = String(body.action || 'add');
-  const amount = Math.round(Number(body.amount || 0));
-  if (!Number.isFinite(amount)) {
-    sendJson(res, 400, { error: 'Montant invalide.' });
-    return;
-  }
-
-  const account = withCreditStoreLock(() => {
-    const store = readCreditStore();
-    const lockedAccount = ensureCreditAccount(store, userId);
-    const now = new Date().toISOString();
-    const reason = body.reason || `admin_${action}`;
-
-    if (action === 'set') {
-      const previousBalance = Number(lockedAccount.balance || 0);
-      const nextBalance = Math.max(0, amount);
-      lockedAccount.balance = nextBalance;
-      lockedAccount.updatedAt = now;
-      lockedAccount.transactions = [...(lockedAccount.transactions || []), {
-        type: 'admin_set',
-        amount: nextBalance - previousBalance,
-        previousBalance,
-        nextBalance,
-        reason,
-        at: now,
-      }].slice(-100);
-    } else {
-      const signedAmount = action === 'subtract' ? -Math.abs(amount) : Math.abs(amount);
-      addCreditTransaction(lockedAccount, {
-        type: signedAmount < 0 ? 'admin_debit' : 'admin_grant',
-        amount: signedAmount,
-        reason,
-        at: now,
-      });
-    }
-
-    writeCreditStore(store);
-    return lockedAccount;
-  });
-  sendJson(res, 200, {
-    user: normalizeCreditAccount(userId, account),
-    costs: aiCreditCosts,
-  });
-};
-
-const handleAdminCredits = async (req, res) => {
-  await verifySupabaseAdminRequest(req);
-  if (req.method === 'GET') {
-    await handleCreditsAdminList(req, res);
-    return;
-  }
-  if (req.method === 'POST') {
-    await handleCreditsAdminUpdate(req, res);
-    return;
-  }
-  sendJson(res, 405, { error: 'Methode non autorisee.' });
-};
 
 const createEmptyShopPack = () => ({
   id: '',
@@ -1057,7 +350,7 @@ const handleAdminUsers = async (req, res) => {
   });
 
   if (error) throw error;
-  const publicRecords = await downloadStorageJson(publicProjectsStoragePath, []);
+  const publicRecords = await downloadStorageJson(publicProjectsStoragePath, [], { visibility: 'public' });
   const publicCounts = getPublicProjectCounts(publicRecords);
   const users = await Promise.all((data.users || [])
     .map(async (user) => ({
@@ -1066,7 +359,7 @@ const handleAdminUsers = async (req, res) => {
     })));
 
   const visibleUsers = users
-    .filter((account) => normalizeEmail(account.email) !== ADMIN_EMAIL)
+    .filter((account) => !isConfiguredAdminEmail(account.email))
     .sort((a, b) => normalizeEmail(a.email).localeCompare(normalizeEmail(b.email), 'fr'));
 
   sendJson(res, 200, { users: visibleUsers });
@@ -1120,7 +413,7 @@ const getAdminProjectPayload = (record = {}) => {
     userId,
     projectId,
     title: getProjectTitle(data, record),
-    author: record.authorName || record.author || record.authorEmail || 'Créateur',
+    author: record.authorName || record.author || record.authorEmail || 'CrÃ©ateur',
     authorEmail: record.authorEmail || '',
     category: shareState.category || data.category || 'Autre',
     ageRating: shareState.ageRating || data.ageRating || 'Tout public',
@@ -1162,7 +455,7 @@ const handleAdminProjects = async (req, res) => {
   }
 
   const client = getSupabaseAdminClient();
-  const records = await downloadStorageJson(publicProjectsStoragePath, []);
+  const records = await downloadStorageJson(publicProjectsStoragePath, [], { visibility: 'public' });
   const projects = Array.isArray(records) ? records.map(getAdminProjectPayload) : [];
   const projectCounts = await getAdminProjectCounts(client, records);
   sendJson(res, 200, { projects, projectCounts });
@@ -1313,10 +606,10 @@ const savePublicProjectIndexForUser = async (userId, projects = []) => {
       publicKey: `${userId}:${project.id}`,
     }));
 
-  const existingIndex = await downloadStorageJson(publicProjectsStoragePath, []);
+  const existingIndex = await downloadStorageJson(publicProjectsStoragePath, [], { visibility: 'public' });
   const safeIndex = Array.isArray(existingIndex) ? existingIndex : [];
   const withoutUser = safeIndex.filter((project) => project.userId !== userId);
-  return uploadStorageJson(publicProjectsStoragePath, [...withoutUser, ...publicRecords]);
+  return uploadStorageJson(publicProjectsStoragePath, [...withoutUser, ...publicRecords], { visibility: 'public' });
 };
 
 const saveServerProjectsForUser = async (userId, projects = []) => {
@@ -1390,7 +683,7 @@ const handleProjectPublication = async (req, res) => {
           copiedAt: timestamp,
           publishedAt: sourceProject.shareState?.publishedAt || timestamp,
           durationMinutes: sourceProject.shareState?.durationMinutes || Math.max(15, Math.min(90, 15 + (sourceProject.data?.scenes?.length || 0) * 8 + (sourceProject.data?.enigmas?.length || 0) * 5)),
-          difficulty: sourceProject.shareState?.difficulty || ((sourceProject.data?.enigmas?.length || 0) >= 5 ? 'difficile' : (sourceProject.data?.enigmas?.length || 0) >= 2 ? 'intermédiaire' : 'facile'),
+          difficulty: sourceProject.shareState?.difficulty || ((sourceProject.data?.enigmas?.length || 0) >= 5 ? 'difficile' : (sourceProject.data?.enigmas?.length || 0) >= 2 ? 'intermÃ©diaire' : 'facile'),
         },
         updatedAt: timestamp,
       };
@@ -1408,7 +701,7 @@ const handleProjectPublication = async (req, res) => {
         publishedName: sourceProject.name || getProjectTitle(sourceProject.data),
         publishedThumbnail: sourceProject.shareState?.galleryThumbnail || sourceProject.thumbnail || getProjectThumbnail(snapshot) || '',
         durationMinutes: Math.max(15, Math.min(90, 15 + (snapshot?.scenes?.length || 0) * 8 + (snapshot?.enigmas?.length || 0) * 5)),
-        difficulty: (snapshot?.enigmas?.length || 0) >= 5 ? 'difficile' : (snapshot?.enigmas?.length || 0) >= 2 ? 'intermédiaire' : 'facile',
+        difficulty: (snapshot?.enigmas?.length || 0) >= 5 ? 'difficile' : (snapshot?.enigmas?.length || 0) >= 2 ? 'intermÃ©diaire' : 'facile',
       },
       updatedAt: timestamp,
     };
@@ -1421,142 +714,6 @@ const handleProjectPublication = async (req, res) => {
 
   await saveServerProjectsForUser(user.id, nextProjects);
   sendJson(res, 200, { project: nextProject });
-};
-
-const gumroadPacks = [
-  {
-    credits: Number(process.env.GUMROAD_PACK_100_CREDITS || 100),
-    productId: process.env.GUMROAD_PACK_100_PRODUCT_ID || '',
-    permalink: process.env.GUMROAD_PACK_100_PERMALINK || 'BLFVPJ',
-  },
-  {
-    credits: Number(process.env.GUMROAD_PACK_250_CREDITS || 250),
-    productId: process.env.GUMROAD_PACK_250_PRODUCT_ID || '',
-    permalink: process.env.GUMROAD_PACK_250_PERMALINK || 'lvnjan',
-  },
-  {
-    credits: Number(process.env.GUMROAD_PACK_500_CREDITS || 500),
-    productId: process.env.GUMROAD_PACK_500_PRODUCT_ID || '',
-    permalink: process.env.GUMROAD_PACK_500_PERMALINK || 'ojrsxa',
-  },
-  {
-    credits: Number(process.env.GUMROAD_PACK_1000_CREDITS || 1000),
-    productId: process.env.GUMROAD_PACK_1000_PRODUCT_ID || '',
-    permalink: process.env.GUMROAD_PACK_1000_PERMALINK || 'zyedcq',
-  },
-].filter((pack) => pack.credits > 0);
-
-const parseGumroadCustomFields = (body = {}) => {
-  if (body.custom_fields && typeof body.custom_fields === 'object') return body.custom_fields;
-  if (typeof body.custom_fields === 'string') {
-    try {
-      return JSON.parse(body.custom_fields);
-    } catch {
-      return {};
-    }
-  }
-
-  return Object.fromEntries(Object.entries(body)
-    .filter(([key]) => key.startsWith('custom_fields['))
-    .map(([key, value]) => [key.match(/^custom_fields\[(.+)\]$/)?.[1] || key, value]));
-};
-
-const getGumroadUserId = (body = {}) => {
-  const customFields = parseGumroadCustomFields(body);
-  return body.user_id
-    || body.userId
-    || body.purchase_id
-    || customFields.user_id
-    || customFields.userId
-    || customFields['Identifiant achat']
-    || customFields['identifiant achat']
-    || body.email
-    || '';
-};
-
-const getGumroadPack = (body = {}) => {
-  const productId = String(body.product_id || '').trim();
-  const permalink = String(body.product_permalink || body.permalink || '').trim().split('/').filter(Boolean).pop()?.toLowerCase() || '';
-  const productName = String(body.product_name || body.product || '').toLowerCase();
-  return gumroadPacks.find((pack) => (
-    (pack.productId && pack.productId === productId)
-    || (pack.permalink && pack.permalink.toLowerCase() === permalink)
-    || (pack.permalink && productName.includes(pack.permalink.toLowerCase()))
-    || (pack.credits && new RegExp(`\\bpack\\s+${pack.credits}\\b`, 'i').test(productName))
-  ));
-};
-
-const handleGumroadWebhook = async (req, res) => {
-  const body = await readJsonBody(req);
-  const expectedSecret = process.env.GUMROAD_WEBHOOK_SECRET || '';
-  if (!expectedSecret) {
-    sendJson(res, 503, { ok: false, error: 'Secret Gumroad serveur non configure.' });
-    return;
-  }
-  if (body.secret !== expectedSecret) {
-    sendJson(res, 403, { ok: false, error: 'Secret Gumroad invalide.' });
-    return;
-  }
-
-  const saleId = String(body.sale_id || body.id || body.order_number || '').trim();
-  if (!saleId) {
-    sendJson(res, 400, { ok: false, error: 'sale_id Gumroad manquant.' });
-    return;
-  }
-
-  const pack = getGumroadPack(body);
-  if (!pack) {
-    sendJson(res, 400, { ok: false, error: 'Pack Gumroad inconnu.' });
-    return;
-  }
-
-  const userId = getCreditUserId(req, { userId: getGumroadUserId(body) });
-  if (!userId || userId === 'anonymous') {
-    sendJson(res, 400, { ok: false, error: 'Identifiant utilisateur manquant.' });
-    return;
-  }
-
-  const gumroadResult = withCreditStoreLock(() => {
-    const store = readCreditStore();
-    if (store.gumroadSales[saleId]) {
-      return { duplicate: true };
-    }
-
-    const account = ensureCreditAccount(store, userId);
-    const processedAt = new Date().toISOString();
-    addCreditTransaction(account, {
-      type: 'grant',
-      amount: pack.credits,
-      reason: `gumroad:${saleId}`,
-      at: processedAt,
-      productId: body.product_id || '',
-      productPermalink: body.product_permalink || body.permalink || '',
-      buyerEmail: body.email || '',
-    });
-    store.gumroadSales[saleId] = {
-      userId,
-      credits: pack.credits,
-      productId: body.product_id || '',
-      productPermalink: body.product_permalink || body.permalink || '',
-      email: body.email || '',
-      processedAt,
-    };
-    writeCreditStore(store);
-    return { balance: account.balance };
-  });
-
-  if (gumroadResult.duplicate) {
-    sendJson(res, 200, { ok: true, duplicate: true, saleId });
-    return;
-  }
-
-  sendJson(res, 200, {
-    ok: true,
-    saleId,
-    userId,
-    creditsAdded: pack.credits,
-    balance: gumroadResult.balance,
-  });
 };
 
 const openaiFetch = async (path, body) => {
@@ -1895,34 +1052,6 @@ const handleRemoveBackground = async (req, res) => {
     if (charged) refundCredits(userId, cost, 'failed_remove_background:remove.bg');
     throw error;
   }
-};
-
-const serveStatic = (req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host}`);
-  const requestedPath = decodeURIComponent(url.pathname);
-  const filePath = requestedPath === '/'
-    ? join(publicDir, 'index.html')
-    : resolve(publicDir, `.${requestedPath}`);
-
-  const publicRelativePath = relative(publicDir, filePath);
-  const isInsidePublicDir = publicRelativePath
-    && !publicRelativePath.startsWith('..')
-    && !isAbsolute(publicRelativePath);
-  const safePath = isInsidePublicDir ? filePath : join(publicDir, 'index.html');
-  const finalPath = existsSync(safePath) && !safePath.endsWith('\\')
-    ? safePath
-    : join(publicDir, 'index.html');
-
-  if (!existsSync(finalPath)) {
-    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-    res.end('Build introuvable. Lance npm run build avant npm start.');
-    return;
-  }
-
-  res.writeHead(200, {
-    'Content-Type': mimeTypes[extname(finalPath)] || 'application/octet-stream',
-  });
-  res.end(readFileSync(finalPath));
 };
 
 const server = createServer((req, res) => requestContext.run(req, async () => {

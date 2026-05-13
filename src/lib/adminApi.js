@@ -3,12 +3,15 @@ import { getSupabaseClient, hasSupabaseConfig } from '../supabaseStorage';
 import { fileToDataURL, uploadFileToSupabase } from '../utils/fileHelpers';
 import { safeParseJson } from '../utils/storageHelpers';
 
-const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || 'thorez.m@hotmail.fr';
+const ADMIN_EMAIL = normalizeEmail(import.meta.env.VITE_ADMIN_EMAIL || '');
 const ADMIN_USERS_ENDPOINT = import.meta.env.VITE_ADMIN_USERS_ENDPOINT || '/api/admin/users';
 const ADMIN_CREDITS_ENDPOINT = import.meta.env.VITE_ADMIN_CREDITS_ENDPOINT || '/api/admin/credits';
 const ADMIN_PROJECTS_ENDPOINT = import.meta.env.VITE_ADMIN_PROJECTS_ENDPOINT || '/api/admin/projects';
 const ADMIN_MODERATION_ENDPOINT = import.meta.env.VITE_ADMIN_MODERATION_ENDPOINT || '/api/admin/moderation';
 const LOCAL_PROJECTS_KEY_PREFIX = 'escapeGameBuilder.projects';
+const isConfiguredAdminEmail = (email = '') => Boolean(
+  ADMIN_EMAIL && normalizeEmail(email) === ADMIN_EMAIL,
+);
 
 const readJsonResponse = async (response, fallbackMessage) => {
   const payload = await response.json().catch(() => ({}));
@@ -101,7 +104,7 @@ export const getManagedUsers = ({ accounts = [], supabaseUsers = [], creditUsers
   });
 
   creditUsers.forEach((creditAccount) => {
-    if (normalizeEmail(creditAccount.userId) === normalizeEmail(ADMIN_EMAIL)) return;
+    if (isConfiguredAdminEmail(creditAccount.userId)) return;
     const existing = byId.get(creditAccount.userId) || {
       userId: creditAccount.userId,
       name: '',
@@ -130,7 +133,7 @@ export const getManagedUsers = ({ accounts = [], supabaseUsers = [], creditUsers
 export const loadAdminDashboard = async () => {
   const authHeaders = await getAdminAuthHeaders();
   const localAccounts = getAllAccounts()
-    .filter((account) => normalizeEmail(account.email) !== normalizeEmail(ADMIN_EMAIL));
+    .filter((account) => !isConfiguredAdminEmail(account.email));
 
   const [usersResult, creditsResult, projectsResult, moderationResult] = await Promise.allSettled([
     hasSupabaseConfig()
@@ -180,7 +183,7 @@ export const loadAdminDashboard = async () => {
     supabaseUsers,
     creditUsers: Array.isArray(creditsPayload.users) ? creditsPayload.users : [],
     projectCounts,
-    publicGames: (projectsPayload.projects || []).filter((game) => normalizeEmail(game.authorEmail) !== normalizeEmail(ADMIN_EMAIL)),
+    publicGames: (projectsPayload.projects || []).filter((game) => !isConfiguredAdminEmail(game.authorEmail)),
     moderation: buildModerationState(Array.isArray(moderationPayload.actions) ? moderationPayload.actions : []),
   };
 };
@@ -227,7 +230,7 @@ export const toggleStoredLocalAccountStatus = (targetUser) => {
   updateStoredAccount(targetUser.userId, { status: nextStatus });
   return {
     nextStatus,
-    accounts: getAllAccounts().filter((account) => normalizeEmail(account.email) !== normalizeEmail(ADMIN_EMAIL)),
+    accounts: getAllAccounts().filter((account) => !isConfiguredAdminEmail(account.email)),
   };
 };
 

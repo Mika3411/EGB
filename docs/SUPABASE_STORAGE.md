@@ -38,6 +38,8 @@ Comportement runtime :
 
 - `visibility: "public"` utilise `VITE_SUPABASE_PUBLIC_ASSETS_BUCKET`, avec `VITE_SUPABASE_STORAGE_BUCKET` comme fallback legacy si le bucket public n'est pas configure.
 - `visibility: "private"` utilise `VITE_SUPABASE_PRIVATE_DATA_BUCKET`, avec `VITE_SUPABASE_STORAGE_BUCKET` comme fallback legacy si le bucket prive n'est pas configure.
+- Cote serveur, `SUPABASE_PUBLIC_ASSETS_BUCKET` et `SUPABASE_PRIVATE_DATA_BUCKET` sont lus en priorite, puis les variantes `VITE_*`, puis `SUPABASE_STORAGE_BUCKET` / `VITE_SUPABASE_STORAGE_BUCKET` en fallback legacy.
+- Les jobs IA, les sauvegardes utilisateur et le manifeste boutique complet utilisent le bucket prive. L'index `public/projects.json` utilise le bucket public.
 - `uploadPublicAsset()` force le bucket public.
 - `uploadPrivateUserFile()` force le bucket prive sous `users/{userId}/...`.
 - `downloadTextFile(path, { visibility: "public" })` lit dans le bucket public.
@@ -151,6 +153,15 @@ VITE_SUPABASE_STORAGE_BUCKET=escape-game-private-data
 # Cote serveur uniquement. Ne jamais exposer avec un prefixe VITE_.
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=YOUR_SUPABASE_SERVICE_ROLE_KEY
+SUPABASE_PUBLIC_ASSETS_BUCKET=escape-game-public-assets
+SUPABASE_PRIVATE_DATA_BUCKET=escape-game-private-data
+
+# Fallback serveur temporaire pour anciens deploiements seulement.
+SUPABASE_STORAGE_BUCKET=escape-game-private-data
+
+# Admin optionnel par email explicite. Preferer les roles Supabase.
+ADMIN_EMAIL=admin@example.com
+VITE_ADMIN_EMAIL=admin@example.com
 ```
 
 Ne jamais placer `SUPABASE_SERVICE_ROLE_KEY` dans le code frontend ou dans une variable `VITE_*`.

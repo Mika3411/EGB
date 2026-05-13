@@ -652,7 +652,48 @@ describe('combatEngine', () => {
     expect(result.averageRounds).toBe(1);
     expect(result.averageHeroDamagePerRound).toBe(10);
     expect(result.averageEnemyDamagePerRound).toBe(0);
+    expect(result.survivalChance).toBe(100);
+    expect(result.averageHeroManaSpent).toBe(0);
+    expect(result.averageHeroHealthRemaining).toBe(12);
     expect(result.victoryCount).toBe(10);
+  });
+
+  it('estimates mana spent and survival from full combat simulations', () => {
+    const project = {
+      heroAdventure: {
+        dice: { sides: 20, label: 'd20' },
+        rules: { criticalSuccess: 20, criticalFailure: 1, criticalChance: 0, criticalMultiplier: 2 },
+        hero: {
+          health: 6,
+          maxHealth: 6,
+          mana: 3,
+          maxMana: 3,
+          skills: [{ id: 'force', name: 'Force', value: 10 }],
+          powers: [],
+        },
+      },
+    };
+
+    const result = estimateCombatBalance(
+      project,
+      {
+        combatEnemyName: 'Brute',
+        combatEnemyMaxHealth: 20,
+        combatAttackDifficulty: 5,
+        combatManaCost: 1,
+        combatEnemyStrength: 8,
+        combatEnemyChaos: 20,
+      },
+      {},
+      {
+        iterations: 4,
+        randomFactory: () => makeRandom([0.5, 0.5, 0.5, 0.5]),
+      },
+    );
+
+    expect(result.survivalChance).toBe(0);
+    expect(result.averageHeroManaSpent).toBeGreaterThan(0);
+    expect(result.averageHeroHealthRemaining).toBe(0);
   });
 
   it('lets status damage win in the shared simulation', () => {

@@ -12,11 +12,19 @@ services:
         sync: false
       - key: VITE_SUPABASE_PUBLISHABLE_KEY
         sync: false
-      - key: VITE_SUPABASE_STORAGE_BUCKET
+      - key: VITE_SUPABASE_PUBLIC_ASSETS_BUCKET
+        sync: false
+      - key: VITE_SUPABASE_PRIVATE_DATA_BUCKET
         sync: false
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_PUBLIC_ASSETS_BUCKET
+        sync: false
+      - key: SUPABASE_PRIVATE_DATA_BUCKET
+        sync: false
+      - key: ADMIN_EMAIL
         sync: false
       - key: AI_CREDIT_ADMIN_KEY
         sync: false

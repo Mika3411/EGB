@@ -1,17 +1,13 @@
 import {
-  aiJobBucket,
   getSupabaseAdminClient,
   json,
+  privateDataBucket,
+  publicAssetsBucket,
   verifyAdmin,
   withErrors,
 } from './_shared.js';
 
 const publicProjectsStoragePath = 'public/projects.json';
-const privateDataBucket = process.env.SUPABASE_PRIVATE_DATA_BUCKET
-  || process.env.VITE_SUPABASE_PRIVATE_DATA_BUCKET
-  || process.env.SUPABASE_STORAGE_BUCKET
-  || process.env.VITE_SUPABASE_STORAGE_BUCKET
-  || aiJobBucket;
 
 const sanitizeStorageSegment = (value = '') => String(value || '')
   .trim()
@@ -82,7 +78,7 @@ const getAdminProjectPayload = (record = {}) => {
 };
 
 const downloadPublicProjects = async (supabase) => {
-  const { data, error } = await supabase.storage.from(aiJobBucket).download(publicProjectsStoragePath);
+  const { data, error } = await supabase.storage.from(publicAssetsBucket).download(publicProjectsStoragePath);
   if (error) {
     if (isMissingStorageResource(error)) return [];
     throw error;

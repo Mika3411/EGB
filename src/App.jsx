@@ -14,6 +14,7 @@ const AdminPage = React.lazy(() => import('./components/AdminPage'));
 const PublicGallery = React.lazy(() => import('./components/PublicGallery'));
 const BuilderApp = React.lazy(() => import('./BuilderApp.jsx'));
 const BuilderTutorial = React.lazy(() => import('./components/BuilderTutorial'));
+const ArcadeMode = React.lazy(() => import('./components/ArcadeMode'));
 
 const TabLoadingFallback = () => (
   <section className="panel">
@@ -54,6 +55,7 @@ const LandingLoadingFallback = () => (
 const createShellInitialScreen = () => {
   if (typeof window === 'undefined') return 'profile';
   const params = new URLSearchParams(window.location.search);
+  if (params.get('arcade') === '1') return 'arcade';
   if (params.get('playUser') && params.get('playProject')) return 'shared-preview';
   if (params.get('gallery') === '1' || window.__escapeInitialGalleryGame) return 'gallery';
   const savedState = readAppUiState();
@@ -382,6 +384,14 @@ function ShellApp() {
           initialScreen={builderLaunch.screen}
           onExitToProfile={openProfileScreen}
         />
+      </Suspense>
+    );
+  }
+
+  if (screen === 'arcade') {
+    return (
+      <Suspense fallback={<LandingLoadingFallback />}>
+        <ArcadeMode />
       </Suspense>
     );
   }

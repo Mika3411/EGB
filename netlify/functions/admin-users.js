@@ -1,18 +1,13 @@
 import {
-  ADMIN_EMAIL,
   getSupabaseAdminClient,
+  isConfiguredAdminEmail,
   json,
   normalizeEmail,
   parseBody,
+  privateDataBucket,
   verifyAdmin,
   withErrors,
 } from './_shared.js';
-
-const privateDataBucket = process.env.SUPABASE_PRIVATE_DATA_BUCKET
-  || process.env.VITE_SUPABASE_PRIVATE_DATA_BUCKET
-  || process.env.SUPABASE_STORAGE_BUCKET
-  || process.env.VITE_SUPABASE_STORAGE_BUCKET
-  || 'escape-game-assets';
 
 const sanitizeStorageSegment = (value = '') => String(value || '')
   .trim()
@@ -94,7 +89,7 @@ export const handler = async (event) => withErrors(event, async () => {
       )));
 
     const visibleUsers = users
-      .filter((account) => normalizeEmail(account.email) !== ADMIN_EMAIL)
+      .filter((account) => !isConfiguredAdminEmail(account.email))
       .sort((a, b) => normalizeEmail(a.email).localeCompare(normalizeEmail(b.email), 'fr'));
 
     return json(200, { users: visibleUsers });

@@ -1,8 +1,8 @@
 import {
-  aiJobBucket,
   getSupabaseAdminClient,
   json,
   parseBody,
+  privateDataBucket,
   resolveCreditUserId,
   withErrors,
 } from './_shared.js';
@@ -71,7 +71,7 @@ const normalizeShopPack = (pack = {}) => ({
 });
 
 const loadShopPacks = async (supabase) => {
-  const { data, error } = await supabase.storage.from(aiJobBucket).download(shopPacksStoragePath);
+  const { data, error } = await supabase.storage.from(privateDataBucket).download(shopPacksStoragePath);
   if (error) throw error;
   const packs = JSON.parse(await data.text());
   return Array.isArray(packs) ? packs.map(normalizeShopPack) : [];

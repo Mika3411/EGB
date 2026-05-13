@@ -1,0 +1,277 @@
+.arcade-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto minmax(420px, 1fr) auto;
+  gap: 12px;
+  padding: 14px;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(127, 29, 29, .3), transparent 32%),
+    radial-gradient(circle at 82% 12%, rgba(146, 64, 14, .24), transparent 30%),
+    linear-gradient(180deg, rgba(16, 10, 9, .99), rgba(7, 4, 4, .99)),
+    #0b0706;
+  color: var(--text);
+  overflow: hidden;
+}
+
+.arcade-builder-shell {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.arcade-hud {
+  display: grid;
+  grid-template-columns: minmax(170px, 240px) minmax(320px, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 74px;
+  padding: 10px 12px;
+  border: 1px solid rgba(185, 118, 58, .28);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(38, 25, 20, .94), rgba(14, 8, 7, .94));
+  box-shadow: 0 16px 42px rgba(0, 0, 0, .42), inset 0 1px rgba(255, 196, 112, .08);
+}
+
+.arcade-hud h1 {
+  margin: 4px 0 0;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.arcade-kicker,
+.arcade-stats span,
+.arcade-controls span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.arcade-kicker {
+  color: #f59e0b;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.arcade-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(92px, 1fr));
+  gap: 8px;
+}
+
+.arcade-stats span {
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid rgba(185, 118, 58, .22);
+  border-radius: 8px;
+  background: rgba(18, 12, 10, .82);
+  color: #f5e8d0;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.arcade-stats svg {
+  color: #f59e0b;
+}
+
+.arcade-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.arcade-actions button {
+  min-height: 38px;
+  gap: 7px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.arcade-stage {
+  position: relative;
+  min-height: 0;
+  border: 1px solid rgba(185, 118, 58, .32);
+  border-radius: 8px;
+  background: #0b0706;
+  box-shadow: inset 0 0 0 1px rgba(255, 196, 112, .04), 0 28px 70px rgba(0, 0, 0, .48);
+  overflow: hidden;
+}
+
+.arcade-builder-layout {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 260px minmax(420px, 1fr) 260px;
+  gap: 12px;
+}
+
+.arcade-builder-panel {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: auto;
+}
+
+.arcade-panel-section {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(185, 118, 58, .24);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(32, 21, 17, .94), rgba(14, 8, 7, .94));
+  box-shadow: inset 0 1px rgba(255, 196, 112, .06);
+}
+
+.arcade-panel-section h2 {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1;
+  letter-spacing: 0;
+  color: #f5e8d0;
+}
+
+.arcade-panel-section label {
+  display: grid;
+  gap: 6px;
+  color: #bda98a;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.arcade-panel-section input,
+.arcade-panel-section select {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid rgba(185, 118, 58, .24);
+  border-radius: 8px;
+  background: rgba(10, 7, 6, .9);
+  color: #fff7ed;
+  padding: 7px 9px;
+}
+
+.arcade-panel-section input[type="range"] {
+  padding: 0;
+}
+
+.arcade-tool-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.arcade-tool-grid button,
+.arcade-library button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 7px;
+  min-height: 36px;
+  padding: 8px 9px;
+  border: 1px solid rgba(185, 118, 58, .22);
+  border-radius: 8px;
+  background: rgba(16, 10, 9, .84);
+  color: #f5e8d0;
+  box-shadow: none;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.arcade-tool-grid button.active {
+  border-color: rgba(245, 158, 11, .72);
+  background: rgba(127, 29, 29, .52);
+  color: #fff;
+}
+
+.arcade-inspector {
+  display: grid;
+  gap: 10px;
+}
+
+.arcade-selected-type {
+  width: fit-content;
+  padding: 5px 8px;
+  border: 1px solid rgba(245, 158, 11, .42);
+  border-radius: 8px;
+  background: rgba(245, 158, 11, .12);
+  color: #fbbf24;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.arcade-empty-state {
+  margin: 0;
+  color: #bda98a;
+  line-height: 1.45;
+}
+
+.arcade-library {
+  align-content: start;
+}
+
+.arcade-library button {
+  width: 100%;
+}
+
+.arcade-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: none;
+}
+
+.arcade-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  min-height: 38px;
+}
+
+.arcade-controls span {
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px solid rgba(185, 118, 58, .2);
+  border-radius: 8px;
+  background: rgba(16, 10, 9, .78);
+  color: #d6b985;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+@media (max-width: 920px) {
+  .arcade-shell {
+    grid-template-rows: auto minmax(360px, 1fr) auto;
+    padding: 10px;
+  }
+
+  .arcade-hud {
+    grid-template-columns: 1fr;
+  }
+
+  .arcade-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .arcade-actions {
+    justify-content: stretch;
+  }
+
+  .arcade-actions button {
+    flex: 1;
+  }
+
+  .arcade-builder-layout {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+
+  .arcade-builder-panel {
+    overflow: visible;
+  }
+
+  .arcade-stage {
+    min-height: 420px;
+  }
+}

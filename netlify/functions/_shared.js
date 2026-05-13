@@ -6,7 +6,7 @@ import { assertAiContentAllowed, makeImageModerationInput } from '../../src/util
 import { assertCorsRequestAllowed, makeCorsHeaders } from '../../src/utils/corsConfig.js';
 import { assertProjectSafety, parseProjectJsonPayload } from '../../src/utils/projectSafetyValidation.js';
 
-export const ADMIN_EMAIL = String(process.env.ADMIN_EMAIL || process.env.VITE_ADMIN_EMAIL || 'thorez.m@hotmail.fr')
+export const ADMIN_EMAIL = String(process.env.ADMIN_EMAIL || process.env.VITE_ADMIN_EMAIL || '')
   .trim()
   .toLowerCase();
 
@@ -28,7 +28,19 @@ export const aiCreditCosts = {
 };
 
 export const defaultAiCredits = Number(process.env.AI_DEFAULT_CREDITS || 20);
-export const aiJobBucket = process.env.SUPABASE_STORAGE_BUCKET || process.env.VITE_SUPABASE_STORAGE_BUCKET || 'escape-game-assets';
+export const legacyStorageBucket = process.env.SUPABASE_STORAGE_BUCKET
+  || process.env.VITE_SUPABASE_STORAGE_BUCKET
+  || 'escape-game-assets';
+export const publicAssetsBucket = process.env.SUPABASE_PUBLIC_ASSETS_BUCKET
+  || process.env.VITE_SUPABASE_PUBLIC_ASSETS_BUCKET
+  || legacyStorageBucket;
+export const privateDataBucket = process.env.SUPABASE_PRIVATE_DATA_BUCKET
+  || process.env.VITE_SUPABASE_PRIVATE_DATA_BUCKET
+  || legacyStorageBucket;
+export const resolveServerStorageBucket = (visibility = 'private') => (
+  visibility === 'public' ? publicAssetsBucket : privateDataBucket
+);
+export const aiJobBucket = privateDataBucket;
 
 export const toCount = (value) => {
   const number = Number(value);
@@ -66,6 +78,34 @@ export const calculateImageCreditCost = (account = {}, body = {}) => {
 };
 
 export const normalizeEmail = (value = '') => String(value).trim().toLowerCase();
+
+const normalizeRole = (value = '') => String(value).trim().toLowerCase();
+const hasTruthyAdminFlag = (value) => value === true || /^(1|true|yes)$/i.test(String(value || ''));
+const getMetadataRoles = (metadata = {}) => {
+  const roles = Array.isArray(metadata.roles)
+    ? metadata.roles
+    : typeof metadata.roles === 'string'
+      ? metadata.roles.split(/[,\s]+/)
+      : [];
+  return [...roles, metadata.role].map(normalizeRole).filter(Boolean);
+};
+
+export const isConfiguredAdminEmail = (email = '') => Boolean(
+  ADMIN_EMAIL && normalizeEmail(email) === ADMIN_EMAIL,
+);
+
+export const isAdminUser = (user = {}) => {
+  const metadata = {
+    ...(user.app_metadata || {}),
+    ...(user.user_metadata || {}),
+  };
+  return Boolean(
+    hasTruthyAdminFlag(metadata.isAdmin)
+    || hasTruthyAdminFlag(metadata.is_admin)
+    || getMetadataRoles(metadata).includes('admin')
+    || isConfiguredAdminEmail(user.email),
+  );
+};
 
 const corsEventStore = new AsyncLocalStorage();
 
@@ -111,13 +151,21 @@ export const verifyAdmin = async (event) => {
 
   const supabase = getSupabaseAdminClient();
   const { data, error } = await supabase.auth.getUser(token);
-  if (error || normalizeEmail(data.user?.email) !== ADMIN_EMAIL) {
+  const user = data.user || null;
+  if (error || !user) {
+    const accessError = new Error('Session admin invalide.');
+    accessError.statusCode = 401;
+    throw accessError;
+  }
+
+  if (!isAdminUser(user)) {
     const accessError = new Error('Acces admin refuse.');
     accessError.statusCode = 403;
     throw accessError;
   }
 
-  return data.user;
+  user.isAdmin = true;
+  return user;
 };
 
 export const sanitizeCreditUserId = (value = '') =>

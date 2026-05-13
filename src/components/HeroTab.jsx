@@ -1,16 +1,26 @@
 import { useMemo, useState } from 'react';
 import { AlertTriangle, Dices, Eye, Heart, Plus, ShieldCheck, Sparkles, Swords, Trash2, Trophy } from 'lucide-react';
 import HelpLabel from './forms/HelpLabel.jsx';
-import { COMBAT_MEDIA_TYPES, DEFAULT_COMBAT_SETTINGS } from '../lib/combatDefaults.js';
+import {
+  estimateCombatBalance,
+  getCombatSimulationStats,
+  resolveRollOutcome,
+} from '../lib/combatEngine.js';
+import {
+  DEFAULT_EDITOR_EQUIPMENT_SLOT_LABELS as DEFAULT_EQUIPMENT_SLOT_LABELS,
+  DEFAULT_HERO_EDITOR_ADVENTURE,
+  DEFAULT_HERO_EDITOR_SKILLS as DEFAULT_SKILLS,
+  HERO_DICE_SKIN_IDS,
+  HERO_POWER_TYPE_IDS,
+  HERO_STATUS_EFFECT_TYPE_IDS,
+  clampEditorNumber as clampNumber,
+  normalizeHeroAdventure as normalizeSharedHeroAdventure,
+  normalizeHeroRules as normalizeSharedHeroRules,
+  normalizeHeroSheet as normalizeSharedHeroSheet,
+  normalizeSkillId,
+} from '../lib/heroAdventureDefaults.js';
 
-const DEFAULT_SKILLS = [
-  { id: 'force', name: 'Force', value: 3, manaCost: 0 },
-  { id: 'ruse', name: 'Ruse', value: 2, manaCost: 0 },
-  { id: 'survie', name: 'Survie', value: 2, manaCost: 0 },
-  { id: 'magie', name: 'Magie', value: 4, manaCost: 2 },
-];
-
-const DEFAULT_EQUIPMENT_SLOT_LABELS = ['Casque', 'Bouclier', 'Arme', 'Armure', 'Anneau', 'Jambières', 'Amulette', 'Sac'];
+const DEFAULT_HERO_ADVENTURE = DEFAULT_HERO_EDITOR_ADVENTURE;
 const HERO_DICE_SKINS = [
   { id: 'classic', label: 'Ivoire' },
   { id: 'bone', label: 'Os ancien' },
@@ -22,7 +32,6 @@ const HERO_DICE_SKINS = [
   { id: 'divine', label: 'Serment' },
   { id: 'cursed', label: 'Maudit' },
 ];
-const HERO_DICE_SKIN_IDS = new Set(HERO_DICE_SKINS.map((skin) => skin.id));
 const DICE_PREVIEW_PIPS = ['top-left', 'top-right', 'center', 'bottom-left', 'bottom-right'];
 const BUTTON_STYLE_PRESETS = [
   { id: 'modern', label: 'Moderne' },
@@ -49,7 +58,6 @@ const HERO_POWER_TYPES = [
   { id: 'fire', label: 'Feu' },
   { id: 'lightning', label: 'Foudre' },
 ];
-const HERO_POWER_TYPE_IDS = new Set(HERO_POWER_TYPES.map((type) => type.id));
 const HERO_STATUS_EFFECT_TYPES = [
   { id: '', label: 'Aucun' },
   { id: 'poison', label: 'Poison' },
@@ -66,7 +74,6 @@ const HERO_STATUS_EFFECT_TYPES = [
   { id: 'critical_buff', label: 'Bonus critique' },
   { id: 'critical_debuff', label: 'Malus critique' },
 ];
-const HERO_STATUS_EFFECT_TYPE_IDS = new Set(HERO_STATUS_EFFECT_TYPES.map((type) => type.id));
 const HERO_RESISTANCE_FIELDS = [
   { id: 'water', label: 'Eau', field: 'resistanceWater' },
   { id: 'earth', label: 'Terre', field: 'resistanceEarth' },
@@ -81,46 +88,6 @@ const NARRATION_BACKGROUND_PRESETS = [
   { id: 'blood', label: 'Sombre', value: 'rgba(69, 10, 10, .72)' },
   { id: 'violet', label: 'Arcane', value: 'rgba(76, 29, 149, .70)' },
 ];
-const DEFAULT_HERO_ADVENTURE = {
-  enabled: true,
-  dice: { sides: 20, label: 'd20', skin: 'classic' },
-  hero: {
-    name: 'Aventurier',
-    description: '',
-    health: 18,
-    maxHealth: 18,
-    mana: 10,
-    maxMana: 10,
-    initiative: 0,
-    armor: 0,
-    dodgeChance: 0,
-    backgroundImageData: '',
-    characterImageData: '',
-    setupBackgroundImageData: '',
-    setupMusicData: '',
-    setupMusicName: '',
-    defeatSceneId: '',
-    equipmentSlotCount: 6,
-    equipmentSlotLabels: DEFAULT_EQUIPMENT_SLOT_LABELS,
-    skills: DEFAULT_SKILLS,
-    powers: [
-      { id: 'flamme', name: 'Flamme', type: 'fire', manaCost: 2, force: 4 },
-    ],
-    resistanceWater: 0,
-    resistanceEarth: 0,
-    resistanceFire: 0,
-    resistanceLightning: 0,
-  },
-  rules: {
-    criticalSuccess: 20,
-    criticalFailure: 1,
-    criticalChance: 0,
-    criticalMultiplier: 2,
-    allowManualAdjustments: true,
-    failForward: true,
-  },
-  combat: DEFAULT_COMBAT_SETTINGS,
-};
 
 const FIELD_HELP = {
   enabled: "Affiche les options Hero aventure dans le jeu : fiche personnage, PV, mana, compétences, équipements, tests et combats.",
@@ -164,222 +131,24 @@ const HERO_INTERNAL_TABS = [
   { id: 'guide', label: 'Guide' },
 ];
 
-const clampNumber = (value, fallback, min = 0, max = 999) => {
-  const next = Number(value);
-  if (!Number.isFinite(next)) return fallback;
-  return Math.max(min, Math.min(max, Math.round(next)));
-};
-
-const normalizeSkillId = (name = 'competence') => (
-  name
-    .toString()
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    || `compétence_${Math.random().toString(36).slice(2, 7)}`
-);
-
-const textOrDefault = (value, fallback = '') => (
-  value === undefined || value === null ? fallback : String(value)
-);
-
 const createHeroSheetId = () => `hero_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
-const normalizeHeroRules = (rawRules = {}, diceSides = DEFAULT_HERO_ADVENTURE.dice.sides) => ({
-  ...DEFAULT_HERO_ADVENTURE.rules,
-  ...(rawRules && typeof rawRules === 'object' ? rawRules : {}),
-  criticalSuccess: clampNumber(rawRules?.criticalSuccess, DEFAULT_HERO_ADVENTURE.rules.criticalSuccess, 1, diceSides),
-  criticalFailure: clampNumber(rawRules?.criticalFailure, DEFAULT_HERO_ADVENTURE.rules.criticalFailure, 1, diceSides),
-  criticalChance: clampNumber(rawRules?.criticalChance, DEFAULT_HERO_ADVENTURE.rules.criticalChance, 0, 100),
-  criticalMultiplier: clampNumber(rawRules?.criticalMultiplier, DEFAULT_HERO_ADVENTURE.rules.criticalMultiplier, 1, 20),
-});
-
-const normalizeHeroSheet = (rawHero = {}, index = 0, diceSides = DEFAULT_HERO_ADVENTURE.dice.sides, fallbackRules = {}) => {
-  const sourceHero = rawHero && typeof rawHero === 'object' ? rawHero : {};
-  const maxHealth = clampNumber(sourceHero.maxHealth, DEFAULT_HERO_ADVENTURE.hero.maxHealth, 1, 999);
-  const maxMana = clampNumber(sourceHero.maxMana, DEFAULT_HERO_ADVENTURE.hero.maxMana, 0, 999);
-  const skills = Array.isArray(sourceHero.skills) && sourceHero.skills.length ? sourceHero.skills : DEFAULT_SKILLS;
-  const powers = Array.isArray(sourceHero.powers) && sourceHero.powers.length ? sourceHero.powers : DEFAULT_HERO_ADVENTURE.hero.powers;
-
-  return {
-    id: sourceHero.id || `hero_${index + 1}`,
-    name: textOrDefault(sourceHero.name, DEFAULT_HERO_ADVENTURE.hero.name),
-    description: textOrDefault(sourceHero.description, DEFAULT_HERO_ADVENTURE.hero.description),
-    health: clampNumber(sourceHero.health, maxHealth, 0, maxHealth),
-    maxHealth,
-    mana: clampNumber(sourceHero.mana, maxMana, 0, maxMana),
-    maxMana,
-    initiative: clampNumber(sourceHero.initiative, DEFAULT_HERO_ADVENTURE.hero.initiative, -999, 999),
-    armor: clampNumber(sourceHero.armor, DEFAULT_HERO_ADVENTURE.hero.armor, 0, 999),
-    dodgeChance: clampNumber(sourceHero.dodgeChance, DEFAULT_HERO_ADVENTURE.hero.dodgeChance, 0, 100),
-    backgroundImageData: sourceHero.backgroundImageData || '',
-    characterImageData: sourceHero.characterImageData || '',
-    setupBackgroundImageData: sourceHero.setupBackgroundImageData || '',
-    setupMusicData: sourceHero.setupMusicData || '',
-    setupMusicName: sourceHero.setupMusicName || '',
-    defeatSceneId: sourceHero.defeatSceneId || '',
-    equipmentSlotCount: clampNumber(sourceHero.equipmentSlotCount, DEFAULT_HERO_ADVENTURE.hero.equipmentSlotCount, 1, 8),
-    equipmentSlotLabels: DEFAULT_EQUIPMENT_SLOT_LABELS.map((label, slotIndex) => {
-      const customLabel = Array.isArray(sourceHero.equipmentSlotLabels) ? sourceHero.equipmentSlotLabels[slotIndex] : undefined;
-      return textOrDefault(customLabel, label);
-    }),
-    skills: skills.map((skill, skillIndex) => ({
-      id: skill.id || normalizeSkillId(skill.name || `competence_${skillIndex + 1}`),
-      name: textOrDefault(skill.name, `Competence ${skillIndex + 1}`),
-      value: clampNumber(skill.value, 0, -20, 50),
-      baseValue: Number.isFinite(Number(skill.baseValue))
-        ? clampNumber(skill.baseValue, 0, -20, 50)
-        : clampNumber((Number(skill.value) || 0) - (Number(skill.rolledValue) || 0), 0, -20, 50),
-      rolledValue: skill.rolledValue ? clampNumber(skill.rolledValue, 0, 1, 6) : 0,
-      rollFormula: skill.rollFormula || '',
-      manaCost: clampNumber(skill.manaCost, 0, 0, 99),
-    })),
-    powers: powers.map((power, powerIndex) => ({
-      id: power.id || normalizeSkillId(power.name || `pouvoir_${powerIndex + 1}`),
-      name: textOrDefault(power.name, `Pouvoir ${powerIndex + 1}`),
-      type: HERO_POWER_TYPE_IDS.has(power.type) ? power.type : 'fire',
-      manaCost: clampNumber(power.manaCost, 0, 0, 999),
-      force: clampNumber(power.force, 1, 0, 999),
-      healHealth: clampNumber(power.healHealth, 0, 0, 999),
-      healMana: clampNumber(power.healMana, 0, 0, 999),
-      statusType: HERO_STATUS_EFFECT_TYPE_IDS.has(power.statusType) ? power.statusType : '',
-      statusAmount: clampNumber(power.statusAmount, 0, 0, 999),
-      statusDuration: clampNumber(power.statusDuration, 1, 1, 99),
-    })),
-    resistanceWater: clampNumber(sourceHero.resistanceWater, 0, 0, 100),
-    resistanceEarth: clampNumber(sourceHero.resistanceEarth, 0, 0, 100),
-    resistanceFire: clampNumber(sourceHero.resistanceFire, 0, 0, 100),
-    resistanceLightning: clampNumber(sourceHero.resistanceLightning, 0, 0, 100),
-    rules: normalizeHeroRules(sourceHero.rules || fallbackRules, diceSides),
-  };
+const heroNormalizerOptions = {
+  defaults: DEFAULT_HERO_ADVENTURE,
+  profile: 'editor',
 };
 
-const normalizeHeroAdventure = (project = {}) => {
-  const raw = project.heroAdventure && typeof project.heroAdventure === 'object'
-    ? project.heroAdventure
-    : {};
-  const rawHero = raw.hero && typeof raw.hero === 'object' ? raw.hero : {};
-  const rawDice = raw.dice && typeof raw.dice === 'object' ? raw.dice : {};
-  const maxHealth = clampNumber(rawHero.maxHealth, DEFAULT_HERO_ADVENTURE.hero.maxHealth, 1, 999);
-  const maxMana = clampNumber(rawHero.maxMana, DEFAULT_HERO_ADVENTURE.hero.maxMana, 0, 999);
-  const skills = Array.isArray(rawHero.skills) && rawHero.skills.length
-    ? rawHero.skills
-    : DEFAULT_SKILLS;
-  const powers = Array.isArray(rawHero.powers) && rawHero.powers.length
-    ? rawHero.powers
-    : DEFAULT_HERO_ADVENTURE.hero.powers;
-  const rawCombat = raw.combat && typeof raw.combat === 'object' ? raw.combat : {};
-  const normalizeCombatMediaType = (value) => (COMBAT_MEDIA_TYPES.has(value) ? value : 'image');
-  const normalizeHeroAttackType = (value) => (['physical', 'water', 'earth', 'fire', 'lightning'].includes(value) ? value : 'physical');
-  const normalizePowerType = (value) => (['water', 'earth', 'fire', 'lightning'].includes(value) ? value : 'fire');
-  const diceSides = clampNumber(rawDice.sides, DEFAULT_HERO_ADVENTURE.dice.sides, 2, 100);
-  const sourceHeroes = Array.isArray(raw.heroes) && raw.heroes.length ? raw.heroes : [rawHero];
-  const heroes = sourceHeroes.map((entry, index) => normalizeHeroSheet(entry, index, diceSides, raw.rules));
-  const fallbackHero = normalizeHeroSheet(rawHero, 0, diceSides, raw.rules);
-  const selectedHeroId = raw.selectedHeroId || fallbackHero.id || heroes[0]?.id || 'hero_1';
-  const selectedHero = heroes.find((entry) => entry.id === selectedHeroId) || heroes[0] || fallbackHero;
-  const selectedRules = normalizeHeroRules(selectedHero.rules || raw.rules, diceSides);
+const normalizeHeroRules = (rawRules = {}, diceSides = DEFAULT_HERO_ADVENTURE.dice.sides) => (
+  normalizeSharedHeroRules(rawRules, diceSides, heroNormalizerOptions)
+);
 
-  return {
-    enabled: raw.enabled ?? project.creationMode === 'hero_adventure',
-    dice: {
-      sides: diceSides,
-      label: rawDice.label || `d${diceSides}`,
-      skin: HERO_DICE_SKIN_IDS.has(rawDice.skin) ? rawDice.skin : DEFAULT_HERO_ADVENTURE.dice.skin,
-    },
-    hero: {
-      name: rawHero.name || DEFAULT_HERO_ADVENTURE.hero.name,
-      health: clampNumber(rawHero.health, maxHealth, 0, maxHealth),
-      maxHealth,
-      mana: clampNumber(rawHero.mana, maxMana, 0, maxMana),
-      maxMana,
-      initiative: clampNumber(rawHero.initiative, DEFAULT_HERO_ADVENTURE.hero.initiative, -999, 999),
-      armor: clampNumber(rawHero.armor, DEFAULT_HERO_ADVENTURE.hero.armor, 0, 999),
-      dodgeChance: clampNumber(rawHero.dodgeChance, DEFAULT_HERO_ADVENTURE.hero.dodgeChance, 0, 100),
-      backgroundImageData: rawHero.backgroundImageData || '',
-      characterImageData: rawHero.characterImageData || '',
-      setupBackgroundImageData: rawHero.setupBackgroundImageData || '',
-      setupMusicData: rawHero.setupMusicData || '',
-      setupMusicName: rawHero.setupMusicName || '',
-      defeatSceneId: rawHero.defeatSceneId || '',
-      equipmentSlotCount: clampNumber(rawHero.equipmentSlotCount, DEFAULT_HERO_ADVENTURE.hero.equipmentSlotCount, 1, 8),
-      equipmentSlotLabels: DEFAULT_EQUIPMENT_SLOT_LABELS.map((label, index) => {
-        const customLabel = Array.isArray(rawHero.equipmentSlotLabels) ? rawHero.equipmentSlotLabels[index] : '';
-        return String(customLabel || label).trim() || label;
-      }),
-      skills: skills.map((skill, index) => ({
-        id: skill.id || normalizeSkillId(skill.name || `compétence_${index + 1}`),
-        name: skill.name || `Compétence ${index + 1}`,
-        value: clampNumber(skill.value, 0, -20, 50),
-        baseValue: Number.isFinite(Number(skill.baseValue))
-          ? clampNumber(skill.baseValue, 0, -20, 50)
-          : clampNumber((Number(skill.value) || 0) - (Number(skill.rolledValue) || 0), 0, -20, 50),
-        rolledValue: skill.rolledValue ? clampNumber(skill.rolledValue, 0, 1, 6) : 0,
-        rollFormula: skill.rollFormula || '',
-        manaCost: clampNumber(skill.manaCost, 0, 0, 99),
-      })),
-      powers: powers.map((power, index) => ({
-        id: power.id || normalizeSkillId(power.name || `pouvoir_${index + 1}`),
-        name: power.name || `Pouvoir ${index + 1}`,
-        type: HERO_POWER_TYPE_IDS.has(power.type) ? power.type : 'fire',
-        manaCost: clampNumber(power.manaCost, 0, 0, 999),
-        force: clampNumber(power.force, 1, 0, 999),
-        healHealth: clampNumber(power.healHealth, 0, 0, 999),
-        healMana: clampNumber(power.healMana, 0, 0, 999),
-        statusType: HERO_STATUS_EFFECT_TYPE_IDS.has(power.statusType) ? power.statusType : '',
-        statusAmount: clampNumber(power.statusAmount, 0, 0, 999),
-        statusDuration: clampNumber(power.statusDuration, 1, 1, 99),
-      })),
-      resistanceWater: clampNumber(rawHero.resistanceWater, 0, 0, 100),
-      resistanceEarth: clampNumber(rawHero.resistanceEarth, 0, 0, 100),
-      resistanceFire: clampNumber(rawHero.resistanceFire, 0, 0, 100),
-      resistanceLightning: clampNumber(rawHero.resistanceLightning, 0, 0, 100),
-    },
-    rules: {
-      ...DEFAULT_HERO_ADVENTURE.rules,
-      ...(raw.rules && typeof raw.rules === 'object' ? raw.rules : {}),
-      criticalSuccess: clampNumber(raw.rules?.criticalSuccess, DEFAULT_HERO_ADVENTURE.rules.criticalSuccess, 1, clampNumber(rawDice.sides, DEFAULT_HERO_ADVENTURE.dice.sides, 2, 100)),
-      criticalFailure: clampNumber(raw.rules?.criticalFailure, DEFAULT_HERO_ADVENTURE.rules.criticalFailure, 1, clampNumber(rawDice.sides, DEFAULT_HERO_ADVENTURE.dice.sides, 2, 100)),
-      criticalChance: clampNumber(raw.rules?.criticalChance, DEFAULT_HERO_ADVENTURE.rules.criticalChance, 0, 100),
-      criticalMultiplier: clampNumber(raw.rules?.criticalMultiplier, DEFAULT_HERO_ADVENTURE.rules.criticalMultiplier, 1, 20),
-    },
-    selectedHeroId: selectedHero.id,
-    heroes,
-    hero: { ...selectedHero, rules: selectedRules },
-    rules: selectedRules,
-    combat: {
-      ...DEFAULT_COMBAT_SETTINGS,
-      ...rawCombat,
-      turnMode: rawCombat.turnMode !== false,
-      showDice: rawCombat.showDice !== false,
-      enemyAutoTurn: rawCombat.enemyAutoTurn !== false,
-      heroMediaType: normalizeCombatMediaType(rawCombat.heroMediaType),
-      enemyMediaType: normalizeCombatMediaType(rawCombat.enemyMediaType),
-      heroAnime2dSpec: rawCombat.heroAnime2dSpec && typeof rawCombat.heroAnime2dSpec === 'object' ? rawCombat.heroAnime2dSpec : null,
-      enemyAnime2dSpec: rawCombat.enemyAnime2dSpec && typeof rawCombat.enemyAnime2dSpec === 'object' ? rawCombat.enemyAnime2dSpec : null,
-      heroAttackType: normalizeHeroAttackType(rawCombat.heroAttackType),
-      enemyPowerType: normalizePowerType(rawCombat.enemyPowerType),
-      enemyInitiative: clampNumber(rawCombat.enemyInitiative, DEFAULT_COMBAT_SETTINGS.enemyInitiative, -999, 999),
-      enemyStrength: clampNumber(rawCombat.enemyStrength, DEFAULT_COMBAT_SETTINGS.enemyStrength, 0, 999),
-      enemyArmor: clampNumber(rawCombat.enemyArmor, DEFAULT_COMBAT_SETTINGS.enemyArmor, 0, 999),
-      enemyDodgeChance: clampNumber(rawCombat.enemyDodgeChance, DEFAULT_COMBAT_SETTINGS.enemyDodgeChance, 0, 100),
-      enemyMaxMana: clampNumber(rawCombat.enemyMaxMana, DEFAULT_COMBAT_SETTINGS.enemyMaxMana, 0, 999),
-      enemyPowerManaCost: clampNumber(rawCombat.enemyPowerManaCost, DEFAULT_COMBAT_SETTINGS.enemyPowerManaCost, 0, 999),
-      enemyPowerDamage: clampNumber(rawCombat.enemyPowerDamage, DEFAULT_COMBAT_SETTINGS.enemyPowerDamage, 0, 999),
-      enemyPowerUsageChance: clampNumber(rawCombat.enemyPowerUsageChance, DEFAULT_COMBAT_SETTINGS.enemyPowerUsageChance, 0, 100),
-      enemyAiMode: rawCombat.enemyAiMode === 'random' ? 'random' : DEFAULT_COMBAT_SETTINGS.enemyAiMode,
-      enemyCriticalChance: clampNumber(rawCombat.enemyCriticalChance, DEFAULT_COMBAT_SETTINGS.enemyCriticalChance, 0, 100),
-      enemyCriticalMultiplier: Math.max(1, Math.min(20, Number(rawCombat.enemyCriticalMultiplier) || DEFAULT_COMBAT_SETTINGS.enemyCriticalMultiplier)),
-      enemyResistanceWater: clampNumber(rawCombat.enemyResistanceWater, 0, 0, 100),
-      enemyResistanceEarth: clampNumber(rawCombat.enemyResistanceEarth, 0, 0, 100),
-      enemyResistanceFire: clampNumber(rawCombat.enemyResistanceFire, 0, 0, 100),
-      enemyResistanceLightning: clampNumber(rawCombat.enemyResistanceLightning, 0, 0, 100),
-    },
-  };
-};
+const normalizeHeroSheet = (rawHero = {}, index = 0, diceSides = DEFAULT_HERO_ADVENTURE.dice.sides, fallbackRules = {}) => (
+  normalizeSharedHeroSheet(rawHero, index, diceSides, fallbackRules, heroNormalizerOptions)
+);
+
+const normalizeHeroAdventure = (project = {}) => (
+  normalizeSharedHeroAdventure(project, heroNormalizerOptions)
+);
 
 const asList = (value) => (Array.isArray(value) ? value : []);
 
@@ -414,12 +183,22 @@ const formatSignedNumber = (value) => {
   return `${next >= 0 ? '+' : ''}${next}`;
 };
 
-const getRollSuccessProbability = (sides, modifier, difficulty) => {
+const getRollSuccessProbability = (sides, modifier, difficulty, rules = {}) => {
   const dieSides = Math.max(2, Math.round(numberValue(sides, 20)));
-  const neededRoll = Math.ceil(numberValue(difficulty, 10) - numberValue(modifier, 0));
-  if (neededRoll <= 1) return 1;
-  if (neededRoll > dieSides) return 0;
-  return (dieSides - neededRoll + 1) / dieSides;
+  const criticalSuccess = clampNumber(Number(rules?.criticalSuccess) || dieSides, dieSides, 1, dieSides);
+  const criticalFailure = clampNumber(Number(rules?.criticalFailure) || 1, 1, 1, dieSides);
+  let successCount = 0;
+  for (let raw = 1; raw <= dieSides; raw += 1) {
+    const outcome = resolveRollOutcome({
+      raw,
+      modifier,
+      difficulty,
+      criticalSuccess,
+      criticalFailure,
+    });
+    if (outcome.success) successCount += 1;
+  }
+  return successCount / dieSides;
 };
 
 const getProbabilityRating = (probability) => {
@@ -431,32 +210,13 @@ const getProbabilityRating = (probability) => {
   return { key: 'balanced', label: 'Équilibré' };
 };
 
-const getCombatRating = (winProbability, expectedDamage, heroHealth, hitProbability, minManaBlocked) => {
+const getCombatRating = (winProbability, expectedDamage, heroHealth, hitProbability, minManaBlocked, survivalProbability = 1) => {
   const healthRatio = heroHealth > 0 && Number.isFinite(expectedDamage) ? expectedDamage / heroHealth : 0;
-  if (minManaBlocked || hitProbability <= 0 || winProbability < 0.15) return { key: 'impossible', label: 'Quasi impossible' };
-  if (winProbability < 0.45 || healthRatio >= 0.75) return { key: 'punitive', label: 'Très punitif' };
-  if (winProbability < 0.7 || healthRatio >= 0.45) return { key: 'hard', label: 'Tendu' };
+  if (minManaBlocked || hitProbability <= 0 || winProbability < 0.15 || survivalProbability < 0.25) return { key: 'impossible', label: 'Quasi impossible' };
+  if (winProbability < 0.45 || survivalProbability < 0.55 || healthRatio >= 0.75) return { key: 'punitive', label: 'Très punitif' };
+  if (winProbability < 0.7 || survivalProbability < 0.8 || healthRatio >= 0.45) return { key: 'hard', label: 'Tendu' };
   if (winProbability > 0.93 && healthRatio <= 0.15) return { key: 'easy', label: 'Très facile' };
   return { key: 'balanced', label: 'Équilibré' };
-};
-
-const negativeBinomialWinProbability = (successProbability, successesRequired, maxFailures) => {
-  const p = Math.max(0, Math.min(1, successProbability));
-  const successes = Math.max(1, Math.round(successesRequired));
-  if (p <= 0) return 0;
-  if (p >= 1) return maxFailures >= 0 ? 1 : 0;
-  if (!Number.isFinite(maxFailures)) return 1;
-  const failures = Math.max(-1, Math.floor(maxFailures));
-  if (failures < 0) return 0;
-
-  const cappedFailures = Math.min(failures, 1200);
-  let term = p ** successes;
-  let sum = term;
-  for (let failureCount = 1; failureCount <= cappedFailures; failureCount += 1) {
-    term *= ((successes + failureCount - 1) / failureCount) * (1 - p);
-    sum += term;
-  }
-  return Math.max(0, Math.min(1, sum));
 };
 
 const getHeroItemLabel = (item, skills = []) => {
@@ -486,11 +246,23 @@ const getSourceLabel = ({ scene, sceneIndex, hotspot, hotspotIndex, node, nodeIn
   return `${sceneLabel} / ${hotspotLabel}`;
 };
 
-const buildHeroBalanceReport = (project = {}, heroAdventure = DEFAULT_HERO_ADVENTURE) => {
+export const buildHeroBalanceReport = (project = {}, heroAdventure = DEFAULT_HERO_ADVENTURE, options = {}) => {
   const hero = heroAdventure.hero || DEFAULT_HERO_ADVENTURE.hero;
   const skills = asList(hero.skills).length ? asList(hero.skills) : DEFAULT_SKILLS;
   const fallbackSkill = skills[0] || DEFAULT_SKILLS[0];
   const diceSides = Math.max(2, numberValue(heroAdventure.dice?.sides, 20));
+  const balanceProject = {
+    ...project,
+    heroAdventure: {
+      ...(project.heroAdventure || {}),
+      ...heroAdventure,
+      hero,
+      rules: hero.rules || heroAdventure.rules || DEFAULT_HERO_ADVENTURE.rules,
+      combat: heroAdventure.combat || DEFAULT_HERO_ADVENTURE.combat,
+    },
+  };
+  const combatIterations = clampNumber(options.combatIterations, 240, 1, 5000);
+  const combatMaxRounds = clampNumber(options.combatMaxRounds, 60, 1, 500);
   const items = asList(project.items);
   const checks = [];
   const combats = [];
@@ -499,10 +271,6 @@ const buildHeroBalanceReport = (project = {}, heroAdventure = DEFAULT_HERO_ADVEN
   let sequence = 0;
 
   const getSkill = (skillId) => skills.find((skill) => skill.id === skillId) || fallbackSkill;
-  const getForceSkill = () => skills.find((skill) => (
-    String(skill.id || '').toLowerCase() === 'force'
-    || String(skill.name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase() === 'force'
-  )) || fallbackSkill;
   const getItem = (itemId) => items.find((item) => item.id === itemId) || null;
   const pushReward = (itemId, sourceLabel, index, reason = 'Récompense') => {
     if (!itemId) return;
@@ -547,7 +315,7 @@ const buildHeroBalanceReport = (project = {}, heroAdventure = DEFAULT_HERO_ADVEN
     const difficulty = Math.max(1, numberValue(entry.skillCheckDifficulty, 12));
     const manaCost = Math.max(0, numberValue(entry.skillCheckManaCost, 0));
     const failureHealthLoss = Math.max(0, numberValue(entry.skillCheckFailureHealthLoss, 0));
-    const successProbability = getRollSuccessProbability(diceSides, skill?.value || 0, difficulty);
+    const successProbability = getRollSuccessProbability(diceSides, skill?.value || 0, difficulty, heroAdventure.rules);
     const expectedDamage = (1 - successProbability) * failureHealthLoss;
     const rating = getProbabilityRating(successProbability);
     const check = {
@@ -570,38 +338,51 @@ const buildHeroBalanceReport = (project = {}, heroAdventure = DEFAULT_HERO_ADVEN
   };
   const pushCombat = (entry, sourceLabel, index) => {
     const skill = getSkill(entry.combatSkillId);
-    const enemyName = entry.combatEnemyName || entry.name || 'Ennemi';
-    const enemyHealth = Math.max(1, numberValue(entry.combatEnemyMaxHealth, 8));
-    const difficulty = Math.max(1, numberValue(entry.combatAttackDifficulty, 10));
-    const forceSkill = getForceSkill();
-    const bestPowerDamage = Math.max(0, ...asList(hero.powers).map((power) => numberValue(power.force, 0)));
-    const heroDamage = Math.max(1, numberValue(forceSkill?.value, 1) + bestPowerDamage);
-    const enemyDamage = Math.max(0, numberValue(entry.combatEnemyStrength, numberValue(entry.combatEnemyDamage, 2)));
-    const manaCost = Math.max(0, numberValue(entry.combatManaCost, 0));
-    const hitProbability = getRollSuccessProbability(diceSides, skill?.value || 0, difficulty);
-    const hitsNeeded = Math.max(1, Math.ceil(enemyHealth / heroDamage));
-    const expectedAttempts = hitProbability > 0 ? hitsNeeded / hitProbability : Infinity;
-    const expectedDamage = hitProbability > 0 ? Math.max(0, expectedAttempts - 1) * enemyDamage : Infinity;
-    const expectedMana = hitProbability > 0 ? expectedAttempts * manaCost : Infinity;
-    const heroHealth = Math.max(0, numberValue(hero.health, hero.maxHealth || 1));
-    const heroMana = Math.max(0, numberValue(hero.mana, hero.maxMana || 0));
-    const maxFailuresByHealth = enemyDamage > 0 ? Math.floor((heroHealth - 1) / enemyDamage) : Infinity;
-    const maxAttemptsByMana = manaCost > 0 ? Math.floor(heroMana / manaCost) : Infinity;
-    const maxFailuresByMana = Number.isFinite(maxAttemptsByMana) ? maxAttemptsByMana - hitsNeeded : Infinity;
-    const maxFailures = Math.min(maxFailuresByHealth, maxFailuresByMana);
-    const minManaBlocked = manaCost > 0 && heroMana < manaCost * hitsNeeded;
-    const winProbability = negativeBinomialWinProbability(hitProbability, hitsNeeded, maxFailures);
-    const rating = getCombatRating(winProbability, expectedDamage, heroHealth, hitProbability, minManaBlocked);
+    const combatSettings = heroAdventure.combat || DEFAULT_HERO_ADVENTURE.combat;
+    const stats = getCombatSimulationStats(balanceProject, entry, combatSettings);
+    const estimate = estimateCombatBalance(balanceProject, entry, combatSettings, {
+      iterations: combatIterations,
+      maxRounds: combatMaxRounds,
+      seed: `${entry.id || sourceLabel}-${index}`,
+    });
+    const enemyName = stats.enemyName;
+    const enemyHealth = stats.enemyHealth;
+    const difficulty = stats.difficulty;
+    const manaCost = stats.combatManaCost;
+    const hitProbability = getRollSuccessProbability(stats.diceSides, stats.skillBonus, stats.difficulty, balanceProject.heroAdventure.rules);
+    const winProbability = Math.max(0, Math.min(1, numberValue(estimate.winChance, 0) / 100));
+    const survivalProbability = Math.max(0, Math.min(1, numberValue(estimate.survivalChance, 0) / 100));
+    const blockedProbability = Math.max(0, Math.min(1, numberValue(estimate.blockedCount, 0) / Math.max(1, estimate.iterations || combatIterations)));
+    const timeoutProbability = Math.max(0, Math.min(1, numberValue(estimate.timeoutCount, 0) / Math.max(1, estimate.iterations || combatIterations)));
+    const defeatProbability = Math.max(0, Math.min(1, numberValue(estimate.defeatCount, 0) / Math.max(1, estimate.iterations || combatIterations)));
+    const expectedAttempts = numberValue(estimate.averageRounds, 0);
+    const expectedDamage = numberValue(estimate.averageEnemyDamage, 0);
+    const expectedMana = numberValue(estimate.averageHeroManaSpent, 0);
+    const heroDamage = numberValue(estimate.averageHeroDamagePerRound, Math.max(0, stats.heroForce));
+    const enemyDamage = numberValue(estimate.averageEnemyDamagePerRound, Math.max(0, stats.enemyStats?.strength || 0));
+    const hitsNeeded = heroDamage > 0 ? Math.max(1, Math.ceil(enemyHealth / heroDamage)) : Infinity;
+    const minManaBlocked = blockedProbability >= 0.5 || (manaCost > 0 && stats.heroMana < manaCost);
+    const rating = getCombatRating(winProbability, expectedDamage, stats.heroHealth, hitProbability, minManaBlocked, survivalProbability);
+    const enemyResistance = stats.enemyStats?.resistances?.[stats.heroAttackType] || 0;
+    const mitigationDetails = [
+      stats.heroDieDamagePercent > 0 ? `dé +${stats.heroDieDamagePercent}% dégâts` : null,
+      stats.enemyStats?.armor > 0 ? `armure ${stats.enemyStats.armor}` : null,
+      enemyResistance > 0 ? `résistance ${stats.heroAttackType} ${enemyResistance}%` : null,
+      stats.enemyStats?.dodgeChance > 0 ? `esquive ${stats.enemyStats.dodgeChance}%` : null,
+      stats.heroCriticalChance > 0 ? `critique ${stats.heroCriticalChance}%` : null,
+      stats.enemyStats?.powerUsageChance > 0 && stats.enemyStats?.powerDamage > 0 ? `pouvoir ennemi ${stats.enemyStats.powerDamage} dégâts (${stats.enemyStats.powerUsageChance}%)` : null,
+      asList(stats.heroPowers).some((power) => power.statusType) ? 'statuts héros simulés' : null,
+    ].filter(Boolean);
     const combat = {
       id: `${entry.id || sourceLabel}-${index}-combat`,
       sourceLabel,
       index,
       enemyName,
       skillId: skill?.id || '',
-      skillName: skill?.name || 'Compétence',
-      skillBonus: numberValue(skill?.value, 0),
-      forceDamage: numberValue(forceSkill?.value, 0),
-      powerDamage: bestPowerDamage,
+      skillName: stats.skillName || skill?.name || 'Compétence',
+      skillBonus: stats.skillBonus,
+      forceDamage: stats.heroForce,
+      powerDamage: Math.max(0, ...asList(stats.heroPowers).map((power) => numberValue(power.force, 0))),
       difficulty,
       enemyHealth,
       heroDamage,
@@ -610,9 +391,17 @@ const buildHeroBalanceReport = (project = {}, heroAdventure = DEFAULT_HERO_ADVEN
       hitsNeeded,
       hitProbability,
       winProbability,
+      survivalProbability,
+      defeatProbability,
+      blockedProbability,
+      timeoutProbability,
       expectedAttempts,
       expectedDamage,
       expectedMana,
+      averageHeroHealthRemaining: numberValue(estimate.averageHeroHealthRemaining, 0),
+      averageHeroManaRemaining: numberValue(estimate.averageHeroManaRemaining, 0),
+      engineEstimate: estimate,
+      mitigationDetails,
       rating,
       rewardItemId: entry.combatRewardItemId || '',
     };
@@ -816,12 +605,15 @@ const buildHeroBalanceReport = (project = {}, heroAdventure = DEFAULT_HERO_ADVEN
 
   combats.forEach((combat) => {
     if (['impossible', 'punitive'].includes(combat.rating.key)) {
-      pushAlert('danger', 'Combat trop punitif', `${combat.enemyName}: ${formatPercent(combat.winProbability)} de victoire, ${formatDecimal(combat.expectedDamage)} PV attendus.`, combat.sourceLabel);
+      pushAlert('danger', 'Combat trop punitif', `${combat.enemyName}: ${formatPercent(combat.winProbability)} de victoire, ${formatPercent(combat.survivalProbability)} de survie, ${formatDecimal(combat.expectedDamage)} PV attendus.`, combat.sourceLabel);
     } else if (combat.rating.key === 'easy') {
       pushAlert('info', 'Combat très facile', `${combat.enemyName}: ${formatPercent(combat.winProbability)} de victoire et peu de pression PV.`, combat.sourceLabel);
     }
-    if (combat.manaCost > 0 && combat.manaCost * combat.hitsNeeded > numberValue(hero.maxMana, 0)) {
-      pushAlert('danger', 'Combat bloqué par mana', `${combat.enemyName} exige au minimum ${combat.manaCost * combat.hitsNeeded} mana pour ${numberValue(hero.maxMana, 0)} mana max.`, combat.sourceLabel);
+    if (combat.blockedProbability >= 0.25) {
+      pushAlert('danger', 'Combat bloqué par mana', `${combat.enemyName}: ${formatPercent(combat.blockedProbability)} des simulations se bloquent faute de mana.`, combat.sourceLabel);
+    }
+    if (combat.timeoutProbability >= 0.25) {
+      pushAlert('warning', 'Combat très long', `${combat.enemyName}: ${formatPercent(combat.timeoutProbability)} des simulations dépassent la limite de tours.`, combat.sourceLabel);
     }
   });
 
@@ -1962,13 +1754,15 @@ export default function HeroTab({ project, patchProject, onPreviewHeroCharacter,
                       <div className="hero-balance-metrics">
                         <span><strong>{formatPercent(combat.hitProbability)}</strong><small>toucher</small></span>
                         <span><strong>{formatPercent(combat.winProbability)}</strong><small>victoire</small></span>
+                        <span><strong>{formatPercent(combat.survivalProbability)}</strong><small>survie</small></span>
                         <span><strong>{formatDecimal(combat.expectedAttempts)}</strong><small>tours</small></span>
                         <span><strong>{formatDecimal(combat.expectedDamage)}</strong><small>PV perdus</small></span>
                         <span><strong>{formatDecimal(combat.expectedMana)}</strong><small>mana</small></span>
                       </div>
                       <p>
                         {combat.skillName} {formatSignedNumber(combat.skillBonus)} contre {combat.difficulty};
-                        {' '}{combat.hitsNeeded} touche(s) de {combat.heroDamage} dégâts max pour {combat.enemyHealth} PV ennemis.
+                        {' '}simulation moteur sur {combat.engineEstimate?.iterations || 0} combat(s), {formatDecimal(combat.heroDamage)} dégâts héros/tour pour {combat.enemyHealth} PV ennemis.
+                        {combat.mitigationDetails?.length ? ` ${combat.mitigationDetails.join(' - ')}.` : ''}
                       </p>
                     </article>
                   )) : (
