@@ -4,7 +4,7 @@ import {
   Crosshair,
   Download,
   HeartPulse,
-  Map,
+  Map as MapIcon,
   MousePointer2,
   Pause,
   Play,
@@ -1092,7 +1092,7 @@ function ArcadeMode() {
           <span><Shield size={16} /> {playMode ? `${playerHealth}/${snapshot.player.maxHp} PV` : `${config.player.health}/${config.player.maxHealth} PV`}</span>
           <span><Crosshair size={16} /> {playMode ? snapshot.enemies.length : config.enemies.length}</span>
           <span><Zap size={16} /> {playMode ? `${playerMana}/${snapshot.player.maxMana} Mana` : `${config.player.mana}/${config.player.maxMana} Mana`}</span>
-          <span><Map size={16} /> {config.world.width} x {config.world.height}</span>
+          <span><MapIcon size={16} /> {config.world.width} x {config.world.height}</span>
         </div>
         <div className="arcade-actions">
           <button
