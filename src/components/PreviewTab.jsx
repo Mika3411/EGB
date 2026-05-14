@@ -102,6 +102,7 @@ export default function PreviewTab(props) {
     heroState = null,
     heroSetupComplete = true,
     activeHeroCombat = null,
+    heroCombatStates = {},
     attackActiveHeroCombat,
     rollActiveEnemyCombat,
     attemptSurvivalHeroCombat,
@@ -743,11 +744,13 @@ export default function PreviewTab(props) {
   const renderHeroCombatOverlay = () => (
     <PreviewCombatOverlay
       activeHeroCombat={activeHeroCombat}
+      heroCombatStates={heroCombatStates}
       isHeroAdventure={isHeroAdventure}
       heroAdventure={heroAdventure}
       heroState={heroState}
       playSceneBackgroundUrl={playSceneBackgroundUrl}
       lastDiceRoll={lastDiceRoll}
+      inventory={inventory}
       selectedHeroCombatPowerId={selectedHeroCombatPowerId}
       setSelectedHeroCombatPowerId={setSelectedHeroCombatPowerId}
       heroCombatEffectLocked={heroCombatEffectLocked}
@@ -765,6 +768,7 @@ export default function PreviewTab(props) {
       attackActiveHeroCombat={attackActiveHeroCombat}
       attemptEscapeHeroCombat={attemptEscapeHeroCombat}
       closeHeroCombat={closeHeroCombat}
+      openInventoryItem={openInventoryItem}
       project={project}
       Anime2DPreviewComponent={Anime2DPreview}
       getCombatEntryValue={getCombatEntryValue}

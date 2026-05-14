@@ -73,7 +73,7 @@ const applyBookHeroTemplate = (project, name) => {
     combat: {
       turnMode: true,
       showDice: true,
-      enemyAutoTurn: true,
+      enemyAutoTurn: false,
       enemyName: 'Gardien de brume',
       heroAttackType: 'physical',
       heroDieDamagePercent: 30,

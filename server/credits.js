@@ -119,9 +119,19 @@ export const getCreditUserId = (req, body = {}) => {
 export const sanitizeCreditUserId = (value = '') =>
   String(value).trim().replace(/[^a-zA-Z0-9._:@-]/g, '-') || 'anonymous';
 
+export const isLocalCreditAuthAllowed = (env = process.env) =>
+  /^(1|true|yes)$/i.test(String(env.ALLOW_LOCAL_CREDIT_AUTH || ''));
+
 export const resolveCreditUserId = async (req, body = {}) => {
   const requestedUserId = getCreditUserId(req, body);
-  if (!getSupabaseAdminClient()) return requestedUserId;
+  if (!getSupabaseAdminClient()) {
+    if (isLocalCreditAuthAllowed(process.env)) return requestedUserId;
+
+    const error = new Error('Authentification Supabase requise pour les credits.');
+    error.status = 503;
+    error.code = 'SUPABASE_AUTH_REQUIRED';
+    throw error;
+  }
 
   const authUser = await verifySupabaseUserRequest(req);
   const userId = sanitizeCreditUserId(authUser.id || authUser.email || requestedUserId);

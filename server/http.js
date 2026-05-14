@@ -12,16 +12,40 @@ export const sendJson = (res, status, payload) => {
   res.end(JSON.stringify(payload));
 };
 
-export const readJsonBody = (req) => new Promise((resolveBody, rejectBody) => {
+export const defaultJsonBodyLimitBytes = 20 * 1024 * 1024;
+
+const makeHttpBodyError = (message, status, code) => {
+  const error = new Error(message);
+  error.status = status;
+  error.code = code;
+  return error;
+};
+
+export const readJsonBody = (req, options = {}) => new Promise((resolveBody, rejectBody) => {
+  const maxBytes = Number.isFinite(Number(options.maxBytes))
+    ? Math.max(0, Number(options.maxBytes))
+    : defaultJsonBodyLimitBytes;
   let raw = '';
+  let settled = false;
+
+  const rejectOnce = (error) => {
+    if (settled) return;
+    settled = true;
+    rejectBody(error);
+  };
+
   req.on('data', (chunk) => {
+    if (settled) return;
     raw += chunk;
-    if (raw.length > 20 * 1024 * 1024) {
-      req.destroy();
-      rejectBody(new Error('Payload trop volumineux.'));
+    if (Buffer.byteLength(raw) > maxBytes) {
+      raw = '';
+      req.resume?.();
+      rejectOnce(makeHttpBodyError('Payload trop volumineux.', 413, 'PAYLOAD_TOO_LARGE'));
     }
   });
   req.on('end', () => {
+    if (settled) return;
+    settled = true;
     try {
       const contentType = String(req.headers['content-type'] || '').toLowerCase();
       if (!raw) {
@@ -34,10 +58,10 @@ export const readJsonBody = (req) => new Promise((resolveBody, rejectBody) => {
       }
       resolveBody(JSON.parse(raw));
     } catch {
-      rejectBody(new Error('Payload invalide.'));
+      rejectBody(makeHttpBodyError('Payload invalide.', 400, 'PAYLOAD_INVALID'));
     }
   });
-  req.on('error', rejectBody);
+  req.on('error', rejectOnce);
 });
 
 export const imageDataToBlob = (imageData = '') => {

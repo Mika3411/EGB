@@ -408,10 +408,9 @@ export const getCombatEnemyStats = (entry = {}, combatSettings = DEFAULT_COMBAT_
   );
   const heroAttackType = readValue('combatHeroAttackType', 'heroAttackType', 'physical');
   const powerType = readValue('combatEnemyPowerType', 'enemyPowerType', 'fire');
-  const enemyAutoTurnValue = readValue('combatEnemyAutoTurn', 'enemyAutoTurn', true);
 
   return {
-    enemyAutoTurn: enemyAutoTurnValue !== false,
+    enemyAutoTurn: false,
     heroAttackType: normalizeHeroAttackType(heroAttackType),
     initiative: readNumber('combatEnemyInitiative', 'enemyInitiative', DEFAULT_COMBAT_SETTINGS.enemyInitiative, -999, 999),
     strength: readNumber('combatEnemyStrength', 'enemyStrength', numberValue(entry.combatEnemyDamage, DEFAULT_COMBAT_SETTINGS.enemyStrength), 0, 999),
@@ -549,7 +548,8 @@ export const resolveHeroCombatAttack = ({
   const shieldResult = roll.success && !dodge.dodged
     ? applyShield(armorResult.damage, enemyStatusEffects)
     : { damage: armorResult.damage, blocked: 0, effects: Array.isArray(enemyStatusEffects) ? enemyStatusEffects : [] };
-  const damage = shieldResult.damage;
+  const criticalPierced = Boolean(critical.critical && roll.success && !dodge.dodged && rawDamage > 0 && shieldResult.damage <= 0);
+  const damage = criticalPierced ? 1 : shieldResult.damage;
   const nextEnemyHealth = Math.max(0, numberValue(enemyHealth, stats.enemyHealth) - damage);
   const powerStatusEffect = createStatusEffectFromPower(power || {});
   const statusTarget = getStatusEffectTarget(powerStatusEffect || {});
@@ -581,6 +581,7 @@ export const resolveHeroCombatAttack = ({
     armor: armorResult.armor,
     armorBlocked: armorResult.blocked,
     shieldBlocked: shieldResult.blocked,
+    criticalPierced,
     enemyStatusEffects: shieldResult.effects,
     appliedStatusEffect,
     dodgeChance: dodge.chance,
@@ -666,7 +667,8 @@ export const resolveEnemyCombatAttack = ({
   const shieldResult = dodge.dodged
     ? { damage: armorResult.damage, blocked: 0, effects: Array.isArray(heroStatusEffects) ? heroStatusEffects : [] }
     : applyShield(armorResult.damage, heroStatusEffects);
-  const damage = shieldResult.damage;
+  const criticalPierced = Boolean(critical.critical && !dodge.dodged && rawDamage > 0 && shieldResult.damage <= 0);
+  const damage = criticalPierced ? 1 : shieldResult.damage;
   const nextHeroHealth = Math.max(0, numberValue(heroHealth, safeStats.heroHealth) - damage);
 
   return {
@@ -694,6 +696,7 @@ export const resolveEnemyCombatAttack = ({
     armor: armorResult.armor,
     armorBlocked: armorResult.blocked,
     shieldBlocked: shieldResult.blocked,
+    criticalPierced,
     heroStatusEffects: shieldResult.effects,
     dodgeChance: dodge.chance,
     dodged: dodge.dodged,

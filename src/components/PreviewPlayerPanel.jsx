@@ -40,6 +40,7 @@ export default function PreviewPlayerPanel({
       heroState={preview.heroState}
       heroSetupComplete={preview.heroSetupComplete}
       activeHeroCombat={preview.activeHeroCombat}
+      heroCombatStates={preview.heroCombatStates}
       attackActiveHeroCombat={preview.attackActiveHeroCombat}
       rollActiveEnemyCombat={preview.rollActiveEnemyCombat}
       attemptSurvivalHeroCombat={preview.attemptSurvivalHeroCombat}

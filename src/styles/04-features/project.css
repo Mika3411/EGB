@@ -451,6 +451,23 @@
 
 .hero-roster-card em{justify-self:start;margin-top:4px;color:#fecaca;font-style:normal;font-size:12px;font-weight:850}
 
+.hero-preview-dashboard{display:grid;gap:12px;min-width:0}
+.hero-preview-panel-head .subpanel-head{margin:0}
+.hero-editor-character-preview{min-width:0}
+.hero-editor-character-preview .hero-equipment-slot{pointer-events:none}
+.hero-character-page--editor{grid-template-columns:minmax(260px,.95fr) minmax(360px,1.15fr);grid-template-areas:"doll combat" "description combat" "skills inventory" "equipped inventory";align-items:start}
+.hero-character-page--editor .hero-paper-doll{grid-area:doll}
+.hero-character-page--editor .hero-character-description{grid-area:description}
+.hero-character-page--editor .hero-character-skills{grid-area:skills}
+.hero-character-page--editor .hero-character-combat{grid-area:combat}
+.hero-character-page--editor .hero-character-section:not(.hero-inventory-dropzone){grid-area:equipped}
+.hero-character-page--editor .hero-inventory-dropzone{grid-area:inventory}
+.hero-character-page--editor .hero-inventory-dropzone.is-empty .inventory-grid{grid-template-columns:1fr;height:auto;place-items:start}
+.hero-character-page--editor .hero-inventory-dropzone.is-empty .inventory-grid p{max-width:none;margin:0;text-align:left}
+.hero-character-description{margin:0;padding:10px 12px;border:1px solid rgba(147,197,253,.18);border-radius:10px;background:rgba(15,23,42,.64);color:#dbeafe;line-height:1.5}
+.hero-preview-empty{margin:0;color:#cbd5e1;font-size:13px;line-height:1.45}
+@media (max-width: 760px){.hero-character-page--editor{grid-template-columns:1fr;grid-template-areas:"doll" "description" "skills" "combat" "equipped" "inventory"}}
+
 .hero-gauge-grid{margin-top:12px}
 
 .hero-description-field{display:grid;gap:6px;margin-top:12px}
@@ -762,6 +779,7 @@
 .combat-enemy-stat-strip span{display:grid;gap:2px;min-width:0;padding:10px;border:1px solid rgba(147,197,253,.17);border-radius:10px;background:#02061770;color:#bfdbfe;font-size:11px;font-weight:850;text-transform:uppercase}
 
 .combat-enemy-stat-strip strong{color:#f8fafc;font-size:18px}
+.combat-enemy-stat-strip strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 .combat-enemy-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:end}
 
@@ -792,6 +810,16 @@
 .combat-mode-switch button{min-width:0;padding:9px 10px;border:1px solid rgba(147,197,253,.16);border-radius:8px;background:#02061780;color:#bfdbfe;box-shadow:none;font-size:12px;font-weight:900}
 
 .combat-mode-switch button.active{border-color:rgba(251,191,36,.48);background:rgba(251,191,36,.18);color:#fff7ed}
+
+.combat-entry-media-section{grid-column:1 / -1}
+
+.combat-entry-settings-grid,.combat-entry-media-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:end}
+
+.combat-entry-media-grid{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+
+.combat-media-slot.is-inherited{border-color:rgba(96,165,250,.22)}
+
+.combat-media-inherited-badge{position:absolute;right:8px;bottom:8px;padding:4px 7px;border:1px solid rgba(147,197,253,.26);border-radius:999px;background:rgba(2,6,23,.74);color:#bfdbfe;font-size:10px;font-style:normal;font-weight:900;text-transform:uppercase}
 
 .combat-media-head{display:grid;grid-template-columns:minmax(0,1fr) minmax(132px,auto);gap:8px;align-items:end}
 
@@ -832,31 +860,6 @@
 
 .combat-json-error{margin:-4px 0 12px;padding:9px 11px;border:1px solid rgba(248,113,113,.32);border-radius:10px;background:rgba(127,29,29,.26);color:#fecaca;font-size:12px;font-weight:850}
 
-.combat-simulation-card{display:grid;gap:10px;margin:0 0 12px;padding:12px;border:1px solid rgba(147,197,253,.2);border-radius:12px;background:#08111fc9}
-
-.combat-simulation-card.victory{border-color:rgba(74,222,128,.34);background:rgba(6,78,59,.28)}
-
-.combat-simulation-card.defeat,.combat-simulation-card.blocked{border-color:rgba(248,113,113,.34);background:rgba(127,29,29,.24)}
-
-.combat-simulation-card.timeout{border-color:rgba(251,191,36,.34);background:rgba(120,53,15,.2)}
-
-.combat-simulation-card header{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:start}
-
-.combat-simulation-card header strong{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#f8fafc}
-
-.combat-simulation-card header small{display:block;margin-top:2px;color:#94a3b8;font-size:11px;font-weight:800}
-
-.combat-simulation-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
-
-.combat-simulation-metrics span{display:grid;gap:2px;min-width:0;padding:8px;border:1px solid rgba(148,163,184,.14);border-radius:9px;background:rgba(2,6,23,.52)}
-
-.combat-simulation-metrics strong,.combat-simulation-metrics small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-
-.combat-simulation-metrics strong{color:#e0f2fe}
-
-.combat-simulation-metrics small{color:#94a3b8;font-size:10px;font-weight:900;text-transform:uppercase}
-
-.combat-simulation-log{display:grid;gap:5px;max-height:220px;margin:0;padding:0 0 0 20px;overflow:auto;color:#dbeafe;font-size:12px;line-height:1.45}
 .combat-balance-panel{max-width:980px;display:grid;gap:12px}
 .combat-balance-panel .subpanel-head{align-items:center}
 .combat-balance-badge{justify-self:end;min-width:0;padding:7px 10px;border:1px solid rgba(251,191,36,.28);border-radius:999px;background:rgba(251,191,36,.12);color:#fde68a;font-size:12px;font-weight:950;text-transform:uppercase;white-space:nowrap}
@@ -873,7 +876,7 @@
 .combat-balance-meter i{position:absolute;inset:0 auto 0 0;width:0;border-radius:inherit;background:linear-gradient(90deg,#f87171,#fbbf24 48%,#22c55e)}
 .combat-balance-note{margin:0;padding:10px;border:1px solid rgba(148,163,184,.14);border-radius:10px;background:#08111fb8;color:#cbd5e1;font-size:12px;font-weight:800;line-height:1.45}
 
-@media (max-width: 760px){.hero-skill-editor,.hero-power-editor,.hero-resistance-grid,.hero-equipment-slot-editor-grid,.hero-guide-grid,.hero-balance-summary,.hero-balance-grid,.hero-balance-skill-grid,.hero-balance-reward-grid,.combat-config-grid,.combat-enemy-grid,.combat-narration-grid,.combat-resistance-grid,.combat-enemy-stat-strip,.combat-mode-switch,.combat-effect-media-grid,.combat-simulation-metrics,.combat-balance-summary,.combat-balance-outcomes,.combat-hero-skill-row{grid-template-columns:1fr}.hero-equipment-slot-editor-head{display:grid}.hero-skill-delete{width:100%}.hero-check-preview{grid-template-columns:1fr}.hero-dice-skin-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hero-balance-panel--wide{grid-column:auto}.hero-balance-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.combat-arena-preview{grid-template-columns:1fr;min-height:auto;padding:18px}.combat-dice-preview{order:2}.combat-media-head{grid-template-columns:1fr}.combat-editor-tabs{display:grid;grid-template-columns:1fr}.combat-resistance-row,.hero-resistance-row{grid-template-columns:minmax(0,1fr) 84px auto}.combat-balance-badge{justify-self:start}}
+@media (max-width: 760px){.hero-skill-editor,.hero-power-editor,.hero-resistance-grid,.hero-equipment-slot-editor-grid,.hero-guide-grid,.hero-balance-summary,.hero-balance-grid,.hero-balance-skill-grid,.hero-balance-reward-grid,.combat-config-grid,.combat-enemy-grid,.combat-narration-grid,.combat-resistance-grid,.combat-enemy-stat-strip,.combat-mode-switch,.combat-entry-settings-grid,.combat-entry-media-grid,.combat-effect-media-grid,.combat-balance-summary,.combat-balance-outcomes,.combat-hero-skill-row{grid-template-columns:1fr}.hero-equipment-slot-editor-head{display:grid}.hero-skill-delete{width:100%}.hero-check-preview{grid-template-columns:1fr}.hero-dice-skin-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hero-balance-panel--wide{grid-column:auto}.hero-balance-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.combat-arena-preview{grid-template-columns:1fr;min-height:auto;padding:18px}.combat-dice-preview{order:2}.combat-media-head{grid-template-columns:1fr}.combat-editor-tabs{display:grid;grid-template-columns:1fr}.combat-resistance-row,.hero-resistance-row{grid-template-columns:minmax(0,1fr) 84px auto}.combat-balance-badge{justify-self:start}}
 
 .dialogue-box{line-height:1.7;background:#0c1527eb;border-radius:var(--radius-xl);padding:14px;border:1px solid var(--line)}
 

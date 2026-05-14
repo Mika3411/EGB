@@ -143,6 +143,12 @@ function buildEnemyCombatAction(stats, currentEnemyMana, enemyName, options = {}
   });
   enemyRoll.modifier = enemyAttack.forceDamage + enemyAttack.dieDamageBonus;
   enemyRoll.total = enemyAttack.baseDamage;
+  enemyRoll.damage = enemyAttack.damage;
+  enemyRoll.damageTarget = 'hero';
+  enemyRoll.damageBlocked = enemyAttack.armorBlocked + enemyAttack.shieldBlocked;
+  enemyRoll.dodged = enemyAttack.dodged;
+  enemyRoll.critical = enemyAttack.critical;
+  enemyRoll.criticalPierced = enemyAttack.criticalPierced;
   const enemyActionText = enemyAttack.usesPower
     ? enemyName + ' utilise ' + enemyStats.powerName + ' (' + getCombatPowerTypeLabel(enemyStats.powerType) + ').'
     : enemyName + ' riposte.';
@@ -151,12 +157,13 @@ function buildEnemyCombatAction(stats, currentEnemyMana, enemyName, options = {}
   const heroDodgeText = enemyAttack.dodged ? ' Le héros esquive.' : '';
   const heroArmorText = enemyAttack.armorBlocked ? ' Armure héros -' + enemyAttack.armorBlocked + '.' : '';
   const heroShieldText = enemyAttack.shieldBlocked ? ' Bouclier -' + enemyAttack.shieldBlocked + '.' : '';
+  const criticalPierceText = enemyAttack.criticalPierced ? ' Percée critique: 1 PV traverse la défense.' : '';
   const manaText = enemyAttack.usesPower ? ' Mana ' + enemyAttack.enemyMana + '/' + enemyStats.maxMana + '.' : '';
   const damageText = enemyAttack.damage > 0
     ? ' Le héros perd ' + enemyAttack.damage + ' PV.'
     : ' Le héros ne perd pas de PV.';
   const damageFormulaText = ' Dégâts: force ' + enemyAttack.forceDamage + ' + dé ' + enemyAttack.dieDamageBonus + ' (' + enemyAttack.dieDamagePercent + '%) = ' + enemyAttack.baseDamage + '.';
-  const attackText = 'Jet ennemi: ' + enemyRoll.raw + '. ' + enemyActionText + damageFormulaText + damageText + criticalText + heroResistanceText + heroDodgeText + heroArmorText + heroShieldText + manaText;
+  const attackText = 'Jet ennemi: ' + enemyRoll.raw + '. ' + enemyActionText + damageFormulaText + damageText + criticalText + heroResistanceText + heroDodgeText + heroArmorText + heroShieldText + criticalPierceText + manaText;
   const visualEffects = [
     enemyAttack.usesPower && enemyStats.powerManaCost > 0 ? makeCombatVisualEffect('enemy', 'mana', '-' + enemyStats.powerManaCost + ' Mana') : null,
     enemyAttack.critical ? makeCombatVisualEffect('hero', 'critical', 'CRITIQUE x' + enemyAttack.criticalMultiplier) : null,
@@ -417,6 +424,11 @@ function resolveHeroCombatTurn(entry = {}, options = {}) {
     heroDieDamagePercent: heroAttack.heroDieDamagePercent,
     heroCritical: heroAttack.critical,
     rawHeroDamage: heroAttack.rawDamage,
+    damage: heroAttack.damage,
+    damageTarget: 'enemy',
+    damageBlocked: heroAttack.armorBlocked + heroAttack.shieldBlocked,
+    dodged: heroAttack.dodged,
+    criticalPierced: heroAttack.criticalPierced,
   };
   let nextHeroStatusEffects = heroTick.effects;
   let nextEnemyStatusEffects = heroAttack.enemyStatusEffects || currentEnemyStatusEffects;
@@ -445,6 +457,7 @@ function resolveHeroCombatTurn(entry = {}, options = {}) {
   const shieldText = hit && heroAttack.shieldBlocked
     ? ' Bouclier -' + heroAttack.shieldBlocked + '.'
     : '';
+  const criticalPierceText = heroAttack.criticalPierced ? ' Percée critique: 1 PV traverse la défense.' : '';
   const recoveryText = heroAttack.recovery.healthRecovered || heroAttack.recovery.manaRecovered
     ? ' Soin: +' + heroAttack.recovery.healthRecovered + ' PV, +' + heroAttack.recovery.manaRecovered + ' mana.'
     : '';
@@ -454,14 +467,14 @@ function resolveHeroCombatTurn(entry = {}, options = {}) {
   const rollDetail = roll.modifier ? 'dé ' + roll.raw + ' + ' + roll.modifier : 'dé ' + roll.raw;
   const rollText = (roll.skillName || 'Action') + (hit ? ' réussie' : ' échouée') + ': ' + roll.total + ' contre ' + stats.difficulty + ' (' + rollDetail + ').';
   const attackText = hit
-    ? heroPowerText + enemyName + ' perd ' + heroAttack.damage + ' PV.' + heroDamageFormulaText + heroCriticalText + resistanceText + dodgeText + armorText + shieldText + recoveryText + statusText
+    ? heroPowerText + enemyName + ' perd ' + heroAttack.damage + ' PV.' + heroDamageFormulaText + heroCriticalText + resistanceText + dodgeText + armorText + shieldText + criticalPierceText + recoveryText + statusText
     : heroPowerText + 'Aucun dégât.' + recoveryText + statusText;
   const heroVisualEffects = [
     heroAttack.manaSpent > 0 ? makeCombatVisualEffect('hero', 'mana', '-' + heroAttack.manaSpent + ' Mana') : null,
-    heroAttack.critical ? makeCombatVisualEffect('enemy', 'critical', 'CRITIQUE x' + heroAttack.criticalMultiplier) : null,
     hit && heroAttack.damage > 0
       ? makeCombatOutcomeEffect('enemy', heroAttack.victory ? 'death' : 'hit', heroAttack.victory ? 'KO' : '-' + heroAttack.damage + ' PV')
       : null,
+    heroAttack.critical ? makeCombatVisualEffect('enemy', 'critical', 'CRITIQUE x' + heroAttack.criticalMultiplier) : null,
   ].filter(Boolean);
 
   if (heroAttack.victory) {
@@ -607,6 +620,11 @@ function runHeroCombatAction(entry = {}, options = {}) {
       return true;
     }
     if (options.closeConversation) closeConversation();
+    const startMessage = enemyStarts
+      ? runtime.enemyName + ' a l’initiative (' + initiative.enemyInitiative + ' contre ' + initiative.heroInitiative + '). Lance le dé ennemi.'
+      : enemyStats.enemyAutoTurn === false
+        ? 'Combat contre ' + runtime.enemyName + '. À toi de jouer, puis lance le dé ennemi.'
+        : 'Combat contre ' + runtime.enemyName + '. À toi de jouer.';
     state.activeHeroCombat = {
       id: runtime.combatId,
       entry: { ...entry },
@@ -616,15 +634,16 @@ function runHeroCombatAction(entry = {}, options = {}) {
       enemyMaxHealth: runtime.enemyMaxHealth,
       enemyMana: runtime.currentEnemyMana,
       enemyMaxMana: runtime.enemyMaxMana,
+      heroInitiative: initiative.heroInitiative,
+      enemyInitiative: initiative.enemyInitiative,
+      heroStatusEffects: runtime.currentHeroStatusEffects,
+      enemyStatusEffects: runtime.currentEnemyStatusEffects,
       round: 1,
       phase: enemyStarts ? 'enemy' : 'hero',
       initiativePending: enemyStarts,
       status: 'active',
-      message: enemyStarts
-? runtime.enemyName + ' a l’initiative (' + initiative.enemyInitiative + ' contre ' + initiative.heroInitiative + '). Lance le dé ennemi.'
-: enemyStats.enemyAutoTurn === false
-  ? 'Combat contre ' + runtime.enemyName + '. À toi de jouer, puis lance le dé ennemi.'
-  : 'Combat contre ' + runtime.enemyName + '. À toi de jouer.',
+      message: startMessage,
+      history: buildHeroCombatHistory({}, startMessage),
       lastRoll: null,
       lastEnemyRoll: null,
       visualEffects: [],
@@ -636,6 +655,16 @@ function runHeroCombatAction(entry = {}, options = {}) {
 
   const result = resolveHeroCombatTurn(entry, options);
   return Boolean(result.ok);
+}
+
+function buildHeroCombatHistory(current = {}, nextMessage = '') {
+  const cleanMessage = String(nextMessage || '').replace(/\s+/g, ' ').trim();
+  const existingHistory = Array.isArray(current.history) ? current.history : current.message ? [current.message] : [];
+  const history = existingHistory
+    .map((entry) => String(entry || '').replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+  if (cleanMessage && history[history.length - 1] !== cleanMessage) history.push(cleanMessage);
+  return history.slice(-8);
 }
 
 function attackActiveHeroCombat(heroPowerId = '', options = {}) {
@@ -663,6 +692,7 @@ function attackActiveHeroCombat(heroPowerId = '', options = {}) {
       status: result.victory ? 'victory' : result.defeat ? 'defeat' : 'ended',
       phase: 'ended',
       message: result.message,
+      history: buildHeroCombatHistory(current, result.message),
       enemyHealth: result.enemyHealth,
       enemyMaxHealth: result.enemyMaxHealth,
       enemyMana: result.enemyMana,
@@ -678,6 +708,7 @@ function attackActiveHeroCombat(heroPowerId = '', options = {}) {
       round: result.pendingEnemyTurn || result.survivalPending ? current.round : (Number(current.round) || 1) + 1,
       survivalPending: Boolean(result.survivalPending),
       message: result.message,
+      history: buildHeroCombatHistory(current, result.message),
       enemyHealth: result.enemyHealth,
       enemyMaxHealth: result.enemyMaxHealth,
       enemyMana: result.enemyMana,
@@ -715,6 +746,7 @@ function rollActiveEnemyCombat(options = {}) {
     survivalPending: Boolean(result.survivalPending),
     initiativePending: false,
     message: result.message,
+    history: buildHeroCombatHistory(current, result.message),
     enemyHealth: result.enemyHealth,
     enemyMaxHealth: result.enemyMaxHealth,
     enemyMana: result.enemyMana,
@@ -801,6 +833,7 @@ function attemptSurvivalHeroCombat() {
       survivalPending: false,
       survivalUsed: true,
       message,
+      history: buildHeroCombatHistory(current, message),
       lastRoll: roll,
     };
     render();
@@ -815,6 +848,7 @@ function attemptSurvivalHeroCombat() {
     survivalPending: false,
     survivalUsed: true,
     message,
+    history: buildHeroCombatHistory(current, message),
     lastRoll: roll,
   };
   render();
@@ -857,6 +891,7 @@ function attemptEscapeHeroCombat() {
     phase: 'enemy',
     pendingEnemyTurn: true,
     message,
+    history: buildHeroCombatHistory(current, message),
     lastRoll: roll,
     lastEnemyRoll: null,
   };
@@ -1325,6 +1360,14 @@ function bindEvents() {
       state.selectedHeroCombatPowerId = button.dataset.heroCombatPower || '';
       render();
     });
+  });
+  root.querySelectorAll('[data-hero-combat-item]').forEach((button) => {
+    button.addEventListener('click', () => {
+      openInventoryItem(button.dataset.heroCombatItem || '');
+    });
+  });
+  root.querySelectorAll('[data-hero-combat-flee]').forEach((button) => {
+    button.addEventListener('click', closeHeroCombat);
   });
   root.querySelectorAll('[data-hero-unequip-id]').forEach((button) => {
     button.addEventListener('click', () => {

@@ -214,6 +214,86 @@
   width: 100%;
 }
 
+.arcade-character-summary {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 8px;
+  border: 1px solid rgba(185, 118, 58, .22);
+  border-radius: 8px;
+  background: rgba(10, 7, 6, .6);
+}
+
+.arcade-character-token {
+  width: 38px;
+  height: 38px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 62% 30%, rgba(255, 255, 255, .68) 0 9%, transparent 10%),
+    linear-gradient(135deg, var(--arcade-character-accent, #67e8f9), var(--arcade-character-body, #d7b56d));
+  box-shadow: 0 0 18px color-mix(in srgb, var(--arcade-character-accent, #67e8f9) 36%, transparent);
+  overflow: hidden;
+}
+
+.arcade-character-token::after {
+  content: "";
+  width: 24px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(8, 4, 3, .42);
+  transform: translateY(10px) rotate(-8deg);
+}
+
+.arcade-character-token img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.arcade-character-token:has(img)::after {
+  display: none;
+}
+
+.arcade-character-summary strong,
+.arcade-character-summary small {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.arcade-character-summary strong {
+  color: #fff7ed;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.arcade-character-summary small {
+  margin-top: 3px;
+  color: #bda98a;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.arcade-panel-section label.arcade-file-button {
+  display: inline-flex;
+  width: 100%;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: #f5e8d0;
+  font-size: 12px;
+  line-height: 1.1;
+}
+
 .arcade-canvas {
   display: block;
   width: 100%;

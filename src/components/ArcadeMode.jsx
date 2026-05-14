@@ -23,6 +23,36 @@ const BULLET_RADIUS = 4;
 const DASH_DURATION = 0.16;
 const PICKUP_RADIUS = 15;
 
+const ARCADE_CHARACTER_PRESETS = [
+  { id: 'runner', label: 'Aventurier', body: '#d7b56d', accent: '#67e8f9', face: '#f0c9a5', weapon: '#e0f7ff' },
+  { id: 'knight', label: 'Chevalier', body: '#94a3b8', accent: '#f8fafc', face: '#e7c39e', weapon: '#cbd5e1' },
+  { id: 'mage', label: 'Mage', body: '#8b5cf6', accent: '#c4b5fd', face: '#f0c9a5', weapon: '#f5d0fe' },
+  { id: 'ranger', label: 'Rodeuse', body: '#22c55e', accent: '#86efac', face: '#e7c39e', weapon: '#bbf7d0' },
+  { id: 'guard', label: 'Garde rouge', body: '#ef4444', accent: '#fca5a5', face: '#d8a47f', weapon: '#fecaca' },
+  { id: 'sniper', label: 'Tireur jaune', body: '#facc15', accent: '#fde68a', face: '#e7c39e', weapon: '#fef3c7' },
+  { id: 'brute', label: 'Brute orange', body: '#f97316', accent: '#fed7aa', face: '#c8875c', weapon: '#ffedd5' },
+  { id: 'shadow', label: 'Ombre', body: '#64748b', accent: '#a78bfa', face: '#cbd5e1', weapon: '#ddd6fe' },
+];
+
+const PLAYER_CHARACTER_IDS = ['runner', 'knight', 'mage', 'ranger', 'shadow'];
+const ENEMY_CHARACTER_IDS = ['guard', 'sniper', 'brute', 'shadow', 'knight', 'mage', 'ranger'];
+const DEFAULT_ENEMY_CHARACTER_BY_ROLE = {
+  rifle: 'guard',
+  sniper: 'sniper',
+  brute: 'brute',
+};
+
+const getCharacterPreset = (id = 'runner', fallbackId = 'runner') => (
+  ARCADE_CHARACTER_PRESETS.find((preset) => preset.id === id)
+  || ARCADE_CHARACTER_PRESETS.find((preset) => preset.id === fallbackId)
+  || ARCADE_CHARACTER_PRESETS[0]
+);
+
+const getEnemyCharacterId = (enemy = {}) => enemy.character || DEFAULT_ENEMY_CHARACTER_BY_ROLE[enemy.role] || 'guard';
+const getCharacterOptions = (ids) => ids.map((id) => getCharacterPreset(id));
+const PLAYER_CHARACTER_OPTIONS = getCharacterOptions(PLAYER_CHARACTER_IDS);
+const ENEMY_CHARACTER_OPTIONS = getCharacterOptions(ENEMY_CHARACTER_IDS);
+
 const DEFAULT_ARCADE_CONFIG = {
   meta: {
     title: 'Mission Arcade',
@@ -35,6 +65,8 @@ const DEFAULT_ARCADE_CONFIG = {
   player: {
     x: 340,
     y: 410,
+    character: 'runner',
+    characterImageData: '',
     health: 18,
     maxHealth: 18,
     mana: 10,
@@ -85,15 +117,15 @@ const DEFAULT_ARCADE_CONFIG = {
     { id: 'prop-8', x: 3820, y: 630, r: 28 },
   ],
   enemies: [
-    { id: 'enemy-1', x: 960, y: 560, role: 'rifle', combatEnemyName: 'Garde', combatEnemyMaxHealth: 8, combatEnemyStrength: 2, combatEnemyMaxMana: 0, combatEnemyPowerDamage: 0 },
-    { id: 'enemy-2', x: 1530, y: 1050, role: 'rifle', combatEnemyName: 'Patrouilleur', combatEnemyMaxHealth: 8, combatEnemyStrength: 2, combatEnemyMaxMana: 0, combatEnemyPowerDamage: 0 },
-    { id: 'enemy-3', x: 2190, y: 780, role: 'sniper', combatEnemyName: 'Tireur', combatEnemyMaxHealth: 7, combatEnemyStrength: 3, combatEnemyMaxMana: 2, combatEnemyPowerDamage: 4 },
-    { id: 'enemy-4', x: 2810, y: 1260, role: 'rifle', combatEnemyName: 'Garde', combatEnemyMaxHealth: 8, combatEnemyStrength: 2, combatEnemyMaxMana: 0, combatEnemyPowerDamage: 0 },
-    { id: 'enemy-5', x: 3450, y: 610, role: 'brute', combatEnemyName: 'Brute', combatEnemyMaxHealth: 14, combatEnemyStrength: 4, combatEnemyMaxMana: 0, combatEnemyPowerDamage: 0 },
-    { id: 'enemy-6', x: 3860, y: 1490, role: 'rifle', combatEnemyName: 'Garde', combatEnemyMaxHealth: 8, combatEnemyStrength: 2, combatEnemyMaxMana: 0, combatEnemyPowerDamage: 0 },
-    { id: 'enemy-7', x: 1020, y: 2320, role: 'rifle', combatEnemyName: 'Patrouilleur', combatEnemyMaxHealth: 8, combatEnemyStrength: 2, combatEnemyMaxMana: 0, combatEnemyPowerDamage: 0 },
-    { id: 'enemy-8', x: 1990, y: 2050, role: 'sniper', combatEnemyName: 'Tireur', combatEnemyMaxHealth: 7, combatEnemyStrength: 3, combatEnemyMaxMana: 2, combatEnemyPowerDamage: 4 },
-    { id: 'enemy-9', x: 3330, y: 2310, role: 'brute', combatEnemyName: 'Brute', combatEnemyMaxHealth: 14, combatEnemyStrength: 4, combatEnemyMaxMana: 0, combatEnemyPowerDamage: 0 },
+    { id: 'enemy-1', x: 960, y: 560, role: 'rifle', character: 'guard', characterImageData: '', combatEnemyName: 'Garde', combatEnemyMaxHealth: 8, combatEnemyStrength: 2, combatEnemyMaxMana: 0, combatEnemyPowerDamage: 0 },
+    { id: 'enemy-2', x: 1530, y: 1050, role: 'rifle', character: 'guard', characterImageData: '', combatEnemyName: 'Patrouilleur', combatEnemyMaxHealth: 8, combatEnemyStrength: 2, combatEnemyMaxMana: 0, combatEnemyPowerDamage: 0 },
+    { id: 'enemy-3', x: 2190, y: 780, role: 'sniper', character: 'sniper', characterImageData: '', combatEnemyName: 'Tireur', combatEnemyMaxHealth: 7, combatEnemyStrength: 3, combatEnemyMaxMana: 2, combatEnemyPowerDamage: 4 },
+    { id: 'enemy-4', x: 2810, y: 1260, role: 'rifle', character: 'guard', characterImageData: '', combatEnemyName: 'Garde', combatEnemyMaxHealth: 8, combatEnemyStrength: 2, combatEnemyMaxMana: 0, combatEnemyPowerDamage: 0 },
+    { id: 'enemy-5', x: 3450, y: 610, role: 'brute', character: 'brute', characterImageData: '', combatEnemyName: 'Brute', combatEnemyMaxHealth: 14, combatEnemyStrength: 4, combatEnemyMaxMana: 0, combatEnemyPowerDamage: 0 },
+    { id: 'enemy-6', x: 3860, y: 1490, role: 'rifle', character: 'guard', characterImageData: '', combatEnemyName: 'Garde', combatEnemyMaxHealth: 8, combatEnemyStrength: 2, combatEnemyMaxMana: 0, combatEnemyPowerDamage: 0 },
+    { id: 'enemy-7', x: 1020, y: 2320, role: 'rifle', character: 'guard', characterImageData: '', combatEnemyName: 'Patrouilleur', combatEnemyMaxHealth: 8, combatEnemyStrength: 2, combatEnemyMaxMana: 0, combatEnemyPowerDamage: 0 },
+    { id: 'enemy-8', x: 1990, y: 2050, role: 'sniper', character: 'sniper', characterImageData: '', combatEnemyName: 'Tireur', combatEnemyMaxHealth: 7, combatEnemyStrength: 3, combatEnemyMaxMana: 2, combatEnemyPowerDamage: 4 },
+    { id: 'enemy-9', x: 3330, y: 2310, role: 'brute', character: 'brute', characterImageData: '', combatEnemyName: 'Brute', combatEnemyMaxHealth: 14, combatEnemyStrength: 4, combatEnemyMaxMana: 0, combatEnemyPowerDamage: 0 },
   ],
   pickups: [
     { id: 'pickup-1', x: 1360, y: 460, type: 'health' },
@@ -126,6 +158,28 @@ const getPowerColor = (type = 'fire') => ({
   earth: '#86efac',
   fire: '#f97316',
 }[type] || '#f97316');
+
+const readArcadeImageFile = (file) => new Promise((resolve, reject) => {
+  if (!file) return resolve('');
+  if (!file.type?.startsWith('image/')) return reject(new Error('Le fichier selectionne doit etre une image.'));
+  const reader = new FileReader();
+  reader.onload = () => resolve(reader.result || '');
+  reader.onerror = () => reject(reader.error || new Error("Impossible de charger l'image."));
+  reader.readAsDataURL(file);
+});
+
+const getCachedImage = (cache, src) => {
+  if (!src) return null;
+  const cached = cache.get(src);
+  if (cached) return cached.complete && cached.naturalWidth ? cached : null;
+  const image = new Image();
+  image.decoding = 'async';
+  image.onload = () => {};
+  image.onerror = () => cache.delete(src);
+  image.src = src;
+  cache.set(src, image);
+  return null;
+};
 
 const rectCircleOverlap = (rect, circle) => {
   const closestX = clamp(circle.x, rect.x, rect.x + rect.w);
@@ -286,6 +340,90 @@ const drawWorldFloor = (ctx, config, time = 0) => {
   }
 };
 
+const drawCharacterImage = (ctx, actor, radius, image, preset, selected, stateIntensity = 0, aim = { x: 1, y: 0 }) => {
+  const width = radius * 3.2;
+  const height = radius * 3.55;
+  ctx.save();
+  ctx.shadowBlur = selected ? 24 : 12 + stateIntensity * 8;
+  ctx.shadowColor = preset.accent;
+  ctx.drawImage(image, actor.x - width / 2, actor.y - height * 0.58, width, height);
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = selected ? '#f8fbff' : preset.accent;
+  ctx.lineWidth = selected ? 3 : 1.5;
+  ctx.beginPath();
+  ctx.ellipse(actor.x, actor.y - height * 0.08, width * 0.46, height * 0.48, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = preset.weapon;
+  ctx.lineWidth = selected ? 5 : 4;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(actor.x + aim.x * radius * 0.65, actor.y + aim.y * radius * 0.65);
+  ctx.lineTo(actor.x + aim.x * radius * 1.9, actor.y + aim.y * radius * 1.9);
+  ctx.stroke();
+  ctx.restore();
+};
+
+const drawArcadeCharacter = (ctx, actor, {
+  radius,
+  aim,
+  preset,
+  selected = false,
+  active = false,
+  image = null,
+  time = 0,
+}) => {
+  const stateIntensity = active ? 1 : 0;
+  if (image) {
+    drawCharacterImage(ctx, actor, radius, image, preset, selected, stateIntensity, aim);
+    return;
+  }
+
+  const pulse = active ? Math.sin(time * 8) * 0.12 : 0;
+  const angle = Math.atan2(aim.y, aim.x);
+  ctx.save();
+  ctx.translate(actor.x, actor.y);
+  ctx.rotate(angle);
+  ctx.shadowBlur = selected ? 22 : 8 + stateIntensity * 12;
+  ctx.shadowColor = preset.accent;
+
+  ctx.fillStyle = selected ? '#f8fbff' : preset.body;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, radius * (1 + pulse), radius * 0.92, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = preset.accent;
+  ctx.beginPath();
+  ctx.ellipse(-radius * 0.16, 0, radius * 0.36, radius * 0.58, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = preset.face;
+  ctx.beginPath();
+  ctx.arc(radius * 0.42, -radius * 0.32, radius * 0.47, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(12, 7, 6, .58)';
+  ctx.lineWidth = 2.2;
+  ctx.beginPath();
+  ctx.moveTo(radius * 0.5, -radius * 0.38);
+  ctx.lineTo(radius * 0.86, -radius * 0.4);
+  ctx.stroke();
+
+  ctx.strokeStyle = preset.weapon;
+  ctx.lineWidth = selected ? 5 : 4;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(radius * 0.46, radius * 0.2);
+  ctx.lineTo(radius * 1.82, radius * 0.28);
+  ctx.stroke();
+
+  ctx.strokeStyle = 'rgba(255, 255, 255, .34)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.arc(0, 0, radius * 1.04, 0.2, Math.PI * 1.4);
+  ctx.stroke();
+  ctx.restore();
+};
+
 function ArcadeMode() {
   const canvasRef = useRef(null);
   const wrapperRef = useRef(null);
@@ -294,6 +432,7 @@ function ArcadeMode() {
   const animationRef = useRef(0);
   const lastFrameRef = useRef(0);
   const cameraRef = useRef({ x: 0, y: 0, width: 1, height: 1 });
+  const imageCacheRef = useRef(new Map());
   const [config, setConfig] = useState(() => cloneConfig());
   const configRef = useRef(config);
   const stateRef = useRef(createInitialState(config));
@@ -301,6 +440,7 @@ function ArcadeMode() {
   const [tool, setTool] = useState('select');
   const [selected, setSelected] = useState(null);
   const [isPaused, setIsPaused] = useState(false);
+  const [mediaError, setMediaError] = useState('');
   const [snapshot, setSnapshot] = useState(() => createInitialState(config));
 
   useEffect(() => {
@@ -322,6 +462,34 @@ function ArcadeMode() {
       return next;
     });
   }, [resetGame]);
+
+  const setPlayerCharacterImage = useCallback(async (file) => {
+    if (!file) return;
+    try {
+      const imageData = await readArcadeImageFile(file);
+      setMediaError('');
+      patchConfig((next) => {
+        next.player.characterImageData = imageData;
+      });
+    } catch (error) {
+      setMediaError(error?.message || "Impossible de charger l'image.");
+    }
+  }, [patchConfig]);
+
+  const setSelectedEnemyCharacterImage = useCallback(async (file) => {
+    if (!file || selected?.type !== 'enemy') return;
+    const target = { ...selected };
+    try {
+      const imageData = await readArcadeImageFile(file);
+      setMediaError('');
+      patchConfig((next) => {
+        const selectedEntity = getSelectedEntity(next, target);
+        if (selectedEntity?.item) selectedEntity.item.characterImageData = imageData;
+      });
+    } catch (error) {
+      setMediaError(error?.message || "Impossible de charger l'image.");
+    }
+  }, [patchConfig, selected]);
 
   const resolveMapCollision = useCallback((entity, radius) => {
     const liveConfig = configRef.current;
@@ -667,28 +835,25 @@ function ArcadeMode() {
     const enemiesToDraw = mode === 'play' ? state.enemies : liveConfig.enemies;
     enemiesToDraw.forEach((enemy) => {
       const isSelected = selected?.type === 'enemy' && selected.id === enemy.id;
-      const enemyColor = enemy.role === 'sniper' ? '#facc15' : enemy.role === 'brute' ? '#f97316' : '#ef4444';
-      ctx.fillStyle = isSelected ? '#f8fbff' : enemy.alert ? enemyColor : enemyColor;
-      ctx.shadowBlur = enemy.alert ? 18 : 6;
-      ctx.shadowColor = enemyColor;
-      ctx.beginPath();
-      ctx.arc(enemy.x, enemy.y, ENEMY_RADIUS, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
+      const enemyPreset = getCharacterPreset(getEnemyCharacterId(enemy), 'guard');
+      const enemyImage = getCachedImage(imageCacheRef.current, enemy.characterImageData);
+      const target = mode === 'play' ? state.player : liveConfig.player;
+      const aim = normalize(target.x - enemy.x, target.y - enemy.y);
+      drawArcadeCharacter(ctx, enemy, {
+        radius: ENEMY_RADIUS,
+        aim,
+        preset: enemyPreset,
+        selected: isSelected,
+        active: Boolean(enemy.alert),
+        image: enemyImage,
+        time: state.time,
+      });
       if (mode === 'play') {
         ctx.fillStyle = 'rgba(0,0,0,.36)';
         ctx.fillRect(enemy.x - 21, enemy.y - 31, 42, 5);
         ctx.fillStyle = '#dc2626';
         ctx.fillRect(enemy.x - 21, enemy.y - 31, 42 * (enemy.hp / enemy.maxHp), 5);
       }
-      const target = mode === 'play' ? state.player : liveConfig.player;
-      const aim = normalize(target.x - enemy.x, target.y - enemy.y);
-      ctx.strokeStyle = enemyColor;
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.moveTo(enemy.x + aim.x * 12, enemy.y + aim.y * 12);
-      ctx.lineTo(enemy.x + aim.x * 28, enemy.y + aim.y * 28);
-      ctx.stroke();
     });
 
     const player = mode === 'play' ? state.player : liveConfig.player;
@@ -706,19 +871,17 @@ function ArcadeMode() {
       ctx.lineTo(state.player.moveTarget.x, state.player.moveTarget.y + 9);
       ctx.stroke();
     }
-    ctx.fillStyle = mode === 'edit' && selected?.type === 'spawn' ? '#f8fbff' : player.dash > 0 ? '#f59e0b' : '#d7b56d';
-    ctx.shadowBlur = player.dash > 0 ? 20 : 10;
-    ctx.shadowColor = ctx.fillStyle;
-    ctx.beginPath();
-    ctx.arc(player.x, player.y, PLAYER_RADIUS, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = '#fff7d6';
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.moveTo(player.x + aim.x * 13, player.y + aim.y * 13);
-    ctx.lineTo(player.x + aim.x * 34, player.y + aim.y * 34);
-    ctx.stroke();
+    const playerPreset = getCharacterPreset(liveConfig.player.character || 'runner', 'runner');
+    const playerImage = getCachedImage(imageCacheRef.current, liveConfig.player.characterImageData);
+    drawArcadeCharacter(ctx, player, {
+      radius: PLAYER_RADIUS,
+      aim,
+      preset: playerPreset,
+      selected: mode === 'edit' && selected?.type === 'spawn',
+      active: player.dash > 0,
+      image: playerImage,
+      time: state.time,
+    });
 
     state.particles.forEach((particle) => {
       ctx.globalAlpha = clamp(particle.life / particle.maxLife, 0, 1);
@@ -751,10 +914,10 @@ function ArcadeMode() {
     ctx.fillStyle = 'rgba(245, 158, 11, .1)';
     ctx.fillRect(width - 172, 34, 146, 88);
     liveConfig.enemies.forEach((enemy) => {
-      ctx.fillStyle = '#ef4444';
+      ctx.fillStyle = getCharacterPreset(getEnemyCharacterId(enemy), 'guard').body;
       ctx.fillRect(width - 172 + enemy.x * mapScaleX - 2, 34 + enemy.y * mapScaleY - 2, 4, 4);
     });
-    ctx.fillStyle = '#d7b56d';
+    ctx.fillStyle = getCharacterPreset(liveConfig.player.character || 'runner', 'runner').body;
     ctx.fillRect(width - 172 + player.x * mapScaleX - 3, 34 + player.y * mapScaleY - 3, 6, 6);
 
     if (mode === 'play' && (state.gameOver || state.victory || isPaused)) {
@@ -868,6 +1031,8 @@ function ArcadeMode() {
           x: Math.round(point.x),
           y: Math.round(point.y),
           role: 'rifle',
+          character: 'guard',
+          characterImageData: '',
           combatEnemyName: 'Ennemi',
           combatEnemyMaxHealth: 8,
           combatEnemyStrength: 2,
@@ -911,6 +1076,10 @@ function ArcadeMode() {
   const playMode = mode === 'play';
   const forceSkill = config.player.skills[0] || { name: 'Force', value: 0, manaCost: 0 };
   const mainPower = config.player.powers[0] || { name: 'Pouvoir', type: 'fire', manaCost: 0, force: 0 };
+  const playerCharacterPreset = getCharacterPreset(config.player.character || 'runner', 'runner');
+  const selectedEnemyCharacterPreset = selectedEntity?.type === 'enemy'
+    ? getCharacterPreset(getEnemyCharacterId(selectedEntity.item), 'guard')
+    : null;
 
   return (
     <main className="arcade-shell arcade-builder-shell">
@@ -989,6 +1158,46 @@ function ArcadeMode() {
 
           <div className="arcade-panel-section">
             <h2>Heros</h2>
+            <label>
+              Personnage principal
+              <select value={config.player.character || 'runner'} onChange={(event) => patchConfig((next) => { next.player.character = event.target.value; })}>
+                {PLAYER_CHARACTER_OPTIONS.map((preset) => (
+                  <option key={preset.id} value={preset.id}>{preset.label}</option>
+                ))}
+              </select>
+            </label>
+            <div className="arcade-character-summary">
+              <span
+                className="arcade-character-token"
+                style={{ '--arcade-character-body': playerCharacterPreset.body, '--arcade-character-accent': playerCharacterPreset.accent }}
+              >
+                {config.player.characterImageData ? <img src={config.player.characterImageData} alt="" /> : null}
+              </span>
+              <div>
+                <strong>{playerCharacterPreset.label}</strong>
+                <small>{config.player.characterImageData ? 'Image personnalisee' : 'Preset arcade'}</small>
+              </div>
+            </div>
+            <label className="button like secondary-action arcade-file-button">
+              Importer image heros
+              <input
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = '';
+                  setPlayerCharacterImage(file);
+                }}
+              />
+            </label>
+            {config.player.characterImageData ? (
+              <button type="button" className="secondary-action" onClick={() => {
+                setMediaError('');
+                patchConfig((next) => { next.player.characterImageData = ''; });
+              }}>Retirer image heros</button>
+            ) : null}
+            {mediaError ? <p className="arcade-empty-state">{mediaError}</p> : null}
             <label>
               PV actuels
               <input type="number" min="0" max={config.player.maxHealth} value={config.player.health} onChange={(event) => patchConfig((next) => { next.player.health = clamp(Number(event.target.value), 0, next.player.maxHealth); })} />
@@ -1127,6 +1336,52 @@ function ArcadeMode() {
                         <option value="brute">Brute</option>
                       </select>
                     </label>
+                    <label>
+                      Personnage
+                      <select value={getEnemyCharacterId(selectedEntity.item)} onChange={(event) => updateEntity('character', event.target.value)}>
+                        {ENEMY_CHARACTER_OPTIONS.map((preset) => (
+                          <option key={preset.id} value={preset.id}>{preset.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="arcade-character-summary">
+                      <span
+                        className="arcade-character-token"
+                        style={{
+                          '--arcade-character-body': selectedEnemyCharacterPreset?.body || '#ef4444',
+                          '--arcade-character-accent': selectedEnemyCharacterPreset?.accent || '#fca5a5',
+                        }}
+                      >
+                        {selectedEntity.item.characterImageData ? <img src={selectedEntity.item.characterImageData} alt="" /> : null}
+                      </span>
+                      <div>
+                        <strong>{selectedEnemyCharacterPreset?.label || 'Ennemi'}</strong>
+                        <small>{selectedEntity.item.characterImageData ? 'Image personnalisee' : 'Preset arcade'}</small>
+                      </div>
+                    </div>
+                    <label className="button like secondary-action arcade-file-button">
+                      Importer image ennemi
+                      <input
+                        type="file"
+                        accept="image/*"
+                        hidden
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          event.target.value = '';
+                          setSelectedEnemyCharacterImage(file);
+                        }}
+                      />
+                    </label>
+                    {selectedEntity.item.characterImageData ? (
+                      <button type="button" className="secondary-action" onClick={() => {
+                        setMediaError('');
+                        patchConfig((next) => {
+                          const currentEnemy = getSelectedEntity(next, selected);
+                          if (currentEnemy?.item) currentEnemy.item.characterImageData = '';
+                        });
+                      }}>Retirer image ennemi</button>
+                    ) : null}
+                    {mediaError ? <p className="arcade-empty-state">{mediaError}</p> : null}
                     <label>
                       PV ennemi
                       <input type="number" min="1" max="999" value={selectedEntity.item.combatEnemyMaxHealth || 8} onChange={(event) => updateEntity('combatEnemyMaxHealth', event.target.value)} />

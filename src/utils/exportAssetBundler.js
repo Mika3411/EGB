@@ -1,3 +1,5 @@
+import { COMBAT_EFFECT_SLOTS, getCombatEffectFieldBase } from '../lib/combatDefaults';
+
 const slugify = (value = '') => String(value)
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
@@ -158,9 +160,40 @@ export function buildExportProjectWithAssets(project, zip) {
     });
   };
 
+  const exportCombatActorMedia = (target, prefix, fallbackName) => {
+    if (!target || typeof target !== 'object') return;
+    exportMediaField(target, `${prefix}ImageData`, `${prefix}ImageName`, 'combat', `${fallbackName}-image`);
+    exportAnime2dSpecMedia(target[`${prefix}Anime2dSpec`], 'animations', `${fallbackName}-anime2d`);
+  };
+
+  const exportCombatEntryMedia = (entry, fallbackName) => {
+    if (!entry || typeof entry !== 'object') return;
+    exportMediaField(entry, 'combatBackgroundImageData', 'combatBackgroundImageName', 'combat', `${fallbackName}-background`);
+    exportCombatActorMedia(entry, 'combatHero', `${fallbackName}-hero`);
+    exportCombatActorMedia(entry, 'combatEnemy', `${fallbackName}-enemy`);
+  };
+
+  const exportCombatSettingsMedia = (combat, fallbackName = 'combat') => {
+    if (!combat || typeof combat !== 'object') return;
+    exportMediaField(combat, 'backgroundImageData', 'backgroundImageName', 'combat', `${fallbackName}-background`);
+    exportCombatActorMedia(combat, 'hero', `${fallbackName}-hero`);
+    exportCombatActorMedia(combat, 'enemy', `${fallbackName}-enemy`);
+
+    COMBAT_EFFECT_SLOTS.forEach(({ actor, outcome }) => {
+      const base = getCombatEffectFieldBase(actor, outcome);
+      const effectName = `${fallbackName}-${actor}-${outcome}`;
+      exportMediaField(combat, `${base}ImageData`, `${base}ImageName`, 'combat', `${effectName}-image`);
+      exportAnime2dSpecMedia(combat[`${base}Anime2dSpec`], 'animations', `${effectName}-anime2d`);
+      exportMediaField(combat, `${base}VideoData`, `${base}VideoName`, 'video', `${effectName}-video`);
+      exportMediaField(combat, `${base}AudioData`, `${base}AudioName`, 'audio', `${effectName}-audio`);
+    });
+  };
+
   (nextProject.assets || []).forEach((asset, assetIndex) => {
     exportMediaField(asset, 'url', 'name', asset.type === 'image' ? 'images' : asset.type === 'audio' ? 'audio' : asset.type === 'video' ? 'video' : 'assets', asset.name || asset.id || `asset-${assetIndex + 1}`);
   });
+
+  exportCombatSettingsMedia(nextProject.heroAdventure?.combat, 'combat-default');
 
   (nextProject.scenes || []).forEach((scene, sceneIndex) => {
     exportMediaField(scene, 'backgroundData', 'backgroundName', 'scenes', scene.name || `scene-${sceneIndex + 1}-background`);
@@ -172,10 +205,17 @@ export function buildExportProjectWithAssets(project, zip) {
       exportMediaField(spot, 'objectImageData', 'objectImageName', 'hotspots', `${hotspotName}-image`);
       exportMediaField(spot, 'soundData', 'soundName', 'audio', `${hotspotName}-sound`);
       exportMediaField(spot, 'secondObjectImageData', 'secondObjectImageName', 'hotspots', `${hotspotName}-second-image`);
+      exportCombatEntryMedia(spot, `${hotspotName}-combat`);
       (spot.logicRules || []).forEach((rule, ruleIndex) => {
         const ruleName = `${hotspotName}-${rule.name || `rule-${ruleIndex + 1}`}`;
         exportMediaField(rule, 'successSoundData', 'successSoundName', 'audio', `${ruleName}-success`);
         exportMediaField(rule, 'failureSoundData', 'failureSoundName', 'audio', `${ruleName}-failure`);
+      });
+      (spot.conversation?.nodes || []).forEach((node, nodeIndex) => {
+        (node.replies || []).forEach((reply, replyIndex) => {
+          const replyName = `${hotspotName}-${node.speaker || node.id || `node-${nodeIndex + 1}`}-${reply.label || reply.id || `reply-${replyIndex + 1}`}`;
+          exportCombatEntryMedia(reply, `${replyName}-combat`);
+        });
       });
     });
 

@@ -74,6 +74,8 @@ const toPublicShopPack = (pack = {}) => {
   const {
     downloadUrl,
     downloadStoragePath,
+    downloadBucket,
+    downloadStorageBucket,
     ...publicPack
   } = normalizeShopPack(pack);
   return {

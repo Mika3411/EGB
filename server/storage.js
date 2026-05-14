@@ -21,6 +21,16 @@ export const buildStoragePath = (...segments) => segments
   .map((segment) => sanitizeStorageSegment(segment))
   .join('/');
 
+export const validateStoragePath = (path = '') => {
+  const storagePath = String(path || '').trim().replace(/^\/+/, '');
+  if (!storagePath || storagePath.includes('..') || /[\0\\]/.test(storagePath)) {
+    const error = new Error('Chemin Supabase invalide.');
+    error.status = 400;
+    throw error;
+  }
+  return storagePath;
+};
+
 export const isStorageNotFoundError = (error) => {
   const status = Number(error?.statusCode || error?.status || 0);
   const code = String(error?.code || error?.statusCode || '').toLowerCase();
@@ -64,4 +74,31 @@ export const uploadStorageJson = async (path, value, options = {}) => {
   });
   if (error) throw error;
   return value;
+};
+
+export const createStorageSignedUrl = async (path, options = {}) => {
+  const client = getSupabaseAdminClient();
+  if (!client) {
+    const error = new Error('Configuration Supabase manquante.');
+    error.status = 500;
+    throw error;
+  }
+
+  const storagePath = validateStoragePath(path);
+  const expiresIn = Math.max(60, Math.round(Number(options.expiresIn || 3600)));
+  const buckets = [...new Set((options.buckets || [options.bucket || resolveServerStorageBucket(options.visibility)])
+    .map((bucket) => String(bucket || '').trim())
+    .filter(Boolean))];
+  let lastError = null;
+
+  for (const bucket of buckets) {
+    const { data, error } = await client.storage.from(bucket).createSignedUrl(storagePath, expiresIn);
+    if (!error && data?.signedUrl) return data.signedUrl;
+    lastError = error || lastError;
+  }
+
+  if (lastError) throw lastError;
+  const error = new Error('Fichier telechargeable introuvable.');
+  error.status = 404;
+  throw error;
 };

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Clapperboard, Dices, Image as ImageIcon, Swords, Upload, Volume2 } from 'lucide-react';
+import { Clapperboard, Image as ImageIcon, Swords, Upload, Volume2 } from 'lucide-react';
 import Anime2DPreview, { normalizeAnime2dSpec, readAnime2dJsonFile } from './Anime2DPreview.jsx';
 import MediaSourcePicker from './MediaSourcePicker.jsx';
 import HelpLabel from './forms/HelpLabel.jsx';
@@ -12,7 +12,6 @@ import {
   getEntryValue,
   normalizeHeroAttackType,
   normalizePowerType,
-  simulateCombat,
 } from '../lib/combatEngine.js';
 import {
   COMBAT_EFFECT_MEDIA_TYPES,
@@ -42,6 +41,7 @@ const ENEMY_AI_MODES = [
   { id: 'tactical', label: 'Tactique' },
   { id: 'random', label: 'Aléatoire' },
 ];
+const ENTRY_BOOLEAN_DEFAULT = 'default';
 const RESISTANCE_FIELDS = [
   { id: 'water', label: 'Eau', field: 'combatEnemyResistanceWater' },
   { id: 'earth', label: 'Terre', field: 'combatEnemyResistanceEarth' },
@@ -78,6 +78,35 @@ const getBalanceVerdict = (balance) => {
 const normalizeMediaType = (value) => (COMBAT_MEDIA_TYPES.has(value) ? value : 'image');
 const normalizeEffectMediaType = (value) => (COMBAT_EFFECT_MEDIA_TYPES.has(value) ? value : 'none');
 const normalizeCombatVisualEffect = (value) => (COMBAT_VISUAL_EFFECT_TYPES.has(value) ? value : 'none');
+const normalizeEnemyAiMode = (value) => (
+  ENEMY_AI_MODES.some((mode) => mode.id === value) ? value : DEFAULT_COMBAT_SETTINGS.enemyAiMode
+);
+const getEnemyAiModeLabel = (value) => (
+  ENEMY_AI_MODES.find((mode) => mode.id === normalizeEnemyAiMode(value))?.label || 'Tactique'
+);
+const hasOwnEntryValue = (entry, field) => (
+  Object.prototype.hasOwnProperty.call(entry || {}, field)
+  && entry?.[field] !== undefined
+  && entry?.[field] !== null
+);
+const getEntryBooleanOverrideValue = (entry, field) => {
+  if (!hasOwnEntryValue(entry, field) || entry[field] === '') return ENTRY_BOOLEAN_DEFAULT;
+  return entry[field] === false ? 'false' : 'true';
+};
+const getActorEntryPrefix = (actor) => (actor === 'hero' ? 'combatHero' : 'combatEnemy');
+const getActorMediaOverrideFields = (actor) => {
+  const prefix = getActorEntryPrefix(actor);
+  return [
+    `${prefix}MediaType`,
+    `${prefix}ImageData`,
+    `${prefix}ImageName`,
+    `${prefix}Anime2dSpec`,
+    `${prefix}Anime2dName`,
+  ];
+};
+const hasActorMediaOverride = (entry, actor) => (
+  getActorMediaOverrideFields(actor).some((field) => hasOwnEntryValue(entry, field) && entry[field] !== '')
+);
 const normalizeEffectMediaSettings = (combat = {}, actor, outcome) => {
   const base = getCombatEffectFieldBase(actor, outcome);
   return {
@@ -101,7 +130,7 @@ const normalizeCombatSettings = (combat = {}) => ({
   ...(combat && typeof combat === 'object' ? combat : {}),
   turnMode: combat?.turnMode !== false,
   showDice: combat?.showDice !== false,
-  enemyAutoTurn: combat?.enemyAutoTurn !== false,
+  enemyAutoTurn: false,
   backgroundImageData: combat?.backgroundImageData || '',
   backgroundImageName: combat?.backgroundImageName || '',
   heroMediaType: normalizeMediaType(combat?.heroMediaType),
@@ -130,7 +159,7 @@ const normalizeCombatSettings = (combat = {}) => ({
   enemyPowerManaCost: clampNumber(combat?.enemyPowerManaCost, DEFAULT_COMBAT_SETTINGS.enemyPowerManaCost, 0, 999),
   enemyPowerDamage: clampNumber(combat?.enemyPowerDamage, DEFAULT_COMBAT_SETTINGS.enemyPowerDamage, 0, 999),
   enemyPowerUsageChance: clampNumber(combat?.enemyPowerUsageChance, DEFAULT_COMBAT_SETTINGS.enemyPowerUsageChance, 0, 100),
-  enemyAiMode: ENEMY_AI_MODES.some((mode) => mode.id === combat?.enemyAiMode) ? combat.enemyAiMode : DEFAULT_COMBAT_SETTINGS.enemyAiMode,
+  enemyAiMode: normalizeEnemyAiMode(combat?.enemyAiMode),
   enemyCriticalChance: clampNumber(combat?.enemyCriticalChance, DEFAULT_COMBAT_SETTINGS.enemyCriticalChance, 0, 100),
   enemyCriticalMultiplier: clampDecimal(combat?.enemyCriticalMultiplier, DEFAULT_COMBAT_SETTINGS.enemyCriticalMultiplier, 1, 20),
   enemyResistanceWater: clampNumber(combat?.enemyResistanceWater, 0, 0, 100),
@@ -204,6 +233,17 @@ const getActorMedia = (entry, combat, actor, fallbackImage = '') => {
     imageName: entry?.[`${entryPrefix}ImageName`] || combat[`${globalPrefix}ImageName`] || '',
     anime2dSpec: entry?.[`${entryPrefix}Anime2dSpec`] || combat[`${globalPrefix}Anime2dSpec`] || null,
     anime2dName: entry?.[`${entryPrefix}Anime2dName`] || combat[`${globalPrefix}Anime2dName`] || '',
+  };
+};
+
+const getEntryActorMedia = (entry, actor, inheritedMedia = {}) => {
+  const entryPrefix = getActorEntryPrefix(actor);
+  return {
+    mediaType: normalizeMediaType(getEntryValue(entry, `${entryPrefix}MediaType`, inheritedMedia.mediaType)),
+    imageData: entry?.[`${entryPrefix}ImageData`] || '',
+    imageName: entry?.[`${entryPrefix}ImageName`] || '',
+    anime2dSpec: entry?.[`${entryPrefix}Anime2dSpec`] || null,
+    anime2dName: entry?.[`${entryPrefix}Anime2dName`] || '',
   };
 };
 
@@ -357,6 +397,146 @@ function MediaSlotEditor({
         </div>
       )}
       <small>{mediaType === 'anime2d' ? (anime2dName || 'Aucune animation JSON') : (imageName || 'Aucune image')}</small>
+    </div>
+  );
+}
+
+function CombatBooleanOverrideSelect({
+  label,
+  help,
+  value,
+  fallbackLabel,
+  trueLabel,
+  falseLabel,
+  onChange,
+}) {
+  return (
+    <div>
+      <HelpLabel help={help}>{label}</HelpLabel>
+      <select value={value} onChange={(event) => onChange(event.target.value)}>
+        <option value={ENTRY_BOOLEAN_DEFAULT}>Défaut ({fallbackLabel})</option>
+        <option value="true">{trueLabel}</option>
+        <option value="false">{falseLabel}</option>
+      </select>
+    </div>
+  );
+}
+
+function CombatEntryMediaSlotEditor({
+  title,
+  help,
+  media,
+  inheritedMedia,
+  hasOverride,
+  inheritedLabel,
+  handleUpload,
+  mediaLibrary,
+  project,
+  currentAnimeSpec,
+  currentAnimeName,
+  onMediaTypeChange,
+  onImageSelect,
+  onImageClear,
+  onAnimeSelect,
+  onAnimeClear,
+  onClearOverride,
+  onJsonError,
+}) {
+  const readJson = async (file) => {
+    if (!file) return;
+    try {
+      const spec = await readAnime2dJsonFile(file);
+      onJsonError('');
+      onAnimeSelect(spec, file.name || 'animation-2d.json');
+    } catch (error) {
+      onJsonError(error?.message || 'JSON 2D Anime invalide.');
+    }
+  };
+
+  const previewMedia = hasOverride ? media : inheritedMedia;
+  const hasAnime = previewMedia.mediaType === 'anime2d' && previewMedia.anime2dSpec;
+  const hasImage = previewMedia.mediaType === 'image' && previewMedia.imageData;
+  const customName = media.mediaType === 'anime2d' ? media.anime2dName : media.imageName;
+  const inheritedName = inheritedMedia.mediaType === 'anime2d' ? inheritedMedia.anime2dName : inheritedMedia.imageName;
+  const currentName = hasOverride ? customName : inheritedName;
+  const clearOverrideButton = hasOverride ? (
+    <button type="button" className="secondary-action" onClick={onClearOverride}>
+      Revenir au défaut
+    </button>
+  ) : null;
+
+  return (
+    <div className={`combat-media-slot ${hasOverride ? 'has-override' : 'is-inherited'}`}>
+      <div className="combat-media-head">
+        <HelpLabel help={help}>{title}</HelpLabel>
+        <select value={media.mediaType} onChange={(event) => onMediaTypeChange(event.target.value)}>
+          <option value="image">Image</option>
+          <option value="anime2d">Animation 2D Anime</option>
+        </select>
+      </div>
+      <div className="combat-media-preview">
+        {hasAnime ? (
+          <Anime2DPreview spec={previewMedia.anime2dSpec} project={project} />
+        ) : hasImage ? (
+          <img src={previewMedia.imageData} alt={title} />
+        ) : (
+          <span>{previewMedia.mediaType === 'anime2d' ? 'JSON 2D' : 'Image'}</span>
+        )}
+        {!hasOverride && (hasAnime || hasImage) ? <em className="combat-media-inherited-badge">Défaut</em> : null}
+      </div>
+      {media.mediaType === 'image' ? (
+        <div className="inline-actions">
+          <MediaSourcePicker
+            accept="image/*"
+            handleUpload={handleUpload}
+            mediaLibrary={mediaLibrary}
+            onSelect={onImageSelect}
+          >
+            <ImageIcon size={15} aria-hidden="true" /> Choisir
+          </MediaSourcePicker>
+          {media.imageData ? (
+            <button type="button" className="secondary-action" onClick={onImageClear}>
+              Retirer
+            </button>
+          ) : null}
+          {clearOverrideButton}
+        </div>
+      ) : (
+        <div className="inline-actions">
+          <label className="button like secondary-action">
+            <Upload size={15} aria-hidden="true" /> Importer JSON
+            <input
+              type="file"
+              accept="application/json,.json"
+              hidden
+              onChange={(event) => {
+                readJson(event.target.files?.[0]);
+                event.target.value = '';
+              }}
+            />
+          </label>
+          {currentAnimeSpec ? (
+            <button
+              type="button"
+              className="secondary-action"
+              onClick={() => onAnimeSelect(currentAnimeSpec, currentAnimeName || 'Animation 2D courante')}
+            >
+              <Clapperboard size={15} aria-hidden="true" /> Utiliser courante
+            </button>
+          ) : null}
+          {media.anime2dSpec ? (
+            <button type="button" className="secondary-action" onClick={onAnimeClear}>
+              Retirer
+            </button>
+          ) : null}
+          {clearOverrideButton}
+        </div>
+      )}
+      <small>
+        {hasOverride
+          ? (currentName || 'Aucun média personnalisé')
+          : `${inheritedLabel}: ${currentName || 'aucun média'}`}
+      </small>
     </div>
   );
 }
@@ -534,7 +714,6 @@ export default function CombatTab({
   const [selectedCombatId, setSelectedCombatId] = useState('');
   const [activeCombatPanel, setActiveCombatPanel] = useState('arena');
   const [jsonError, setJsonError] = useState('');
-  const [combatSimulation, setCombatSimulation] = useState(null);
   const selectedSource = combatSources.find((source) => source.id === selectedCombatId) || combatSources[0] || null;
   const selectedEntry = selectedSource?.entry || null;
   const currentAnimeSpec = useMemo(() => normalizeAnime2dSpec(project.anime2dDraft), [project.anime2dDraft]);
@@ -543,6 +722,13 @@ export default function CombatTab({
   const previewHeroMedia = getActorMedia(selectedEntry, combat, 'hero', heroFallbackImage);
   const previewEnemyMedia = getActorMedia(selectedEntry, combat, 'enemy');
   const previewEnemyName = selectedEntry?.combatEnemyName || combat.enemyName || 'Adversaire';
+  const selectedBackgroundName = selectedEntry?.combatBackgroundImageData
+    ? selectedEntry.combatBackgroundImageName || 'Fond personnalisé'
+    : combat.backgroundImageName || '';
+  const selectedHeroEntryMedia = getEntryActorMedia(selectedEntry, 'hero', previewHeroMedia);
+  const selectedEnemyEntryMedia = getEntryActorMedia(selectedEntry, 'enemy', previewEnemyMedia);
+  const hasHeroMediaOverride = hasActorMediaOverride(selectedEntry, 'hero');
+  const hasEnemyMediaOverride = hasActorMediaOverride(selectedEntry, 'enemy');
   const heroName = project.heroAdventure?.hero?.name || 'Héros';
   const selectedHeroInitiative = clampNumber(project.heroAdventure?.hero?.initiative, 0, -999, 999);
   const diceLabel = project.heroAdventure?.dice?.label || 'd20';
@@ -559,10 +745,12 @@ export default function CombatTab({
   const selectedEnemyArmor = clampNumber(getEntryValue(selectedEntry, 'combatEnemyArmor', combat.enemyArmor), combat.enemyArmor, 0, 999);
   const selectedEnemyDodgeChance = clampNumber(getEntryValue(selectedEntry, 'combatEnemyDodgeChance', combat.enemyDodgeChance), combat.enemyDodgeChance, 0, 100);
   const selectedEnemyMaxMana = clampNumber(getEntryValue(selectedEntry, 'combatEnemyMaxMana', combat.enemyMaxMana), combat.enemyMaxMana, 0, 999);
+  const selectedEnemyPowerName = getEntryValue(selectedEntry, 'combatEnemyPowerName', combat.enemyPowerName) || DEFAULT_COMBAT_SETTINGS.enemyPowerName;
   const selectedEnemyPowerType = normalizePowerType(getEntryValue(selectedEntry, 'combatEnemyPowerType', combat.enemyPowerType));
   const selectedEnemyPowerManaCost = clampNumber(getEntryValue(selectedEntry, 'combatEnemyPowerManaCost', combat.enemyPowerManaCost), combat.enemyPowerManaCost, 0, 999);
   const selectedEnemyPowerDamage = clampNumber(getEntryValue(selectedEntry, 'combatEnemyPowerDamage', combat.enemyPowerDamage), combat.enemyPowerDamage, 0, 999);
   const selectedEnemyPowerUsageChance = clampNumber(getEntryValue(selectedEntry, 'combatEnemyPowerUsageChance', combat.enemyPowerUsageChance), combat.enemyPowerUsageChance, 0, 100);
+  const selectedEnemyAiMode = normalizeEnemyAiMode(getEntryValue(selectedEntry, 'combatEnemyAiMode', combat.enemyAiMode));
   const selectedEnemyCriticalChance = clampNumber(getEntryValue(selectedEntry, 'combatEnemyCriticalChance', combat.enemyCriticalChance), combat.enemyCriticalChance, 0, 100);
   const selectedEnemyCriticalMultiplier = clampDecimal(getEntryValue(selectedEntry, 'combatEnemyCriticalMultiplier', combat.enemyCriticalMultiplier), combat.enemyCriticalMultiplier, 1, 20);
   const combatBalance = useMemo(() => (
@@ -589,10 +777,6 @@ export default function CombatTab({
       setSelectedCombatId(combatSources[0].id);
     }
   }, [combatSources, selectedCombatId]);
-
-  useEffect(() => {
-    setCombatSimulation(null);
-  }, [selectedCombatId]);
 
   const ensureHeroAdventure = (draft) => {
     if (!draft.heroAdventure || typeof draft.heroAdventure !== 'object') draft.heroAdventure = {};
@@ -621,16 +805,25 @@ export default function CombatTab({
 
   const updateCombatEntry = (changes) => patchCombatEntry((target) => Object.assign(target, changes));
 
+  const clearCombatEntryFields = (fields) => patchCombatEntry((target) => {
+    fields.forEach((field) => {
+      delete target[field];
+    });
+  });
+
+  const updateCombatEntryBooleanOverride = (field, value) => {
+    if (value === ENTRY_BOOLEAN_DEFAULT) {
+      clearCombatEntryFields([field]);
+      return;
+    }
+    updateCombatEntry({ [field]: value === 'true' });
+  };
+
   const openSelectedSource = () => {
     if (!selectedSource) return;
     setSelectedSceneId?.(selectedSource.sceneId);
     setSelectedHotspotId?.(selectedSource.hotspotId);
     setTab?.('scenes');
-  };
-
-  const simulateSelectedCombat = () => {
-    if (!selectedEntry) return;
-    setCombatSimulation(simulateCombat(project, selectedEntry, combat));
   };
 
   const previewSelectedCombat = () => {
@@ -676,6 +869,29 @@ export default function CombatTab({
 
   const defaultHeroHandlers = makeDefaultActorHandlers('hero');
   const defaultEnemyHandlers = makeDefaultActorHandlers('enemy');
+
+  const makeEntryActorHandlers = (actor) => {
+    const entryPrefix = getActorEntryPrefix(actor);
+    return {
+      onMediaTypeChange: (mediaType) => updateCombatEntry({ [`${entryPrefix}MediaType`]: normalizeMediaType(mediaType) }),
+      onImageSelect: (imageData, imageName = '') => updateCombatEntry({
+        [`${entryPrefix}ImageData`]: imageData,
+        [`${entryPrefix}ImageName`]: imageName,
+        [`${entryPrefix}MediaType`]: 'image',
+      }),
+      onImageClear: () => clearCombatEntryFields([`${entryPrefix}ImageData`, `${entryPrefix}ImageName`]),
+      onAnimeSelect: (spec, name = '') => updateCombatEntry({
+        [`${entryPrefix}Anime2dSpec`]: spec,
+        [`${entryPrefix}Anime2dName`]: name,
+        [`${entryPrefix}MediaType`]: 'anime2d',
+      }),
+      onAnimeClear: () => clearCombatEntryFields([`${entryPrefix}Anime2dSpec`, `${entryPrefix}Anime2dName`]),
+      onClearOverride: () => clearCombatEntryFields(getActorMediaOverrideFields(actor)),
+    };
+  };
+
+  const entryHeroHandlers = makeEntryActorHandlers('hero');
+  const entryEnemyHandlers = makeEntryActorHandlers('enemy');
 
   const makeDefaultEffectHandlers = (actor, outcome) => {
     const base = getCombatEffectFieldBase(actor, outcome);
@@ -729,7 +945,8 @@ export default function CombatTab({
           <span><strong>{combatSources.length}</strong> combat(s)</span>
           <span><strong>{diceLabel}</strong> dé principal</span>
           <span><strong>{combat.turnMode ? 'Tour par tour' : 'Instantané'}</strong> mode par défaut</span>
-          <span><strong>{combat.enemyAutoTurn ? 'Ennemi auto' : 'Dé ennemi manuel'}</strong> riposte</span>
+          <span><strong>Dé ennemi manuel</strong> riposte</span>
+          <span><strong>{getEnemyAiModeLabel(combat.enemyAiMode)}</strong> IA ennemie</span>
         </div>
 
         <label className="checkbox-row">
@@ -783,9 +1000,6 @@ export default function CombatTab({
             <p>Choisis les visuels puis teste le rendu dans Preview.</p>
           </div>
           <div className="inline-actions">
-            <button type="button" className="secondary-action" onClick={simulateSelectedCombat} disabled={!selectedEntry}>
-              <Dices size={16} aria-hidden="true" /> Simuler le combat
-            </button>
             <button type="button" className="secondary-action" onClick={previewSelectedCombat} disabled={!selectedEntry}>
               <Swords size={16} aria-hidden="true" /> Preview
             </button>
@@ -814,31 +1028,6 @@ export default function CombatTab({
         </div>
 
         {jsonError ? <div className="combat-json-error">{jsonError}</div> : null}
-
-        {combatSimulation ? (
-          <div className={`combat-simulation-card ${combatSimulation.status}`}>
-            <header>
-              <div>
-                <strong>{combatSimulation.title}</strong>
-                <small>Simulation aleatoire du combat selectionne.</small>
-              </div>
-              <button type="button" className="secondary-action compact" onClick={() => setCombatSimulation(null)}>
-                Effacer
-              </button>
-            </header>
-            <div className="combat-simulation-metrics">
-                    <span><strong>{combatSimulation.heroHealth}/{combatSimulation.heroMaxHealth}</strong><small>PV héros</small></span>
-                    <span><strong>{combatSimulation.heroMana}/{combatSimulation.heroMaxMana}</strong><small>Mana héros</small></span>
-              <span><strong>{combatSimulation.enemyHealth}/{combatSimulation.enemyMaxHealth}</strong><small>PV ennemi</small></span>
-              <span><strong>{combatSimulation.enemyMana}/{combatSimulation.enemyMaxMana}</strong><small>Mana ennemi</small></span>
-            </div>
-            <ol className="combat-simulation-log">
-              {combatSimulation.logs.map((line, index) => (
-                <li key={`${index}-${line}`}>{line}</li>
-              ))}
-            </ol>
-          </div>
-        ) : null}
 
         <div className="combat-editor-tabs" role="tablist" aria-label="Sections de combat">
           <button
@@ -873,6 +1062,99 @@ export default function CombatTab({
 
         {activeCombatPanel === 'arena' ? (
         <div className="combat-config-grid combat-config-grid--single">
+          {selectedEntry ? (
+            <section className="subpanel combat-config-card combat-entry-media-section">
+              <div className="subpanel-head">
+                <div>
+                  <h3>Combat sélectionné</h3>
+                  <p>Overrides propres à {previewEnemyName}, avec les réglages par défaut en secours.</p>
+                </div>
+                {selectedSource ? (
+                  <button type="button" className="secondary-action compact" onClick={openSelectedSource}>
+                    Ouvrir
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="combat-entry-settings-grid">
+                <CombatBooleanOverrideSelect
+                  label="Résolution"
+                  help="Permet de forcer ce combat en tour par tour ou en résolution directe, sans toucher au défaut global."
+                  value={getEntryBooleanOverrideValue(selectedEntry, 'combatTurnMode')}
+                  fallbackLabel={combat.turnMode ? 'tour par tour' : 'instantané'}
+                  trueLabel="Tour par tour"
+                  falseLabel="Instantané"
+                  onChange={(value) => updateCombatEntryBooleanOverride('combatTurnMode', value)}
+                />
+                <CombatBooleanOverrideSelect
+                  label="Dé central"
+                  help="Affiche ou masque le dé central uniquement pour ce combat."
+                  value={getEntryBooleanOverrideValue(selectedEntry, 'combatShowDice')}
+                  fallbackLabel={combat.showDice ? 'affiché' : 'masqué'}
+                  trueLabel="Afficher"
+                  falseLabel="Masquer"
+                  onChange={(value) => updateCombatEntryBooleanOverride('combatShowDice', value)}
+                />
+              </div>
+
+              <div className="combat-background-picker combat-entry-background-picker">
+                <HelpLabel help="Fond utilisé uniquement pour ce combat. Sans choix personnalisé, le fond par défaut reste utilisé.">Fond de ce combat</HelpLabel>
+                <div className="inline-actions">
+                  <MediaSourcePicker
+                    accept="image/*"
+                    handleUpload={handleUpload}
+                    mediaLibrary={mediaLibrary}
+                    onSelect={(imageData, imageName = '') => updateCombatEntry({
+                      combatBackgroundImageData: imageData,
+                      combatBackgroundImageName: imageName,
+                    })}
+                  >
+                    <ImageIcon size={15} aria-hidden="true" /> Choisir le fond
+                  </MediaSourcePicker>
+                  {selectedEntry.combatBackgroundImageData ? (
+                    <button type="button" className="secondary-action" onClick={() => clearCombatEntryFields(['combatBackgroundImageData', 'combatBackgroundImageName'])}>
+                      Revenir au défaut
+                    </button>
+                  ) : null}
+                </div>
+                <small>{selectedEntry.combatBackgroundImageData ? selectedBackgroundName : `Défaut: ${selectedBackgroundName || 'aucun fond'}`}</small>
+              </div>
+
+              <div className="combat-entry-media-grid">
+                <CombatEntryMediaSlotEditor
+                  title="Héros de ce combat"
+                  help="Visuel du héros uniquement pour ce combat. Sans override, le héros par défaut est utilisé."
+                  media={selectedHeroEntryMedia}
+                  inheritedMedia={getActorMedia(null, combat, 'hero', heroFallbackImage)}
+                  hasOverride={hasHeroMediaOverride}
+                  inheritedLabel="Défaut héros"
+                  handleUpload={handleUpload}
+                  mediaLibrary={mediaLibrary}
+                  project={project}
+                  currentAnimeSpec={currentAnimeSpec}
+                  currentAnimeName={project.anime2dDraft?.sceneName}
+                  onJsonError={setJsonError}
+                  {...entryHeroHandlers}
+                />
+                <CombatEntryMediaSlotEditor
+                  title="Ennemi de ce combat"
+                  help="Visuel de l'ennemi uniquement pour ce combat. Sans override, l'ennemi par défaut est utilisé."
+                  media={selectedEnemyEntryMedia}
+                  inheritedMedia={getActorMedia(null, combat, 'enemy')}
+                  hasOverride={hasEnemyMediaOverride}
+                  inheritedLabel="Défaut ennemi"
+                  handleUpload={handleUpload}
+                  mediaLibrary={mediaLibrary}
+                  project={project}
+                  currentAnimeSpec={currentAnimeSpec}
+                  currentAnimeName={project.anime2dDraft?.sceneName}
+                  onJsonError={setJsonError}
+                  {...entryEnemyHandlers}
+                />
+              </div>
+            </section>
+          ) : null}
+
           <section className="subpanel combat-config-card combat-default-media-section">
             <div className="subpanel-head">
               <div>
@@ -905,28 +1187,34 @@ export default function CombatTab({
             </div>
 
             <div className="combat-turn-mode-picker">
-              <HelpLabel help="Détermine si l'ennemi attaque automatiquement ou si le joueur doit cliquer pour lancer son dé.">Tour de l'ennemi</HelpLabel>
-              <div className="combat-mode-switch" role="group" aria-label="Mode du tour ennemi">
-                <button
-                  type="button"
-                  className={combat.enemyAutoTurn ? 'active' : ''}
-                  onClick={() => updateDefaultCombat({ enemyAutoTurn: true })}
-                >
-                  Automatique
-                </button>
-                <button
-                  type="button"
-                  className={!combat.enemyAutoTurn ? 'active' : ''}
-                  onClick={() => updateDefaultCombat({ enemyAutoTurn: false })}
-                >
-                  Joueur lance le dé
-                </button>
+              <HelpLabel help="Mode de décision par défaut pour les pouvoirs ennemis. Tactique ajuste la probabilité selon la situation; aléatoire utilise seulement le pourcentage configuré.">IA ennemie par défaut</HelpLabel>
+              <div className="combat-mode-switch" role="group" aria-label="Mode IA ennemi par défaut">
+                {ENEMY_AI_MODES.map((mode) => (
+                  <button
+                    key={mode.id}
+                    type="button"
+                    className={combat.enemyAiMode === mode.id ? 'active' : ''}
+                    onClick={() => updateDefaultCombat({ enemyAiMode: mode.id })}
+                  >
+                    {mode.label}
+                  </button>
+                ))}
               </div>
               <small>
-                {combat.enemyAutoTurn
-                  ? "L'ennemi joue juste après l'attaque du héros."
-                  : "Après l'attaque du héros, le combat attend le lancer du dé ennemi."}
+                {combat.enemyAiMode === 'tactical'
+                  ? "L'ennemi adapte sa dépense de mana à l'état du combat."
+                  : "L'ennemi suit uniquement sa tendance pouvoir en pourcentage."}
               </small>
+            </div>
+
+            <div className="combat-turn-mode-picker">
+              <HelpLabel help="Nom utilisé pour le pouvoir ennemi quand le combat sélectionné n'a pas son propre nom.">Nom du pouvoir par défaut</HelpLabel>
+              <input
+                value={combat.enemyPowerName}
+                placeholder={DEFAULT_COMBAT_SETTINGS.enemyPowerName}
+                onChange={(event) => updateDefaultCombat({ enemyPowerName: event.target.value || DEFAULT_COMBAT_SETTINGS.enemyPowerName })}
+              />
+              <small>Les combats peuvent le remplacer dans l'onglet Ennemi.</small>
             </div>
 
             <MediaSlotEditor
@@ -1017,6 +1305,9 @@ export default function CombatTab({
                     <span><strong>{selectedEnemyArmor}</strong> armure</span>
                     <span><strong>{selectedEnemyDodgeChance}%</strong> esquive</span>
                     <span><strong>{selectedEnemyMaxMana}</strong> mana</span>
+                    <span><strong>Manuel</strong> riposte</span>
+                    <span><strong>{getEnemyAiModeLabel(selectedEnemyAiMode)}</strong> IA</span>
+                    <span><strong>{selectedEnemyPowerName}</strong> nom pouvoir</span>
                     <span><strong>{selectedEnemyPowerUsageChance}%</strong> pouvoir</span>
                     <span><strong>{selectedEnemyCriticalChance}%</strong> critique</span>
                   </div>
@@ -1172,6 +1463,22 @@ export default function CombatTab({
                       </div>
                     </div>
                     <div className="combat-enemy-grid">
+                      <div>
+                        <HelpLabel help="Nom affiché dans les messages et les logs quand l'ennemi utilise son pouvoir.">Nom du pouvoir</HelpLabel>
+                        <input
+                          value={selectedEntry.combatEnemyPowerName || ''}
+                          placeholder={combat.enemyPowerName}
+                          onChange={(event) => updateCombatEntry({ combatEnemyPowerName: event.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <HelpLabel help="Mode de décision de cet ennemi. Tactique ajuste la tendance selon les PV, la mana, les résistances et les états; aléatoire suit le pourcentage brut.">IA ennemie</HelpLabel>
+                        <select value={selectedEnemyAiMode} onChange={(event) => updateCombatEntry({ combatEnemyAiMode: normalizeEnemyAiMode(event.target.value) })}>
+                          {ENEMY_AI_MODES.map((mode) => (
+                            <option key={mode.id} value={mode.id}>{mode.label}</option>
+                          ))}
+                        </select>
+                      </div>
                       <div>
                         <HelpLabel help="Élément du pouvoir ennemi. Les résistances du héros peuvent réduire ses dégâts.">Type</HelpLabel>
                         <select value={selectedEnemyPowerType} onChange={(event) => updateCombatEntry({ combatEnemyPowerType: normalizePowerType(event.target.value) })}>

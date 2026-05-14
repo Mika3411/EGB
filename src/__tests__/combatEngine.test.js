@@ -174,6 +174,28 @@ describe('combatEngine', () => {
     expect(result.enemyHealth).toBe(8);
   });
 
+  it('lets critical hero hits pierce full damage blocking for 1 PV', () => {
+    const result = resolveHeroCombatAttack({
+      stats: {
+        ...baseStats,
+        heroAttackType: 'physical',
+        enemyStats: {
+          ...baseStats.enemyStats,
+          armor: 999,
+          resistances: { water: 0, earth: 0, fire: 0, lightning: 0 },
+        },
+      },
+      enemyHealth: 10,
+      heroMana: 6,
+      rawRoll: 20,
+    });
+
+    expect(result.critical).toBe(true);
+    expect(result.criticalPierced).toBe(true);
+    expect(result.damage).toBe(1);
+    expect(result.enemyHealth).toBe(9);
+  });
+
   it('lets the enemy dodge a successful hero attack', () => {
     const result = resolveHeroCombatAttack({
       stats: {

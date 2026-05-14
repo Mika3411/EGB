@@ -1065,6 +1065,7 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     heroState,
     heroSetupComplete,
     activeHeroCombat,
+    heroCombatStates,
     equippedHeroItemIds,
     equippedHeroSlotMap,
     lastChoiceSnapshot,

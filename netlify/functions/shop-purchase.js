@@ -3,6 +3,7 @@ import {
   json,
   parseBody,
   privateDataBucket,
+  publicAssetsBucket,
   resolveCreditUserId,
   withErrors,
 } from './_shared.js';
@@ -77,6 +78,47 @@ const loadShopPacks = async (supabase) => {
   return Array.isArray(packs) ? packs.map(normalizeShopPack) : [];
 };
 
+const validateStoragePath = (path = '') => {
+  const storagePath = String(path || '').trim().replace(/^\/+/, '');
+  if (!storagePath || storagePath.includes('..') || /[\0\\]/.test(storagePath)) {
+    const error = new Error('Chemin Supabase invalide.');
+    error.statusCode = 400;
+    throw error;
+  }
+  return storagePath;
+};
+
+const getDownloadBuckets = (pack = {}) => {
+  const configuredBuckets = [
+    pack.downloadStorageBucket,
+    pack.downloadBucket,
+  ].map((bucket) => String(bucket || '').trim()).filter(Boolean);
+  const defaultBuckets = pack.downloadMode === 'supabase'
+    ? [publicAssetsBucket, privateDataBucket]
+    : [privateDataBucket, publicAssetsBucket];
+
+  return [...new Set([...configuredBuckets, ...defaultBuckets])];
+};
+
+const resolvePackDownloadUrl = async (supabase, pack = {}) => {
+  const downloadUrl = String(pack.downloadUrl || '').trim();
+  if (downloadUrl) return downloadUrl;
+
+  const downloadStoragePath = String(pack.downloadStoragePath || '').trim();
+  if (!downloadStoragePath) return '';
+
+  const storagePath = validateStoragePath(downloadStoragePath);
+  let lastError = null;
+  for (const bucket of getDownloadBuckets(pack)) {
+    const { data, error } = await supabase.storage.from(bucket).createSignedUrl(storagePath, 60 * 60);
+    if (!error && data?.signedUrl) return data.signedUrl;
+    lastError = error || lastError;
+  }
+
+  if (lastError) throw lastError;
+  return '';
+};
+
 const purchaseShopPack = async (supabase, {
   packId,
   userId,
@@ -122,7 +164,8 @@ export const handler = async (event) => withErrors(event, async () => {
   const packs = await loadShopPacks(supabase);
   const pack = packs.find((entry) => entry.id === packId);
   if (!pack || pack.archived) return json(404, { error: 'Pack indisponible.' });
-  if (!pack.downloadUrl) return json(400, { error: 'Pack sans fichier telechargeable.' });
+  const downloadUrl = await resolvePackDownloadUrl(supabase, pack);
+  if (!downloadUrl) return json(400, { error: 'Pack sans fichier telechargeable.' });
 
   const costCredits = Math.max(0, Math.round(Number(pack.costCredits || 0)));
   const title = String(pack.title || 'Pack boutique').trim().slice(0, 120);
@@ -143,7 +186,7 @@ export const handler = async (event) => withErrors(event, async () => {
       packId,
       title,
       costCredits,
-      downloadUrl: pack.downloadUrl,
+      downloadUrl,
       downloadFileName,
       purchasedAt: purchaseResult.purchased_at,
     },

@@ -74,6 +74,20 @@ export function createPreviewHeroCombatActions({
     return nextStates[combatId];
   };
 
+  const buildHeroCombatHistory = (current = {}, nextMessage = '') => {
+    const cleanMessage = String(nextMessage || '').replace(/\s+/g, ' ').trim();
+    const existingHistory = Array.isArray(current.history)
+      ? current.history
+      : current.message
+      ? [current.message]
+      : [];
+    const history = existingHistory
+      .map((entry) => String(entry || '').replace(/\s+/g, ' ').trim())
+      .filter(Boolean);
+    if (cleanMessage && history[history.length - 1] !== cleanMessage) history.push(cleanMessage);
+    return history.slice(-8);
+  };
+
   const runSkillCheckAction = (entry = {}, options = {}) => {
     if (blockDefeatedHeroAction()) return false;
     if (!heroAdventure.enabled) {
@@ -382,17 +396,24 @@ export function createPreviewHeroCombatActions({
     const enemyActionText = enemyAttack.usesPower
       ? `${enemyName} utilise ${enemyStats.powerName} (${getPowerTypeLabel(enemyStats.powerType)}).`
       : `${enemyName} riposte.`;
+    enemyRoll.damage = enemyAttack.damage;
+    enemyRoll.damageTarget = 'hero';
+    enemyRoll.damageBlocked = enemyAttack.armorBlocked + enemyAttack.shieldBlocked;
+    enemyRoll.dodged = enemyAttack.dodged;
+    enemyRoll.critical = enemyAttack.critical;
+    enemyRoll.criticalPierced = enemyAttack.criticalPierced;
     const criticalText = enemyAttack.critical ? ` Coup critique x${enemyAttack.criticalMultiplier}.` : '';
     const heroResistanceText = enemyAttack.resistance ? ` Résistance du héros: dégâts réduits.` : '';
     const heroDodgeText = enemyAttack.dodged ? ` Le héros esquive.` : '';
     const heroArmorText = enemyAttack.armorBlocked ? ` Armure héros -${enemyAttack.armorBlocked}.` : '';
     const heroShieldText = enemyAttack.shieldBlocked ? ` Bouclier -${enemyAttack.shieldBlocked}.` : '';
+    const criticalPierceText = enemyAttack.criticalPierced ? ` Percée critique: 1 PV traverse la défense.` : '';
     const manaText = enemyAttack.usesPower ? ` Mana ${enemyAttack.enemyMana}/${enemyStats.maxMana}.` : '';
     const damageText = enemyAttack.damage > 0
       ? ` Le héros perd ${enemyAttack.damage} PV.`
       : ` Le héros ne perd pas de PV.`;
     const damageFormulaText = ` Dégâts: force ${enemyAttack.forceDamage} + dé ${enemyAttack.dieDamageBonus} (${enemyAttack.dieDamagePercent}%) = ${enemyAttack.baseDamage}.`;
-    const attackText = `Jet ennemi: ${enemyRoll.raw}. ${enemyActionText}${damageFormulaText}${damageText}${criticalText}${heroResistanceText}${heroDodgeText}${heroArmorText}${heroShieldText}${manaText}`;
+    const attackText = `Jet ennemi: ${enemyRoll.raw}. ${enemyActionText}${damageFormulaText}${damageText}${criticalText}${heroResistanceText}${heroDodgeText}${heroArmorText}${heroShieldText}${criticalPierceText}${manaText}`;
     const visualEffects = [
       enemyAttack.usesPower && enemyStats.powerManaCost > 0 ? makeCombatVisualEffect('enemy', 'mana', `-${enemyStats.powerManaCost} Mana`) : null,
       enemyAttack.critical ? makeCombatVisualEffect('hero', 'critical', `CRITIQUE x${enemyAttack.criticalMultiplier}`) : null,
@@ -713,6 +734,11 @@ export function createPreviewHeroCombatActions({
       heroRandomCritical: heroAttack.randomCritical,
       heroCriticalMultiplier: heroAttack.criticalMultiplier,
       rawHeroDamage: heroAttack.rawDamage,
+      damage: heroAttack.damage,
+      damageTarget: 'enemy',
+      damageBlocked: heroAttack.armorBlocked + heroAttack.shieldBlocked,
+      dodged: heroAttack.dodged,
+      criticalPierced: heroAttack.criticalPierced,
     };
     let nextHeroStatusEffects = heroTick.effects;
     let nextEnemyStatusEffects = heroAttack.enemyStatusEffects || currentEnemyStatusEffects;
@@ -751,6 +777,7 @@ export function createPreviewHeroCombatActions({
     const shieldText = hit && heroAttack.shieldBlocked
       ? ` Bouclier -${heroAttack.shieldBlocked}.`
       : '';
+    const criticalPierceText = heroAttack.criticalPierced ? ` Percée critique: 1 PV traverse la défense.` : '';
     const recoveryText = heroAttack.recovery.healthRecovered || heroAttack.recovery.manaRecovered
       ? ` Soin: +${heroAttack.recovery.healthRecovered} PV, +${heroAttack.recovery.manaRecovered} mana.`
       : '';
@@ -760,10 +787,10 @@ export function createPreviewHeroCombatActions({
     const heroManaSpent = heroAttack.manaSpent;
     const heroVisualEffects = [
       heroManaSpent > 0 ? makeCombatVisualEffect('hero', 'mana', `-${heroManaSpent} Mana`) : null,
-      heroCritical ? makeCombatVisualEffect('enemy', 'critical', `CRITIQUE x${heroCriticalMultiplier}`) : null,
       hit && heroDamage > 0
         ? makeCombatOutcomeEffect('enemy', nextEnemyHealth <= 0 ? 'death' : 'hit', nextEnemyHealth <= 0 ? 'KO' : `-${heroDamage} PV`)
         : null,
+      heroCritical ? makeCombatVisualEffect('enemy', 'critical', `CRITIQUE x${heroCriticalMultiplier}`) : null,
     ].filter(Boolean);
 
     if (nextEnemyHealth <= 0) {
@@ -780,7 +807,7 @@ export function createPreviewHeroCombatActions({
       if (reward.itemId) addInventoryItem(reward.itemId);
       if (options.sourceHotspotId) markHotspotCompleted(options.sourceHotspotId);
       const endText = entry.combatEndDialogue ? ` ${entry.combatEndDialogue}` : '';
-      const victoryAttackText = `${heroPowerText}${enemyName} perd ${heroDamage} PV.${heroDamageFormulaText}${heroCriticalText}${resistanceText}${dodgeText}${armorText}${shieldText}${recoveryText}${statusText}`;
+      const victoryAttackText = `${heroPowerText}${enemyName} perd ${heroDamage} PV.${heroDamageFormulaText}${heroCriticalText}${resistanceText}${dodgeText}${armorText}${shieldText}${criticalPierceText}${recoveryText}${statusText}`;
       const victoryMessage = `${rollText} ${victoryAttackText} ${enemyName} est vaincu.${endText} ${entry.combatVictoryDialogue || 'Victoire.'}${reward.message}`.trim();
       if (entry.combatVictoryTargetSceneId) {
         setDialogue(victoryMessage);
@@ -815,7 +842,7 @@ export function createPreviewHeroCombatActions({
     }
 
     const attackText = hit
-      ? `${heroPowerText}${enemyName} perd ${heroDamage} PV.${heroDamageFormulaText}${heroCriticalText}${resistanceText}${dodgeText}${armorText}${shieldText}${recoveryText}${statusText}`
+      ? `${heroPowerText}${enemyName} perd ${heroDamage} PV.${heroDamageFormulaText}${heroCriticalText}${resistanceText}${dodgeText}${armorText}${shieldText}${criticalPierceText}${recoveryText}${statusText}`
       : `${heroPowerText}Aucun dégât.${recoveryText}${statusText}`;
     const healthText = ` Il lui reste ${nextEnemyHealth}/${enemyMaxHealth} PV.`;
     if (options.allowManualEnemyTurn) {
@@ -949,6 +976,9 @@ export function createPreviewHeroCombatActions({
         return true;
       }
       if (options.closeConversation) closeConversation();
+      const startMessage = entry.combatStartDialogue || (enemyStarts
+        ? `${runtime.enemyName} a l'initiative (${initiative.enemyInitiative} contre ${initiative.heroInitiative}). Le dé ennemi se lance.`
+        : `Combat contre ${runtime.enemyName}. À toi de jouer.`);
       setActiveHeroCombat({
         id: runtime.combatId,
         entry: { ...entry },
@@ -960,14 +990,17 @@ export function createPreviewHeroCombatActions({
         enemyMaxHealth: runtime.enemyMaxHealth,
         enemyMana: runtime.currentEnemyMana,
         enemyMaxMana: runtime.enemyMaxMana,
+        heroInitiative: initiative.heroInitiative,
+        enemyInitiative: initiative.enemyInitiative,
+        heroStatusEffects: runtime.currentHeroStatusEffects,
+        enemyStatusEffects: runtime.currentEnemyStatusEffects,
         round: 1,
         phase: enemyStarts ? 'enemy' : 'hero',
         pendingEnemyTurn: enemyStarts,
         initiativePending: enemyStarts,
         status: 'active',
-        message: entry.combatStartDialogue || (enemyStarts
-          ? `${runtime.enemyName} a l'initiative (${initiative.enemyInitiative} contre ${initiative.heroInitiative}). Le dé ennemi se lance.`
-          : `Combat contre ${runtime.enemyName}. À toi de jouer.`),
+        message: startMessage,
+        history: buildHeroCombatHistory({}, startMessage),
         lastRoll: null,
         lastEnemyRoll: null,
         visualEffects: [],
@@ -1010,6 +1043,7 @@ export function createPreviewHeroCombatActions({
         survivalPending: Boolean(result.survivalPending),
         status: result.victory ? 'victory' : result.defeat ? 'defeat' : 'active',
         message: result.message,
+        history: buildHeroCombatHistory(current, result.message),
         pendingSceneId: result.pendingSceneId || '',
         pendingSceneMessage: result.pendingSceneMessage || '',
         lastRoll: result.roll || current.lastRoll,
@@ -1047,6 +1081,7 @@ export function createPreviewHeroCombatActions({
         initiativePending: false,
         status: result.defeat ? 'defeat' : 'active',
         message: result.message,
+        history: buildHeroCombatHistory(current, result.message),
         pendingSceneId: result.pendingSceneId || '',
         pendingSceneMessage: result.pendingSceneMessage || '',
         lastEnemyRoll: result.enemyRoll || current.lastEnemyRoll,
@@ -1077,6 +1112,7 @@ export function createPreviewHeroCombatActions({
         survivalUsed: true,
         status: result.defeat ? 'defeat' : 'active',
         message: result.message,
+        history: buildHeroCombatHistory(current, result.message),
         pendingSceneId: result.pendingSceneId || '',
         pendingSceneMessage: result.pendingSceneMessage || '',
         lastRoll: result.roll || current.lastRoll,
@@ -1127,6 +1163,7 @@ export function createPreviewHeroCombatActions({
         phase: 'enemy',
         pendingEnemyTurn: true,
         message,
+        history: buildHeroCombatHistory(current, message),
         lastRoll: roll,
         lastEnemyRoll: null,
         visualEffects: [],

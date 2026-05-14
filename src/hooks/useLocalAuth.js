@@ -57,37 +57,59 @@ const openProjectsDb = () => new Promise((resolve, reject) => {
   request.onerror = () => reject(request.error || new Error('Ouverture IndexedDB impossible'));
 });
 
+// Cursor reads avoid materializing every user's project records and media blobs at once.
+const readUserProjectRecordsFromIndexedDb = (db, userId) => new Promise((resolve, reject) => {
+  const records = [];
+  const prefix = getProjectRecordKeyPrefix(userId);
+  const transaction = db.transaction(PROJECTS_DB_STORE, 'readonly');
+  const store = transaction.objectStore(PROJECTS_DB_STORE);
+  const range = typeof IDBKeyRange !== 'undefined'
+    ? IDBKeyRange.bound(prefix, `${prefix}\uffff`)
+    : null;
+  const request = range ? store.openCursor(range) : store.openCursor();
+
+  request.onsuccess = () => {
+    const cursor = request.result;
+    if (!cursor) return;
+    if (typeof cursor.key === 'string' && cursor.key.startsWith(prefix) && cursor.value?.id) {
+      records.push(normalizeProjectRecord(cursor.value));
+    }
+    cursor.continue();
+  };
+  request.onerror = () => reject(request.error || new Error('Lecture IndexedDB impossible'));
+  transaction.oncomplete = () => resolve(records);
+  transaction.onerror = () => reject(transaction.error || new Error('Transaction IndexedDB impossible'));
+});
+
+const readProjectListFromIndexedDb = (db, userId) => new Promise((resolve, reject) => {
+  const transaction = db.transaction(PROJECTS_DB_STORE, 'readonly');
+  const store = transaction.objectStore(PROJECTS_DB_STORE);
+  const request = store.get(userId);
+
+  request.onsuccess = () => {
+    const projects = Array.isArray(request.result)
+      ? request.result.map(normalizeProjectRecord)
+      : [];
+    resolve(projects);
+  };
+  request.onerror = () => reject(request.error || new Error('Lecture IndexedDB impossible'));
+  transaction.onerror = () => reject(transaction.error || new Error('Transaction IndexedDB impossible'));
+});
+
 const readProjectsFromIndexedDb = async (userId) => {
   if (!userId) return [];
+  let db = null;
   try {
-    const db = await openProjectsDb();
-    return await new Promise((resolve, reject) => {
-      const transaction = db.transaction(PROJECTS_DB_STORE, 'readonly');
-      const store = transaction.objectStore(PROJECTS_DB_STORE);
-      const listRequest = store.get(userId);
-      const keysRequest = store.getAllKeys();
-      const valuesRequest = store.getAll();
-      const requests = [listRequest, keysRequest, valuesRequest];
-      requests.forEach((request) => {
-        request.onerror = () => reject(request.error || new Error('Lecture IndexedDB impossible'));
-      });
-      transaction.oncomplete = () => {
-        const listProjects = Array.isArray(listRequest.result) ? listRequest.result.map(normalizeProjectRecord) : [];
-        const prefix = getProjectRecordKeyPrefix(userId);
-        const projectRecords = (valuesRequest.result || [])
-          .map((value, index) => ({ key: keysRequest.result?.[index], value }))
-          .filter(({ key, value }) => typeof key === 'string' && key.startsWith(prefix) && value?.id)
-          .map(({ value }) => normalizeProjectRecord(value));
-        db.close();
-        resolve(mergeProjectRecordsByFreshness(listProjects, projectRecords));
-      };
-      transaction.onerror = () => {
-        db.close();
-        reject(transaction.error || new Error('Transaction IndexedDB impossible'));
-      };
-    });
+    db = await openProjectsDb();
+    const projectRecords = await readUserProjectRecordsFromIndexedDb(db, userId);
+    if (projectRecords.length > 0) {
+      return mergeProjectRecordsByFreshness(projectRecords);
+    }
+    return await readProjectListFromIndexedDb(db, userId);
   } catch {
     return [];
+  } finally {
+    if (db) db.close();
   }
 };
 

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { AlertTriangle, Dices, Eye, Heart, Plus, ShieldCheck, Sparkles, Swords, Trash2, Trophy } from 'lucide-react';
 import HelpLabel from './forms/HelpLabel.jsx';
+import HeroCharacterSheetPreview from './HeroCharacterSheetPreview.jsx';
 import {
   estimateCombatBalance,
   getCombatSimulationStats,
@@ -19,7 +20,6 @@ import {
   normalizeHeroSheet as normalizeSharedHeroSheet,
   normalizeSkillId,
 } from '../lib/heroAdventureDefaults.js';
-
 const DEFAULT_HERO_ADVENTURE = DEFAULT_HERO_EDITOR_ADVENTURE;
 const HERO_DICE_SKINS = [
   { id: 'classic', label: 'Ivoire' },
@@ -88,7 +88,6 @@ const NARRATION_BACKGROUND_PRESETS = [
   { id: 'blood', label: 'Sombre', value: 'rgba(69, 10, 10, .72)' },
   { id: 'violet', label: 'Arcane', value: 'rgba(76, 29, 149, .70)' },
 ];
-
 const FIELD_HELP = {
   enabled: "Affiche les options Hero aventure dans le jeu : fiche personnage, PV, mana, compétences, équipements, tests et combats.",
   heroName: "Nom du personnage joué par le joueur. Il apparaît sur la fiche personnage et dans le panneau Hero.",
@@ -119,11 +118,11 @@ const FIELD_HELP = {
   criticalMultiplier: "Multiplicateur appliqué aux dégâts du héros quand le dé fait une réussite critique.",
   failForward: "Quand le joueur échoue, prévoyez une suite intéressante : blessure, perte de mana, autre chemin, indice incomplet.",
 };
-
 const DICE_PRESETS = [4, 6, 8, 10, 12, 20, 100];
 const rollDie = (sides = 6) => Math.floor(Math.random() * sides) + 1;
 const HERO_INTERNAL_TABS = [
   { id: 'sheet', label: 'Fiche' },
+  { id: 'preview', label: 'Aperçu' },
   { id: 'powers', label: 'Pouvoirs' },
   { id: 'skills', label: 'Compétences' },
   { id: 'rules', label: 'Affichage' },
@@ -1030,6 +1029,7 @@ export default function HeroTab({ project, patchProject, onPreviewHeroCharacter,
         </div>
 
         <div className="subpanel-grid">
+          {activeHeroTab === 'preview' ? <HeroCharacterSheetPreview hero={hero} heroAdventure={heroAdventure} onOpenPlayerPreview={previewHeroPage} /> : null}
           {activeHeroTab === 'sheet' ? (
           <div className="subpanel" data-tour="hero-sheet-panel">
             <div className="subpanel-head">

@@ -40,6 +40,34 @@ describe('project safety validation', () => {
     expect(result.errors).toEqual([]);
   });
 
+  it('accepts advanced combat fields in strict AI mode', () => {
+    const result = validateProjectSafety(makeProject({
+      scenes: [{
+        ...makeProject().scenes[0],
+        hotspots: [{
+          id: 'combat1',
+          name: 'Gardien',
+          x: 40,
+          y: 45,
+          width: 18,
+          height: 18,
+          actionType: 'hero_combat',
+          combatEnemyName: 'Sentinelle',
+          combatStartDialogue: 'La sentinelle bloque le passage.',
+          combatEndDialogue: 'La poussiere retombe.',
+          combatHeroDieDamagePercent: 50,
+          combatEnemyDieDamagePercent: 25,
+          combatEnemyCunning: 12,
+          combatEnemyChaos: 14,
+          combatEnemyAiMode: 'tactical',
+        }],
+      }],
+    }), { mode: 'ai' });
+
+    expect(result.ok).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
   it('rejects unexpected fields in strict AI mode', () => {
     const result = validateProjectSafety(makeProject({ injected: true }), { mode: 'ai' });
 

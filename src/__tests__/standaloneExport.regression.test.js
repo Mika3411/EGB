@@ -79,6 +79,106 @@ const makeStandaloneProject = () => ({
   }],
 });
 
+const makeStandaloneCombatMediaProject = () => ({
+  id: 'standalone-combat-media',
+  title: 'Standalone Combat Media',
+  creationMode: 'hero_adventure',
+  start: { type: 'scene', targetSceneId: 'scene-start', targetCinematicId: '' },
+  acts: [{ id: 'act-1', name: 'Acte 1' }],
+  heroAdventure: {
+    enabled: true,
+    dice: { sides: 20, label: 'd20' },
+    rules: {
+      criticalSuccess: 20,
+      criticalFailure: 1,
+      criticalChance: 0,
+      criticalMultiplier: 2,
+    },
+    hero: {
+      id: 'hero-1',
+      name: 'Ariane',
+      health: 10,
+      maxHealth: 10,
+      mana: 3,
+      maxMana: 3,
+      skills: [{ id: 'force', name: 'Force', value: 4 }],
+      powers: [],
+      characterImageData: 'data:image/png;base64,aGVybw==',
+    },
+    combat: {
+      turnMode: true,
+      backgroundImageData: 'data:image/png;base64,YXJlbmE=',
+      backgroundImageName: 'Combat Arena.png',
+      heroImageData: 'data:image/png;base64,Z2xvYmFsLWhlcm8=',
+      heroImageName: 'Global Hero.png',
+      enemyImageData: 'data:image/png;base64,Z2xvYmFsLWVuZW15',
+      enemyImageName: 'Global Enemy.png',
+      heroHitEffectMediaType: 'video',
+      heroHitEffectVideoData: 'data:video/mp4;base64,aGVyby12aWRlbw==',
+      heroHitEffectVideoName: 'Hero Impact.mp4',
+      heroHitEffectAudioData: 'data:audio/mpeg;base64,aGVyby1hdWRpbw==',
+      heroHitEffectAudioName: 'Hero Impact.mp3',
+      enemyDeathEffectMediaType: 'video',
+      enemyDeathEffectVideoData: 'data:video/mp4;base64,ZW5lbXktdmlkZW8=',
+      enemyDeathEffectVideoName: 'Enemy Death.mp4',
+      enemyDeathEffectAudioData: 'data:audio/ogg;base64,ZW5lbXktYXVkaW8=',
+      enemyDeathEffectAudioName: 'Enemy Death.ogg',
+    },
+  },
+  scenes: [{
+    id: 'scene-start',
+    name: 'Hall',
+    actId: 'act-1',
+    hotspots: [{
+      id: 'combat-hotspot',
+      name: 'Gardien',
+      actionType: 'hero_combat',
+      x: 40,
+      y: 50,
+      width: 20,
+      height: 20,
+      combatEnemyName: 'Gardien',
+      combatEnemyMaxHealth: 3,
+      combatBackgroundImageData: 'data:image/png;base64,aG90c3BvdC1iZw==',
+      combatBackgroundImageName: 'Hotspot Combat BG.png',
+      combatEnemyImageData: 'data:image/png;base64,aG90c3BvdC1lbmVteQ==',
+      combatEnemyImageName: 'Hotspot Enemy.png',
+    }, {
+      id: 'talk',
+      name: 'Oracle',
+      actionType: 'conversation',
+      x: 20,
+      y: 30,
+      width: 18,
+      height: 18,
+      conversation: {
+        startNodeId: 'intro',
+        nodes: [{
+          id: 'intro',
+          speaker: 'Oracle',
+          text: 'Un duel?',
+          replies: [{
+            id: 'fight-reply',
+            label: 'Combattre',
+            actionType: 'hero_combat',
+            combatEnemyName: 'Ombre',
+            combatEnemyMaxHealth: 2,
+            combatHeroImageData: 'data:image/png;base64,cmVwbHktaGVybw==',
+            combatHeroImageName: 'Reply Hero.png',
+          }],
+        }],
+      },
+    }],
+    sceneObjects: [],
+  }],
+  items: [],
+  enigmas: [],
+  cinematics: [],
+  combinations: [],
+  assets: [],
+  storyVariables: [],
+});
+
 const makeHeroMalusProject = () => ({
   id: 'standalone-hero-malus',
   title: 'Standalone Hero Malus',
@@ -385,6 +485,43 @@ describe('standalone export regression', () => {
       exportedProject.items[0].imageData,
       exportedProject.cinematics[0].slides[0].imageData,
       exportedProject.cinematics[0].slides[0].audioData,
+    ].forEach((assetPath) => {
+      expect(files).toContain(`jeu-exporte/${assetPath}`);
+    });
+  });
+
+  test('packages standalone combat media instead of leaving audio and video data URLs', async () => {
+    await exportStandalone(makeStandaloneCombatMediaProject());
+
+    expect(downloadBlob).toHaveBeenCalledTimes(1);
+    const [, blob] = downloadBlob.mock.calls[0];
+    const zip = await JSZip.loadAsync(blob);
+    const files = Object.keys(zip.files);
+    const exportedProject = JSON.parse(await zip.file('jeu-exporte/project.json').async('string'));
+    const combat = exportedProject.heroAdventure.combat;
+    const hotspot = exportedProject.scenes[0].hotspots[0];
+    const reply = exportedProject.scenes[0].hotspots[1].conversation.nodes[0].replies[0];
+
+    expect(combat.backgroundImageData).toMatch(/^assets\/combat\/combat-arena-png\.png$/);
+    expect(combat.heroImageData).toMatch(/^assets\/combat\/global-hero-png\.png$/);
+    expect(combat.enemyImageData).toMatch(/^assets\/combat\/global-enemy-png\.png$/);
+    expect(combat.heroHitEffectVideoData).toMatch(/^assets\/video\/hero-impact-mp4\.mp4$/);
+    expect(combat.heroHitEffectAudioData).toMatch(/^assets\/audio\/hero-impact-mp3\.mp3$/);
+    expect(combat.enemyDeathEffectVideoData).toMatch(/^assets\/video\/enemy-death-mp4\.mp4$/);
+    expect(combat.enemyDeathEffectAudioData).toMatch(/^assets\/audio\/enemy-death-ogg\.ogg$/);
+    expect(hotspot.combatBackgroundImageData).toMatch(/^assets\/combat\/hotspot-combat-bg-png\.png$/);
+    expect(hotspot.combatEnemyImageData).toMatch(/^assets\/combat\/hotspot-enemy-png\.png$/);
+    expect(reply.combatHeroImageData).toMatch(/^assets\/combat\/reply-hero-png\.png$/);
+    expect(JSON.stringify(exportedProject.heroAdventure.combat)).not.toContain('data:');
+
+    [
+      combat.heroHitEffectVideoData,
+      combat.heroHitEffectAudioData,
+      combat.enemyDeathEffectVideoData,
+      combat.enemyDeathEffectAudioData,
+      hotspot.combatBackgroundImageData,
+      hotspot.combatEnemyImageData,
+      reply.combatHeroImageData,
     ].forEach((assetPath) => {
       expect(files).toContain(`jeu-exporte/${assetPath}`);
     });

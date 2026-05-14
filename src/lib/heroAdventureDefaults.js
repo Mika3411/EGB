@@ -292,7 +292,7 @@ export const normalizeHeroCombatSettings = (rawCombat = {}, options = {}) => {
     ...sourceCombat,
     turnMode: sourceCombat.turnMode !== false,
     showDice: sourceCombat.showDice !== false,
-    enemyAutoTurn: sourceCombat.enemyAutoTurn !== false,
+    enemyAutoTurn: false,
     heroMediaType: normalizeCombatMediaType(sourceCombat.heroMediaType),
     enemyMediaType: normalizeCombatMediaType(sourceCombat.enemyMediaType),
     heroAnime2dSpec: sourceCombat.heroAnime2dSpec && typeof sourceCombat.heroAnime2dSpec === 'object' ? sourceCombat.heroAnime2dSpec : null,

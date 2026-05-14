@@ -53,7 +53,7 @@ export const createCombatEffectDefaults = () => Object.fromEntries(
 export const DEFAULT_COMBAT_SETTINGS = {
   turnMode: true,
   showDice: true,
-  enemyAutoTurn: true,
+  enemyAutoTurn: false,
   backgroundImageData: '',
   backgroundImageName: '',
   heroMediaType: 'image',
