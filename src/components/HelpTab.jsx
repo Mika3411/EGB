@@ -88,6 +88,7 @@ const HELP_TUTORIAL_OPTIONS = [
   ['map', 'Plan', 'Organiser les pièces, relier le parcours, vérifier les connexions réelles et repérer les scènes isolées.'],
   ['adventure', 'Narration', 'Contrôler les conversations a choix multiples, les réponses cachées, les variables d’histoire, les fins et les erreurs de branchement.'],
   ['hero', 'Héros', 'Configurer la fiche Hero Adventure : dé principal, PV, mana, compétences, critiques, puis relier ces valeurs aux tests, combats et objets héros.'],
+  ['combat', 'Combat', 'Centraliser les combats Hero Adventure : sources, arène, ennemis, pouvoirs, IA, équilibrage, effets et test direct en Preview.'],
   ['cinematics', 'Cinématiques', 'Construire une séquence narrative avec slides ou vidéo, régler le démarrage du jeu et définir l’action de fin.'],
   ['animation', 'Animation', 'Composer une séquence 2D avec storyboard, calques, retouches, mouvements, verrouillage et prévisualisation.'],
   ['combinations', 'Combinaisons', 'Relier deux objets entre eux, choisir un résultat utile et ecrire un retour clair pour le joueur.'],
@@ -97,9 +98,8 @@ const HELP_TUTORIAL_OPTIONS = [
   ['score', 'Bilan', 'Lire la note globale, les dimensions, les points forts, les alertes et le temps de jeu estime.'],
   ['ai', 'IA', 'Utiliser l’assistant IA, comprendre les crédits, les modes, les brouillons, les validations et les generations d images.'],
 ];
-
 const BEGINNER_HELP_TUTORIAL_OPTIONS = new Set(['profile', 'scenes', 'media', 'editor', 'enigmas', 'ai', 'preview']);
-const INTERMEDIATE_HELP_TUTORIAL_OPTIONS = new Set(['profile', 'scenes', 'media', 'editor', 'map', 'cinematics', 'enigmas', 'ai', 'preview']);
+const INTERMEDIATE_HELP_TUTORIAL_OPTIONS = new Set(['profile', 'scenes', 'media', 'editor', 'map', 'hero', 'combat', 'cinematics', 'enigmas', 'ai', 'preview']);
 
 const BEGINNER_MANUAL_SECTIONS = [
   {
@@ -211,7 +211,7 @@ const BEGINNER_FAQ_ITEMS = [
 const FAQ_ITEMS = [
   {
     question: 'Par quoi commencer quand on decouvre le builder ?',
-    answer: "Commence par le didacticiel Profil pour comprendre les projets, puis Scènes et Éditeur pour créer les lieux, objets et zones cliquables. Pour un mode choix multiples, ajoute Narration afin de vérifier les branches. Passe ensuite par Énigmes, Logique, Plan et Preview. Le plus simple est de créer une petite boucle jouable, de la tester, puis de l'enrichir.",
+    answer: "Commence par le didacticiel Profil pour comprendre les projets, puis Scènes et Éditeur pour créer les lieux, objets et zones cliquables. Pour un mode choix multiples, ajoute Narration afin de vérifier les branches. Pour une Hero Adventure, enchaîne Héros, Combat et Preview. Passe ensuite par Énigmes, Logique, Plan et Bilan.",
   },
   {
     question: 'Quelle différence entre une scène et une sous-scène ?',
@@ -303,7 +303,7 @@ const FAQ_ITEMS = [
   },
   {
     question: 'Que vérifier avant de publier ?',
-    answer: 'Teste le jeu du début à la fin, vérifie le point de départ, les zones non reliées, les énigmes sans solution, les objets impossibles à obtenir, les combinaisons utiles, les cinématiques avec action de fin, le Plan, le Bilan, la catégorie, la mention d\'âge et la miniature.',
+    answer: 'Teste le jeu du début à la fin, vérifie le point de départ, les zones non reliées, les énigmes sans solution, les objets impossibles à obtenir, les combinaisons utiles, les combats trop faciles ou bloquants, les cinématiques avec action de fin, le Plan, le Bilan, la catégorie, la mention d\'âge et la miniature.',
   },
   {
     question: 'Pourquoi mon objet n’apparaît pas dans l’inventaire ?',

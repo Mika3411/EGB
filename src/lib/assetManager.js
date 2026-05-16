@@ -120,6 +120,10 @@ export function getAssetUsage(project = {}, assetId = '') {
     if (item.imageId === assetId) addUsage('item', item.id, 'image');
   });
 
+  (project.decorModels3d || []).forEach((model) => {
+    if (model.imageId === assetId) addUsage('decor3d', model.id, 'image');
+  });
+
   (project.scenes || []).forEach((scene) => {
     if (scene.backgroundId === assetId) addUsage('scene', scene.id, 'background');
     if (scene.musicId === assetId) addUsage('scene', scene.id, 'music');
@@ -306,6 +310,17 @@ export function collectProjectAssets(project = {}) {
       url: item.imageData,
       name: item.imageName || item.name,
       usedIn: [`item:${item.id}`],
+    });
+  });
+
+  (project.decorModels3d || []).forEach((model) => {
+    pushAsset(assets, {
+      id: model.imageId || makeAssetId('decor_3d', model.id, 'image'),
+      type: 'image',
+      url: model.imageData,
+      name: model.imageName || model.name,
+      usedIn: [`decor3d:${model.id}`],
+      meta: { role: 'decor3dTexture' },
     });
   });
 
@@ -510,6 +525,10 @@ export function migrateProjectAssetReferences(project = {}) {
 
   (project.items || []).forEach((item) => {
     assignAssetIdFromUrl(project, item, { idField: 'imageId', dataField: 'imageData', fallbackParts: ['item', item.id, 'image'] });
+  });
+
+  (project.decorModels3d || []).forEach((model) => {
+    assignAssetIdFromUrl(project, model, { idField: 'imageId', dataField: 'imageData', fallbackParts: ['decor_3d', model.id, 'image'] });
   });
 
   (project.cinematics || []).forEach((cinematic) => {

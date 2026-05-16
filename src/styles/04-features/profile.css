@@ -208,6 +208,20 @@
 
 .profile-publish-button{min-height:38px;padding:8px 14px;border-radius:12px;border:1px solid rgba(134,239,172,.3);background:linear-gradient(180deg,#10b981,#047857);color:#fff;box-shadow:0 10px 24px #05966938}
 
+.profile-project-grid{margin-top:12px}
+
+.profile-project-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
+
+.profile-project-column{display:grid;gap:12px;align-content:start;min-width:0}
+
+.profile-project-grid .list-card{min-width:0;margin-bottom:0}
+
+.profile-project-list-mobile{display:none}
+
+.profile-project-grid>.empty-state-inline{grid-column:1 / -1}
+
+@media (max-width: 1180px){.profile-project-columns{display:none}.profile-project-list-mobile{display:grid;gap:12px}}
+
 .user-chip{display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:20px;min-width:320px;justify-content:space-between}
 
 .user-chip-pro{width:100%}

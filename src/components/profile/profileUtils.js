@@ -40,6 +40,7 @@ export const PROFILE_TUTORIAL_OPTIONS = [
   ['map', 'Plan'],
   ['adventure', 'Narration'],
   ['hero', 'Héros'],
+  ['combat', 'Combat'],
   ['cinematics', 'Cinématiques'],
   ['animation', 'Animation'],
   ['combinations', 'Combinaisons'],

@@ -1,0 +1,75 @@
+.arcade-shell.arcade-workspace-decors3d{height:100vh;max-height:100vh}
+.arcade-shell > .decor3d-tab{overflow:hidden}
+.decor3d-tab{display:grid;grid-template-columns:minmax(240px,300px) minmax(360px,1fr) minmax(280px,360px);gap:14px;align-items:stretch;min-height:0;height:100%;max-height:100%;padding:14px}
+.decor3d-tab.decor3d-tab-minimal{grid-template-columns:minmax(0,1fr)}
+.decor3d-tab.decor3d-tab-with-inspector{grid-template-columns:minmax(220px,300px) minmax(0,1fr) minmax(280px,360px)}
+.decor3d-library-panel,.decor3d-preview-panel,.decor3d-editor-panel,.decor3d-side-card{min-width:0;min-height:0;max-height:100%;overflow:auto}
+.decor3d-list{display:grid;gap:8px;min-height:0;padding-right:2px}
+.decor3d-list-item{display:grid!important;grid-template-columns:46px minmax(0,1fr);align-items:center;justify-content:start;gap:10px;width:100%;min-height:58px;padding:8px!important;border:1px solid rgba(148,163,184,.18)!important;border-radius:8px!important;background:rgba(15,23,42,.7)!important;color:#eaf2ff!important;text-align:left;box-shadow:none!important}
+.decor3d-list-item.selected{border-color:rgba(245,158,11,.76)!important;background:rgba(120,53,15,.3)!important}
+.decor3d-list-item strong,.decor3d-list-item small{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.decor3d-list-item strong{color:#fff;font-size:13px}
+.decor3d-list-item small{color:#aebdd3;font-size:11px}
+.decor3d-thumb{display:grid;place-items:center;width:42px;height:42px;border:1px solid rgba(255,255,255,.14);border-radius:8px;background:linear-gradient(145deg,var(--decor-body,#64748b),var(--decor-accent,#f59e0b));box-shadow:inset 0 1px rgba(255,255,255,.14),0 8px 18px rgba(0,0,0,.24);overflow:hidden;color:#fff}
+.decor3d-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.decor3d-preview-panel{display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:12px}
+.decor3d-preview-toolbar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.decor3d-preview-toolbar h2{margin:7px 0 0;font-size:22px}
+.decor3d-preview-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0}
+.decor3d-preview-actions button{display:inline-grid;place-items:center;width:32px;height:32px;min-width:32px;min-height:32px;padding:0;border:1px solid rgba(245,158,11,.24);border-radius:8px;background:rgba(15,23,42,.86);color:#fff7ed;box-shadow:none}
+.decor3d-preview-actions button:hover,.decor3d-preview-actions button:focus-visible,.decor3d-preview-actions button.active{border-color:rgba(245,158,11,.76);background:rgba(120,53,15,.46);color:#fff}
+.decor3d-canvas-shell{position:relative;aspect-ratio:16/10;min-height:0;border:1px solid rgba(245,158,11,.18);border-radius:8px;overflow:hidden;background:#07111e;box-shadow:inset 0 1px rgba(255,255,255,.05)}
+.decor3d-canvas{display:block;width:100%;height:100%;min-height:0}
+.decor3d-webgl-error{position:absolute;inset:0;display:grid;place-items:center;padding:18px;color:#fde68a;background:#07111e;text-align:center;font-weight:800}
+.decor3d-meta-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+.decor3d-meta-strip span{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:0;min-height:34px;padding:7px 9px;border:1px solid rgba(245,158,11,.16);border-radius:8px;background:rgba(15,23,42,.72);color:#fff7ed;font-size:12px;font-weight:850;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.decor3d-meta-strip svg{flex:0 0 auto;color:#fbbf24}
+.decor3d-card-grid{display:grid;gap:8px}
+.decor3d-card-grid span,.decor3d-card-grid button{display:inline-flex;align-items:center;gap:7px;min-width:0;min-height:36px;padding:8px 9px;border:1px solid rgba(245,158,11,.16);border-radius:8px;background:rgba(15,23,42,.72);color:#fff7ed;font-size:12px;font-weight:850;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+.decor3d-card-grid button{width:100%;cursor:pointer;box-shadow:none}
+.decor3d-card-grid button:hover,.decor3d-card-grid button.active{border-color:rgba(245,158,11,.62);background:rgba(120,53,15,.34);color:#fff}
+.decor3d-card-grid svg{flex:0 0 auto;color:#fbbf24}
+.decor3d-form{display:grid;gap:9px}
+.decor3d-orientation-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.decor3d-orientation-grid label{min-width:0}
+.decor3d-orientation-grid input{width:100%;min-width:0;padding-inline:8px}
+.decor3d-orientation-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.decor3d-orientation-actions button{display:inline-flex;align-items:center;justify-content:center;min-width:0;min-height:34px}
+.decor3d-editor-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0}
+.decor3d-new-button{min-height:30px!important;min-width:0;padding:5px 8px!important;border-radius:8px!important;gap:5px;font-size:11px;font-weight:900;line-height:1;white-space:nowrap}
+.decor3d-new-button svg{flex:0 0 auto}
+.decor3d-save-button{min-height:30px!important;min-width:0;padding:5px 8px!important;border-radius:8px!important;border-color:rgba(52,211,153,.44);background:linear-gradient(180deg,rgba(5,150,105,.58),rgba(6,78,59,.94));color:#ecfdf5;box-shadow:none;gap:5px;font-size:11px;font-weight:900;line-height:1;white-space:nowrap}
+.decor3d-save-button:hover,.decor3d-save-button:focus-visible{border-color:rgba(167,243,208,.78);background:linear-gradient(180deg,rgba(16,185,129,.72),rgba(6,95,70,.96));color:#fff}
+.decor3d-save-button svg{flex:0 0 auto}
+.decor3d-save-button:disabled{opacity:.62;cursor:wait}
+.decor3d-save-status{margin:-4px 0 2px;color:#a7f3d0;font-size:12px;font-weight:850}
+
+.decor3d-tab-fullscreen{position:fixed;inset:0;z-index:900;grid-template-columns:minmax(0,1fr)!important;gap:0;padding:0;background:#020617}
+.decor3d-tab-fullscreen .decor3d-preview-panel{position:fixed;inset:0;z-index:910;display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:0;padding:12px;border:0;border-radius:0;background:#07111e}
+.decor3d-tab-fullscreen .decor3d-preview-toolbar{position:relative;z-index:980;align-items:center;padding:6px 8px;border:1px solid rgba(245,158,11,.18);border-radius:8px;background:rgba(4,10,16,.86);box-shadow:0 14px 42px rgba(0,0,0,.32)}
+.decor3d-tab-fullscreen .decor3d-preview-toolbar h2{margin:4px 0 0;font-size:18px}
+.decor3d-tab-fullscreen .decor3d-canvas-shell{height:100%;aspect-ratio:auto;margin-top:10px;border-radius:8px}
+.decor3d-tab-fullscreen .decor3d-meta-strip{margin-top:10px}
+.decor3d-tab-fullscreen .decor3d-side-card,.decor3d-tab-fullscreen .decor3d-editor-panel{position:fixed;left:12px;z-index:970;width:min(340px,calc(100vw - 24px));max-height:calc(50vh - 24px);transform:translateX(calc(-100% - 28px));transition:transform .18s ease;pointer-events:none;overflow:auto;box-shadow:0 22px 70px rgba(0,0,0,.58)}
+.decor3d-tab-fullscreen .decor3d-side-card{top:88px}
+.decor3d-tab-fullscreen .decor3d-editor-panel{bottom:12px}
+.decor3d-tab-fullscreen.decor3d-drawer-open .decor3d-side-card,.decor3d-tab-fullscreen.decor3d-drawer-open .decor3d-editor-panel{transform:translateX(0);pointer-events:auto}
+
+@media (max-width:1100px){
+  .decor3d-tab{grid-template-columns:minmax(220px,280px) minmax(0,1fr)}
+  .decor3d-tab.decor3d-tab-with-inspector{grid-template-columns:minmax(220px,280px) minmax(0,1fr)}
+  .decor3d-editor-panel{grid-column:1/-1}
+}
+@media (max-width:760px){
+  .arcade-shell.arcade-workspace-decors3d{height:auto;max-height:none;overflow:auto}
+  .arcade-shell > .decor3d-tab{overflow:auto}
+  .decor3d-tab{grid-template-columns:1fr;height:auto;max-height:none;padding:10px}
+  .decor3d-tab.decor3d-tab-with-inspector{grid-template-columns:1fr}
+  .decor3d-library-panel,.decor3d-preview-panel,.decor3d-editor-panel,.decor3d-side-card{max-height:none;overflow:visible}
+  .decor3d-editor-actions{justify-content:stretch}
+  .decor3d-new-button{flex:0 0 auto;min-width:0}
+  .decor3d-save-button{flex:0 0 auto;min-width:0}
+  .decor3d-canvas-shell,.decor3d-canvas{min-height:0}
+  .decor3d-meta-strip{grid-template-columns:1fr}
+  .decor3d-orientation-grid{grid-template-columns:1fr}
+}

@@ -28,8 +28,62 @@ const normalizeAllowedValue = (value, allowedValues, fallback) => {
   const normalizedValue = normalizeLegacyTechnicalValue(value);
   return allowedValues.includes(normalizedValue) ? normalizedValue : fallback;
 };
+const DECOR_KIND_VALUE_MAP = {
+  billboard: 'decor',
+  crate: 'wall',
+  rock: 'decor',
+  tree: 'decor',
+};
+const normalizeDecorKind = (value) => {
+  const normalizedValue = normalizeLegacyTechnicalValue(value);
+  return normalizeAllowedValue(DECOR_KIND_VALUE_MAP[normalizedValue] || normalizedValue, ['decor', 'road', 'water', 'wall', 'house'], 'decor');
+};
+const clampNumber = (value, fallback, min, max) => {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return fallback;
+  return Math.max(min, Math.min(max, numericValue));
+};
 
 const makeItem = (name = 'Nouvel objet', icon = '📦') => ({ id: uid(), name, icon, imageData: '', imageName: '' });
+const makeCharacter3DModel = (overrides = {}) => ({
+  id: overrides.id || uid(),
+  name: overrides.name || 'Personnage 3D',
+  role: overrides.role || 'hero',
+  shape: overrides.shape || 'humanoid',
+  modelUrl: overrides.modelUrl || '',
+  modelData: overrides.modelData || '',
+  modelName: overrides.modelName || '',
+  previewLightIntensity: overrides.previewLightIntensity ?? 1,
+  previewLightOrientation: overrides.previewLightOrientation ?? -35,
+});
+const makeDecor3DModel = (overrides = {}) => ({
+  id: uid(),
+  name: 'Decor 3D',
+  kind: 'decor',
+  imageData: '',
+  imageName: '',
+  modelUrl: '',
+  modelData: '',
+  modelName: '',
+  baseColor: '#64748b',
+  accentColor: '#f59e0b',
+  roofColor: '#7f1d1d',
+  width: 2.2,
+  depth: 2.2,
+  height: 1.2,
+  floorZeroZ: 2.5,
+  scale: 1,
+  elevation: 0,
+  modelRotationX: 0,
+  modelRotationY: 0,
+  modelRotationZ: 0,
+  modelCenterOnOrigin: false,
+  modelFlushToGround: false,
+  collision: true,
+  repeatTexture: false,
+  notes: '',
+  ...overrides,
+});
 const makeCombination = () => ({
   id: uid(),
   itemAId: '',
@@ -809,6 +863,60 @@ const ensureSewerAct2 = (draft) => {
   draft.routeMap.notes = `${draft.routeMap.notes || ''}\nActe II: commence après l'endroit sombre de la cave, descend dans les égouts puis les sous-sols, et se termine en franchissant la porte rouge métallique. Temps bloqué: 10h09. Rat figé: reprise temporaire du temps.`.trim();
 };
 
+const normalizeCharacter3DModel = (entry = {}, index = 0) => {
+  const base = makeCharacter3DModel({
+    id: entry?.id || uid(),
+    name: entry?.name || `Personnage 3D ${index + 1}`,
+    role: entry?.role,
+    shape: entry?.shape,
+    modelUrl: entry?.modelUrl,
+    modelData: entry?.modelData,
+    modelName: entry?.modelName,
+    previewLightIntensity: entry?.previewLightIntensity,
+    previewLightOrientation: entry?.previewLightOrientation,
+  });
+  return {
+    id: base.id,
+    name: base.name,
+    role: normalizeAllowedValue(base.role, ['hero', 'enemy', 'npc'], 'hero'),
+    shape: normalizeAllowedValue(base.shape, ['humanoid', 'glb', 'dark-knight', 'robot', 'creature', 'mage'], 'humanoid'),
+    modelUrl: base.modelUrl || '',
+    modelData: base.modelData || '',
+    modelName: base.modelName || '',
+    previewLightIntensity: clampNumber(base.previewLightIntensity, 1, 0.2, 2.5),
+    previewLightOrientation: clampNumber(base.previewLightOrientation, -35, -180, 180),
+  };
+};
+
+const normalizeDecor3DModel = (entry = {}, index = 0) => {
+  const base = makeDecor3DModel({
+    ...entry,
+    id: entry?.id || uid(),
+    name: entry?.name || `Decor 3D ${index + 1}`,
+  });
+  return {
+    ...base,
+    kind: normalizeDecorKind(base.kind),
+    imageData: base.imageData || '',
+    imageName: base.imageName || '',
+    modelUrl: base.modelUrl || '',
+    modelData: base.modelData || '',
+    modelName: base.modelName || '',
+    baseColor: /^#[0-9a-f]{6}$/i.test(base.baseColor) ? base.baseColor : '#64748b',
+    accentColor: /^#[0-9a-f]{6}$/i.test(base.accentColor) ? base.accentColor : '#f59e0b',
+    roofColor: /^#[0-9a-f]{6}$/i.test(base.roofColor) ? base.roofColor : '#7f1d1d',
+    width: clampNumber(base.width, 2.2, 0.4, 8),
+    depth: clampNumber(base.depth, 2.2, 0.4, 8),
+    height: clampNumber(base.height, 1.2, 0.05, 6),
+    floorZeroZ: clampNumber(base.floorZeroZ, 2.5, -120, 120),
+    scale: clampNumber(base.scale, 1, 0.5, 2),
+    elevation: clampNumber(base.elevation, 0, -1, 3),
+    collision: Boolean(base.collision),
+    repeatTexture: Boolean(base.repeatTexture),
+    notes: base.notes || '',
+  };
+};
+
 const normalizeProject = (rawProject) => {
   const draft = structuredClone(rawProject || {});
   if (!Array.isArray(draft.items)) draft.items = [];
@@ -850,6 +958,12 @@ const normalizeProject = (rawProject) => {
   if (!Array.isArray(draft.cinematics)) draft.cinematics = [];
   if (!Array.isArray(draft.enigmas)) draft.enigmas = [];
   if (!Array.isArray(draft.assets)) draft.assets = [];
+  draft.characterModels3d = Array.isArray(draft.characterModels3d)
+    ? draft.characterModels3d.map(normalizeCharacter3DModel)
+    : [];
+  draft.decorModels3d = Array.isArray(draft.decorModels3d)
+    ? draft.decorModels3d.map(normalizeDecor3DModel)
+    : [];
   if (!Array.isArray(draft.acts) || !draft.acts.length) {
     draft.acts = [makeAct('Acte I')];
   }
@@ -1180,6 +1294,13 @@ const createInitialProject = () => {
     scenes: [sceneA, sceneB, sceneC],
     cinematics: [cinematic],
     enigmas: [drawerCode, hallwayColors],
+    characterModels3d: [
+      makeCharacter3DModel({ name: 'Aventurier 3D', role: 'hero', shape: 'humanoid' }),
+    ],
+    decorModels3d: [
+      makeDecor3DModel({ name: 'Route de depart', kind: 'road', baseColor: '#334155', accentColor: '#f59e0b', width: 4, depth: 2.2, height: 0.05, collision: false }),
+      makeDecor3DModel({ name: 'Decor', kind: 'decor', baseColor: '#64748b', accentColor: '#94a3b8', width: 1.5, depth: 1.2, height: 1.1 }),
+    ],
     start: {
       type: 'scene',
       targetSceneId: sceneA.id,
@@ -1193,6 +1314,8 @@ const initialProject = createInitialProject();
 export {
   uid,
   makeItem,
+  makeCharacter3DModel,
+  makeDecor3DModel,
   makeCombination,
   makeStoryVariable,
   makeHotspot,

@@ -1,0 +1,70 @@
+.arcade-shell.arcade-workspace-characters3d{height:100vh;max-height:100vh}
+.arcade-shell > .character3d-tab{overflow:hidden}
+.character3d-tab{display:grid;grid-template-columns:minmax(240px,300px) minmax(360px,1fr) minmax(280px,360px);gap:14px;align-items:stretch;min-height:0;height:100%;max-height:100%;padding:14px}
+.character3d-tab.character3d-tab-minimal{grid-template-columns:minmax(0,1fr)}
+.character3d-tab.character3d-tab-with-inspector{grid-template-columns:minmax(220px,300px) minmax(0,1fr) minmax(280px,360px)}
+.character3d-library-panel,.character3d-preview-panel,.character3d-editor-panel,.character3d-side-card{min-width:0;min-height:0;max-height:100%;overflow:auto}
+.character3d-list{display:grid;gap:8px;max-height:640px;overflow:auto;padding-right:2px}
+.character3d-list-item{display:grid!important;grid-template-columns:46px minmax(0,1fr);align-items:center;justify-content:start;gap:10px;width:100%;min-height:58px;padding:8px!important;border:1px solid rgba(148,163,184,.18)!important;border-radius:8px!important;background:rgba(15,23,42,.7)!important;color:#eaf2ff!important;text-align:left;box-shadow:none!important}
+.character3d-list-item.selected{border-color:rgba(96,165,250,.76)!important;background:rgba(37,99,235,.28)!important}
+.character3d-list-item strong,.character3d-list-item small{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.character3d-list-item strong{color:#fff;font-size:13px}
+.character3d-list-item small{color:#aebdd3;font-size:11px}
+.character3d-thumb{display:grid;place-items:center;width:42px;height:42px;border:1px solid rgba(255,255,255,.14);border-radius:8px;background:linear-gradient(145deg,var(--character-body,#2563eb),var(--character-accent,#67e8f9));box-shadow:inset 0 1px rgba(255,255,255,.14),0 8px 18px rgba(0,0,0,.24);overflow:hidden;color:#fff}
+.character3d-preview-panel{display:grid;grid-template-rows:auto minmax(0,1fr);gap:12px}
+.character3d-preview-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.character3d-preview-head h2{margin:7px 0 0;font-size:22px}
+.character3d-preview-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0}
+.character3d-preview-actions button{display:inline-grid;place-items:center;width:32px;height:32px;min-width:32px;min-height:32px;padding:0;border:1px solid rgba(147,197,253,.24);border-radius:8px;background:rgba(15,23,42,.86);color:#eaf2ff;box-shadow:none}
+.character3d-preview-actions button:hover,.character3d-preview-actions button:focus-visible,.character3d-preview-actions button.active{border-color:rgba(96,165,250,.76);background:rgba(37,99,235,.42);color:#fff}
+.character3d-canvas-shell{position:relative;aspect-ratio:16/10;min-height:0;border:1px solid rgba(147,197,253,.18);border-radius:8px;overflow:hidden;background:#07111e;box-shadow:inset 0 1px rgba(255,255,255,.05)}
+.character3d-canvas{display:block;width:100%;height:100%;min-height:0}
+.character3d-webgl-error{position:absolute;inset:0;display:grid;place-items:center;padding:18px;color:#bfdbfe;background:#07111e;text-align:center;font-weight:800}
+.character3d-card-role-buttons{display:grid;gap:8px}
+.character3d-card-role-buttons button{display:inline-flex;align-items:center;justify-content:flex-start;gap:8px;width:100%;min-height:42px;padding:9px 11px;border:1px solid rgba(147,197,253,.18);border-radius:8px;background:rgba(15,23,42,.72);color:#dbeafe;box-shadow:none;font-size:13px;font-weight:900;white-space:nowrap}
+.character3d-card-role-buttons button.active{border-color:rgba(96,165,250,.78);background:rgba(37,99,235,.34);color:#fff}
+.character3d-card-role-buttons button:disabled{opacity:.58;cursor:not-allowed}
+.character3d-card-role-buttons svg{flex:0 0 auto;color:#93c5fd}
+.character3d-form{display:grid;gap:9px}
+.character3d-editor-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0}
+.character3d-new-button{min-height:30px!important;min-width:0;padding:5px 8px!important;border-radius:8px!important;gap:5px;font-size:11px;font-weight:900;line-height:1;white-space:nowrap}
+.character3d-new-button svg{flex:0 0 auto}
+.character3d-save-button{min-height:30px!important;min-width:0;padding:5px 8px!important;border-radius:8px!important;border-color:rgba(52,211,153,.44);background:linear-gradient(180deg,rgba(5,150,105,.58),rgba(6,78,59,.94));color:#ecfdf5;box-shadow:none;gap:5px;font-size:11px;font-weight:900;line-height:1;white-space:nowrap}
+.character3d-save-button:hover,.character3d-save-button:focus-visible{border-color:rgba(167,243,208,.78);background:linear-gradient(180deg,rgba(16,185,129,.72),rgba(6,95,70,.96));color:#fff}
+.character3d-save-button svg{flex:0 0 auto}
+.character3d-save-button:disabled{opacity:.62;cursor:wait}
+.character3d-save-status{margin:-4px 0 2px;color:#a7f3d0;font-size:12px;font-weight:850}
+.character3d-range{display:grid;gap:6px;margin:0}
+.character3d-range span{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#dbeafe}
+.character3d-range strong{font-size:12px}
+.character3d-range em{font-style:normal;color:#93c5fd;font-size:11px;font-weight:850;font-variant-numeric:tabular-nums}
+.character3d-range input{padding:0;height:22px}
+
+.character3d-tab-fullscreen{position:fixed;inset:0;z-index:900;grid-template-columns:minmax(0,1fr)!important;gap:0;padding:0;background:#020617}
+.character3d-tab-fullscreen .character3d-preview-panel{position:fixed;inset:0;z-index:910;display:grid;grid-template-rows:auto minmax(0,1fr);gap:0;padding:12px;border:0;border-radius:0;background:#07111e}
+.character3d-tab-fullscreen .character3d-preview-head{position:relative;z-index:980;align-items:center;padding:6px 8px;border:1px solid rgba(147,197,253,.18);border-radius:8px;background:rgba(4,10,16,.86);box-shadow:0 14px 42px rgba(0,0,0,.32)}
+.character3d-tab-fullscreen .character3d-preview-head h2{margin:4px 0 0;font-size:18px}
+.character3d-tab-fullscreen .character3d-canvas-shell{height:100%;aspect-ratio:auto;margin-top:10px;border-radius:8px}
+.character3d-tab-fullscreen .character3d-side-card,.character3d-tab-fullscreen .character3d-editor-panel{position:fixed;left:12px;z-index:970;width:min(340px,calc(100vw - 24px));max-height:calc(50vh - 24px);transform:translateX(calc(-100% - 28px));transition:transform .18s ease;pointer-events:none;overflow:auto;box-shadow:0 22px 70px rgba(0,0,0,.58)}
+.character3d-tab-fullscreen .character3d-side-card{top:88px}
+.character3d-tab-fullscreen .character3d-editor-panel{bottom:12px}
+.character3d-tab-fullscreen.character3d-drawer-open .character3d-side-card,.character3d-tab-fullscreen.character3d-drawer-open .character3d-editor-panel{transform:translateX(0);pointer-events:auto}
+
+@media (max-width:1100px){
+  .character3d-tab{grid-template-columns:minmax(220px,280px) minmax(0,1fr)}
+  .character3d-tab.character3d-tab-with-inspector{grid-template-columns:minmax(220px,280px) minmax(0,1fr)}
+  .character3d-editor-panel{grid-column:1/-1}
+}
+@media (max-width:760px){
+  .arcade-shell.arcade-workspace-characters3d{height:auto;max-height:none;overflow:auto}
+  .arcade-shell > .character3d-tab{overflow:auto}
+  .character3d-tab{grid-template-columns:1fr;padding:10px}
+  .character3d-tab.character3d-tab-with-inspector{grid-template-columns:1fr}
+  .character3d-tab{height:auto;max-height:none}
+  .character3d-library-panel,.character3d-preview-panel,.character3d-editor-panel,.character3d-side-card{max-height:none;overflow:visible}
+  .character3d-preview-head{display:grid}
+  .character3d-editor-actions{justify-content:stretch}
+  .character3d-new-button{flex:0 0 auto;min-width:0}
+  .character3d-save-button{flex:0 0 auto;min-width:0}
+  .character3d-canvas-shell,.character3d-canvas{min-height:0}
+}

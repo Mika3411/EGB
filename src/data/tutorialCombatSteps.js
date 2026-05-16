@@ -1,0 +1,58 @@
+export const COMBAT_TUTORIAL_STEPS = [
+  {
+    tab: 'combat',
+    selector: '[data-tour-tab="combat"]',
+    title: 'Onglet Combat',
+    body: 'Ce parcours t aide a regler les combats Hero Adventure sans chercher dans toutes les zones. Il part des combats crees dans Scenes, puis centralise visuels, rythme, statistiques, pouvoirs et test en Preview.',
+    action: 'Clique sur l onglet Combat pour commencer le parcours.',
+    completedWhen: { type: 'interact' },
+  },
+  {
+    tab: 'combat',
+    selector: '[data-tour="combat-summary-panel"]',
+    title: 'Sources de combat',
+    body: 'La liste detecte les zones et les reponses de conversation dont l action est Combat simple. Si elle est vide, retourne dans Scenes, selectionne une zone, puis choisis Combat simple comme action.',
+    action: 'Clique dans le resume pour repérer le nombre de combats et le combat actif.',
+    completedWhen: { type: 'interact' },
+  },
+  {
+    tab: 'combat',
+    selector: '[data-tour="combat-editor-panel"]',
+    title: 'Arene de test',
+    body: 'L arene montre le heros, l ennemi, le fond et le de central tels qu ils seront presentes au joueur. Le bouton Preview lance directement le combat selectionne pour verifier le rythme reel.',
+    action: 'Clique dans l atelier de combat pour repérer la preview rapide.',
+    completedWhen: { type: 'interact' },
+  },
+  {
+    tab: 'combat',
+    selector: '[data-tour="combat-editor-panel"]',
+    title: 'Overrides par combat',
+    body: 'Chaque combat peut garder les reglages par defaut ou forcer ses propres choix : tour par tour, affichage du de, fond, image du heros, image de l ennemi ou animation 2D. Utilise les overrides pour les boss et les rencontres speciales.',
+  },
+  {
+    tab: 'combat',
+    selector: '[data-tour="combat-editor-panel"]',
+    title: 'Ennemi et IA',
+    body: 'Le panneau Ennemi regle PV, armure, esquive, resistances, initiative, mana et pouvoir. Le mode IA tactique favorise les pouvoirs utiles, tandis que le mode aleatoire garde une rencontre plus imprevisible.',
+  },
+  {
+    tab: 'combat',
+    selector: '[data-tour="combat-editor-panel"]',
+    title: 'Equilibrage',
+    body: 'Le panneau Equilibrage compare les PV, degats, difficulte, mana et chances de survie. Lis-le avant publication : un combat trop long fatigue, un combat trop brutal bloque le joueur.',
+  },
+  {
+    tab: 'combat',
+    selector: '[data-tour="combat-editor-panel"]',
+    title: 'Effets et historique',
+    body: 'Les coups critiques, degats bloques, percees critiques, effets visuels et messages de round sont conserves dans le journal du combat. C est ce qui rend le resultat comprehensible, pas seulement spectaculaire.',
+  },
+  {
+    tab: 'combat',
+    selector: '[data-tour="combat-editor-panel"]',
+    title: 'A toi de jouer',
+    body: 'Bravo {name}, tu sais maintenant ou creer un combat, ou regler l ennemi, comment personnaliser son rendu et pourquoi tester chaque rencontre en Preview.',
+    action: 'Clique sur Terminer quand tu es pret a ajuster tes propres combats.',
+    celebration: true,
+  },
+];

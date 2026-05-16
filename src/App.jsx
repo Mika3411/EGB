@@ -14,7 +14,7 @@ const AdminPage = React.lazy(() => import('./components/AdminPage'));
 const PublicGallery = React.lazy(() => import('./components/PublicGallery'));
 const BuilderApp = React.lazy(() => import('./BuilderApp.jsx'));
 const BuilderTutorial = React.lazy(() => import('./components/BuilderTutorial'));
-const ArcadeMode = React.lazy(() => import('./components/ArcadeMode'));
+const Rpg3DMode = React.lazy(() => import('./components/Rpg3DMode'));
 
 const TabLoadingFallback = () => (
   <section className="panel">
@@ -391,7 +391,7 @@ function ShellApp() {
   if (screen === 'arcade') {
     return (
       <Suspense fallback={<LandingLoadingFallback />}>
-        <ArcadeMode />
+        <Rpg3DMode user={auth.user} authReady={auth.isReady} project={auth.activeProject?.data || null} />
       </Suspense>
     );
   }

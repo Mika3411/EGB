@@ -54,6 +54,10 @@ textarea{min-height:68px}
 
 .label-with-help{position:relative;display:flex;align-items:center;gap:6px;margin:4px 0 3px;color:#ccdaef;font-size:11px;font-weight:700;overflow:visible!important}
 
+.builder3d-help-label{margin:0;min-width:0;color:inherit;font-size:inherit;font-weight:inherit;line-height:inherit}
+
+.builder3d-help-label>span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis}
+
 .panel-context-pro .subpanel,.panel-context-pro .side-editor-pro,.panel-context-pro .label-with-help{position:relative;overflow:visible!important;z-index:2001}
 
 .ai-visual-label{margin-top:12px}

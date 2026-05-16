@@ -28,6 +28,31 @@ export default function ProjectList({
       });
   }, [projects, search, sortMode]);
 
+  const projectColumns = useMemo(() => (
+    visibleProjects.reduce(
+      (columns, project, index) => {
+        columns[index % 2].push(project);
+        return columns;
+      },
+      [[], []],
+    )
+  ), [visibleProjects]);
+
+  const renderProjectCard = (project) => (
+    <ProjectCard
+      key={project.id}
+      project={project}
+      isActive={project.id === activeProjectId}
+      syncStatus={syncStatus}
+      onOpenProject={onOpenProject}
+      onTestProject={onTestProject}
+      onRenameProject={onRenameProject}
+      onUpdateProjectMode={onUpdateProjectMode}
+      onDuplicateProject={onDuplicateProject}
+      onDeleteProject={onDeleteProject}
+    />
+  );
+
   return (
     <section className="panel" data-tour="profile-projects-section">
       <div className="panel-head">
@@ -53,22 +78,20 @@ export default function ProjectList({
         </select>
       </div>
 
-      <div className="editor-stack" style={{ marginTop: 12 }} data-tour="profile-project-list">
+      <div className="profile-project-grid" data-tour="profile-project-list">
         {visibleProjects.length > 0 ? (
-          visibleProjects.map((project) => (
-            <ProjectCard
-              key={project.id}
-              project={project}
-              isActive={project.id === activeProjectId}
-              syncStatus={syncStatus}
-              onOpenProject={onOpenProject}
-              onTestProject={onTestProject}
-              onRenameProject={onRenameProject}
-              onUpdateProjectMode={onUpdateProjectMode}
-              onDuplicateProject={onDuplicateProject}
-              onDeleteProject={onDeleteProject}
-            />
-          ))
+          <>
+            <div className="profile-project-columns">
+              {projectColumns.map((columnProjects, columnIndex) => (
+                <div className="profile-project-column" key={columnIndex}>
+                  {columnProjects.map(renderProjectCard)}
+                </div>
+              ))}
+            </div>
+            <div className="profile-project-list-mobile">
+              {visibleProjects.map(renderProjectCard)}
+            </div>
+          </>
         ) : (
           <div className="empty-state-inline">
             <div>

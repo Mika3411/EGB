@@ -1,7 +1,7 @@
 import { makeCinematic, makeCombination, makeEnigma, makeLogicRule, makeRouteMap } from './projectData';
 import { applyCreationTemplate } from '../lib/projectTemplates';
 
-export const BUILDER_TUTORIAL_TABS = ['profile', 'scenes', 'media', 'objects', 'editor', 'map', 'adventure', 'hero', 'cinematics', 'animation', 'combinations', 'enigmas', 'logic', 'ai', 'preview', 'score'];
+export const BUILDER_TUTORIAL_TABS = ['profile', 'scenes', 'media', 'objects', 'characters3d', 'decors3d', 'editor', 'map', 'adventure', 'hero', 'combat', 'cinematics', 'animation', 'combinations', 'enigmas', 'logic', 'ai', 'preview', 'score'];
 
 const getProjectRecordName = (project) =>
   project?.name || project?.data?.title || project?.data?.name || '';
@@ -399,6 +399,61 @@ export const prepareProjectForTutorial = (project, tab) => {
   if (tab === 'hero') {
     nextProject = applyCreationTemplate(nextProject, 'hero_adventure', nextProject.title || 'Projet didacticiel temporaire');
     nextProject.isTemporaryTutorial = Boolean(project?.isTemporaryTutorial);
+  }
+  if (tab === 'combat') {
+    nextProject = applyCreationTemplate(nextProject, 'hero_adventure', nextProject.title || 'Projet didacticiel temporaire');
+    nextProject.isTemporaryTutorial = Boolean(project?.isTemporaryTutorial);
+    nextProject.creationMode = 'hero_adventure';
+    if (!nextProject.heroAdventure || typeof nextProject.heroAdventure !== 'object') nextProject.heroAdventure = {};
+    nextProject.heroAdventure.enabled = true;
+    nextProject.heroAdventure.combat = {
+      ...(nextProject.heroAdventure.combat || {}),
+      turnMode: true,
+      showDice: true,
+      enemyAutoTurn: false,
+      enemyAiMode: 'tactical',
+      enemyName: 'Garde du seuil',
+      enemyHealth: 12,
+      enemyStrength: 3,
+      enemyMaxMana: 4,
+      enemyPowerName: 'Trait d ombre',
+      enemyPowerDamage: 3,
+      enemyPowerManaCost: 2,
+      enemyPowerUsageChance: 35,
+    };
+    const scene = nextProject.scenes?.[0];
+    if (scene) {
+      if (!Array.isArray(scene.hotspots)) scene.hotspots = [];
+      const rewardItemId = nextProject.items?.[0]?.id || '';
+      const combatHotspot = scene.hotspots.find((hotspot) => hotspot.actionType === 'hero_combat') || {
+        id: `hotspot_combat_${Date.now().toString(36)}`,
+        x: 48,
+        y: 48,
+        width: 18,
+        height: 16,
+      };
+      Object.assign(combatHotspot, {
+        name: 'Garde du seuil',
+        actionType: 'hero_combat',
+        dialogue: 'Le garde bloque le passage.',
+        combatEnemyName: 'Garde du seuil',
+        combatEnemyMaxHealth: 12,
+        combatAttackDifficulty: 10,
+        combatEnemyStrength: 3,
+        combatEnemyArmor: 1,
+        combatEnemyMaxMana: 4,
+        combatEnemyPowerName: 'Trait d ombre',
+        combatEnemyPowerDamage: 3,
+        combatEnemyPowerManaCost: 2,
+        combatEnemyPowerUsageChance: 35,
+        combatTurnMode: true,
+        combatShowDice: true,
+        combatRewardItemId: rewardItemId,
+        combatVictoryDialogue: 'Le garde recule et libere le passage.',
+        combatDefeatDialogue: 'Le garde te force a battre en retraite.',
+      });
+      if (!scene.hotspots.some((hotspot) => hotspot.id === combatHotspot.id)) scene.hotspots.unshift(combatHotspot);
+    }
   }
   if (tab === 'cinematics') {
     if (!Array.isArray(nextProject.cinematics)) nextProject.cinematics = [];

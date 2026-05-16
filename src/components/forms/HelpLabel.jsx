@@ -10,9 +10,9 @@ export const positionHelpBubble = (event) => {
   dot.style.setProperty('--help-width', `${bubbleWidth}px`);
 };
 
-export default function HelpLabel({ children, help, className = '' }) {
+export default function HelpLabel({ children, help, className = '', as: Tag = 'label', ...props }) {
   return (
-    <label className={`label-with-help${className ? ` ${className}` : ''}`}>
+    <Tag className={`label-with-help${className ? ` ${className}` : ''}`} {...props}>
       <span>{children}</span>
       <span
         className="help-dot"
@@ -24,6 +24,6 @@ export default function HelpLabel({ children, help, className = '' }) {
       >
         ?
       </span>
-    </label>
+    </Tag>
   );
 }

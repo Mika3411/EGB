@@ -38,7 +38,7 @@ const PROJECT_KEYS = makeSet([
   'tutorialExampleImages', 'authorProfile', 'thumbnail', 'thumbnailUrl', 'published',
   'publication', 'publicStatus', 'visibility', 'slug', 'userId', 'createdAt', 'updatedAt',
   'storagePath', 'templateId', 'tags', 'version', 'mode', 'metadata', 'exportedAt',
-  'imagePromptRules',
+  'imagePromptRules', 'characterModels3d', 'decorModels3d',
 ]);
 
 const START_KEYS = makeSet(['type', 'targetSceneId', 'targetCinematicId']);
@@ -135,6 +135,17 @@ const ITEM_KEYS = makeSet([
   'heroItemSkillId', 'heroItemBonus', ...MEDIA_ID_KEYS, ...SHARED_AI_KEYS,
 ]);
 
+const CHARACTER_3D_MODEL_KEYS = makeSet([
+  'id', 'name', 'role', 'shape', 'modelUrl', 'modelData', 'modelName', 'previewLightIntensity', 'previewLightOrientation',
+  ...SHARED_AI_KEYS,
+]);
+
+const DECOR_3D_MODEL_KEYS = makeSet([
+  'id', 'name', 'kind', 'imageData', 'imageName', 'baseColor', 'accentColor', 'roofColor',
+  'modelUrl', 'modelData', 'modelName', 'width', 'depth', 'height', 'floorZeroZ', 'scale', 'elevation', 'collision', 'repeatTexture', 'notes',
+  ...MEDIA_ID_KEYS, ...SHARED_AI_KEYS,
+]);
+
 const COMBINATION_KEYS = makeSet([
   'id', 'itemAId', 'itemBId', 'resultItemId', 'message', 'consume', 'conditions',
   'failMessage', ...SHARED_AI_KEYS,
@@ -222,6 +233,8 @@ const ARRAY_LIMITS = {
   enigmas: [200, 600],
   cinematics: [120, 300],
   storyVariables: [120, 400],
+  characterModels3d: [80, 240],
+  decorModels3d: [120, 400],
   assets: [0, 1200],
   'scenes.[].hotspots': [40, 120],
   'scenes.[].sceneObjects': [60, 200],
@@ -286,6 +299,8 @@ const getAllowedKeys = (path) => {
   if (signature === 'start') return START_KEYS;
   if (signature === 'acts.[]') return ACT_KEYS;
   if (signature === 'items.[]') return ITEM_KEYS;
+  if (signature === 'characterModels3d.[]') return CHARACTER_3D_MODEL_KEYS;
+  if (signature === 'decorModels3d.[]') return DECOR_3D_MODEL_KEYS;
   if (signature === 'combinations.[]') return COMBINATION_KEYS;
   if (signature === 'combinations.[].conditions.[]') return ADVANCED_CONDITION_KEYS;
   if (signature === 'scenes.[]') return SCENE_KEYS;

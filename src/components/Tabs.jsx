@@ -7,11 +7,13 @@ import {
   CircleHelp,
   Clapperboard,
   ClipboardCheck,
+  Cuboid,
   GitBranch,
   Image,
   LayoutGrid,
   Link2,
   Map,
+  Mountain,
   Package,
   Play,
   Puzzle,
@@ -23,17 +25,17 @@ import {
 } from 'lucide-react';
 
 const primaryTabKeys = ['scenes', 'media', 'plan', 'adventure', 'hero', 'combat', 'preview'];
-const creationTabKeys = ['objects', 'cinematics', 'enigmas', 'combinations', 'logic', 'animation'];
+const creationTabKeys = ['objects', 'characters3d', 'decors3d', 'cinematics', 'enigmas', 'combinations', 'logic', 'animation'];
 const assistantTabKeys = ['ai'];
 const mainTabKeys = [...primaryTabKeys, ...creationTabKeys, ...assistantTabKeys];
 
 const utilityTabKeys = ['shop', 'help', 'score'];
-const beginnerTabs = new Set(['scenes', 'media', 'objects', 'enigmas', 'ai', 'preview']);
+const beginnerTabs = new Set(['scenes', 'media', 'objects', 'characters3d', 'decors3d', 'enigmas', 'ai', 'preview']);
 const beginnerUtilityTabs = new Set(['shop', 'help']);
-const intermediateTabs = new Set(['scenes', 'media', 'map', 'objects', 'cinematics', 'enigmas', 'ai', 'preview']);
+const intermediateTabs = new Set(['scenes', 'media', 'map', 'objects', 'characters3d', 'decors3d', 'cinematics', 'enigmas', 'ai', 'preview']);
 const intermediateUtilityTabs = new Set(['shop', 'help']);
-const adventureTabs = new Set(['scenes', 'media', 'map', 'adventure', 'objects', 'cinematics', 'enigmas', 'logic', 'preview', 'animation']);
-const heroAdventureTabs = new Set(['scenes', 'media', 'map', 'adventure', 'hero', 'combat', 'objects', 'cinematics', 'enigmas', 'logic', 'preview', 'animation', 'ai']);
+const adventureTabs = new Set(['scenes', 'media', 'map', 'adventure', 'objects', 'characters3d', 'decors3d', 'cinematics', 'enigmas', 'logic', 'preview', 'animation']);
+const heroAdventureTabs = new Set(['scenes', 'media', 'map', 'adventure', 'hero', 'combat', 'objects', 'characters3d', 'decors3d', 'cinematics', 'enigmas', 'logic', 'preview', 'animation', 'ai']);
 const adventureUtilityTabs = new Set(['shop', 'help', 'score']);
 
 const getTabEntries = (tabKeys) => tabKeys.map((tabKey) => [getTabValue(tabKey), TABS[tabKey]]);
@@ -50,6 +52,8 @@ const tabIcons = {
   logic: Workflow,
   hero: Shield,
   combat: Swords,
+  characters3d: Cuboid,
+  decors3d: Mountain,
   ai: Bot,
   preview: Play,
   animation: Brush,
