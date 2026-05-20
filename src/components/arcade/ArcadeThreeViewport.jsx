@@ -14,16 +14,20 @@ import {
   clamp,
   getActionZoneHeight,
   getActionZoneWidth,
+  getDecorMaterialBrightness,
   getCharacterModelScale,
   getHexColor,
   getPropHeight,
+  getPropRenderMode,
   getPropWidth,
   getReliefHeight,
   getReliefWidth,
   getModelEraserRadius,
   getTerrainPaintRadius,
   getTerrainPaintShape,
+  isFloorDecorKind,
 } from '../../utils/rpg3dDomain.js';
+import { updateGltfModelMaterialAppearance } from '../../utils/threeGltfUtils';
 import {
   DEFAULT_ENGINE,
   EDIT_MODEL_ANIMATION_FRAME_MS,
@@ -281,6 +285,16 @@ function ArcadeThreeViewport({
     config.actionZones,
     config.props,
   ]);
+  const propMaterialAppearanceSignature = React.useMemo(() => (
+    (config.props || [])
+      .filter((prop) => getPropRenderMode(prop) === 'glb')
+      .map((prop) => [
+        prop.id || '',
+        Math.round(getDecorMaterialBrightness(prop) * 100),
+        isFloorDecorKind(prop.decorKind) ? 1 : 0,
+      ].join(':'))
+      .join(';')
+  ), [config.props]);
   const terrainPaintLayerSignature = React.useMemo(() => getTerrainPaintLayerSignature(config), [
     config.world,
     config.terrainPaintStrokes,
@@ -1342,6 +1356,25 @@ function ArcadeThreeViewport({
     updateSceneLighting(scene, getEngine(liveConfig));
     invalidateRenderRef.current({ followupFrames: 2 });
   }, [configRef, config.engine?.lightIntensity, config.engine?.lightOrientation]);
+
+  useEffect(() => {
+    const staticGroup = staticGroupRef.current;
+    const liveConfig = configRef.current || config;
+    if (!staticGroup || !liveConfig) return;
+    const propsById = new Map((liveConfig.props || []).map((prop) => [prop.id, prop]));
+    let didUpdate = false;
+    staticGroup.children.forEach((root) => {
+      if (root.userData?.entityType !== 'prop') return;
+      const prop = propsById.get(root.userData.entityId);
+      if (!prop || getPropRenderMode(prop) !== 'glb') return;
+      didUpdate = updateGltfModelMaterialAppearance(root, {
+        materialBrightness: getDecorMaterialBrightness(prop),
+        maxEnvMapIntensity: isFloorDecorKind(prop.decorKind) ? 0.42 : 1,
+        maxEmissiveIntensity: isFloorDecorKind(prop.decorKind) ? 0.03 : 0.18,
+      }) || didUpdate;
+    });
+    if (didUpdate) invalidateRenderRef.current({ followupFrames: 2 });
+  }, [configRef, propMaterialAppearanceSignature]);
 
   useEffect(() => {
     const liveConfig = configRef.current || config;

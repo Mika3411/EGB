@@ -581,6 +581,57 @@ const getMaterialBrightness = (options = {}) => {
   return Number.isFinite(value) ? Math.min(1.6, Math.max(0.15, value)) : 1;
 };
 
+const getOrCreateMaterialAppearanceBase = (material) => {
+  if (!material) return null;
+  const existing = material.userData?.rpg3dAppearanceBase;
+  if (existing?.color?.isColor || existing?.emissive?.isColor) return existing;
+  const base = {
+    color: material.color?.clone?.() || null,
+    emissive: material.emissive?.clone?.() || null,
+    emissiveIntensity: Number.isFinite(Number(material.emissiveIntensity)) ? Number(material.emissiveIntensity) : null,
+    envMapIntensity: Number.isFinite(Number(material.envMapIntensity)) ? Number(material.envMapIntensity) : null,
+  };
+  material.userData = {
+    ...(material.userData || {}),
+    rpg3dAppearanceBase: base,
+  };
+  return base;
+};
+
+const applyManagedMaterialAppearance = (material, options = {}) => {
+  if (!material) return false;
+  const base = getOrCreateMaterialAppearanceBase(material);
+  const brightness = getMaterialBrightness(options);
+  if (base?.color?.isColor && material.color?.copy) {
+    material.color.copy(base.color);
+    if (brightness !== 1) material.color.multiplyScalar(brightness);
+  }
+  if (base?.emissive?.isColor && material.emissive?.copy) {
+    material.emissive.copy(base.emissive);
+    if (brightness < 1) material.emissive.multiplyScalar(Math.max(0.2, brightness));
+  }
+  if (base && 'envMapIntensity' in material && base.envMapIntensity !== null) {
+    const maxEnvMapIntensity = Number(options.maxEnvMapIntensity);
+    material.envMapIntensity = Number.isFinite(maxEnvMapIntensity)
+      ? Math.min(base.envMapIntensity, Math.max(0, maxEnvMapIntensity))
+      : base.envMapIntensity;
+  }
+  if (base && 'emissiveIntensity' in material && base.emissiveIntensity !== null) {
+    const maxEmissiveIntensity = Number(options.maxEmissiveIntensity);
+    material.emissiveIntensity = Number.isFinite(maxEmissiveIntensity)
+      ? Math.min(base.emissiveIntensity, Math.max(0, maxEmissiveIntensity))
+      : base.emissiveIntensity;
+    if (brightness < 1) material.emissiveIntensity *= brightness;
+  }
+  material.userData = {
+    ...(material.userData || {}),
+    rpg3dAppearanceManaged: true,
+    rpg3dAppearanceBrightness: brightness,
+  };
+  material.needsUpdate = true;
+  return true;
+};
+
 const shouldCloneMaterialsForAppearance = (options = {}) => (
   Boolean(options.cloneMaterials)
   || hasFiniteNumber(options.materialBrightness)
@@ -602,25 +653,7 @@ const cloneMaterialForAppearance = (material) => {
 
 const tuneImportedMaterialAppearance = (material, options = {}) => {
   if (!material) return;
-  const brightness = getMaterialBrightness(options);
-  if (brightness !== 1 && material.color?.multiplyScalar) {
-    material.color.multiplyScalar(brightness);
-  }
-  if (brightness < 1 && material.emissive?.multiplyScalar) {
-    material.emissive.multiplyScalar(Math.max(0.2, brightness));
-  }
-  if (hasFiniteNumber(options.maxEnvMapIntensity) && 'envMapIntensity' in material) {
-    const maxEnvMapIntensity = Math.max(0, Number(options.maxEnvMapIntensity));
-    material.envMapIntensity = Math.min(Number(material.envMapIntensity) || 0, maxEnvMapIntensity);
-  }
-  if (hasFiniteNumber(options.maxEmissiveIntensity) && 'emissiveIntensity' in material) {
-    const maxEmissiveIntensity = Math.max(0, Number(options.maxEmissiveIntensity));
-    material.emissiveIntensity = Math.min(Number(material.emissiveIntensity) || 0, maxEmissiveIntensity);
-  }
-  if (brightness < 1 && 'emissiveIntensity' in material) {
-    material.emissiveIntensity = (Number(material.emissiveIntensity) || 0) * brightness;
-  }
-  material.needsUpdate = true;
+  applyManagedMaterialAppearance(material, options);
 };
 
 const forceMaterialVisibility = (material, options = {}) => {
@@ -771,6 +804,19 @@ export const prepareGltfModel = (object, options = {}) => {
       tuneImportedMaterialAppearance(material, options);
     });
   });
+};
+
+export const updateGltfModelMaterialAppearance = (object, options = {}) => {
+  let didUpdate = false;
+  object?.traverse?.((child) => {
+    if (!child.isMesh && !child.isSkinnedMesh) return;
+    const materials = Array.isArray(child.material) ? child.material : [child.material];
+    materials.filter(Boolean).forEach((material) => {
+      if (!material.userData?.rpg3dAppearanceManaged && !options.includeUnmanaged) return;
+      didUpdate = applyManagedMaterialAppearance(material, options) || didUpdate;
+    });
+  });
+  return didUpdate;
 };
 
 export const snapObjectToGround = (object, groundY = 0) => {

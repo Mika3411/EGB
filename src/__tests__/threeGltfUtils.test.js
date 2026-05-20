@@ -16,6 +16,7 @@ import {
   playGltfAnimations,
   prepareGltfModel,
   THREE_MODEL_ACCEPT,
+  updateGltfModelMaterialAppearance,
 } from '../utils/threeGltfUtils';
 
 describe('prepareGltfModel', () => {
@@ -48,6 +49,49 @@ describe('prepareGltfModel', () => {
 
     expect(material.metalness).toBe(1);
     expect(material.roughness).toBe(1);
+  });
+
+  it('updates imported model brightness from the original material state', () => {
+    const material = new THREE.MeshStandardMaterial({
+      color: '#886644',
+      emissive: '#221100',
+      emissiveIntensity: 0.8,
+      envMapIntensity: 1.4,
+    });
+    const baseColor = material.color.clone();
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
+
+    prepareGltfModel(mesh, {
+      cloneMaterials: true,
+      materialBrightness: 0.5,
+      maxEnvMapIntensity: 1,
+      maxEmissiveIntensity: 0.3,
+    });
+
+    const tunedMaterial = mesh.material;
+    expect(tunedMaterial).not.toBe(material);
+    expect(tunedMaterial.color.r).toBeCloseTo(baseColor.r * 0.5);
+    expect(tunedMaterial.envMapIntensity).toBeCloseTo(1);
+    expect(tunedMaterial.emissiveIntensity).toBeCloseTo(0.15);
+
+    updateGltfModelMaterialAppearance(mesh, {
+      materialBrightness: 0.8,
+      maxEnvMapIntensity: 1,
+      maxEmissiveIntensity: 0.3,
+    });
+
+    expect(tunedMaterial.color.r).toBeCloseTo(baseColor.r * 0.8);
+    expect(tunedMaterial.envMapIntensity).toBeCloseTo(1);
+    expect(tunedMaterial.emissiveIntensity).toBeCloseTo(0.24);
+
+    updateGltfModelMaterialAppearance(mesh, {
+      materialBrightness: 1,
+      maxEnvMapIntensity: 1,
+      maxEmissiveIntensity: 0.3,
+    });
+
+    expect(tunedMaterial.color.r).toBeCloseTo(baseColor.r);
+    expect(tunedMaterial.emissiveIntensity).toBeCloseTo(0.3);
   });
 
   it('converts unlit GLB materials when real map shadows are required', () => {

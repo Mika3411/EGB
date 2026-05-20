@@ -1356,7 +1356,6 @@ const getPropVisualSignature = (prop = {}) => [
   getPropRenderMode(prop),
   prop.decorKind || '',
   getPropModelScale(prop),
-  Math.round(getPropMaterialBrightness(prop) * 100),
   prop.decorModel3dId || '',
   prop.decorModelName || '',
   getImageSignature(getPropModelSource(prop)),
