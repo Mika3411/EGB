@@ -392,6 +392,11 @@ const MIME_EXTENSION_MAP: Record<string, string[]> = {
   'audio/flac': ['flac'],
   'application/json': ['json'],
   'text/json': ['json'],
+  'model/gltf-binary': ['glb'],
+  'model/gltf+json': ['gltf'],
+  'model/obj': ['obj'],
+  'application/vnd.autodesk.fbx': ['fbx'],
+  'model/vnd.fbx': ['fbx'],
 };
 
 const createStorageValidationError = ({ action, bucket = PRIVATE_DATA_BUCKET, path, code, message }: StorageErrorDetails & { message: string }) => (

@@ -1,8 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {
   Cuboid,
   Maximize2,
@@ -16,19 +12,41 @@ import {
   Upload,
   User,
 } from 'lucide-react';
-import { attachClickTargetCameraControls } from './three/clickTargetCameraControls.js';
 import { makeCharacter3DModel } from '../data/projectData';
-import { fileToDataURL } from '../utils/fileHelpers';
-import { formatBytes, optimizeCharacterGlbFile } from '../utils/glbOptimizer';
+import { formatBytes } from '../utils/glbOptimizer';
+import Character3DPreview from './rpg3d/Character3DPreview.jsx';
 import {
-  fitObjectToHeight,
-  getGltfAnimationClips,
-  getGltfModelSource,
-  getGltfModelSources,
-  loadGltfFromSource,
-  playGltfAnimations,
-  prepareGltfModel,
+  CHARACTER_ANIMATION_SLOTS,
+  CHARACTER_MATERIAL_BRIGHTNESS_MAX,
+  CHARACTER_MATERIAL_BRIGHTNESS_MIN,
+  CHARACTER_MODEL_SCALE_MAX,
+  CHARACTER_MODEL_SCALE_MIN,
+  getAnimationSource,
+  getCharacterModelAxisScale,
+  getCharacterImportFileInfo,
+  getCharacterMaterialBrightness,
+  getEmbeddedAnimationSignature,
+  getPreviewAnimationSlot,
+  getPreviewLightIntensity,
+  getPreviewLightOrientation,
+  isCharacterModelScaleProportional,
+  isHeavyLocalFbxAsset,
+  numberValue,
+  readCharacterAnimationImport,
+  readCharacterModelImport,
+  resizeAxesProportionally,
+  summarizeEmbeddedAnimationClips,
+} from '../utils/rpg3dModelImport';
+import {
+  THREE_MODEL_ACCEPT,
+  getThreeModelFormatLabel,
+  getThreeModelSource,
 } from '../utils/threeGltfUtils';
+import {
+  createLocalModelFileId,
+  forgetRpg3DLocalBlobFile,
+  rememberRpg3DLocalBlobFile,
+} from '../utils/rpg3dAssetsStorage.js';
 import HelpLabel from './forms/HelpLabel.jsx';
 
 const ROLE_OPTIONS = [
@@ -37,18 +55,12 @@ const ROLE_OPTIONS = [
   { id: 'npc', label: 'PNJ', icon: User },
 ];
 
-const SHAPE_OPTIONS = [
-  { id: 'humanoid', label: 'Humanoide' },
-  { id: 'glb', label: 'Modele GLB' },
-  { id: 'dark-knight', label: 'Chevalier noir' },
-  { id: 'robot', label: 'Robot' },
-  { id: 'creature', label: 'Creature' },
-  { id: 'mage', label: 'Mage' },
-];
-
 const CHARACTER_FIELD_HELP = {
   name: 'Nom interne et visible du personnage dans les listes du builder 3D.',
-  glbImport: 'Charge ou remplace le modele 3D du personnage au format .glb. Le fichier est optimise avant d etre stocke.',
+  glbImport: 'Charge ou remplace le modele 3D du personnage au format .glb, .fbx, .obj ou .zip. Pour un FBX avec dossier .fbm, importe un zip contenant le FBX et ses textures.',
+  animationImport: 'Ajoute un FBX/GLB d animation qui utilise le meme squelette que le modele principal. La marche joue pendant le deplacement, l attaque pendant le tir ou le sort.',
+  characterModelScale: 'Regle les axes du personnage quand il est place sur la carte RPG 3D. X elargit, Y regle la profondeur, Z regle la hauteur.',
+  materialBrightness: 'Regle la luminosite de ce personnage quand il est place sur la carte RPG 3D.',
   previewLightIntensity: 'Regle la puissance de l eclairage dans l apercu personnage. Cela aide a verifier les volumes et les textures.',
   previewLightOrientation: 'Tourne la lumiere principale autour du personnage pour controler les ombres dans l apercu.',
 };
@@ -57,500 +69,9 @@ const CharacterHelpLabel = ({ children, help }) => (
   <HelpLabel as="span" className="builder3d-help-label" help={help}>{children}</HelpLabel>
 );
 
-const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-const numberValue = (value, fallback, min, max) => clamp(Number.isFinite(Number(value)) ? Number(value) : fallback, min, max);
-const getPreviewLightIntensity = (model = {}) => numberValue(model.previewLightIntensity, 1, 0.2, 2.5);
-const getPreviewLightOrientation = (model = {}) => numberValue(model.previewLightOrientation, -35, -180, 180);
-
-const getCharacterBuildSignature = (model = {}) => [
-  model.id || '',
-  model.shape || '',
-  model.modelUrl || '',
-  model.modelData || '',
-  model.modelName || '',
-].join('|');
-
-const applyPreviewLighting = (model, renderer, lights) => {
-  if (!renderer || !lights) return;
-  const intensity = getPreviewLightIntensity(model);
-  const orientation = THREE.MathUtils.degToRad(getPreviewLightOrientation(model));
-  const keyRadius = 6.2;
-  const fillRadius = 6.6;
-  const rimRadius = 5.4;
-
-  renderer.toneMappingExposure = 0.88 + intensity * 0.2;
-  lights.hemi.intensity = 0.82 + intensity * 0.34;
-  lights.key.intensity = 1.3 + intensity * 0.82;
-  lights.frontFill.intensity = 0.38 + intensity * 0.46;
-  lights.rim.intensity = 0.24 + intensity * 0.22;
-  lights.ambient.intensity = 0.14 + intensity * 0.16;
-
-  lights.key.position.set(Math.sin(orientation) * keyRadius, 5.8, Math.cos(orientation) * keyRadius);
-  lights.frontFill.position.set(Math.sin(orientation + Math.PI * 0.58) * fillRadius, 2.4, Math.cos(orientation + Math.PI * 0.58) * fillRadius);
-  lights.rim.position.set(Math.sin(orientation + Math.PI) * rimRadius, 3.8, Math.cos(orientation + Math.PI) * rimRadius);
-};
-
 const ensureCharacterModels = (draft) => {
   if (!Array.isArray(draft.characterModels3d)) draft.characterModels3d = [];
   return draft.characterModels3d;
-};
-
-const disposeMaterial = (material) => {
-  if (!material) return;
-  if (material.userData?.disposeTextures) {
-    Object.values(material).forEach((value) => {
-      if (value?.isTexture) value.dispose();
-    });
-  }
-  material.dispose?.();
-};
-
-const disposeObject = (object) => {
-  if (object?.userData) object.userData.disposed = true;
-  object.traverse((child) => {
-    child.geometry?.dispose?.();
-    const materials = Array.isArray(child.material) ? child.material : [child.material];
-    materials.filter(Boolean).forEach(disposeMaterial);
-  });
-};
-
-const clearGroup = (group) => {
-  [...group.children].forEach((child) => {
-    group.remove(child);
-    disposeObject(child);
-  });
-};
-
-const material = (color, options = {}) => {
-  const texture = options.texture || null;
-  const created = new THREE.MeshStandardMaterial({
-    color: texture ? '#ffffff' : color,
-    map: texture,
-    roughness: options.roughness ?? 0.58,
-    metalness: options.metalness ?? 0.05,
-    emissive: options.emissive || '#000000',
-    emissiveIntensity: options.emissiveIntensity ?? 0,
-    transparent: options.transparent || false,
-    opacity: options.opacity ?? 1,
-    side: options.side || THREE.FrontSide,
-  });
-  if (texture) created.userData.disposeTextures = true;
-  return created;
-};
-
-const addMesh = (group, geometry, meshMaterial, position, rotation = null, scale = null) => {
-  const mesh = new THREE.Mesh(geometry, meshMaterial);
-  mesh.position.set(position[0], position[1], position[2]);
-  if (rotation) mesh.rotation.set(rotation[0], rotation[1], rotation[2]);
-  if (scale) mesh.scale.set(scale[0], scale[1], scale[2]);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  group.add(mesh);
-  return mesh;
-};
-
-const buildCharacterObject = (model) => {
-  const root = new THREE.Group();
-  const shape = ['humanoid', 'glb', 'dark-knight', 'robot', 'creature', 'mage'].includes(model.shape) ? model.shape : 'humanoid';
-  const isDarkKnight = shape === 'dark-knight';
-  const faceTint = isDarkKnight ? '#0a0b0d' : '#f0c7a7';
-  const bodyTint = isDarkKnight ? '#111318' : shape === 'robot' ? '#334155' : shape === 'creature' ? '#0f766e' : '#2563eb';
-  const accentTint = isDarkKnight ? '#b88742' : shape === 'mage' ? '#a78bfa' : '#67e8f9';
-  const bladeTint = isDarkKnight ? '#c7b18a' : '#e2e8f0';
-  const height = isDarkKnight ? 2.05 : shape === 'robot' ? 1.82 : shape === 'creature' ? 1.55 : 1.75;
-  const build = isDarkKnight ? 1.28 : shape === 'creature' ? 1.12 : 1;
-  const headRatio = shape === 'creature' ? 1.12 : 1;
-  const armRatio = isDarkKnight ? 1.08 : 1;
-  const legRatio = isDarkKnight ? 1.04 : 1;
-
-  const legHeight = height * 0.34 * legRatio;
-  const torsoHeight = height * (shape === 'creature' ? 0.46 : isDarkKnight ? 0.47 : 0.43);
-  const headRadius = height * 0.105 * headRatio;
-  const bodyWidth = height * (isDarkKnight ? 0.205 : 0.18) * build;
-  const bodyDepth = bodyWidth * (shape === 'robot' || isDarkKnight ? 0.9 : 0.74);
-  const footY = 0.06;
-  const legY = footY + legHeight / 2;
-  const torsoY = footY + legHeight + torsoHeight / 2;
-  const headY = footY + legHeight + torsoHeight + headRadius * 1.18;
-  const bodyMaterial = material(bodyTint, { roughness: shape === 'robot' || isDarkKnight ? 0.38 : 0.62, metalness: shape === 'robot' || isDarkKnight ? 0.32 : 0.04 });
-  const accentMaterial = material(accentTint, { roughness: isDarkKnight ? 0.34 : 0.42, metalness: isDarkKnight ? 0.44 : 0.05, emissive: accentTint, emissiveIntensity: isDarkKnight ? 0.04 : 0.08 });
-  const faceMaterial = material(faceTint, { roughness: 0.64 });
-  const weaponMaterial = material(bladeTint, { roughness: 0.28, metalness: isDarkKnight ? 0.56 : 0.26, emissive: isDarkKnight ? '#2a1b08' : accentTint, emissiveIntensity: isDarkKnight ? 0.05 : 0.08 });
-
-  const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(Math.max(0.55, bodyWidth * 1.55), 40),
-    new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.24 }),
-  );
-  shadow.rotation.x = -Math.PI / 2;
-  shadow.position.y = 0.012;
-  root.add(shadow);
-
-  if (shape === 'mage') {
-    const magicRing = new THREE.Mesh(
-      new THREE.TorusGeometry(Math.max(0.55, bodyWidth * 1.55), 0.02, 10, 64),
-      new THREE.MeshBasicMaterial({ color: accentTint, transparent: true, opacity: 0.74 }),
-    );
-    magicRing.rotation.x = Math.PI / 2;
-    magicRing.position.y = 0.05;
-    root.add(magicRing);
-  }
-
-  if (isDarkKnight) {
-    const trimMaterial = material(accentTint, { roughness: 0.28, metalness: 0.62, emissive: '#1f1204', emissiveIntensity: 0.08 });
-    const eyeMaterial = new THREE.MeshBasicMaterial({ color: '#ef271f' });
-    const cloakMaterial = material('#060914', {
-      roughness: 0.88,
-      transparent: true,
-      opacity: 0.9,
-      side: THREE.DoubleSide,
-    });
-
-    addMesh(root, new THREE.BoxGeometry(bodyWidth * 1.72, torsoHeight, bodyDepth * 1.16), bodyMaterial, [0, torsoY, 0]);
-    addMesh(root, new THREE.BoxGeometry(bodyWidth * 1.34, torsoHeight * 0.18, bodyDepth * 1.22), trimMaterial, [0, torsoY + torsoHeight * 0.22, bodyDepth * 0.08]);
-    addMesh(root, new THREE.BoxGeometry(bodyWidth * 0.82, torsoHeight * 0.56, 0.035), trimMaterial, [0, torsoY + torsoHeight * 0.02, bodyDepth * 0.61]);
-    addMesh(root, new THREE.BoxGeometry(bodyWidth * 0.42, torsoHeight * 0.36, 0.04), bodyMaterial, [0, torsoY - torsoHeight * 0.12, bodyDepth * 0.65]);
-
-    [-1, 1].forEach((side) => {
-      const shoulder = addMesh(root, new THREE.ConeGeometry(bodyWidth * 0.62, bodyWidth * 0.54, 4), bodyMaterial, [side * bodyWidth * 1.18, torsoY + torsoHeight * 0.34, 0], [0.22, 0, side * 0.55]);
-      shoulder.rotation.y = Math.PI / 4;
-      addMesh(root, new THREE.ConeGeometry(bodyWidth * 0.15, bodyWidth * 0.62, 8), trimMaterial, [side * bodyWidth * 1.55, torsoY + torsoHeight * 0.48, 0], [0, 0, -side * 0.78]);
-      addMesh(root, new THREE.CapsuleGeometry(bodyWidth * 0.22, torsoHeight * 0.64 * armRatio, 6, 10), bodyMaterial, [side * bodyWidth * 1.14, torsoY - torsoHeight * 0.1, 0], [0, 0, side * 0.12]);
-      addMesh(root, new THREE.BoxGeometry(bodyWidth * 0.34, torsoHeight * 0.22, bodyDepth * 0.62), trimMaterial, [side * bodyWidth * 1.12, torsoY - torsoHeight * 0.26, 0]);
-    });
-
-    [-1, 1].forEach((side) => {
-      addMesh(root, new THREE.CapsuleGeometry(bodyWidth * 0.27, legHeight * 0.78 * legRatio, 6, 10), bodyMaterial, [side * bodyWidth * 0.38, legY, 0]);
-      addMesh(root, new THREE.BoxGeometry(bodyWidth * 0.5, legHeight * 0.18, bodyDepth * 0.72), trimMaterial, [side * bodyWidth * 0.38, legY - legHeight * 0.18, 0]);
-      addMesh(root, new THREE.ConeGeometry(bodyWidth * 0.2, bodyWidth * 0.5, 4), trimMaterial, [side * bodyWidth * 0.38, legY + legHeight * 0.2, bodyDepth * 0.46], [Math.PI / 2, 0, Math.PI / 4]);
-    });
-
-    addMesh(root, new THREE.SphereGeometry(headRadius * 1.08, 20, 14), bodyMaterial, [0, headY, 0]);
-    addMesh(root, new THREE.ConeGeometry(headRadius * 0.92, headRadius * 1.82, 4), bodyMaterial, [0, headY + headRadius * 0.18, bodyDepth * 0.05], [0, Math.PI / 4, 0]);
-    addMesh(root, new THREE.BoxGeometry(headRadius * 1.28, headRadius * 0.08, 0.03), eyeMaterial, [0, headY + headRadius * 0.08, headRadius * 0.98]);
-    [-1, 0, 1].forEach((side) => {
-      addMesh(root, new THREE.ConeGeometry(headRadius * 0.13, headRadius * (side === 0 ? 1.25 : 0.88), 8), trimMaterial, [side * headRadius * 0.62, headY + headRadius * 0.95, 0], [0, 0, -side * 0.2]);
-    });
-
-    const cloak = addMesh(root, new THREE.PlaneGeometry(bodyWidth * 3.4, height * 1.04, 1, 6), cloakMaterial, [0, torsoY - torsoHeight * 0.18, -bodyDepth * 0.84], [0.24, 0, 0]);
-    const cloakPositions = cloak.geometry.attributes.position;
-    for (let index = 0; index < cloakPositions.count; index += 1) {
-      const x = cloakPositions.getX(index);
-      const y = cloakPositions.getY(index);
-      const rag = Math.sin(index * 2.1) * 0.045 - Math.max(0, -y) * 0.08;
-      cloakPositions.setZ(index, rag + Math.abs(x) * 0.04);
-    }
-    cloakPositions.needsUpdate = true;
-
-    addMesh(root, new THREE.BoxGeometry(bodyWidth * 0.15, height * 1.18, bodyWidth * 0.06), weaponMaterial, [-bodyWidth * 1.82, height * 0.46, bodyDepth * 0.9], [0.05, 0, 0.02]);
-    addMesh(root, new THREE.BoxGeometry(bodyWidth * 0.76, bodyWidth * 0.1, bodyWidth * 0.16), trimMaterial, [-bodyWidth * 1.82, height * 0.78, bodyDepth * 0.92], [0, 0, -0.15]);
-    addMesh(root, new THREE.SphereGeometry(bodyWidth * 0.13, 12, 8), trimMaterial, [-bodyWidth * 1.82, height * 0.14, bodyDepth * 0.9]);
-    addMesh(root, new THREE.ConeGeometry(bodyWidth * 0.12, bodyWidth * 0.42, 4), weaponMaterial, [-bodyWidth * 1.82, height * 1.08, bodyDepth * 0.9], [0, Math.PI / 4, 0]);
-  } else if (shape === 'robot') {
-    addMesh(root, new THREE.BoxGeometry(bodyWidth * 1.8, torsoHeight, bodyDepth * 1.42), bodyMaterial, [0, torsoY, 0]);
-    addMesh(root, new THREE.BoxGeometry(bodyWidth * 1.35, headRadius * 1.75, bodyDepth * 1.16), faceMaterial, [0, headY, 0]);
-    addMesh(root, new THREE.BoxGeometry(bodyWidth * 0.45, legHeight, bodyDepth * 0.58), accentMaterial, [-bodyWidth * 0.43, legY, 0]);
-    addMesh(root, new THREE.BoxGeometry(bodyWidth * 0.45, legHeight, bodyDepth * 0.58), accentMaterial, [bodyWidth * 0.43, legY, 0]);
-    addMesh(root, new THREE.BoxGeometry(bodyWidth * 0.38, torsoHeight * 0.78 * armRatio, bodyDepth * 0.46), accentMaterial, [-bodyWidth * 1.25, torsoY + torsoHeight * 0.05, 0], [0, 0, -0.18]);
-    addMesh(root, new THREE.BoxGeometry(bodyWidth * 0.38, torsoHeight * 0.78 * armRatio, bodyDepth * 0.46), accentMaterial, [bodyWidth * 1.25, torsoY + torsoHeight * 0.05, 0], [0, 0, 0.18]);
-  } else if (shape === 'creature') {
-    addMesh(root, new THREE.SphereGeometry(bodyWidth * 1.12, 24, 18), bodyMaterial, [0, torsoY, 0], null, [1.15, 1.28, 0.92]);
-    addMesh(root, new THREE.SphereGeometry(headRadius * 1.32, 20, 14), faceMaterial, [0, headY, bodyDepth * 0.12]);
-    addMesh(root, new THREE.CapsuleGeometry(bodyWidth * 0.24, torsoHeight * 0.54 * armRatio, 6, 10), accentMaterial, [-bodyWidth * 1.22, torsoY + torsoHeight * 0.02, 0], [0, 0, -0.42]);
-    addMesh(root, new THREE.CapsuleGeometry(bodyWidth * 0.24, torsoHeight * 0.54 * armRatio, 6, 10), accentMaterial, [bodyWidth * 1.22, torsoY + torsoHeight * 0.02, 0], [0, 0, 0.42]);
-    addMesh(root, new THREE.CapsuleGeometry(bodyWidth * 0.24, legHeight * 0.58, 5, 10), accentMaterial, [-bodyWidth * 0.42, legY, 0]);
-    addMesh(root, new THREE.CapsuleGeometry(bodyWidth * 0.24, legHeight * 0.58, 5, 10), accentMaterial, [bodyWidth * 0.42, legY, 0]);
-    [-1, 1].forEach((side) => {
-      addMesh(root, new THREE.ConeGeometry(headRadius * 0.25, headRadius * 1.1, 8), weaponMaterial, [side * headRadius * 0.68, headY + headRadius * 0.72, 0], [0, 0, side * 0.42]);
-    });
-  } else {
-    addMesh(root, new THREE.CapsuleGeometry(bodyWidth, Math.max(0.08, torsoHeight - bodyWidth * 1.25), 8, 16), bodyMaterial, [0, torsoY, 0]);
-    addMesh(root, new THREE.SphereGeometry(headRadius, 22, 16), faceMaterial, [0, headY, bodyDepth * 0.08]);
-    addMesh(root, new THREE.CapsuleGeometry(bodyWidth * 0.22, torsoHeight * 0.7 * armRatio, 6, 12), faceMaterial, [-bodyWidth * 1.05, torsoY + torsoHeight * 0.05, 0], [0, 0, -0.24]);
-    addMesh(root, new THREE.CapsuleGeometry(bodyWidth * 0.22, torsoHeight * 0.7 * armRatio, 6, 12), faceMaterial, [bodyWidth * 1.05, torsoY + torsoHeight * 0.05, 0], [0, 0, 0.24]);
-    addMesh(root, new THREE.CapsuleGeometry(bodyWidth * 0.23, legHeight * 0.82, 5, 12), bodyMaterial, [-bodyWidth * 0.38, legY, 0]);
-    addMesh(root, new THREE.CapsuleGeometry(bodyWidth * 0.23, legHeight * 0.82, 5, 12), bodyMaterial, [bodyWidth * 0.38, legY, 0]);
-  }
-
-  if (!isDarkKnight && shape === 'mage') {
-    const cloakMaterial = material(accentTint, {
-      roughness: 0.7,
-      transparent: true,
-      opacity: 0.78,
-      side: THREE.DoubleSide,
-      emissive: accentTint,
-      emissiveIntensity: 0.06,
-    });
-    addMesh(root, new THREE.PlaneGeometry(bodyWidth * 2.35, torsoHeight * 1.25), cloakMaterial, [0, torsoY - torsoHeight * 0.02, -bodyDepth * 0.72], [0.12, 0, 0]);
-  }
-
-  if (!isDarkKnight && shape === 'robot') {
-    addMesh(root, new THREE.SphereGeometry(headRadius * 1.08, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), accentMaterial, [0, headY + headRadius * 0.08, bodyDepth * 0.02]);
-  }
-
-  if (!isDarkKnight) {
-    const weaponLength = shape === 'mage' ? torsoHeight * 1.42 : torsoHeight * 0.98;
-    addMesh(root, new THREE.BoxGeometry(bodyWidth * 0.12, bodyWidth * 0.12, weaponLength), weaponMaterial, [bodyWidth * 1.34, torsoY + torsoHeight * 0.03, bodyDepth * 0.82], [0.28, 0.08, -0.12]);
-    if (shape === 'mage') {
-      addMesh(root, new THREE.SphereGeometry(bodyWidth * 0.18, 14, 10), accentMaterial, [bodyWidth * 1.52, torsoY + torsoHeight * 0.48, bodyDepth * 1.24]);
-    }
-  }
-
-  return root;
-};
-
-const loadGltfCharacter = (sources, model, onLoaded, onError) => {
-  const loader = new GLTFLoader();
-  const sourceList = (Array.isArray(sources) ? sources : [sources]).filter(Boolean);
-  const handleLoaded = (gltf) => {
-      const object = gltf.scene || gltf.scenes?.[0];
-      if (!object) {
-        onError?.();
-        return;
-      }
-      prepareGltfModel(object, { restoreTextureColor: true });
-      fitObjectToHeight(object, 2, { groundY: 0 });
-      onLoaded?.(object, getGltfAnimationClips(gltf));
-  };
-  const trySource = (index = 0) => {
-    const source = sourceList[index];
-    if (!source) {
-      onError?.();
-      return;
-    }
-    loadGltfFromSource(loader, source, handleLoaded, () => trySource(index + 1));
-  };
-  trySource();
-};
-
-function Character3DPreview({ model }) {
-  const containerRef = useRef(null);
-  const sceneRef = useRef(null);
-  const characterRootRef = useRef(null);
-  const rendererRef = useRef(null);
-  const animationMixersRef = useRef([]);
-  const lightsRef = useRef(null);
-  const [webglError, setWebglError] = useState('');
-  const buildSignature = useMemo(() => getCharacterBuildSignature(model), [model]);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return undefined;
-
-    let renderer;
-    try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'default' });
-    } catch {
-      setWebglError('Apercu 3D indisponible.');
-      return undefined;
-    }
-
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.08;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.6));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFShadowMap;
-    renderer.domElement.className = 'character3d-canvas';
-    renderer.domElement.setAttribute('aria-label', 'Apercu personnage 3D');
-    container.appendChild(renderer.domElement);
-    rendererRef.current = renderer;
-    setWebglError('');
-
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#07111e');
-    scene.fog = new THREE.Fog('#07111e', 7, 16);
-    sceneRef.current = scene;
-    const pmremGenerator = new THREE.PMREMGenerator(renderer);
-    const roomEnvironment = new RoomEnvironment();
-    const environmentMap = pmremGenerator.fromScene(roomEnvironment, 0.04).texture;
-    roomEnvironment.dispose?.();
-    scene.environment = environmentMap;
-
-    const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 60);
-    camera.position.set(2.8, 2.05, 3.5);
-
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.08;
-    controls.minDistance = 2.4;
-    controls.maxDistance = 7;
-    controls.maxPolarAngle = Math.PI * 0.49;
-    controls.target.set(0, 1.05, 0);
-    const detachCameraControls = attachClickTargetCameraControls({
-      camera,
-      controls,
-      domElement: renderer.domElement,
-      scene,
-      groundY: 0,
-    });
-
-    const hemi = new THREE.HemisphereLight('#d5f4ff', '#24170f', 1.22);
-    scene.add(hemi);
-    const key = new THREE.DirectionalLight('#fff2cf', 2.05);
-    key.position.set(-3.8, 5.8, 4.8);
-    key.castShadow = true;
-    key.shadow.camera.near = 0.5;
-    key.shadow.camera.far = 18;
-    key.shadow.camera.left = -5;
-    key.shadow.camera.right = 5;
-    key.shadow.camera.top = 5;
-    key.shadow.camera.bottom = -5;
-    scene.add(key);
-    const frontFill = new THREE.DirectionalLight('#d8e8ff', 1.05);
-    frontFill.position.set(3.2, 2.4, 5.4);
-    scene.add(frontFill);
-    const rim = new THREE.DirectionalLight('#86f7ff', 0.48);
-    rim.position.set(3.4, 3.8, -4.2);
-    scene.add(rim);
-    const ambient = new THREE.AmbientLight('#7fb7ff', 0.28);
-    scene.add(ambient);
-    lightsRef.current = { hemi, key, frontFill, rim, ambient };
-    applyPreviewLighting(model, renderer, lightsRef.current);
-
-    const floorTexture = new THREE.CanvasTexture(createPreviewFloor());
-    floorTexture.wrapS = THREE.RepeatWrapping;
-    floorTexture.wrapT = THREE.RepeatWrapping;
-    floorTexture.repeat.set(4, 4);
-    floorTexture.colorSpace = THREE.SRGBColorSpace;
-    const floorMaterial = new THREE.MeshStandardMaterial({ map: floorTexture, roughness: 0.88, metalness: 0 });
-    floorMaterial.userData.disposeTextures = true;
-    const floor = new THREE.Mesh(new THREE.CircleGeometry(2.35, 72), floorMaterial);
-    floor.rotation.x = -Math.PI / 2;
-    floor.receiveShadow = true;
-    scene.add(floor);
-
-    const grid = new THREE.GridHelper(4.8, 16, '#67e8f9', '#263c5c');
-    grid.material.transparent = true;
-    grid.material.opacity = 0.28;
-    grid.position.y = 0.018;
-    scene.add(grid);
-
-    const characterRoot = new THREE.Group();
-    characterRootRef.current = characterRoot;
-    scene.add(characterRoot);
-
-    const resize = () => {
-      const width = Math.max(320, container.clientWidth);
-      const height = Math.max(320, container.clientHeight);
-      if (renderer.domElement.width !== Math.floor(width * renderer.getPixelRatio()) || renderer.domElement.height !== Math.floor(height * renderer.getPixelRatio())) {
-        renderer.setSize(width, height, false);
-        camera.aspect = width / height;
-        camera.updateProjectionMatrix();
-      }
-    };
-
-    let frameId = 0;
-    let previousTime = 0;
-    const render = (time = 0) => {
-      resize();
-      const delta = previousTime ? Math.min(0.05, (time - previousTime) / 1000) : 0;
-      previousTime = time;
-      animationMixersRef.current.forEach((mixer) => mixer.update(delta));
-      controls.update();
-      renderer.render(scene, camera);
-      frameId = requestAnimationFrame(render);
-    };
-    render();
-
-    return () => {
-      cancelAnimationFrame(frameId);
-      detachCameraControls();
-      controls.dispose();
-      animationMixersRef.current.forEach((mixer) => mixer.stopAllAction());
-      animationMixersRef.current = [];
-      clearGroup(characterRoot);
-      disposeObject(floor);
-      scene.environment = null;
-      environmentMap.dispose();
-      pmremGenerator.dispose();
-      renderer.dispose();
-      renderer.forceContextLoss?.();
-      if (renderer.domElement.parentNode === container) container.removeChild(renderer.domElement);
-      sceneRef.current = null;
-      characterRootRef.current = null;
-      rendererRef.current = null;
-      lightsRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    applyPreviewLighting(model, rendererRef.current, lightsRef.current);
-  }, [model?.previewLightIntensity, model?.previewLightOrientation]);
-
-  useEffect(() => {
-    const characterRoot = characterRootRef.current;
-    if (!characterRoot || !model) return;
-    let cancelled = false;
-    animationMixersRef.current.forEach((mixer) => mixer.stopAllAction());
-    animationMixersRef.current = [];
-    clearGroup(characterRoot);
-    const sources = getGltfModelSources(model);
-    if (sources.length) {
-      const loadingRoot = new THREE.Group();
-      characterRoot.add(loadingRoot);
-      loadingRoot.add(new THREE.Mesh(
-        new THREE.CapsuleGeometry(0.36, 1.15, 6, 12),
-        new THREE.MeshStandardMaterial({
-          color: '#1f2937',
-          roughness: 0.68,
-          metalness: 0.12,
-          emissive: '#0f172a',
-          emissiveIntensity: 0.18,
-        }),
-      ));
-      loadingRoot.children[0].position.y = 0.72;
-      loadGltfCharacter(sources, model, (object, animationClips) => {
-        if (cancelled || characterRoot.userData?.disposed) {
-          disposeObject(object);
-          return;
-        }
-        const mixer = playGltfAnimations(object, animationClips, { timeOffset: performance.now() * 0.001 });
-        animationMixersRef.current = mixer ? [mixer] : [];
-        clearGroup(loadingRoot);
-        loadingRoot.add(object);
-      }, () => {
-        if (cancelled) return;
-        clearGroup(loadingRoot);
-        loadingRoot.add(buildCharacterObject({ ...model, modelUrl: '', modelData: '', shape: 'dark-knight' }));
-      });
-    } else {
-      characterRoot.add(buildCharacterObject(model));
-    }
-    return () => {
-      cancelled = true;
-      animationMixersRef.current.forEach((mixer) => mixer.stopAllAction());
-      animationMixersRef.current = [];
-    };
-  }, [buildSignature]);
-
-  return (
-    <div ref={containerRef} className="character3d-canvas-shell">
-      {webglError ? <div className="character3d-webgl-error">{webglError}</div> : null}
-    </div>
-  );
-}
-
-const createPreviewFloor = () => {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 512;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#0f1b2d';
-  ctx.fillRect(0, 0, 512, 512);
-  for (let x = 0; x < 512; x += 64) {
-    for (let y = 0; y < 512; y += 64) {
-      ctx.fillStyle = ((x + y) / 64) % 2 ? '#172741' : '#101d31';
-      ctx.fillRect(x, y, 64, 64);
-      ctx.strokeStyle = 'rgba(103, 232, 249, .11)';
-      ctx.strokeRect(x + 0.5, y + 0.5, 63, 63);
-    }
-  }
-  ctx.strokeStyle = 'rgba(245, 158, 11, .2)';
-  ctx.lineWidth = 5;
-  ctx.beginPath();
-  ctx.arc(256, 256, 132, 0, Math.PI * 2);
-  ctx.stroke();
-  return canvas;
 };
 
 const FieldRange = ({ label, help, value, min, max, step = 0.05, onChange }) => (
@@ -562,6 +83,23 @@ const FieldRange = ({ label, help, value, min, max, step = 0.05, onChange }) => 
     <input type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} />
   </label>
 );
+
+const CHARACTER_SCALE_AXES = [
+  { id: 'x', label: 'X' },
+  { id: 'y', label: 'Y' },
+  { id: 'z', label: 'Z' },
+];
+const formatDraftNumber = (value) => (Number.isFinite(Number(value)) ? String(Number(value)) : '');
+const normalizeDraftNumber = (value = '') => String(value ?? '').trim().replace(',', '.');
+const isValidDraftNumber = (value = '') => {
+  const normalized = normalizeDraftNumber(value);
+  return normalized !== '' && Number.isFinite(Number(normalized));
+};
+const toCharacterUserAxes = (axisScale = {}) => ({
+  x: axisScale.x,
+  y: axisScale.z,
+  z: axisScale.y,
+});
 
 export default function Character3DTab({
   project,
@@ -580,20 +118,20 @@ export default function Character3DTab({
     setLocalSelectedModelId(nextModelId);
     onSelectedModelIdChange?.(nextModelId);
   }, [onSelectedModelIdChange]);
-  const [, setCopyStatus] = useState('');
+  const [copyStatus, setCopyStatus] = useState('');
+  const [importInProgress, setImportInProgress] = useState(false);
   const localModelUrlsRef = useRef(new Map());
+  const localAnimationUrlsRef = useRef(new Map());
   const bootstrappedModelRef = useRef(false);
-
-  useEffect(() => () => {
-    localModelUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
-    localModelUrlsRef.current.clear();
-  }, []);
+  const [previewAnimationSlot, setPreviewAnimationSlot] = useState('');
+  const [embeddedAnimationInfoByModelId, setEmbeddedAnimationInfoByModelId] = useState({});
+  const [axisScaleDraft, setAxisScaleDraft] = useState({ modelId: '', x: '', y: '', z: '' });
 
   useEffect(() => {
     if (!models.length) {
       if (bootstrappedModelRef.current) return;
       bootstrappedModelRef.current = true;
-      const next = makeCharacter3DModel({ name: 'Nouveau personnage', role: 'hero', shape: 'humanoid' });
+      const next = makeCharacter3DModel({ name: 'Nouveau personnage', role: 'hero', shape: 'glb' });
       patchProject((draft) => {
         const modelList = ensureCharacterModels(draft);
         if (!modelList.length) modelList.push(next);
@@ -608,8 +146,9 @@ export default function Character3DTab({
   }, [models, patchProject, selectedModelId, setSelectedModelId]);
 
   const selectedModel = models.find((model) => model.id === selectedModelId) || models[0] || null;
-  const selectedGltfSource = selectedModel ? getGltfModelSource(selectedModel) : '';
+  const selectedModelSource = selectedModel ? getThreeModelSource(selectedModel) : '';
   const previewModel = useMemo(() => selectedModel || makeCharacter3DModel({ name: 'Nouveau personnage' }), [selectedModel]);
+  const selectedEmbeddedAnimations = selectedModel?.id ? embeddedAnimationInfoByModelId[selectedModel.id] || [] : [];
   const selectedRole = selectedModel?.role || previewModel.role || 'hero';
   const cardRoleOptions = ['enemy', 'hero', 'npc']
     .map((roleId) => ROLE_OPTIONS.find((option) => option.id === roleId))
@@ -624,39 +163,214 @@ export default function Character3DTab({
     }, options);
   }, [patchProject, selectedModelId]);
 
+  const commitSelectedModelAxisScale = useCallback((axisId, rawValue) => {
+    if (!selectedModel) return;
+    if (!isValidDraftNumber(rawValue)) {
+      const axisScale = toCharacterUserAxes(getCharacterModelAxisScale(selectedModel));
+      setAxisScaleDraft((current) => ({
+        ...current,
+        modelId: selectedModel.id || '',
+        [axisId]: formatDraftNumber(axisScale[axisId]),
+      }));
+      return;
+    }
+    patchSelectedModel((model) => {
+      const axisScale = toCharacterUserAxes(getCharacterModelAxisScale(model));
+      const nextValue = numberValue(rawValue, axisScale[axisId] || 1, CHARACTER_MODEL_SCALE_MIN, CHARACTER_MODEL_SCALE_MAX);
+      const isProportional = isCharacterModelScaleProportional(model);
+      const nextAxisScale = isProportional
+        ? resizeAxesProportionally(axisScale, axisId, nextValue, CHARACTER_MODEL_SCALE_MIN, CHARACTER_MODEL_SCALE_MAX)
+        : { ...axisScale, [axisId]: nextValue };
+      model.characterModelScaleX = nextAxisScale.x;
+      model.characterModelScaleY = nextAxisScale.z;
+      model.characterModelScaleZ = nextAxisScale.y;
+      model.characterModelScale = nextAxisScale.z;
+    }, { rememberHistory: false });
+  }, [patchSelectedModel, selectedModel]);
+
+  const setSelectedModelAxisDraft = useCallback((axisId, rawValue) => {
+    setAxisScaleDraft((current) => ({
+      ...current,
+      modelId: selectedModelId || '',
+      [axisId]: rawValue,
+    }));
+  }, [selectedModelId]);
+
+  const setSelectedModelScaleProportional = useCallback((checked) => {
+    patchSelectedModel((model) => {
+      model.characterModelScaleProportional = checked;
+    }, { rememberHistory: false });
+  }, [patchSelectedModel]);
+
+  useEffect(() => {
+    const axisScale = selectedModel ? toCharacterUserAxes(getCharacterModelAxisScale(selectedModel)) : { x: 1, y: 1, z: 1 };
+    setAxisScaleDraft({
+      modelId: selectedModel?.id || '',
+      x: formatDraftNumber(axisScale.x),
+      y: formatDraftNumber(axisScale.y),
+      z: formatDraftNumber(axisScale.z),
+    });
+  }, [
+    selectedModel?.id,
+    selectedModel?.characterModelScale,
+    selectedModel?.characterModelScaleX,
+    selectedModel?.characterModelScaleY,
+    selectedModel?.characterModelScaleZ,
+  ]);
+
+  const handlePreviewAnimationClipsLoaded = useCallback((modelId, clips = []) => {
+    if (!modelId) return;
+    const nextClips = summarizeEmbeddedAnimationClips(clips);
+    const nextSignature = getEmbeddedAnimationSignature(nextClips);
+    setEmbeddedAnimationInfoByModelId((current) => (
+      getEmbeddedAnimationSignature(current[modelId] || []) === nextSignature
+        ? current
+        : { ...current, [modelId]: nextClips }
+    ));
+  }, []);
+
   const setSelectedModelFile = useCallback(async (file) => {
     if (!file || !selectedModelId) return;
-    const isGlb = file.name?.toLowerCase().endsWith('.glb') || file.type === 'model/gltf-binary';
-    if (!isGlb) {
-      setCopyStatus('Choisis un fichier .glb');
+    const fileInfo = getCharacterImportFileInfo(file);
+    const { archiveFormat, modelFormat, isZip } = fileInfo;
+    if (!modelFormat && !archiveFormat) {
+      setCopyStatus('Choisis un fichier .glb, .fbx, .obj ou .zip');
+      return;
+    }
+    if (archiveFormat && archiveFormat !== 'zip') {
+      setCopyStatus('Archive 3D non supportee');
       return;
     }
     const previousUrl = localModelUrlsRef.current.get(selectedModelId);
-    if (previousUrl) URL.revokeObjectURL(previousUrl);
+    if (previousUrl) {
+      forgetRpg3DLocalBlobFile(previousUrl);
+      URL.revokeObjectURL(previousUrl);
+    }
     localModelUrlsRef.current.delete(selectedModelId);
-    setCopyStatus('Optimisation GLB...');
+    const importLabel = isZip ? 'ZIP' : getThreeModelFormatLabel(modelFormat);
+    setImportInProgress(true);
+    setCopyStatus(isZip ? 'Lecture ZIP...' : modelFormat === 'glb' ? 'Optimisation GLB...' : `Import ${importLabel}...`);
     try {
-      const optimization = await optimizeCharacterGlbFile(file);
-      const optimizedFile = optimization.file || file;
+      const {
+        zipBundle,
+        sourceFormat,
+        isGlb,
+        optimization,
+        optimizedFile,
+        modelData,
+        modelFileSize,
+      } = await readCharacterModelImport(file, fileInfo);
+      if (isZip) setCopyStatus(`ZIP: ${getThreeModelFormatLabel(sourceFormat)} + ${zipBundle.modelResources.length} texture${zipBundle.modelResources.length > 1 ? 's' : ''}`);
+      const localModelFileId = createLocalModelFileId('character', selectedModelId, optimizedFile);
       const modelUrl = URL.createObjectURL(optimizedFile);
+      rememberRpg3DLocalBlobFile(modelUrl, optimizedFile, localModelFileId);
       localModelUrlsRef.current.set(selectedModelId, modelUrl);
-      const modelData = await fileToDataURL(optimizedFile);
       patchSelectedModel((model) => {
         model.shape = 'glb';
         model.modelUrl = modelUrl;
         model.modelData = modelData || '';
-        model.modelName = optimizedFile.name || file.name || 'modele.glb';
+        model.localModelFileId = localModelFileId;
+        model.modelName = optimizedFile.name || file.name || `modele.${sourceFormat}`;
+        model.modelFormat = sourceFormat;
+        model.modelFileSize = modelFileSize;
+        model.modelResources = zipBundle?.modelResources || [];
       });
-      setCopyStatus(optimization.optimized
+      setEmbeddedAnimationInfoByModelId((current) => {
+        const next = { ...current };
+        delete next[selectedModelId];
+        return next;
+      });
+      setCopyStatus(isGlb && optimization.optimized
         ? `GLB allege ${formatBytes(optimization.originalSize)} -> ${formatBytes(optimization.optimizedSize)}`
-        : 'GLB charge');
+        : isGlb && optimization.skipped
+          ? `GLB optimise charge sans recompression${modelData ? '' : ' en local'}`
+          : isZip
+          ? `ZIP charge: ${getThreeModelFormatLabel(sourceFormat)} + ${zipBundle.modelResources.length} texture${zipBundle.modelResources.length > 1 ? 's' : ''}${modelData ? '' : ' en local'}${isHeavyLocalFbxAsset({ modelFormat: sourceFormat, modelUrl, modelFileSize }) ? ' - preview GLB conseille' : ''}`
+          : `${getThreeModelFormatLabel(sourceFormat)} charge${modelData ? '' : ' en local'}${isHeavyLocalFbxAsset({ modelFormat: sourceFormat, modelUrl, modelFileSize }) ? ' - preview GLB conseille' : ''}`);
     } catch {
-      setCopyStatus('Import GLB impossible');
+      setCopyStatus('Import du modele 3D impossible');
+    } finally {
+      setImportInProgress(false);
     }
   }, [patchSelectedModel, selectedModelId]);
 
+  const setSelectedAnimationFile = useCallback(async (slot, file) => {
+    if (!file || !selectedModelId || !CHARACTER_ANIMATION_SLOTS.some((entry) => entry.id === slot)) return;
+    const fileInfo = getCharacterImportFileInfo(file);
+    const { archiveFormat, modelFormat, isZip } = fileInfo;
+    if (!modelFormat && !archiveFormat) {
+      setCopyStatus('Choisis une animation .glb, .fbx ou .zip');
+      return;
+    }
+    if (archiveFormat && archiveFormat !== 'zip') {
+      setCopyStatus('Archive animation non supportee');
+      return;
+    }
+    const animationKey = `${selectedModelId}:${slot}`;
+    const previousUrl = localAnimationUrlsRef.current.get(animationKey);
+    if (previousUrl) {
+      forgetRpg3DLocalBlobFile(previousUrl);
+      URL.revokeObjectURL(previousUrl);
+    }
+    localAnimationUrlsRef.current.delete(animationKey);
+    setImportInProgress(true);
+    setCopyStatus(isZip ? 'Lecture ZIP animation...' : `Import animation ${getThreeModelFormatLabel(modelFormat)}...`);
+    try {
+      const {
+        zipBundle,
+        sourceFile,
+        sourceFormat,
+        animationData,
+        modelFileSize,
+      } = await readCharacterAnimationImport(file, fileInfo);
+      const localModelFileId = createLocalModelFileId(`character-animation-${slot}`, selectedModelId, sourceFile);
+      const animationUrl = URL.createObjectURL(sourceFile);
+      rememberRpg3DLocalBlobFile(animationUrl, sourceFile, localModelFileId);
+      localAnimationUrlsRef.current.set(animationKey, animationUrl);
+      patchSelectedModel((model) => {
+        model.modelAnimations = {
+          ...(model.modelAnimations || {}),
+          [slot]: {
+            modelUrl: animationUrl,
+            modelData: animationData || '',
+            localModelFileId,
+            modelName: sourceFile.name || file.name || `animation-${slot}.${sourceFormat}`,
+            modelFormat: sourceFormat,
+            modelFileSize,
+            modelResources: zipBundle?.modelResources || [],
+          },
+        };
+      });
+      setPreviewAnimationSlot(slot);
+      const slotLabel = CHARACTER_ANIMATION_SLOTS.find((entry) => entry.id === slot)?.label || slot;
+      setCopyStatus(`${slotLabel}: animation ${getThreeModelFormatLabel(sourceFormat)} chargee${animationData ? '' : ' en local'}`);
+    } catch {
+      setCopyStatus('Import animation impossible');
+    } finally {
+      setImportInProgress(false);
+    }
+  }, [patchSelectedModel, selectedModelId]);
+
+  const removeSelectedAnimation = useCallback((slot) => {
+    if (!selectedModelId) return;
+    const animationKey = `${selectedModelId}:${slot}`;
+    const previousUrl = localAnimationUrlsRef.current.get(animationKey);
+    if (previousUrl) {
+      forgetRpg3DLocalBlobFile(previousUrl);
+      URL.revokeObjectURL(previousUrl);
+    }
+    localAnimationUrlsRef.current.delete(animationKey);
+    patchSelectedModel((model) => {
+      const nextAnimations = { ...(model.modelAnimations || {}) };
+      delete nextAnimations[slot];
+      model.modelAnimations = nextAnimations;
+    });
+    setPreviewAnimationSlot((current) => (current === slot ? '' : current));
+  }, [patchSelectedModel, selectedModelId]);
+
   const createModel = () => {
-    const next = makeCharacter3DModel({ name: `Personnage 3D ${models.length + 1}`, role: 'npc', shape: 'humanoid' });
+    const role = ROLE_OPTIONS.some((option) => option.id === selectedRole) ? selectedRole : 'npc';
+    const next = makeCharacter3DModel({ name: `Personnage 3D ${models.length + 1}`, role, shape: 'glb' });
     patchProject((draft) => {
       ensureCharacterModels(draft).push(next);
     });
@@ -667,7 +381,28 @@ export default function Character3DTab({
   const deleteModel = () => {
     if (!selectedModel) return;
     const nextModels = models.filter((model) => model.id !== selectedModel.id);
+    const previousModelUrl = localModelUrlsRef.current.get(selectedModel.id);
+    if (previousModelUrl) {
+      forgetRpg3DLocalBlobFile(previousModelUrl);
+      URL.revokeObjectURL(previousModelUrl);
+      localModelUrlsRef.current.delete(selectedModel.id);
+    }
+    [...localAnimationUrlsRef.current.keys()]
+      .filter((key) => key.startsWith(`${selectedModel.id}:`))
+      .forEach((key) => {
+        const previousUrl = localAnimationUrlsRef.current.get(key);
+        if (previousUrl) {
+          forgetRpg3DLocalBlobFile(previousUrl);
+          URL.revokeObjectURL(previousUrl);
+        }
+        localAnimationUrlsRef.current.delete(key);
+      });
     setSelectedModelId(nextModels[0]?.id || '');
+    setEmbeddedAnimationInfoByModelId((current) => {
+      const next = { ...current };
+      delete next[selectedModel.id];
+      return next;
+    });
     patchProject((draft) => {
       draft.characterModels3d = ensureCharacterModels(draft).filter((model) => model.id !== selectedModel.id);
     });
@@ -690,6 +425,16 @@ export default function Character3DTab({
       return next;
     });
   };
+  const selectedAxisScale = selectedModel ? toCharacterUserAxes(getCharacterModelAxisScale(selectedModel)) : { x: 1, y: 1, z: 1 };
+  const selectedScaleProportional = selectedModel ? isCharacterModelScaleProportional(selectedModel) : true;
+  const activeAxisScaleDraft = axisScaleDraft.modelId === (selectedModel?.id || '')
+    ? axisScaleDraft
+    : {
+      modelId: selectedModel?.id || '',
+      x: formatDraftNumber(selectedAxisScale.x),
+      y: formatDraftNumber(selectedAxisScale.y),
+      z: formatDraftNumber(selectedAxisScale.z),
+    };
 
   return (
     <main className={characterTabClassName}>
@@ -719,11 +464,11 @@ export default function Character3DTab({
                 onClick={() => setSelectedModelId(model.id)}
               >
                 <span className="character3d-thumb" style={{ '--character-body': '#2563eb', '--character-accent': '#67e8f9' }}>
-                  {getGltfModelSource(model) ? <Cuboid aria-hidden="true" size={20} /> : <ModelRoleIcon aria-hidden="true" size={19} />}
+                  {getThreeModelSource(model) ? <Cuboid aria-hidden="true" size={20} /> : <ModelRoleIcon aria-hidden="true" size={19} />}
                 </span>
                 <span>
                   <strong>{model.name || 'Personnage 3D'}</strong>
-                  <small>{modelRole.label} - {model.modelName || SHAPE_OPTIONS.find((option) => option.id === model.shape)?.label || 'Humanoide'}</small>
+                  <small>{modelRole.label} - {model.modelName || 'Aucun modele importe'}</small>
                 </span>
               </button>
             );
@@ -788,7 +533,11 @@ export default function Character3DTab({
           </div>
         </div>
 
-        <Character3DPreview model={previewModel} />
+        <Character3DPreview
+          model={previewModel}
+          animationSlot={previewAnimationSlot}
+          onAnimationClipsLoaded={handlePreviewAnimationClipsLoaded}
+        />
       </section>
 
       {showInspectorPanel ? (
@@ -828,6 +577,9 @@ export default function Character3DTab({
           </div>
         </div>
         {saveStatus ? <p className="character3d-save-status" role="status">{saveStatus}</p> : null}
+        {saveInProgress ? <div className="character3d-progress character3d-progress-save" role="progressbar" aria-label="Sauvegarde en cours"><span /></div> : null}
+        {copyStatus ? <p className="character3d-import-status" role="status">{copyStatus}</p> : null}
+        {importInProgress ? <div className="character3d-progress character3d-progress-import" role="progressbar" aria-label="Import en cours"><span /></div> : null}
 
         {selectedModel ? (
           <div className="character3d-form">
@@ -838,13 +590,13 @@ export default function Character3DTab({
 
             {canImportRoleGlb ? (
               <>
-                <CharacterHelpLabel help={CHARACTER_FIELD_HELP.glbImport}>Modele GLB</CharacterHelpLabel>
+                <CharacterHelpLabel help={CHARACTER_FIELD_HELP.glbImport}>Modele 3D</CharacterHelpLabel>
                 <label className="button like full secondary-action character3d-file-button">
                   <Upload aria-hidden="true" size={16} />
-                  <span>{selectedModel.modelName ? 'Remplacer GLB' : 'Importer GLB'}</span>
+                  <span>{selectedModel.modelName ? 'Remplacer modele 3D' : 'Importer modele 3D'}</span>
                   <input
                     type="file"
-                    accept=".glb,model/gltf-binary"
+                    accept={THREE_MODEL_ACCEPT}
                     hidden
                     onChange={(event) => {
                       const file = event.target.files?.[0];
@@ -856,24 +608,146 @@ export default function Character3DTab({
               </>
             ) : null}
 
-            {selectedGltfSource ? (
+            {selectedModelSource ? (
               <button type="button" className="secondary-action full" onClick={() => patchSelectedModel((model) => {
                 if (String(model.modelUrl || '').startsWith('blob:')) {
                   const previousUrl = localModelUrlsRef.current.get(model.id);
-                  if (previousUrl) URL.revokeObjectURL(previousUrl);
+                  if (previousUrl) {
+                    forgetRpg3DLocalBlobFile(previousUrl);
+                    URL.revokeObjectURL(previousUrl);
+                  }
                   localModelUrlsRef.current.delete(model.id);
                 }
+                setEmbeddedAnimationInfoByModelId((current) => {
+                  const next = { ...current };
+                  delete next[model.id];
+                  return next;
+                });
                 model.modelUrl = '';
                 model.modelData = '';
+                model.localModelFileId = '';
                 model.modelName = '';
-                if (model.shape === 'glb') model.shape = 'humanoid';
+                model.modelFormat = '';
+                model.modelFileSize = 0;
+                model.modelResources = [];
+                model.modelAnimations = {};
               })}>
-                Retirer modele GLB
+                Retirer modele 3D
               </button>
             ) : null}
 
+            {selectedModelSource ? (
+              <>
+                {selectedEmbeddedAnimations.length ? (
+                  <div className="character3d-embedded-animations">
+                    <CharacterHelpLabel help="Ces clips sont inclus directement dans le FBX/GLB importe via Modele 3D. Ils peuvent deja servir au preview et au test sans import marche/attaque separe.">
+                      Animations incluses
+                    </CharacterHelpLabel>
+                    <div className="character3d-embedded-animation-list">
+                      {selectedEmbeddedAnimations.map((clip) => (
+                        <span key={`${clip.name}:${clip.duration}:${clip.trackCount}`}>
+                          {clip.name} - {clip.duration.toFixed(2)}s
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+
+            {selectedModelSource ? (
+              <div className="character3d-animation-imports">
+                <CharacterHelpLabel help={CHARACTER_FIELD_HELP.animationImport}>Animations</CharacterHelpLabel>
+                {CHARACTER_ANIMATION_SLOTS.map((slot) => {
+                  const animation = selectedModel.modelAnimations?.[slot.id] || {};
+                  const hasAnimation = Boolean(getAnimationSource(animation));
+                  return (
+                    <div className="character3d-animation-row" key={slot.id}>
+                      <label className="button like full secondary-action character3d-file-button">
+                        <Upload aria-hidden="true" size={16} />
+                        <span>{hasAnimation ? `Remplacer ${slot.label.toLowerCase()}` : `Importer ${slot.label.toLowerCase()}`}</span>
+                        <input
+                          type="file"
+                          accept={THREE_MODEL_ACCEPT}
+                          hidden
+                          onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            event.target.value = '';
+                            setSelectedAnimationFile(slot.id, file);
+                          }}
+                        />
+                      </label>
+                      {hasAnimation ? (
+                        <div className="character3d-animation-meta">
+                          <small>{slot.importedLabel}: {animation.modelName || 'animation 3D'}</small>
+                          <button
+                            type="button"
+                            className={`secondary-action compact ${getPreviewAnimationSlot(selectedModel, previewAnimationSlot) === slot.id ? 'active' : ''}`}
+                            onClick={() => setPreviewAnimationSlot(slot.id)}
+                          >
+                            Apercu
+                          </button>
+                          <button type="button" className="secondary-action compact" onClick={() => removeSelectedAnimation(slot.id)}>
+                            Retirer
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            <div className="character3d-axis-scale">
+              <div className="character3d-axis-scale-head">
+                <CharacterHelpLabel help={CHARACTER_FIELD_HELP.characterModelScale}>Taille XYZ</CharacterHelpLabel>
+                <label className="character3d-proportional-toggle">
+                  <input
+                    type="checkbox"
+                    checked={selectedScaleProportional}
+                    onChange={(event) => setSelectedModelScaleProportional(event.target.checked)}
+                  />
+                  <span>Proportionnel</span>
+                </label>
+              </div>
+              <div className="character3d-axis-grid">
+                {CHARACTER_SCALE_AXES.map(({ id, label }) => (
+                  <label key={id}>
+                    <span>{label}</span>
+                    <input
+                      type="number"
+                      min={CHARACTER_MODEL_SCALE_MIN}
+                      max={CHARACTER_MODEL_SCALE_MAX}
+                      step="0.05"
+                      value={activeAxisScaleDraft[id]}
+                      onChange={(event) => setSelectedModelAxisDraft(id, event.target.value)}
+                      onBlur={(event) => commitSelectedModelAxisScale(id, event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          commitSelectedModelAxisScale(id, event.currentTarget.value);
+                          event.currentTarget.blur();
+                        }
+                        if (event.key === 'Escape') {
+                          setSelectedModelAxisDraft(id, formatDraftNumber(selectedAxisScale[id]));
+                          event.currentTarget.blur();
+                        }
+                      }}
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
             <FieldRange
-              label="Lumiere"
+              label="Lumiere carte"
+              help={CHARACTER_FIELD_HELP.materialBrightness}
+              min={CHARACTER_MATERIAL_BRIGHTNESS_MIN}
+              max={CHARACTER_MATERIAL_BRIGHTNESS_MAX}
+              step="0.05"
+              value={getCharacterMaterialBrightness(selectedModel)}
+              onChange={(value) => patchSelectedModel((model) => { model.materialBrightness = value; }, { rememberHistory: false })}
+            />
+            <FieldRange
+              label="Lumiere apercu"
               help={CHARACTER_FIELD_HELP.previewLightIntensity}
               min="0.2"
               max="2.5"

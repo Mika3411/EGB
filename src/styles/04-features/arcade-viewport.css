@@ -1,0 +1,223 @@
+.arcade-three-viewport {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  outline: none;
+  cursor: crosshair;
+  background: #071016;
+  touch-action: none;
+  user-select: none;
+}
+
+.arcade-three-viewport.drag-enabled {
+  cursor: grab;
+}
+
+.arcade-three-viewport.drag-enabled:active {
+  cursor: grabbing;
+}
+
+.arcade-three-viewport.camera-target-pick-enabled,
+.arcade-three-viewport.camera-target-pick-enabled:active {
+  cursor: crosshair;
+}
+
+.arcade-three-viewport.terrain-paint-enabled,
+.arcade-three-viewport.terrain-paint-enabled:active {
+  cursor: cell;
+}
+
+.arcade-three-viewport.model-eraser-enabled,
+.arcade-three-viewport.model-eraser-enabled:active {
+  cursor: crosshair;
+}
+
+.arcade-three-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.arcade-three-fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #071016;
+  color: #f5e8d0;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: center;
+  z-index: 1;
+}
+
+.arcade-three-marquee {
+  position: absolute;
+  z-index: 24;
+  border: 1px solid rgba(125, 211, 252, .96);
+  border-radius: 4px;
+  background: rgba(14, 165, 233, .16);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18), 0 0 18px rgba(14, 165, 233, .2);
+  pointer-events: none;
+}
+
+.arcade-three-badge {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 9px;
+  border: 1px solid rgba(103, 232, 249, .28);
+  border-radius: 8px;
+  background: rgba(7, 16, 22, .78);
+  color: #a7f3d0;
+  font-size: 11px;
+  font-weight: 900;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.arcade-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  min-height: 38px;
+}
+
+.arcade-controls span {
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px solid rgba(185, 118, 58, .2);
+  border-radius: 8px;
+  background: rgba(16, 10, 9, .78);
+  color: #d6b985;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.arcade-controls svg {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 920px) {
+  .arcade-shell {
+    grid-template-rows: auto auto minmax(360px, 1fr) auto;
+    padding: 10px;
+  }
+
+  .arcade-builder-shell {
+    height: auto;
+    max-height: none;
+    overflow: auto;
+  }
+
+  .arcade-shell > .character3d-tab,
+  .arcade-shell > .decor3d-tab,
+  .arcade-shell > .arcade-canvas-manager-tab,
+  .arcade-shell > .arcade-management-tab,
+  .arcade-shell > .model-tools-tab {
+    height: auto;
+    max-height: none;
+    overflow: auto;
+  }
+
+  .arcade-hud {
+    grid-template-columns: 1fr;
+  }
+
+  .arcade-actions {
+    justify-content: stretch;
+  }
+
+  .arcade-actions button {
+    flex: 1;
+  }
+
+  .arcade-canvas-manager-tab,
+  .arcade-canvas-detail-grid,
+  .arcade-canvas-edit-grid,
+  .arcade-canvas-summary,
+  .arcade-canvas-summary-stats,
+  .arcade-canvas-list,
+  .arcade-canvas-file-row,
+  .arcade-canvas-row,
+  .arcade-management-tab,
+  .arcade-management-summary,
+  .arcade-management-stats,
+  .arcade-management-list,
+  .arcade-management-row,
+  .model-tools-tab,
+  .model-tools-file-row,
+  .model-tools-quality,
+  .model-tools-actions,
+  .model-tools-result-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .arcade-canvas-row-actions,
+  .arcade-management-top-actions,
+  .arcade-management-actions {
+    justify-content: stretch;
+  }
+
+  .arcade-canvas-row-actions button,
+  .arcade-management-actions {
+    min-width: 0;
+  }
+
+  .arcade-canvas-row-actions button,
+  .arcade-management-top-actions button,
+  .arcade-management-actions button {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .arcade-builder-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+    max-height: none;
+    overflow: auto;
+  }
+
+  .arcade-builder-layout.arcade-builder-layout-with-inspector {
+    grid-template-columns: 1fr;
+  }
+
+  .arcade-builder-panel {
+    overflow: visible;
+  }
+
+  .arcade-stage {
+    aspect-ratio: 16 / 10;
+    height: auto;
+    min-height: 0;
+  }
+
+  .arcade-stage-transform-toolbar {
+    top: auto;
+    left: 10px;
+    bottom: 52px;
+    grid-auto-flow: column;
+    grid-auto-columns: 34px;
+    transform: none;
+  }
+
+  .arcade-stage-transform-toolbar button {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
+  }
+
+  .arcade-stage-transform-divider {
+    width: 1px;
+    height: 100%;
+  }
+}

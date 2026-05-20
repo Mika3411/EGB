@@ -31,6 +31,7 @@ export const apiRouteDefinitions = [
   prefixRoute('aiJob', ['GET'], '/api/ai-job'),
   exactRoute('image', ['POST'], '/api/image'),
   exactRoute('removeBackground', ['POST'], '/api/remove-background'),
+  prefixRoute('modelTools', ['GET', 'POST', 'DELETE'], '/api/model-tools'),
 ];
 
 export const resolveApiRoute = (method = '', pathname = '') => {

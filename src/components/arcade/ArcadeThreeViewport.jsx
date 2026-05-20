@@ -1,1540 +1,148 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { clone as cloneGltfScene } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { attachClickTargetCameraControls } from '../three/clickTargetCameraControls.js';
 import {
-  applyTextureToGltfModel,
-  fitObjectToHeight,
-  getGltfAnimationClips,
-  loadGltfFromSource,
-  playGltfAnimations,
-  prepareGltfModel,
-  snapObjectToGround,
-} from '../../utils/threeGltfUtils';
+  PICKUP_RADIUS,
+  PLAYER_RADIUS,
+  MODEL_ERASER_DEFAULT_RADIUS,
+  TERRAIN_PAINT_DEFAULT_COLOR,
+  TERRAIN_PAINT_DEFAULT_RADIUS,
+  TERRAIN_PAINT_DEFAULT_SHAPE,
+  clamp,
+  getActionZoneHeight,
+  getActionZoneWidth,
+  getCharacterModelScale,
+  getHexColor,
+  getPropHeight,
+  getPropWidth,
+  getReliefHeight,
+  getReliefWidth,
+  getModelEraserRadius,
+  getTerrainPaintRadius,
+  getTerrainPaintShape,
+} from '../../utils/rpg3dDomain.js';
+import {
+  DEFAULT_ENGINE,
+  EDIT_MODEL_ANIMATION_FRAME_MS,
+  EDIT_RENDER_PIXEL_RATIO_MAX,
+  ENEMY_RADIUS,
+  FLOOR_VISUAL_PADDING_WORLD,
+  PLAY_RENDER_PIXEL_RATIO_MAX,
+  SHADOW_CAMERA_MIN_EXTENT,
+  SHADOW_MAP_SIZE,
+  WORLD_SCALE,
+  addActionZone,
+  addActor,
+  addBullet,
+  addParticle,
+  addPickup,
+  addProp,
+  addRelief,
+  addStaticSelectionOverlays,
+  addTerrainPaintLayer,
+  addWall,
+  buildContinuousFloorUvMap,
+  clearGroup,
+  configureSunShadowCamera,
+  createFloorTexture,
+  createSupportSurfaceHeightResolver,
+  createTerrainPaintPreview,
+  disposeObject,
+  fromScenePosition,
+  getActorVisualSignature,
+  getCameraDistance,
+  getCameraHeightForDistance,
+  getCharacterPreset,
+  getCharacterRenderMode,
+  getEnemyCharacterId,
+  getEngine,
+  getEntityKey,
+  getEntityLift,
+  getEntityLiftHeight,
+  getHeroCharacterId,
+  getSelectionOverlaySignature,
+  getStaticSceneSignature,
+  getTerrainPaintLayerSignature,
+  isSelectionActive,
+  readEntity,
+  removeGroupChild,
+  toScenePosition,
+  updateDynamicTransforms,
+  updateSceneLighting,
+} from './rpg3dSceneBuilders.js';
+import {
+  createCachedModelGetter,
+  createCachedTextureGetter,
+  getActorMovementFacingTarget,
+  hashString,
+} from './rpg3dRuntimeModels.js';
+import {
+  DYNAMIC_SELECTION_TYPES,
+  applyTransformPreview,
+  createTransformGuide,
+  createWorldBoxPoints,
+  findSelectedPosition,
+  getCameraTargetPoint,
+  getProjectedBounds,
+  getTransformDescriptor,
+  getTransformPreviewRoots,
+  isCameraTargetEntity,
+  isDraggableEntity,
+  isSameEntity,
+  normalizeScreenRect,
+  resetTransformPreview,
+  screenRectsIntersect,
+} from './rpg3dViewportPicking.js';
 
-const WORLD_SCALE = 0.018;
-const PLAYER_RADIUS = 18;
-const ENEMY_RADIUS = 16;
-const PICKUP_RADIUS = 15;
-const ENTITY_Z_MIN = -900;
-const ENTITY_Z_MAX = 900;
-const DEFAULT_FLOOR_ZERO_Z = 2.5;
-const FLOOR_ZERO_Z_MIN = -120;
-const FLOOR_ZERO_Z_MAX = 120;
-const MODEL_SCALE_MIN = 0.4;
-const MODEL_SCALE_MAX = 5;
-const ACTION_ZONE_MIN_SIZE = 40;
-const ACTION_ZONE_DEFAULT_WIDTH = 260;
-const ACTION_ZONE_DEFAULT_HEIGHT = 180;
-const ACTION_ZONE_DEFAULT_MODEL_HEIGHT = 240;
-const ACTION_ZONE_DEFAULT_OPACITY = 0.32;
-const TILE_DUPLICATE_HANDLE_SCALE = 2;
-const DYNAMIC_SELECTION_TYPES = new Set(['spawn', 'hero', 'enemy', 'pickup']);
+const MODEL_ERASER_PREVIEW_COLOR = '#fb923c';
 
-const DEFAULT_ENGINE = {
-  cameraHeight: 20,
-  cameraDistance: 30,
-  wallHeight: 2.4,
-  reliefScale: 1,
-  propHeight: 1,
-  lightIntensity: 1.15,
-};
-
-const CHARACTER_PRESETS = [
-  { id: 'runner', body: '#d7b56d', accent: '#67e8f9', weapon: '#e0f7ff' },
-  { id: 'knight', body: '#94a3b8', accent: '#f8fafc', weapon: '#cbd5e1' },
-  { id: 'mage', body: '#8b5cf6', accent: '#c4b5fd', weapon: '#f5d0fe' },
-  { id: 'ranger', body: '#22c55e', accent: '#86efac', weapon: '#bbf7d0' },
-  { id: 'guard', body: '#ef4444', accent: '#fca5a5', weapon: '#fecaca' },
-  { id: 'sniper', body: '#facc15', accent: '#fde68a', weapon: '#fef3c7' },
-  { id: 'brute', body: '#f97316', accent: '#fed7aa', weapon: '#ffedd5' },
-  { id: 'shadow', body: '#64748b', accent: '#a78bfa', weapon: '#ddd6fe' },
-];
-
-const DEFAULT_ENEMY_CHARACTER_BY_ROLE = {
-  rifle: 'guard',
-  sniper: 'sniper',
-  brute: 'brute',
-};
-
-const RELIEF_STYLE_COLORS = {
-  plateau: { top: '#7c5939', side: '#372217', emissive: '#20110a' },
-  ridge: { top: '#766a56', side: '#2e2921', emissive: '#1a1712' },
-  basin: { top: '#2f2119', side: '#17100c', emissive: '#0f0907' },
-};
-
-const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-const degreesToRadians = (value = 0) => {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? (numeric * Math.PI) / 180 : 0;
-};
-const getModelRotationRadians = (object = {}) => ({
-  x: degreesToRadians(clamp(Number(object.modelRotationX) || 0, -180, 180)),
-  y: degreesToRadians(clamp(Number(object.modelRotationY) || 0, -180, 180)),
-  z: degreesToRadians(clamp(Number(object.modelRotationZ) || 0, -180, 180)),
-});
-const applyModelRotation = (object3d, source = {}) => {
-  const rotation = getModelRotationRadians(source);
-  object3d.rotation.set(rotation.x, rotation.y, rotation.z);
-};
-const centerObjectHorizontallyOnOrigin = (object3d) => {
-  if (!object3d) return false;
-  object3d.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(object3d, true);
-  if (!Number.isFinite(box.min.x) || !Number.isFinite(box.max.x) || !Number.isFinite(box.min.z) || !Number.isFinite(box.max.z)) return false;
-  const center = box.getCenter(new THREE.Vector3());
-  object3d.position.x -= center.x;
-  object3d.position.z -= center.z;
-  object3d.updateMatrixWorld(true);
-  return true;
-};
-const alignObjectTopToGround = (object3d, groundY = 0.018) => {
-  if (!object3d) return false;
-  object3d.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(object3d, true);
-  if (!Number.isFinite(box.max.y)) return false;
-  object3d.position.y += groundY - box.max.y;
-  object3d.updateMatrixWorld(true);
-  return true;
-};
-const normalize = (x, y) => {
-  const length = Math.hypot(x, y);
-  return length > 0.001 ? { x: x / length, y: y / length } : { x: 1, y: 0 };
-};
-
-const getEngine = (config = {}) => ({ ...DEFAULT_ENGINE, ...(config.engine || {}) });
-const getPropWidth = (prop = {}) => Math.max(12, Number(prop.w) || (Number(prop.r) || 34) * 2);
-const getPropHeight = (prop = {}) => Math.max(12, Number(prop.h) || (Number(prop.r) || 34) * 2);
-const getPropModelHeight = (prop = {}) => Math.max(12, Number(prop.modelHeight) || getPropHeight(prop));
-const getPropRenderMode = (prop = {}) => prop.renderMode || (prop.imageData ? 'billboard' : 'rock');
-const normalizeModelRotationDegrees = (value = 0) => {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return 0;
-  const normalized = ((numeric % 360) + 360) % 360;
-  return normalized > 180 ? normalized - 360 : normalized;
-};
-const isFlatTileLikeProp = (prop = {}) => {
-  if (getPropRenderMode(prop) === 'floor') return true;
-  if (getPropRenderMode(prop) !== 'glb') return false;
-  const rotationX = Math.abs(normalizeModelRotationDegrees(prop.modelRotationX || 0));
-  return rotationX >= 30 && rotationX <= 150;
-};
-const getPropModelSource = (prop = {}) => prop.decorModelUrl || prop.modelUrl || prop.modelData || '';
-const getPropModelScale = (prop = {}) => clamp(Number(prop.decorModelScale) || Number(prop.modelScale) || 1, MODEL_SCALE_MIN, MODEL_SCALE_MAX);
-const getFlatTileWorldFootprint = (prop = {}) => {
-  if (getPropRenderMode(prop) === 'glb') {
-    const footprint = Math.max(12, Math.round(getPropModelHeight(prop) * getPropModelScale(prop)));
-    return { width: footprint, height: footprint };
-  }
-  return { width: getPropWidth(prop), height: getPropHeight(prop) };
-};
-const getFlatTileSceneDimensions = (prop = {}, fallbackWidth = 0.24, fallbackDepth = 0.24) => {
-  if (getPropRenderMode(prop) === 'glb') {
-    const footprint = Math.max(0.24, getPropModelHeight(prop) * getPropModelScale(prop) * WORLD_SCALE);
-    return { width: footprint, depth: footprint };
-  }
-  return { width: fallbackWidth, depth: fallbackDepth };
-};
-const getEntityLift = (entity = {}) => clamp(Number(entity.z) || 0, ENTITY_Z_MIN, ENTITY_Z_MAX);
-const getEntityLiftHeight = (entity = {}) => getEntityLift(entity) * WORLD_SCALE;
-const getFloorZeroZ = (tile = {}) => {
-  const value = Number(tile.floorZeroZ);
-  return clamp(Number.isFinite(value) ? value : DEFAULT_FLOOR_ZERO_Z, FLOOR_ZERO_Z_MIN, FLOOR_ZERO_Z_MAX);
-};
-const getFlatTileSurfaceHeight = (tile = {}) => getEntityLiftHeight(tile) + getFloorZeroZ(tile) * WORLD_SCALE;
-const getSupportSurfaceHeightAtPoint = (config = {}, point = {}) => {
-  let supportHeight = 0;
-  (config.props || []).forEach((prop) => {
-    if (!prop || !isFlatTileLikeProp(prop)) return;
-    const { width, height } = getFlatTileWorldFootprint(prop);
-    const x = Number(prop.x) || 0;
-    const y = Number(prop.y) || 0;
-    const pointX = Number(point.x) || 0;
-    const pointY = Number(point.y) || 0;
-    if (
-      pointX < x - width / 2
-      || pointX > x + width / 2
-      || pointY < y - height / 2
-      || pointY > y + height / 2
-    ) return;
-    supportHeight = Math.max(supportHeight, getFlatTileSurfaceHeight(prop));
-  });
-  return supportHeight;
-};
-const getReliefWidth = (relief = {}) => Math.max(40, Number(relief.w) || 300);
-const getReliefHeight = (relief = {}) => Math.max(40, Number(relief.h) || 180);
-const getReliefElevation = (relief = {}) => {
-  const elevation = Number(relief.elevation);
-  return clamp(Number.isFinite(elevation) ? elevation : 24, -80, 120);
-};
-const getActionZoneWidth = (zone = {}) => Math.max(ACTION_ZONE_MIN_SIZE, Number(zone.w) || ACTION_ZONE_DEFAULT_WIDTH);
-const getActionZoneHeight = (zone = {}) => Math.max(ACTION_ZONE_MIN_SIZE, Number(zone.h) || ACTION_ZONE_DEFAULT_HEIGHT);
-const getActionZoneModelHeight = (zone = {}) => Math.max(60, Number(zone.modelHeight) || ACTION_ZONE_DEFAULT_MODEL_HEIGHT);
-const getActionZoneOpacity = (zone = {}) => clamp(Number(zone.opacity) || ACTION_ZONE_DEFAULT_OPACITY, 0.05, 0.95);
-const getActionZoneColor = (zone = {}) => {
-  const value = String(zone.color || '').trim();
-  return /^#[0-9a-f]{6}$/i.test(value) ? value : (getActionZoneType(zone) === 'portal' ? '#38bdf8' : '#facc15');
-};
-const getActionZoneRenderMode = (zone = {}) => zone.renderMode || 'volume';
-const getActionZoneType = (zone = {}) => zone.actionType || 'portal';
-const getEnemyCharacterId = (enemy = {}) => enemy.character || DEFAULT_ENEMY_CHARACTER_BY_ROLE[enemy.role] || 'guard';
-const getHeroCharacterId = (hero = {}) => hero.character || 'runner';
-const getCharacterPreset = (id = 'runner', fallbackId = 'runner') => (
-  CHARACTER_PRESETS.find((preset) => preset.id === id)
-  || CHARACTER_PRESETS.find((preset) => preset.id === fallbackId)
-  || CHARACTER_PRESETS[0]
-);
-const getCharacterRenderMode = (actor = {}) => actor.characterRenderMode || 'capsule';
-const getCharacterModelScale = (actor = {}) => clamp(Number(actor.characterModelScale) || 1, MODEL_SCALE_MIN, MODEL_SCALE_MAX);
-
-const toScenePosition = (config, x, y, height = 0) => new THREE.Vector3(
-  (x - config.world.width / 2) * WORLD_SCALE,
-  height,
-  (y - config.world.height / 2) * WORLD_SCALE,
-);
-
-const fromScenePosition = (config, position) => ({
-  x: clamp(position.x / WORLD_SCALE + config.world.width / 2, 0, config.world.width),
-  y: clamp(position.z / WORLD_SCALE + config.world.height / 2, 0, config.world.height),
-});
-
-const disposeMaterial = (material) => {
-  if (material.userData?.disposeTextures) {
-    Object.values(material).forEach((value) => {
-      if (value?.isTexture) value.dispose();
-    });
-  }
-  material.dispose?.();
-};
-
-const disposeObject = (object) => {
-  object.traverse((child) => {
-    const preserveSharedResources = Boolean(child.userData?.preserveSharedResources);
-    if (!preserveSharedResources && child.geometry) child.geometry.dispose();
-    const materials = Array.isArray(child.material) ? child.material : [child.material];
-    materials.filter(Boolean).forEach((material) => {
-      if (preserveSharedResources && !material.userData?.disposeWithInstance) return;
-      disposeMaterial(material);
-    });
-  });
-};
-
-const clearGroup = (group) => {
-  if (Array.isArray(group.userData?.animationMixers)) {
-    group.userData.animationMixers.forEach((mixer) => mixer.stopAllAction());
-    group.userData.animationMixers = [];
-  }
-  [...group.children].forEach((child) => {
-    group.remove(child);
-    disposeObject(child);
-  });
-};
-
-const assignEntity = (object, entity) => {
-  object.userData.entityType = entity.type;
-  object.userData.entityId = entity.id;
-  if (entity.direction) object.userData.entityDirection = entity.direction;
-  object.traverse((child) => {
-    child.userData.entityType = entity.type;
-    child.userData.entityId = entity.id;
-    if (entity.direction) child.userData.entityDirection = entity.direction;
-  });
-};
-
-const readEntity = (object) => {
+const getEntityRootObject = (object, entity) => {
   let current = object;
+  let root = null;
   while (current) {
-    if (current.userData?.entityType) {
-      return {
-        type: current.userData.entityType,
-        id: current.userData.entityId,
-        direction: current.userData.entityDirection,
-      };
-    }
+    if (isSameEntity(readEntity(current), entity)) root = current;
+    else if (root) break;
     current = current.parent;
   }
-  return null;
+  return root;
 };
 
-const createFloorTexture = () => {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 512;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#172033';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  for (let x = 0; x < canvas.width; x += 64) {
-    for (let y = 0; y < canvas.height; y += 64) {
-      ctx.fillStyle = ((x + y) / 64) % 2 ? '#223149' : '#182538';
-      ctx.fillRect(x, y, 64, 64);
-      ctx.strokeStyle = 'rgba(103, 232, 249, .12)';
-      ctx.strokeRect(x + 0.5, y + 0.5, 63, 63);
-    }
-  }
-  ctx.strokeStyle = 'rgba(245, 158, 11, .18)';
-  ctx.lineWidth = 5;
-  ctx.beginPath();
-  ctx.moveTo(0, 410);
-  ctx.bezierCurveTo(145, 340, 260, 520, 512, 390);
-  ctx.stroke();
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
-};
-
-const createSelectionRing = (radius = 0.55, color = '#67e8f9') => {
-  const ring = new THREE.Mesh(
-    new THREE.TorusGeometry(radius, 0.035, 8, 48),
-    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.92 }),
-  );
-  ring.rotation.x = Math.PI / 2;
-  ring.position.y = 0.045;
-  return ring;
-};
-
-const createSelectionEdges = (geometry) => new THREE.LineSegments(
-  new THREE.EdgesGeometry(geometry),
-  new THREE.LineBasicMaterial({ color: '#67e8f9', transparent: true, opacity: 0.95 }),
-);
-
-const createTileDuplicateHandle = (direction, width, depth, propId) => {
-  const gap = 0.42 * TILE_DUPLICATE_HANDLE_SCALE;
-  const radius = 0.28 * TILE_DUPLICATE_HANDLE_SCALE;
-  const positions = {
-    left: { x: -width / 2 - gap, z: 0, rotation: Math.PI / 2 },
-    right: { x: width / 2 + gap, z: 0, rotation: -Math.PI / 2 },
-    up: { x: 0, z: -depth / 2 - gap, rotation: 0 },
-    down: { x: 0, z: depth / 2 + gap, rotation: Math.PI },
-  };
-  const placement = positions[direction] || positions.right;
-  const handle = new THREE.Group();
-  handle.position.set(placement.x, 0.34, placement.z);
-
-  const haloMaterial = new THREE.MeshBasicMaterial({
-    color: '#0f172a',
-    transparent: true,
-    opacity: 0.82,
-    side: THREE.DoubleSide,
-    depthTest: false,
-  });
-  const halo = new THREE.Mesh(new THREE.CircleGeometry(radius * 1.18, 24), haloMaterial);
-  halo.rotation.x = -Math.PI / 2;
-  halo.renderOrder = 80;
-  handle.add(halo);
-
-  const triangle = new THREE.Mesh(
-    new THREE.CircleGeometry(radius, 3),
-    new THREE.MeshBasicMaterial({
-      color: '#fbbf24',
-      transparent: true,
-      opacity: 1,
-      side: THREE.DoubleSide,
-      depthTest: false,
-    }),
-  );
-  triangle.rotation.set(-Math.PI / 2, 0, placement.rotation);
-  triangle.position.y = 0.012;
-  triangle.renderOrder = 82;
-  handle.add(triangle);
-
-  const hitArea = new THREE.Mesh(
-    new THREE.BoxGeometry(radius * 3.4, 0.18, radius * 3.4),
-    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
-  );
-  hitArea.position.y = 0.01;
-  handle.add(hitArea);
-  assignEntity(handle, { type: 'tileDuplicate', id: propId, direction });
-  return handle;
-};
-
-const addTileDuplicateHandles = (propGroup, prop, width, depth) => {
-  ['up', 'right', 'down', 'left'].forEach((direction) => {
-    propGroup.add(createTileDuplicateHandle(direction, width, depth, prop.id));
-  });
-};
-
-const getSelectedFlatTileProps = (config = {}, selected, multiSelected = []) => {
-  const selection = multiSelected.length ? multiSelected : selected ? [selected] : [];
-  const selectedIds = new Set(selection.filter((entry) => entry?.type === 'prop').map((entry) => entry.id));
-  if (!selectedIds.size) return [];
-  return (config.props || []).filter((prop) => selectedIds.has(prop.id) && isFlatTileLikeProp(prop));
-};
-
-const getFlatTileSelectionBounds = (config = {}, props = []) => {
-  let bounds = null;
-  props.forEach((prop) => {
-    const fallbackWidth = Math.max(0.24, getPropWidth(prop) * WORLD_SCALE);
-    const fallbackDepth = Math.max(0.24, getPropHeight(prop) * WORLD_SCALE);
-    const size = getFlatTileSceneDimensions(prop, fallbackWidth, fallbackDepth);
-    const center = toScenePosition(config, prop.x, prop.y, 0);
-    const tileBounds = {
-      minX: center.x - size.width / 2,
-      maxX: center.x + size.width / 2,
-      minZ: center.z - size.depth / 2,
-      maxZ: center.z + size.depth / 2,
-    };
-    bounds = bounds
-      ? {
-        minX: Math.min(bounds.minX, tileBounds.minX),
-        maxX: Math.max(bounds.maxX, tileBounds.maxX),
-        minZ: Math.min(bounds.minZ, tileBounds.minZ),
-        maxZ: Math.max(bounds.maxZ, tileBounds.maxZ),
-      }
-      : tileBounds;
-  });
-  return bounds;
-};
-
-const addTileSelectionDuplicateHandles = (group, config, props = []) => {
-  const bounds = getFlatTileSelectionBounds(config, props);
-  if (!bounds) return;
-  const handleGroup = new THREE.Group();
-  handleGroup.position.set((bounds.minX + bounds.maxX) / 2, 0, (bounds.minZ + bounds.maxZ) / 2);
-  const width = Math.max(0.24, bounds.maxX - bounds.minX);
-  const depth = Math.max(0.24, bounds.maxZ - bounds.minZ);
-  ['up', 'right', 'down', 'left'].forEach((direction) => {
-    handleGroup.add(createTileDuplicateHandle(direction, width, depth, 'selection'));
-  });
-  group.add(handleGroup);
-};
-
-const createSelectionOverlayGroup = (entity) => {
+const createModelEraserSurfacePreview = (radiusWorld, color = MODEL_ERASER_PREVIEW_COLOR) => {
+  const radius = Math.max(0.025, Number(radiusWorld) || 0.025);
   const group = new THREE.Group();
-  assignEntity(group, entity);
-  return group;
-};
+  group.userData.previewRadius = radius;
+  group.userData.previewColor = color;
 
-const addBoxSelectionOverlay = (group, config, entity, centerX, centerY, width, depth, height, lift = 0) => {
-  const overlay = createSelectionOverlayGroup(entity);
-  const geometry = new THREE.BoxGeometry(
-    Math.max(0.2, width * WORLD_SCALE),
-    Math.max(0.05, height),
-    Math.max(0.2, depth * WORLD_SCALE),
-  );
-  const edges = createSelectionEdges(geometry);
-  edges.position.copy(toScenePosition(config, centerX, centerY, lift + Math.max(0.05, height) / 2));
-  overlay.add(edges);
-  group.add(overlay);
-};
-
-const addPropSelectionOverlay = (group, config, prop, options = {}) => {
-  const width = Math.max(0.24, getPropWidth(prop) * WORLD_SCALE);
-  const depth = Math.max(0.24, getPropHeight(prop) * WORLD_SCALE);
-  const propHeight = Math.max(0.08, getPropModelHeight(prop) * WORLD_SCALE);
-  const lift = getEntityLiftHeight(prop);
-  const overlay = createSelectionOverlayGroup({ type: 'prop', id: prop.id });
-  overlay.position.copy(toScenePosition(config, prop.x, prop.y, lift));
-  overlay.rotation.y = degreesToRadians(prop.rotation || 0);
-
-  if (isFlatTileLikeProp(prop)) {
-    const tileSize = getFlatTileSceneDimensions(prop, width, depth);
-    const outline = createSelectionEdges(new THREE.BoxGeometry(tileSize.width, 0.05, tileSize.depth));
-    outline.position.y = 0.08;
-    overlay.add(outline);
-    if (options.showTileDuplicateHandles !== false) {
-      addTileDuplicateHandles(overlay, prop, tileSize.width, tileSize.depth);
-    }
-  } else if (['box', 'house', 'glb'].includes(getPropRenderMode(prop))) {
-    const edges = createSelectionEdges(new THREE.BoxGeometry(width, propHeight, depth));
-    edges.position.y = propHeight / 2;
-    overlay.add(edges);
-  } else {
-    overlay.add(createSelectionRing(Math.max(width, depth) * 0.58, '#67e8f9'));
-  }
-
-  group.add(overlay);
-};
-
-const addActionZoneSelectionOverlay = (group, config, zone) => {
-  const width = Math.max(0.24, getActionZoneWidth(zone) * WORLD_SCALE);
-  const depth = Math.max(0.24, getActionZoneHeight(zone) * WORLD_SCALE);
-  const height = Math.max(0.24, getActionZoneModelHeight(zone) * WORLD_SCALE);
-  const overlay = createSelectionOverlayGroup({ type: 'actionZone', id: zone.id });
-  overlay.position.copy(toScenePosition(config, zone.x, zone.y, 0));
-  overlay.rotation.y = degreesToRadians(zone.rotation || 0);
-  const edges = createSelectionEdges(new THREE.BoxGeometry(width, height, depth));
-  edges.position.y = height / 2;
-  overlay.add(edges);
-  group.add(overlay);
-};
-
-const addStaticSelectionOverlays = (group, config, selected, multiSelected = []) => {
-  const selection = multiSelected.length ? multiSelected : selected ? [selected] : [];
-  if (!selection.length) return;
-  const selectedFlatTiles = getSelectedFlatTileProps(config, selected, multiSelected);
-  const selectedFlatTileIds = new Set(selectedFlatTiles.map((prop) => prop.id));
-  const showGroupedTileHandles = selectedFlatTiles.length > 1;
-
-  selection.forEach((entity) => {
-    if (!entity?.type || !entity.id) return;
-    if (entity.type === 'obstacle') {
-      const obstacle = (config.obstacles || []).find((item) => item.id === entity.id);
-      if (!obstacle) return;
-      const height = Math.max(0.4, Number(config.engine?.wallHeight) || DEFAULT_ENGINE.wallHeight);
-      addBoxSelectionOverlay(
-        group,
-        config,
-        entity,
-        (Number(obstacle.x) || 0) + getPropWidth(obstacle) / 2,
-        (Number(obstacle.y) || 0) + getPropHeight(obstacle) / 2,
-        getPropWidth(obstacle),
-        getPropHeight(obstacle),
-        height,
-        getEntityLiftHeight(obstacle),
-      );
-      return;
-    }
-    if (entity.type === 'relief') {
-      const relief = (config.reliefs || []).find((item) => item.id === entity.id);
-      if (!relief) return;
-      const elevation = getReliefElevation(relief);
-      const height = Math.max(0.08, Math.abs(elevation) * WORLD_SCALE * (Number(config.engine?.reliefScale) || 1));
-      addBoxSelectionOverlay(
-        group,
-        config,
-        entity,
-        Number(relief.x) || 0,
-        Number(relief.y) || 0,
-        getReliefWidth(relief),
-        getReliefHeight(relief),
-        height,
-        elevation >= 0 ? 0 : -height * 0.4,
-      );
-      return;
-    }
-    if (entity.type === 'actionZone') {
-      const zone = (config.actionZones || []).find((item) => item.id === entity.id);
-      if (!zone) return;
-      addActionZoneSelectionOverlay(group, config, zone);
-      return;
-    }
-    if (entity.type === 'prop') {
-      const prop = (config.props || []).find((item) => item.id === entity.id);
-      if (!prop) return;
-      addPropSelectionOverlay(group, config, prop, {
-        showTileDuplicateHandles: !(showGroupedTileHandles && selectedFlatTileIds.has(prop.id)),
-      });
-    }
-  });
-
-  if (showGroupedTileHandles) addTileSelectionDuplicateHandles(group, config, selectedFlatTiles);
-};
-
-const createCachedTextureGetter = (cache) => (src, repeat = false) => {
-  if (!src) return null;
-  const cacheKey = `${repeat ? 'repeat' : 'single'}:${src}`;
-  const cached = cache.get(cacheKey);
-  if (cached) return cached;
-  const texture = new THREE.TextureLoader().load(src);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 4;
-  if (repeat) {
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(2, 2);
-  }
-  cache.set(cacheKey, texture);
-  return texture;
-};
-
-const createCachedModelGetter = (cache, pending, onLoaded) => {
-  const loader = new GLTFLoader();
-  return (src) => {
-    if (!src) return null;
-    const cached = cache.get(src);
-    if (cached) return cached;
-    if (pending.has(src)) return null;
-    pending.add(src);
-    loadGltfFromSource(
-      loader,
-      src,
-      (gltf) => {
-        const object = gltf.scene || gltf.scenes?.[0];
-        if (object) {
-          prepareGltfModel(object, { restoreTextureColor: true });
-          object.userData.gltfAnimationClips = getGltfAnimationClips(gltf);
-          cache.set(src, object);
-        }
-        pending.delete(src);
-        onLoaded?.();
-      },
-      () => {
-        pending.delete(src);
-        onLoaded?.();
-      },
-    );
-    return null;
-  };
-};
-
-const addGltfActorModel = (actorGroup, template, actor, height, radius3d, selected, modelScale, animationTime = 0) => {
-  const instance = cloneGltfScene(template);
-  instance.traverse((child) => {
-    child.userData.preserveSharedResources = true;
-  });
-  prepareGltfModel(instance, { restoreTextureColor: true });
-  const targetHeight = height * 1.28 * modelScale;
-  fitObjectToHeight(instance, targetHeight, { groundY: 0 });
-  actorGroup.add(instance);
-  const mixer = playGltfAnimations(instance, template.userData?.gltfAnimationClips || [], { timeOffset: animationTime });
-  if (selected) actorGroup.add(createSelectionRing(radius3d * 1.9 * modelScale, '#f8fbff'));
-  return { mixer };
-};
-
-const addGltfPropModel = (propGroup, template, prop, propHeight, radius, selected, texture = null) => {
-  const instance = cloneGltfScene(template);
-  instance.traverse((child) => {
-    child.userData.preserveSharedResources = true;
-  });
-  prepareGltfModel(instance, { restoreTextureColor: true });
-  applyTextureToGltfModel(instance, texture);
-  fitObjectToHeight(instance, propHeight * getPropModelScale(prop), { groundY: 0 });
-  const orientedGroup = new THREE.Group();
-  orientedGroup.add(instance);
-  applyModelRotation(orientedGroup, prop);
-  if (prop.modelCenterOnOrigin) centerObjectHorizontallyOnOrigin(orientedGroup);
-  snapObjectToGround(orientedGroup, 0);
-  if (prop.modelFlushToGround) alignObjectTopToGround(orientedGroup);
-  propGroup.add(orientedGroup);
-  const clips = template.userData?.gltfAnimationClips || [];
-  const mixer = playGltfAnimations(instance, clips, { timeOffset: Math.abs(hashString(prop.id || prop.name || 'prop')) * 0.001 });
-  if (selected) propGroup.add(createSelectionRing(radius, '#67e8f9'));
-  return { mixer };
-};
-
-const IMAGE_SIGNATURE_CACHE_LIMIT = 128;
-const imageSignatureCache = new Map();
-
-const hashString = (value = '') => [...String(value)].reduce((hash, char) => (
-  ((hash << 5) - hash + char.charCodeAt(0)) | 0
-), 0);
-
-const getImageSignature = (src = '') => {
-  if (!src) return '0';
-  const cached = imageSignatureCache.get(src);
-  if (cached) return cached;
-  const signature = `${src.length}:${hashString(src)}`;
-  imageSignatureCache.set(src, signature);
-  if (imageSignatureCache.size > IMAGE_SIGNATURE_CACHE_LIMIT) {
-    imageSignatureCache.delete(imageSignatureCache.keys().next().value);
-  }
-  return signature;
-};
-
-const getActorVisualSignature = (actor = {}) => [
-  actor.id || 'player',
-  actor.character || '',
-  actor.role || '',
-  Math.round(getEntityLift(actor)),
-  Math.round(Number(actor.rotation) || 0),
-  actor.characterRenderMode || '',
-  Math.round(getCharacterModelScale(actor) * 100),
-  actor.characterImageName || '',
-  getImageSignature(actor.characterImageData),
-  actor.characterModel3dId || '',
-  actor.characterModelName || '',
-  actor.characterModelUrl || '',
-].join(':');
-
-const getStaticEngineSignature = (engine = {}) => [
-  Number(engine.wallHeight) || DEFAULT_ENGINE.wallHeight,
-  Number(engine.reliefScale) || DEFAULT_ENGINE.reliefScale,
-  Number(engine.propHeight) || DEFAULT_ENGINE.propHeight,
-].join(':');
-
-const getObstacleVisualSignature = (obstacle = {}) => [
-  obstacle.id || '',
-  Number(obstacle.x) || 0,
-  Number(obstacle.y) || 0,
-  Math.round(getEntityLift(obstacle)),
-  Number(obstacle.w) || 0,
-  Number(obstacle.h) || 0,
-].join(':');
-
-const getReliefVisualSignature = (relief = {}) => [
-  relief.id || '',
-  Number(relief.x) || 0,
-  Number(relief.y) || 0,
-  Math.round(getEntityLift(relief)),
-  getReliefWidth(relief),
-  getReliefHeight(relief),
-  getReliefElevation(relief),
-  relief.style || 'plateau',
-  relief.blocksMovement ? 1 : 0,
-].join(':');
-
-const getActionZoneVisualSignature = (zone = {}) => [
-  zone.id || '',
-  Number(zone.x) || 0,
-  Number(zone.y) || 0,
-  getActionZoneWidth(zone),
-  getActionZoneHeight(zone),
-  getActionZoneModelHeight(zone),
-  getActionZoneRenderMode(zone),
-  getActionZoneType(zone),
-  getActionZoneColor(zone),
-  Math.round(getActionZoneOpacity(zone) * 100),
-  Math.round(Number(zone.rotation) || 0),
-  zone.visibleInPlay ? 1 : 0,
-].join(':');
-
-const getPropVisualSignature = (prop = {}) => [
-  prop.id || '',
-  prop.name || '',
-  Number(prop.x) || 0,
-  Number(prop.y) || 0,
-  Math.round(getEntityLift(prop)),
-  Math.round(Number(prop.rotation) || 0),
-  getPropWidth(prop),
-  getPropHeight(prop),
-  getPropModelHeight(prop),
-  getPropRenderMode(prop),
-  getPropModelScale(prop),
-  prop.decorModel3dId || '',
-  prop.decorModelName || '',
-  getImageSignature(getPropModelSource(prop)),
-  Math.round(normalizeModelRotationDegrees(prop.modelRotationX || 0)),
-  Math.round(normalizeModelRotationDegrees(prop.modelRotationY || 0)),
-  Math.round(normalizeModelRotationDegrees(prop.modelRotationZ || 0)),
-  prop.modelCenterOnOrigin ? 1 : 0,
-  prop.modelFlushToGround ? 1 : 0,
-  prop.imageName || '',
-  getImageSignature(prop.imageData),
-  prop.repeatTexture ? 1 : 0,
-  getFloorZeroZ(prop),
-].join(':');
-
-const getStaticSceneSignature = (config = {}) => {
-  const world = config.world || {};
-  const engine = getEngine(config);
-  return [
-    Number(world.width) || 0,
-    Number(world.height) || 0,
-    Number(world.grid) || 0,
-    getStaticEngineSignature(engine),
-    (config.obstacles || []).map(getObstacleVisualSignature).join(';'),
-    (config.reliefs || []).map(getReliefVisualSignature).join(';'),
-    (config.actionZones || []).map(getActionZoneVisualSignature).join(';'),
-    (config.props || []).map(getPropVisualSignature).join(';'),
-  ].join('|');
-};
-
-const getSelectionOverlayEntitySignature = (config = {}, entity = {}) => {
-  if (!entity?.type || !entity.id) return '';
-  const engine = getEngine(config);
-  if (entity.type === 'obstacle') {
-    const obstacle = (config.obstacles || []).find((item) => item.id === entity.id);
-    return [
-      getEntityKey(entity),
-      obstacle ? getObstacleVisualSignature(obstacle) : 'missing',
-      Number(engine.wallHeight) || DEFAULT_ENGINE.wallHeight,
-    ].join(':');
-  }
-  if (entity.type === 'relief') {
-    const relief = (config.reliefs || []).find((item) => item.id === entity.id);
-    return [
-      getEntityKey(entity),
-      relief ? getReliefVisualSignature(relief) : 'missing',
-      Number(engine.reliefScale) || DEFAULT_ENGINE.reliefScale,
-    ].join(':');
-  }
-  if (entity.type === 'prop') {
-    const prop = (config.props || []).find((item) => item.id === entity.id);
-    return [
-      getEntityKey(entity),
-      prop ? getPropVisualSignature(prop) : 'missing',
-      Number(engine.propHeight) || DEFAULT_ENGINE.propHeight,
-    ].join(':');
-  }
-  if (entity.type === 'actionZone') {
-    const zone = (config.actionZones || []).find((item) => item.id === entity.id);
-    return [
-      getEntityKey(entity),
-      zone ? getActionZoneVisualSignature(zone) : 'missing',
-    ].join(':');
-  }
-  return '';
-};
-
-const getSelectionOverlaySignature = (config = {}, selected, multiSelected = []) => {
-  const selection = multiSelected.length ? multiSelected : selected ? [selected] : [];
-  return selection
-    .map((entity) => getSelectionOverlayEntitySignature(config, entity))
-    .filter(Boolean)
-    .sort()
-    .join('|');
-};
-
-const createRockGeometry = (seedValue) => {
-  const geometry = new THREE.DodecahedronGeometry(1, 1);
-  const seed = Math.abs(hashString(seedValue)) + 1;
-  const positions = geometry.attributes.position;
-  const vertex = new THREE.Vector3();
-  for (let i = 0; i < positions.count; i += 1) {
-    vertex.fromBufferAttribute(positions, i);
-    const jitter = 0.78 + (((Math.sin(seed * (i + 3) * 12.9898) * 43758.5453) % 1 + 1) % 1) * 0.34;
-    vertex.multiplyScalar(jitter);
-    positions.setXYZ(i, vertex.x, vertex.y, vertex.z);
-  }
-  positions.needsUpdate = true;
-  geometry.computeVertexNormals();
-  return geometry;
-};
-
-const addWall = (group, config, obstacle, engine, selected) => {
-  const width = Math.max(0.2, obstacle.w * WORLD_SCALE);
-  const depth = Math.max(0.2, obstacle.h * WORLD_SCALE);
-  const height = Math.max(0.4, Number(engine.wallHeight) || DEFAULT_ENGINE.wallHeight);
-  const lift = getEntityLiftHeight(obstacle);
-  const geometry = new THREE.BoxGeometry(width, height, depth);
-  const material = new THREE.MeshStandardMaterial({
-    color: selected ? '#3b5268' : '#263241',
-    roughness: 0.74,
-    metalness: 0.08,
-    emissive: selected ? '#123449' : '#070b10',
-    emissiveIntensity: selected ? 0.32 : 0.1,
-  });
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  mesh.position.copy(toScenePosition(config, obstacle.x + obstacle.w / 2, obstacle.y + obstacle.h / 2, height / 2 + lift));
-
-  const wallGroup = new THREE.Group();
-  wallGroup.add(mesh);
-  if (selected) wallGroup.add(createSelectionEdges(geometry));
-  assignEntity(wallGroup, { type: 'obstacle', id: obstacle.id });
-  if (selected) wallGroup.children[1].position.copy(mesh.position);
-  group.add(wallGroup);
-};
-
-const addRelief = (group, config, relief, engine, selected) => {
-  const width = Math.max(0.2, getReliefWidth(relief) * WORLD_SCALE);
-  const depth = Math.max(0.2, getReliefHeight(relief) * WORLD_SCALE);
-  const elevation = getReliefElevation(relief);
-  const height = Math.max(0.08, Math.abs(elevation) * WORLD_SCALE * (Number(engine.reliefScale) || 1));
-  const colors = RELIEF_STYLE_COLORS[relief.style] || RELIEF_STYLE_COLORS.plateau;
-  const geometry = new THREE.BoxGeometry(width, height, depth);
-  const material = new THREE.MeshStandardMaterial({
-    color: selected ? '#94f2ff' : colors.top,
-    roughness: relief.style === 'ridge' ? 0.86 : 0.7,
-    metalness: 0.02,
-    emissive: colors.emissive,
-    emissiveIntensity: selected ? 0.18 : 0.05,
-  });
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.castShadow = elevation > 0;
-  mesh.receiveShadow = true;
-  mesh.position.copy(toScenePosition(config, relief.x, relief.y, elevation >= 0 ? height / 2 : height * 0.1));
-
-  const reliefGroup = new THREE.Group();
-  reliefGroup.add(mesh);
-  if (selected) {
-    const edges = createSelectionEdges(geometry);
-    edges.position.copy(mesh.position);
-    reliefGroup.add(edges);
-  }
-  if (relief.blocksMovement) {
-    const marker = new THREE.Mesh(
-      new THREE.BoxGeometry(Math.min(width * 0.5, 1.4), 0.05, Math.min(depth * 0.14, 0.22)),
-      new THREE.MeshBasicMaterial({ color: '#facc15' }),
-    );
-    marker.position.copy(toScenePosition(config, relief.x, relief.y, height + 0.06));
-    reliefGroup.add(marker);
-  }
-  assignEntity(reliefGroup, { type: 'relief', id: relief.id });
-  group.add(reliefGroup);
-};
-
-const addActionZone = (group, config, zone, options = {}) => {
-  const { playMode = false } = options;
-  const width = Math.max(0.24, getActionZoneWidth(zone) * WORLD_SCALE);
-  const depth = Math.max(0.24, getActionZoneHeight(zone) * WORLD_SCALE);
-  const height = Math.max(0.24, getActionZoneModelHeight(zone) * WORLD_SCALE);
-  const color = getActionZoneColor(zone);
-  const opacity = getActionZoneOpacity(zone);
-  const zoneGroup = new THREE.Group();
-  zoneGroup.position.copy(toScenePosition(config, zone.x, zone.y, 0));
-  zoneGroup.rotation.y = degreesToRadians(zone.rotation || 0);
-
-  const geometry = new THREE.BoxGeometry(width, height, depth);
-  const veil = new THREE.Mesh(
-    geometry,
+  const fill = new THREE.Mesh(
+    new THREE.SphereGeometry(radius, 24, 12),
     new THREE.MeshBasicMaterial({
       color,
       transparent: true,
-      opacity,
-      side: THREE.DoubleSide,
+      opacity: 0.14,
       depthWrite: false,
+      depthTest: false,
     }),
   );
-  veil.position.y = height / 2;
-  veil.renderOrder = 20;
-  zoneGroup.add(veil);
+  fill.renderOrder = 97;
+  group.add(fill);
 
-  const edges = new THREE.LineSegments(
-    new THREE.EdgesGeometry(geometry),
+  const wire = new THREE.LineSegments(
+    new THREE.WireframeGeometry(new THREE.SphereGeometry(radius, 16, 8)),
     new THREE.LineBasicMaterial({
       color,
       transparent: true,
-      opacity: Math.min(1, Math.max(0.48, opacity + 0.34)),
-    }),
-  );
-  edges.position.y = height / 2;
-  edges.renderOrder = 21;
-  zoneGroup.add(edges);
-
-  if (!playMode || zone.visibleInPlay) {
-    const footprintGeometry = new THREE.PlaneGeometry(width, depth);
-    const footprint = new THREE.LineSegments(
-      new THREE.EdgesGeometry(footprintGeometry),
-      new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.8 }),
-    );
-    footprint.rotation.x = -Math.PI / 2;
-    footprint.position.y = 0.06;
-    footprint.renderOrder = 22;
-    zoneGroup.add(footprint);
-  }
-
-  assignEntity(zoneGroup, { type: 'actionZone', id: zone.id });
-  group.add(zoneGroup);
-};
-
-const addProp = (group, config, prop, engine, selected, getTexture, getModel, options = {}) => {
-  const width = Math.max(0.24, getPropWidth(prop) * WORLD_SCALE);
-  const depth = Math.max(0.24, getPropHeight(prop) * WORLD_SCALE);
-  const propHeight = Math.max(0.08, getPropModelHeight(prop) * WORLD_SCALE * (Number(engine.propHeight) || 1));
-  const lift = getEntityLiftHeight(prop);
-  const renderMode = getPropRenderMode(prop);
-  const propGroup = new THREE.Group();
-  propGroup.position.copy(toScenePosition(config, prop.x, prop.y, lift));
-  propGroup.rotation.y = degreesToRadians(prop.rotation || 0);
-  const visualGroup = new THREE.Group();
-  applyModelRotation(visualGroup, prop);
-
-  const texture = getTexture(prop.imageData, Boolean(prop.repeatTexture || renderMode === 'floor'));
-  const modelSource = getPropModelSource(prop);
-  const modelTemplate = renderMode === 'glb' ? getModel?.(modelSource) : null;
-  const textureMaterial = (fallbackColor, options = {}) => new THREE.MeshStandardMaterial({
-    color: fallbackColor,
-    map: texture || null,
-    roughness: options.roughness ?? 0.72,
-    metalness: options.metalness ?? 0.04,
-    emissive: options.emissive || '#061721',
-    emissiveIntensity: options.emissiveIntensity ?? 0.1,
-  });
-
-  if (renderMode === 'glb') {
-    if (modelTemplate) {
-      const animation = addGltfPropModel(
-        propGroup,
-        modelTemplate,
-        prop,
-        propHeight,
-        Math.max(width, depth) * 0.56,
-        selected,
-        texture,
-      );
-      if (animation?.mixer) {
-        if (!Array.isArray(group.userData.animationMixers)) group.userData.animationMixers = [];
-        group.userData.animationMixers.push(animation.mixer);
-      }
-    } else {
-      const geometry = new THREE.BoxGeometry(width, propHeight, depth);
-      const mesh = new THREE.Mesh(geometry, textureMaterial(selected ? '#e0f7ff' : '#38bdf8', { roughness: 0.62 }));
-      mesh.position.y = propHeight / 2;
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      visualGroup.add(mesh);
-      if (selected) {
-        const edges = createSelectionEdges(geometry);
-        edges.position.copy(mesh.position);
-        visualGroup.add(edges);
-      }
-    }
-  } else if (renderMode === 'floor') {
-    const material = textureMaterial('#2f5368', { roughness: 0.88, emissiveIntensity: 0.04 });
-    material.side = THREE.DoubleSide;
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), material);
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.position.y = 0.045;
-    mesh.receiveShadow = true;
-    visualGroup.add(mesh);
-    if (selected) {
-      const outline = createSelectionEdges(new THREE.BoxGeometry(width, 0.04, depth));
-      outline.position.y = 0.07;
-      visualGroup.add(outline);
-    }
-  } else if (renderMode === 'box') {
-    const geometry = new THREE.BoxGeometry(width, propHeight, depth);
-    const mesh = new THREE.Mesh(geometry, textureMaterial(selected ? '#e0f7ff' : '#7dd3fc', { roughness: 0.68 }));
-    mesh.position.y = propHeight / 2;
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    visualGroup.add(mesh);
-    if (selected) {
-      const edges = createSelectionEdges(geometry);
-      edges.position.copy(mesh.position);
-      visualGroup.add(edges);
-    }
-  } else if (renderMode === 'house') {
-    const bodyHeight = Math.max(0.38, propHeight * 0.68);
-    const roofHeight = Math.max(0.24, propHeight * 0.32);
-    const bodyGeometry = new THREE.BoxGeometry(width, bodyHeight, depth);
-    const body = new THREE.Mesh(bodyGeometry, textureMaterial(selected ? '#e0f7ff' : '#d9b889', { roughness: 0.78 }));
-    body.position.y = bodyHeight / 2;
-    body.castShadow = true;
-    body.receiveShadow = true;
-    visualGroup.add(body);
-
-    const roof = new THREE.Mesh(
-      new THREE.ConeGeometry(Math.max(width, depth) * 0.72, roofHeight, 4),
-      new THREE.MeshStandardMaterial({
-        color: '#7f1d1d',
-        roughness: 0.7,
-        emissive: '#2a0b0b',
-        emissiveIntensity: 0.08,
-      }),
-    );
-    roof.rotation.y = Math.PI / 4;
-    roof.position.y = bodyHeight + roofHeight / 2;
-    roof.castShadow = true;
-    visualGroup.add(roof);
-
-    const door = new THREE.Mesh(
-      new THREE.BoxGeometry(width * 0.18, bodyHeight * 0.42, 0.035),
-      new THREE.MeshStandardMaterial({ color: '#3b2417', roughness: 0.8 }),
-    );
-    door.position.set(0, bodyHeight * 0.22, depth / 2 + 0.025);
-    visualGroup.add(door);
-
-    if (selected) {
-      const edges = createSelectionEdges(new THREE.BoxGeometry(width, propHeight, depth));
-      edges.position.y = propHeight / 2;
-      visualGroup.add(edges);
-    }
-  } else if (renderMode === 'rock') {
-    const geometry = createRockGeometry(prop.id || prop.name || 'rock');
-    const material = textureMaterial(selected ? '#e0f7ff' : '#64748b', {
-      roughness: 0.92,
-      metalness: 0,
-      emissive: '#111827',
-      emissiveIntensity: 0.08,
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.scale.set(width * 0.48, propHeight * 0.5, depth * 0.48);
-    mesh.position.y = propHeight * 0.48;
-    mesh.rotation.y = hashString(prop.id || prop.name || 'rock') * 0.01;
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    visualGroup.add(mesh);
-    if (selected) propGroup.add(createSelectionRing(Math.max(width, depth) * 0.52, '#67e8f9'));
-  } else if (texture) {
-    const material = new THREE.SpriteMaterial({ map: texture, transparent: true, alphaTest: 0.08 });
-    const sprite = new THREE.Sprite(material);
-    sprite.scale.set(width, Math.max(depth, propHeight), 1);
-    sprite.position.y = Math.max(depth, propHeight) / 2;
-    visualGroup.add(sprite);
-  } else {
-    const geometry = new THREE.CylinderGeometry(width * 0.38, width * 0.48, propHeight, 10);
-    const material = new THREE.MeshStandardMaterial({
-      color: selected ? '#67e8f9' : '#2dd4bf',
-      roughness: 0.82,
-      emissive: '#06231f',
-      emissiveIntensity: 0.16,
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    mesh.position.y = propHeight / 2;
-    visualGroup.add(mesh);
-  }
-
-  if (!(renderMode === 'glb' && modelTemplate)) {
-    if (prop.modelCenterOnOrigin) centerObjectHorizontallyOnOrigin(visualGroup);
-    snapObjectToGround(visualGroup, renderMode === 'floor' ? 0.045 : 0);
-  }
-
-  if (selected && !['floor', 'box', 'rock', 'house', 'glb'].includes(renderMode)) {
-    propGroup.add(createSelectionRing(Math.max(width, depth) * 0.55, '#67e8f9'));
-  }
-  propGroup.add(visualGroup);
-  assignEntity(propGroup, { type: 'prop', id: prop.id });
-  if (selected && isFlatTileLikeProp(prop) && options.showTileDuplicateHandles !== false) {
-    const handleSize = getFlatTileSceneDimensions(prop, width, depth);
-    addTileDuplicateHandles(propGroup, prop, handleSize.width, handleSize.depth);
-  }
-  group.add(propGroup);
-};
-
-const addPickup = (group, config, pickup, selected, time) => {
-  const position = toScenePosition(config, pickup.x, pickup.y, 0.42 + Math.sin(time * 4) * 0.04 + getEntityLiftHeight(pickup));
-  const color = pickup.type === 'health' ? '#ef4444' : pickup.type === 'mana' ? '#38bdf8' : '#facc15';
-  const pickupGroup = new THREE.Group();
-  pickupGroup.position.copy(position);
-  pickupGroup.add(new THREE.Mesh(
-    new THREE.TorusGeometry(PICKUP_RADIUS * WORLD_SCALE, 0.055, 10, 32),
-    new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.4, roughness: 0.36 }),
-  ));
-  const core = new THREE.Mesh(
-    new THREE.SphereGeometry(PICKUP_RADIUS * WORLD_SCALE * 0.52, 12, 12),
-    new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: color, emissiveIntensity: 0.75 }),
-  );
-  pickupGroup.add(core);
-  if (selected) pickupGroup.add(createSelectionRing(PICKUP_RADIUS * WORLD_SCALE * 1.3, '#ffffff'));
-  assignEntity(pickupGroup, { type: 'pickup', id: pickup.id });
-  group.add(pickupGroup);
-};
-
-const addActor = (group, config, actor, options) => {
-  const {
-    type,
-    id,
-    radius,
-    preset,
-    selected,
-    active,
-    imageData,
-    aimTarget,
-    getTexture,
-    getModel,
-    renderMode: forcedRenderMode,
-    modelScale: forcedModelScale,
-    animationTime = 0,
-    useStoredRotation = false,
-    supportHeight = 0,
-  } = options;
-  const actorGroup = new THREE.Group();
-  const lift = getEntityLiftHeight(actor);
-  actorGroup.position.copy(toScenePosition(config, actor.x, actor.y, supportHeight + lift));
-  const radius3d = Math.max(0.22, radius * WORLD_SCALE);
-  const modelScale = forcedModelScale || getCharacterModelScale(actor);
-  const height = (type === 'player' ? 1.32 : 1.18) * modelScale;
-  const bodyColor = active ? preset.accent : preset.body;
-  const texture = getTexture(imageData);
-  const renderMode = forcedRenderMode || getCharacterRenderMode(actor);
-  const modelTemplate = renderMode === 'glb' ? getModel?.(actor.characterModelUrl) : null;
-  const skinnedBodyColor = selected ? '#f8fbff' : texture ? '#d8e5f5' : bodyColor;
-  const aim = normalize((aimTarget?.x || actor.x + 1) - actor.x, (aimTarget?.y || actor.y) - actor.y);
-  const angle = useStoredRotation ? degreesToRadians(actor.rotation || 0) : Math.atan2(aim.x, aim.y);
-  actorGroup.rotation.y = angle;
-
-  const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(radius3d * (renderMode === 'boss' ? 2.4 : 1.35) * modelScale, 24),
-    new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.24 }),
-  );
-  shadow.rotation.x = -Math.PI / 2;
-  shadow.position.y = -lift + 0.012;
-  actorGroup.userData.actorShadow = shadow;
-  actorGroup.add(shadow);
-
-  const actorMaterial = (color, options = {}) => new THREE.MeshStandardMaterial({
-    color: options.skin && texture ? '#ffffff' : color,
-    map: options.skin && texture ? texture : null,
-    roughness: options.roughness ?? 0.58,
-    metalness: options.metalness ?? 0.04,
-    emissive: options.emissive || preset.accent,
-    emissiveIntensity: options.emissiveIntensity ?? (active ? 0.26 : 0.08),
-  });
-
-  const addTexturePanel = (width, panelHeight, y, z, opacity = 0.96) => {
-    if (!texture) return;
-    const panel = new THREE.Mesh(
-      new THREE.PlaneGeometry(width, panelHeight),
-      new THREE.MeshBasicMaterial({
-        map: texture,
-        transparent: true,
-        opacity,
-        alphaTest: 0.06,
-        side: THREE.DoubleSide,
-      }),
-    );
-    panel.position.set(0, y, z);
-    actorGroup.add(panel);
-  };
-
-  const addImageSprite = (width, spriteHeight, y, z = 0) => {
-    if (!texture || renderMode === 'sprite') return;
-    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: texture,
-      transparent: true,
-      opacity: 0.98,
-      alphaTest: 0.05,
+      opacity: 0.82,
       depthTest: false,
-      depthWrite: false,
-    }));
-    sprite.scale.set(width, spriteHeight, 1);
-    sprite.position.set(0, y, z);
-    sprite.renderOrder = 12;
-    actorGroup.add(sprite);
-  };
-
-  if (renderMode === 'glb' && actor.characterModelUrl) {
-    if (!modelTemplate) {
-      const placeholder = new THREE.Mesh(
-        new THREE.CapsuleGeometry(radius3d * 0.88 * modelScale, height * 0.58, 6, 12),
-        actorMaterial(skinnedBodyColor, { metalness: 0.12, skin: false }),
-      );
-      placeholder.position.y = height * 0.5;
-      actorGroup.add(placeholder);
-      if (selected) actorGroup.add(createSelectionRing(radius3d * 1.9 * modelScale, '#f8fbff'));
-    } else {
-      const animation = addGltfActorModel(actorGroup, modelTemplate, actor, height, radius3d, selected, modelScale, animationTime);
-      if (animation?.mixer) {
-        if (!Array.isArray(group.userData.animationMixers)) group.userData.animationMixers = [];
-        group.userData.animationMixers.push(animation.mixer);
-      }
-    }
-    assignEntity(actorGroup, { type, id });
-    group.add(actorGroup);
-    return;
-  }
-
-  if (renderMode === 'sprite' && texture) {
-    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, alphaTest: 0.08 }));
-    sprite.scale.set(radius3d * 3.4 * modelScale, height * 1.18, 1);
-    sprite.position.y = height * 0.58;
-    actorGroup.add(sprite);
-  } else if (renderMode === 'block') {
-    const bodyGeometry = new THREE.BoxGeometry(radius3d * 1.7 * modelScale, height * 0.62, radius3d * 1.15 * modelScale);
-    const body = new THREE.Mesh(bodyGeometry, actorMaterial(skinnedBodyColor, { roughness: 0.5, metalness: 0.12, skin: true }));
-    body.position.y = height * 0.42;
-    body.castShadow = true;
-    body.receiveShadow = true;
-    actorGroup.add(body);
-    addTexturePanel(radius3d * 1.58 * modelScale, height * 0.5, height * 0.42, radius3d * 0.59 * modelScale + 0.012);
-    addImageSprite(radius3d * 2.45 * modelScale, height * 0.82, height * 0.55);
-
-    const head = new THREE.Mesh(
-      new THREE.BoxGeometry(radius3d * 1.15 * modelScale, radius3d * 1.05 * modelScale, radius3d * 1.05 * modelScale),
-      actorMaterial('#f0c9a5', { roughness: 0.64, emissiveIntensity: 0.04 }),
-    );
-    head.position.y = height * 0.82;
-    head.castShadow = true;
-    actorGroup.add(head);
-
-    const shoulderGeometry = new THREE.BoxGeometry(radius3d * 2.1 * modelScale, radius3d * 0.3, radius3d * 0.7 * modelScale);
-    const shoulders = new THREE.Mesh(shoulderGeometry, actorMaterial(preset.weapon, { roughness: 0.4, metalness: 0.18 }));
-    shoulders.position.y = height * 0.61;
-    shoulders.castShadow = true;
-    actorGroup.add(shoulders);
-  } else if (renderMode === 'boss') {
-    const core = new THREE.Mesh(
-      new THREE.SphereGeometry(radius3d * 1.42 * modelScale, 18, 14),
-      actorMaterial(skinnedBodyColor, { roughness: 0.72, metalness: 0.02, emissiveIntensity: active ? 0.34 : 0.12, skin: true }),
-    );
-    core.scale.y = 1.18;
-    core.position.y = height * 0.45;
-    core.castShadow = true;
-    core.receiveShadow = true;
-    actorGroup.add(core);
-    addTexturePanel(radius3d * 2.2 * modelScale, height * 0.66, height * 0.48, radius3d * 1.42 * modelScale + 0.016);
-    addImageSprite(radius3d * 3.05 * modelScale, height * 0.9, height * 0.58);
-
-    const hornMaterial = actorMaterial(preset.weapon, { roughness: 0.42, metalness: 0.08, emissiveIntensity: 0.12 });
-    [-1, 1].forEach((side) => {
-      const horn = new THREE.Mesh(new THREE.ConeGeometry(radius3d * 0.32 * modelScale, radius3d * 1.1 * modelScale, 8), hornMaterial);
-      horn.position.set(side * radius3d * 0.9 * modelScale, height * 0.98, radius3d * 0.1);
-      horn.rotation.z = -side * 0.52;
-      horn.castShadow = true;
-      actorGroup.add(horn);
-    });
-
-    [-1, 1].forEach((side) => {
-      const arm = new THREE.Mesh(
-        new THREE.CapsuleGeometry(radius3d * 0.3 * modelScale, radius3d * 1.25 * modelScale, 5, 10),
-        actorMaterial(preset.accent, { roughness: 0.55, emissiveIntensity: 0.2 }),
-      );
-      arm.position.set(side * radius3d * 1.42 * modelScale, height * 0.48, radius3d * 0.02);
-      arm.rotation.z = side * 0.36;
-      arm.castShadow = true;
-      actorGroup.add(arm);
-    });
-  } else {
-    const body = new THREE.Mesh(
-      new THREE.CapsuleGeometry(radius3d * modelScale, Math.max(0.2, height - radius3d * 2 * modelScale), 6, 14),
-      actorMaterial(skinnedBodyColor, { metalness: type === 'enemy' ? 0.08 : 0.03, skin: true }),
-    );
-    body.position.y = height / 2;
-    body.castShadow = true;
-    body.receiveShadow = true;
-    actorGroup.add(body);
-    addTexturePanel(radius3d * 1.85 * modelScale, height * 0.68, height * 0.48, radius3d * 0.98 * modelScale + 0.012);
-    addImageSprite(radius3d * 2.45 * modelScale, height * 0.94, height * 0.58);
-
-    const head = new THREE.Mesh(
-      new THREE.SphereGeometry(radius3d * 0.74 * modelScale, 16, 12),
-      actorMaterial('#f0c9a5', { roughness: 0.68, emissive: '#000000', emissiveIntensity: 0 }),
-    );
-    head.position.set(radius3d * 0.32 * modelScale, height * 0.9, radius3d * 0.1);
-    head.castShadow = true;
-    actorGroup.add(head);
-  }
-
-  const weapon = new THREE.Mesh(
-    new THREE.BoxGeometry(radius3d * 0.36 * modelScale, radius3d * 0.3 * modelScale, radius3d * 2.55 * modelScale),
-    new THREE.MeshStandardMaterial({
-      color: preset.weapon,
-      roughness: 0.28,
-      metalness: 0.24,
-      emissive: preset.accent,
-      emissiveIntensity: 0.16,
     }),
   );
-  weapon.position.set(0, height * 0.62, radius3d * 1.55 * modelScale);
-  weapon.castShadow = true;
-  actorGroup.add(weapon);
+  wire.renderOrder = 98;
+  group.add(wire);
 
-  if (selected) actorGroup.add(createSelectionRing(radius3d * (renderMode === 'boss' ? 2.35 : 1.75) * modelScale, '#f8fbff'));
-  assignEntity(actorGroup, { type, id });
-  group.add(actorGroup);
+  return group;
 };
-
-const addBullet = (group, config, bullet) => {
-  const mesh = new THREE.Mesh(
-    new THREE.SphereGeometry(0.08, 12, 8),
-    new THREE.MeshStandardMaterial({
-      color: bullet.color,
-      emissive: bullet.color,
-      emissiveIntensity: 1.2,
-      roughness: 0.2,
-    }),
-  );
-  mesh.userData.dynamicKind = 'bullet';
-  mesh.userData.dynamicId = bullet.id;
-  mesh.position.copy(toScenePosition(config, bullet.x, bullet.y, 0.58));
-  group.add(mesh);
-};
-
-const addParticle = (group, config, particle, index = 0) => {
-  const alpha = clamp(particle.life / particle.maxLife, 0, 1);
-  const mesh = new THREE.Mesh(
-    new THREE.SphereGeometry(0.045 + alpha * 0.035, 8, 6),
-    new THREE.MeshBasicMaterial({ color: particle.color, transparent: true, opacity: alpha }),
-  );
-  mesh.userData.dynamicKind = 'particle';
-  mesh.userData.dynamicIndex = index;
-  mesh.position.copy(toScenePosition(config, particle.x, particle.y, 0.25 + alpha * 0.6));
-  group.add(mesh);
-};
-
-const findDynamicEntityRoot = (group, type, id) => (
-  group?.children.find((child) => child.userData?.entityType === type && child.userData?.entityId === id) || null
-);
-
-const updateActorTransform = (root, config, actor, options = {}) => {
-  if (!root || !actor) return;
-  const {
-    aimTarget,
-    useStoredRotation = false,
-    supportHeight = 0,
-  } = options;
-  const lift = getEntityLiftHeight(actor);
-  root.position.copy(toScenePosition(config, actor.x, actor.y, supportHeight + lift));
-  const aim = normalize((aimTarget?.x || actor.x + 1) - actor.x, (aimTarget?.y || actor.y) - actor.y);
-  root.rotation.y = useStoredRotation ? degreesToRadians(actor.rotation || 0) : Math.atan2(aim.x, aim.y);
-  if (root.userData.actorShadow) root.userData.actorShadow.position.y = -lift + 0.012;
-};
-
-const updatePickupTransform = (root, config, pickup, time = 0) => {
-  if (!root || !pickup) return;
-  root.position.copy(toScenePosition(
-    config,
-    pickup.x,
-    pickup.y,
-    0.42 + Math.sin(time * 4) * 0.04 + getEntityLiftHeight(pickup),
-  ));
-};
-
-const updateBulletTransform = (root, config, bullet) => {
-  if (!root || !bullet) return;
-  root.visible = true;
-  root.position.copy(toScenePosition(config, bullet.x, bullet.y, 0.58));
-};
-
-const updateParticleTransform = (root, config, particle) => {
-  if (!root || !particle) return;
-  const alpha = clamp(particle.life / particle.maxLife, 0, 1);
-  root.visible = true;
-  root.position.copy(toScenePosition(config, particle.x, particle.y, 0.25 + alpha * 0.6));
-  if (root.material) root.material.opacity = alpha;
-  root.scale.setScalar(0.72 + alpha * 0.56);
-};
-
-const updateDynamicTransforms = (group, config, state, options = {}) => {
-  if (!group || !config || !state) return;
-  const { playMode = false, aimPoint = null } = options;
-  const time = state.time || 0;
-  const getActorSupportHeight = (actor) => getSupportSurfaceHeightAtPoint(config, actor);
-
-  (config.heroes || []).forEach((hero) => {
-    updateActorTransform(findDynamicEntityRoot(group, 'hero', hero.id), config, hero, {
-      aimTarget: playMode ? state.player : config.player,
-      useStoredRotation: true,
-      supportHeight: getActorSupportHeight(hero),
-    });
-  });
-
-  const enemies = playMode ? state.enemies : config.enemies;
-  (enemies || []).forEach((enemy) => {
-    updateActorTransform(findDynamicEntityRoot(group, 'enemy', enemy.id), config, enemy, {
-      aimTarget: playMode ? state.player : config.player,
-      useStoredRotation: !playMode,
-      supportHeight: getActorSupportHeight(enemy),
-    });
-  });
-
-  const pickups = playMode ? state.pickups : config.pickups;
-  (pickups || []).forEach((pickup) => {
-    updatePickupTransform(findDynamicEntityRoot(group, 'pickup', pickup.id), config, pickup, time);
-  });
-
-  if (playMode) {
-    updateActorTransform(findDynamicEntityRoot(group, 'spawn', 'player'), config, state.player, {
-      aimTarget: aimPoint || state.player?.moveTarget || { x: config.player.x + 1, y: config.player.y },
-      supportHeight: getActorSupportHeight(state.player),
-    });
-  }
-
-  const bulletRoots = new Map(
-    group.children
-      .filter((child) => child.userData?.dynamicKind === 'bullet')
-      .map((child) => [child.userData.dynamicId, child]),
-  );
-  const activeBulletIds = new Set();
-  (state.bullets || []).forEach((bullet) => {
-    activeBulletIds.add(bullet.id);
-    updateBulletTransform(bulletRoots.get(bullet.id), config, bullet);
-  });
-  bulletRoots.forEach((root, id) => {
-    if (!activeBulletIds.has(id)) root.visible = false;
-  });
-
-  const particleRoots = group.children
-    .filter((child) => child.userData?.dynamicKind === 'particle')
-    .sort((a, b) => (a.userData.dynamicIndex || 0) - (b.userData.dynamicIndex || 0));
-  particleRoots.forEach((root, index) => {
-    const particle = state.particles?.[index];
-    if (particle) updateParticleTransform(root, config, particle);
-    else root.visible = false;
-  });
-};
-
-const getMapEntityItem = (config, selected) => {
-  if (!selected || !config) return null;
-  if (selected.type === 'spawn') return config.player || null;
-  const key = selected.type === 'obstacle'
-    ? 'obstacles'
-    : selected.type === 'hero'
-      ? 'heroes'
-      : selected.type === 'enemy'
-        ? 'enemies'
-        : selected.type === 'pickup'
-          ? 'pickups'
-          : selected.type === 'relief'
-            ? 'reliefs'
-            : selected.type === 'actionZone'
-              ? 'actionZones'
-              : 'props';
-  return (config[key] || []).find((item) => item.id === selected.id) || null;
-};
-
-const findSelectedPosition = (config, selected) => {
-  if (!selected) return null;
-  const entity = getMapEntityItem(config, selected);
-  if (!entity) return null;
-  if (selected.type === 'obstacle') return { x: entity.x + entity.w / 2, y: entity.y + entity.h / 2 };
-  return { x: entity.x, y: entity.y };
-};
-const isDraggableEntity = (entity = {}) => (
-  ['spawn', 'prop', 'hero', 'enemy', 'pickup', 'relief', 'obstacle', 'actionZone'].includes(entity.type)
-);
-const isCameraTargetEntity = (entity = {}) => (
-  ['spawn', 'prop', 'hero', 'enemy', 'pickup', 'relief', 'obstacle', 'actionZone'].includes(entity.type)
-);
-const getCameraTargetPoint = (config, entity, engine = DEFAULT_ENGINE) => {
-  if (!config || !isCameraTargetEntity(entity)) return null;
-  const item = getMapEntityItem(config, entity);
-  const position = findSelectedPosition(config, entity);
-  if (!item || !position) return null;
-  if (entity.type === 'spawn' || entity.type === 'hero' || entity.type === 'enemy') {
-    return {
-      ...position,
-      height: getSupportSurfaceHeightAtPoint(config, item) + getEntityLiftHeight(item) + 0.72,
-    };
-  }
-  if (entity.type === 'pickup') {
-    return { ...position, height: 0.42 + getEntityLiftHeight(item) };
-  }
-  if (entity.type === 'obstacle') {
-    return { ...position, height: Math.max(0.4, Number(engine.wallHeight) || DEFAULT_ENGINE.wallHeight) / 2 + getEntityLiftHeight(item) };
-  }
-  if (entity.type === 'relief') {
-    const elevation = getReliefElevation(item);
-    const height = Math.max(0.08, Math.abs(elevation) * WORLD_SCALE * (Number(engine.reliefScale) || 1));
-    return { ...position, height: elevation >= 0 ? height : 0.04 };
-  }
-  if (entity.type === 'actionZone') {
-    return { ...position, height: Math.max(0.24, getActionZoneModelHeight(item) * WORLD_SCALE) / 2 };
-  }
-  if (entity.type === 'prop') {
-    const propHeight = Math.max(0.08, getPropModelHeight(item) * WORLD_SCALE * (Number(engine.propHeight) || 1));
-    const height = isFlatTileLikeProp(item) ? getFlatTileSurfaceHeight(item) + 0.08 : getEntityLiftHeight(item) + propHeight / 2;
-    return { ...position, height };
-  }
-  return { ...position, height: 0.65 };
-};
-const getEntityKey = (entity = {}) => (entity?.type && entity?.id ? `${entity.type}:${entity.id}` : '');
-const isSameEntity = (a = {}, b = {}) => Boolean(a?.type && b?.type && a.type === b.type && a.id === b.id);
-const isSelectionActive = (type, id, selected, multiSelected = []) => (
-  (selected?.type === type && selected.id === id)
-  || multiSelected.some((entry) => entry.type === type && entry.id === id)
-);
-const normalizeScreenRect = (box = {}) => ({
-  left: Math.min(box.startX, box.currentX),
-  top: Math.min(box.startY, box.currentY),
-  width: Math.abs(box.currentX - box.startX),
-  height: Math.abs(box.currentY - box.startY),
-});
-const screenRectsIntersect = (a, b) => (
-  a.left <= b.left + b.width
-  && a.left + a.width >= b.left
-  && a.top <= b.top + b.height
-  && a.top + a.height >= b.top
-);
-const projectWorldPointToScreen = (config, camera, viewport, point = {}) => {
-  const vector = toScenePosition(config, point.x, point.y, point.height || 0);
-  vector.project(camera);
-  if (!Number.isFinite(vector.x) || !Number.isFinite(vector.y) || vector.z < -1 || vector.z > 1) return null;
-  return {
-    x: (vector.x * 0.5 + 0.5) * viewport.width,
-    y: (-vector.y * 0.5 + 0.5) * viewport.height,
-  };
-};
-const getProjectedBounds = (config, camera, viewport, points = []) => {
-  const projected = points
-    .map((point) => projectWorldPointToScreen(config, camera, viewport, point))
-    .filter(Boolean);
-  if (!projected.length) return null;
-  return {
-    left: Math.min(...projected.map((point) => point.x)),
-    top: Math.min(...projected.map((point) => point.y)),
-    width: Math.max(...projected.map((point) => point.x)) - Math.min(...projected.map((point) => point.x)),
-    height: Math.max(...projected.map((point) => point.y)) - Math.min(...projected.map((point) => point.y)),
-  };
-};
-const createWorldBoxPoints = (x, y, width, height) => [
-  { x, y },
-  { x: x - width / 2, y: y - height / 2 },
-  { x: x + width / 2, y: y - height / 2 },
-  { x: x + width / 2, y: y + height / 2 },
-  { x: x - width / 2, y: y + height / 2 },
-];
 
 function ArcadeThreeViewport({
   config,
@@ -1546,11 +154,28 @@ function ArcadeThreeViewport({
   multiSelected = [],
   multiSelectMode = false,
   cameraTargetPickMode = false,
+  cameraZoomDragMode = false,
+  transformMode = '',
   placementEntity = null,
   dragEnabled = false,
+  paintMode = false,
+  paintBrushColor = TERRAIN_PAINT_DEFAULT_COLOR,
+  paintBrushRadius = TERRAIN_PAINT_DEFAULT_RADIUS,
+  paintBrushShape = TERRAIN_PAINT_DEFAULT_SHAPE,
+  modelEraserMode = false,
+  modelEraserRadius = MODEL_ERASER_DEFAULT_RADIUS,
   onWorldPointer,
   onWorldClick,
+  onWorldPaintStart,
+  onWorldPaintMove,
+  onWorldPaintEnd,
+  onModelEraseStart,
+  onModelEraseMove,
+  onModelEraseEnd,
   onCameraTargetPick,
+  onCameraZoomDrag,
+  onSelectionTransformCommit,
+  resolveWorldDragPoint,
   onWorldDragStart,
   onWorldDrag,
   onWorldDrop,
@@ -1564,19 +189,36 @@ function ArcadeThreeViewport({
   const cameraRef = useRef(null);
   const controlsRef = useRef(null);
   const staticGroupRef = useRef(null);
+  const terrainPaintGroupRef = useRef(null);
   const selectionGroupRef = useRef(null);
   const dynamicGroupRef = useRef(null);
+  const transformProxyRef = useRef(null);
+  const transformGuideRef = useRef(null);
+  const transformControlsRef = useRef(null);
+  const transformDescriptorRef = useRef(null);
+  const transformSessionRef = useRef(null);
+  const transformPointerActiveRef = useRef(false);
   const groundRef = useRef(null);
   const raycasterRef = useRef(new THREE.Raycaster());
   const pointerRef = useRef(new THREE.Vector2());
   const aimPointRef = useRef(null);
+  const invalidateRenderRef = useRef(() => {});
   const clickStartRef = useRef(null);
+  const heldMoveRef = useRef(null);
   const dragRef = useRef(null);
+  const paintRef = useRef(null);
+  const modelEraserRef = useRef(null);
+  const cameraZoomDragRef = useRef(null);
+  const playCameraPanOffsetRef = useRef(new THREE.Vector3());
+  const playCameraPanStartOffsetRef = useRef(new THREE.Vector3());
+  const paintPreviewRef = useRef(null);
+  const modelEraserPreviewRef = useRef(null);
   const placementPreviewRef = useRef(null);
   const marqueeRef = useRef(null);
   const textureCacheRef = useRef(new Map());
   const modelCacheRef = useRef(new Map());
   const modelPendingRef = useRef(new Set());
+  const modelFailedRef = useRef(new Set());
   const latestRef = useRef({
     config,
     mode,
@@ -1584,11 +226,28 @@ function ArcadeThreeViewport({
     multiSelected,
     multiSelectMode,
     cameraTargetPickMode,
+    cameraZoomDragMode,
+    transformMode,
     placementEntity,
     dragEnabled,
+    paintMode,
+    paintBrushColor,
+    paintBrushRadius,
+    paintBrushShape,
+    modelEraserMode,
+    modelEraserRadius,
     onWorldPointer,
     onWorldClick,
+    onWorldPaintStart,
+    onWorldPaintMove,
+    onWorldPaintEnd,
+    onModelEraseStart,
+    onModelEraseMove,
+    onModelEraseEnd,
     onCameraTargetPick,
+    onCameraZoomDrag,
+    onSelectionTransformCommit,
+    resolveWorldDragPoint,
     onWorldDragStart,
     onWorldDrag,
     onWorldDrop,
@@ -1622,6 +281,10 @@ function ArcadeThreeViewport({
     config.actionZones,
     config.props,
   ]);
+  const terrainPaintLayerSignature = React.useMemo(() => getTerrainPaintLayerSignature(config), [
+    config.world,
+    config.terrainPaintStrokes,
+  ]);
   const selectionOverlaySignature = React.useMemo(
     () => getSelectionOverlaySignature(config, selected, multiSelected),
     [
@@ -1645,11 +308,28 @@ function ArcadeThreeViewport({
     multiSelected,
     multiSelectMode,
     cameraTargetPickMode,
+    cameraZoomDragMode,
+    transformMode,
     placementEntity,
     dragEnabled,
+    paintMode,
+    paintBrushColor,
+    paintBrushRadius,
+    paintBrushShape,
+    modelEraserMode,
+    modelEraserRadius,
     onWorldPointer,
     onWorldClick,
+    onWorldPaintStart,
+    onWorldPaintMove,
+    onWorldPaintEnd,
+    onModelEraseStart,
+    onModelEraseMove,
+    onModelEraseEnd,
     onCameraTargetPick,
+    onCameraZoomDrag,
+    onSelectionTransformCommit,
+    resolveWorldDragPoint,
     onWorldDragStart,
     onWorldDrag,
     onWorldDrop,
@@ -1700,6 +380,133 @@ function ArcadeThreeViewport({
     };
   }, [configRef]);
 
+  const resolveSelectedModelHit = useCallback((event) => {
+    const renderer = rendererRef.current;
+    const camera = cameraRef.current;
+    const staticGroup = staticGroupRef.current;
+    const liveConfig = configRef.current || latestRef.current.config;
+    const selectedEntity = latestRef.current.selected;
+    if (!renderer || !camera || !staticGroup || !liveConfig?.world || selectedEntity?.type !== 'prop' || !selectedEntity.id) {
+      return null;
+    }
+    const rect = renderer.domElement.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    pointerRef.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    pointerRef.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    const raycaster = raycasterRef.current;
+    raycaster.setFromCamera(pointerRef.current, camera);
+    const hit = raycaster
+      .intersectObjects([staticGroup], true)
+      .find((candidate) => (
+        (candidate.object?.isMesh || candidate.object?.isSkinnedMesh)
+        && candidate.object?.userData?.rpg3dModelEraserSurface === true
+        && isSameEntity(readEntity(candidate.object), selectedEntity)
+      ));
+    if (!hit?.point) return null;
+    const root = getEntityRootObject(hit.object, selectedEntity);
+    root?.updateWorldMatrix?.(true, false);
+    hit.object?.updateWorldMatrix?.(true, false);
+    const localScenePoint = root?.worldToLocal?.(hit.point.clone()) || null;
+    const localMeshPoint = hit.object?.worldToLocal?.(hit.point.clone()) || null;
+    const point = fromScenePosition(liveConfig, hit.point);
+    return {
+      point,
+      entity: { type: selectedEntity.type, id: selectedEntity.id },
+      x: point.x,
+      y: point.y,
+      sceneX: hit.point.x,
+      sceneY: hit.point.y,
+      sceneZ: hit.point.z,
+      localSceneX: localScenePoint?.x,
+      localSceneY: localScenePoint?.y,
+      localSceneZ: localScenePoint?.z,
+      localMeshX: localMeshPoint?.x,
+      localMeshY: localMeshPoint?.y,
+      localMeshZ: localMeshPoint?.z,
+      surfaceIndex: hit.object?.userData?.rpg3dModelEraserSurfaceIndex,
+      materialIndex: hit.face?.materialIndex ?? 0,
+      uvX: hit.uv?.x,
+      uvY: hit.uv?.y,
+      screenX: event.clientX - rect.left,
+      screenY: event.clientY - rect.top,
+    };
+  }, [configRef]);
+
+  const hidePaintPreview = useCallback(() => {
+    if (!paintPreviewRef.current) return;
+    removeGroupChild(sceneRef.current, paintPreviewRef.current);
+    paintPreviewRef.current = null;
+    invalidateRenderRef.current({ followupFrames: 1 });
+  }, []);
+
+  const updatePaintPreview = useCallback((point) => {
+    const scene = sceneRef.current;
+    const liveConfig = configRef.current || latestRef.current.config;
+    const latest = latestRef.current;
+    if (!scene || !liveConfig || !point || latest.mode === 'play' || !latest.paintMode) {
+      hidePaintPreview();
+      return;
+    }
+    const color = getHexColor(latest.paintBrushColor, TERRAIN_PAINT_DEFAULT_COLOR);
+    const radius = getTerrainPaintRadius({ radius: latest.paintBrushRadius });
+    const shape = getTerrainPaintShape({ shape: latest.paintBrushShape });
+    const radiusWorld = radius * WORLD_SCALE;
+    const current = paintPreviewRef.current;
+    const shouldRebuild = !current
+      || Math.abs((current.userData.previewRadius || 0) - radiusWorld) > 0.001
+      || current.userData.previewColor !== color
+      || current.userData.previewShape !== shape;
+    if (shouldRebuild) {
+      if (current) removeGroupChild(scene, current);
+      paintPreviewRef.current = createTerrainPaintPreview(radius, color, shape);
+      scene.add(paintPreviewRef.current);
+    }
+    paintPreviewRef.current.position.copy(toScenePosition(liveConfig, point.x, point.y, 0.092));
+    paintPreviewRef.current.visible = true;
+    invalidateRenderRef.current({ followupFrames: 1 });
+  }, [configRef, hidePaintPreview]);
+
+  const hideModelEraserPreview = useCallback(() => {
+    if (!modelEraserPreviewRef.current) return;
+    removeGroupChild(sceneRef.current, modelEraserPreviewRef.current);
+    modelEraserPreviewRef.current = null;
+    invalidateRenderRef.current({ followupFrames: 1 });
+  }, []);
+
+  const updateModelEraserPreview = useCallback((hit) => {
+    const scene = sceneRef.current;
+    const latest = latestRef.current;
+    const sceneX = Number(hit?.sceneX);
+    const sceneY = Number(hit?.sceneY);
+    const sceneZ = Number(hit?.sceneZ);
+    if (
+      !scene
+      || !Number.isFinite(sceneX)
+      || !Number.isFinite(sceneY)
+      || !Number.isFinite(sceneZ)
+      || latest.mode === 'play'
+      || !latest.modelEraserMode
+    ) {
+      hideModelEraserPreview();
+      return;
+    }
+    const color = MODEL_ERASER_PREVIEW_COLOR;
+    const radius = getModelEraserRadius({ modelEraserRadius: latest.modelEraserRadius });
+    const radiusWorld = radius * WORLD_SCALE;
+    const current = modelEraserPreviewRef.current;
+    const shouldRebuild = !current
+      || Math.abs((current.userData.previewRadius || 0) - radiusWorld) > 0.001
+      || current.userData.previewColor !== color;
+    if (shouldRebuild) {
+      if (current) removeGroupChild(scene, current);
+      modelEraserPreviewRef.current = createModelEraserSurfacePreview(radiusWorld, color);
+      scene.add(modelEraserPreviewRef.current);
+    }
+    modelEraserPreviewRef.current.position.set(sceneX, sceneY, sceneZ);
+    modelEraserPreviewRef.current.visible = true;
+    invalidateRenderRef.current({ followupFrames: 1 });
+  }, [hideModelEraserPreview]);
+
   const getEntitiesInMarquee = useCallback((rect) => {
     const renderer = rendererRef.current;
     const camera = cameraRef.current;
@@ -1713,12 +520,6 @@ function ArcadeThreeViewport({
       if (bounds && screenRectsIntersect(bounds, rect)) selectedEntities.push(entity);
     };
 
-    if (liveConfig.player) {
-      addIfInside(
-        { type: 'spawn', id: 'player' },
-        createWorldBoxPoints(liveConfig.player.x, liveConfig.player.y, PLAYER_RADIUS * 2, PLAYER_RADIUS * 2),
-      );
-    }
     (liveConfig.heroes || []).forEach((hero) => {
       addIfInside({ type: 'hero', id: hero.id }, createWorldBoxPoints(hero.x, hero.y, PLAYER_RADIUS * 2, PLAYER_RADIUS * 2));
     });
@@ -1759,12 +560,21 @@ function ArcadeThreeViewport({
     if (!camera || !controls || !liveConfig || !isCameraTargetEntity(entity)) return false;
     const targetPoint = getCameraTargetPoint(liveConfig, entity, getEngine(liveConfig));
     if (!targetPoint) return false;
+    const engine = getEngine(liveConfig);
     const nextTarget = toScenePosition(liveConfig, targetPoint.x, targetPoint.y, targetPoint.height ?? 0.65);
     const viewOffset = camera.position.clone().sub(controls.target);
+    const desiredDistance = getCameraDistance(engine);
+    if (viewOffset.lengthSq() < 0.0001) {
+      const height = getCameraHeightForDistance(engine, desiredDistance);
+      viewOffset.set(-desiredDistance * 0.65, height, desiredDistance * 0.78);
+    } else if (viewOffset.length() < desiredDistance) {
+      viewOffset.normalize().multiplyScalar(desiredDistance);
+    }
     controls.target.copy(nextTarget);
     camera.position.copy(nextTarget).add(viewOffset);
     controls.update();
     cameraReadyRef.current = true;
+    invalidateRenderRef.current({ followupFrames: 8 });
     return true;
   }, [configRef]);
 
@@ -1850,6 +660,7 @@ function ArcadeThreeViewport({
       };
     }
     applyDragPreview(placementPreviewRef.current, point);
+    invalidateRenderRef.current({ followupFrames: 1 });
   }, [applyDragPreview, configRef, createDragPreviewTargets, resetDragPreview]);
 
   useEffect(() => {
@@ -1874,7 +685,7 @@ function ArcadeThreeViewport({
     renderer.toneMappingExposure = 1.08;
     renderer.setClearColor('#081521', 1);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.15));
-    renderer.shadowMap.enabled = false;
+    renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.domElement.className = 'arcade-three-canvas';
     const handleContextLost = (event) => {
@@ -1902,59 +713,167 @@ function ArcadeThreeViewport({
     cameraRef.current = camera;
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.08;
-    controls.maxPolarAngle = Math.PI * 0.47;
-    controls.minDistance = 5;
-    controls.maxDistance = 90;
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.08;
+      controls.maxPolarAngle = Math.PI * 0.47;
+      controls.minDistance = 2.6;
+      controls.maxDistance = 90;
     controls.screenSpacePanning = false;
     controlsRef.current = controls;
+    const canUseOrbitControls = () => {
+      const latest = latestRef.current;
+      return latest.mode !== 'play'
+        && !latest.dragEnabled
+        && !latest.multiSelectMode
+        && !latest.cameraTargetPickMode
+        && !latest.cameraZoomDragMode
+        && !latest.placementEntity
+        && !latest.paintMode
+        && !latest.modelEraserMode
+        && !dragRef.current
+        && !paintRef.current
+        && !modelEraserRef.current
+        && !marqueeRef.current
+        && !transformPointerActiveRef.current
+        && !transformSessionRef.current
+        && !transformControlsRef.current?.dragging;
+    };
+    const canUseRightButtonPanControls = () => true;
     const detachCameraControls = attachClickTargetCameraControls({
       camera,
       controls,
       domElement: renderer.domElement,
       scene,
       groundY: 0,
-      enabled: () => latestRef.current.mode !== 'play' && !latestRef.current.cameraTargetPickMode && !latestRef.current.placementEntity && !dragRef.current && !marqueeRef.current,
+      enabled: canUseRightButtonPanControls,
+      onPanStart: () => {
+        playCameraPanStartOffsetRef.current.copy(playCameraPanOffsetRef.current);
+      },
+      onPanMove: (offset) => {
+        if (latestRef.current.mode !== 'play') return;
+        playCameraPanOffsetRef.current.copy(playCameraPanStartOffsetRef.current).add(offset);
+      },
     });
 
     const staticGroup = new THREE.Group();
+    const terrainPaintGroup = new THREE.Group();
     const selectionGroup = new THREE.Group();
     const dynamicGroup = new THREE.Group();
     staticGroupRef.current = staticGroup;
+    terrainPaintGroupRef.current = terrainPaintGroup;
     selectionGroupRef.current = selectionGroup;
     dynamicGroupRef.current = dynamicGroup;
     scene.add(staticGroup);
+    scene.add(terrainPaintGroup);
     scene.add(selectionGroup);
     scene.add(dynamicGroup);
 
-    const hemi = new THREE.HemisphereLight('#d6f6ff', '#26170f', 1.14);
+    const hemi = new THREE.HemisphereLight('#fff7ea', '#211814', 1.02);
     scene.add(hemi);
-    const sun = new THREE.DirectionalLight('#fff1cf', 1.75);
+    const sun = new THREE.DirectionalLight('#fff6e6', 1.95);
     sun.position.set(-16, 32, 18);
     sun.castShadow = true;
-    sun.shadow.camera.near = 1;
-    sun.shadow.camera.far = 80;
-    sun.shadow.camera.left = -45;
-    sun.shadow.camera.right = 45;
-    sun.shadow.camera.top = 45;
-    sun.shadow.camera.bottom = -45;
+    sun.shadow.mapSize.set(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+    sun.shadow.camera.near = 0.8;
+    sun.shadow.camera.far = 120;
+    sun.shadow.camera.left = -SHADOW_CAMERA_MIN_EXTENT;
+    sun.shadow.camera.right = SHADOW_CAMERA_MIN_EXTENT;
+    sun.shadow.camera.top = SHADOW_CAMERA_MIN_EXTENT;
+    sun.shadow.camera.bottom = -SHADOW_CAMERA_MIN_EXTENT;
+    sun.shadow.bias = -0.00035;
+    sun.shadow.normalBias = 0.01;
     scene.add(sun);
-    const frontFill = new THREE.DirectionalLight('#d8e8ff', 0.95);
+    scene.add(sun.target);
+    const frontFill = new THREE.DirectionalLight('#f7f3ec', 0.55);
     frontFill.position.set(18, 14, 24);
     scene.add(frontFill);
-    const rim = new THREE.DirectionalLight('#7df3ff', 0.42);
+    const rim = new THREE.DirectionalLight('#ffe0bd', 0.16);
     rim.position.set(20, 18, -24);
     scene.add(rim);
-    scene.add(new THREE.AmbientLight('#78b7ff', 0.24));
+    const ambient = new THREE.AmbientLight('#fff3e0', 0.08);
+    scene.add(ambient);
     scene.userData.hemi = hemi;
     scene.userData.sun = sun;
     scene.userData.frontFill = frontFill;
     scene.userData.rim = rim;
+    scene.userData.ambient = ambient;
+
+    const transformProxy = new THREE.Object3D();
+    transformProxy.visible = false;
+    scene.add(transformProxy);
+    transformProxyRef.current = transformProxy;
+
+    const transformControls = new TransformControls(camera, renderer.domElement);
+    transformControls.enabled = false;
+    transformControls.setSpace('local');
+    transformControls.getHelper().visible = false;
+    transformControls.addEventListener('change', () => {
+      invalidateRenderRef.current({ followupFrames: 2 });
+    });
+    transformControls.addEventListener('mouseDown', () => {
+      const descriptor = transformDescriptorRef.current;
+      transformPointerActiveRef.current = true;
+      clickStartRef.current = null;
+      if (!descriptor || !transformProxyRef.current) return;
+      transformSessionRef.current = {
+        entity: descriptor.entity,
+        mode: latestRef.current.transformMode,
+        startRotation: transformProxyRef.current.rotation.clone(),
+        startScale: transformProxyRef.current.scale.clone(),
+        startProxyQuaternion: transformProxyRef.current.quaternion.clone(),
+        startProxyScale: transformProxyRef.current.scale.clone(),
+        previewRoots: getTransformPreviewRoots(findEntityRoots(descriptor.entity), descriptor),
+      };
+      if (controlsRef.current) controlsRef.current.enabled = false;
+    });
+    transformControls.addEventListener('objectChange', () => {
+      applyTransformPreview(transformSessionRef.current, transformProxyRef.current);
+      invalidateRenderRef.current({ followupFrames: 1 });
+    });
+    transformControls.addEventListener('mouseUp', () => {
+      const session = transformSessionRef.current;
+      const proxy = transformProxyRef.current;
+      if (session && proxy) {
+        const scaleRatio = (axis) => {
+          const start = Math.max(0.001, session.startScale[axis]);
+          const value = proxy.scale[axis] / start;
+          return Number.isFinite(value) ? value : 1;
+        };
+        latestRef.current.onSelectionTransformCommit?.({
+          entity: session.entity,
+          mode: session.mode,
+          rotationDelta: {
+            x: THREE.MathUtils.radToDeg(proxy.rotation.x - session.startRotation.x),
+            y: THREE.MathUtils.radToDeg(proxy.rotation.y - session.startRotation.y),
+            z: THREE.MathUtils.radToDeg(proxy.rotation.z - session.startRotation.z),
+          },
+          scaleDelta: {
+            x: scaleRatio('x'),
+            y: scaleRatio('y'),
+            z: scaleRatio('z'),
+          },
+        });
+      }
+      transformSessionRef.current = null;
+      window.setTimeout(() => {
+        transformPointerActiveRef.current = false;
+      }, 0);
+      invalidateRenderRef.current({ followupFrames: 2 });
+    });
+    transformControls.addEventListener('dragging-changed', (event) => {
+      if (controlsRef.current) {
+        controlsRef.current.enabled = !event.value && canUseOrbitControls();
+      }
+    });
+    scene.add(transformControls.getHelper());
+    transformControlsRef.current = transformControls;
 
     let frameId = 0;
+    let renderQueued = false;
+    let editFollowupFrames = 0;
     let lastResizeCheck = 0;
     let previousAnimationTime = 0;
+    let editAnimationTimer = 0;
     const resize = (timestamp = 0) => {
       if (timestamp && timestamp - lastResizeCheck < 250) return;
       lastResizeCheck = timestamp;
@@ -1968,21 +887,60 @@ function ArcadeThreeViewport({
       }
     };
 
+    const queueRender = ({ followupFrames = 0 } = {}) => {
+      editFollowupFrames = Math.max(editFollowupFrames, followupFrames);
+      if (editAnimationTimer) {
+        window.clearTimeout(editAnimationTimer);
+        editAnimationTimer = 0;
+      }
+      if (renderQueued) return;
+      renderQueued = true;
+      frameId = requestAnimationFrame(render);
+    };
+    invalidateRenderRef.current = queueRender;
+
+    const hasAnimationMixers = () => Boolean(
+      staticGroup.userData.animationMixers?.length
+      || dynamicGroup.userData.animationMixers?.length,
+    );
+
+    const queueEditAnimationRender = (timestamp = 0) => {
+      if (renderQueued || editAnimationTimer) return;
+      const elapsed = previousAnimationTime ? timestamp - previousAnimationTime : EDIT_MODEL_ANIMATION_FRAME_MS;
+      const delay = Math.max(0, EDIT_MODEL_ANIMATION_FRAME_MS - elapsed);
+      editAnimationTimer = window.setTimeout(() => {
+        editAnimationTimer = 0;
+        queueRender();
+      }, delay);
+    };
+
+    const handleControlsChange = () => {
+      if (latestRef.current.mode !== 'play') queueRender({ followupFrames: 10 });
+    };
+    controls.addEventListener('change', handleControlsChange);
+
     const render = (timestamp = 0) => {
+      renderQueued = false;
       const liveConfig = configRef.current || latestRef.current.config;
       const state = stateRef.current;
       const latest = latestRef.current;
+      const playMode = latest.mode === 'play';
       if (!liveConfig || !state) {
-        frameId = requestAnimationFrame(render);
+        if (playMode) queueRender();
         return;
       }
-      const animationDelta = previousAnimationTime ? Math.min(0.05, (timestamp - previousAnimationTime) / 1000) : 0;
+      const hasMixers = hasAnimationMixers();
+      const shouldAnimate = playMode || editFollowupFrames > 0 || hasMixers;
+      const maxAnimationDelta = playMode ? 0.05 : 0.15;
+      const animationDelta = shouldAnimate && previousAnimationTime
+        ? Math.min(maxAnimationDelta, (timestamp - previousAnimationTime) / 1000)
+        : 0;
       previousAnimationTime = timestamp;
       staticGroup.userData.animationMixers?.forEach((mixer) => mixer.update(animationDelta));
       dynamicGroup.userData.animationMixers?.forEach((mixer) => mixer.update(animationDelta));
       const engine = getEngine(liveConfig);
-      const playMode = latest.mode === 'play';
       const player = playMode ? state.player : liveConfig.player;
+      const getActorSupportHeight = createSupportSurfaceHeightResolver(liveConfig);
       const selectedPosition = !playMode ? findSelectedPosition(liveConfig, latest.selected) : null;
       const editFocus = { x: liveConfig.world.width * 0.5, y: liveConfig.world.height * 0.48 };
       const selectedEditFocus = selectedPosition ? {
@@ -1990,24 +948,32 @@ function ArcadeThreeViewport({
         y: clamp(selectedPosition.y, liveConfig.world.height * 0.22, liveConfig.world.height * 0.78),
       } : null;
       const focus = playMode ? player : (selectedEditFocus || editFocus);
-      const target = toScenePosition(liveConfig, focus.x, focus.y, 0.65);
+      const focusHeight = playMode
+        ? getActorSupportHeight(player) + getEntityLiftHeight(player) + 0.72
+        : 0.65;
+      const target = toScenePosition(liveConfig, focus.x, focus.y, focusHeight);
+      const playCameraTarget = playMode ? target.clone().add(playCameraPanOffsetRef.current) : target;
 
+      const nextPixelRatio = Math.min(window.devicePixelRatio || 1, playMode ? PLAY_RENDER_PIXEL_RATIO_MAX : EDIT_RENDER_PIXEL_RATIO_MAX);
+      if (renderer.getPixelRatio() !== nextPixelRatio) renderer.setPixelRatio(nextPixelRatio);
+      renderer.shadowMap.autoUpdate = !playMode;
+      if (!playMode) renderer.shadowMap.needsUpdate = true;
       resize(timestamp);
-      scene.userData.hemi.intensity = Number(engine.lightIntensity) || DEFAULT_ENGINE.lightIntensity;
-      scene.userData.sun.intensity = (Number(engine.lightIntensity) || DEFAULT_ENGINE.lightIntensity) * 1.35;
-      controls.enabled = !playMode && !latest.dragEnabled && !latest.multiSelectMode && !latest.cameraTargetPickMode && !latest.placementEntity && !dragRef.current && !marqueeRef.current;
+      updateSceneLighting(scene, engine);
+      controls.enabled = canUseOrbitControls();
 
       if (playMode) {
-        const distance = Number(engine.cameraDistance) || DEFAULT_ENGINE.cameraDistance;
-        const height = Number(engine.cameraHeight) || DEFAULT_ENGINE.cameraHeight;
+        const distance = getCameraDistance(engine);
+        const height = getCameraHeightForDistance(engine, distance);
         const offset = new THREE.Vector3(-distance * 0.48, height, distance * 0.72);
-        camera.position.lerp(target.clone().add(offset), 0.12);
-        camera.lookAt(target);
+        controls.target.copy(playCameraTarget);
+        camera.position.lerp(playCameraTarget.clone().add(offset), 0.12);
+        camera.lookAt(playCameraTarget);
         lastEditCameraDistanceRef.current = null;
       } else {
-        const distance = Number(engine.cameraDistance) || DEFAULT_ENGINE.cameraDistance;
+        const distance = getCameraDistance(engine);
         if (!cameraReadyRef.current) {
-          const height = Number(engine.cameraHeight) || DEFAULT_ENGINE.cameraHeight;
+          const height = getCameraHeightForDistance(engine, distance);
           camera.position.copy(target.clone().add(new THREE.Vector3(-distance * 0.65, height, distance * 0.78)));
           controls.target.copy(target);
           cameraReadyRef.current = true;
@@ -2031,14 +997,14 @@ function ArcadeThreeViewport({
           .sort()
           .join(','),
       ].join('|');
-      const dynamicHeroes = liveConfig.heroes || [];
+      const controlledHeroId = playMode ? state.player?.controlledHeroId : '';
+      const dynamicHeroes = (liveConfig.heroes || []).filter((hero) => hero.id !== controlledHeroId);
       const dynamicEnemies = playMode ? state.enemies : liveConfig.enemies;
       const dynamicPickups = playMode ? state.pickups : liveConfig.pickups;
-      const getActorSupportHeight = (actor) => getSupportSurfaceHeightAtPoint(liveConfig, actor);
       if (playMode) {
         updateDynamicTransforms(dynamicGroup, liveConfig, state, {
           playMode,
-          aimPoint: aimPointRef.current,
+          getSupportHeight: getActorSupportHeight,
         });
       }
       const heroVisualSignature = dynamicHeroes.map((hero) => [
@@ -2051,8 +1017,6 @@ function ArcadeThreeViewport({
         playMode ? '' : `${Math.round(enemy.x)}:${Math.round(enemy.y)}`,
         getActorVisualSignature(enemy),
       ].join(':')).join(';');
-      const bulletVisualSignature = (state.bullets || []).map((bullet) => `${bullet.id}:${bullet.color}`).join(';');
-      const particleFrameSignature = `${state.particles.length}:${Math.floor((state.time || 0) * 10)}`;
       const pickupVisualSignature = dynamicPickups.map((pickup) => [
         pickup.id,
         pickup.type,
@@ -2062,17 +1026,13 @@ function ArcadeThreeViewport({
       const forceSignature = [
         latest.mode,
         dynamicSelectedKey,
-        getActorVisualSignature(liveConfig.player),
-        playMode && state.player?.dash > 0 ? 'dash' : 'walk',
+        controlledHeroId,
+        playMode ? getActorVisualSignature(state.player) : '',
         heroVisualSignature,
         enemyVisualSignature,
         pickupVisualSignature,
-        bulletVisualSignature,
       ].join('|');
-      const dynamicSignature = [
-        forceSignature,
-        particleFrameSignature,
-      ].join('|');
+      const dynamicSignature = forceSignature;
       const minInterval = playMode ? 90 : 1000;
       const shouldRefreshDynamic = dynamicFrameRef.current.forceSignature !== forceSignature
         || (
@@ -2083,8 +1043,9 @@ function ArcadeThreeViewport({
       if (shouldRefreshDynamic) {
         dynamicFrameRef.current = { signature: dynamicSignature, forceSignature, lastTime: now };
         const getTexture = createCachedTextureGetter(textureCacheRef.current);
-        const getModel = createCachedModelGetter(modelCacheRef.current, modelPendingRef.current, () => {
+        const getModel = createCachedModelGetter(modelCacheRef.current, modelPendingRef.current, modelFailedRef.current, () => {
           dynamicFrameRef.current.forceSignature = '';
+          queueRender({ followupFrames: 2 });
         });
         clearGroup(dynamicGroup);
 
@@ -2109,6 +1070,7 @@ function ArcadeThreeViewport({
             getTexture,
             getModel,
             useStoredRotation: true,
+            editMode: !playMode,
             supportHeight: getActorSupportHeight(hero),
           });
         });
@@ -2131,45 +1093,62 @@ function ArcadeThreeViewport({
             getTexture,
             getModel,
             useStoredRotation: !playMode,
+            editMode: !playMode,
             supportHeight: getActorSupportHeight(enemy),
           });
         });
 
         if (playMode) {
-          const pointerTarget = aimPointRef.current || state.player?.moveTarget || {
-            x: liveConfig.player.x + 1,
-            y: liveConfig.player.y,
-          };
-          addActor(dynamicGroup, liveConfig, player, {
-            type: 'spawn',
-            id: 'player',
+          const playerVisualActor = { ...liveConfig.player, ...player };
+          const playerEntityType = controlledHeroId ? 'hero' : 'player';
+          const playerEntityId = controlledHeroId || 'player';
+          addActor(dynamicGroup, liveConfig, playerVisualActor, {
+            type: playerEntityType,
+            id: playerEntityId,
             radius: PLAYER_RADIUS,
-            preset: getCharacterPreset(liveConfig.player.character || 'runner', 'runner'),
-            selected: false,
+            preset: getCharacterPreset(getHeroCharacterId(playerVisualActor), 'runner'),
+            selected: isSelectionActive(playerEntityType, playerEntityId, latest.selected, latest.multiSelected),
             active: player.dash > 0,
-            imageData: liveConfig.player.characterImageData,
-            renderMode: getCharacterRenderMode(liveConfig.player),
-            modelScale: getCharacterModelScale(liveConfig.player),
+            imageData: playerVisualActor.characterImageData,
+            renderMode: getCharacterRenderMode(playerVisualActor),
+            modelScale: getCharacterModelScale(playerVisualActor),
             animationTime: state.time || timestamp * 0.001,
-            aimTarget: pointerTarget,
+            aimTarget: getActorMovementFacingTarget(playerVisualActor),
             getTexture,
             getModel,
-            supportHeight: getActorSupportHeight(player),
+            editMode: false,
+            supportHeight: getActorSupportHeight(playerVisualActor),
           });
         }
       }
 
       renderer.render(scene, camera);
-      frameId = requestAnimationFrame(render);
+      if (playMode) {
+        queueRender();
+      } else {
+        if (editFollowupFrames > 0) editFollowupFrames -= 1;
+        if (editFollowupFrames > 0) {
+          queueRender();
+        } else if (hasMixers) {
+          queueEditAnimationRender(timestamp);
+        }
+      }
     };
 
-    render();
+    queueRender({ followupFrames: 2 });
 
     return () => {
+      heldMoveRef.current = null;
+      clickStartRef.current = null;
+      latestRef.current.onShootChange?.(false);
       cancelAnimationFrame(frameId);
+      if (editAnimationTimer) window.clearTimeout(editAnimationTimer);
+      invalidateRenderRef.current = () => {};
+      controls.removeEventListener('change', handleControlsChange);
       detachCameraControls();
       controls.dispose();
       clearGroup(staticGroup);
+      clearGroup(terrainPaintGroup);
       clearGroup(selectionGroup);
       clearGroup(dynamicGroup);
       textureCacheRef.current.forEach((texture) => texture.dispose());
@@ -2177,6 +1156,22 @@ function ArcadeThreeViewport({
       modelCacheRef.current.forEach((object) => disposeObject(object));
       modelCacheRef.current.clear();
       modelPendingRef.current.clear();
+      modelFailedRef.current.clear();
+      transformControls.detach();
+      scene.remove(transformControls.getHelper());
+      transformControls.dispose();
+      transformControlsRef.current = null;
+      if (transformGuideRef.current) {
+        transformProxy.remove(transformGuideRef.current);
+        disposeObject(transformGuideRef.current);
+        transformGuideRef.current = null;
+      }
+      if (paintPreviewRef.current) {
+        removeGroupChild(scene, paintPreviewRef.current);
+        paintPreviewRef.current = null;
+      }
+      scene.remove(transformProxy);
+      transformProxyRef.current = null;
       scene.environment = null;
       environmentMap.dispose();
       pmremGenerator.dispose();
@@ -2191,10 +1186,50 @@ function ArcadeThreeViewport({
       cameraRef.current = null;
       controlsRef.current = null;
       staticGroupRef.current = null;
+      terrainPaintGroupRef.current = null;
       selectionGroupRef.current = null;
       dynamicGroupRef.current = null;
     };
   }, [configRef, stateRef]);
+
+  useEffect(() => {
+    playCameraPanOffsetRef.current.set(0, 0, 0);
+    playCameraPanStartOffsetRef.current.set(0, 0, 0);
+    if (mode === 'play') return;
+    heldMoveRef.current = null;
+    clickStartRef.current = null;
+    latestRef.current.onShootChange?.(false);
+  }, [mode]);
+
+  useEffect(() => {
+    if (mode === 'edit' && paintMode) return;
+    if (paintRef.current) latestRef.current.onWorldPaintEnd?.();
+    paintRef.current = null;
+    hidePaintPreview();
+  }, [hidePaintPreview, mode, paintMode]);
+
+  useEffect(() => {
+    if (mode === 'edit' && modelEraserMode) return;
+    if (modelEraserRef.current) latestRef.current.onModelEraseEnd?.();
+    modelEraserRef.current = null;
+    hideModelEraserPreview();
+  }, [hideModelEraserPreview, mode, modelEraserMode]);
+
+  useEffect(() => {
+    if (mode !== 'edit' || !paintMode) {
+      hidePaintPreview();
+      return;
+    }
+    if (aimPointRef.current) updatePaintPreview(aimPointRef.current);
+  }, [hidePaintPreview, mode, paintBrushColor, paintBrushRadius, paintBrushShape, paintMode, updatePaintPreview]);
+
+  useEffect(() => {
+    if (mode !== 'edit' || !modelEraserMode) {
+      hideModelEraserPreview();
+      return;
+    }
+    hideModelEraserPreview();
+  }, [hideModelEraserPreview, mode, modelEraserMode, modelEraserRadius]);
 
   useEffect(() => {
     const liveConfig = configRef.current || config;
@@ -2202,16 +1237,25 @@ function ArcadeThreeViewport({
     const staticGroup = staticGroupRef.current;
     if (!scene || !staticGroup || !liveConfig) return;
     const engine = getEngine(liveConfig);
+    configureSunShadowCamera(scene.userData.sun, liveConfig);
     const getTexture = createCachedTextureGetter(textureCacheRef.current);
-    const getModel = createCachedModelGetter(modelCacheRef.current, modelPendingRef.current, () => {
+    const getModel = createCachedModelGetter(modelCacheRef.current, modelPendingRef.current, modelFailedRef.current, () => {
       setStaticAssetVersion((version) => version + 1);
+      invalidateRenderRef.current({ followupFrames: 2 });
     });
     clearGroup(staticGroup);
 
     const floorTexture = createFloorTexture();
+    const floorVisualPadding = Math.max(
+      FLOOR_VISUAL_PADDING_WORLD,
+      (Number(liveConfig.world?.width) || 0) * 0.75,
+      (Number(liveConfig.world?.height) || 0) * 0.75,
+    );
+    const floorVisualWidth = Math.max(1, (Number(liveConfig.world?.width) || 1) + floorVisualPadding * 2);
+    const floorVisualHeight = Math.max(1, (Number(liveConfig.world?.height) || 1) + floorVisualPadding * 2);
     floorTexture.repeat.set(
-      Math.max(1, liveConfig.world.width / Math.max(240, liveConfig.world.grid * 2)),
-      Math.max(1, liveConfig.world.height / Math.max(240, liveConfig.world.grid * 2)),
+      Math.max(1, floorVisualWidth / Math.max(240, liveConfig.world.grid * 2)),
+      Math.max(1, floorVisualHeight / Math.max(240, liveConfig.world.grid * 2)),
     );
     const floorMaterial = new THREE.MeshStandardMaterial({
       map: floorTexture,
@@ -2222,7 +1266,7 @@ function ArcadeThreeViewport({
     });
     floorMaterial.userData.disposeTextures = true;
     const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(liveConfig.world.width * WORLD_SCALE, liveConfig.world.height * WORLD_SCALE),
+      new THREE.PlaneGeometry(floorVisualWidth * WORLD_SCALE, floorVisualHeight * WORLD_SCALE),
       floorMaterial,
     );
     floor.rotation.x = -Math.PI / 2;
@@ -2240,6 +1284,8 @@ function ArcadeThreeViewport({
     );
     grid.material.transparent = true;
     grid.material.opacity = 0.42;
+    grid.material.depthWrite = false;
+    grid.material.depthFunc = THREE.LessDepth;
     grid.position.y = 0.018;
     staticGroup.add(grid);
 
@@ -2255,11 +1301,15 @@ function ArcadeThreeViewport({
       addActionZone(staticGroup, liveConfig, zone, { playMode: mode === 'play' });
     });
 
-    liveConfig.props.forEach((prop) => {
+    const renderedProps = liveConfig.props.map((prop) => {
       const studioTexture = prop.decorModel3dId && !prop.imageData
         ? studioDecorTextureById.get(prop.decorModel3dId)
         : null;
-      const renderedProp = studioTexture ? { ...prop, ...studioTexture } : prop;
+      return studioTexture ? { ...prop, ...studioTexture } : prop;
+    });
+    const continuousFloorUvMap = buildContinuousFloorUvMap(renderedProps);
+
+    renderedProps.forEach((renderedProp) => {
       addProp(
         staticGroup,
         liveConfig,
@@ -2268,11 +1318,30 @@ function ArcadeThreeViewport({
         false,
         getTexture,
         getModel,
+        { floorUv: continuousFloorUvMap.get(renderedProp.id) || null },
       );
     });
     dynamicFrameRef.current.signature = '';
     dynamicFrameRef.current.forceSignature = '';
+    invalidateRenderRef.current({ followupFrames: 2 });
   }, [configRef, mode, staticAssetVersion, staticSceneSignature, studioDecorTextureById]);
+
+  useEffect(() => {
+    const liveConfig = configRef.current || config;
+    const terrainPaintGroup = terrainPaintGroupRef.current;
+    if (!terrainPaintGroup || !liveConfig) return;
+    clearGroup(terrainPaintGroup);
+    addTerrainPaintLayer(terrainPaintGroup, liveConfig);
+    invalidateRenderRef.current({ followupFrames: 2 });
+  }, [configRef, terrainPaintLayerSignature]);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    const liveConfig = configRef.current || config;
+    if (!scene || !liveConfig) return;
+    updateSceneLighting(scene, getEngine(liveConfig));
+    invalidateRenderRef.current({ followupFrames: 2 });
+  }, [configRef, config.engine?.lightIntensity, config.engine?.lightOrientation]);
 
   useEffect(() => {
     const liveConfig = configRef.current || config;
@@ -2280,18 +1349,138 @@ function ArcadeThreeViewport({
     if (!selectionGroup || !liveConfig) return;
     clearGroup(selectionGroup);
     addStaticSelectionOverlays(selectionGroup, liveConfig, selected, multiSelected);
+    invalidateRenderRef.current({ followupFrames: 2 });
   }, [configRef, selectionOverlaySignature]);
+
+  useEffect(() => {
+    const liveConfig = configRef.current || config;
+    const proxy = transformProxyRef.current;
+    const controls = transformControlsRef.current;
+    if (!proxy || !controls || !liveConfig) return;
+    const clearTransformGizmo = () => {
+      transformDescriptorRef.current = null;
+      if (transformGuideRef.current) {
+        proxy.remove(transformGuideRef.current);
+        disposeObject(transformGuideRef.current);
+        transformGuideRef.current = null;
+      }
+      controls.detach();
+      controls.enabled = false;
+      controls.getHelper().visible = false;
+      controls.axis = null;
+      proxy.visible = false;
+    };
+
+    const transformToolActive = mode === 'edit' && (transformMode === 'rotate' || transformMode === 'scale');
+    if (!transformToolActive) {
+      resetTransformPreview(transformSessionRef.current);
+      transformSessionRef.current = null;
+      transformPointerActiveRef.current = false;
+      clearTransformGizmo();
+      invalidateRenderRef.current({ followupFrames: 1 });
+      return;
+    }
+
+    if (transformSessionRef.current) return;
+
+    const descriptor = getTransformDescriptor(liveConfig, selected, multiSelected, transformMode);
+    transformDescriptorRef.current = descriptor;
+
+    if (transformGuideRef.current) {
+      proxy.remove(transformGuideRef.current);
+      disposeObject(transformGuideRef.current);
+      transformGuideRef.current = null;
+    }
+
+    if (!descriptor) {
+      clearTransformGizmo();
+      invalidateRenderRef.current({ followupFrames: 1 });
+      return;
+    }
+
+    proxy.visible = true;
+    proxy.position.copy(descriptor.center);
+    proxy.rotation.copy(descriptor.rotation);
+    proxy.scale.set(1, 1, 1);
+    const guide = createTransformGuide(descriptor, transformMode);
+    proxy.add(guide);
+    transformGuideRef.current = guide;
+    controls.attach(proxy);
+    controls.setMode(transformMode === 'scale' ? 'scale' : 'rotate');
+    controls.setSpace('local');
+    controls.size = descriptor.controlSize;
+    controls.enabled = true;
+    controls.getHelper().visible = true;
+    invalidateRenderRef.current({ followupFrames: 2 });
+  }, [
+    configRef,
+    config.world,
+    config.engine?.wallHeight,
+    config.engine?.reliefScale,
+    config.engine?.propHeight,
+    config.obstacles,
+    config.reliefs,
+    config.actionZones,
+    config.props,
+    config.player,
+    config.heroes,
+    config.enemies,
+    mode,
+    multiSelected,
+    selected,
+    transformMode,
+  ]);
 
   useEffect(() => {
     const activeKey = getEntityKey(placementEntity);
     if (activeKey && placementPreviewRef.current?.key === activeKey) return;
     resetDragPreview(placementPreviewRef.current);
     placementPreviewRef.current = null;
+    invalidateRenderRef.current({ followupFrames: 1 });
   }, [placementEntity, resetDragPreview]);
 
+  useEffect(() => {
+    if (!placementEntity || mode === 'play') return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      setCameraTargetFromEntity(placementEntity);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [mode, placementEntity, setCameraTargetFromEntity]);
+
+  useEffect(() => {
+    invalidateRenderRef.current({ followupFrames: mode === 'play' ? 0 : 2 });
+  }, [mode, dragEnabled, multiSelectMode, cameraTargetPickMode, cameraZoomDragMode, transformMode]);
+
+  const isTransformInteractionActive = useCallback(() => Boolean(
+    transformPointerActiveRef.current
+    || transformControlsRef.current?.dragging
+    || transformControlsRef.current?.axis,
+  ), []);
+
   const handlePointerMove = useCallback((event) => {
+    if (transformControlsRef.current?.dragging) {
+      event.preventDefault();
+      invalidateRenderRef.current({ followupFrames: 1 });
+      return;
+    }
+    const cameraZoomDrag = cameraZoomDragRef.current;
+    if (cameraZoomDrag && cameraZoomDrag.pointerId === event.pointerId) {
+      event.preventDefault();
+      const deltaY = event.clientY - cameraZoomDrag.lastY;
+      cameraZoomDrag.lastY = event.clientY;
+      latestRef.current.onCameraZoomDrag?.(deltaY);
+      invalidateRenderRef.current({ followupFrames: 4 });
+      return;
+    }
+    const eraserMode = latestRef.current.modelEraserMode && latestRef.current.mode !== 'play';
     const resolved = resolvePointer(event);
-    const screenPoint = resolved || getScreenPoint(event);
+    const modelHit = eraserMode ? resolveSelectedModelHit(event) : null;
+    const screenPoint = resolved || modelHit || getScreenPoint(event);
+    if (!resolved && latestRef.current.paintMode) hidePaintPreview();
+    if (eraserMode) {
+      if (modelHit) updateModelEraserPreview(modelHit);
+      else hideModelEraserPreview();
+    }
     if (!resolved && !screenPoint) return;
     if (resolved) {
       aimPointRef.current = resolved.point;
@@ -2304,6 +1493,32 @@ function ArcadeThreeViewport({
       if (latestRef.current.placementEntity && latestRef.current.mode !== 'play') {
         applyPlacementPreview(latestRef.current.placementEntity, resolved.point);
       }
+      if (latestRef.current.paintMode && latestRef.current.mode !== 'play') {
+        updatePaintPreview(resolved.point);
+      }
+    }
+    if (modelEraserRef.current) {
+      event.preventDefault();
+      if (modelHit) latestRef.current.onModelEraseMove?.(modelHit);
+      invalidateRenderRef.current({ followupFrames: 1 });
+      return;
+    }
+    if (paintRef.current && resolved) {
+      event.preventDefault();
+      latestRef.current.onWorldPaintMove?.(resolved.point);
+      invalidateRenderRef.current({ followupFrames: 1 });
+      return;
+    }
+    const heldMove = heldMoveRef.current;
+    if (
+      resolved
+      && latestRef.current.mode === 'play'
+      && heldMove
+      && heldMove.pointerId === event.pointerId
+    ) {
+      event.preventDefault();
+      latestRef.current.onWorldClick?.(resolved.point, resolved.entity, 0);
+      return;
     }
     if (marqueeRef.current && screenPoint) {
       event.preventDefault();
@@ -2315,18 +1530,27 @@ function ArcadeThreeViewport({
     if (dragRef.current) {
       event.preventDefault();
       const drag = dragRef.current;
-      const point = {
+      const rawPoint = {
         x: resolved.point.x - drag.offsetX,
         y: resolved.point.y - drag.offsetY,
       };
+      const point = latestRef.current.resolveWorldDragPoint?.(drag.entity, rawPoint) || rawPoint;
       applyDragPreview(drag, point);
       latestRef.current.onWorldDrag?.(drag.entity, point);
+      invalidateRenderRef.current({ followupFrames: 1 });
     }
-  }, [applyDragPreview, applyPlacementPreview, getScreenPoint, resolvePointer]);
+  }, [applyDragPreview, applyPlacementPreview, getScreenPoint, hideModelEraserPreview, hidePaintPreview, resolvePointer, resolveSelectedModelHit, updateModelEraserPreview, updatePaintPreview]);
 
   const handlePointerDown = useCallback((event) => {
+    if (event.button === 0 && isTransformInteractionActive()) {
+      event.preventDefault();
+      clickStartRef.current = null;
+      return;
+    }
+    const eraserMode = event.button === 0 && latestRef.current.modelEraserMode && latestRef.current.mode === 'edit';
     const resolved = resolvePointer(event, { pickEntity: true });
-    const screenPoint = resolved || getScreenPoint(event);
+    const modelHit = eraserMode ? resolveSelectedModelHit(event) : null;
+    const screenPoint = resolved || modelHit || getScreenPoint(event);
     if (resolved) {
       aimPointRef.current = resolved.point;
       latestRef.current.onWorldPointer?.({
@@ -2346,16 +1570,58 @@ function ArcadeThreeViewport({
     }
     if (event.button === 2) {
       event.preventDefault();
-      latestRef.current.onShootChange?.(true);
+      latestRef.current.onShootChange?.(false);
+      return;
+    }
+    if (event.button === 0 && latestRef.current.cameraZoomDragMode && latestRef.current.mode === 'edit') {
+      event.preventDefault();
+      window.getSelection?.()?.removeAllRanges?.();
+      clickStartRef.current = null;
+      cameraZoomDragRef.current = {
+        pointerId: event.pointerId,
+        startY: event.clientY,
+        lastY: event.clientY,
+      };
+      if (controlsRef.current) controlsRef.current.enabled = false;
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      return;
+    }
+    if (eraserMode) {
+      event.preventDefault();
+      clickStartRef.current = null;
+      if (!modelHit) {
+        hideModelEraserPreview();
+        return;
+      }
+      modelEraserRef.current = { pointerId: event.pointerId };
+      if (controlsRef.current) controlsRef.current.enabled = false;
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      updateModelEraserPreview(modelHit);
+      latestRef.current.onModelEraseStart?.(modelHit);
       return;
     }
     if (event.button !== 0 || !resolved) return;
     if (latestRef.current.mode === 'play') {
+      event.preventDefault();
+      window.getSelection?.()?.removeAllRanges?.();
+      clickStartRef.current = null;
+      heldMoveRef.current = { pointerId: event.pointerId };
+      event.currentTarget.setPointerCapture?.(event.pointerId);
       latestRef.current.onWorldClick?.(resolved.point, resolved.entity, event.button);
       return;
     }
     if (latestRef.current.placementEntity) {
       event.preventDefault();
+      return;
+    }
+    if (latestRef.current.paintMode && latestRef.current.mode === 'edit') {
+      event.preventDefault();
+      clickStartRef.current = null;
+      paintRef.current = { pointerId: event.pointerId };
+      if (controlsRef.current) controlsRef.current.enabled = false;
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      updatePaintPreview(resolved.point);
+      latestRef.current.onWorldPaintStart?.(resolved.point);
       return;
     }
     if (latestRef.current.cameraTargetPickMode) {
@@ -2398,9 +1664,47 @@ function ArcadeThreeViewport({
       if (controlsRef.current) controlsRef.current.enabled = false;
       event.currentTarget.setPointerCapture?.(event.pointerId);
     }
-  }, [configRef, createDragPreviewTargets, getScreenPoint, resolvePointer]);
+  }, [configRef, createDragPreviewTargets, getScreenPoint, hideModelEraserPreview, isTransformInteractionActive, resolvePointer, resolveSelectedModelHit, updateModelEraserPreview, updatePaintPreview]);
 
   const handlePointerUp = useCallback((event) => {
+    const cameraZoomDrag = cameraZoomDragRef.current;
+    if (event.button === 0 && cameraZoomDrag && cameraZoomDrag.pointerId === event.pointerId) {
+      event.preventDefault();
+      clickStartRef.current = null;
+      cameraZoomDragRef.current = null;
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+      invalidateRenderRef.current({ followupFrames: 3 });
+      return;
+    }
+    const heldMove = heldMoveRef.current;
+    if (event.button === 0 && heldMove && heldMove.pointerId === event.pointerId) {
+      event.preventDefault();
+      clickStartRef.current = null;
+      heldMoveRef.current = null;
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+      return;
+    }
+    if (event.button === 0 && isTransformInteractionActive()) {
+      event.preventDefault();
+      clickStartRef.current = null;
+      return;
+    }
+    if (event.button === 0 && modelEraserRef.current?.pointerId === event.pointerId) {
+      event.preventDefault();
+      clickStartRef.current = null;
+      modelEraserRef.current = null;
+      latestRef.current.onModelEraseEnd?.();
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+      return;
+    }
+    if (event.button === 0 && paintRef.current?.pointerId === event.pointerId) {
+      event.preventDefault();
+      clickStartRef.current = null;
+      paintRef.current = null;
+      latestRef.current.onWorldPaintEnd?.();
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+      return;
+    }
     if (event.button === 0 && clickStartRef.current?.cameraTargetPick) {
       const start = clickStartRef.current;
       clickStartRef.current = null;
@@ -2419,10 +1723,11 @@ function ArcadeThreeViewport({
       const resolved = resolvePointer(event);
       dragRef.current = null;
       if (resolved) {
-        const point = {
+        const rawPoint = {
           x: resolved.point.x - drag.offsetX,
           y: resolved.point.y - drag.offsetY,
         };
+        const point = latestRef.current.resolveWorldDragPoint?.(drag.entity, rawPoint) || rawPoint;
         latestRef.current.onWorldDrop?.(drag.entity, point);
       } else {
         resetDragPreview(drag);
@@ -2456,13 +1761,13 @@ function ArcadeThreeViewport({
     if (event.button === 0) {
       const start = clickStartRef.current;
       clickStartRef.current = null;
-      if (start && latestRef.current.mode !== 'play') {
+      if (start) {
         const movement = Math.hypot(event.clientX - start.x, event.clientY - start.y);
         if (movement < 6) latestRef.current.onWorldClick?.(start.point, start.entity, event.button);
       }
     }
     if (event.button === 2) latestRef.current.onShootChange?.(false);
-  }, [getEntitiesInMarquee, getScreenPoint, resetDragPreview, resolvePointer, setCameraTargetFromEntity]);
+  }, [getEntitiesInMarquee, getScreenPoint, isTransformInteractionActive, resetDragPreview, resolvePointer, setCameraTargetFromEntity]);
 
   return (
     <div
@@ -2471,7 +1776,10 @@ function ArcadeThreeViewport({
         'arcade-three-viewport',
         dragEnabled && mode !== 'play' ? 'drag-enabled' : '',
         cameraTargetPickMode && mode !== 'play' ? 'camera-target-pick-enabled' : '',
+        cameraZoomDragMode && mode !== 'play' ? 'camera-zoom-drag-enabled' : '',
         placementEntity && mode !== 'play' ? 'placement-enabled' : '',
+        paintMode && mode !== 'play' ? 'terrain-paint-enabled' : '',
+        modelEraserMode && mode !== 'play' ? 'model-eraser-enabled' : '',
       ].filter(Boolean).join(' ')}
       role="application"
       aria-label="Editeur RPG 3D WebGL"
@@ -2482,10 +1790,32 @@ function ArcadeThreeViewport({
       onPointerLeave={() => {
         if (marqueeRef.current) return;
         clickStartRef.current = null;
+        if (!paintRef.current) hidePaintPreview();
+        if (!modelEraserRef.current) hideModelEraserPreview();
         if (!dragRef.current) latestRef.current.onShootChange?.(false);
       }}
       onPointerCancel={(event) => {
         clickStartRef.current = null;
+        if (paintRef.current?.pointerId === event.pointerId) {
+          paintRef.current = null;
+          latestRef.current.onWorldPaintEnd?.();
+          event.currentTarget.releasePointerCapture?.(event.pointerId);
+        }
+        if (modelEraserRef.current?.pointerId === event.pointerId) {
+          modelEraserRef.current = null;
+          latestRef.current.onModelEraseEnd?.();
+          event.currentTarget.releasePointerCapture?.(event.pointerId);
+        }
+        hidePaintPreview();
+        hideModelEraserPreview();
+        if (heldMoveRef.current?.pointerId === event.pointerId) {
+          heldMoveRef.current = null;
+          event.currentTarget.releasePointerCapture?.(event.pointerId);
+        }
+        if (cameraZoomDragRef.current?.pointerId === event.pointerId) {
+          cameraZoomDragRef.current = null;
+          event.currentTarget.releasePointerCapture?.(event.pointerId);
+        }
         if (marqueeRef.current) {
           marqueeRef.current = null;
           setMarqueeRect(null);

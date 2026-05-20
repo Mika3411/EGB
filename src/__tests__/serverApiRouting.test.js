@@ -12,6 +12,7 @@ describe('server API routing', () => {
   test('signale les methodes invalides pour les routes API connues', () => {
     expect(resolveApiRoute('DELETE', '/api/shop/packs')).toEqual({ type: 'methodNotAllowed' });
     expect(resolveApiRoute('POST', '/api/ai-job')).toEqual({ type: 'methodNotAllowed' });
+    expect(resolveApiRoute('PUT', '/api/model-tools/convert')).toEqual({ type: 'methodNotAllowed' });
   });
 
   test('distingue les routes API inconnues du fallback statique frontend', () => {
@@ -23,5 +24,7 @@ describe('server API routing', () => {
     expect(resolveApiRoute('GET', '/api/ai-job-extra')).toEqual({ type: 'apiNotFound' });
     expect(resolveApiRoute('GET', '/api/admin/users-extra')).toEqual({ type: 'apiNotFound' });
     expect(resolveApiRoute('GET', '/api/admin/users/123')).toEqual({ type: 'handler', routeId: 'adminUsersList' });
+    expect(resolveApiRoute('POST', '/api/model-tools/convert')).toEqual({ type: 'handler', routeId: 'modelTools' });
+    expect(resolveApiRoute('GET', '/api/model-tools/jobs/job-1')).toEqual({ type: 'handler', routeId: 'modelTools' });
   });
 });

@@ -27,6 +27,7 @@ import {
   handleImage,
   handleRemoveBackground,
 } from './server/ai.js';
+import { handleModelTools } from './server/modelTools.js';
 import { serveStatic } from './server/staticFiles.js';
 
 const apiRouteHandlers = {
@@ -50,6 +51,7 @@ const apiRouteHandlers = {
   aiJob: handleAiJob,
   image: handleImage,
   removeBackground: handleRemoveBackground,
+  modelTools: handleModelTools,
 };
 
 const server = createServer((req, res) => requestContext.run(req, async () => {

@@ -9,6 +9,12 @@ const DEFAULT_CHARACTER_GLB_OPTIONS = {
   jpegQuality: 0.82,
   minFileSize: 6 * 1024 * 1024,
 };
+const GLB_OPTIMIZER_SKIP_EXTENSIONS = new Set([
+  'EXT_meshopt_compression',
+  'EXT_texture_webp',
+  'KHR_draco_mesh_compression',
+  'KHR_texture_basisu',
+]);
 
 const align4 = (value) => (value + 3) & ~3;
 
@@ -166,6 +172,17 @@ export const formatBytes = (bytes = 0) => {
   return `${Math.round(value)} o`;
 };
 
+const getGltfExtensionList = (json = {}) => (
+  [
+    ...(Array.isArray(json.extensionsRequired) ? json.extensionsRequired : []),
+    ...(Array.isArray(json.extensionsUsed) ? json.extensionsUsed : []),
+  ]
+);
+
+const hasOptimizerUnsafeExtension = (json = {}) => (
+  getGltfExtensionList(json).some((extension) => GLB_OPTIMIZER_SKIP_EXTENSIONS.has(extension))
+);
+
 export const optimizeCharacterGlbFile = async (file, options = {}) => {
   const settings = { ...DEFAULT_CHARACTER_GLB_OPTIONS, ...options };
   if (!file || file.size < settings.minFileSize) {
@@ -173,6 +190,17 @@ export const optimizeCharacterGlbFile = async (file, options = {}) => {
   }
 
   const parsed = parseGlb(await file.arrayBuffer());
+  if (hasOptimizerUnsafeExtension(parsed.json)) {
+    return {
+      file,
+      optimized: false,
+      originalSize: file.size,
+      optimizedSize: file.size,
+      imageCount: 0,
+      skipped: true,
+      skipReason: 'extensions',
+    };
+  }
   const images = Array.isArray(parsed.json.images) ? parsed.json.images : [];
   const bufferViews = Array.isArray(parsed.json.bufferViews) ? parsed.json.bufferViews : [];
   const replacements = new Map();

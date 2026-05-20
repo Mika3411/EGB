@@ -45,17 +45,66 @@ const clampNumber = (value, fallback, min, max) => {
 };
 
 const makeItem = (name = 'Nouvel objet', icon = '📦') => ({ id: uid(), name, icon, imageData: '', imageName: '' });
-const makeCharacter3DModel = (overrides = {}) => ({
-  id: overrides.id || uid(),
-  name: overrides.name || 'Personnage 3D',
-  role: overrides.role || 'hero',
-  shape: overrides.shape || 'humanoid',
-  modelUrl: overrides.modelUrl || '',
-  modelData: overrides.modelData || '',
-  modelName: overrides.modelName || '',
-  previewLightIntensity: overrides.previewLightIntensity ?? 1,
-  previewLightOrientation: overrides.previewLightOrientation ?? -35,
-});
+const CHARACTER_3D_ANIMATION_SLOTS = ['walk', 'attack'];
+const normalizeModelResourceEntries = (resources = []) => (
+  Array.isArray(resources)
+    ? resources.map((resource) => ({
+      path: resource?.path || resource?.name || '',
+      name: resource?.name || resource?.path || '',
+      data: resource?.data || '',
+      url: resource?.url || '',
+      storageMode: resource?.storageMode || '',
+      storagePath: resource?.storagePath || '',
+      storageBucket: resource?.storageBucket || '',
+    })).filter((resource) => resource.path && (resource.data || resource.url))
+    : []
+);
+const normalizeCharacter3DAnimations = (animations = {}) => (
+  CHARACTER_3D_ANIMATION_SLOTS.reduce((next, slot) => {
+    const animation = animations?.[slot];
+    if (!animation || typeof animation !== 'object') return next;
+    const modelUrl = animation.modelUrl || animation.url || '';
+    const modelData = animation.modelData || animation.data || '';
+    if (!modelUrl && !modelData) return next;
+    next[slot] = {
+      modelUrl,
+      modelData,
+      modelName: animation.modelName || animation.name || '',
+      modelFormat: animation.modelFormat || '',
+      modelFileSize: Number(animation.modelFileSize) || 0,
+      modelResources: normalizeModelResourceEntries(animation.modelResources || animation.resources || []),
+      storageMode: animation.storageMode || '',
+      storagePath: animation.storagePath || '',
+      storageBucket: animation.storageBucket || '',
+    };
+    return next;
+  }, {})
+);
+
+const makeCharacter3DModel = (overrides = {}) => {
+  const uniformScale = overrides.characterModelScale ?? overrides.modelScale ?? 1;
+  return {
+    id: overrides.id || uid(),
+    name: overrides.name || 'Personnage 3D',
+    role: overrides.role || 'hero',
+    shape: overrides.shape || 'glb',
+    modelUrl: overrides.modelUrl || '',
+    modelData: overrides.modelData || '',
+    modelName: overrides.modelName || '',
+    modelFormat: overrides.modelFormat || '',
+    modelFileSize: Number(overrides.modelFileSize) || 0,
+    modelResources: Array.isArray(overrides.modelResources) ? overrides.modelResources : [],
+    modelAnimations: normalizeCharacter3DAnimations(overrides.modelAnimations),
+    characterModelScale: uniformScale,
+    characterModelScaleX: overrides.characterModelScaleX ?? overrides.modelScaleX ?? uniformScale,
+    characterModelScaleY: overrides.characterModelScaleY ?? overrides.modelScaleY ?? uniformScale,
+    characterModelScaleZ: overrides.characterModelScaleZ ?? overrides.modelScaleZ ?? uniformScale,
+    characterModelScaleProportional: overrides.characterModelScaleProportional ?? true,
+    materialBrightness: overrides.materialBrightness ?? 1,
+    previewLightIntensity: overrides.previewLightIntensity ?? 1,
+    previewLightOrientation: overrides.previewLightOrientation ?? -35,
+  };
+};
 const makeDecor3DModel = (overrides = {}) => ({
   id: uid(),
   name: 'Decor 3D',
@@ -73,12 +122,14 @@ const makeDecor3DModel = (overrides = {}) => ({
   height: 1.2,
   floorZeroZ: 2.5,
   scale: 1,
+  modelSizeProportional: false,
   elevation: 0,
   modelRotationX: 0,
   modelRotationY: 0,
   modelRotationZ: 0,
   modelCenterOnOrigin: false,
   modelFlushToGround: false,
+  materialBrightness: overrides.materialBrightness ?? 1,
   collision: true,
   repeatTexture: false,
   notes: '',
@@ -872,17 +923,38 @@ const normalizeCharacter3DModel = (entry = {}, index = 0) => {
     modelUrl: entry?.modelUrl,
     modelData: entry?.modelData,
     modelName: entry?.modelName,
+    modelFormat: entry?.modelFormat,
+    modelFileSize: entry?.modelFileSize,
+    modelResources: entry?.modelResources,
+    modelAnimations: entry?.modelAnimations,
+    characterModelScale: entry?.characterModelScale,
+    characterModelScaleX: entry?.characterModelScaleX,
+    characterModelScaleY: entry?.characterModelScaleY,
+    characterModelScaleZ: entry?.characterModelScaleZ,
+    characterModelScaleProportional: entry?.characterModelScaleProportional,
+    materialBrightness: entry?.materialBrightness,
     previewLightIntensity: entry?.previewLightIntensity,
     previewLightOrientation: entry?.previewLightOrientation,
   });
+  const normalizedScale = clampNumber(base.characterModelScale, 1, 0.4, 20);
   return {
     id: base.id,
     name: base.name,
     role: normalizeAllowedValue(base.role, ['hero', 'enemy', 'npc'], 'hero'),
-    shape: normalizeAllowedValue(base.shape, ['humanoid', 'glb', 'dark-knight', 'robot', 'creature', 'mage'], 'humanoid'),
+    shape: normalizeAllowedValue(base.shape, ['glb'], 'glb'),
     modelUrl: base.modelUrl || '',
     modelData: base.modelData || '',
     modelName: base.modelName || '',
+    modelFormat: base.modelFormat || '',
+    modelFileSize: Number(base.modelFileSize) || 0,
+    modelResources: normalizeModelResourceEntries(base.modelResources),
+    modelAnimations: normalizeCharacter3DAnimations(base.modelAnimations),
+    characterModelScale: normalizedScale,
+    characterModelScaleX: clampNumber(base.characterModelScaleX, normalizedScale, 0.4, 20),
+    characterModelScaleY: clampNumber(base.characterModelScaleY, normalizedScale, 0.4, 20),
+    characterModelScaleZ: clampNumber(base.characterModelScaleZ, normalizedScale, 0.4, 20),
+    characterModelScaleProportional: base.characterModelScaleProportional !== false,
+    materialBrightness: clampNumber(base.materialBrightness, 1, 0.25, 1.4),
     previewLightIntensity: clampNumber(base.previewLightIntensity, 1, 0.2, 2.5),
     previewLightOrientation: clampNumber(base.previewLightOrientation, -35, -180, 180),
   };
@@ -894,9 +966,10 @@ const normalizeDecor3DModel = (entry = {}, index = 0) => {
     id: entry?.id || uid(),
     name: entry?.name || `Decor 3D ${index + 1}`,
   });
+  const normalizedKind = normalizeDecorKind(base.kind);
   return {
     ...base,
-    kind: normalizeDecorKind(base.kind),
+    kind: normalizedKind,
     imageData: base.imageData || '',
     imageName: base.imageName || '',
     modelUrl: base.modelUrl || '',
@@ -905,12 +978,14 @@ const normalizeDecor3DModel = (entry = {}, index = 0) => {
     baseColor: /^#[0-9a-f]{6}$/i.test(base.baseColor) ? base.baseColor : '#64748b',
     accentColor: /^#[0-9a-f]{6}$/i.test(base.accentColor) ? base.accentColor : '#f59e0b',
     roofColor: /^#[0-9a-f]{6}$/i.test(base.roofColor) ? base.roofColor : '#7f1d1d',
-    width: clampNumber(base.width, 2.2, 0.4, 8),
-    depth: clampNumber(base.depth, 2.2, 0.4, 8),
-    height: clampNumber(base.height, 1.2, 0.05, 6),
+    width: clampNumber(base.width, 2.2, 0.05, 120),
+    depth: clampNumber(base.depth, 2.2, 0.05, 120),
+    height: clampNumber(base.height, 1.2, 0.05, 120),
     floorZeroZ: clampNumber(base.floorZeroZ, 2.5, -120, 120),
-    scale: clampNumber(base.scale, 1, 0.5, 2),
+    scale: clampNumber(base.scale, 1, 0.5, 20),
+    modelSizeProportional: Boolean(base.modelSizeProportional),
     elevation: clampNumber(base.elevation, 0, -1, 3),
+    materialBrightness: clampNumber(base.materialBrightness, ['road', 'water'].includes(normalizedKind) ? 0.55 : 1, 0.25, 1.4),
     collision: Boolean(base.collision),
     repeatTexture: Boolean(base.repeatTexture),
     notes: base.notes || '',
@@ -1294,13 +1369,8 @@ const createInitialProject = () => {
     scenes: [sceneA, sceneB, sceneC],
     cinematics: [cinematic],
     enigmas: [drawerCode, hallwayColors],
-    characterModels3d: [
-      makeCharacter3DModel({ name: 'Aventurier 3D', role: 'hero', shape: 'humanoid' }),
-    ],
-    decorModels3d: [
-      makeDecor3DModel({ name: 'Route de depart', kind: 'road', baseColor: '#334155', accentColor: '#f59e0b', width: 4, depth: 2.2, height: 0.05, collision: false }),
-      makeDecor3DModel({ name: 'Decor', kind: 'decor', baseColor: '#64748b', accentColor: '#94a3b8', width: 1.5, depth: 1.2, height: 1.1 }),
-    ],
+    characterModels3d: [],
+    decorModels3d: [],
     start: {
       type: 'scene',
       targetSceneId: sceneA.id,

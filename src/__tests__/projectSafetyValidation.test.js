@@ -32,6 +32,8 @@ const makeProject = (overrides = {}) => ({
   ...overrides,
 });
 
+const toDataUrl = (mimeType, content) => `data:${mimeType};base64,${btoa(content)}`;
+
 describe('project safety validation', () => {
   it('accepts a compact AI project with the expected schema', () => {
     const result = validateProjectSafety(makeProject(), { mode: 'ai' });
@@ -86,6 +88,75 @@ describe('project safety validation', () => {
 
     expect(result.ok).toBe(false);
     expect(result.errors.some((error) => error.includes('champ média non vide'))).toBe(true);
+  });
+
+  it('allows embedded 3D model data outside AI responses', () => {
+    const result = validateProjectSafety(makeProject({
+      characterModels3d: [{
+        id: 'char1',
+        name: 'Hero FBX',
+        role: 'hero',
+        shape: 'glb',
+        modelName: 'hero.fbx',
+        modelData: 'data:application/octet-stream;base64,ZmJ4',
+      }],
+      decorModels3d: [{
+        id: 'decor1',
+        name: 'Door OBJ',
+        kind: 'decor',
+        modelName: 'door.obj',
+        modelData: 'data:model/obj;base64,byBET29y',
+      }],
+    }));
+
+    expect(result.ok).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('allows OBJ ZIP model resources with MTL and supported texture data URLs', () => {
+    const result = validateProjectSafety(makeProject({
+      decorModels3d: [{
+        id: 'decor1',
+        name: 'Door OBJ',
+        kind: 'decor',
+        modelName: 'door.obj',
+        modelData: 'data:model/obj;base64,byBET29y',
+        modelResources: [
+          {
+            path: 'door.mtl',
+            name: 'door.mtl',
+            data: toDataUrl('text/plain', 'newmtl Door'),
+          },
+          {
+            path: 'textures/door.bmp',
+            name: 'door.bmp',
+            data: toDataUrl('image/bmp', 'bmp-texture'),
+          },
+          {
+            path: 'textures/door.png',
+            name: 'door.png',
+            data: toDataUrl('image/png', 'png-texture'),
+          },
+        ],
+      }],
+    }));
+
+    expect(result.ok).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('keeps text data URLs rejected outside model resources', () => {
+    const result = validateProjectSafety(makeProject({
+      assets: [{
+        id: 'asset1',
+        type: 'note',
+        name: 'note.txt',
+        data: toDataUrl('text/plain', 'plain text outside model resources'),
+      }],
+    }));
+
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((error) => error.includes('assets.0.data: type data URL interdit (text/plain)'))).toBe(true);
   });
 
   it('blocks active content through the project validator', () => {

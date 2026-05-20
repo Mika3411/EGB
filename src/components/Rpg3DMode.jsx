@@ -4,10 +4,12 @@ import {
   Camera,
   ChevronDown,
   ChevronRight,
+  Circle,
   Copy,
   Crosshair,
   Cuboid,
   Download,
+  Eraser,
   Eye,
   EyeOff,
   Folder,
@@ -26,6 +28,7 @@ import {
   PanelLeftOpen,
   PanelRightOpen,
   Pause,
+  Paintbrush,
   Play,
   Plus,
   Redo2,
@@ -36,84 +39,194 @@ import {
   Sparkles,
   Square,
   Sword,
+  Triangle,
   Trash2,
   Undo2,
+  Wrench,
+  ZoomIn,
 } from 'lucide-react';
 import ArcadeThreeViewport from './arcade/ArcadeThreeViewport';
 import Character3DTab from './Character3DTab.jsx';
 import Decor3DTab from './Decor3DTab.jsx';
+import ModelToolsTab from './ModelToolsTab.jsx';
+import Rpg3DControls from './rpg3d/Rpg3DControls.jsx';
+import Rpg3DHeader from './rpg3d/Rpg3DHeader.jsx';
+import Rpg3DInspector from './rpg3d/Rpg3DInspector.jsx';
+import Rpg3DMapPanel from './rpg3d/Rpg3DMapPanel.jsx';
+import Rpg3DNpcChoiceOverlay from './rpg3d/Rpg3DNpcChoiceOverlay.jsx';
+import Rpg3DStage from './rpg3d/Rpg3DStage.jsx';
+import Rpg3DWorkspaceTabs from './rpg3d/Rpg3DWorkspaceTabs.jsx';
 import HelpLabel from './forms/HelpLabel.jsx';
-import { ARCADE_3D_CHARACTER_MODELS, ARCADE_3D_DECOR_MODELS } from '../data/arcade3dAssets';
 import { makeCharacter3DModel, makeDecor3DModel } from '../data/projectData';
+import useRpg3DGameLoop from '../hooks/useRpg3DGameLoop.js';
+import useRpg3DProjectState from '../hooks/useRpg3DProjectState.js';
 import {
-  buildStoragePath,
-  downloadTextFile,
-  generateStorageFilename,
-  hasSupabaseConfig,
-  isStorageNotFoundError,
-  uploadToStorage,
-} from '../supabaseStorage';
+  createArcadeAssetsPayload,
+  createSupabaseArcadeAssetsPayload,
+  getPersistedModelAnimations,
+  getStudioModelSource,
+  hasRpg3DAssetsSupabaseConfig,
+  isRpg3DAssetsNotFoundError,
+  loadArcadeAssetsFromSupabase,
+  rememberArcadeAssetsLocally,
+  restoreLocalArcadeAssetsSources,
+  syncConfigModelReferences,
+  uploadArcadeAssetsManifest,
+} from '../utils/rpg3dAssetsStorage.js';
+import {
+  DEFAULT_RPG3D_ACT_ID,
+  DEFAULT_RPG3D_CANVAS_ID,
+  cloneStudioProjectForEdit,
+  createConfigFromSavedAssets,
+  createFallbackRpg3DCanvas,
+  createRpg3DCanvasDraft,
+  createStudioProjectFromSavedAssets,
+  getActiveRpg3DCanvas,
+  getDefaultPortalTargetCanvasId,
+  getDefaultRpg3DActs,
+  getRpg3DCanvasStructure,
+  syncStudioProjectActiveCanvasConfig,
+} from '../utils/rpg3dStudioProject.js';
+import {
+  MAP_ENTITY_COLLECTIONS,
+  applyGroupDragToConfig,
+  canResizeSelectionEntity,
+  clampArcadeEntitiesToWorld,
+  duplicateMapEntityIntoConfig,
+  findEntityAt,
+  getEntityCenterPoint,
+  getSelectedEntity,
+  getSelectionEntities,
+  isSameEntity,
+  moveMapEntityByDelta,
+  moveMapEntityToPoint,
+  normalizeTerrainPaintPoint,
+  resolveFlatTileDragPoint,
+  scaleSelectionEntity,
+  snapFlatTileToNeighbors,
+  snapFlatTileToWorldEdges,
+} from '../utils/rpg3dMapEditing.js';
+import {
+  ACTION_ZONE_DEFAULT_HEIGHT,
+  ACTION_ZONE_DEFAULT_MODEL_HEIGHT,
+  ACTION_ZONE_DEFAULT_OPACITY,
+  ACTION_ZONE_DEFAULT_WIDTH,
+  ACTION_ZONE_MIN_SIZE,
+  DEFAULT_ARCADE_CONFIG,
+  DEFAULT_FLOOR_ZERO_Z,
+  ENTITY_Z_MAX,
+  ENTITY_Z_MIN,
+  FLAT_GROUND_DEFAULT_COLOR,
+  FLOOR_ZERO_Z_MAX,
+  FLOOR_ZERO_Z_MIN,
+  MATERIAL_BRIGHTNESS_MAX,
+  MATERIAL_BRIGHTNESS_MIN,
+  MODEL_ERASER_DEFAULT_RADIUS,
+  MODEL_ERASER_MAX_RADIUS,
+  MODEL_ERASER_MAX_STROKES,
+  MODEL_ERASER_MIN_RADIUS,
+  MODEL_SCALE_MAX,
+  MODEL_SCALE_MIN,
+  TERRAIN_PAINT_DEFAULT_COLOR,
+  TERRAIN_PAINT_DEFAULT_OPACITY,
+  TERRAIN_PAINT_DEFAULT_RADIUS,
+  TERRAIN_PAINT_DEFAULT_SHAPE,
+  TERRAIN_PAINT_MAX_RADIUS,
+  TERRAIN_PAINT_MIN_RADIUS,
+  clamp,
+  cloneConfig,
+  createModelEraserSurfaceStroke,
+  getActionZoneColor,
+  getActionZoneHeight,
+  getActionZoneModelHeight,
+  getActionZoneOpacity,
+  getActionZoneType,
+  getActionZoneWidth,
+  getCharacterMaterialBrightness,
+  getCharacterModelAxisScale,
+  getCharacterModelScale,
+  getDecorMaterialBrightness,
+  getDecorModelScale,
+  getEnemyStats,
+  getEntityZ,
+  getFlatGroundPlateauColor,
+  getFlatTileSnapOverlap,
+  getFlatTileWorldBounds,
+  getFlatTileWorldDimensions,
+  getFloorBaseColor,
+  getFloorTileWorldSize,
+  getFloorZeroZ,
+  getHexColor,
+  getModelEraserRadius,
+  getModelEraserStrokes,
+  getPlayableHeroId,
+  getPropHeight,
+  getPropModelHeight,
+  getPropRenderMode,
+  getPropWidth,
+  getReliefElevation,
+  getReliefHeight,
+  getReliefWidth,
+  getSelectionBoundsFromEntities,
+  getStudioDecorKindId,
+  getTerrainPaintColor,
+  getTerrainPaintOpacity,
+  getTerrainPaintRadius,
+  getTerrainPaintShape,
+  getWorldCoverTileSize,
+  isFlatGroundPlateauProp,
+  isFlatTileLikeProp,
+  isFloorDecorKind,
+  isFloorTileProp,
+  normalizeDegrees,
+} from '../utils/rpg3dDomain.js';
 
-const PLAYER_RADIUS = 18;
-const ENEMY_RADIUS = 16;
-const BULLET_RADIUS = 4;
-const DASH_DURATION = 0.16;
-const PICKUP_RADIUS = 15;
 const ARCADE_WORLD_SCALE = 0.018;
-const ARCADE_ASSETS_STORAGE_KEY = 'escape-game-builder:arcade-assets:v1';
-const ARCADE_ASSETS_REMOTE_VERSION = 2;
-const ARCADE_MANIFEST_MAX_BYTES = 5 * 1024 * 1024;
-const ARCADE_GLB_MAX_BYTES = 80 * 1024 * 1024;
-const ARCADE_GLB_MIME_TYPES = ['model/gltf-binary', 'application/octet-stream'];
-const ARCADE_TEXTURE_MAX_BYTES = 15 * 1024 * 1024;
-const ARCADE_TEXTURE_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml'];
-const ARCADE_UPLOAD_MB = 1024 * 1024;
-const ARCADE_MANIFEST_UPLOAD_TIMEOUT_MS = 90000;
-const ARCADE_GLB_UPLOAD_TIMEOUT = {
-  minMs: 180000,
-  maxMs: 900000,
-  msPerMb: 12000,
-};
-const ARCADE_MEDIA_UPLOAD_TIMEOUT = {
-  minMs: 90000,
-  maxMs: 240000,
-  msPerMb: 6000,
-};
-const FLOOR_TILE_OVERLAP = 20;
-const FLOOR_TILE_EDGE_SNAP_DISTANCE = 56;
-const RPG3D_HISTORY_LIMIT = 60;
-const RPG3D_HISTORY_DATA_URL_MAX_CHARS = 512 * 1024;
-const ENTITY_Z_MIN = -900;
-const ENTITY_Z_MAX = 900;
-const DEFAULT_FLOOR_ZERO_Z = 2.5;
-const FLOOR_ZERO_Z_MIN = -120;
-const FLOOR_ZERO_Z_MAX = 120;
-const MODEL_SCALE_MIN = 0.4;
-const MODEL_SCALE_MAX = 5;
-const ACTION_ZONE_MIN_SIZE = 40;
-const ACTION_ZONE_DEFAULT_WIDTH = 260;
-const ACTION_ZONE_DEFAULT_HEIGHT = 180;
-const ACTION_ZONE_DEFAULT_MODEL_HEIGHT = 240;
-const ACTION_ZONE_DEFAULT_OPACITY = 0.32;
+const CHARACTER_PLACEMENT_CAMERA_DISTANCE = 16;
+const CAMERA_DISTANCE_MIN = 3.5;
+const CAMERA_DISTANCE_MAX = 60;
+const CAMERA_ZOOM_DRAG_SENSITIVITY = 0.08;
+const TERRAIN_PAINT_FLUSH_INTERVAL_MS = 32;
+const RPG3D_LOGIN_REQUIRED_STATUS = 'Connecte-toi pour sauvegarder dans Supabase.';
+const RPG3D_LOCAL_SESSION_FALLBACK_STATUS = 'Sauvegarde locale terminee. Connecte-toi pour synchroniser Supabase.';
+
+const getNow = () => (
+  typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? performance.now()
+    : Date.now()
+);
+
+const isDisconnectedSaveStatus = (status = '') => (
+  status === RPG3D_LOGIN_REQUIRED_STATUS
+  || status === RPG3D_LOCAL_SESSION_FALLBACK_STATUS
+);
 
 const RPG3D_FIELD_HELP = {
   mapWidth: 'Largeur totale de la carte en unites du builder. Augmente-la pour donner plus d espace horizontal au parcours.',
   mapHeight: 'Hauteur totale de la carte en unites du builder. Augmente-la pour construire une zone plus profonde.',
   mapGrid: 'Pas de la grille utilise pour aligner les placements et garder des distances regulieres.',
   mapObjects: 'Nombre total d elements places sur le canevas actif.',
-  actionZoneTool: 'Active le placement d un cube transparent 3D: clique ensuite sur la carte pour le poser.',
+  actionZoneTool: 'Active le placement d une zone d action 3D: clique ensuite sur la carte pour la poser.',
+  flatGroundTool: 'Ajoute un sol plat opaque qui cache la grille technique et sert de base au terrain.',
+  flatGroundColor: 'Couleur de base du plateau plat place sous la peinture du terrain.',
+  terrainPaintTool: 'Active la peinture du terrain: maintiens le clic gauche sur le sol pour dessiner une zone coloree.',
+  terrainPaintColor: 'Couleur appliquee aux nouvelles traces peintes au sol.',
+  terrainPaintBrush: 'Largeur de la brosse utilisee pour dessiner les zones de terrain.',
+  terrainPaintShape: 'Forme de la brosse utilisee pour peindre le terrain.',
+  terrainPaintClear: 'Retire toutes les traces de peinture du terrain actuel.',
   assetFiles: 'Fichiers 3D crees dans les ateliers Personnages 3D et Objets 3D, prets a etre importes sur la carte.',
-  activeView: 'Mode de rendu de la carte. Le builder RPG 3D utilise ici le viewport WebGL.',
   cameraHeight: 'Hauteur de la camera au-dessus du sol pendant l edition et le test.',
   cameraDistance: 'Distance de recul de la camera par rapport au centre vise.',
   wallHeight: 'Hauteur visuelle des murs et obstacles dans le rendu 3D.',
   reliefScale: 'Amplifie ou reduit le volume des reliefs pour rendre le terrain plus lisible.',
   propHeight: 'Hauteur par defaut des decors simples quand aucun modele 3D precis ne la remplace.',
   lightIntensity: 'Puissance globale de l eclairage dans la carte 3D.',
-  playerCharacter: 'Preset de personnage utilise par le heros quand aucun GLB ou sprite personnalise ne le remplace.',
-  characterRenderMode: 'Choisit si le personnage s affiche en volume procedural, GLB, sprite vertical ou forme stylisee.',
-  characterModel: 'Modele GLB issu de l atelier Personnages 3D a appliquer au heros.',
+  lightOrientation: 'Direction du soleil et des ombres dans la scene 3D.',
+  playerCharacter: 'Preset de personnage utilise par le heros quand aucun modele 3D ou sprite personnalise ne le remplace.',
+  characterRenderMode: 'Choisit si le personnage s affiche en volume procedural, modele 3D, sprite vertical ou forme stylisee.',
+  characterModel: 'Modele 3D issu de l atelier Personnages 3D a appliquer au heros.',
   characterScale: 'Taille du modele 3D du heros sur la carte.',
+  characterMaterialBrightness: 'Luminosite propre a ce personnage sur la carte RPG 3D.',
   playerImage: 'Image verticale utilisee comme apparence du heros en mode sprite.',
   currentHealth: 'Points de vie actuels du heros au lancement du test.',
   maxHealth: 'Reserve maximale de points de vie du heros.',
@@ -152,11 +265,14 @@ const RPG3D_FIELD_HELP = {
   reliefDepth: 'Profondeur ou longueur du relief sur la carte.',
   reliefElevation: 'Hauteur visuelle du relief. Une valeur negative cree un creux.',
   collision: 'Indique si cet element bloque physiquement le passage du joueur.',
-  decorScale: 'Echelle appliquee au modele GLB de cet objet 3D.',
+  decorScale: 'Echelle appliquee au modele 3D de cet objet.',
+  materialBrightness: 'Luminosite propre a cet objet sur la carte RPG 3D.',
+  modelEraserRadius: 'Largeur de la gomme appliquee uniquement au modele GLB selectionne.',
   rotationX: 'Inclinaison avant/arriere du modele selectionne.',
   rotationY: 'Rotation verticale du modele selectionne.',
   rotationZ: 'Inclinaison laterale du modele selectionne.',
   floorTileSize: 'Taille de la dalle plate selectionnee.',
+  floorColor: 'Couleur de base d une dalle de sol plate sans texture.',
   propWidth: 'Largeur visible de l image ou du decor selectionne.',
   propDepth: 'Profondeur ou longueur visible de l image ou du decor selectionne.',
   propModelHeight: 'Hauteur 3D utilisee pour le rendu de cet objet.',
@@ -212,7 +328,7 @@ const PLAYER_CHARACTER_OPTIONS = getCharacterOptions(PLAYER_CHARACTER_IDS);
 const ENEMY_CHARACTER_OPTIONS = getCharacterOptions(ENEMY_CHARACTER_IDS);
 const CHARACTER_RENDER_OPTIONS = [
   { id: 'capsule', label: 'Personnage volume' },
-  { id: 'glb', label: 'Modele GLB' },
+  { id: 'glb', label: 'Modele 3D' },
   { id: 'sprite', label: 'Image verticale' },
   { id: 'block', label: 'Bloc robot' },
   { id: 'boss', label: 'Boss creature' },
@@ -232,7 +348,12 @@ const NUMERIC_ENTITY_FIELDS = new Set([
   'r',
   'rotation',
   'characterModelScale',
+  'characterModelScaleX',
+  'characterModelScaleY',
+  'characterModelScaleZ',
+  'characterMaterialBrightness',
   'decorModelScale',
+  'materialBrightness',
   'modelRotationX',
   'modelRotationY',
   'modelRotationZ',
@@ -251,68 +372,6 @@ const NUMERIC_ENTITY_FIELDS = new Set([
   'combatEnemyPowerUsageChance',
 ]);
 
-const DEFAULT_ARCADE_CONFIG = {
-  meta: {
-    title: 'Mission RPG 3D',
-  },
-  world: {
-    width: 4200,
-    height: 2800,
-    grid: 120,
-  },
-  engine: {
-    defaultView: '3d',
-    cameraHeight: 20,
-    cameraDistance: 30,
-    wallHeight: 2.4,
-    reliefScale: 1,
-    propHeight: 1,
-    lightIntensity: 1.15,
-  },
-  player: {
-    x: 2100,
-    y: 1400,
-    z: 0,
-    character: 'runner',
-    characterImageData: '',
-    characterImageName: '',
-    characterModel3dId: '',
-    characterModelUrl: '',
-    characterModelName: '',
-    characterRenderMode: 'capsule',
-    characterModelScale: 1,
-    health: 18,
-    maxHealth: 18,
-    mana: 10,
-    maxMana: 10,
-    speed: 260,
-    dashSpeed: 680,
-    dashCooldown: 0.9,
-    bulletSpeed: 680,
-    fireRate: 0.13,
-    skills: [
-      { id: 'force', name: 'Force', value: 3, manaCost: 0 },
-      { id: 'ruse', name: 'Ruse', value: 2, manaCost: 0 },
-      { id: 'magie', name: 'Magie', value: 4, manaCost: 2 },
-    ],
-    powers: [
-      { id: 'flamme', name: 'Flamme', type: 'fire', manaCost: 2, force: 4 },
-    ],
-  },
-  ai: {
-    visionRange: 850,
-    obstacleAvoidance: 56,
-    aggression: 1,
-  },
-  obstacles: [],
-  reliefs: [],
-  heroes: [],
-  props: [],
-  enemies: [],
-  pickups: [],
-  actionZones: [],
-};
-
 const TOOL_OPTIONS = [
   { id: 'select', label: 'Selection', icon: MousePointer2 },
   { id: 'obstacle', label: 'Mur', icon: Square },
@@ -321,7 +380,13 @@ const TOOL_OPTIONS = [
   { id: 'relief', label: 'Relief', icon: Mountain },
   { id: 'prop', label: 'Image 3D', icon: Box },
   { id: 'actionZone', label: 'Zone', icon: MousePointerClick },
-  { id: 'spawn', label: 'Depart', icon: Shield },
+  { id: 'terrainPaint', label: 'Peindre sol', icon: Paintbrush },
+];
+
+const TERRAIN_PAINT_SHAPE_OPTIONS = [
+  { id: 'round', label: 'Rond', icon: Circle },
+  { id: 'square', label: 'Carre', icon: Square },
+  { id: 'triangle', label: 'Triangle', icon: Triangle },
 ];
 
 const STUDIO_CHARACTER_ROLE_LABELS = {
@@ -333,7 +398,7 @@ const STUDIO_DECOR_KIND_LABELS = {
   billboard: 'décors',
   crate: 'mur',
   decor: 'décors',
-  house: 'habitions',
+  house: 'habitations',
   road: 'sol',
   rock: 'décors',
   tree: 'décors',
@@ -352,19 +417,7 @@ const DECOR_IMPORT_GROUPS = [
   { id: 'house', label: 'Habitations' },
   { id: 'decor', label: 'Decors' },
 ];
-const ASSET_IMPORT_SOURCE_GROUPS = [
-  { id: 'glb', label: 'Modeles GLB' },
-  { id: 'image', label: 'Images et textures' },
-  { id: 'procedural', label: 'Formes simples' },
-];
-const DECOR_IMPORT_KIND_MAP = {
-  billboard: 'decor',
-  crate: 'wall',
-  rock: 'decor',
-  tree: 'decor',
-};
 const SELECTED_ENTITY_TYPE_LABELS = {
-  spawn: 'HEROS',
   hero: 'HEROS',
   enemy: 'ENNEMI',
   prop: 'OBJET',
@@ -373,7 +426,7 @@ const SELECTED_ENTITY_TYPE_LABELS = {
   pickup: 'BONUS',
   actionZone: 'ZONE',
 };
-const MULTI_SELECT_ENTITY_TYPES = new Set(['spawn', 'hero', 'enemy', 'prop', 'relief', 'obstacle', 'pickup', 'actionZone']);
+const MULTI_SELECT_ENTITY_TYPES = new Set(['hero', 'enemy', 'prop', 'relief', 'obstacle', 'pickup', 'actionZone']);
 const ROTATABLE_ENTITY_TYPES = new Set(['hero', 'enemy', 'prop', 'actionZone']);
 const MAP_ENTITY_META = {
   hero: { label: 'Heros carte', icon: Shield, tone: 'character' },
@@ -384,24 +437,21 @@ const MAP_ENTITY_META = {
   pickup: { label: 'Bonus carte', icon: HeartPulse, tone: 'neutral' },
   actionZone: { label: 'Zone transparente', icon: MousePointerClick, tone: 'neutral' },
 };
-const MAP_ENTITY_COLLECTIONS = {
-  hero: 'heroes',
-  enemy: 'enemies',
-  prop: 'props',
-  relief: 'reliefs',
-  obstacle: 'obstacles',
-  pickup: 'pickups',
-  actionZone: 'actionZones',
-};
 
 const isEditableShortcutTarget = (target) => Boolean(
   target?.closest?.('input, textarea, select, [contenteditable="true"], [contenteditable="plaintext-only"]'),
 );
-const getDeletableSelectionEntities = (selected, multiSelected = []) => {
+const isProtectedMapEntity = (config = {}, entity = {}) => {
+  if (entity?.type !== 'prop' || !entity.id) return false;
+  const prop = (config.props || []).find((item) => item.id === entity.id);
+  return isFlatGroundPlateauProp(prop, config.world);
+};
+const getDeletableSelectionEntities = (config, selected, multiSelected = []) => {
   const selection = multiSelected.length ? multiSelected : selected ? [selected] : [];
   const seen = new Set();
   return selection.filter((entity) => {
-    if (!entity?.id || entity.type === 'spawn' || !MAP_ENTITY_COLLECTIONS[entity.type]) return false;
+    if (!entity?.id || !MAP_ENTITY_COLLECTIONS[entity.type]) return false;
+    if (isProtectedMapEntity(config, entity)) return false;
     const key = `${entity.type}:${entity.id}`;
     if (seen.has(key)) return false;
     seen.add(key);
@@ -409,518 +459,11 @@ const getDeletableSelectionEntities = (selected, multiSelected = []) => {
   });
 };
 const isDuplicableSelectionEntity = (entity = {}) => Boolean(
-  entity?.id && entity.type !== 'spawn' && MAP_ENTITY_COLLECTIONS[entity.type],
+  entity?.id
+  && MAP_ENTITY_COLLECTIONS[entity.type]
+  && !(entity.type === 'prop' && isFlatGroundPlateauProp(entity.item)),
 );
 
-const clonePlainObjectArray = (items = []) => (Array.isArray(items) ? items.map((item) => ({ ...(item || {}) })) : []);
-const cloneActionZoneArray = (items = []) => clonePlainObjectArray(items).map((zone) => ({
-  ...zone,
-  npcChoices: clonePlainObjectArray(zone.npcChoices || []),
-}));
-const clonePlayerConfig = (player = DEFAULT_ARCADE_CONFIG.player) => ({
-  ...(player || {}),
-  skills: clonePlainObjectArray(player?.skills || []),
-  powers: clonePlainObjectArray(player?.powers || []),
-});
-const cloneConfig = (config = DEFAULT_ARCADE_CONFIG) => ({
-  meta: { ...(config.meta || {}) },
-  world: { ...(config.world || DEFAULT_ARCADE_CONFIG.world) },
-  engine: { ...(config.engine || DEFAULT_ARCADE_CONFIG.engine) },
-  player: clonePlayerConfig(config.player || DEFAULT_ARCADE_CONFIG.player),
-  obstacles: clonePlainObjectArray(config.obstacles || []),
-  reliefs: clonePlainObjectArray(config.reliefs || []),
-  heroes: clonePlainObjectArray(config.heroes || []),
-  props: clonePlainObjectArray(config.props || []),
-  enemies: clonePlainObjectArray(config.enemies || []),
-  pickups: clonePlainObjectArray(config.pickups || []),
-  actionZones: cloneActionZoneArray(config.actionZones || []),
-});
-const DEFAULT_RPG3D_ACT_ID = 'rpg3d-act-1';
-const DEFAULT_RPG3D_SCENE_ID = 'rpg3d-scene-1';
-const DEFAULT_RPG3D_CANVAS_ID = 'rpg3d-canvas-1';
-const getDefaultRpg3DActs = () => [{ id: DEFAULT_RPG3D_ACT_ID, name: 'Acte I' }];
-const getDefaultRpg3DScenes = () => [{
-  id: DEFAULT_RPG3D_SCENE_ID,
-  name: 'Scene 1',
-  actId: DEFAULT_RPG3D_ACT_ID,
-  parentSceneId: '',
-}];
-const createFallbackRpg3DCanvas = (config = DEFAULT_ARCADE_CONFIG) => ({
-  id: DEFAULT_RPG3D_CANVAS_ID,
-  name: 'Canevas 1',
-  actId: DEFAULT_RPG3D_ACT_ID,
-  sceneId: DEFAULT_RPG3D_CANVAS_ID,
-  config: cloneConfig(config),
-  createdAt: '',
-  updatedAt: '',
-});
-const getSourceProjectActs = (sourceProject = null) => (
-  Array.isArray(sourceProject?.acts) && sourceProject.acts.length
-    ? sourceProject.acts
-    : []
-);
-const getSourceProjectScenes = (sourceProject = null) => (
-  Array.isArray(sourceProject?.scenes) && sourceProject.scenes.length
-    ? sourceProject.scenes
-    : []
-);
-const normalizeRpg3DActs = (acts = [], sourceProject = null) => {
-  const rawActs = Array.isArray(acts) && acts.length ? acts : [];
-  const normalized = (Array.isArray(rawActs) ? rawActs : [])
-    .map((act, index) => ({
-      id: act?.id || `rpg3d-act-${index + 1}`,
-      name: act?.name || `Acte ${index + 1}`,
-    }))
-    .filter((act) => act.id);
-  return normalized.length ? normalized : getDefaultRpg3DActs();
-};
-const normalizeRpg3DScenes = (scenes = [], acts = getDefaultRpg3DActs(), sourceProject = null) => {
-  const rawScenes = Array.isArray(scenes) && scenes.length ? scenes : [];
-  const fallbackActId = acts[0]?.id || DEFAULT_RPG3D_ACT_ID;
-  const actIds = new Set(acts.map((act) => act.id));
-  const normalized = (Array.isArray(rawScenes) ? rawScenes : [])
-    .map((scene, index) => ({
-      id: scene?.id || `rpg3d-scene-${index + 1}`,
-      name: scene?.name || `Scene ${index + 1}`,
-      actId: actIds.has(scene?.actId) ? scene.actId : fallbackActId,
-      parentSceneId: scene?.parentSceneId || '',
-    }))
-    .filter((scene) => scene.id);
-  return normalized.length ? normalized : getDefaultRpg3DScenes().map((scene) => ({ ...scene, actId: fallbackActId }));
-};
-const normalizeRpg3DCanvases = (canvases = [], fallbackConfig = null, acts = getDefaultRpg3DActs(), scenes = getDefaultRpg3DScenes()) => {
-  const fallbackActId = acts[0]?.id || DEFAULT_RPG3D_ACT_ID;
-  const actIds = new Set(acts.map((act) => act.id));
-  const normalized = (Array.isArray(canvases) ? canvases : [])
-    .map((canvas, index) => {
-      const scene = scenes.find((entry) => entry.id === canvas?.sceneId);
-      const actId = actIds.has(canvas?.actId)
-        ? canvas.actId
-        : scene?.actId || fallbackActId;
-      const canvasId = canvas?.id || `rpg3d-canvas-${index + 1}`;
-      return {
-        id: canvasId,
-        name: canvas?.name || `Canevas ${index + 1}`,
-        actId,
-        sceneId: canvasId,
-        config: createConfigFromSavedAssets(canvas?.config || (index === 0 ? fallbackConfig : null)),
-        createdAt: canvas?.createdAt || '',
-        updatedAt: canvas?.updatedAt || '',
-      };
-    })
-    .filter((canvas) => canvas.id);
-  if (normalized.length) return normalized;
-  const fallbackCanvas = createFallbackRpg3DCanvas(fallbackConfig || DEFAULT_ARCADE_CONFIG);
-  return [{
-    ...fallbackCanvas,
-    actId: fallbackActId,
-    sceneId: fallbackCanvas.id,
-  }];
-};
-const cloneStudioProjectForEdit = (studioProject = null, fallbackConfig = null, sourceProject = null) => {
-  const acts = normalizeRpg3DActs(studioProject?.rpg3dActs || [], sourceProject);
-  const scenes = normalizeRpg3DScenes(studioProject?.rpg3dScenes || [], acts, sourceProject);
-  const canvases = normalizeRpg3DCanvases(studioProject?.rpg3dCanvases || [], fallbackConfig, acts, scenes);
-  const activeCanvasId = canvases.some((canvas) => canvas.id === studioProject?.rpg3dActiveCanvasId)
-    ? studioProject.rpg3dActiveCanvasId
-    : canvases[0]?.id || DEFAULT_RPG3D_CANVAS_ID;
-  return {
-    ...createDefaultStudioProject(),
-    ...(studioProject && typeof studioProject === 'object' ? studioProject : {}),
-    characterModels3d: clonePlainObjectArray(studioProject?.characterModels3d || []),
-    decorModels3d: clonePlainObjectArray(studioProject?.decorModels3d || []),
-    mediaAssets: clonePlainObjectArray(studioProject?.mediaAssets || []),
-    rpg3dActs: acts,
-    rpg3dScenes: scenes,
-    rpg3dCanvases: canvases,
-    rpg3dActiveCanvasId: activeCanvasId,
-  };
-};
-const createDefaultStudioProject = () => ({
-  title: 'RPG 3D Builder',
-  characterModels3d: [],
-  decorModels3d: [],
-  mediaAssets: [],
-  rpg3dActs: getDefaultRpg3DActs(),
-  rpg3dScenes: getDefaultRpg3DScenes(),
-  rpg3dCanvases: [createFallbackRpg3DCanvas()],
-  rpg3dActiveCanvasId: DEFAULT_RPG3D_CANVAS_ID,
-});
-const createConfigFromSavedAssets = (savedConfig = null) => {
-  const next = cloneConfig(DEFAULT_ARCADE_CONFIG);
-  if (!savedConfig || typeof savedConfig !== 'object') return next;
-  next.world = { ...next.world, ...(savedConfig.world || {}) };
-  next.engine = { ...next.engine, ...(savedConfig.engine || {}) };
-  next.player = { ...next.player, ...(savedConfig.player || {}) };
-  next.obstacles = clonePlainObjectArray(savedConfig.obstacles);
-  next.reliefs = clonePlainObjectArray(savedConfig.reliefs);
-  next.heroes = clonePlainObjectArray(savedConfig.heroes);
-  next.props = clonePlainObjectArray(savedConfig.props);
-  next.enemies = clonePlainObjectArray(savedConfig.enemies);
-  next.pickups = clonePlainObjectArray(savedConfig.pickups);
-  next.actionZones = cloneActionZoneArray(savedConfig.actionZones);
-  return next;
-};
-const createStudioProjectFromSavedAssets = (savedStudioProject = null, savedConfig = null, sourceProject = null) => (
-  cloneStudioProjectForEdit(savedStudioProject, savedConfig, sourceProject)
-);
-const getActiveRpg3DCanvas = (studioProject = null) => {
-  const project = cloneStudioProjectForEdit(studioProject);
-  return project.rpg3dCanvases.find((canvas) => canvas.id === project.rpg3dActiveCanvasId)
-    || project.rpg3dCanvases[0]
-    || createFallbackRpg3DCanvas();
-};
-const getDefaultPortalTargetCanvasId = (studioProject = null) => {
-  const project = cloneStudioProjectForEdit(studioProject);
-  const activeId = project.rpg3dActiveCanvasId || project.rpg3dCanvases[0]?.id || '';
-  return (project.rpg3dCanvases || []).find((canvas) => canvas.id && canvas.id !== activeId)?.id || '';
-};
-const syncStudioProjectActiveCanvasConfig = (studioProject = null, config = DEFAULT_ARCADE_CONFIG, canvasId = '') => {
-  const next = cloneStudioProjectForEdit(studioProject);
-  const activeCanvasId = canvasId || next.rpg3dActiveCanvasId || next.rpg3dCanvases[0]?.id || DEFAULT_RPG3D_CANVAS_ID;
-  const targetIndex = next.rpg3dCanvases.findIndex((canvas) => canvas.id === activeCanvasId);
-  if (targetIndex >= 0) {
-    next.rpg3dCanvases[targetIndex] = {
-      ...next.rpg3dCanvases[targetIndex],
-      config: cloneConfig(config),
-      updatedAt: new Date().toISOString(),
-    };
-    next.rpg3dActiveCanvasId = activeCanvasId;
-  }
-  return next;
-};
-const getRpg3DCanvasStructure = (studioProject = null, legacyStudioProject = null) => {
-  const targetProject = legacyStudioProject || studioProject;
-  const normalizedProject = cloneStudioProjectForEdit(targetProject, null, null);
-  const acts = normalizeRpg3DActs(normalizedProject.rpg3dActs);
-  const scenes = normalizeRpg3DScenes(normalizedProject.rpg3dScenes, acts);
-  return {
-    acts,
-    scenes,
-    canvases: normalizeRpg3DCanvases(normalizedProject.rpg3dCanvases, null, acts, scenes),
-  };
-};
-const createRpg3DCanvasDraft = ({ index = 0, actId = DEFAULT_RPG3D_ACT_ID, sceneId = '', sceneName = '' } = {}) => {
-  const id = createId('rpg3d-canvas');
-  const name = sceneName || `Scene ${index + 1}`;
-  const config = cloneConfig(DEFAULT_ARCADE_CONFIG);
-  config.meta = { ...(config.meta || {}), title: name };
-  return {
-    id,
-    name,
-    actId,
-    sceneId: sceneId || id,
-    config,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-};
-const readSavedArcadeAssets = () => {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = window.localStorage.getItem(ARCADE_ASSETS_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : null;
-  } catch {
-    return null;
-  }
-};
-const getArcadeAssetsRemotePath = (userId) => buildStoragePath('users', userId, 'arcade-assets', 'assets.json');
-const getArcadeModelRemotePath = (userId, modelType, filename) => (
-  buildStoragePath('users', userId, 'arcade-assets', modelType, filename)
-);
-const getArcadeTextureRemotePath = (userId, modelType, filename) => (
-  buildStoragePath('users', userId, 'arcade-assets', modelType, 'textures', filename)
-);
-const getArcadeMediaRemotePath = (userId, filename) => (
-  buildStoragePath('users', userId, 'arcade-assets', 'media', filename)
-);
-const isBlobUrl = (value = '') => String(value || '').startsWith('blob:');
-const isDataUrl = (value = '') => String(value || '').startsWith('data:');
-const createArcadeAssetsPayload = (config, studioProject) => ({
-  version: ARCADE_ASSETS_REMOTE_VERSION,
-  savedAt: new Date().toISOString(),
-  config: {
-    ...cloneConfig(config),
-  },
-  studioProject: cloneStudioProjectForEdit(studioProject),
-});
-const getPersistedModelSource = (model = {}) => {
-  if (isDataUrl(model.modelData)) return model.modelData;
-  if (model.modelData && isBlobUrl(model.modelUrl)) return model.modelData;
-  return model.modelUrl || model.modelData || '';
-};
-const stripVolatileModelData = (model = {}) => {
-  const next = { ...model };
-  if (isDataUrl(next.modelData) && next.modelUrl && !isBlobUrl(next.modelUrl) && !isDataUrl(next.modelUrl)) next.modelUrl = '';
-  if (isBlobUrl(next.modelUrl) && !next.modelData) next.modelUrl = '';
-  if (next.modelUrl && !isBlobUrl(next.modelUrl) && !isDataUrl(next.modelUrl)) next.modelData = '';
-  return next;
-};
-const createLocalArcadeAssetsSnapshot = (payload = {}) => ({
-  ...payload,
-  studioProject: {
-    ...createDefaultStudioProject(),
-    ...(payload.studioProject || {}),
-    characterModels3d: (payload.studioProject?.characterModels3d || []).map(stripVolatileModelData),
-    decorModels3d: (payload.studioProject?.decorModels3d || []).map(stripVolatileModelData),
-    mediaAssets: clonePlainObjectArray(payload.studioProject?.mediaAssets || []),
-  },
-});
-const rememberArcadeAssetsLocally = (payload) => {
-  if (typeof window === 'undefined') return false;
-  try {
-    window.localStorage.removeItem(ARCADE_ASSETS_STORAGE_KEY);
-    window.localStorage.setItem(ARCADE_ASSETS_STORAGE_KEY, JSON.stringify(createLocalArcadeAssetsSnapshot(payload)));
-    return true;
-  } catch {
-    return false;
-  }
-};
-const getExtensionForMimeType = (mimeType = '') => ({
-  'model/gltf-binary': 'glb',
-  'image/png': 'png',
-  'image/jpeg': 'jpg',
-  'image/webp': 'webp',
-  'image/gif': 'gif',
-  'image/svg+xml': 'svg',
-}[String(mimeType).toLowerCase()] || 'bin');
-const dataUrlToFile = (dataUrl, fallbackName = 'asset.bin', options = {}) => {
-  const [header = '', encoded = ''] = String(dataUrl || '').split(',');
-  const mimeType = header.match(/^data:([^;,]+)/i)?.[1] || options.mimeType || 'application/octet-stream';
-  const binary = atob(encoded);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-  const sourceName = fallbackName || options.defaultName || 'asset';
-  const extension = options.extension || getExtensionForMimeType(mimeType);
-  const fileName = /\.[a-z0-9]+$/i.test(sourceName) ? sourceName : `${sourceName}.${extension}`;
-  return new File([bytes], fileName, { type: mimeType });
-};
-const getSizedUploadTimeoutMs = (file, profile = ARCADE_MEDIA_UPLOAD_TIMEOUT) => {
-  const sizeMb = Math.max(0, (Number(file?.size) || 0) / ARCADE_UPLOAD_MB);
-  const minMs = Number(profile.minMs) || ARCADE_MEDIA_UPLOAD_TIMEOUT.minMs;
-  const maxMs = Number(profile.maxMs) || ARCADE_MEDIA_UPLOAD_TIMEOUT.maxMs;
-  const msPerMb = Number(profile.msPerMb) || ARCADE_MEDIA_UPLOAD_TIMEOUT.msPerMb;
-  return Math.round(Math.min(maxMs, Math.max(minMs, sizeMb * msPerMb)));
-};
-const mapArcadeAssetsSequentially = async (items = [], mapper) => {
-  const results = [];
-  for (let index = 0; index < items.length; index += 1) {
-    results.push(await mapper(items[index], index));
-  }
-  return results;
-};
-const uploadModelTextureDataToSupabase = async (model, userId, modelType) => {
-  const next = { ...model };
-  if (!isDataUrl(next.imageData)) return next;
-  const file = dataUrlToFile(next.imageData, next.imageName || `${next.name || modelType}-texture`, { mimeType: 'image/png' });
-  const filename = generateStorageFilename(file.name || `${modelType}-texture.${getExtensionForMimeType(file.type)}`);
-  const uploadResult = await uploadToStorage(getArcadeTextureRemotePath(userId, modelType, filename), file, {
-    visibility: 'public',
-    upsert: false,
-    cacheControl: '31536000',
-    contentType: file.type || 'image/png',
-    maxFileSize: ARCADE_TEXTURE_MAX_BYTES,
-    allowMimeTypes: ARCADE_TEXTURE_MIME_TYPES,
-    timeoutMs: getSizedUploadTimeoutMs(file, ARCADE_MEDIA_UPLOAD_TIMEOUT),
-  });
-  return {
-    ...next,
-    imageData: uploadResult.publicUrl || '',
-    imageName: next.imageName || file.name,
-    imageStorageMode: 'supabase',
-    imageStoragePath: uploadResult.path,
-    imageStorageBucket: uploadResult.bucket,
-  };
-};
-const uploadMediaAssetDataToSupabase = async (asset, userId, index = 0) => {
-  const next = { ...(asset || {}) };
-  if (!isDataUrl(next.url)) return next;
-  const file = dataUrlToFile(next.url, next.name || `media-${index + 1}`, { mimeType: 'image/png' });
-  const filename = generateStorageFilename(file.name || `media-${index + 1}.${getExtensionForMimeType(file.type)}`);
-  const uploadResult = await uploadToStorage(getArcadeMediaRemotePath(userId, filename), file, {
-    visibility: 'public',
-    upsert: false,
-    cacheControl: '31536000',
-    contentType: file.type || 'image/png',
-    maxFileSize: ARCADE_TEXTURE_MAX_BYTES,
-    allowMimeTypes: ARCADE_TEXTURE_MIME_TYPES,
-    timeoutMs: getSizedUploadTimeoutMs(file, ARCADE_MEDIA_UPLOAD_TIMEOUT),
-  });
-  return {
-    ...next,
-    url: uploadResult.publicUrl || '',
-    name: next.name || file.name,
-    storageMode: 'supabase',
-    storagePath: uploadResult.path,
-    storageBucket: uploadResult.bucket,
-  };
-};
-const uploadModelDataToSupabase = async (model, userId, modelType) => {
-  const next = { ...model };
-  const modelData = isDataUrl(model.modelData) ? model.modelData : (isDataUrl(model.modelUrl) ? model.modelUrl : '');
-  if (!modelData && next.modelUrl && !isBlobUrl(next.modelUrl) && !isDataUrl(next.modelUrl)) {
-    next.modelData = '';
-    return uploadModelTextureDataToSupabase(next, userId, modelType);
-  }
-
-  if (!modelData) {
-    if (isBlobUrl(next.modelUrl)) next.modelUrl = next.modelData || '';
-    return uploadModelTextureDataToSupabase(stripVolatileModelData(next), userId, modelType);
-  }
-
-  const sourceName = next.modelName || next.name || `${modelType}.glb`;
-  const file = dataUrlToFile(modelData, sourceName, { mimeType: 'model/gltf-binary', extension: 'glb' });
-  const filename = generateStorageFilename(file.name || `${modelType}.glb`);
-  const uploadResult = await uploadToStorage(getArcadeModelRemotePath(userId, modelType, filename), file, {
-    visibility: 'public',
-    upsert: false,
-    cacheControl: '31536000',
-    contentType: file.type || 'model/gltf-binary',
-    maxFileSize: ARCADE_GLB_MAX_BYTES,
-    allowMimeTypes: ARCADE_GLB_MIME_TYPES,
-    timeoutMs: getSizedUploadTimeoutMs(file, ARCADE_GLB_UPLOAD_TIMEOUT),
-  });
-
-  return uploadModelTextureDataToSupabase({
-    ...next,
-    modelUrl: uploadResult.publicUrl || '',
-    modelData: '',
-    modelName: next.modelName || file.name,
-    modelStorageMode: 'supabase',
-    modelStoragePath: uploadResult.path,
-    modelStorageBucket: uploadResult.bucket,
-  }, userId, modelType);
-};
-const persistStudioModelsToSupabase = async (studioProject, userId) => ({
-  ...createDefaultStudioProject(),
-  ...(studioProject || {}),
-  characterModels3d: await mapArcadeAssetsSequentially(studioProject?.characterModels3d || [], (model) => (
-    uploadModelDataToSupabase(model, userId, 'characters')
-  )),
-  decorModels3d: await mapArcadeAssetsSequentially(studioProject?.decorModels3d || [], (model) => (
-    uploadModelDataToSupabase(model, userId, 'objects')
-  )),
-  mediaAssets: await mapArcadeAssetsSequentially(studioProject?.mediaAssets || [], (asset, index) => (
-    uploadMediaAssetDataToSupabase(asset, userId, index)
-  )),
-});
-const syncConfigModelReferences = (config, studioProject) => {
-  const next = createConfigFromSavedAssets(config);
-  let changed = false;
-  const characterModels = new Map((studioProject.characterModels3d || []).map((model) => [model.id, model]));
-  const decorModels = new Map((studioProject.decorModels3d || []).map((model) => [model.id, model]));
-  const setField = (target, field, value) => {
-    if (!target || target[field] === value) return;
-    target[field] = value;
-    changed = true;
-  };
-  const syncActor = (actor) => {
-    if (!actor) return;
-    const model = characterModels.get(actor.characterModel3dId);
-    if (model) {
-      const source = getPersistedModelSource(model);
-      if (source) {
-        setField(actor, 'characterModelUrl', source);
-        setField(actor, 'characterModelName', model.modelName || model.name || actor.characterModelName || '');
-        setField(actor, 'characterRenderMode', 'glb');
-        return;
-      }
-      setField(actor, 'characterModelUrl', '');
-      setField(actor, 'characterModelName', '');
-      if (actor.characterRenderMode === 'glb') setField(actor, 'characterRenderMode', getStudioCharacterRenderMode(model));
-    } else if (actor.characterModel3dId || isBlobUrl(actor.characterModelUrl)) {
-      setField(actor, 'characterModel3dId', '');
-      setField(actor, 'characterModelUrl', '');
-      setField(actor, 'characterModelName', '');
-      if (actor.characterRenderMode === 'glb') setField(actor, 'characterRenderMode', 'capsule');
-    }
-  };
-  syncActor(next.player);
-  (next.heroes || []).forEach(syncActor);
-  (next.enemies || []).forEach(syncActor);
-  (next.props || []).forEach((prop) => {
-    const model = decorModels.get(prop.decorModel3dId);
-    if (model) {
-      setField(prop, 'modelRotationX', getModelRotationValue(model, 'modelRotationX'));
-      setField(prop, 'modelRotationY', getModelRotationValue(model, 'modelRotationY'));
-      setField(prop, 'modelRotationZ', getModelRotationValue(model, 'modelRotationZ'));
-      setField(prop, 'modelCenterOnOrigin', Boolean(model.modelCenterOnOrigin));
-      setField(prop, 'modelFlushToGround', Boolean(model.modelFlushToGround));
-      const source = getPersistedModelSource(model);
-      if (source) {
-        setField(prop, 'decorModelUrl', source);
-        setField(prop, 'decorModelName', model.modelName || model.name || prop.decorModelName || '');
-        setField(prop, 'renderMode', 'glb');
-        if (!prop.imageData || prop.imageData === model.imageData || prop.imageName === model.imageName) {
-          setField(prop, 'imageData', '');
-          setField(prop, 'imageName', '');
-          setField(prop, 'repeatTexture', false);
-        }
-        return;
-      }
-      setField(prop, 'decorModelUrl', '');
-      setField(prop, 'decorModelName', '');
-      if (prop.renderMode === 'glb') setField(prop, 'renderMode', getDecorImportRenderMode(model));
-    } else if (isBlobUrl(prop.decorModelUrl)) {
-      setField(prop, 'decorModelUrl', '');
-    }
-  });
-  return { config: changed ? next : config, changed };
-};
-const syncConfigModelUrls = (config, studioProject) => syncConfigModelReferences(config, studioProject).config;
-const compactHistoryDataUrl = (value = '') => (
-  isDataUrl(value) && value.length > RPG3D_HISTORY_DATA_URL_MAX_CHARS ? '' : value
-);
-const compactHistoryModel = (model = {}) => stripVolatileModelData({
-  ...model,
-  modelData: compactHistoryDataUrl(model.modelData || ''),
-  modelUrl: isDataUrl(model.modelUrl || '') ? compactHistoryDataUrl(model.modelUrl) : (model.modelUrl || ''),
-  imageData: compactHistoryDataUrl(model.imageData || ''),
-});
-const createHistoryStudioProjectSnapshot = (studioProject = null) => ({
-  ...createDefaultStudioProject(),
-  ...(studioProject && typeof studioProject === 'object' ? studioProject : {}),
-  characterModels3d: (studioProject?.characterModels3d || []).map(compactHistoryModel),
-  decorModels3d: (studioProject?.decorModels3d || []).map(compactHistoryModel),
-  mediaAssets: (studioProject?.mediaAssets || []).map((asset) => ({
-    ...(asset || {}),
-    url: compactHistoryDataUrl(asset?.url || ''),
-  })),
-});
-const createRpg3DHistorySnapshot = (config, studioProject) => ({
-  config: cloneConfig(config),
-  studioProject: createHistoryStudioProjectSnapshot(studioProject),
-});
-const createSupabaseArcadeAssetsPayload = async (config, studioProject, userId) => {
-  const persistedStudioProject = await persistStudioModelsToSupabase(studioProject, userId);
-  const persistedConfig = syncConfigModelUrls(config, persistedStudioProject);
-  return createArcadeAssetsPayload(persistedConfig, persistedStudioProject);
-};
-const uploadArcadeAssetsManifest = async (payload, userId) => {
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  await uploadToStorage(getArcadeAssetsRemotePath(userId), blob, {
-    visibility: 'private',
-    upsert: true,
-    cacheControl: '0',
-    contentType: 'application/json',
-    maxFileSize: ARCADE_MANIFEST_MAX_BYTES,
-    timeoutMs: ARCADE_MANIFEST_UPLOAD_TIMEOUT_MS,
-  });
-};
-const loadArcadeAssetsFromSupabase = async (userId) => {
-  const text = await downloadTextFile(getArcadeAssetsRemotePath(userId), { visibility: 'private' });
-  const parsed = JSON.parse(text);
-  return parsed && typeof parsed === 'object' ? parsed : null;
-};
-const mergeById = (current = [], additions = []) => {
-  const seen = new Set(current.map((item) => item.id).filter(Boolean));
-  const nextItems = additions
-    .filter((item) => item?.id && !seen.has(item.id))
-    .map((item) => structuredClone(item));
-  return [...current, ...nextItems];
-};
 const createNewArcadeConfig = () => {
   const next = cloneConfig(DEFAULT_ARCADE_CONFIG);
   next.meta.title = 'Nouveau projet';
@@ -931,69 +474,93 @@ const createNewArcadeConfig = () => {
   next.enemies = [];
   next.pickups = [];
   next.actionZones = [];
+  next.terrainPaintStrokes = [];
   next.player.x = Math.round(next.world.width * 0.5);
   next.player.y = Math.round(next.world.height * 0.5);
   next.player.health = next.player.maxHealth;
   next.player.mana = next.player.maxMana;
   return next;
 };
-const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-const clampWithFloor = (value, min, max) => clamp(value, min, Math.max(min, max));
 const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
-const normalize = (x, y) => {
-  const length = Math.hypot(x, y);
-  return length > 0.001 ? { x: x / length, y: y / length } : { x: 0, y: 0 };
+const vectorDistanceByFields = (a = {}, b = {}, fields = []) => {
+  const values = fields.flatMap((field) => [Number(a[field]), Number(b[field])]);
+  if (!values.every(Number.isFinite)) return null;
+  return Math.hypot(
+    Number(a[fields[0]]) - Number(b[fields[0]]),
+    Number(a[fields[1]]) - Number(b[fields[1]]),
+    Number(a[fields[2]]) - Number(b[fields[2]]),
+  );
+};
+const modelEraserHitDistance = (a = {}, b = {}) => {
+  const localSceneDistance = vectorDistanceByFields(a, b, ['localSceneX', 'localSceneY', 'localSceneZ']);
+  if (localSceneDistance !== null) return localSceneDistance / ARCADE_WORLD_SCALE;
+  const sceneDistance = vectorDistanceByFields(a, b, ['sceneX', 'sceneY', 'sceneZ']);
+  if (sceneDistance !== null) return sceneDistance / ARCADE_WORLD_SCALE;
+  return distance(a, b);
+};
+const normalizeModelEraserHit = (point = {}) => {
+  const normalized = {
+    x: Number(point.x),
+    y: Number(point.y),
+  };
+  const sceneX = Number(point.sceneX);
+  const sceneY = Number(point.sceneY);
+  const sceneZ = Number(point.sceneZ);
+  if ([sceneX, sceneY, sceneZ].every(Number.isFinite)) {
+    normalized.sceneX = sceneX;
+    normalized.sceneY = sceneY;
+    normalized.sceneZ = sceneZ;
+  }
+  const localSceneX = Number(point.localSceneX);
+  const localSceneY = Number(point.localSceneY);
+  const localSceneZ = Number(point.localSceneZ);
+  if ([localSceneX, localSceneY, localSceneZ].every(Number.isFinite)) {
+    normalized.localSceneX = localSceneX;
+    normalized.localSceneY = localSceneY;
+    normalized.localSceneZ = localSceneZ;
+  }
+  const localMeshX = Number(point.localMeshX);
+  const localMeshY = Number(point.localMeshY);
+  const localMeshZ = Number(point.localMeshZ);
+  if ([localMeshX, localMeshY, localMeshZ].every(Number.isFinite)) {
+    normalized.localMeshX = localMeshX;
+    normalized.localMeshY = localMeshY;
+    normalized.localMeshZ = localMeshZ;
+  }
+  const surfaceIndex = Number(point.surfaceIndex);
+  if (Number.isFinite(surfaceIndex)) normalized.surfaceIndex = Math.round(surfaceIndex);
+  const materialIndex = Number(point.materialIndex);
+  if (Number.isFinite(materialIndex)) normalized.materialIndex = Math.round(materialIndex);
+  const uvX = Number(point.uvX);
+  const uvY = Number(point.uvY);
+  if (Number.isFinite(uvX) && Number.isFinite(uvY)) {
+    normalized.uvX = uvX;
+    normalized.uvY = uvY;
+  }
+  return normalized;
 };
 const createId = (prefix) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-const normalizeDegrees = (value = 0) => {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return 0;
-  return ((numeric % 360) + 360) % 360;
-};
 const getModelRotationValue = (item = {}, field = 'modelRotationX') => {
   const numeric = Number(item[field]);
   return clamp(Number.isFinite(numeric) ? numeric : 0, -180, 180);
 };
-const normalizeModelRotation = (value = 0) => {
-  const normalized = normalizeDegrees(value);
-  return normalized > 180 ? normalized - 360 : normalized;
+const shouldAppendTerrainPaintPoint = (stroke = {}, point = {}) => {
+  const points = Array.isArray(stroke.points) ? stroke.points : [];
+  const previous = points[points.length - 1];
+  if (!previous) return true;
+  const spacing = Math.max(10, getTerrainPaintRadius(stroke) * 0.18);
+  return distance(previous, point) >= spacing;
 };
 const getEntityRotation = (item = {}) => normalizeDegrees(item.rotation || 0);
+const isCountedMapProp = (prop = {}, config = {}) => !isFlatGroundPlateauProp(prop, config.world);
+const getCountedMapProps = (config = {}) => (config.props || []).filter((prop) => isCountedMapProp(prop, config));
 const getArcadeObjectCount = (config = {}) => (config.obstacles?.length || 0)
   + (config.reliefs?.length || 0)
   + (config.heroes?.length || 0)
-  + (config.props?.length || 0)
+  + getCountedMapProps(config).length
   + (config.enemies?.length || 0)
   + (config.pickups?.length || 0)
   + (config.actionZones?.length || 0);
-const clampArcadeEntitiesToWorld = (config) => {
-  const width = Number(config.world?.width) || DEFAULT_ARCADE_CONFIG.world.width;
-  const height = Number(config.world?.height) || DEFAULT_ARCADE_CONFIG.world.height;
-  if (config.player) {
-    config.player.x = clampWithFloor(Number(config.player.x) || width / 2, PLAYER_RADIUS, width - PLAYER_RADIUS);
-    config.player.y = clampWithFloor(Number(config.player.y) || height / 2, PLAYER_RADIUS, height - PLAYER_RADIUS);
-  }
-  (config.obstacles || []).forEach((obstacle) => {
-    const obstacleWidth = Math.max(0, Number(obstacle.w) || 0);
-    const obstacleHeight = Math.max(0, Number(obstacle.h) || 0);
-    obstacle.x = clampWithFloor(Number(obstacle.x) || 0, 0, width - obstacleWidth);
-    obstacle.y = clampWithFloor(Number(obstacle.y) || 0, 0, height - obstacleHeight);
-  });
-  ['reliefs', 'heroes', 'props', 'enemies', 'pickups'].forEach((collectionName) => {
-    (config[collectionName] || []).forEach((item) => {
-      item.x = clamp(Number(item.x) || 0, 0, width);
-      item.y = clamp(Number(item.y) || 0, 0, height);
-    });
-  });
-  (config.actionZones || []).forEach((zone) => {
-    const zoneWidth = getActionZoneWidth(zone);
-    const zoneHeight = getActionZoneHeight(zone);
-    zone.w = Math.round(zoneWidth);
-    zone.h = Math.round(zoneHeight);
-    zone.x = Math.round(clamp(Number(zone.x) || width / 2, zoneWidth / 2, Math.max(zoneWidth / 2, width - zoneWidth / 2)));
-    zone.y = Math.round(clamp(Number(zone.y) || height / 2, zoneHeight / 2, Math.max(zoneHeight / 2, height - zoneHeight / 2)));
-  });
-};
 const getArcadeImportPoint = (config, index = 0) => {
   const grid = Math.max(90, Number(config.world?.grid) || DEFAULT_ARCADE_CONFIG.world.grid);
   const angle = (index % 8) * (Math.PI / 4);
@@ -1005,33 +572,18 @@ const getArcadeImportPoint = (config, index = 0) => {
     y: Math.round(clamp(baseY + Math.sin(angle) * radius, 40, config.world.height - 40)),
   };
 };
-const getPowerColor = (type = 'fire') => ({
-  lightning: '#c4b5fd',
-  water: '#67e8f9',
-  earth: '#86efac',
-  fire: '#f97316',
-}[type] || '#f97316');
 const getCharacterRenderMode = (actor = {}) => actor.characterRenderMode || 'capsule';
 const getCharacterRenderLabel = (actor = {}) => CHARACTER_RENDER_OPTIONS.find((option) => option.id === getCharacterRenderMode(actor))?.label || 'Personnage volume';
-const getCharacterModelScale = (actor = {}) => clamp(Number(actor.characterModelScale) || 1, MODEL_SCALE_MIN, MODEL_SCALE_MAX);
-const getHeroCharacterId = (hero = {}) => hero.character || 'runner';
-const getEntityZ = (item = {}) => clamp(Number(item.z) || 0, ENTITY_Z_MIN, ENTITY_Z_MAX);
-const getFloorZeroZ = (item = {}) => {
-  const value = Number(item.floorZeroZ);
-  return clamp(Number.isFinite(value) ? value : DEFAULT_FLOOR_ZERO_Z, FLOOR_ZERO_Z_MIN, FLOOR_ZERO_Z_MAX);
+const getStudioMaterialBrightness = (model = {}) => {
+  const value = Number(model.materialBrightness);
+  return clamp(Number.isFinite(value) ? value : 1, MATERIAL_BRIGHTNESS_MIN, MATERIAL_BRIGHTNESS_MAX);
 };
-const canEntityLevitate = (type = '') => ['spawn', 'hero', 'enemy', 'prop', 'pickup', 'obstacle'].includes(type);
+const getHeroCharacterId = (hero = {}) => hero.character || 'runner';
+const canEntityLevitate = (type = '') => ['hero', 'enemy', 'prop', 'pickup', 'obstacle'].includes(type);
 const getSelectedEntityTypeLabel = (selectedEntity = {}) => (
   SELECTED_ENTITY_TYPE_LABELS[selectedEntity.type] || String(selectedEntity.type || '').toUpperCase()
 );
-const getEntityKey = (entity = {}) => (entity?.type && entity?.id ? `${entity.type}:${entity.id}` : '');
 const canMultiSelectEntity = (entity = {}) => Boolean(entity?.id && MULTI_SELECT_ENTITY_TYPES.has(entity.type));
-const isSameEntity = (a = {}, b = {}) => a?.type === b?.type && a?.id === b?.id;
-const getStudioModelSource = (model = {}) => {
-  if (isDataUrl(model.modelData)) return model.modelData;
-  if (model.modelData && String(model.modelUrl || '').startsWith('blob:')) return model.modelData;
-  return model.modelUrl || model.modelData || '';
-};
 const getStudioCharacterRenderMode = (model = {}) => {
   if (getStudioModelSource(model)) return 'glb';
   if (model.shape === 'robot') return 'block';
@@ -1040,37 +592,67 @@ const getStudioCharacterRenderMode = (model = {}) => {
 };
 const getDecorImportRenderMode = (model = {}) => {
   if (getStudioModelSource(model)) return 'glb';
-  if (model.kind === 'road' || model.kind === 'water') return 'floor';
+  if (isFloorDecorKind(model.kind)) return 'floor';
   if (model.kind === 'wall') return 'box';
   if (model.kind === 'house') return 'house';
   if (model.imageData) return 'billboard';
   return 'rock';
 };
 const getDecorModelWorldSize = (model = {}) => {
-  const width = Math.round(clamp((Number(model.width) || 2.2) / ARCADE_WORLD_SCALE, 24, 1400));
-  const depth = Math.round(clamp((Number(model.depth) || 2.2) / ARCADE_WORLD_SCALE, 24, 1400));
-  const height = Math.round(clamp((Number(model.height) || 1.2) / ARCADE_WORLD_SCALE, 12, 900));
-  if (model.kind === 'road' || model.kind === 'water') {
+  const modelScale = getDecorModelScale(model);
+  const width = Math.round(clamp(((Number(model.width) || 2.2) * modelScale) / ARCADE_WORLD_SCALE, 24, 9000));
+  const depth = Math.round(clamp(((Number(model.depth) || 2.2) * modelScale) / ARCADE_WORLD_SCALE, 24, 9000));
+  const modelHeight = Number(model.height) || 1.2;
+  const height = Math.round(clamp((modelHeight * modelScale) / ARCADE_WORLD_SCALE, 12, 9000));
+  if (isFloorDecorKind(model.kind) && !getStudioModelSource(model)) {
     const tileSize = Math.max(width, depth);
     return { width: tileSize, depth: tileSize, height: Math.max(12, height) };
   }
   return { width, depth, height };
+};
+const getPlacementCameraDistance = (config = {}, entity = null) => {
+  const defaultDistance = DEFAULT_ARCADE_CONFIG.engine.cameraDistance;
+  if (!entity?.type || !entity.id) return defaultDistance;
+  const selectedEntity = getSelectedEntity(config, entity);
+  if (!selectedEntity?.item) return defaultDistance;
+  if (['hero', 'enemy'].includes(entity.type)) return CHARACTER_PLACEMENT_CAMERA_DISTANCE;
+  return defaultDistance;
+};
+const applyCharacterModelScaleToActor = (actor, model = null) => {
+  const axisScale = model ? getCharacterModelAxisScale(model) : { x: 1, y: 1, z: 1 };
+  actor.characterModelScale = axisScale.y;
+  actor.characterModelScaleX = axisScale.x;
+  actor.characterModelScaleY = axisScale.y;
+  actor.characterModelScaleZ = axisScale.z;
+  actor.characterModelScaleProportional = model ? model.characterModelScaleProportional !== false : true;
 };
 const applyCharacterModelToActor = (actor, model = null) => {
   if (!model || !getStudioModelSource(model)) {
     actor.characterModel3dId = '';
     actor.characterModelUrl = '';
     actor.characterModelName = '';
+    actor.characterModelFormat = '';
+    actor.characterModelFileSize = 0;
+    actor.characterModelResources = [];
+    actor.characterModelAnimations = {};
+    actor.characterLocalModelFileId = '';
     actor.characterRenderMode = model ? getStudioCharacterRenderMode(model) : 'capsule';
+    applyCharacterModelScaleToActor(actor, model);
+    actor.characterMaterialBrightness = model ? getStudioMaterialBrightness(model) : 1;
     return;
   }
   actor.characterModel3dId = model.id || '';
   actor.characterModelUrl = getStudioModelSource(model);
   actor.characterModelName = model.modelName || model.name || 'modele.glb';
+  actor.characterModelFormat = model.modelFormat || '';
+  actor.characterModelFileSize = Number(model.modelFileSize) || 0;
+  actor.characterModelResources = Array.isArray(model.modelResources) ? model.modelResources : [];
+  actor.characterModelAnimations = getPersistedModelAnimations(model, { preferLocalBlob: true });
+  actor.characterLocalModelFileId = model.localModelFileId || '';
   actor.characterRenderMode = 'glb';
-  actor.characterModelScale = clamp(Number(actor.characterModelScale) || 1, MODEL_SCALE_MIN, MODEL_SCALE_MAX);
+  applyCharacterModelScaleToActor(actor, model);
+  actor.characterMaterialBrightness = getStudioMaterialBrightness(model);
 };
-const getDecorModelScale = (prop = {}) => clamp(Number(prop.decorModelScale) || 1, MODEL_SCALE_MIN, MODEL_SCALE_MAX);
 const guessCharacterRenderMode = (fileName = '') => {
   const name = fileName.toLowerCase();
   if (/(boss|dragon|monster|monstre|creature|golem|geant|giant)/.test(name)) return 'boss';
@@ -1092,63 +674,6 @@ const readArcadeImageFile = (file) => new Promise((resolve, reject) => {
   reader.readAsDataURL(file);
 });
 
-const getCachedImage = (cache, src) => {
-  if (!src) return null;
-  const cached = cache.get(src);
-  if (cached) return cached.complete && cached.naturalWidth ? cached : null;
-  const image = new Image();
-  image.decoding = 'async';
-  image.onload = () => {};
-  image.onerror = () => cache.delete(src);
-  image.src = src;
-  cache.set(src, image);
-  return null;
-};
-
-const getPropWidth = (prop = {}) => Math.max(12, Number(prop.w) || (Number(prop.r) || 34) * 2);
-const getPropHeight = (prop = {}) => Math.max(12, Number(prop.h) || (Number(prop.r) || 34) * 2);
-const getPropModelHeight = (prop = {}) => Math.max(12, Number(prop.modelHeight) || getPropHeight(prop));
-const getPropRenderMode = (prop = {}) => prop.renderMode || (prop.imageData ? 'billboard' : 'rock');
-const isFloorTileProp = (prop = {}) => getPropRenderMode(prop) === 'floor';
-const isFlatTileLikeProp = (prop = {}) => {
-  if (isFloorTileProp(prop)) return true;
-  if (getPropRenderMode(prop) !== 'glb') return false;
-  const rotationX = Math.abs(normalizeModelRotation(prop.modelRotationX || 0));
-  return rotationX >= 30 && rotationX <= 150;
-};
-const getFloorTileWorldSize = (prop = {}) => Math.max(12, Math.round(Math.max(getPropWidth(prop), getPropHeight(prop))));
-const getFlatTileWorldDimensions = (prop = {}) => {
-  if (getPropRenderMode(prop) === 'glb') {
-    const footprint = Math.max(12, Math.round(getPropModelHeight(prop) * getDecorModelScale(prop)));
-    return { width: footprint, height: footprint };
-  }
-  return {
-    width: Math.max(12, Math.round(getPropWidth(prop))),
-    height: Math.max(12, Math.round(getPropHeight(prop))),
-  };
-};
-const getActionZoneWidth = (zone = {}) => Math.max(ACTION_ZONE_MIN_SIZE, Number(zone.w) || ACTION_ZONE_DEFAULT_WIDTH);
-const getActionZoneHeight = (zone = {}) => Math.max(ACTION_ZONE_MIN_SIZE, Number(zone.h) || ACTION_ZONE_DEFAULT_HEIGHT);
-const getActionZoneModelHeight = (zone = {}) => Math.max(60, Number(zone.modelHeight) || ACTION_ZONE_DEFAULT_MODEL_HEIGHT);
-const getActionZoneOpacity = (zone = {}) => clamp(Number(zone.opacity) || ACTION_ZONE_DEFAULT_OPACITY, 0.05, 0.95);
-const getActionZoneColor = (zone = {}) => {
-  const value = String(zone.color || '').trim();
-  return /^#[0-9a-f]{6}$/i.test(value) ? value : (getActionZoneType(zone) === 'portal' ? '#38bdf8' : '#facc15');
-};
-const getActionZoneRect = (zone = {}) => ({
-  x: (Number(zone.x) || 0) - getActionZoneWidth(zone) / 2,
-  y: (Number(zone.y) || 0) - getActionZoneHeight(zone) / 2,
-  w: getActionZoneWidth(zone),
-  h: getActionZoneHeight(zone),
-});
-const isPointInActionZone = (zone, point) => {
-  const rect = getActionZoneRect(zone);
-  return point.x >= rect.x
-    && point.x <= rect.x + rect.w
-    && point.y >= rect.y
-    && point.y <= rect.y + rect.h;
-};
-const getActionZoneType = (zone = {}) => zone.actionType || 'portal';
 const createNpcChoice = (label = 'Reponse', response = '') => ({
   id: createId('npc-choice'),
   label,
@@ -1192,205 +717,6 @@ const getActionZoneNpcLabel = (config = {}, targetNpcId = '') => {
   if (enemy) return enemy.combatEnemyName || enemy.name || 'Personnage';
   return 'PNJ';
 };
-const getFlatTileSnapOverlap = (dimension = 0) => {
-  const size = Math.max(0, Number(dimension) || 0);
-  return Math.min(FLOOR_TILE_OVERLAP, Math.max(0, size / 2 - 1));
-};
-const getFlatTileWorldBounds = (tiles = []) => {
-  let bounds = null;
-  tiles.forEach((tile) => {
-    if (!tile) return;
-    const { width, height } = getFlatTileWorldDimensions(tile);
-    const x = Number(tile.x) || 0;
-    const y = Number(tile.y) || 0;
-    const tileBounds = {
-      minX: x - width / 2,
-      maxX: x + width / 2,
-      minY: y - height / 2,
-      maxY: y + height / 2,
-    };
-    bounds = bounds
-      ? {
-        minX: Math.min(bounds.minX, tileBounds.minX),
-        maxX: Math.max(bounds.maxX, tileBounds.maxX),
-        minY: Math.min(bounds.minY, tileBounds.minY),
-        maxY: Math.max(bounds.maxY, tileBounds.maxY),
-      }
-      : tileBounds;
-  });
-  return bounds;
-};
-const getFlatTileEdgeSnapDistance = (width = 0, height = 0) => (
-  Math.min(92, Math.max(FLOOR_TILE_EDGE_SNAP_DISTANCE, Math.min(width, height) * 0.35))
-);
-const snapFlatTileToWorldEdges = (tile, world = {}, options = {}) => {
-  if (!tile || !isFlatTileLikeProp(tile)) return false;
-  const { width, height } = getFlatTileWorldDimensions(tile);
-  const worldWidth = Math.max(width, Number(world.width) || width);
-  const worldHeight = Math.max(height, Number(world.height) || height);
-  const minX = width / 2;
-  const maxX = worldWidth - width / 2;
-  const minY = height / 2;
-  const maxY = worldHeight - height / 2;
-  const snapDistance = options.force ? Infinity : getFlatTileEdgeSnapDistance(width, height);
-  const currentX = Number(tile.x) || 0;
-  const currentY = Number(tile.y) || 0;
-  let nextX = currentX;
-  let nextY = currentY;
-
-  if (Math.abs(currentX - minX) <= snapDistance) nextX = minX;
-  else if (Math.abs(currentX - maxX) <= snapDistance) nextX = maxX;
-  if (Math.abs(currentY - minY) <= snapDistance) nextY = minY;
-  else if (Math.abs(currentY - maxY) <= snapDistance) nextY = maxY;
-
-  if (nextX === currentX && nextY === currentY) return false;
-  tile.x = Math.round(clamp(nextX, minX, maxX));
-  tile.y = Math.round(clamp(nextY, minY, maxY));
-  tile.blocksMovement = false;
-  return true;
-};
-const getFlatTileGroupEdgeSnapOffset = (config = {}, dragState = {}, delta = {}) => {
-  const items = dragState.items || [];
-  if (items.length <= 1) return { x: 0, y: 0 };
-  const props = config.props || [];
-  const projectedTiles = items.map(({ entity, start }) => {
-    if (entity?.type !== 'prop' || !start) return null;
-    const prop = props.find((item) => item.id === entity.id);
-    if (!prop || !isFlatTileLikeProp(prop)) return null;
-    return {
-      ...prop,
-      x: start.x + (Number(delta.x) || 0),
-      y: start.y + (Number(delta.y) || 0),
-    };
-  }).filter(Boolean);
-  if (!projectedTiles.length) return { x: 0, y: 0 };
-  const bounds = getFlatTileWorldBounds(projectedTiles);
-  if (!bounds) return { x: 0, y: 0 };
-  const world = config.world || DEFAULT_ARCADE_CONFIG.world;
-  const worldWidth = Number(world.width) || DEFAULT_ARCADE_CONFIG.world.width;
-  const worldHeight = Number(world.height) || DEFAULT_ARCADE_CONFIG.world.height;
-  const snapDistance = getFlatTileEdgeSnapDistance(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY);
-  const offset = { x: 0, y: 0 };
-
-  if (Math.abs(bounds.minX) <= snapDistance) offset.x = -bounds.minX;
-  else if (Math.abs(worldWidth - bounds.maxX) <= snapDistance) offset.x = worldWidth - bounds.maxX;
-  if (Math.abs(bounds.minY) <= snapDistance) offset.y = -bounds.minY;
-  else if (Math.abs(worldHeight - bounds.maxY) <= snapDistance) offset.y = worldHeight - bounds.maxY;
-
-  return offset;
-};
-const getRangeGap = (minA, maxA, minB, maxB) => {
-  if (maxA < minB) return minB - maxA;
-  if (maxB < minA) return minA - maxB;
-  return 0;
-};
-const getFlatTileGroupNeighborSnapOffset = (config = {}, dragState = {}, delta = {}) => {
-  const items = dragState.items || [];
-  if (items.length <= 1) return { x: 0, y: 0 };
-  const props = config.props || [];
-  const selectedIds = new Set(items
-    .filter(({ entity, start }) => entity?.type === 'prop' && start)
-    .map(({ entity }) => entity.id));
-  if (!selectedIds.size) return { x: 0, y: 0 };
-
-  const projectedTiles = items.map(({ entity, start }) => {
-    if (entity?.type !== 'prop' || !start) return null;
-    const prop = props.find((item) => item.id === entity.id);
-    if (!prop || !isFlatTileLikeProp(prop)) return null;
-    return {
-      ...prop,
-      x: start.x + (Number(delta.x) || 0),
-      y: start.y + (Number(delta.y) || 0),
-    };
-  }).filter(Boolean);
-  if (!projectedTiles.length) return { x: 0, y: 0 };
-
-  const bounds = getFlatTileWorldBounds(projectedTiles);
-  if (!bounds) return { x: 0, y: 0 };
-  const groupWidth = bounds.maxX - bounds.minX;
-  const groupHeight = bounds.maxY - bounds.minY;
-  const snapDistance = Math.max(48, Math.min(groupWidth, groupHeight) * 0.85);
-  let best = null;
-
-  (props || []).forEach((target) => {
-    if (!target || selectedIds.has(target.id) || !isFlatTileLikeProp(target)) return;
-    const targetBounds = getFlatTileWorldBounds([target]);
-    if (!targetBounds) return;
-    const targetWidth = targetBounds.maxX - targetBounds.minX;
-    const targetHeight = targetBounds.maxY - targetBounds.minY;
-    const overlapX = getFlatTileSnapOverlap(Math.min(groupWidth, targetWidth));
-    const overlapY = getFlatTileSnapOverlap(Math.min(groupHeight, targetHeight));
-    const verticalGap = getRangeGap(bounds.minY, bounds.maxY, targetBounds.minY, targetBounds.maxY);
-    const horizontalGap = getRangeGap(bounds.minX, bounds.maxX, targetBounds.minX, targetBounds.maxX);
-    const candidates = [];
-
-    if (verticalGap <= snapDistance) {
-      candidates.push(
-        { x: targetBounds.minX + overlapX - bounds.maxX, y: 0 },
-        { x: targetBounds.maxX - overlapX - bounds.minX, y: 0 },
-      );
-    }
-    if (horizontalGap <= snapDistance) {
-      candidates.push(
-        { x: 0, y: targetBounds.minY + overlapY - bounds.maxY },
-        { x: 0, y: targetBounds.maxY - overlapY - bounds.minY },
-      );
-    }
-
-    candidates.forEach((candidate) => {
-      const distance = Math.hypot(candidate.x, candidate.y);
-      if (distance > snapDistance) return;
-      if (!best || distance < best.distance) best = { ...candidate, distance };
-    });
-  });
-
-  return best ? { x: best.x, y: best.y } : { x: 0, y: 0 };
-};
-const snapFlatTileToNeighbors = (tile, props = [], world = {}, options = {}) => {
-  if (!tile || !isFlatTileLikeProp(tile)) return false;
-  const { width, height } = getFlatTileWorldDimensions(tile);
-  const snapDistance = options.force ? Infinity : Math.max(48, Math.min(width, height) * 0.85);
-  let best = null;
-  (props || []).forEach((target) => {
-    if (!target || target.id === tile.id || !isFlatTileLikeProp(target)) return;
-    const targetSize = getFlatTileWorldDimensions(target);
-    const overlapX = getFlatTileSnapOverlap(Math.min(width, targetSize.width));
-    const overlapY = getFlatTileSnapOverlap(Math.min(height, targetSize.height));
-    const candidates = [
-      {
-        x: (Number(target.x) || 0) - (targetSize.width + width) / 2 + overlapX,
-        y: Number(target.y) || 0,
-      },
-      {
-        x: (Number(target.x) || 0) + (targetSize.width + width) / 2 - overlapX,
-        y: Number(target.y) || 0,
-      },
-      {
-        x: Number(target.x) || 0,
-        y: (Number(target.y) || 0) - (targetSize.height + height) / 2 + overlapY,
-      },
-      {
-        x: Number(target.x) || 0,
-        y: (Number(target.y) || 0) + (targetSize.height + height) / 2 - overlapY,
-      },
-    ];
-    candidates.forEach((candidate) => {
-      const distance = Math.hypot((Number(tile.x) || 0) - candidate.x, (Number(tile.y) || 0) - candidate.y);
-      if (!best || distance < best.distance) best = { ...candidate, distance };
-    });
-  });
-  if (!best || best.distance > snapDistance) return false;
-  tile.x = Math.round(clamp(best.x, width / 2, (Number(world.width) || width) - width / 2));
-  tile.y = Math.round(clamp(best.y, height / 2, (Number(world.height) || height) - height / 2));
-  tile.blocksMovement = false;
-  return true;
-};
-const getPropRect = (prop = {}) => ({
-  x: prop.x - getPropWidth(prop) / 2,
-  y: prop.y - getPropHeight(prop) / 2,
-  w: getPropWidth(prop),
-  h: getPropHeight(prop),
-});
 const guessPropRenderMode = (fileName = '') => {
   const name = fileName.toLowerCase();
   if (/(route|road|chemin|path|rue|street|sol|floor|terrain)/.test(name)) return 'floor';
@@ -1399,264 +725,7 @@ const guessPropRenderMode = (fileName = '') => {
   return 'billboard';
 };
 const shouldPropBlockByMode = (mode) => ['box', 'rock', 'house'].includes(mode);
-const getReliefWidth = (relief = {}) => Math.max(40, Number(relief.w) || 300);
-const getReliefHeight = (relief = {}) => Math.max(40, Number(relief.h) || 180);
-const getReliefElevation = (relief = {}) => {
-  const elevation = Number(relief.elevation);
-  return clamp(Number.isFinite(elevation) ? elevation : 24, -80, 120);
-};
 const getReliefStyle = (id = 'plateau') => RELIEF_STYLE_OPTIONS.find((option) => option.id === id) || RELIEF_STYLE_OPTIONS[0];
-
-const isPointInProp = (prop, point) => {
-  const rect = getPropRect(prop);
-  return point.x >= rect.x
-    && point.x <= rect.x + rect.w
-    && point.y >= rect.y
-    && point.y <= rect.y + rect.h;
-};
-
-const getReliefRect = (relief = {}) => ({
-  x: relief.x - getReliefWidth(relief) / 2,
-  y: relief.y - getReliefHeight(relief) / 2,
-  w: getReliefWidth(relief),
-  h: getReliefHeight(relief),
-});
-
-const isPointInRelief = (relief, point) => {
-  const rect = getReliefRect(relief);
-  return point.x >= rect.x
-    && point.x <= rect.x + rect.w
-    && point.y >= rect.y
-    && point.y <= rect.y + rect.h;
-};
-
-const getBlockingObstacles = (config = {}) => [
-  ...(config.obstacles || []),
-  ...((config.reliefs || []).filter((relief) => relief.blocksMovement).map(getReliefRect)),
-  ...((config.props || []).filter((prop) => prop.blocksMovement).map(getPropRect)),
-];
-
-const rectCircleOverlap = (rect, circle) => {
-  const closestX = clamp(circle.x, rect.x, rect.x + rect.w);
-  const closestY = clamp(circle.y, rect.y, rect.y + rect.h);
-  return Math.hypot(circle.x - closestX, circle.y - closestY) < circle.r;
-};
-
-const pushCircleOutOfRect = (circle, rect) => {
-  if (!rectCircleOverlap(rect, circle)) return circle;
-  const left = Math.abs(circle.x - rect.x);
-  const right = Math.abs(rect.x + rect.w - circle.x);
-  const top = Math.abs(circle.y - rect.y);
-  const bottom = Math.abs(rect.y + rect.h - circle.y);
-  const min = Math.min(left, right, top, bottom);
-  if (min === left) return { ...circle, x: rect.x - circle.r };
-  if (min === right) return { ...circle, x: rect.x + rect.w + circle.r };
-  if (min === top) return { ...circle, y: rect.y - circle.r };
-  return { ...circle, y: rect.y + rect.h + circle.r };
-};
-
-const hasLineOfSight = (from, to, obstacles) => {
-  const steps = Math.max(8, Math.ceil(distance(from, to) / 42));
-  for (let i = 1; i < steps; i += 1) {
-    const t = i / steps;
-    const point = {
-      x: from.x + (to.x - from.x) * t,
-      y: from.y + (to.y - from.y) * t,
-      r: 7,
-    };
-    if (obstacles.some((obstacle) => rectCircleOverlap(obstacle, point))) return false;
-  }
-  return true;
-};
-
-const getEnemyStats = (enemy = {}) => {
-  const role = enemy.role || 'rifle';
-  const base = role === 'sniper'
-    ? { healthScale: 7, speed: 98, range: 560, delay: 1.45, bulletSpeed: 560, spread: 0.02, score: 130 }
-    : role === 'brute'
-      ? { healthScale: 9, speed: 92, range: 260, delay: 0.95, bulletSpeed: 390, spread: 0.16, score: 160 }
-      : { healthScale: 7, speed: 112, range: 380, delay: 0.72, bulletSpeed: 430, spread: 0.08, score: 100 };
-  const maxHealth = Math.max(1, Number(enemy.combatEnemyMaxHealth) || 8);
-  const strength = Math.max(0, Number(enemy.combatEnemyStrength) || 2);
-  const attackSpeed = clamp(Number(enemy.combatEnemyAttackSpeed) || (1 / base.delay), 0.1, 8);
-  return {
-    ...base,
-    speed: clamp(Number(enemy.combatEnemySpeed) || base.speed, 20, 420),
-    attackSpeed,
-    delay: 1 / attackSpeed,
-    hp: maxHealth * base.healthScale,
-    damage: Math.max(1, strength * 4),
-    powerDamage: Math.max(0, Number(enemy.combatEnemyPowerDamage) || 0) * 5,
-    maxMana: Math.max(0, Number(enemy.combatEnemyMaxMana) || 0),
-    powerManaCost: Math.max(0, Number(enemy.combatEnemyPowerManaCost) || 3),
-    powerUsageChance: Math.max(0, Math.min(100, Number(enemy.combatEnemyPowerUsageChance) || 25)),
-    criticalChance: clamp(Number(enemy.combatEnemyCriticalChance) || 0, 0, 100),
-    criticalMultiplier: clamp(Number(enemy.combatEnemyCriticalMultiplier) || 1.5, 1, 8),
-  };
-};
-
-const createEnemyRuntime = (enemy, index) => {
-  const stats = getEnemyStats(enemy);
-  return {
-    ...enemy,
-    vx: 0,
-    vy: 0,
-    hp: stats.hp,
-    maxHp: stats.hp,
-    mana: stats.maxMana,
-    maxMana: stats.maxMana,
-    shootTimer: 0.25 + (index % 4) * 0.18,
-    strafeTimer: 0,
-    strafeDir: index % 2 === 0 ? 1 : -1,
-    alert: 0,
-  };
-};
-
-const createInitialState = (config) => ({
-  player: {
-    x: config.player.x,
-    y: config.player.y,
-    z: getEntityZ(config.player),
-    vx: 0,
-    vy: 0,
-    hp: config.player.health,
-    maxHp: config.player.maxHealth,
-    mana: config.player.mana,
-    maxMana: config.player.maxMana,
-    dash: 0,
-    dashCooldown: 0,
-    shootCooldown: 0,
-    powerCooldown: 0,
-    moveTarget: null,
-  },
-  bullets: [],
-  enemies: config.enemies.map(createEnemyRuntime),
-  pickups: config.pickups.map((pickup) => ({ ...pickup })),
-  particles: [],
-  score: 0,
-  time: 0,
-  actionMessage: '',
-  actionMessageTimer: 0,
-  gameOver: false,
-  victory: false,
-});
-
-const findEntityAt = (config, point) => {
-  const obstacle = [...config.obstacles].reverse().find((item) => (
-    point.x >= item.x && point.x <= item.x + item.w && point.y >= item.y && point.y <= item.y + item.h
-  ));
-  if (obstacle) return { type: 'obstacle', id: obstacle.id };
-  const hero = [...(config.heroes || [])].reverse().find((item) => Math.hypot(point.x - item.x, point.y - item.y) <= 26);
-  if (hero) return { type: 'hero', id: hero.id };
-  const enemy = [...config.enemies].reverse().find((item) => Math.hypot(point.x - item.x, point.y - item.y) <= 26);
-  if (enemy) return { type: 'enemy', id: enemy.id };
-  const pickup = [...config.pickups].reverse().find((item) => Math.hypot(point.x - item.x, point.y - item.y) <= 25);
-  if (pickup) return { type: 'pickup', id: pickup.id };
-  const actionZone = [...(config.actionZones || [])].reverse().find((item) => isPointInActionZone(item, point));
-  if (actionZone) return { type: 'actionZone', id: actionZone.id };
-  const prop = [...config.props].reverse().find((item) => (
-    item.imageData || item.w || item.h
-      ? isPointInProp(item, point)
-      : Math.hypot(point.x - item.x, point.y - item.y) <= item.r + 8
-  ));
-  if (prop) return { type: 'prop', id: prop.id };
-  const relief = [...(config.reliefs || [])].reverse().find((item) => isPointInRelief(item, point));
-  if (relief) return { type: 'relief', id: relief.id };
-  if (Math.hypot(point.x - config.player.x, point.y - config.player.y) <= 28) return { type: 'spawn', id: 'player' };
-  return null;
-};
-
-const getSelectedEntity = (config, selected) => {
-  if (!selected) return null;
-  if (selected.type === 'spawn') return { type: 'spawn', item: config.player };
-  const collectionName = MAP_ENTITY_COLLECTIONS[selected.type] || 'props';
-  return { type: selected.type, item: (config[collectionName] || []).find((item) => item.id === selected.id) };
-};
-
-const getSelectionEntities = (config, selected, multiSelected = []) => {
-  const candidates = Array.isArray(multiSelected) && multiSelected.length ? [...multiSelected] : [];
-  if (selected && !candidates.some((entry) => isSameEntity(entry, selected))) candidates.push(selected);
-  const seen = new Set();
-  return candidates
-    .map((entity) => {
-      const selectedEntity = getSelectedEntity(config, entity);
-      return selectedEntity?.item ? { type: entity.type, id: entity.id, item: selectedEntity.item } : null;
-    })
-    .filter((entity) => {
-      const key = getEntityKey(entity);
-      if (!key || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-};
-
-const getSelectionEntityBounds = ({ type, item } = {}) => {
-  if (!item) return null;
-  if (type === 'obstacle') {
-    const width = Math.max(30, Number(item.w) || 180);
-    const height = Math.max(30, Number(item.h) || 70);
-    const x = Number(item.x) || 0;
-    const y = Number(item.y) || 0;
-    return { minX: x, maxX: x + width, minY: y, maxY: y + height };
-  }
-  if (type === 'relief') {
-    const width = getReliefWidth(item);
-    const height = getReliefHeight(item);
-    const x = Number(item.x) || 0;
-    const y = Number(item.y) || 0;
-    return { minX: x - width / 2, maxX: x + width / 2, minY: y - height / 2, maxY: y + height / 2 };
-  }
-  if (type === 'prop') {
-    const dimensions = isFlatTileLikeProp(item)
-      ? getFlatTileWorldDimensions(item)
-      : { width: getPropWidth(item), height: getPropHeight(item) };
-    const x = Number(item.x) || 0;
-    const y = Number(item.y) || 0;
-    return {
-      minX: x - dimensions.width / 2,
-      maxX: x + dimensions.width / 2,
-      minY: y - dimensions.height / 2,
-      maxY: y + dimensions.height / 2,
-    };
-  }
-  if (type === 'actionZone') {
-    const width = getActionZoneWidth(item);
-    const height = getActionZoneHeight(item);
-    const x = Number(item.x) || 0;
-    const y = Number(item.y) || 0;
-    return { minX: x - width / 2, maxX: x + width / 2, minY: y - height / 2, maxY: y + height / 2 };
-  }
-  const radius = type === 'pickup' ? PICKUP_RADIUS : PLAYER_RADIUS;
-  const x = Number(item.x) || 0;
-  const y = Number(item.y) || 0;
-  return { minX: x - radius, maxX: x + radius, minY: y - radius, maxY: y + radius };
-};
-
-const getSelectionBoundsFromEntities = (entities = []) => {
-  let bounds = null;
-  entities.forEach((entity) => {
-    const entityBounds = getSelectionEntityBounds(entity);
-    if (!entityBounds) return;
-    bounds = bounds
-      ? {
-        minX: Math.min(bounds.minX, entityBounds.minX),
-        maxX: Math.max(bounds.maxX, entityBounds.maxX),
-        minY: Math.min(bounds.minY, entityBounds.minY),
-        maxY: Math.max(bounds.maxY, entityBounds.maxY),
-      }
-      : entityBounds;
-  });
-  if (!bounds) return null;
-  const width = Math.max(0, bounds.maxX - bounds.minX);
-  const height = Math.max(0, bounds.maxY - bounds.minY);
-  return {
-    ...bounds,
-    width,
-    height,
-    centerX: bounds.minX + width / 2,
-    centerY: bounds.minY + height / 2,
-  };
-};
 
 const getCommonSelectionNumericValue = (entities = [], getter = () => 0, precision = 0) => {
   if (!entities.length) return '';
@@ -1668,85 +737,6 @@ const getCommonSelectionNumericValue = (entities = [], getter = () => 0, precisi
   });
   const first = values[0];
   return values.every((value) => value === first) ? first : '';
-};
-
-const duplicateMapEntityIntoConfig = (config, entity, offsetOverride = null) => {
-  if (!isDuplicableSelectionEntity(entity)) return null;
-  const collectionName = MAP_ENTITY_COLLECTIONS[entity.type];
-  const collection = config[collectionName] || [];
-  const original = collection.find((item) => item.id === entity.id);
-  if (!original) return null;
-  const world = config.world || DEFAULT_ARCADE_CONFIG.world;
-  const worldWidth = Number(world.width) || DEFAULT_ARCADE_CONFIG.world.width;
-  const worldHeight = Number(world.height) || DEFAULT_ARCADE_CONFIG.world.height;
-  const isFloorTile = entity.type === 'prop' && isFloorTileProp(original);
-  const hasOffsetVector = offsetOverride && typeof offsetOverride === 'object';
-  const hasNumericOffset = offsetOverride !== null
-    && offsetOverride !== undefined
-    && Number.isFinite(Number(offsetOverride));
-  const fallbackOffset = isFloorTile
-    ? getFloorTileWorldSize(original)
-    : Math.max(48, Number(world.grid) || DEFAULT_ARCADE_CONFIG.world.grid);
-  const offsetX = hasOffsetVector
-    ? Number(offsetOverride.x) || 0
-    : hasNumericOffset
-      ? Number(offsetOverride)
-      : fallbackOffset;
-  const offsetY = hasOffsetVector
-    ? Number(offsetOverride.y) || 0
-    : hasNumericOffset
-      ? Number(offsetOverride)
-      : fallbackOffset;
-  const copy = structuredClone(original);
-  copy.id = createId(entity.type);
-  if (Number.isFinite(Number(copy.x))) copy.x = Number(copy.x) + offsetX;
-  if (Number.isFinite(Number(copy.y))) copy.y = Number(copy.y) + offsetY;
-
-  if (isFloorTile) {
-    const { width, height } = getFlatTileWorldDimensions(original);
-    copy.w = width;
-    copy.h = height;
-    copy.r = Math.round(Math.max(width, height) / 2);
-    copy.modelHeight = 12;
-    copy.blocksMovement = false;
-  }
-
-  if (entity.type === 'obstacle') {
-    const width = Math.max(30, Number(copy.w) || 180);
-    const height = Math.max(30, Number(copy.h) || 70);
-    copy.x = Math.round(clamp(Number(copy.x) || 0, 0, Math.max(0, worldWidth - width)));
-    copy.y = Math.round(clamp(Number(copy.y) || 0, 0, Math.max(0, worldHeight - height)));
-  } else if (entity.type === 'relief') {
-    const width = getReliefWidth(copy);
-    const height = getReliefHeight(copy);
-    copy.x = Math.round(clamp(Number(copy.x) || 0, width / 2, Math.max(width / 2, worldWidth - width / 2)));
-    copy.y = Math.round(clamp(Number(copy.y) || 0, height / 2, Math.max(height / 2, worldHeight - height / 2)));
-  } else if (entity.type === 'prop') {
-    const dimensions = isFlatTileLikeProp(copy)
-      ? getFlatTileWorldDimensions(copy)
-      : { width: getPropWidth(copy), height: getPropHeight(copy) };
-    copy.x = Math.round(clamp(Number(copy.x) || 0, dimensions.width / 2, Math.max(dimensions.width / 2, worldWidth - dimensions.width / 2)));
-    copy.y = Math.round(clamp(Number(copy.y) || 0, dimensions.height / 2, Math.max(dimensions.height / 2, worldHeight - dimensions.height / 2)));
-  } else if (entity.type === 'actionZone') {
-    const width = getActionZoneWidth(copy);
-    const height = getActionZoneHeight(copy);
-    copy.x = Math.round(clamp(Number(copy.x) || 0, width / 2, Math.max(width / 2, worldWidth - width / 2)));
-    copy.y = Math.round(clamp(Number(copy.y) || 0, height / 2, Math.max(height / 2, worldHeight - height / 2)));
-  } else {
-    const radius = entity.type === 'pickup' ? PICKUP_RADIUS : PLAYER_RADIUS;
-    copy.x = Math.round(clamp(Number(copy.x) || 0, radius, Math.max(radius, worldWidth - radius)));
-    copy.y = Math.round(clamp(Number(copy.y) || 0, radius, Math.max(radius, worldHeight - radius)));
-  }
-
-  if (entity.type === 'enemy') copy.combatEnemyName = `${copy.combatEnemyName || copy.name || 'Personnage'} copie`;
-  if (entity.type === 'hero') copy.name = `${copy.name || 'Heros'} copie`;
-  if (entity.type === 'prop') copy.name = `${copy.name || 'Objet'} copie`;
-  if (entity.type === 'relief') copy.name = `${copy.name || 'Relief'} copie`;
-  if (entity.type === 'actionZone') copy.name = `${copy.name || 'Zone'} copie`;
-
-  collection.push(copy);
-  config[collectionName] = collection;
-  return { type: entity.type, id: copy.id };
 };
 
 const getSelectionDuplicateOffset = (entities = [], world = {}) => {
@@ -1765,350 +755,6 @@ const getSelectionDuplicateOffset = (entities = [], world = {}) => {
     x: fitOffset(baseOffset, bounds.minX, bounds.maxX, worldWidth),
     y: fitOffset(baseOffset, bounds.minY, bounds.maxY, worldHeight),
   };
-};
-
-const moveMapEntityToPoint = (config, selected, point, options = {}) => {
-  const selectedEntity = getSelectedEntity(config, selected);
-  if (!selectedEntity?.item || !point) return false;
-  const item = selectedEntity.item;
-  const world = config.world || DEFAULT_ARCADE_CONFIG.world;
-  const centerX = Number(point.x) || 0;
-  const centerY = Number(point.y) || 0;
-  if (selectedEntity.type === 'obstacle') {
-    const width = Math.max(30, Number(item.w) || 180);
-    const height = Math.max(30, Number(item.h) || 70);
-    item.x = Math.round(clamp(centerX - width / 2, 0, Math.max(0, world.width - width)));
-    item.y = Math.round(clamp(centerY - height / 2, 0, Math.max(0, world.height - height)));
-    return true;
-  }
-  if (selectedEntity.type === 'relief') {
-    const width = getReliefWidth(item);
-    const height = getReliefHeight(item);
-    item.x = Math.round(clamp(centerX, width / 2, Math.max(width / 2, world.width - width / 2)));
-    item.y = Math.round(clamp(centerY, height / 2, Math.max(height / 2, world.height - height / 2)));
-    return true;
-  }
-  if (selectedEntity.type === 'prop') {
-    const dimensions = isFlatTileLikeProp(item)
-      ? getFlatTileWorldDimensions(item)
-      : { width: getPropWidth(item), height: getPropHeight(item) };
-    item.x = Math.round(clamp(centerX, dimensions.width / 2, Math.max(dimensions.width / 2, world.width - dimensions.width / 2)));
-    item.y = Math.round(clamp(centerY, dimensions.height / 2, Math.max(dimensions.height / 2, world.height - dimensions.height / 2)));
-    if (options.snap && isFlatTileLikeProp(item)) {
-      snapFlatTileToNeighbors(item, config.props || [], world, { force: false });
-      snapFlatTileToWorldEdges(item, world, { force: false });
-    }
-    return true;
-  }
-  if (selectedEntity.type === 'actionZone') {
-    const width = getActionZoneWidth(item);
-    const height = getActionZoneHeight(item);
-    item.x = Math.round(clamp(centerX, width / 2, Math.max(width / 2, world.width - width / 2)));
-    item.y = Math.round(clamp(centerY, height / 2, Math.max(height / 2, world.height - height / 2)));
-    return true;
-  }
-  const radius = selectedEntity.type === 'pickup' ? PICKUP_RADIUS : PLAYER_RADIUS;
-  item.x = Math.round(clamp(centerX, radius, Math.max(radius, world.width - radius)));
-  item.y = Math.round(clamp(centerY, radius, Math.max(radius, world.height - radius)));
-  if (selectedEntity.type === 'spawn') item.moveTarget = null;
-  return true;
-};
-const getEntityCenterPoint = (config, entity) => {
-  const selectedEntity = getSelectedEntity(config, entity);
-  if (!selectedEntity?.item) return null;
-  const item = selectedEntity.item;
-  if (selectedEntity.type === 'obstacle') {
-    return {
-      x: (Number(item.x) || 0) + (Math.max(30, Number(item.w) || 180) / 2),
-      y: (Number(item.y) || 0) + (Math.max(30, Number(item.h) || 70) / 2),
-    };
-  }
-  return { x: Number(item.x) || 0, y: Number(item.y) || 0 };
-};
-const moveMapEntityByDelta = (config, entity, delta, options = {}) => {
-  const point = getEntityCenterPoint(config, entity);
-  if (!point) return false;
-  return moveMapEntityToPoint(config, entity, {
-    x: point.x + (Number(delta?.x) || 0),
-    y: point.y + (Number(delta?.y) || 0),
-  }, options);
-};
-const applyGroupDragToConfig = (config, dragState, point, options = {}) => {
-  if (!dragState || !point) return false;
-  const delta = {
-    x: (Number(point.x) || 0) - dragState.anchor.x,
-    y: (Number(point.y) || 0) - dragState.anchor.y,
-  };
-  const isGroupMove = (dragState.items || []).length > 1;
-  const groupNeighborOffset = options.snap && isGroupMove
-    ? getFlatTileGroupNeighborSnapOffset(config, dragState, delta)
-    : { x: 0, y: 0 };
-  const neighborSnappedDelta = {
-    x: delta.x + groupNeighborOffset.x,
-    y: delta.y + groupNeighborOffset.y,
-  };
-  const groupEdgeOffset = options.snap && isGroupMove && groupNeighborOffset.x === 0 && groupNeighborOffset.y === 0
-    ? getFlatTileGroupEdgeSnapOffset(config, dragState, neighborSnappedDelta)
-    : { x: 0, y: 0 };
-  const groupOffset = {
-    x: groupNeighborOffset.x + groupEdgeOffset.x,
-    y: groupNeighborOffset.y + groupEdgeOffset.y,
-  };
-  let moved = false;
-  (dragState.items || []).forEach(({ entity, start }) => {
-    if (!entity || !start) return;
-    moved = moveMapEntityToPoint(config, entity, {
-      x: start.x + delta.x + groupOffset.x,
-      y: start.y + delta.y + groupOffset.y,
-    }, isGroupMove ? { ...options, snap: false } : options) || moved;
-  });
-  return moved;
-};
-
-const drawRoundedRect = (ctx, x, y, w, h, r) => {
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, r);
-  ctx.fill();
-};
-
-const drawWorldFloor = (ctx, config, time = 0) => {
-  const tileSize = Math.max(80, config.world.grid);
-  ctx.fillStyle = '#17100d';
-  ctx.fillRect(0, 0, config.world.width, config.world.height);
-
-  for (let x = 0; x <= config.world.width; x += tileSize) {
-    for (let y = 0; y <= config.world.height; y += tileSize) {
-      const shade = ((x / tileSize + y / tileSize) % 2) ? 'rgba(45, 31, 25, .5)' : 'rgba(30, 22, 19, .72)';
-      ctx.fillStyle = shade;
-      ctx.fillRect(x + 2, y + 2, tileSize - 4, tileSize - 4);
-      ctx.strokeStyle = 'rgba(112, 74, 45, .16)';
-      ctx.strokeRect(x + 2.5, y + 2.5, tileSize - 5, tileSize - 5);
-    }
-  }
-
-  ctx.strokeStyle = 'rgba(238, 116, 38, .13)';
-  ctx.lineWidth = 2;
-  for (let x = 220; x <= config.world.width; x += 520) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x + Math.sin(x) * 90, config.world.height);
-    ctx.stroke();
-  }
-
-  for (let i = 0; i < 42; i += 1) {
-    const x = (i * 337) % config.world.width;
-    const y = (i * 593) % config.world.height;
-    const pulse = 0.45 + Math.sin(time * 2 + i) * 0.18;
-    ctx.fillStyle = `rgba(249, 115, 22, ${pulse * 0.18})`;
-    ctx.beginPath();
-    ctx.arc(x, y, 12 + (i % 5) * 3, 0, Math.PI * 2);
-    ctx.fill();
-  }
-};
-
-const drawCharacterImage = (ctx, actor, radius, image, preset, selected, stateIntensity = 0, aim = { x: 1, y: 0 }) => {
-  const width = radius * 3.2;
-  const height = radius * 3.55;
-  ctx.save();
-  ctx.shadowBlur = selected ? 24 : 12 + stateIntensity * 8;
-  ctx.shadowColor = preset.accent;
-  ctx.drawImage(image, actor.x - width / 2, actor.y - height * 0.58, width, height);
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = selected ? '#f8fbff' : preset.accent;
-  ctx.lineWidth = selected ? 3 : 1.5;
-  ctx.beginPath();
-  ctx.ellipse(actor.x, actor.y - height * 0.08, width * 0.46, height * 0.48, 0, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.strokeStyle = preset.weapon;
-  ctx.lineWidth = selected ? 5 : 4;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(actor.x + aim.x * radius * 0.65, actor.y + aim.y * radius * 0.65);
-  ctx.lineTo(actor.x + aim.x * radius * 1.9, actor.y + aim.y * radius * 1.9);
-  ctx.stroke();
-  ctx.restore();
-};
-
-const drawArcadeCharacter = (ctx, actor, {
-  radius,
-  aim,
-  preset,
-  selected = false,
-  active = false,
-  image = null,
-  time = 0,
-}) => {
-  const stateIntensity = active ? 1 : 0;
-  if (image) {
-    drawCharacterImage(ctx, actor, radius, image, preset, selected, stateIntensity, aim);
-    return;
-  }
-
-  const pulse = active ? Math.sin(time * 8) * 0.12 : 0;
-  const angle = Math.atan2(aim.y, aim.x);
-  ctx.save();
-  ctx.translate(actor.x, actor.y);
-  ctx.rotate(angle);
-  ctx.shadowBlur = selected ? 22 : 8 + stateIntensity * 12;
-  ctx.shadowColor = preset.accent;
-
-  ctx.fillStyle = selected ? '#f8fbff' : preset.body;
-  ctx.beginPath();
-  ctx.ellipse(0, 0, radius * (1 + pulse), radius * 0.92, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = preset.accent;
-  ctx.beginPath();
-  ctx.ellipse(-radius * 0.16, 0, radius * 0.36, radius * 0.58, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = preset.face;
-  ctx.beginPath();
-  ctx.arc(radius * 0.42, -radius * 0.32, radius * 0.47, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.strokeStyle = 'rgba(12, 7, 6, .58)';
-  ctx.lineWidth = 2.2;
-  ctx.beginPath();
-  ctx.moveTo(radius * 0.5, -radius * 0.38);
-  ctx.lineTo(radius * 0.86, -radius * 0.4);
-  ctx.stroke();
-
-  ctx.strokeStyle = preset.weapon;
-  ctx.lineWidth = selected ? 5 : 4;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(radius * 0.46, radius * 0.2);
-  ctx.lineTo(radius * 1.82, radius * 0.28);
-  ctx.stroke();
-
-  ctx.strokeStyle = 'rgba(255, 255, 255, .34)';
-  ctx.lineWidth = 1.2;
-  ctx.beginPath();
-  ctx.arc(0, 0, radius * 1.04, 0.2, Math.PI * 1.4);
-  ctx.stroke();
-  ctx.restore();
-};
-
-const drawArcadeProp = (ctx, prop, image, selected = false) => {
-  const width = getPropWidth(prop);
-  const height = getPropHeight(prop);
-  if (image) {
-    const x = prop.x - width / 2;
-    const y = prop.y - height / 2;
-    ctx.save();
-    ctx.shadowBlur = selected ? 18 : 8;
-    ctx.shadowColor = 'rgba(245, 158, 11, .45)';
-    ctx.drawImage(image, x, y, width, height);
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = selected ? '#f59e0b' : 'rgba(255, 199, 133, .28)';
-    ctx.lineWidth = selected ? 3 : 1.5;
-    ctx.strokeRect(x, y, width, height);
-    if (prop.blocksMovement) {
-      ctx.fillStyle = 'rgba(255, 247, 214, .16)';
-      ctx.fillRect(x + 8, y + 8, 22, 5);
-    }
-    ctx.restore();
-    return;
-  }
-
-  ctx.fillStyle = selected ? 'rgba(214, 160, 76, .92)' : 'rgba(74, 50, 35, .86)';
-  ctx.beginPath();
-  ctx.arc(prop.x, prop.y, prop.r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = 'rgba(255, 197, 112, .16)';
-  ctx.beginPath();
-  ctx.arc(prop.x - 8, prop.y - 7, prop.r * 0.42, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = selected ? '#f59e0b' : 'rgba(255, 199, 133, .22)';
-  ctx.lineWidth = selected ? 3 : 1;
-  ctx.stroke();
-  if (prop.blocksMovement) {
-    ctx.fillStyle = 'rgba(255, 247, 214, .16)';
-    ctx.fillRect(prop.x - 10, prop.y - prop.r - 8, 20, 5);
-  }
-};
-
-const drawArcadeRelief = (ctx, relief, selected = false) => {
-  const rect = getReliefRect(relief);
-  const elevation = getReliefElevation(relief);
-  const style = getReliefStyle(relief.style);
-  const depth = clamp(Math.abs(elevation) * 0.42, 6, 34);
-  const radius = 14;
-  const isBasin = relief.style === 'basin' || elevation < 0;
-
-  ctx.save();
-  if (isBasin) {
-    const gradient = ctx.createLinearGradient(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h);
-    gradient.addColorStop(0, style.light);
-    gradient.addColorStop(0.34, style.top);
-    gradient.addColorStop(1, style.edge);
-    ctx.fillStyle = gradient;
-    drawRoundedRect(ctx, rect.x, rect.y, rect.w, rect.h, radius);
-
-    ctx.fillStyle = style.shadow;
-    drawRoundedRect(ctx, rect.x + depth, rect.y + depth, Math.max(12, rect.w - depth * 2), Math.max(12, rect.h - depth * 2), radius);
-    ctx.strokeStyle = selected ? '#f8fbff' : 'rgba(245, 158, 11, .36)';
-    ctx.lineWidth = selected ? 3 : 1.5;
-    ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1);
-  } else {
-    ctx.fillStyle = style.shadow;
-    drawRoundedRect(ctx, rect.x + depth, rect.y + depth, rect.w, rect.h, radius);
-
-    ctx.fillStyle = style.edge;
-    ctx.beginPath();
-    ctx.moveTo(rect.x + rect.w, rect.y + depth);
-    ctx.lineTo(rect.x + rect.w + depth, rect.y + depth * 1.5);
-    ctx.lineTo(rect.x + rect.w + depth, rect.y + rect.h + depth * 1.2);
-    ctx.lineTo(rect.x + rect.w, rect.y + rect.h);
-    ctx.closePath();
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(rect.x + depth, rect.y + rect.h);
-    ctx.lineTo(rect.x + rect.w, rect.y + rect.h);
-    ctx.lineTo(rect.x + rect.w + depth, rect.y + rect.h + depth * 1.2);
-    ctx.lineTo(rect.x + depth * 1.2, rect.y + rect.h + depth * 1.2);
-    ctx.closePath();
-    ctx.fill();
-
-    const topGradient = ctx.createLinearGradient(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h);
-    topGradient.addColorStop(0, style.light);
-    topGradient.addColorStop(0.24, style.top);
-    topGradient.addColorStop(1, style.edge);
-    ctx.fillStyle = topGradient;
-    drawRoundedRect(ctx, rect.x, rect.y, rect.w, rect.h, radius);
-    ctx.strokeStyle = selected ? '#f8fbff' : 'rgba(255, 229, 168, .28)';
-    ctx.lineWidth = selected ? 3 : 1.5;
-    ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1);
-  }
-
-  ctx.strokeStyle = 'rgba(255, 244, 214, .18)';
-  ctx.lineWidth = 1;
-  for (let i = 1; i < 4; i += 1) {
-    const inset = i * Math.min(rect.w, rect.h) * 0.08;
-    if (rect.w - inset * 2 > 14 && rect.h - inset * 2 > 14) {
-      ctx.strokeRect(rect.x + inset, rect.y + inset, rect.w - inset * 2, rect.h - inset * 2);
-    }
-  }
-
-  if (relief.style === 'ridge') {
-    ctx.strokeStyle = 'rgba(255, 238, 184, .42)';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(rect.x + rect.w * 0.12, rect.y + rect.h * 0.64);
-    ctx.lineTo(rect.x + rect.w * 0.32, rect.y + rect.h * 0.36);
-    ctx.lineTo(rect.x + rect.w * 0.52, rect.y + rect.h * 0.57);
-    ctx.lineTo(rect.x + rect.w * 0.72, rect.y + rect.h * 0.31);
-    ctx.lineTo(rect.x + rect.w * 0.9, rect.y + rect.h * 0.52);
-    ctx.stroke();
-  }
-
-  if (relief.blocksMovement) {
-    ctx.fillStyle = 'rgba(255, 247, 214, .1)';
-    ctx.fillRect(rect.x + 10, rect.y + 10, 22, 5);
-  }
-
-  ctx.restore();
 };
 
 const getMapEntityEditableName = (type, item = {}) => (
@@ -2190,7 +836,7 @@ const getCharacterImportRoleId = (model = {}) => (
   CHARACTER_IMPORT_GROUPS.some((group) => group.id === model.role) ? model.role : 'npc'
 );
 const getDecorImportKindId = (model = {}) => {
-  const kind = DECOR_IMPORT_KIND_MAP[model.kind] || model.kind || 'decor';
+  const kind = getStudioDecorKindId(model.kind);
   if (DECOR_IMPORT_GROUPS.some((group) => group.id === kind) && kind !== 'decor') return kind;
   const haystack = normalizeAssetExplorerText([
     model.name,
@@ -2204,20 +850,15 @@ const getDecorImportKindId = (model = {}) => {
   if (/(sol|floor|ground|terrain|terre|soil|herbe|grass|gazon|route|road|chemin|path|dalle|pave|tile|square|verdant|brown_soil|brown soil)/.test(haystack)) return 'road';
   return DECOR_IMPORT_GROUPS.some((group) => group.id === kind) ? kind : 'decor';
 };
-const getCharacterImportSourceId = (model = {}) => (getStudioModelSource(model) ? 'glb' : 'procedural');
-const getDecorImportSourceId = (model = {}) => {
-  if (getStudioModelSource(model)) return 'glb';
-  if (model.imageData || model.imageName) return 'image';
-  return 'procedural';
-};
 const getCharacterImportSubtitle = (model = {}) => (
-  `${STUDIO_CHARACTER_ROLE_LABELS[model.role] || 'Heros'} - ${getStudioModelSource(model) ? (model.modelName || 'Modele GLB') : 'Personnage volume'}`
+  `${STUDIO_CHARACTER_ROLE_LABELS[model.role] || 'Heros'} - ${getStudioModelSource(model) ? (model.modelName || 'Modele 3D') : 'Personnage volume'}`
 );
 const getDecorImportSubtitle = (model = {}) => {
   const renderMode = getDecorImportRenderMode(model);
+  const kindLabel = STUDIO_DECOR_KIND_LABELS[getStudioDecorKindId(model.kind)] || renderMode;
   return getStudioModelSource(model)
-    ? (model.modelName || 'Modele GLB')
-    : (STUDIO_DECOR_KIND_LABELS[model.kind] || renderMode);
+    ? `${kindLabel} - ${model.modelName || 'Modele 3D'}`
+    : kindLabel;
 };
 const compareAssetExplorerNodes = (left, right) => (
   String(left.label || '').localeCompare(String(right.label || ''), 'fr', { sensitivity: 'base' })
@@ -2261,26 +902,21 @@ const buildAssetExplorerRoot = ({
   items = [],
   groupOptions,
   getGroupId,
-  getSourceId,
   createAsset,
   showEmptyGroups = false,
 }) => {
   const groups = new Map();
   items.forEach((item) => {
     const groupId = getGroupId(item);
-    const sourceId = getSourceId(item);
-    if (!groups.has(groupId)) groups.set(groupId, new Map());
-    const sources = groups.get(groupId);
-    if (!sources.has(sourceId)) sources.set(sourceId, []);
+    if (!groups.has(groupId)) groups.set(groupId, []);
     const group = getImportGroup(groupOptions, groupId, 'Autres');
-    const source = getImportGroup(ASSET_IMPORT_SOURCE_GROUPS, sourceId, 'Autres');
-    sources.get(sourceId).push(createAsset(item, `${group.label} / ${source.label}`));
+    groups.get(groupId).push(createAsset(item, group.label));
   });
 
   const children = groupOptions
     .map((group) => {
-      const sources = groups.get(group.id);
-      if (!sources) {
+      const assets = (groups.get(group.id) || []).sort(compareAssetExplorerNodes);
+      if (!assets.length) {
         return showEmptyGroups
           ? makeAssetExplorerFolder({
             id: `${id}:${group.id}`,
@@ -2290,34 +926,12 @@ const buildAssetExplorerRoot = ({
           })
           : null;
       }
-      const sourceChildren = ASSET_IMPORT_SOURCE_GROUPS
-        .map((source) => {
-          const assets = (sources.get(source.id) || []).sort(compareAssetExplorerNodes);
-          return assets.length
-            ? makeAssetExplorerFolder({
-              id: `${id}:${group.id}:${source.id}`,
-              label: source.label,
-              tone,
-              children: assets,
-            })
-            : null;
-        })
-        .filter(Boolean);
-      return sourceChildren.length
-        ? makeAssetExplorerFolder({
-          id: `${id}:${group.id}`,
-          label: group.label,
-          tone,
-          children: sourceChildren,
-        })
-        : (showEmptyGroups
-          ? makeAssetExplorerFolder({
-            id: `${id}:${group.id}`,
-            label: group.label,
-            tone,
-            children: [],
-          })
-          : null);
+      return makeAssetExplorerFolder({
+        id: `${id}:${group.id}`,
+        label: group.label,
+        tone,
+        children: assets,
+      });
     })
     .filter(Boolean);
 
@@ -2385,123 +999,6 @@ function ArcadeManagementSection({ title, count, actions = null, emptyLabel, chi
         <div className="empty-state-inline">{emptyLabel}</div>
       )}
     </section>
-  );
-}
-
-function ArcadeMapNumberField({
-  label,
-  help,
-  ariaLabel,
-  value,
-  min,
-  max,
-  step,
-  onCommit,
-}) {
-  const [draft, setDraft] = useState(String(value ?? ''));
-
-  useEffect(() => {
-    setDraft(String(value ?? ''));
-  }, [value]);
-
-  const commitDraft = useCallback(() => {
-    const nextValue = Number(String(draft).trim());
-    if (!Number.isFinite(nextValue)) {
-      setDraft(String(value ?? ''));
-      return;
-    }
-    onCommit(nextValue);
-  }, [draft, onCommit, value]);
-
-  return (
-    <label className="arcade-map-card-field">
-      <input
-        className="arcade-map-card-input"
-        type="text"
-        inputMode="numeric"
-        pattern="[0-9]*"
-        data-min={min}
-        data-max={max}
-        data-step={step}
-        value={draft}
-        aria-label={ariaLabel}
-        onChange={(event) => {
-          if (/^\d*$/.test(event.target.value)) setDraft(event.target.value);
-        }}
-        onBlur={commitDraft}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') event.currentTarget.blur();
-          if (event.key === 'Escape') {
-            setDraft(String(value ?? ''));
-            event.currentTarget.blur();
-          }
-        }}
-      />
-      <Rpg3DHelpLabel className="arcade-map-card-help-label" help={help}>{label}</Rpg3DHelpLabel>
-    </label>
-  );
-}
-
-function ArcadeInspectorNumberInput({
-  value,
-  onCommit,
-  inputMode = 'decimal',
-  ...props
-}) {
-  const [draft, setDraft] = useState(String(value ?? ''));
-  const [isEditing, setIsEditing] = useState(false);
-  const lastValueRef = useRef(String(value ?? ''));
-
-  useEffect(() => {
-    const nextValue = String(value ?? '');
-    if (nextValue !== lastValueRef.current) {
-      lastValueRef.current = nextValue;
-      if (!isEditing) setDraft(nextValue);
-      return;
-    }
-    if (!isEditing && draft !== '') setDraft(nextValue);
-  }, [draft, isEditing, value]);
-
-  const resetDraft = useCallback(() => {
-    setDraft(String(value ?? ''));
-  }, [value]);
-
-  const commitDraft = useCallback(() => {
-    const trimmed = String(draft).trim();
-    const numericValue = Number(trimmed);
-    if (trimmed === '') return;
-    if (!Number.isFinite(numericValue)) {
-      resetDraft();
-      return;
-    }
-    onCommit(numericValue);
-  }, [draft, onCommit, resetDraft]);
-
-  return (
-    <input
-      {...props}
-      type="text"
-      inputMode={inputMode}
-      value={draft}
-      onFocus={(event) => {
-        setIsEditing(true);
-        props.onFocus?.(event);
-      }}
-      onChange={(event) => setDraft(event.target.value)}
-      onBlur={(event) => {
-        setIsEditing(false);
-        commitDraft();
-        props.onBlur?.(event);
-      }}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') event.currentTarget.blur();
-        if (event.key === 'Escape') {
-          resetDraft();
-          event.currentTarget.blur();
-        }
-        props.onKeyDown?.(event);
-      }}
-    />
   );
 }
 
@@ -2594,7 +1091,6 @@ function ArcadeMapAssetExplorer({
       items: characters,
       groupOptions: CHARACTER_IMPORT_GROUPS,
       getGroupId: getCharacterImportRoleId,
-      getSourceId: getCharacterImportSourceId,
       createAsset: (model, pathLabel) => makeAssetExplorerAsset({
         id: `character:${model.id}`,
         label: model.name || 'Personnage 3D',
@@ -2613,7 +1109,6 @@ function ArcadeMapAssetExplorer({
       items: decors,
       groupOptions: DECOR_IMPORT_GROUPS,
       getGroupId: getDecorImportKindId,
-      getSourceId: getDecorImportSourceId,
       showEmptyGroups: true,
       createAsset: (model, pathLabel) => makeAssetExplorerAsset({
         id: `decor:${model.id}`,
@@ -3296,7 +1791,6 @@ function ArcadeManagementTab({
   config,
   selected,
   studioProject,
-  onAddPresetAssets,
   onCreateStudioCharacter,
   onCreateStudioDecor,
   onRenameStudioCharacter,
@@ -3316,7 +1810,7 @@ function ArcadeManagementTab({
     ...(config.enemies || []).map((item, index) => ({ type: 'enemy', item, index })),
   ];
   const mapObjects = [
-    ...(config.props || []).map((item, index) => ({ type: 'prop', item, index })),
+    ...getCountedMapProps(config).map((item, index) => ({ type: 'prop', item, index })),
     ...(config.reliefs || []).map((item, index) => ({ type: 'relief', item, index })),
     ...(config.obstacles || []).map((item, index) => ({ type: 'obstacle', item, index })),
     ...(config.pickups || []).map((item, index) => ({ type: 'pickup', item, index })),
@@ -3464,78 +1958,141 @@ function ArcadeManagementTab({
 }
 
 function Rpg3DMode({ user = null, authReady = true, project = null }) {
-  const canvasRef = useRef(null);
   const wrapperRef = useRef(null);
-  const keysRef = useRef(new Set());
-  const pointerRef = useRef({ x: 0, y: 0, shooting: false, worldX: 0, worldY: 0, hasWorldPoint: false });
   const multiDragRef = useRef(null);
-  const autosaveVersionRef = useRef(0);
-  const lastSavedAutosaveVersionRef = useRef(0);
   const isSavingAssetsRef = useRef(false);
-  const undoStackRef = useRef([]);
-  const redoStackRef = useRef([]);
-  const animationRef = useRef(0);
+  const projectRef = useRef(project);
+  const remoteAssetsLoadKeyRef = useRef('');
   const lastFrameRef = useRef(0);
-  const snapshotFrameRef = useRef(0);
   const actionZoneTriggerRef = useRef({ key: '', cooldownUntil: 0 });
-  const cameraRef = useRef({ x: 0, y: 0, width: 1, height: 1 });
-  const imageCacheRef = useRef(new Map());
-  const [initialArcadeAssets] = useState(() => {
-    const saved = readSavedArcadeAssets();
-    const studio = createStudioProjectFromSavedAssets(saved?.studioProject, saved?.config, project);
-    const activeCanvas = getActiveRpg3DCanvas(studio);
-    return {
-      saved,
-      studioProject: studio,
-      config: createConfigFromSavedAssets(activeCanvas?.config || saved?.config),
-    };
-  });
-  const savedArcadeAssets = initialArcadeAssets.saved;
-  const [config, setConfig] = useState(() => initialArcadeAssets.config);
-  const configRef = useRef(config);
-  const stateRef = useRef(createInitialState(config));
-  const [undoStack, setUndoStack] = useState([]);
-  const [redoStack, setRedoStack] = useState([]);
+  const terrainPaintSessionRef = useRef(null);
+  const terrainPaintPendingPointsRef = useRef([]);
+  const terrainPaintLastPointRef = useRef(null);
+  const terrainPaintFlushTimerRef = useRef(null);
+  const terrainPaintLastFlushRef = useRef(0);
+  const modelEraserSessionRef = useRef(null);
+  const modelEraserLastPointRef = useRef(null);
   const [mode, setMode] = useState('edit');
-  const [viewMode, setViewMode] = useState('3d');
   const [tool, setTool] = useState('select');
   const [dragMode, setDragMode] = useState(false);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [cameraTargetPickMode, setCameraTargetPickMode] = useState(false);
+  const [cameraZoomDragMode, setCameraZoomDragMode] = useState(false);
   const [cameraToolsHidden, setCameraToolsHidden] = useState(false);
+  const [transformTool, setTransformTool] = useState('');
   const [pendingPlacement, setPendingPlacement] = useState(null);
+  const [terrainPaintDraft, setTerrainPaintDraft] = useState({
+    color: TERRAIN_PAINT_DEFAULT_COLOR,
+    radius: TERRAIN_PAINT_DEFAULT_RADIUS,
+    opacity: TERRAIN_PAINT_DEFAULT_OPACITY,
+    shape: TERRAIN_PAINT_DEFAULT_SHAPE,
+  });
+  const [modelEraserRadiusDraft, setModelEraserRadiusDraft] = useState(MODEL_ERASER_DEFAULT_RADIUS);
+  const [flatGroundColorDraft, setFlatGroundColorDraft] = useState(FLAT_GROUND_DEFAULT_COLOR);
   const [multiSelected, setMultiSelected] = useState([]);
   const [selected, setSelected] = useState(null);
+  const selectedRef = useRef(selected);
+  const modeRef = useRef(mode);
   const [isPaused, setIsPaused] = useState(false);
   const [mediaError, setMediaError] = useState('');
-  const [snapshot, setSnapshot] = useState(() => createInitialState(config));
   const [activeNpcChoice, setActiveNpcChoice] = useState(null);
   const [workspaceTab, setWorkspaceTab] = useState('arcade');
   const [mapFullscreen, setMapFullscreen] = useState(false);
   const [mapDrawerOpen, setMapDrawerOpen] = useState(false);
   const [inspectorDrawerOpen, setInspectorDrawerOpen] = useState(false);
-  const [studioProject, setStudioProject] = useState(() => initialArcadeAssets.studioProject);
-  const studioProjectRef = useRef(studioProject);
+
+  selectedRef.current = selected;
+  modeRef.current = mode;
+
+  const {
+    autosaveVersionRef,
+    clearHistoryStacks,
+    config,
+    configRef,
+    initialArcadeAssets,
+    lastSavedAutosaveVersionRef,
+    markAutosaveDirty,
+    patchConfig,
+    patchConfigWithoutHistory,
+    patchStudioProject,
+    pushHistorySnapshot,
+    redoProjectChange,
+    redoStack,
+    resetGame,
+    setConfig,
+    setSnapshot: setGameSnapshot,
+    setStudioProject,
+    snapshot: projectRuntimeSnapshot,
+    stateRef: projectStateRef,
+    studioProject,
+    studioProjectRef,
+    syncActiveCanvasConfigInRef,
+    undoProjectChange,
+    undoStack,
+  } = useRpg3DProjectState({
+    project,
+    selectedRef,
+    modeRef,
+    actionZoneTriggerRef,
+    lastFrameRef,
+    setActiveNpcChoice,
+  });
+
+  const savedArcadeAssets = initialArcadeAssets.saved;
   const [studioSelection, setStudioSelection] = useState({
     characterModelId: '',
     decorModelId: '',
   });
+
   const [managementSaveStatus, setManagementSaveStatus] = useState(
     savedArcadeAssets ? 'Sauvegarde locale chargee.' : '',
   );
   const [isSavingAssets, setIsSavingAssets] = useState(false);
 
   useEffect(() => {
-    configRef.current = config;
-  }, [config]);
-
-  useEffect(() => {
-    studioProjectRef.current = studioProject;
-  }, [studioProject]);
-
-  useEffect(() => {
     isSavingAssetsRef.current = isSavingAssets;
   }, [isSavingAssets]);
+
+  useEffect(() => {
+    projectRef.current = project;
+  }, [project]);
+
+  const clearTerrainPaintFlushTimer = useCallback(() => {
+    if (terrainPaintFlushTimerRef.current === null) return;
+    window.clearTimeout(terrainPaintFlushTimerRef.current);
+    terrainPaintFlushTimerRef.current = null;
+  }, []);
+
+  const flushTerrainPaintPoints = useCallback(() => {
+    clearTerrainPaintFlushTimer();
+    const strokeId = terrainPaintSessionRef.current;
+    const queuedPoints = terrainPaintPendingPointsRef.current;
+    terrainPaintPendingPointsRef.current = [];
+    terrainPaintLastFlushRef.current = getNow();
+    if (!strokeId || !queuedPoints.length) return;
+    patchConfigWithoutHistory((next) => {
+      const stroke = (next.terrainPaintStrokes || []).find((item) => item.id === strokeId);
+      if (!stroke) return;
+      stroke.points = Array.isArray(stroke.points) ? stroke.points : [];
+      queuedPoints.forEach((paintPoint) => {
+        if (shouldAppendTerrainPaintPoint(stroke, paintPoint)) stroke.points.push(paintPoint);
+      });
+    }, false);
+  }, [clearTerrainPaintFlushTimer, patchConfigWithoutHistory]);
+
+  const scheduleTerrainPaintFlush = useCallback(() => {
+    if (terrainPaintFlushTimerRef.current !== null) return;
+    const wait = Math.max(0, TERRAIN_PAINT_FLUSH_INTERVAL_MS - (getNow() - terrainPaintLastFlushRef.current));
+    terrainPaintFlushTimerRef.current = window.setTimeout(() => {
+      terrainPaintFlushTimerRef.current = null;
+      flushTerrainPaintPoints();
+    }, wait);
+  }, [flushTerrainPaintPoints]);
+
+  useEffect(() => () => {
+    clearTerrainPaintFlushTimer();
+    terrainPaintPendingPointsRef.current = [];
+  }, [clearTerrainPaintFlushTimer]);
 
   useEffect(() => {
     if (workspaceTab !== 'arcade') {
@@ -3544,101 +2101,91 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     }
   }, [workspaceTab]);
 
-  const markAutosaveDirty = useCallback(() => {
-    autosaveVersionRef.current += 1;
-  }, []);
-
-  const syncActiveCanvasConfigInRef = useCallback((nextConfig, options = {}) => {
-    const nextStudioProject = syncStudioProjectActiveCanvasConfig(studioProjectRef.current, nextConfig);
-    studioProjectRef.current = nextStudioProject;
-    if (options.updateState) setStudioProject(nextStudioProject);
-    return nextStudioProject;
-  }, []);
-
-  const resetGame = useCallback((nextConfig = configRef.current) => {
-    stateRef.current = createInitialState(nextConfig);
-    actionZoneTriggerRef.current = { key: '', cooldownUntil: 0 };
-    lastFrameRef.current = 0;
-    setActiveNpcChoice(null);
-    setSnapshot(stateRef.current);
-  }, []);
-
-  const pushHistorySnapshot = useCallback(() => {
-    const snapshot = createRpg3DHistorySnapshot(configRef.current, studioProjectRef.current);
-    const nextUndoStack = [...undoStackRef.current.slice(-(RPG3D_HISTORY_LIMIT - 1)), snapshot];
-    undoStackRef.current = nextUndoStack;
-    redoStackRef.current = [];
-    setUndoStack(nextUndoStack);
-    setRedoStack([]);
-  }, []);
-
-  const restoreHistorySnapshot = useCallback((snapshot) => {
-    if (!snapshot) return;
-    const nextConfig = cloneConfig(snapshot.config);
-    const nextStudioProject = syncStudioProjectActiveCanvasConfig(
-      cloneStudioProjectForEdit(snapshot.studioProject || createDefaultStudioProject()),
-      nextConfig,
-    );
-    configRef.current = nextConfig;
-    studioProjectRef.current = nextStudioProject;
-    setConfig(nextConfig);
-    setStudioProject(nextStudioProject);
-    resetGame(nextConfig);
-    markAutosaveDirty();
-  }, [markAutosaveDirty, resetGame]);
-
-  const undoProjectChange = useCallback(() => {
-    const previousUndoStack = undoStackRef.current;
-    if (!previousUndoStack.length) return;
-    const snapshot = previousUndoStack[previousUndoStack.length - 1];
-    const currentSnapshot = createRpg3DHistorySnapshot(configRef.current, studioProjectRef.current);
-    const nextUndoStack = previousUndoStack.slice(0, -1);
-    const nextRedoStack = [...redoStackRef.current.slice(-(RPG3D_HISTORY_LIMIT - 1)), currentSnapshot];
-    undoStackRef.current = nextUndoStack;
-    redoStackRef.current = nextRedoStack;
-    setUndoStack(nextUndoStack);
-    setRedoStack(nextRedoStack);
-    restoreHistorySnapshot(snapshot);
-  }, [restoreHistorySnapshot]);
-
-  const redoProjectChange = useCallback(() => {
-    const previousRedoStack = redoStackRef.current;
-    if (!previousRedoStack.length) return;
-    const snapshot = previousRedoStack[previousRedoStack.length - 1];
-    const currentSnapshot = createRpg3DHistorySnapshot(configRef.current, studioProjectRef.current);
-    const nextRedoStack = previousRedoStack.slice(0, -1);
-    const nextUndoStack = [...undoStackRef.current.slice(-(RPG3D_HISTORY_LIMIT - 1)), currentSnapshot];
-    undoStackRef.current = nextUndoStack;
-    redoStackRef.current = nextRedoStack;
-    setUndoStack(nextUndoStack);
-    setRedoStack(nextRedoStack);
-    restoreHistorySnapshot(snapshot);
-  }, [restoreHistorySnapshot]);
+  useEffect(() => {
+    if (mode === 'edit' && tool === 'terrainPaint') return;
+    flushTerrainPaintPoints();
+    terrainPaintSessionRef.current = null;
+    terrainPaintLastPointRef.current = null;
+    terrainPaintPendingPointsRef.current = [];
+  }, [flushTerrainPaintPoints, mode, tool]);
 
   useEffect(() => {
-    if (!user?.id || !hasSupabaseConfig()) return undefined;
+    if (mode === 'edit' && tool === 'modelEraser') return;
+    modelEraserSessionRef.current = null;
+    modelEraserLastPointRef.current = null;
+  }, [mode, tool]);
+
+  useEffect(() => {
+    if (mode !== 'play') return;
+    const selectedHeroId = selected?.type === 'hero' ? selected.id : '';
+    const controlledHeroId = getPlayableHeroId(configRef.current, selectedHeroId);
+    if (!controlledHeroId) return;
+    if (stateRef.current.player?.controlledHeroId === controlledHeroId) return;
+    resetGame(configRef.current, { mode: 'play' });
+  }, [mode, resetGame, selected?.id, selected?.type]);
+
+  useEffect(() => {
     let cancelled = false;
-    setManagementSaveStatus((current) => current || 'Chargement Supabase...');
+    restoreLocalArcadeAssetsSources({
+      config: configRef.current,
+      studioProject: studioProjectRef.current,
+    }).then((restored) => {
+      if (cancelled || !restored?.changed) return;
+      const nextConfig = createConfigFromSavedAssets(restored.config);
+      const nextStudioProject = syncStudioProjectActiveCanvasConfig(restored.studioProject, nextConfig);
+      configRef.current = nextConfig;
+      studioProjectRef.current = nextStudioProject;
+      setConfig(nextConfig);
+      setStudioProject(nextStudioProject);
+      resetGame(nextConfig);
+      setManagementSaveStatus((current) => current || 'Modeles 3D locaux restaures.');
+    }).catch(() => {
+      // Local model recovery is best-effort; missing files fall back to normal asset sync.
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [resetGame, setConfig, setStudioProject, syncStudioProjectActiveCanvasConfig]);
+
+  useEffect(() => {
+    if (!authReady || !user?.id || !hasRpg3DAssetsSupabaseConfig()) return undefined;
+    const loadKey = user.id;
+    if (remoteAssetsLoadKeyRef.current === loadKey) return undefined;
+    remoteAssetsLoadKeyRef.current = loadKey;
+    let cancelled = false;
+    setManagementSaveStatus((current) => (
+      !current || isDisconnectedSaveStatus(current) ? 'Chargement Supabase...' : current
+    ));
     loadArcadeAssetsFromSupabase(user.id)
-      .then((remoteAssets) => {
+      .then(async (remoteAssets) => {
         if (cancelled || !remoteAssets) return;
-        const nextStudioProject = createStudioProjectFromSavedAssets(remoteAssets.studioProject, remoteAssets.config, project);
-        const nextConfig = createConfigFromSavedAssets(getActiveRpg3DCanvas(nextStudioProject)?.config || remoteAssets.config);
+        const remoteStudioProject = createStudioProjectFromSavedAssets(remoteAssets.studioProject, remoteAssets.config, projectRef.current);
+        const remoteConfig = createConfigFromSavedAssets(getActiveRpg3DCanvas(remoteStudioProject)?.config || remoteAssets.config);
+        const restored = await restoreLocalArcadeAssetsSources({
+          config: remoteConfig,
+          studioProject: remoteStudioProject,
+        });
+        if (cancelled) return;
+        const nextConfig = createConfigFromSavedAssets(restored.config);
+        const nextStudioProject = syncStudioProjectActiveCanvasConfig(restored.studioProject, nextConfig);
         configRef.current = nextConfig;
-        studioProjectRef.current = syncStudioProjectActiveCanvasConfig(nextStudioProject, nextConfig);
-        undoStackRef.current = [];
-        redoStackRef.current = [];
+        studioProjectRef.current = nextStudioProject;
         setConfig(nextConfig);
-        setStudioProject(studioProjectRef.current);
-        setUndoStack([]);
-        setRedoStack([]);
+        setStudioProject(nextStudioProject);
+        clearHistoryStacks();
         resetGame(nextConfig);
-        rememberArcadeAssetsLocally(remoteAssets);
-        setManagementSaveStatus('Sauvegarde Supabase chargee.');
+        rememberArcadeAssetsLocally({
+          ...remoteAssets,
+          config: nextConfig,
+          studioProject: nextStudioProject,
+        });
+        setManagementSaveStatus(restored.changed
+          ? 'Sauvegarde Supabase chargee, modeles locaux restaures.'
+          : 'Sauvegarde Supabase chargee.');
       })
       .catch((error) => {
         if (cancelled) return;
-        if (isStorageNotFoundError(error)) {
+        if (isRpg3DAssetsNotFoundError(error)) {
           setManagementSaveStatus((current) => current === 'Chargement Supabase...' ? '' : current);
           return;
         }
@@ -3647,28 +2194,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     return () => {
       cancelled = true;
     };
-  }, [project, resetGame, user?.id]);
-
-  const patchConfig = useCallback((recipe, shouldReset = true) => {
-    pushHistorySnapshot();
-    const next = cloneConfig(configRef.current);
-    recipe(next);
-    configRef.current = next;
-    syncActiveCanvasConfigInRef(next);
-    if (shouldReset) resetGame(next);
-    setConfig(next);
-    markAutosaveDirty();
-  }, [markAutosaveDirty, pushHistorySnapshot, resetGame, syncActiveCanvasConfigInRef]);
-
-  const patchConfigWithoutHistory = useCallback((recipe, shouldReset = false) => {
-    const next = cloneConfig(configRef.current);
-    recipe(next);
-    configRef.current = next;
-    syncActiveCanvasConfigInRef(next);
-    if (shouldReset) resetGame(next);
-    setConfig(next);
-    markAutosaveDirty();
-  }, [markAutosaveDirty, resetGame, syncActiveCanvasConfigInRef]);
+  }, [authReady, clearHistoryStacks, resetGame, setConfig, setStudioProject, syncStudioProjectActiveCanvasConfig, user?.id]);
 
   const patchViewportEngineConfig = useCallback((recipe) => {
     const currentConfig = configRef.current || DEFAULT_ARCADE_CONFIG;
@@ -3684,10 +2210,16 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     markAutosaveDirty();
   }, [markAutosaveDirty, syncActiveCanvasConfigInRef]);
 
-  const adjustCameraZoom = useCallback((direction) => {
+  const handleCameraZoomDrag = useCallback((deltaY) => {
+    const movement = Number(deltaY) || 0;
+    if (!movement) return;
     patchViewportEngineConfig((engine) => {
       const currentDistance = Number(engine.cameraDistance) || DEFAULT_ARCADE_CONFIG.engine.cameraDistance;
-      engine.cameraDistance = clamp(currentDistance + direction * 4, 10, 44);
+      engine.cameraDistance = clamp(
+        currentDistance + movement * CAMERA_ZOOM_DRAG_SENSITIVITY,
+        CAMERA_DISTANCE_MIN,
+        CAMERA_DISTANCE_MAX,
+      );
     });
   }, [patchViewportEngineConfig]);
 
@@ -3722,6 +2254,8 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     setTool('select');
     setDragMode(false);
     setMultiSelectMode(false);
+    setCameraZoomDragMode(false);
+    setTransformTool('');
     setPendingPlacement(null);
     setCameraTargetPickMode((current) => !current);
   }, []);
@@ -3731,21 +2265,15 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
   }, []);
 
   useEffect(() => {
-    if (mode === 'play' || viewMode !== '3d') setCameraTargetPickMode(false);
-  }, [mode, viewMode]);
-
-  const patchStudioProject = useCallback((recipe) => {
-    pushHistorySnapshot();
-    const next = cloneStudioProjectForEdit(studioProjectRef.current);
-    recipe(next);
-    studioProjectRef.current = next;
-    setStudioProject(next);
-    markAutosaveDirty();
-  }, [markAutosaveDirty, pushHistorySnapshot]);
+    if (mode === 'play') {
+      setCameraTargetPickMode(false);
+      setTransformTool('');
+    }
+  }, [mode]);
 
   useEffect(() => {
     setConfig((current) => {
-      const synced = syncConfigModelReferences(current, studioProject);
+      const synced = syncConfigModelReferences(current, studioProject, { preferLocalBlob: true });
       if (!synced.changed) return current;
       configRef.current = synced.config;
       syncActiveCanvasConfigInRef(synced.config);
@@ -3758,16 +2286,20 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     syncActiveCanvasConfigInRef(configRef.current, { updateState: true });
   }, [syncActiveCanvasConfigInRef, workspaceTab]);
 
-  const saveArcadeAssets = useCallback(async () => {
+  const saveArcadeAssets = useCallback(async (options = {}) => {
+    const localOnly = Boolean(options.localOnly);
+    const supabaseConfigured = hasRpg3DAssetsSupabaseConfig();
+    const saveLocallyBecauseSessionMissing = !localOnly && supabaseConfigured && authReady && !user?.id;
+    const effectiveLocalOnly = localOnly || saveLocallyBecauseSessionMissing;
     const savingVersion = autosaveVersionRef.current;
     if (isSavingAssetsRef.current) return;
-    if (hasSupabaseConfig()) {
+    if (!effectiveLocalOnly && supabaseConfigured) {
       if (!authReady) {
         setManagementSaveStatus('Compte en cours de chargement...');
         return;
       }
       if (!user?.id) {
-        setManagementSaveStatus('Connecte-toi pour sauvegarder dans Supabase.');
+        setManagementSaveStatus(RPG3D_LOGIN_REQUIRED_STATUS);
         return;
       }
     }
@@ -3775,12 +2307,32 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     isSavingAssetsRef.current = true;
     setIsSavingAssets(true);
     setManagementSaveStatus(
-      hasSupabaseConfig() ? 'Sauvegarde Supabase...' : 'Sauvegarde locale...',
+      effectiveLocalOnly ? 'Sauvegarde locale...' : (supabaseConfigured ? 'Sauvegarde Supabase...' : 'Sauvegarde locale...'),
     );
     try {
       const currentConfig = configRef.current;
       const currentStudioProject = syncActiveCanvasConfigInRef(currentConfig, { updateState: workspaceTab === 'canvases' });
-      if (hasSupabaseConfig() && user?.id) {
+      if (effectiveLocalOnly) {
+        const localSync = syncConfigModelReferences(currentConfig, currentStudioProject, { preferLocalBlob: true });
+        const localPayload = createArcadeAssetsPayload(localSync.config, currentStudioProject);
+        if (!rememberArcadeAssetsLocally(localPayload)) {
+          setManagementSaveStatus('Sauvegarde impossible: stockage local plein.');
+          return;
+        }
+        if (localSync.changed) {
+          configRef.current = localSync.config;
+          syncActiveCanvasConfigInRef(localSync.config, { updateState: workspaceTab === 'canvases' });
+          setConfig(localSync.config);
+          resetGame(localSync.config);
+        }
+        lastSavedAutosaveVersionRef.current = Math.max(lastSavedAutosaveVersionRef.current, savingVersion);
+        setManagementSaveStatus(saveLocallyBecauseSessionMissing
+          ? RPG3D_LOCAL_SESSION_FALLBACK_STATUS
+          : 'Sauvegarde locale terminee.');
+        return;
+      }
+
+      if (supabaseConfigured && user?.id) {
         const remotePayload = await createSupabaseArcadeAssetsPayload(currentConfig, currentStudioProject, user.id);
         await uploadArcadeAssetsManifest(remotePayload, user.id);
         rememberArcadeAssetsLocally(remotePayload);
@@ -3812,20 +2364,38 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
       lastSavedAutosaveVersionRef.current = Math.max(lastSavedAutosaveVersionRef.current, savingVersion);
       setManagementSaveStatus('Sauvegarde locale terminee.');
     } catch (error) {
-      setManagementSaveStatus(error?.message ? `Sauvegarde Supabase impossible: ${error.message}` : 'Sauvegarde Supabase impossible.');
+      if (!effectiveLocalOnly && supabaseConfigured) {
+        try {
+          const currentConfig = configRef.current;
+          const currentStudioProject = syncActiveCanvasConfigInRef(currentConfig, { updateState: workspaceTab === 'canvases' });
+          const localSync = syncConfigModelReferences(currentConfig, currentStudioProject, { preferLocalBlob: true });
+          const localPayload = createArcadeAssetsPayload(localSync.config, currentStudioProject);
+          if (rememberArcadeAssetsLocally(localPayload)) {
+            if (localSync.changed) {
+              configRef.current = localSync.config;
+              syncActiveCanvasConfigInRef(localSync.config, { updateState: workspaceTab === 'canvases' });
+              setConfig(localSync.config);
+              resetGame(localSync.config);
+            }
+            lastSavedAutosaveVersionRef.current = Math.max(lastSavedAutosaveVersionRef.current, savingVersion);
+            setManagementSaveStatus(`Sauvegarde locale terminee. Supabase inaccessible: ${error?.message || 'upload impossible'}`);
+            return;
+          }
+        } catch {
+          // Keep the original Supabase error below if the local fallback also fails.
+        }
+      }
+      const errorPrefix = effectiveLocalOnly
+        ? 'Mode local impossible'
+        : supabaseConfigured
+          ? 'Sauvegarde Supabase impossible'
+          : 'Sauvegarde locale impossible';
+      setManagementSaveStatus(error?.message ? `${errorPrefix}: ${error.message}` : `${errorPrefix}.`);
     } finally {
       isSavingAssetsRef.current = false;
       setIsSavingAssets(false);
     }
   }, [authReady, project, resetGame, syncActiveCanvasConfigInRef, user?.id, workspaceTab]);
-
-  const addDownloadedAssets = useCallback(() => {
-    patchStudioProject((draft) => {
-      draft.characterModels3d = mergeById(draft.characterModels3d || [], ARCADE_3D_CHARACTER_MODELS);
-      draft.decorModels3d = mergeById(draft.decorModels3d || [], ARCADE_3D_DECOR_MODELS);
-    });
-    setMediaError('');
-  }, [patchStudioProject]);
 
   const selectRpg3DCanvas = useCallback((canvasId) => {
     const syncedProject = syncActiveCanvasConfigInRef(configRef.current, { updateState: workspaceTab === 'canvases' });
@@ -3839,7 +2409,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     const nextProject = cloneStudioProjectForEdit(syncedProject, null, null);
     nextProject.rpg3dActiveCanvasId = targetCanvas.id;
     const nextCanvas = nextProject.rpg3dCanvases.find((canvas) => canvas.id === targetCanvas.id) || targetCanvas;
-    const synced = syncConfigModelReferences(createConfigFromSavedAssets(nextCanvas.config), nextProject);
+    const synced = syncConfigModelReferences(createConfigFromSavedAssets(nextCanvas.config), nextProject, { preferLocalBlob: true });
     const nextConfig = synced.config;
     const finalProject = syncStudioProjectActiveCanvasConfig(nextProject, nextConfig, targetCanvas.id);
     configRef.current = nextConfig;
@@ -3860,7 +2430,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     const nextProject = cloneStudioProjectForEdit(syncedProject, null, null);
     nextProject.rpg3dActiveCanvasId = targetCanvas.id;
     const nextCanvas = nextProject.rpg3dCanvases.find((canvas) => canvas.id === targetCanvas.id) || targetCanvas;
-    const synced = syncConfigModelReferences(createConfigFromSavedAssets(nextCanvas.config), nextProject);
+    const synced = syncConfigModelReferences(createConfigFromSavedAssets(nextCanvas.config), nextProject, { preferLocalBlob: true });
     const nextConfig = synced.config;
     const finalProject = syncStudioProjectActiveCanvasConfig(nextProject, nextConfig, targetCanvas.id);
     configRef.current = nextConfig;
@@ -3876,6 +2446,43 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     setIsPaused(false);
     return true;
   }, [resetGame, syncActiveCanvasConfigInRef, workspaceTab]);
+
+  const {
+    clearInputState,
+    pointerRef,
+    setPlayerMoveTarget,
+    setPointerShooting,
+    snapshot,
+    stateRef,
+    updateWorldPointer,
+  } = useRpg3DGameLoop({
+    activateRpg3DCanvasPortal,
+    actionZoneTriggerRef,
+    configRef,
+    getActionZoneNpcLabel,
+    getNpcChoiceItems,
+    getNpcInteractionMode,
+    getNpcQuestionText,
+    isPaused,
+    lastFrameRef,
+    mode,
+    setActiveNpcChoice,
+    setIsPaused,
+    setSnapshot: setGameSnapshot,
+    snapshot: projectRuntimeSnapshot,
+    stateRef: projectStateRef,
+    workspaceTab,
+  });
+
+  useEffect(() => {
+    if (workspaceTab === 'arcade') return;
+    clearInputState();
+    window.getSelection?.()?.removeAllRanges?.();
+    if (modeRef.current !== 'play') return;
+    setMode('edit');
+    setIsPaused(false);
+    resetGame(configRef.current, { mode: 'edit' });
+  }, [clearInputState, resetGame, workspaceTab]);
 
   const createRpg3DCanvas = useCallback(({ actId = '' } = {}) => {
     const syncedProject = syncActiveCanvasConfigInRef(configRef.current, { updateState: workspaceTab === 'canvases' });
@@ -4105,7 +2712,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     const next = makeCharacter3DModel({
       name: `Personnage 3D ${(studioProject.characterModels3d || []).length + 1}`,
       role: 'npc',
-      shape: 'humanoid',
+      shape: 'glb',
     });
     patchStudioProject((draft) => {
       draft.characterModels3d = Array.isArray(draft.characterModels3d) ? draft.characterModels3d : [];
@@ -4191,7 +2798,6 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     setSelected(null);
     setTool('select');
     setWorkspaceTab('arcade');
-    setViewMode('3d');
     resetGame(next);
   }, [markAutosaveDirty, pushHistorySnapshot, resetGame]);
 
@@ -4239,8 +2845,15 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
         next.player.characterModel3dId = '';
         next.player.characterModelUrl = '';
         next.player.characterModelName = '';
+        next.player.characterModelResources = [];
+        next.player.characterModelAnimations = {};
         if (!hadImage) next.player.characterRenderMode = guessCharacterRenderMode(file.name || '');
         if (!next.player.characterModelScale) next.player.characterModelScale = 1;
+        if (!next.player.characterModelScaleX) next.player.characterModelScaleX = next.player.characterModelScale;
+        if (!next.player.characterModelScaleY) next.player.characterModelScaleY = next.player.characterModelScale;
+        if (!next.player.characterModelScaleZ) next.player.characterModelScaleZ = next.player.characterModelScale;
+        next.player.characterModelScaleProportional = next.player.characterModelScaleProportional !== false;
+        next.player.characterMaterialBrightness = 1;
       });
     } catch (error) {
       setMediaError(error?.message || "Impossible de charger l'image.");
@@ -4280,601 +2893,6 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     }
   }, [patchConfig, selected]);
 
-  const resolveMapCollision = useCallback((entity, radius) => {
-    const liveConfig = configRef.current;
-    let next = {
-      ...entity,
-      x: clamp(entity.x, radius, liveConfig.world.width - radius),
-      y: clamp(entity.y, radius, liveConfig.world.height - radius),
-      r: radius,
-    };
-    getBlockingObstacles(liveConfig).forEach((obstacle) => {
-      next = pushCircleOutOfRect(next, obstacle);
-    });
-    return { ...entity, x: next.x, y: next.y };
-  }, []);
-
-  const spawnParticles = useCallback((x, y, color, count = 8) => {
-    const particles = stateRef.current.particles;
-    for (let i = 0; i < count; i += 1) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 55 + Math.random() * 160;
-      particles.push({
-        x,
-        y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life: 0.35 + Math.random() * 0.35,
-        maxLife: 0.7,
-        color,
-      });
-    }
-  }, []);
-
-  const fireBullet = useCallback((owner, from, target, speed, damage, color, spread = 0) => {
-    const angle = Math.atan2(target.y - from.y, target.x - from.x) + (Math.random() - 0.5) * spread;
-    stateRef.current.bullets.push({
-      id: `${owner}-${performance.now()}-${Math.random()}`,
-      owner,
-      x: from.x,
-      y: from.y,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      damage,
-      color,
-      life: owner === 'player' ? 1.2 : 1.85,
-    });
-  }, []);
-
-  const updateGame = useCallback((dt) => {
-    const liveConfig = configRef.current;
-    const state = stateRef.current;
-    if (mode !== 'play' || state.gameOver || state.victory) return;
-    state.time += dt;
-    state.actionMessageTimer = Math.max(0, (Number(state.actionMessageTimer) || 0) - dt);
-    if (state.actionMessageTimer <= 0) state.actionMessage = '';
-    const blockingObstacles = getBlockingObstacles(liveConfig);
-    const player = state.player;
-    const keys = keysRef.current;
-    const aim = pointerRef.current;
-
-    let inputX = 0;
-    let inputY = 0;
-    if (keys.has('KeyA') || keys.has('ArrowLeft')) inputX -= 1;
-    if (keys.has('KeyD') || keys.has('ArrowRight')) inputX += 1;
-    if (keys.has('KeyW') || keys.has('ArrowUp')) inputY -= 1;
-    if (keys.has('KeyS') || keys.has('ArrowDown')) inputY += 1;
-    const hasKeyboardMove = Boolean(inputX || inputY);
-    if (!hasKeyboardMove && player.moveTarget) {
-      const targetDistance = Math.hypot(player.moveTarget.x - player.x, player.moveTarget.y - player.y);
-      if (targetDistance < PLAYER_RADIUS + 4) {
-        player.moveTarget = null;
-      } else {
-        inputX = player.moveTarget.x - player.x;
-        inputY = player.moveTarget.y - player.y;
-      }
-    }
-    if (hasKeyboardMove) player.moveTarget = null;
-    const input = normalize(inputX, inputY);
-
-    player.dashCooldown = Math.max(0, player.dashCooldown - dt);
-    player.shootCooldown = Math.max(0, player.shootCooldown - dt);
-    player.powerCooldown = Math.max(0, player.powerCooldown - dt);
-    if (keys.has('Space') && player.dashCooldown <= 0 && (input.x || input.y)) {
-      player.dash = DASH_DURATION;
-      player.dashCooldown = liveConfig.player.dashCooldown;
-    }
-    if (player.dash > 0) {
-      player.dash -= dt;
-      player.vx = input.x * liveConfig.player.dashSpeed;
-      player.vy = input.y * liveConfig.player.dashSpeed;
-    } else {
-      player.vx = input.x * liveConfig.player.speed;
-      player.vy = input.y * liveConfig.player.speed;
-    }
-    player.x += player.vx * dt;
-    player.y += player.vy * dt;
-    Object.assign(player, resolveMapCollision(player, PLAYER_RADIUS));
-
-    if ((aim.shooting || keys.has('KeyF')) && player.shootCooldown <= 0) {
-      const attackSkill = liveConfig.player.skills?.[0] || { value: 3, manaCost: 0 };
-      const manaCost = Math.max(0, Number(attackSkill.manaCost) || 0);
-      if (player.mana >= manaCost) {
-        player.mana -= manaCost;
-        fireBullet('player', player, { x: aim.worldX, y: aim.worldY }, liveConfig.player.bulletSpeed, Math.max(1, (Number(attackSkill.value) || 0) * 7), '#8df7ff', 0.05);
-      }
-      player.shootCooldown = liveConfig.player.fireRate;
-      spawnParticles(player.x, player.y, '#8df7ff', 2);
-    }
-
-    const power = liveConfig.player.powers?.[0];
-    if ((keys.has('KeyQ') || keys.has('KeyE')) && power && player.powerCooldown <= 0) {
-      const manaCost = Math.max(0, Number(power.manaCost) || 0);
-      if (player.mana >= manaCost) {
-        player.mana -= manaCost;
-        player.powerCooldown = 0.65;
-        const color = getPowerColor(power.type);
-        fireBullet('player', player, { x: aim.worldX, y: aim.worldY }, liveConfig.player.bulletSpeed * 0.86, Math.max(1, (Number(power.force) || 0) * 10), color, 0.02);
-        spawnParticles(player.x, player.y, color, 12);
-      }
-    }
-
-    state.pickups = state.pickups.filter((pickup) => {
-      if (Math.hypot(player.x - pickup.x, player.y - pickup.y) > 34) return true;
-      if (pickup.type === 'health') player.hp = Math.min(player.maxHp, player.hp + 28);
-      if (pickup.type === 'mana') player.mana = Math.min(player.maxMana, player.mana + 4);
-      if (pickup.type === 'energy') player.dashCooldown = 0;
-      spawnParticles(pickup.x, pickup.y, pickup.type === 'health' ? '#7ef29d' : pickup.type === 'mana' ? '#67e8f9' : '#ffdf6c', 14);
-      return false;
-    });
-
-    const activeActionZone = (liveConfig.actionZones || []).find((zone) => isPointInActionZone(zone, player));
-    if (activeActionZone) {
-      const now = performance.now();
-      const actionType = getActionZoneType(activeActionZone);
-      const triggerKey = `${actionType}:${activeActionZone.id || ''}:${activeActionZone.targetCanvasId || ''}:${activeActionZone.targetNpcId || ''}`;
-      if (now >= (actionZoneTriggerRef.current.cooldownUntil || 0) && actionZoneTriggerRef.current.key !== triggerKey) {
-        actionZoneTriggerRef.current = { key: triggerKey, cooldownUntil: now + 950 };
-        if (actionType === 'portal' && activeActionZone.targetCanvasId) {
-          spawnParticles(player.x, player.y, '#38bdf8', 18);
-          if (activateRpg3DCanvasPortal(activeActionZone.targetCanvasId)) return;
-        } else if (actionType === 'npcAction') {
-          if (getNpcInteractionMode(activeActionZone) === 'multipleChoice') {
-            setActiveNpcChoice({
-              zoneId: activeActionZone.id,
-              speaker: getActionZoneNpcLabel(liveConfig, activeActionZone.targetNpcId),
-              question: getNpcQuestionText(activeActionZone),
-              choices: getNpcChoiceItems(activeActionZone).filter((choice) => String(choice.label || '').trim()),
-            });
-            setIsPaused(true);
-            spawnParticles(player.x, player.y, '#facc15', 12);
-          } else {
-            state.actionMessage = activeActionZone.message || activeActionZone.npcAction || 'Action PNJ';
-            state.actionMessageTimer = 2.4;
-            spawnParticles(player.x, player.y, '#facc15', 12);
-          }
-        }
-      }
-    } else if (actionZoneTriggerRef.current.key) {
-      actionZoneTriggerRef.current = { key: '', cooldownUntil: actionZoneTriggerRef.current.cooldownUntil || 0 };
-    }
-
-    state.enemies.forEach((enemy) => {
-      const stats = getEnemyStats(enemy);
-      const toPlayer = normalize(player.x - enemy.x, player.y - enemy.y);
-      const playerDistance = distance(enemy, player);
-      const canSee = hasLineOfSight(enemy, player, blockingObstacles);
-      enemy.alert = canSee && playerDistance < liveConfig.ai.visionRange ? 1 : Math.max(0, enemy.alert - dt * 0.35);
-      enemy.strafeTimer -= dt;
-      if (enemy.strafeTimer <= 0) {
-        enemy.strafeTimer = 0.8 + Math.random() * 1.2;
-        enemy.strafeDir *= -1;
-      }
-      const rangeMove = playerDistance > stats.range ? 1 : playerDistance < stats.range - 110 ? -0.8 : 0.1;
-      const strafe = enemy.alert ? enemy.strafeDir * 0.68 : 0;
-      let moveX = toPlayer.x * rangeMove + -toPlayer.y * strafe;
-      let moveY = toPlayer.y * rangeMove + toPlayer.x * strafe;
-
-      blockingObstacles.forEach((obstacle) => {
-        const expanded = {
-          x: obstacle.x - liveConfig.ai.obstacleAvoidance,
-          y: obstacle.y - liveConfig.ai.obstacleAvoidance,
-          w: obstacle.w + liveConfig.ai.obstacleAvoidance * 2,
-          h: obstacle.h + liveConfig.ai.obstacleAvoidance * 2,
-        };
-        if (rectCircleOverlap(expanded, { x: enemy.x, y: enemy.y, r: 1 })) {
-          const center = { x: obstacle.x + obstacle.w / 2, y: obstacle.y + obstacle.h / 2 };
-          const away = normalize(enemy.x - center.x, enemy.y - center.y);
-          moveX += away.x * 1.1;
-          moveY += away.y * 1.1;
-        }
-      });
-
-      const move = normalize(moveX, moveY);
-      enemy.vx = move.x * stats.speed * liveConfig.ai.aggression;
-      enemy.vy = move.y * stats.speed * liveConfig.ai.aggression;
-      enemy.x += enemy.vx * dt;
-      enemy.y += enemy.vy * dt;
-      Object.assign(enemy, resolveMapCollision(enemy, ENEMY_RADIUS));
-
-      enemy.shootTimer -= dt;
-      if (enemy.alert && canSee && enemy.shootTimer <= 0) {
-        const canUsePower = stats.powerDamage > 0 && enemy.mana >= stats.powerManaCost && Math.random() * 100 < stats.powerUsageChance;
-        if (canUsePower) enemy.mana -= stats.powerManaCost;
-        const baseShotDamage = canUsePower ? stats.powerDamage : stats.damage;
-        const isCriticalShot = Math.random() * 100 < stats.criticalChance;
-        const shotDamage = Math.max(1, Math.round(baseShotDamage * (isCriticalShot ? stats.criticalMultiplier : 1)));
-        fireBullet(
-          'enemy',
-          enemy,
-          player,
-          stats.bulletSpeed,
-          shotDamage,
-          isCriticalShot ? '#fde047' : canUsePower ? '#c4b5fd' : enemy.role === 'brute' ? '#ffb36d' : '#ff776d',
-          stats.spread,
-        );
-        if (enemy.role === 'brute') {
-          fireBullet('enemy', enemy, { x: player.x + 40, y: player.y }, 390, 8, '#ffb36d', 0.18);
-        }
-        enemy.shootTimer = stats.delay;
-      }
-    });
-
-    state.bullets = state.bullets
-      .map((bullet) => ({
-        ...bullet,
-        x: bullet.x + bullet.vx * dt,
-        y: bullet.y + bullet.vy * dt,
-        life: bullet.life - dt,
-      }))
-      .filter((bullet) => {
-        if (bullet.life <= 0 || bullet.x < 0 || bullet.y < 0 || bullet.x > liveConfig.world.width || bullet.y > liveConfig.world.height) return false;
-        if (blockingObstacles.some((obstacle) => rectCircleOverlap(obstacle, { x: bullet.x, y: bullet.y, r: BULLET_RADIUS }))) {
-          spawnParticles(bullet.x, bullet.y, '#9fb0cc', 5);
-          return false;
-        }
-        if (bullet.owner === 'player') {
-          const target = state.enemies.find((enemy) => Math.hypot(enemy.x - bullet.x, enemy.y - bullet.y) < ENEMY_RADIUS + BULLET_RADIUS);
-          if (!target) return true;
-          target.hp -= bullet.damage;
-          state.score += 12;
-          spawnParticles(bullet.x, bullet.y, '#8df7ff', 7);
-          return false;
-        }
-        if (Math.hypot(player.x - bullet.x, player.y - bullet.y) < PLAYER_RADIUS + BULLET_RADIUS) {
-          player.hp -= bullet.damage;
-          spawnParticles(bullet.x, bullet.y, '#ff776d', 10);
-          if (player.hp <= 0) state.gameOver = true;
-          return false;
-        }
-        return true;
-      });
-
-    state.enemies = state.enemies.filter((enemy) => {
-      if (enemy.hp > 0) return true;
-      state.score += getEnemyStats(enemy).score;
-      spawnParticles(enemy.x, enemy.y, '#ffdf6c', 18);
-      return false;
-    });
-
-    state.particles = state.particles
-      .map((particle) => ({
-        ...particle,
-        x: particle.x + particle.vx * dt,
-        y: particle.y + particle.vy * dt,
-        life: particle.life - dt,
-        vx: particle.vx * 0.92,
-        vy: particle.vy * 0.92,
-      }))
-      .filter((particle) => particle.life > 0);
-
-    if (state.enemies.length === 0) state.victory = true;
-  }, [activateRpg3DCanvasPortal, fireBullet, mode, resolveMapCollision, spawnParticles]);
-
-  const renderGame = useCallback(() => {
-    const canvas = canvasRef.current;
-    const wrapper = wrapperRef.current;
-    if (!canvas || !wrapper) return;
-    const ctx = canvas.getContext('2d');
-    const bounds = wrapper.getBoundingClientRect();
-    const dpr = Math.min(window.devicePixelRatio || 1, 1.25);
-    const width = Math.max(320, Math.floor(bounds.width));
-    const height = Math.max(280, Math.floor(bounds.height));
-    if (canvas.width !== Math.floor(width * dpr) || canvas.height !== Math.floor(height * dpr)) {
-      canvas.width = Math.floor(width * dpr);
-      canvas.height = Math.floor(height * dpr);
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
-    }
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const liveConfig = configRef.current;
-    const state = stateRef.current;
-    const actor = mode === 'play' ? state.player : liveConfig.player;
-    const camera = {
-      x: clamp(actor.x - width / 2, 0, Math.max(0, liveConfig.world.width - width)),
-      y: clamp(actor.y - height / 2, 0, Math.max(0, liveConfig.world.height - height)),
-      width,
-      height,
-    };
-    cameraRef.current = camera;
-    pointerRef.current.worldX = pointerRef.current.x + camera.x;
-    pointerRef.current.worldY = pointerRef.current.y + camera.y;
-
-    ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = '#0b0706';
-    ctx.fillRect(0, 0, width, height);
-
-    ctx.save();
-    ctx.translate(-camera.x, -camera.y);
-    drawWorldFloor(ctx, liveConfig, state.time);
-    ctx.strokeStyle = 'rgba(185, 118, 58, .08)';
-    ctx.lineWidth = 1;
-    for (let x = 0; x <= liveConfig.world.width; x += liveConfig.world.grid) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, liveConfig.world.height);
-      ctx.stroke();
-    }
-    for (let y = 0; y <= liveConfig.world.height; y += liveConfig.world.grid) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(liveConfig.world.width, y);
-      ctx.stroke();
-    }
-
-    (liveConfig.reliefs || []).forEach((relief) => {
-      const isSelected = selected?.type === 'relief' && selected.id === relief.id;
-      drawArcadeRelief(ctx, relief, isSelected);
-    });
-
-    liveConfig.props.forEach((prop) => {
-      const isSelected = selected?.type === 'prop' && selected.id === prop.id;
-      const propImage = getCachedImage(imageCacheRef.current, prop.imageData);
-      drawArcadeProp(ctx, prop, propImage, isSelected);
-    });
-
-    liveConfig.obstacles.forEach((obstacle) => {
-      const isSelected = selected?.type === 'obstacle' && selected.id === obstacle.id;
-      ctx.fillStyle = isSelected ? 'rgba(95, 57, 42, .98)' : 'rgba(38, 31, 29, .96)';
-      drawRoundedRect(ctx, obstacle.x, obstacle.y, obstacle.w, obstacle.h, 10);
-      ctx.fillStyle = 'rgba(255, 166, 77, .1)';
-      drawRoundedRect(ctx, obstacle.x + 8, obstacle.y + 8, Math.max(8, obstacle.w - 16), 8, 4);
-      ctx.strokeStyle = isSelected ? '#f59e0b' : 'rgba(185, 118, 58, .28)';
-      ctx.lineWidth = isSelected ? 3 : 1;
-      ctx.strokeRect(obstacle.x + 0.5, obstacle.y + 0.5, obstacle.w - 1, obstacle.h - 1);
-      ctx.strokeStyle = 'rgba(0, 0, 0, .45)';
-      ctx.lineWidth = 5;
-      ctx.beginPath();
-      ctx.moveTo(obstacle.x + 12, obstacle.y + obstacle.h - 8);
-      ctx.lineTo(obstacle.x + obstacle.w - 12, obstacle.y + obstacle.h - 8);
-      ctx.stroke();
-    });
-
-    (liveConfig.actionZones || []).forEach((zone) => {
-      const rect = getActionZoneRect(zone);
-      const isSelected = selected?.type === 'actionZone' && selected.id === zone.id;
-      const zoneColor = getActionZoneColor(zone);
-      const opacity = getActionZoneOpacity(zone);
-      ctx.globalAlpha = clamp(opacity, 0.08, 0.8);
-      ctx.fillStyle = zoneColor;
-      ctx.strokeStyle = isSelected ? '#f8fbff' : zoneColor;
-      ctx.lineWidth = isSelected ? 3 : 2;
-      ctx.setLineDash([12, 8]);
-      drawRoundedRect(ctx, rect.x, rect.y, rect.w, rect.h, 8);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1);
-      ctx.setLineDash([]);
-    });
-
-    const pickupsToDraw = mode === 'play' ? state.pickups : liveConfig.pickups;
-    pickupsToDraw.forEach((pickup) => {
-      const isSelected = selected?.type === 'pickup' && selected.id === pickup.id;
-      ctx.fillStyle = pickup.type === 'health' ? '#dc2626' : pickup.type === 'mana' ? '#2563eb' : '#f59e0b';
-      ctx.shadowBlur = 18;
-      ctx.shadowColor = ctx.fillStyle;
-      ctx.beginPath();
-      ctx.arc(pickup.x, pickup.y, PICKUP_RADIUS + (mode === 'play' ? Math.sin(state.time * 5) * 2 : 0), 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-      ctx.strokeStyle = isSelected ? '#f8fbff' : 'rgba(255, 224, 178, .62)';
-      ctx.lineWidth = isSelected ? 3 : 2;
-      ctx.stroke();
-    });
-
-    state.bullets.forEach((bullet) => {
-      ctx.fillStyle = bullet.color;
-      ctx.shadowBlur = 14;
-      ctx.shadowColor = bullet.color;
-      ctx.beginPath();
-      ctx.arc(bullet.x, bullet.y, BULLET_RADIUS, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-    });
-
-    (liveConfig.heroes || []).forEach((hero) => {
-      const isSelected = selected?.type === 'hero' && selected.id === hero.id;
-      const heroPreset = getCharacterPreset(getHeroCharacterId(hero), 'runner');
-      const heroImage = getCachedImage(imageCacheRef.current, hero.characterImageData);
-      const aim = normalize(pointerRef.current.worldX - hero.x, pointerRef.current.worldY - hero.y);
-      drawArcadeCharacter(ctx, hero, {
-        radius: PLAYER_RADIUS,
-        aim,
-        preset: heroPreset,
-        selected: isSelected,
-        active: false,
-        image: heroImage,
-        time: state.time,
-      });
-    });
-
-    const enemiesToDraw = mode === 'play' ? state.enemies : liveConfig.enemies;
-    enemiesToDraw.forEach((enemy) => {
-      const isSelected = selected?.type === 'enemy' && selected.id === enemy.id;
-      const enemyPreset = getCharacterPreset(getEnemyCharacterId(enemy), 'guard');
-      const enemyImage = getCachedImage(imageCacheRef.current, enemy.characterImageData);
-      const target = mode === 'play' ? state.player : liveConfig.player;
-      const aim = normalize(target.x - enemy.x, target.y - enemy.y);
-      drawArcadeCharacter(ctx, enemy, {
-        radius: ENEMY_RADIUS,
-        aim,
-        preset: enemyPreset,
-        selected: isSelected,
-        active: Boolean(enemy.alert),
-        image: enemyImage,
-        time: state.time,
-      });
-      if (mode === 'play') {
-        ctx.fillStyle = 'rgba(0,0,0,.36)';
-        ctx.fillRect(enemy.x - 21, enemy.y - 31, 42, 5);
-        ctx.fillStyle = '#dc2626';
-        ctx.fillRect(enemy.x - 21, enemy.y - 31, 42 * (enemy.hp / enemy.maxHp), 5);
-      }
-    });
-
-    const player = mode === 'play' ? state.player : liveConfig.player;
-    const aim = normalize(pointerRef.current.worldX - player.x, pointerRef.current.worldY - player.y);
-    if (mode === 'play' && state.player.moveTarget) {
-      ctx.strokeStyle = 'rgba(245, 158, 11, .58)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(state.player.moveTarget.x, state.player.moveTarget.y, 18 + Math.sin(state.time * 8) * 3, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(state.player.moveTarget.x - 9, state.player.moveTarget.y);
-      ctx.lineTo(state.player.moveTarget.x + 9, state.player.moveTarget.y);
-      ctx.moveTo(state.player.moveTarget.x, state.player.moveTarget.y - 9);
-      ctx.lineTo(state.player.moveTarget.x, state.player.moveTarget.y + 9);
-      ctx.stroke();
-    }
-    const playerPreset = getCharacterPreset(liveConfig.player.character || 'runner', 'runner');
-    const playerImage = getCachedImage(imageCacheRef.current, liveConfig.player.characterImageData);
-    drawArcadeCharacter(ctx, player, {
-      radius: PLAYER_RADIUS,
-      aim,
-      preset: playerPreset,
-      selected: mode === 'edit' && selected?.type === 'spawn',
-      active: player.dash > 0,
-      image: playerImage,
-      time: state.time,
-    });
-
-    state.particles.forEach((particle) => {
-      ctx.globalAlpha = clamp(particle.life / particle.maxLife, 0, 1);
-      ctx.fillStyle = particle.color;
-      ctx.beginPath();
-      ctx.arc(particle.x, particle.y, 3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    });
-    ctx.restore();
-
-    ctx.strokeStyle = 'rgba(245, 158, 11, .62)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(pointerRef.current.x, pointerRef.current.y, 15, 0, Math.PI * 2);
-    ctx.moveTo(pointerRef.current.x - 22, pointerRef.current.y);
-    ctx.lineTo(pointerRef.current.x - 8, pointerRef.current.y);
-    ctx.moveTo(pointerRef.current.x + 8, pointerRef.current.y);
-    ctx.lineTo(pointerRef.current.x + 22, pointerRef.current.y);
-    ctx.moveTo(pointerRef.current.x, pointerRef.current.y - 22);
-    ctx.lineTo(pointerRef.current.x, pointerRef.current.y - 8);
-    ctx.moveTo(pointerRef.current.x, pointerRef.current.y + 8);
-    ctx.lineTo(pointerRef.current.x, pointerRef.current.y + 22);
-    ctx.stroke();
-
-    ctx.fillStyle = 'rgba(12, 7, 6, .82)';
-    drawRoundedRect(ctx, width - 182, 16, 166, 112, 8);
-    const mapScaleX = 146 / liveConfig.world.width;
-    const mapScaleY = 88 / liveConfig.world.height;
-    ctx.fillStyle = 'rgba(245, 158, 11, .1)';
-    ctx.fillRect(width - 172, 34, 146, 88);
-    (liveConfig.reliefs || []).forEach((relief) => {
-      ctx.fillStyle = relief.blocksMovement ? 'rgba(245, 158, 11, .52)' : 'rgba(214, 160, 76, .28)';
-      ctx.fillRect(
-        width - 172 + (relief.x - getReliefWidth(relief) / 2) * mapScaleX,
-        34 + (relief.y - getReliefHeight(relief) / 2) * mapScaleY,
-        Math.max(2, getReliefWidth(relief) * mapScaleX),
-        Math.max(2, getReliefHeight(relief) * mapScaleY),
-      );
-    });
-    (liveConfig.actionZones || []).forEach((zone) => {
-      ctx.fillStyle = getActionZoneType(zone) === 'portal' ? 'rgba(56, 189, 248, .48)' : 'rgba(250, 204, 21, .46)';
-      ctx.fillRect(
-        width - 172 + (zone.x - getActionZoneWidth(zone) / 2) * mapScaleX,
-        34 + (zone.y - getActionZoneHeight(zone) / 2) * mapScaleY,
-        Math.max(2, getActionZoneWidth(zone) * mapScaleX),
-        Math.max(2, getActionZoneHeight(zone) * mapScaleY),
-      );
-    });
-    liveConfig.enemies.forEach((enemy) => {
-      ctx.fillStyle = getCharacterPreset(getEnemyCharacterId(enemy), 'guard').body;
-      ctx.fillRect(width - 172 + enemy.x * mapScaleX - 2, 34 + enemy.y * mapScaleY - 2, 4, 4);
-    });
-    (liveConfig.heroes || []).forEach((hero) => {
-      ctx.fillStyle = getCharacterPreset(getHeroCharacterId(hero), 'runner').body;
-      ctx.fillRect(width - 172 + hero.x * mapScaleX - 2, 34 + hero.y * mapScaleY - 2, 4, 4);
-    });
-    ctx.fillStyle = getCharacterPreset(liveConfig.player.character || 'runner', 'runner').body;
-    ctx.fillRect(width - 172 + player.x * mapScaleX - 3, 34 + player.y * mapScaleY - 3, 6, 6);
-
-    if (mode === 'play' && state.actionMessage && state.actionMessageTimer > 0) {
-      ctx.fillStyle = 'rgba(8, 15, 26, .84)';
-      drawRoundedRect(ctx, width / 2 - 190, 26, 380, 42, 8);
-      ctx.fillStyle = '#f8fbff';
-      ctx.font = '700 14px Inter, Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText(state.actionMessage, width / 2, 52);
-      ctx.textAlign = 'start';
-    }
-
-    if (mode === 'play' && (state.gameOver || state.victory || isPaused)) {
-      ctx.fillStyle = 'rgba(8, 4, 3, .74)';
-      ctx.fillRect(0, 0, width, height);
-      ctx.fillStyle = '#f8fbff';
-      ctx.font = '800 28px Inter, Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText(state.victory ? 'Zone nettoyee' : state.gameOver ? 'Signal perdu' : 'Pause', width / 2, height / 2 - 8);
-      ctx.font = '600 14px Inter, Arial';
-      ctx.fillStyle = '#d6b985';
-      ctx.fillText('Reprendre ou relancer depuis le panneau de controle.', width / 2, height / 2 + 22);
-      ctx.textAlign = 'start';
-    }
-  }, [isPaused, mode, selected]);
-
-  useEffect(() => {
-    const loop = (timestamp) => {
-      const last = lastFrameRef.current || timestamp;
-      const dt = Math.min(0.033, (timestamp - last) / 1000);
-      lastFrameRef.current = timestamp;
-      if (!isPaused) updateGame(dt);
-      renderGame();
-      if (mode === 'play' && timestamp - snapshotFrameRef.current > 180) {
-        snapshotFrameRef.current = timestamp;
-        setSnapshot({ ...stateRef.current, player: { ...stateRef.current.player } });
-      }
-      animationRef.current = requestAnimationFrame(loop);
-    };
-    animationRef.current = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(animationRef.current);
-  }, [isPaused, renderGame, updateGame]);
-
-  useEffect(() => {
-    const handleKeyDown = (event) => {
-      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) event.preventDefault();
-      if (event.code === 'KeyP') setIsPaused((paused) => !paused);
-      keysRef.current.add(event.code);
-    };
-    const handleKeyUp = (event) => keysRef.current.delete(event.code);
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    };
-  }, []);
-
-  const updatePointer = useCallback((event) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    pointerRef.current.x = event.clientX - rect.left;
-    pointerRef.current.y = event.clientY - rect.top;
-  }, []);
-
-  const updateWorldPointer = useCallback(({ x, y, screenX, screenY }) => {
-    if (Number.isFinite(screenX)) pointerRef.current.x = screenX;
-    if (Number.isFinite(screenY)) pointerRef.current.y = screenY;
-    if (Number.isFinite(x)) {
-      pointerRef.current.worldX = x;
-      pointerRef.current.hasWorldPoint = true;
-    }
-    if (Number.isFinite(y)) {
-      pointerRef.current.worldY = y;
-      pointerRef.current.hasWorldPoint = true;
-    }
-  }, []);
-
   const updateArcadeWorldField = useCallback((field, rawValue) => {
     const value = Number(rawValue);
     if (!Number.isFinite(value)) return;
@@ -4903,6 +2921,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
 
   const beginEntityPlacement = useCallback((entity) => {
     if (!entity?.type || !entity.id) return;
+    const cameraDistance = getPlacementCameraDistance(configRef.current, entity);
     setMode('edit');
     setIsPaused(false);
     setTool('select');
@@ -4912,7 +2931,12 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     setPendingPlacement(entity);
     setSelected(entity);
     setMultiSelected(canMultiSelectEntity(entity) ? [entity] : []);
-  }, []);
+    if (!['hero', 'enemy'].includes(entity.type)) return;
+    patchViewportEngineConfig((engine) => {
+      const currentDistance = Number(engine.cameraDistance) || DEFAULT_ARCADE_CONFIG.engine.cameraDistance;
+      if (Math.abs(currentDistance - cameraDistance) > 0.5) engine.cameraDistance = cameraDistance;
+    });
+  }, [patchViewportEngineConfig]);
 
   const commitPendingPlacement = useCallback((point) => {
     if (!pendingPlacement || !point) return false;
@@ -4931,6 +2955,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     let placedEntity = null;
     patchConfig((next) => {
       const position = getCurrentPlacementPoint(next);
+      const axisScale = getCharacterModelAxisScale(model);
       if ((model.role || 'hero') === 'hero') {
         next.heroes = Array.isArray(next.heroes) ? next.heroes : [];
         const item = {
@@ -4946,8 +2971,15 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
           characterModel3dId: '',
           characterModelUrl: '',
           characterModelName: '',
+          characterModelResources: [],
+          characterModelAnimations: {},
           characterRenderMode: getStudioCharacterRenderMode(model),
-          characterModelScale: 1,
+          characterModelScale: axisScale.y,
+          characterModelScaleX: axisScale.x,
+          characterModelScaleY: axisScale.y,
+          characterModelScaleZ: axisScale.z,
+          characterModelScaleProportional: model.characterModelScaleProportional !== false,
+          characterMaterialBrightness: 1,
           sourceCharacterRole: 'hero',
         };
         if (getStudioModelSource(model)) applyCharacterModelToActor(item, model);
@@ -4970,8 +3002,15 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
         characterModel3dId: '',
         characterModelUrl: '',
         characterModelName: '',
+        characterModelResources: [],
+        characterModelAnimations: {},
         characterRenderMode: getStudioCharacterRenderMode(model),
-        characterModelScale: 1,
+        characterModelScale: axisScale.y,
+        characterModelScaleX: axisScale.x,
+        characterModelScaleY: axisScale.y,
+        characterModelScaleZ: axisScale.z,
+        characterModelScaleProportional: model.characterModelScaleProportional !== false,
+        characterMaterialBrightness: 1,
         sourceCharacterRole: model.role || 'enemy',
         combatEnemyName: model.name || 'Personnage',
         combatEnemyMaxHealth: 8,
@@ -5001,6 +3040,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
       const item = {
         id: createId('prop'),
         name: model.name || 'Objet 3D',
+        decorKind: getStudioDecorKindId(model.kind),
         x: position.x,
         y: position.y,
         z: 0,
@@ -5023,7 +3063,12 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
         decorModel3dId: model.id || '',
         decorModelUrl: source,
         decorModelName: model.modelName || model.name || '',
-        decorModelScale: Number(model.scale) || 1,
+        decorLocalModelFileId: model.localModelFileId || '',
+        modelFormat: model.modelFormat || '',
+        modelFileSize: Number(model.modelFileSize) || 0,
+        modelResources: Array.isArray(model.modelResources) ? model.modelResources : [],
+        materialBrightness: getDecorMaterialBrightness(model),
+        decorModelScale: 1,
         baseColor: model.baseColor || '#64748b',
         accentColor: model.accentColor || '#f59e0b',
         roofColor: model.roofColor || '#7f1d1d',
@@ -5033,6 +3078,204 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     });
     beginEntityPlacement(placedEntity);
   }, [beginEntityPlacement, getCurrentPlacementPoint, patchConfig]);
+
+  const addFlatGroundToCanvas = useCallback(() => {
+    const baseColor = getFlatGroundPlateauColor(configRef.current, flatGroundColorDraft);
+    patchConfig((next) => {
+      const world = next.world || DEFAULT_ARCADE_CONFIG.world;
+      const width = Math.max(12, Math.round(Number(world.width) || DEFAULT_ARCADE_CONFIG.world.width));
+      const height = Math.max(12, Math.round(Number(world.height) || DEFAULT_ARCADE_CONFIG.world.height));
+      next.props = Array.isArray(next.props) ? next.props : [];
+      const existingIndex = next.props.findIndex((prop) => isFlatGroundPlateauProp(prop, world));
+      const existing = existingIndex >= 0 ? next.props[existingIndex] : null;
+      const plateau = {
+        ...(existing || {}),
+        id: existing?.id || createId('prop'),
+        name: 'Sol plat',
+        decorKind: 'road',
+        x: Math.round(width / 2),
+        y: Math.round(height / 2),
+        z: 0,
+        floorZeroZ: DEFAULT_FLOOR_ZERO_Z,
+        rotation: 0,
+        modelRotationX: 0,
+        modelRotationY: 0,
+        modelRotationZ: 0,
+        modelCenterOnOrigin: true,
+        modelFlushToGround: false,
+        r: Math.round(Math.max(width, height) / 2),
+        w: width,
+        h: height,
+        modelHeight: 12,
+        renderMode: 'floor',
+        blocksMovement: false,
+        imageData: '',
+        imageName: '',
+        repeatTexture: false,
+        baseColor,
+        floorColor: baseColor,
+      };
+      if (existingIndex >= 0) {
+        const keptProps = next.props
+          .filter((prop, index) => index === existingIndex || !isFlatGroundPlateauProp(prop, world));
+        const keptIndex = keptProps.findIndex((prop) => prop.id === existing.id);
+        keptProps[keptIndex] = plateau;
+        next.props = keptProps;
+      } else {
+        next.props.push(plateau);
+      }
+      setSelected(null);
+      setMultiSelected([]);
+    }, false);
+    setMode('edit');
+    setTool('select');
+    setPendingPlacement(null);
+    setTransformTool('');
+    setDragMode(false);
+    setMultiSelectMode(false);
+    setCameraTargetPickMode(false);
+  }, [flatGroundColorDraft, patchConfig]);
+
+  const updateFlatGroundColor = useCallback((value) => {
+    const color = getHexColor(value, FLAT_GROUND_DEFAULT_COLOR);
+    setFlatGroundColorDraft(color);
+    const liveConfig = configRef.current || DEFAULT_ARCADE_CONFIG;
+    const hasPlateau = (liveConfig.props || []).some((prop) => isFlatGroundPlateauProp(prop, liveConfig.world));
+    if (!hasPlateau) return;
+    patchConfigWithoutHistory((next) => {
+      (next.props || []).forEach((prop) => {
+        if (!isFlatGroundPlateauProp(prop, next.world)) return;
+        prop.baseColor = color;
+        prop.floorColor = color;
+      });
+    }, false);
+  }, [patchConfigWithoutHistory]);
+
+  const updateTerrainPaintDraft = useCallback((field, value) => {
+    setTerrainPaintDraft((current) => {
+      if (field === 'color') return { ...current, color: getHexColor(value, TERRAIN_PAINT_DEFAULT_COLOR) };
+      if (field === 'radius') {
+        const radius = Number(value);
+        return {
+          ...current,
+          radius: clamp(Number.isFinite(radius) ? radius : TERRAIN_PAINT_DEFAULT_RADIUS, TERRAIN_PAINT_MIN_RADIUS, TERRAIN_PAINT_MAX_RADIUS),
+        };
+      }
+      if (field === 'opacity') {
+        const opacity = Number(value);
+        return { ...current, opacity: clamp(Number.isFinite(opacity) ? opacity : TERRAIN_PAINT_DEFAULT_OPACITY, 0.12, 1) };
+      }
+      if (field === 'shape') return { ...current, shape: getTerrainPaintShape({ shape: value }) };
+      return current;
+    });
+  }, []);
+
+  const clearTerrainPaint = useCallback(() => {
+    if (!(configRef.current?.terrainPaintStrokes || []).length) return;
+    clearTerrainPaintFlushTimer();
+    terrainPaintPendingPointsRef.current = [];
+    terrainPaintLastPointRef.current = null;
+    terrainPaintSessionRef.current = null;
+    patchConfig((next) => {
+      next.terrainPaintStrokes = [];
+    }, false);
+  }, [clearTerrainPaintFlushTimer, patchConfig]);
+
+  const handleTerrainPaintStart = useCallback((point) => {
+    if (!point || modeRef.current !== 'edit') return;
+    const strokeId = createId('paint');
+    clearTerrainPaintFlushTimer();
+    terrainPaintPendingPointsRef.current = [];
+    terrainPaintSessionRef.current = strokeId;
+    setSelected(null);
+    setMultiSelected([]);
+    patchConfig((next) => {
+      const paintPoint = normalizeTerrainPaintPoint(point, next.world);
+      terrainPaintLastPointRef.current = paintPoint;
+      next.terrainPaintStrokes = Array.isArray(next.terrainPaintStrokes) ? next.terrainPaintStrokes : [];
+      next.terrainPaintStrokes.push({
+        id: strokeId,
+        color: getTerrainPaintColor(terrainPaintDraft),
+        radius: getTerrainPaintRadius(terrainPaintDraft),
+        opacity: getTerrainPaintOpacity(terrainPaintDraft),
+        shape: getTerrainPaintShape(terrainPaintDraft),
+        points: [paintPoint],
+      });
+    }, false);
+  }, [clearTerrainPaintFlushTimer, patchConfig, terrainPaintDraft]);
+
+  const handleTerrainPaintMove = useCallback((point) => {
+    const strokeId = terrainPaintSessionRef.current;
+    if (!strokeId || !point) return;
+    const currentStroke = (configRef.current?.terrainPaintStrokes || []).find((stroke) => stroke.id === strokeId);
+    if (!currentStroke) return;
+    const paintPoint = normalizeTerrainPaintPoint(point, configRef.current?.world);
+    const previousPoint = terrainPaintLastPointRef.current
+      || currentStroke.points?.[currentStroke.points.length - 1];
+    const spacing = Math.max(10, getTerrainPaintRadius(currentStroke) * 0.18);
+    if (previousPoint && distance(previousPoint, paintPoint) < spacing) return;
+    terrainPaintLastPointRef.current = paintPoint;
+    terrainPaintPendingPointsRef.current.push(paintPoint);
+    scheduleTerrainPaintFlush();
+  }, [scheduleTerrainPaintFlush]);
+
+  const handleTerrainPaintEnd = useCallback(() => {
+    flushTerrainPaintPoints();
+    terrainPaintSessionRef.current = null;
+    terrainPaintLastPointRef.current = null;
+  }, [flushTerrainPaintPoints]);
+
+  const appendModelEraserStroke = useCallback((point, entity, withHistory = false) => {
+    if (!point || !entity?.id || entity.type !== 'prop') return false;
+    let didAppend = false;
+    const recipe = (next) => {
+      const currentProp = getSelectedEntity(next, entity);
+      if (!currentProp?.item || getPropRenderMode(currentProp.item) !== 'glb') return;
+      const radius = getModelEraserRadius({
+        modelEraserRadius: currentProp.item.modelEraserRadius ?? modelEraserRadiusDraft,
+      });
+      const stroke = createModelEraserSurfaceStroke(point, radius, createId('erase'));
+      if (!stroke) return;
+      currentProp.item.modelEraserRadius = radius;
+      currentProp.item.modelEraserStrokes = [
+        ...getModelEraserStrokes(currentProp.item),
+        stroke,
+      ].slice(-MODEL_ERASER_MAX_STROKES);
+      didAppend = true;
+    };
+    if (withHistory) patchConfig(recipe, false);
+    else patchConfigWithoutHistory(recipe, false);
+    if (didAppend) modelEraserLastPointRef.current = normalizeModelEraserHit(point);
+    return didAppend;
+  }, [modelEraserRadiusDraft, patchConfig, patchConfigWithoutHistory]);
+
+  const handleModelEraseStart = useCallback((point) => {
+    if (!point || modeRef.current !== 'edit') return;
+    const target = selectedRef.current;
+    const currentProp = getSelectedEntity(configRef.current, target);
+    if (!currentProp?.item || currentProp.type !== 'prop' || getPropRenderMode(currentProp.item) !== 'glb') return;
+    modelEraserSessionRef.current = { entity: { type: target.type, id: target.id } };
+    modelEraserLastPointRef.current = null;
+    setMultiSelected([]);
+    appendModelEraserStroke(point, target, true);
+  }, [appendModelEraserStroke, configRef]);
+
+  const handleModelEraseMove = useCallback((point) => {
+    const session = modelEraserSessionRef.current;
+    if (!session?.entity || !point) return;
+    const currentProp = getSelectedEntity(configRef.current, session.entity);
+    if (!currentProp?.item || getPropRenderMode(currentProp.item) !== 'glb') return;
+    const radius = getModelEraserRadius(currentProp.item);
+    const previousPoint = modelEraserLastPointRef.current;
+    const spacing = Math.max(8, radius * 0.2);
+    if (previousPoint && modelEraserHitDistance(previousPoint, point) < spacing) return;
+    appendModelEraserStroke(point, session.entity, false);
+  }, [appendModelEraserStroke, configRef]);
+
+  const handleModelEraseEnd = useCallback(() => {
+    modelEraserSessionRef.current = null;
+    modelEraserLastPointRef.current = null;
+  }, []);
 
   const updateEntity = useCallback((field, rawValue) => {
     const value = NUMERIC_ENTITY_FIELDS.has(field) ? Number(rawValue) : rawValue;
@@ -5044,15 +3287,30 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
       if (field === 'y') selectedEntity.item.y = clamp(value, 0, next.world.height);
       if (field === 'z') selectedEntity.item.z = clamp(value, ENTITY_Z_MIN, ENTITY_Z_MAX);
       if (field === 'floorZeroZ') selectedEntity.item.floorZeroZ = clamp(value, FLOOR_ZERO_Z_MIN, FLOOR_ZERO_Z_MAX);
-      if (field === 'characterModelScale') selectedEntity.item.characterModelScale = clamp(value, MODEL_SCALE_MIN, MODEL_SCALE_MAX);
+      if (field === 'characterModelScale') {
+        const scale = clamp(value, MODEL_SCALE_MIN, MODEL_SCALE_MAX);
+        selectedEntity.item.characterModelScale = scale;
+        selectedEntity.item.characterModelScaleY = scale;
+        if (selectedEntity.item.characterModelScaleProportional !== false) {
+          selectedEntity.item.characterModelScaleX = scale;
+          selectedEntity.item.characterModelScaleZ = scale;
+        }
+      }
+      if (field === 'characterModelScaleX' || field === 'characterModelScaleY' || field === 'characterModelScaleZ') {
+        selectedEntity.item[field] = clamp(value, MODEL_SCALE_MIN, MODEL_SCALE_MAX);
+        if (field === 'characterModelScaleY') selectedEntity.item.characterModelScale = selectedEntity.item[field];
+      }
+      if (field === 'characterMaterialBrightness') selectedEntity.item.characterMaterialBrightness = clamp(value, MATERIAL_BRIGHTNESS_MIN, MATERIAL_BRIGHTNESS_MAX);
       if (field === 'decorModelScale') selectedEntity.item.decorModelScale = clamp(value, MODEL_SCALE_MIN, MODEL_SCALE_MAX);
+      if (field === 'materialBrightness') selectedEntity.item.materialBrightness = clamp(value, MATERIAL_BRIGHTNESS_MIN, MATERIAL_BRIGHTNESS_MAX);
       if (field === 'modelRotationX' || field === 'modelRotationY' || field === 'modelRotationZ') {
         selectedEntity.item[field] = clamp(value, -180, 180);
       }
       if (selectedEntity.type === 'prop' && isFloorTileProp(selectedEntity.item) && ['w', 'h', 'r'].includes(field)) {
+        const maxTileSize = getWorldCoverTileSize(next.world);
         const tileSize = field === 'r'
-          ? Math.max(12, Math.round((Number(value) || 6) * 2))
-          : Math.max(12, Math.round(Number(value) || getFloorTileWorldSize(selectedEntity.item)));
+          ? Math.round(clamp((Number(value) || 6) * 2, 12, maxTileSize))
+          : Math.round(clamp(Number(value) || getFloorTileWorldSize(selectedEntity.item), 12, maxTileSize));
         selectedEntity.item.w = tileSize;
         selectedEntity.item.h = tileSize;
         selectedEntity.item.r = Math.round(tileSize / 2);
@@ -5135,6 +3393,36 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     });
   }, [multiSelected, patchConfig, selected]);
 
+  const handleSelectionTransformCommit = useCallback((payload = {}) => {
+    const { entity, mode: transformMode, rotationDelta = {}, scaleDelta = {} } = payload;
+    if (!entity?.type || !entity.id) return;
+    patchConfig((next) => {
+      const selectedEntity = getSelectedEntity(next, entity);
+      if (!selectedEntity?.item) return;
+      const item = selectedEntity.item;
+      if (transformMode === 'rotate') {
+        const deltaY = Number(rotationDelta.y) || 0;
+        if (ROTATABLE_ENTITY_TYPES.has(selectedEntity.type) && Math.abs(deltaY) > 0.01) {
+          item.rotation = normalizeDegrees((Number(item.rotation) || 0) + deltaY);
+        }
+        if (selectedEntity.type === 'prop' && getPropRenderMode(item) === 'glb') {
+          const deltaX = Number(rotationDelta.x) || 0;
+          const deltaZ = Number(rotationDelta.z) || 0;
+          if (Math.abs(deltaX) > 0.01) item.modelRotationX = clamp(getModelRotationValue(item, 'modelRotationX') + deltaX, -180, 180);
+          if (Math.abs(deltaZ) > 0.01) item.modelRotationZ = clamp(getModelRotationValue(item, 'modelRotationZ') + deltaZ, -180, 180);
+        }
+        return;
+      }
+      if (transformMode === 'scale') {
+        scaleSelectionEntity(next, {
+          type: selectedEntity.type,
+          id: entity.id,
+          item,
+        }, scaleDelta);
+      }
+    }, false);
+  }, [patchConfig]);
+
   const updateSelectedNpcChoice = useCallback((choiceId, field, value) => {
     if (!selected || selected.type !== 'actionZone') return;
     patchConfig((next) => {
@@ -5177,7 +3465,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     const response = choice?.response || choice?.label || 'Choix pris en compte.';
     stateRef.current.actionMessage = response;
     stateRef.current.actionMessageTimer = 3;
-    setSnapshot({ ...stateRef.current, player: { ...stateRef.current.player } });
+    setGameSnapshot({ ...stateRef.current, player: { ...stateRef.current.player } });
     setActiveNpcChoice(null);
     setIsPaused(false);
   }, []);
@@ -5209,6 +3497,11 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
   const handleWorldDrag = useCallback((entity, point) => {
     if (!entity || entity.type === 'tileDuplicate') return;
     if (multiDragRef.current) multiDragRef.current.latestPoint = point;
+  }, []);
+
+  const resolveWorldDragPoint = useCallback((entity, point) => {
+    if (!entity || entity.type === 'tileDuplicate' || !multiDragRef.current) return point;
+    return resolveFlatTileDragPoint(configRef.current, multiDragRef.current, entity, point, { snap: true });
   }, []);
 
   const handleWorldDrop = useCallback((entity, point) => {
@@ -5329,7 +3622,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     if (!selected || selected.type !== 'prop') return;
     patchConfig((next) => {
       const currentProp = getSelectedEntity(next, selected);
-      if (!currentProp?.item || !isFlatTileLikeProp(currentProp.item)) return;
+      if (!currentProp?.item || !isFloorTileProp(currentProp.item)) return;
       snapFlatTileToNeighbors(currentProp.item, next.props || [], next.world, { force: true });
     }, false);
   }, [patchConfig, selected]);
@@ -5397,7 +3690,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
   }, [patchConfig, selected]);
 
   const deleteSelected = useCallback(() => {
-    const targets = getDeletableSelectionEntities(selected, multiSelected);
+    const targets = getDeletableSelectionEntities(configRef.current, selected, multiSelected);
     if (!targets.length) return;
     setPendingPlacement(null);
     patchConfig((next) => {
@@ -5416,7 +3709,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
       if (!['Delete', 'Backspace'].includes(event.code)) return;
       if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
       if (mode !== 'edit' || isEditableShortcutTarget(event.target)) return;
-      if (!getDeletableSelectionEntities(selected, multiSelected).length) return;
+      if (!getDeletableSelectionEntities(configRef.current, selected, multiSelected).length) return;
       event.preventDefault();
       deleteSelected();
     };
@@ -5437,6 +3730,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     const collectionName = MAP_ENTITY_COLLECTIONS[type];
     if (!collectionName) return;
     patchConfig((next) => {
+      if (isProtectedMapEntity(next, { type, id })) return;
       next[collectionName] = (next[collectionName] || []).filter((item) => item.id !== id);
     });
     setSelected((current) => (current?.type === type && current.id === id ? null : current));
@@ -5455,11 +3749,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
   const handleWorldClick = useCallback((point, entity = null, button = 0) => {
     if (mode === 'play') {
       if (button === 0) {
-        const liveConfig = configRef.current;
-        stateRef.current.player.moveTarget = {
-          x: clamp(point.x, PLAYER_RADIUS, liveConfig.world.width - PLAYER_RADIUS),
-          y: clamp(point.y, PLAYER_RADIUS, liveConfig.world.height - PLAYER_RADIUS),
-        };
+        setPlayerMoveTarget(point);
       }
       return;
     }
@@ -5486,11 +3776,6 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
       return;
     }
     patchConfig((next) => {
-      if (tool === 'spawn') {
-        next.player.x = Math.round(point.x);
-        next.player.y = Math.round(point.y);
-        setSelected({ type: 'spawn', id: 'player' });
-      }
       if (tool === 'obstacle') {
         const item = { id: createId('wall'), x: Math.round(point.x - 90), y: Math.round(point.y - 35), z: 0, w: 180, h: 70 };
         next.obstacles.push(item);
@@ -5510,8 +3795,11 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
           characterModel3dId: '',
           characterModelUrl: '',
           characterModelName: '',
+          characterModelResources: [],
+          characterModelAnimations: {},
           characterRenderMode: 'capsule',
           characterModelScale: 1,
+          characterMaterialBrightness: 1,
           combatEnemyName: 'Ennemi',
           combatEnemyMaxHealth: 8,
           combatEnemyStrength: 2,
@@ -5598,7 +3886,8 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
         setSelected({ type: 'prop', id: item.id });
       }
     });
-  }, [commitPendingPlacement, duplicateSelectedTile, mode, multiSelectMode, patchConfig, pendingPlacement, selectSingleEntity, toggleMultiSelectedEntity, tool]);
+    if (tool === 'actionZone') setTool('select');
+  }, [commitPendingPlacement, duplicateSelectedTile, mode, multiSelectMode, patchConfig, pendingPlacement, selectSingleEntity, setPlayerMoveTarget, toggleMultiSelectedEntity, tool]);
 
   const handleMarqueeSelect = useCallback((entities = []) => {
     setMode('edit');
@@ -5616,18 +3905,6 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     setMultiSelected(nextSelection);
     setSelected(nextSelection[nextSelection.length - 1] || null);
   }, []);
-
-  const handleCanvasClick = useCallback((event) => {
-    updatePointer(event);
-    const liveConfig = configRef.current;
-    const camera = cameraRef.current;
-    const point = {
-      x: clamp(pointerRef.current.x + camera.x, 0, liveConfig.world.width),
-      y: clamp(pointerRef.current.y + camera.y, 0, liveConfig.world.height),
-    };
-    updateWorldPointer({ x: point.x, y: point.y, screenX: pointerRef.current.x, screenY: pointerRef.current.y });
-    handleWorldClick(point, null, event.button);
-  }, [handleWorldClick, updatePointer, updateWorldPointer]);
 
   const exportConfig = useCallback(async () => {
     const payload = JSON.stringify(config, null, 2);
@@ -5653,9 +3930,14 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
   );
   const dashReady = snapshot.player.dashCooldown <= 0;
   const playMode = mode === 'play';
-  const threeView = viewMode === '3d';
-  const engineConfig = config.engine || DEFAULT_ARCADE_CONFIG.engine;
-  const cameraDistance = clamp(Number(engineConfig.cameraDistance) || DEFAULT_ARCADE_CONFIG.engine.cameraDistance, 10, 44);
+  const engineConfig = { ...DEFAULT_ARCADE_CONFIG.engine, ...(config.engine || {}) };
+  const lightIntensityValue = Number.isFinite(Number(engineConfig.lightIntensity))
+    ? Number(engineConfig.lightIntensity)
+    : DEFAULT_ARCADE_CONFIG.engine.lightIntensity;
+  const lightOrientationValue = Number.isFinite(Number(engineConfig.lightOrientation))
+    ? Number(engineConfig.lightOrientation)
+    : DEFAULT_ARCADE_CONFIG.engine.lightOrientation;
+  const cameraDistance = clamp(Number(engineConfig.cameraDistance) || DEFAULT_ARCADE_CONFIG.engine.cameraDistance, CAMERA_DISTANCE_MIN, CAMERA_DISTANCE_MAX);
   const cameraZoomPercent = Math.round((DEFAULT_ARCADE_CONFIG.engine.cameraDistance / cameraDistance) * 100);
   const forceSkill = config.player.skills[0] || { name: 'Force', value: 0, manaCost: 0 };
   const mainPower = config.player.powers[0] || { name: 'Pouvoir', type: 'fire', manaCost: 0, force: 0 };
@@ -5687,6 +3969,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     { id: 'management', label: 'Gestion', icon: List },
     { id: 'characters3d', label: 'Personnages 3D', icon: Cuboid },
     { id: 'decors3d', label: 'Objets 3D', icon: Mountain },
+    { id: 'modelTools', label: 'Outils GLB', icon: Wrench },
   ];
   const activeWorkspace = workspaceTabs.find((tab) => tab.id === workspaceTab) || workspaceTabs[0];
   const ActiveWorkspaceIcon = activeWorkspace.icon;
@@ -5697,6 +3980,44 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
   const arcadeObjectCount = getArcadeObjectCount(config);
   const selectedCanRotate = ROTATABLE_ENTITY_TYPES.has(selectedEntity?.type);
   const selectedCanLevitate = canEntityLevitate(selectedEntity?.type);
+  const quickSelectionCanRotate = inspectorSelectionEntities.length === 1
+    && inspectorSelectionEntities.every(({ type }) => ROTATABLE_ENTITY_TYPES.has(type));
+  const quickSelectionCanResize = inspectorSelectionEntities.length === 1
+    && inspectorSelectionEntities.every(canResizeSelectionEntity);
+  const activeTransformTool = (
+    (transformTool === 'rotate' && quickSelectionCanRotate)
+    || (transformTool === 'scale' && quickSelectionCanResize)
+  ) ? transformTool : '';
+  useEffect(() => {
+    if ((transformTool === 'rotate' && !quickSelectionCanRotate)
+      || (transformTool === 'scale' && !quickSelectionCanResize)) {
+      setTransformTool('');
+    }
+  }, [quickSelectionCanResize, quickSelectionCanRotate, transformTool]);
+
+  useEffect(() => {
+    if (!cameraZoomDragMode) return;
+    if (
+      mode !== 'edit'
+      || tool !== 'select'
+      || dragMode
+      || multiSelectMode
+      || cameraTargetPickMode
+      || pendingPlacement
+      || activeTransformTool
+    ) {
+      setCameraZoomDragMode(false);
+    }
+  }, [
+    activeTransformTool,
+    cameraTargetPickMode,
+    cameraZoomDragMode,
+    dragMode,
+    mode,
+    multiSelectMode,
+    pendingPlacement,
+    tool,
+  ]);
   const multiSelectionCanLevitate = hasMultiInspectorSelection
     && inspectorSelectionEntities.every(({ type }) => canEntityLevitate(type));
   const multiSelectionCanRotate = hasMultiInspectorSelection
@@ -5718,6 +4039,22 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
   const selectedPropIsFloorTile = selectedEntity?.type === 'prop' && selectedPropRenderMode === 'floor';
   const selectedPropIsFlatTile = selectedEntity?.type === 'prop' && isFlatTileLikeProp(selectedEntity.item);
   const selectedPropTileSize = selectedPropIsFloorTile ? getFloorTileWorldSize(selectedEntity.item) : 0;
+  const selectedPropCanEraseModel = selectedEntity?.type === 'prop' && selectedPropRenderMode === 'glb';
+  const selectedModelEraserRadius = selectedPropCanEraseModel
+    ? getModelEraserRadius(selectedEntity.item)
+    : modelEraserRadiusDraft;
+  const selectedModelEraserCount = selectedPropCanEraseModel
+    ? getModelEraserStrokes(selectedEntity.item).length
+    : 0;
+  useEffect(() => {
+    if (tool !== 'modelEraser') return;
+    if (mode === 'edit' && selectedPropCanEraseModel) return;
+    modelEraserSessionRef.current = null;
+    modelEraserLastPointRef.current = null;
+    setTool('select');
+  }, [mode, selectedPropCanEraseModel, tool]);
+  const flatGroundColorValue = getFlatGroundPlateauColor(config, flatGroundColorDraft);
+  const terrainPaintStrokeCount = config.terrainPaintStrokes?.length || 0;
   const canUndoRpg3D = undoStack.length > 0;
   const canRedoRpg3D = redoStack.length > 0;
   const positionRowClassName = [
@@ -5753,6 +4090,165 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
       return next;
     });
   };
+  const handleTogglePlayMode = () => {
+    const nextMode = playMode ? 'edit' : 'play';
+    setMode(nextMode);
+    setIsPaused(false);
+    resetGame(undefined, { mode: nextMode });
+  };
+  const handlePauseOrReset = () => (playMode ? setIsPaused((paused) => !paused) : resetGame());
+  const handleLightIntensityChange = (value) => {
+    patchViewportEngineConfig((engine) => {
+      engine.lightIntensity = value;
+    });
+  };
+  const handleLightOrientationChange = (value) => {
+    patchViewportEngineConfig((engine) => {
+      engine.lightOrientation = value;
+    });
+  };
+  const handleToggleTerrainPaint = () => {
+    setMode('edit');
+    setTool((current) => (current === 'terrainPaint' ? 'select' : 'terrainPaint'));
+    setTransformTool('');
+    setPendingPlacement(null);
+    setDragMode(false);
+    setMultiSelectMode(false);
+    setCameraTargetPickMode(false);
+    setCameraZoomDragMode(false);
+  };
+  const handleToggleModelEraser = () => {
+    const currentProp = getSelectedEntity(configRef.current, selectedRef.current);
+    if (!currentProp?.item || currentProp.type !== 'prop' || getPropRenderMode(currentProp.item) !== 'glb') return;
+    setMode('edit');
+    setIsPaused(false);
+    setTool((current) => (current === 'modelEraser' ? 'select' : 'modelEraser'));
+    setTransformTool('');
+    setPendingPlacement(null);
+    setDragMode(false);
+    setMultiSelectMode(false);
+    setCameraTargetPickMode(false);
+    setCameraZoomDragMode(false);
+  };
+  const handleModelEraserRadiusChange = (value) => {
+    const radius = getModelEraserRadius({ modelEraserRadius: value });
+    setModelEraserRadiusDraft(radius);
+    patchConfigWithoutHistory((next) => {
+      const currentProp = getSelectedEntity(next, selectedRef.current);
+      if (!currentProp?.item || currentProp.type !== 'prop' || getPropRenderMode(currentProp.item) !== 'glb') return;
+      currentProp.item.modelEraserRadius = radius;
+    }, false);
+  };
+  const handleClearModelEraser = () => {
+    const currentProp = getSelectedEntity(configRef.current, selectedRef.current);
+    if (!currentProp?.item || currentProp.type !== 'prop' || !getModelEraserStrokes(currentProp.item).length) return;
+    modelEraserSessionRef.current = null;
+    modelEraserLastPointRef.current = null;
+    patchConfig((next) => {
+      const nextProp = getSelectedEntity(next, selectedRef.current);
+      if (!nextProp?.item || nextProp.type !== 'prop') return;
+      nextProp.item.modelEraserStrokes = [];
+    }, false);
+  };
+  const handleSelectActionZoneTool = () => {
+    setMode('edit');
+    setTool('actionZone');
+    setTransformTool('');
+    setPendingPlacement(null);
+    setMultiSelectMode(false);
+    setCameraTargetPickMode(false);
+  };
+  const handleToggleDragMode = () => {
+    setCameraTargetPickMode(false);
+    setCameraZoomDragMode(false);
+    setTransformTool('');
+    setDragMode((current) => !current);
+  };
+  const handleToggleMultiSelectMode = () => {
+    setCameraTargetPickMode(false);
+    setCameraZoomDragMode(false);
+    setTransformTool('');
+    setMultiSelectMode((current) => {
+      const next = !current;
+      setMultiSelected(next && canMultiSelectEntity(selected) ? [selected] : []);
+      return next;
+    });
+  };
+  const handleToggleCameraZoomDragMode = () => {
+    setMode('edit');
+    setIsPaused(false);
+    setTool('select');
+    setDragMode(false);
+    setMultiSelectMode(false);
+    setCameraTargetPickMode(false);
+    setTransformTool('');
+    setPendingPlacement(null);
+    setCameraZoomDragMode((current) => !current);
+  };
+  const handleToggleRotateTransform = () => {
+    setTool('select');
+    setDragMode(false);
+    setMultiSelectMode(false);
+    setCameraTargetPickMode(false);
+    setPendingPlacement(null);
+    setTransformTool((current) => (current === 'rotate' ? '' : 'rotate'));
+  };
+  const handleToggleScaleTransform = () => {
+    setTool('select');
+    setDragMode(false);
+    setMultiSelectMode(false);
+    setCameraTargetPickMode(false);
+    setPendingPlacement(null);
+    setTransformTool((current) => (current === 'scale' ? '' : 'scale'));
+  };
+  const handleActionZoneTypeChange = (value) => {
+    patchConfig((next) => {
+      const currentZone = getSelectedEntity(next, selected);
+      if (!currentZone?.item) return;
+      currentZone.item.actionType = value;
+      if (value === 'portal' && !currentZone.item.targetCanvasId) {
+        currentZone.item.targetCanvasId = getDefaultPortalTargetCanvasId(studioProjectRef.current);
+      }
+    });
+  };
+  const handleNpcInteractionModeChange = (value) => {
+    patchConfig((next) => {
+      const currentZone = getSelectedEntity(next, selected);
+      if (!currentZone?.item) return;
+      currentZone.item.npcInteractionMode = value;
+      if (value === 'multipleChoice') {
+        currentZone.item.npcQuestion = currentZone.item.npcQuestion || currentZone.item.message || 'Que veux-tu demander ?';
+        currentZone.item.npcChoices = getNpcChoiceItems(currentZone.item);
+      }
+    });
+  };
+  const handleZoneVisibilityChange = (value) => {
+    patchConfig((next) => {
+      const currentZone = getSelectedEntity(next, selected);
+      if (currentZone?.item) currentZone.item.visibleInPlay = value === 'visible';
+    });
+  };
+  const handleReliefCollisionChange = (value) => {
+    patchConfig((next) => {
+      const currentRelief = getSelectedEntity(next, selected);
+      if (currentRelief?.item) currentRelief.item.blocksMovement = value === 'blocked';
+    });
+  };
+  const handleClearPropImage = () => {
+    setMediaError('');
+    patchConfig((next) => {
+      const currentProp = getSelectedEntity(next, selected);
+      if (!currentProp?.item) return;
+      currentProp.item.imageData = '';
+      currentProp.item.imageName = '';
+    });
+  };
+  const handlePropCollisionChange = (value) => {
+    patchConfig((next) => {
+      const currentProp = getSelectedEntity(next, selected);
+      if (currentProp?.item) currentProp.item.blocksMovement = value === 'blocked';
+    });
+  };
 
   return (
     <main className={arcadeShellClassName}>
@@ -5780,68 +4276,23 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
           </button>
         </>
       ) : null}
-      <section className="arcade-hud" aria-label="RPG 3D no-code builder">
-        <div>
-          <span className="arcade-kicker"><Sparkles size={15} /> Moteur RPG 3D no-code</span>
-          <h1>RPG 3D Builder</h1>
-        </div>
-        <div className="arcade-actions">
-          {workspaceTab === 'arcade' ? (
-            <>
-              <button
-                type="button"
-                className={playMode ? 'secondary-action' : 'button like'}
-                onClick={() => {
-                  const nextMode = playMode ? 'edit' : 'play';
-                  setMode(nextMode);
-                  setIsPaused(false);
-                  resetGame();
-                }}
-              >
-                {playMode ? <MousePointer2 size={16} /> : <Play size={16} />}
-                <span>{playMode ? 'Editer' : 'Tester'}</span>
-              </button>
-              <button type="button" className="secondary-action" onClick={() => playMode ? setIsPaused((paused) => !paused) : resetGame()}>
-                {playMode && !isPaused ? <Pause size={16} /> : <RotateCcw size={16} />}
-                <span>{playMode ? (isPaused ? 'Reprendre' : 'Pause') : 'Recharger'}</span>
-              </button>
-              <button
-                type="button"
-                className="secondary-action arcade-save-action"
-                onClick={saveArcadeAssets}
-                disabled={isSavingAssets}
-                title={managementSaveStatus || 'Sauvegarder le RPG 3D'}
-              >
-                <Save size={16} />
-                <span>{isSavingAssets ? 'Sauvegarde...' : 'Sauvegarder'}</span>
-              </button>
-            </>
-          ) : (
-            <button type="button" className="secondary-action" onClick={() => setWorkspaceTab('arcade')}>
-              <MapIcon size={16} />
-              <span>Retour carte</span>
-            </button>
-          )}
-        </div>
-      </section>
+      <Rpg3DHeader
+        isPaused={isPaused}
+        isSavingAssets={isSavingAssets}
+        managementSaveStatus={managementSaveStatus}
+        playMode={playMode}
+        workspaceTab={workspaceTab}
+        onPauseOrReset={handlePauseOrReset}
+        onSave={saveArcadeAssets}
+        onSelectWorkspace={setWorkspaceTab}
+        onTogglePlayMode={handleTogglePlayMode}
+      />
 
-      <nav className="arcade-workspace-tabs" aria-label="Ateliers RPG 3D">
-        {workspaceTabs.map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              className={workspaceTab === tab.id ? 'active' : ''}
-              aria-current={workspaceTab === tab.id ? 'page' : undefined}
-              onClick={() => setWorkspaceTab(tab.id)}
-            >
-              <Icon aria-hidden="true" size={16} />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
-      </nav>
+      <Rpg3DWorkspaceTabs
+        tabs={workspaceTabs}
+        activeTabId={workspaceTab}
+        onSelectTab={setWorkspaceTab}
+      />
 
       {workspaceTab === 'canvases' ? (
         <ArcadeCanvasManagerTab
@@ -5864,7 +4315,6 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
           config={config}
           selected={selected}
           studioProject={studioProject}
-          onAddPresetAssets={addDownloadedAssets}
           onCreateStudioCharacter={createStudioCharacter}
           onCreateStudioDecor={createStudioDecor}
           onRenameStudioCharacter={renameStudioCharacter}
@@ -5901,6 +4351,8 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
           saveStatus={managementSaveStatus}
           saveInProgress={isSavingAssets}
         />
+      ) : workspaceTab === 'modelTools' ? (
+        <ModelToolsTab />
       ) : (
       <section className={arcadeBuilderLayoutClassName}>
         {showLegacyToolsPanel ? (
@@ -5947,18 +4399,12 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
           <div className="arcade-panel-section">
             <h2><Camera size={14} /> Moteur 3D</h2>
             <label>
-              <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.activeView}>Vue active</Rpg3DHelpLabel>
-              <select value={viewMode} onChange={(event) => setViewMode(event.target.value)}>
-                <option value="3d">Viewport 3D</option>
-              </select>
-            </label>
-            <label>
               <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.cameraHeight}>Hauteur camera</Rpg3DHelpLabel>
               <input type="range" min="8" max="28" step="1" value={engineConfig.cameraHeight} onChange={(event) => patchViewportEngineConfig((engine) => { engine.cameraHeight = Number(event.target.value); })} />
             </label>
             <label>
               <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.cameraDistance}>Distance camera</Rpg3DHelpLabel>
-              <input type="range" min="10" max="44" step="1" value={engineConfig.cameraDistance} onChange={(event) => patchViewportEngineConfig((engine) => { engine.cameraDistance = Number(event.target.value); })} />
+              <input type="range" min={CAMERA_DISTANCE_MIN} max={CAMERA_DISTANCE_MAX} step="0.5" value={engineConfig.cameraDistance} onChange={(event) => patchViewportEngineConfig((engine) => { engine.cameraDistance = Number(event.target.value); })} />
             </label>
             <label>
               <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.wallHeight}>Hauteur murs</Rpg3DHelpLabel>
@@ -5973,8 +4419,12 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
               <input type="range" min="0.5" max="2.2" step="0.1" value={engineConfig.propHeight} onChange={(event) => patchConfig((next) => { ensureEngineConfig(next).propHeight = Number(event.target.value); }, false)} />
             </label>
             <label>
-              <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.lightIntensity}>Lumiere</Rpg3DHelpLabel>
-              <input type="range" min="0.5" max="2.2" step="0.05" value={engineConfig.lightIntensity} onChange={(event) => patchViewportEngineConfig((engine) => { engine.lightIntensity = Number(event.target.value); })} />
+              <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.lightIntensity}>Lumiere ({Math.round(lightIntensityValue * 100)}%)</Rpg3DHelpLabel>
+              <input type="range" min="0.25" max="2.6" step="0.05" value={lightIntensityValue} onChange={(event) => patchViewportEngineConfig((engine) => { engine.lightIntensity = Number(event.target.value); })} />
+            </label>
+            <label>
+              <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.lightOrientation}>Orientation soleil ({Math.round(lightOrientationValue)} deg)</Rpg3DHelpLabel>
+              <input type="range" min="0" max="359" step="1" value={lightOrientationValue} onChange={(event) => patchViewportEngineConfig((engine) => { engine.lightOrientation = Number(event.target.value); })} />
             </label>
           </div>
 
@@ -6009,20 +4459,48 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
               </select>
             </label>
             <label>
-              <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.characterModel}>Modele GLB</Rpg3DHelpLabel>
+              <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.characterModel}>Modele 3D</Rpg3DHelpLabel>
               <select value={config.player.characterModel3dId || ''} onChange={(event) => patchConfig((next) => {
                 const model = studioHeroModels.find((entry) => entry.id === event.target.value);
                 applyCharacterModelToActor(next.player, model);
               }, false)}>
                 <option value="">Aucun</option>
                 {studioHeroModels.map((model) => (
-                  <option key={model.id} value={model.id}>{model.name || model.modelName || 'Modele GLB'}</option>
+                  <option key={model.id} value={model.id}>{model.name || model.modelName || 'Modele 3D'}</option>
                 ))}
               </select>
             </label>
             <label>
               <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.characterScale}>Taille 3D</Rpg3DHelpLabel>
-              <input type="range" min="0.6" max={MODEL_SCALE_MAX} step="0.1" value={getCharacterModelScale(config.player)} onChange={(event) => patchConfig((next) => { next.player.characterModelScale = Number(event.target.value); }, false)} />
+              <input
+                type="range"
+                min="0.6"
+                max={MODEL_SCALE_MAX}
+                step="0.1"
+                value={getCharacterModelScale(config.player)}
+                onChange={(event) => patchConfig((next) => {
+                  const scale = clamp(Number(event.target.value), MODEL_SCALE_MIN, MODEL_SCALE_MAX);
+                  next.player.characterModelScale = scale;
+                  next.player.characterModelScaleY = scale;
+                  if (next.player.characterModelScaleProportional !== false) {
+                    next.player.characterModelScaleX = scale;
+                    next.player.characterModelScaleZ = scale;
+                  }
+                }, false)}
+              />
+            </label>
+            <label>
+              <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.characterMaterialBrightness}>Lumiere carte {Math.round(getCharacterMaterialBrightness(config.player) * 100)}%</Rpg3DHelpLabel>
+              <input
+                type="range"
+                min={MATERIAL_BRIGHTNESS_MIN}
+                max={MATERIAL_BRIGHTNESS_MAX}
+                step="0.05"
+                value={getCharacterMaterialBrightness(config.player)}
+                onChange={(event) => patchConfig((next) => {
+                  next.player.characterMaterialBrightness = clamp(Number(event.target.value), MATERIAL_BRIGHTNESS_MIN, MATERIAL_BRIGHTNESS_MAX);
+                }, false)}
+              />
             </label>
             <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.playerImage}>Image heros</Rpg3DHelpLabel>
             <label className="button like secondary-action arcade-file-button">
@@ -6053,7 +4531,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
                 patchConfig((next) => {
                   applyCharacterModelToActor(next.player, null);
                 }, false);
-              }}>Retirer modele GLB</button>
+              }}>Retirer modele 3D</button>
             ) : null}
             {mediaError ? <p className="arcade-empty-state">{mediaError}</p> : null}
             <label>
@@ -6130,790 +4608,180 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
         ) : null}
 
         {showArcadeMapCard ? (
-        <aside className="arcade-builder-panel arcade-map-card" aria-label="Carte">
-          <div className="arcade-panel-section">
-            <div className="arcade-map-card-summary">
-              <h2><MapIcon size={13} /> Carte</h2>
-              <div className="arcade-map-card-grid">
-                <ArcadeMapNumberField
-                  label="Largeur"
-                  help={RPG3D_FIELD_HELP.mapWidth}
-                  ariaLabel="Largeur de la carte"
-                  min="1200"
-                  max="9000"
-                  step="100"
-                  value={config.world.width}
-                  onCommit={(value) => updateArcadeWorldField('width', value)}
-                />
-                <ArcadeMapNumberField
-                  label="Hauteur"
-                  help={RPG3D_FIELD_HELP.mapHeight}
-                  ariaLabel="Hauteur de la carte"
-                  min="900"
-                  max="7000"
-                  step="100"
-                  value={config.world.height}
-                  onCommit={(value) => updateArcadeWorldField('height', value)}
-                />
-                <ArcadeMapNumberField
-                  label="Grille"
-                  help={RPG3D_FIELD_HELP.mapGrid}
-                  ariaLabel="Taille de grille"
-                  min="40"
-                  max="240"
-                  step="20"
-                  value={config.world.grid}
-                  onCommit={(value) => updateArcadeWorldField('grid', value)}
-                />
-                <div className="arcade-map-card-field arcade-map-card-object-field">
-                  <input
-                    className="arcade-map-card-input"
-                    type="number"
-                    min="0"
-                    value={arcadeObjectCount}
-                    aria-label="Objets sur la carte"
-                    readOnly
-                  />
-                  <Rpg3DHelpLabel className="arcade-map-card-help-label" help={RPG3D_FIELD_HELP.mapObjects}>Objets</Rpg3DHelpLabel>
-                </div>
-              </div>
-            </div>
-            <ArcadeMapAssetExplorer
-              characters={studioImportCharacters}
-              decors={studioImportDecors}
-              onImportCharacter={importStudioCharacterToCanvas}
-              onImportDecor={importStudioDecorToCanvas}
-            />
-            <div className="arcade-map-card-actions">
-              <button
-                type="button"
-                className={`secondary-action arcade-map-zone-button${tool === 'actionZone' ? ' active' : ''}`}
-                aria-pressed={tool === 'actionZone'}
-                onClick={() => {
-                  setMode('edit');
-                  setTool('actionZone');
-                  setPendingPlacement(null);
-                  setMultiSelectMode(false);
-                  setCameraTargetPickMode(false);
-                }}
-              >
-                <MousePointerClick size={15} />
-                <span>Ajouter zone</span>
-              </button>
-              <Rpg3DHelpLabel className="arcade-map-card-help-label" help={RPG3D_FIELD_HELP.actionZoneTool}>Portail / PNJ</Rpg3DHelpLabel>
-            </div>
-          </div>
-        </aside>
+          <Rpg3DMapPanel
+            AssetExplorerComponent={ArcadeMapAssetExplorer}
+            arcadeObjectCount={arcadeObjectCount}
+            characters={studioImportCharacters}
+            decors={studioImportDecors}
+            fieldHelp={RPG3D_FIELD_HELP}
+            flatGroundColorValue={flatGroundColorValue}
+            lightIntensityValue={lightIntensityValue}
+            lightOrientationValue={lightOrientationValue}
+            paintBrushColor={getTerrainPaintColor(terrainPaintDraft)}
+            paintBrushRadius={getTerrainPaintRadius(terrainPaintDraft)}
+            paintBrushShape={getTerrainPaintShape(terrainPaintDraft)}
+            terrainPaintMaxRadius={TERRAIN_PAINT_MAX_RADIUS}
+            terrainPaintMinRadius={TERRAIN_PAINT_MIN_RADIUS}
+            terrainPaintShapeOptions={TERRAIN_PAINT_SHAPE_OPTIONS}
+            terrainPaintStrokeCount={terrainPaintStrokeCount}
+            tool={tool}
+            world={config.world}
+            onAddFlatGround={addFlatGroundToCanvas}
+            onClearTerrainPaint={clearTerrainPaint}
+            onImportCharacter={importStudioCharacterToCanvas}
+            onImportDecor={importStudioDecorToCanvas}
+            onLightIntensityChange={handleLightIntensityChange}
+            onLightOrientationChange={handleLightOrientationChange}
+            onSelectActionZoneTool={handleSelectActionZoneTool}
+            onTerrainPaintDraftChange={updateTerrainPaintDraft}
+            onToggleTerrainPaint={handleToggleTerrainPaint}
+            onUpdateFlatGroundColor={updateFlatGroundColor}
+            onWorldFieldCommit={updateArcadeWorldField}
+          />
         ) : null}
 
-        <section className="arcade-stage" ref={wrapperRef}>
-          {threeView && cameraToolsHidden ? (
-            <button
-              type="button"
-              className="arcade-stage-tools-toggle"
-              title="Afficher les outils camera"
-              aria-label="Afficher les outils camera"
-              onClick={() => setCameraToolsHidden(false)}
-            >
-              <Eye size={16} />
-            </button>
-          ) : null}
-          {threeView && !cameraToolsHidden ? (
-            <div className="arcade-stage-zoom-control" role="group" aria-label="Outils camera">
-              <button
-                type="button"
-                className="arcade-stage-tools-hide"
-                title="Masquer les outils camera"
-                aria-label="Masquer les outils camera"
-                onClick={() => setCameraToolsHidden(true)}
-              >
-                <EyeOff size={16} />
-              </button>
-              <button
-                type="button"
-                className={dragMode ? 'active' : ''}
-                title={dragMode ? 'Main active: glisser les objets' : 'Activer la main pour glisser les objets'}
-                aria-label={dragMode ? 'Desactiver le glisser-deposer' : 'Activer le glisser-deposer'}
-                aria-pressed={dragMode}
-                onClick={() => {
-                  setCameraTargetPickMode(false);
-                  setDragMode((current) => !current);
-                }}
-              >
-                <Hand size={17} />
-              </button>
-              <button
-                type="button"
-                className={multiSelectMode ? 'active' : ''}
-                title={multiSelectMode ? 'Selection multiple active' : 'Selectionner plusieurs objets'}
-                aria-label={multiSelectMode ? 'Desactiver la selection multiple' : 'Activer la selection multiple'}
-                aria-pressed={multiSelectMode}
-                onClick={() => {
-                  setCameraTargetPickMode(false);
-                  setMultiSelectMode((current) => {
-                    const next = !current;
-                    setMultiSelected(next && canMultiSelectEntity(selected) ? [selected] : []);
-                    return next;
-                  });
-                }}
-              >
-                <MousePointerClick size={17} />
-              </button>
-              <button
-                type="button"
-                className={cameraTargetPickMode ? 'active' : ''}
-                title={cameraTargetPickMode ? 'Clique un objet pour centrer l orbite camera' : 'Choisir le centre de rotation camera'}
-                aria-label={cameraTargetPickMode ? 'Annuler le choix du centre de rotation camera' : 'Choisir le centre de rotation camera'}
-                aria-pressed={cameraTargetPickMode}
-                onClick={toggleCameraTargetPickMode}
-                disabled={playMode}
-              >
-                <Orbit size={17} />
-              </button>
-              <button
-                type="button"
-                title="Annuler"
-                aria-label="Annuler"
-                onClick={undoProjectChange}
-                disabled={!canUndoRpg3D}
-              >
-                <Undo2 size={17} />
-              </button>
-              <button
-                type="button"
-                title="Retablir"
-                aria-label="Retablir"
-                onClick={redoProjectChange}
-                disabled={!canRedoRpg3D}
-              >
-                <Redo2 size={17} />
-              </button>
-              <button
-                type="button"
-                title={mapFullscreen ? 'Quitter le plein ecran' : 'Plein ecran'}
-                aria-label={mapFullscreen ? 'Quitter le plein ecran' : 'Activer le plein ecran'}
-                aria-pressed={mapFullscreen}
-                onClick={toggleMapFullscreen}
-              >
-                {mapFullscreen ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
-              </button>
-              <button type="button" title="Zoom avant" onClick={() => adjustCameraZoom(-1)}>
-                <span>+</span>
-              </button>
-              <output aria-label="Zoom actuel">{cameraZoomPercent}%</output>
-              <button type="button" title="Zoom arriere" onClick={() => adjustCameraZoom(1)}>
-                <span>-</span>
-              </button>
-            </div>
-          ) : null}
-          {threeView ? (
-            <ArcadeThreeViewport
-              config={config}
-              configRef={configRef}
-              studioProject={studioProject}
-              stateRef={stateRef}
-              mode={mode}
-              selected={selected}
-              multiSelected={multiSelected}
-              multiSelectMode={multiSelectMode}
-              cameraTargetPickMode={cameraTargetPickMode && mode === 'edit'}
-              placementEntity={pendingPlacement}
-              dragEnabled={dragMode && mode === 'edit'}
-              onWorldPointer={updateWorldPointer}
-              onWorldClick={handleWorldClick}
-              onCameraTargetPick={handleCameraTargetPick}
-              onWorldDragStart={handleWorldDragStart}
-              onWorldDrag={handleWorldDrag}
-              onWorldDrop={handleWorldDrop}
-              onMarqueeSelect={handleMarqueeSelect}
-              onShootChange={(shooting) => {
-                pointerRef.current.shooting = shooting;
-              }}
-            />
-          ) : (
-            <canvas
-              ref={canvasRef}
-              className="arcade-canvas"
-              aria-label="Editeur RPG 3D no-code"
-              onClick={handleCanvasClick}
-              onContextMenu={(event) => event.preventDefault()}
-              onMouseMove={updatePointer}
-              onMouseDown={(event) => {
-                updatePointer(event);
-                if (mode === 'play' && event.button === 2) {
-                  event.preventDefault();
-                  pointerRef.current.shooting = true;
-                }
-              }}
-              onMouseUp={(event) => {
-                if (event.button === 2) pointerRef.current.shooting = false;
-              }}
-              onMouseLeave={() => {
-                pointerRef.current.shooting = false;
-              }}
-            />
-          )}
-        </section>
+        <Rpg3DStage
+          activeTransformTool={activeTransformTool}
+          cameraTargetPickMode={cameraTargetPickMode}
+          cameraToolsHidden={cameraToolsHidden}
+          cameraZoomDragMode={cameraZoomDragMode}
+          cameraZoomPercent={cameraZoomPercent}
+          canRedo={canRedoRpg3D}
+          canUndo={canUndoRpg3D}
+          config={config}
+          configRef={configRef}
+          dragMode={dragMode}
+          mapFullscreen={mapFullscreen}
+          mode={mode}
+          modelEraserMode={tool === 'modelEraser' && selectedPropCanEraseModel}
+          modelEraserRadius={selectedModelEraserRadius}
+          multiSelected={multiSelected}
+          multiSelectMode={multiSelectMode}
+          paintBrushColor={getTerrainPaintColor(terrainPaintDraft)}
+          paintBrushRadius={getTerrainPaintRadius(terrainPaintDraft)}
+          paintBrushShape={getTerrainPaintShape(terrainPaintDraft)}
+          pendingPlacement={pendingPlacement}
+          playMode={playMode}
+          quickSelectionCanResize={quickSelectionCanResize}
+          quickSelectionCanRotate={quickSelectionCanRotate}
+          selected={selected}
+          stateRef={stateRef}
+          studioProject={studioProject}
+          tool={tool}
+          wrapperRef={wrapperRef}
+          onCameraTargetPick={handleCameraTargetPick}
+          onCameraZoomDrag={handleCameraZoomDrag}
+          onHideCameraTools={() => setCameraToolsHidden(true)}
+          onMarqueeSelect={handleMarqueeSelect}
+          onRedo={redoProjectChange}
+          onSelectionTransformCommit={handleSelectionTransformCommit}
+          onShootChange={setPointerShooting}
+          onShowCameraTools={() => setCameraToolsHidden(false)}
+          onToggleCameraTargetPickMode={toggleCameraTargetPickMode}
+          onToggleCameraZoomDragMode={handleToggleCameraZoomDragMode}
+          onToggleDragMode={handleToggleDragMode}
+          onToggleFullscreen={toggleMapFullscreen}
+          onToggleMultiSelectMode={handleToggleMultiSelectMode}
+          onToggleRotateTransform={handleToggleRotateTransform}
+          onToggleScaleTransform={handleToggleScaleTransform}
+          onUndo={undoProjectChange}
+          onWorldClick={handleWorldClick}
+          onWorldDrag={handleWorldDrag}
+          onWorldDragStart={handleWorldDragStart}
+          onWorldDrop={handleWorldDrop}
+          onModelEraseEnd={handleModelEraseEnd}
+          onModelEraseMove={handleModelEraseMove}
+          onModelEraseStart={handleModelEraseStart}
+          onWorldPaintEnd={handleTerrainPaintEnd}
+          onWorldPaintMove={handleTerrainPaintMove}
+          onWorldPaintStart={handleTerrainPaintStart}
+          onWorldPointer={updateWorldPointer}
+          resolveWorldDragPoint={resolveWorldDragPoint}
+        />
 
         {showArcadeInspector ? (
-        <aside className="arcade-builder-panel" aria-label="Inspecteur">
-          <div className="arcade-panel-section">
-            <h2>Inspecteur</h2>
-            {!inspectorSelectionEntities.length ? (
-              <p className="arcade-empty-state">Selectionne un objet sur la carte pour modifier ses reglages.</p>
-            ) : hasMultiInspectorSelection ? (
-              <div className="arcade-inspector">
-                <span className="arcade-selected-type">Selection ({inspectorSelectionEntities.length})</span>
-                <div className={multiPositionRowClassName}>
-                  <label>
-                    <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.positionX}>X</Rpg3DHelpLabel>
-                    <ArcadeInspectorNumberInput
-                      value={Math.round(inspectorSelectionBounds?.centerX || 0)}
-                      onCommit={(value) => updateSelectionEntities('x', value)}
-                    />
-                  </label>
-                  <label>
-                    <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.positionY}>Y</Rpg3DHelpLabel>
-                    <ArcadeInspectorNumberInput
-                      value={Math.round(inspectorSelectionBounds?.centerY || 0)}
-                      onCommit={(value) => updateSelectionEntities('y', value)}
-                    />
-                  </label>
-                  {multiSelectionCanLevitate ? (
-                    <label>
-                      <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.positionZ}>Z</Rpg3DHelpLabel>
-                      <ArcadeInspectorNumberInput
-                        min={ENTITY_Z_MIN}
-                        max={ENTITY_Z_MAX}
-                        step="10"
-                        value={multiSelectionZValue}
-                        placeholder="Mixte"
-                        onCommit={(value) => updateSelectionEntities('z', value)}
-                      />
-                    </label>
-                  ) : null}
-                  {multiSelectionCanRotate ? (
-                    <label>
-                      <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.orientation}>Orientation</Rpg3DHelpLabel>
-                      <ArcadeInspectorNumberInput
-                        min="0"
-                        max="359"
-                        step="15"
-                        value={multiSelectionRotationValue}
-                        placeholder="Mixte"
-                        onCommit={(value) => updateSelectionEntities('rotation', value)}
-                      />
-                    </label>
-                  ) : null}
-                </div>
-                {multiSelectionAllFlatTiles ? (
-                  <label>
-                    <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.floorZeroZ}>Z 0 personnages</Rpg3DHelpLabel>
-                    <ArcadeInspectorNumberInput
-                      min={FLOOR_ZERO_Z_MIN}
-                      max={FLOOR_ZERO_Z_MAX}
-                      step="0.5"
-                      value={multiSelectionFloorZeroValue}
-                      placeholder="Mixte"
-                      onCommit={(value) => updateSelectionEntities('floorZeroZ', value)}
-                    />
-                  </label>
-                ) : null}
-                {multiSelectionCanEditActions ? (
-                  <div className="arcade-inspector-actions">
-                    <button type="button" className="secondary-action" onClick={duplicateSelected}>
-                      <Copy size={15} />
-                      <span>Dupliquer</span>
-                    </button>
-                    <button type="button" className="danger-button" onClick={deleteSelected}>
-                      <Trash2 size={15} />
-                      <span>Supprimer</span>
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <div className="arcade-inspector">
-                <span className="arcade-selected-type">{getSelectedEntityTypeLabel(selectedEntity)}</span>
-                <div className={positionRowClassName}>
-                  <label>
-                    <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.positionX}>X</Rpg3DHelpLabel>
-                    <ArcadeInspectorNumberInput value={Math.round(selectedEntity.item.x)} onCommit={(value) => updateEntity('x', value)} />
-                  </label>
-                  <label>
-                    <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.positionY}>Y</Rpg3DHelpLabel>
-                    <ArcadeInspectorNumberInput value={Math.round(selectedEntity.item.y)} onCommit={(value) => updateEntity('y', value)} />
-                  </label>
-                  {selectedCanLevitate ? (
-                    <label>
-                      <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.positionZ}>Z</Rpg3DHelpLabel>
-                      <ArcadeInspectorNumberInput min={ENTITY_Z_MIN} max={ENTITY_Z_MAX} step="10" value={Math.round(getEntityZ(selectedEntity.item))} onCommit={(value) => updateEntity('z', value)} />
-                    </label>
-                  ) : null}
-                  {selectedCanRotate ? (
-                    <label>
-                      <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.orientation}>Orientation</Rpg3DHelpLabel>
-                      <ArcadeInspectorNumberInput min="0" max="359" step="15" value={Math.round(getEntityRotation(selectedEntity.item))} onCommit={(value) => updateEntity('rotation', value)} />
-                    </label>
-                  ) : null}
-                </div>
-                {selectedEntity.type === 'obstacle' && (
-                  <>
-                    <label>
-                      <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.width}>Largeur</Rpg3DHelpLabel>
-                      <ArcadeInspectorNumberInput min="30" value={Math.round(selectedEntity.item.w)} onCommit={(value) => updateEntity('w', value)} />
-                    </label>
-                    <label>
-                      <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.height}>Hauteur</Rpg3DHelpLabel>
-                      <ArcadeInspectorNumberInput min="30" value={Math.round(selectedEntity.item.h)} onCommit={(value) => updateEntity('h', value)} />
-                    </label>
-                  </>
-                )}
-                {selectedEntity.type === 'actionZone' && (
-                  <>
-                    <label>
-                      <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.actionZoneName}>Nom zone</Rpg3DHelpLabel>
-                      <input value={selectedEntity.item.name || ''} onChange={(event) => updateEntity('name', event.target.value)} />
-                    </label>
-                    <label>
-                      <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.actionZoneType}>Action</Rpg3DHelpLabel>
-                      <select
-                        value={getActionZoneType(selectedEntity.item)}
-                        onChange={(event) => patchConfig((next) => {
-                          const currentZone = getSelectedEntity(next, selected);
-                          if (!currentZone?.item) return;
-                          currentZone.item.actionType = event.target.value;
-                          if (event.target.value === 'portal' && !currentZone.item.targetCanvasId) {
-                            currentZone.item.targetCanvasId = getDefaultPortalTargetCanvasId(studioProjectRef.current);
-                          }
-                        })}
-                      >
-                        <option value="portal">Portail vers canevas</option>
-                        <option value="npcAction">Action PNJ</option>
-                      </select>
-                    </label>
-                    <div className="arcade-enemy-stat-grid">
-                      <label>
-                        <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.actionZoneWidth}>Largeur</Rpg3DHelpLabel>
-                        <ArcadeInspectorNumberInput min={ACTION_ZONE_MIN_SIZE} max={config.world.width} value={Math.round(getActionZoneWidth(selectedEntity.item))} onCommit={(value) => updateEntity('w', value)} />
-                      </label>
-                      <label>
-                        <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.actionZoneDepth}>Profondeur</Rpg3DHelpLabel>
-                        <ArcadeInspectorNumberInput min={ACTION_ZONE_MIN_SIZE} max={config.world.height} value={Math.round(getActionZoneHeight(selectedEntity.item))} onCommit={(value) => updateEntity('h', value)} />
-                      </label>
-                      <label>
-                        <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.actionZoneModelHeight}>Hauteur 3D</Rpg3DHelpLabel>
-                        <ArcadeInspectorNumberInput min="60" max="900" value={Math.round(getActionZoneModelHeight(selectedEntity.item))} onCommit={(value) => updateEntity('modelHeight', value)} />
-                      </label>
-                    </div>
-                    <div className="arcade-action-zone-veil-grid">
-                      <label>
-                        <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.actionZoneColor}>Couleur voile</Rpg3DHelpLabel>
-                        <input type="color" value={getActionZoneColor(selectedEntity.item)} onChange={(event) => updateEntity('color', event.target.value)} />
-                      </label>
-                      <label>
-                        <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.actionZoneOpacity}>Opacite ({Math.round(getActionZoneOpacity(selectedEntity.item) * 100)}%)</Rpg3DHelpLabel>
-                        <input type="range" min="0.05" max="0.95" step="0.05" value={getActionZoneOpacity(selectedEntity.item)} onChange={(event) => updateEntity('opacity', event.target.value)} />
-                      </label>
-                    </div>
-                    {getActionZoneType(selectedEntity.item) === 'portal' ? (
-                      <label>
-                        <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.targetCanvas}>Canevas destination</Rpg3DHelpLabel>
-                        <select value={selectedEntity.item.targetCanvasId || ''} onChange={(event) => updateEntity('targetCanvasId', event.target.value)}>
-                          <option value="">Aucun canevas</option>
-                          {rpg3DCanvasOptions.map((canvasOption) => (
-                            <option key={canvasOption.id} value={canvasOption.id} disabled={canvasOption.id === activeRpg3DCanvasId}>
-                              {canvasOption.name || 'Canevas'}{canvasOption.id === activeRpg3DCanvasId ? ' (actuel)' : ''}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    ) : (
-                      <>
-                        <label>
-                          <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.targetNpc}>PNJ cible</Rpg3DHelpLabel>
-                          <select value={selectedEntity.item.targetNpcId || ''} onChange={(event) => updateEntity('targetNpcId', event.target.value)}>
-                            <option value="">Aucun personnage</option>
-                            {actionZoneNpcTargets.map((target) => (
-                              <option key={target.id} value={target.id}>{target.label}</option>
-                            ))}
-                          </select>
-                        </label>
-                        <label>
-                          <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.npcInteractionMode}>Interaction</Rpg3DHelpLabel>
-                          <select
-                            value={getNpcInteractionMode(selectedEntity.item)}
-                            onChange={(event) => patchConfig((next) => {
-                              const currentZone = getSelectedEntity(next, selected);
-                              if (!currentZone?.item) return;
-                              currentZone.item.npcInteractionMode = event.target.value;
-                              if (event.target.value === 'multipleChoice') {
-                                currentZone.item.npcQuestion = currentZone.item.npcQuestion || currentZone.item.message || 'Que veux-tu demander ?';
-                                currentZone.item.npcChoices = getNpcChoiceItems(currentZone.item);
-                              }
-                            })}
-                          >
-                            <option value="message">Message simple</option>
-                            <option value="multipleChoice">Question a choix multiples</option>
-                          </select>
-                        </label>
-                        {getNpcInteractionMode(selectedEntity.item) === 'multipleChoice' ? (
-                          <div className="arcade-npc-choice-editor">
-                            <label>
-                              <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.npcQuestion}>Question PNJ</Rpg3DHelpLabel>
-                              <textarea
-                                rows="3"
-                                value={getNpcQuestionText(selectedEntity.item)}
-                                onChange={(event) => updateEntity('npcQuestion', event.target.value)}
-                              />
-                            </label>
-                            {getNpcChoiceItems(selectedEntity.item).map((choice, index) => (
-                              <div key={choice.id} className="arcade-npc-choice-row">
-                                <label>
-                                  <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.npcChoice}>Choix {index + 1}</Rpg3DHelpLabel>
-                                  <input value={choice.label || ''} onChange={(event) => updateSelectedNpcChoice(choice.id, 'label', event.target.value)} />
-                                </label>
-                                <label>
-                                  <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.npcChoiceResponse}>Retour</Rpg3DHelpLabel>
-                                  <input value={choice.response || ''} onChange={(event) => updateSelectedNpcChoice(choice.id, 'response', event.target.value)} />
-                                </label>
-                                <button
-                                  type="button"
-                                  className="danger-button compact arcade-npc-choice-remove"
-                                  onClick={() => removeSelectedNpcChoice(choice.id)}
-                                  aria-label={`Supprimer le choix ${index + 1}`}
-                                  disabled={getNpcChoiceItems(selectedEntity.item).length <= 1}
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              </div>
-                            ))}
-                            <button type="button" className="secondary-action arcade-npc-choice-add" onClick={addSelectedNpcChoice}>
-                              <Plus size={15} />
-                              <span>Ajouter un choix</span>
-                            </button>
-                          </div>
-                        ) : (
-                          <label>
-                            <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.zoneMessage}>Action / message</Rpg3DHelpLabel>
-                            <input value={selectedEntity.item.message || ''} placeholder="dialogue:cle_ou_texte" onChange={(event) => updateEntity('message', event.target.value)} />
-                          </label>
-                        )}
-                      </>
-                    )}
-                    <label>
-                      <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.zoneVisibility}>Visibilite test</Rpg3DHelpLabel>
-                      <select
-                        value={selectedEntity.item.visibleInPlay ? 'visible' : 'hidden'}
-                        onChange={(event) => patchConfig((next) => {
-                          const currentZone = getSelectedEntity(next, selected);
-                          if (currentZone?.item) currentZone.item.visibleInPlay = event.target.value === 'visible';
-                        })}
-                      >
-                        <option value="hidden">Masquer repere sol</option>
-                        <option value="visible">Afficher repere sol</option>
-                      </select>
-                    </label>
-                  </>
-                )}
-                {selectedEntity.type === 'hero' && (
-                  <label>
-                    <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.heroName}>Nom heros</Rpg3DHelpLabel>
-                    <input value={selectedEntity.item.name || ''} onChange={(event) => updateEntity('name', event.target.value)} />
-                  </label>
-                )}
-                {selectedEntity.type === 'enemy' && (
-                  <>
-                    <div className="arcade-enemy-stat-grid">
-                      <label>
-                        <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.enemyHealth}>PV ennemi</Rpg3DHelpLabel>
-                        <ArcadeInspectorNumberInput min="1" max="999" value={selectedEntity.item.combatEnemyMaxHealth || 8} onCommit={(value) => updateEntity('combatEnemyMaxHealth', value)} />
-                      </label>
-                      <label>
-                        <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.enemyStrength}>Force</Rpg3DHelpLabel>
-                        <ArcadeInspectorNumberInput min="0" max="999" value={selectedEntity.item.combatEnemyStrength || 2} onCommit={(value) => updateEntity('combatEnemyStrength', value)} />
-                      </label>
-                      <label>
-                        <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.enemySpeed}>Vitesse</Rpg3DHelpLabel>
-                        <ArcadeInspectorNumberInput min="20" max="420" step="5" value={Math.round(getEnemyStats(selectedEntity.item).speed)} onCommit={(value) => updateEntity('combatEnemySpeed', value)} />
-                      </label>
-                      <label>
-                        <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.enemyAttackSpeed}>Vitesse attaque</Rpg3DHelpLabel>
-                        <ArcadeInspectorNumberInput min="0.1" max="8" step="0.1" value={getEnemyStats(selectedEntity.item).attackSpeed.toFixed(1)} onCommit={(value) => updateEntity('combatEnemyAttackSpeed', value)} />
-                      </label>
-                      <label>
-                        <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.enemyCriticalChance}>% critique</Rpg3DHelpLabel>
-                        <ArcadeInspectorNumberInput min="0" max="100" step="1" value={Math.round(getEnemyStats(selectedEntity.item).criticalChance)} onCommit={(value) => updateEntity('combatEnemyCriticalChance', value)} />
-                      </label>
-                      <label>
-                        <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.enemyCriticalMultiplier}>Multiplicateur crit.</Rpg3DHelpLabel>
-                        <ArcadeInspectorNumberInput min="1" max="8" step="0.1" value={getEnemyStats(selectedEntity.item).criticalMultiplier.toFixed(1)} onCommit={(value) => updateEntity('combatEnemyCriticalMultiplier', value)} />
-                      </label>
-                      <label>
-                        <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.enemyMana}>Mana ennemi</Rpg3DHelpLabel>
-                        <ArcadeInspectorNumberInput min="0" max="999" value={selectedEntity.item.combatEnemyMaxMana || 0} onCommit={(value) => updateEntity('combatEnemyMaxMana', value)} />
-                      </label>
-                      <label>
-                        <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.enemyPowerDamage}>Pouvoir degats</Rpg3DHelpLabel>
-                        <ArcadeInspectorNumberInput min="0" max="999" value={selectedEntity.item.combatEnemyPowerDamage || 0} onCommit={(value) => updateEntity('combatEnemyPowerDamage', value)} />
-                      </label>
-                      <label>
-                        <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.enemyPowerChance}>Tendance %</Rpg3DHelpLabel>
-                        <ArcadeInspectorNumberInput min="0" max="100" value={selectedEntity.item.combatEnemyPowerUsageChance || 25} onCommit={(value) => updateEntity('combatEnemyPowerUsageChance', value)} />
-                      </label>
-                    </div>
-                  </>
-                )}
-                {selectedEntity.type === 'pickup' && (
-                  <label>
-                    <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.pickupType}>Bonus</Rpg3DHelpLabel>
-                    <select value={selectedEntity.item.type} onChange={(event) => updateEntity('type', event.target.value)}>
-                      <option value="health">Soin</option>
-                      <option value="mana">Mana</option>
-                      <option value="energy">Dash</option>
-                    </select>
-                  </label>
-                )}
-                {selectedEntity.type === 'relief' && (
-                  <>
-                    <label>
-                      <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.reliefName}>Nom relief</Rpg3DHelpLabel>
-                      <input value={selectedEntity.item.name || ''} onChange={(event) => updateEntity('name', event.target.value)} />
-                    </label>
-                    <label>
-                      <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.reliefStyle}>Type relief</Rpg3DHelpLabel>
-                      <select value={selectedEntity.item.style || 'plateau'} onChange={(event) => updateEntity('style', event.target.value)}>
-                        {RELIEF_STYLE_OPTIONS.map((option) => (
-                          <option key={option.id} value={option.id}>{option.label}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <div className="arcade-relief-summary">
-                      <span
-                        className="arcade-relief-token"
-                        style={{
-                          '--arcade-relief-top': selectedReliefStyle?.top || '#6f4a2e',
-                          '--arcade-relief-light': selectedReliefStyle?.light || '#d19a55',
-                        }}
-                      >
-                        <Mountain size={18} />
-                      </span>
-                      <div>
-                        <strong>{selectedReliefStyle?.label || 'Relief'}</strong>
-                        <small>{selectedEntity.item.blocksMovement ? 'Bloque le passage' : 'Relief visuel'}</small>
-                      </div>
-                    </div>
-                    <label>
-                      <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.width}>Largeur</Rpg3DHelpLabel>
-                      <ArcadeInspectorNumberInput min="40" max="1400" value={Math.round(getReliefWidth(selectedEntity.item))} onCommit={(value) => updateEntity('w', value)} />
-                    </label>
-                    <label>
-                      <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.reliefDepth}>Profondeur</Rpg3DHelpLabel>
-                      <ArcadeInspectorNumberInput min="40" max="1000" value={Math.round(getReliefHeight(selectedEntity.item))} onCommit={(value) => updateEntity('h', value)} />
-                    </label>
-                    <label>
-                      <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.reliefElevation}>Hauteur relief</Rpg3DHelpLabel>
-                      <ArcadeInspectorNumberInput min="-80" max="120" value={Math.round(getReliefElevation(selectedEntity.item))} onCommit={(value) => updateEntity('elevation', value)} />
-                    </label>
-                    <label>
-                      <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.collision}>Collision</Rpg3DHelpLabel>
-                      <select
-                        value={selectedEntity.item.blocksMovement ? 'blocked' : 'free'}
-                        onChange={(event) => patchConfig((next) => {
-                          const currentRelief = getSelectedEntity(next, selected);
-                          if (currentRelief?.item) currentRelief.item.blocksMovement = event.target.value === 'blocked';
-                        })}
-                      >
-                        <option value="free">Passage libre</option>
-                        <option value="blocked">Bloque le passage</option>
-                      </select>
-                    </label>
-                  </>
-                )}
-                {selectedEntity.type === 'prop' && (
-                  <>
-                    {selectedPropRenderMode === 'glb' ? (
-                      <label>
-                        <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.decorScale}>Echelle 3D ({getDecorModelScale(selectedEntity.item).toFixed(1)}x)</Rpg3DHelpLabel>
-                        <input type="range" min={MODEL_SCALE_MIN} max={MODEL_SCALE_MAX} step="0.05" value={getDecorModelScale(selectedEntity.item)} onChange={(event) => updateEntity('decorModelScale', event.target.value)} />
-                      </label>
-                    ) : null}
-                    <div className="arcade-model-orientation-grid">
-                      <label>
-                        <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.rotationX}>Inclinaison X</Rpg3DHelpLabel>
-                        <ArcadeInspectorNumberInput min="-180" max="180" step="15" value={getModelRotationValue(selectedEntity.item, 'modelRotationX')} onCommit={(value) => updateEntity('modelRotationX', value)} />
-                      </label>
-                      <label>
-                        <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.rotationY}>Axe Y</Rpg3DHelpLabel>
-                        <ArcadeInspectorNumberInput min="-180" max="180" step="15" value={getModelRotationValue(selectedEntity.item, 'modelRotationY')} onCommit={(value) => updateEntity('modelRotationY', value)} />
-                      </label>
-                      <label>
-                        <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.rotationZ}>Inclinaison Z</Rpg3DHelpLabel>
-                        <ArcadeInspectorNumberInput min="-180" max="180" step="15" value={getModelRotationValue(selectedEntity.item, 'modelRotationZ')} onCommit={(value) => updateEntity('modelRotationZ', value)} />
-                      </label>
-                    </div>
-                    {selectedPropIsFlatTile ? (
-                      <>
-                        {selectedPropIsFloorTile ? (
-                          <label>
-                            <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.floorTileSize}>Taille carre</Rpg3DHelpLabel>
-                            <ArcadeInspectorNumberInput min="12" max="1400" value={selectedPropTileSize} onCommit={(value) => updateEntity('w', value)} />
-                          </label>
-                        ) : null}
-                        <label>
-                          <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.floorZeroZ}>Z 0 personnages</Rpg3DHelpLabel>
-                          <ArcadeInspectorNumberInput
-                            min={FLOOR_ZERO_Z_MIN}
-                            max={FLOOR_ZERO_Z_MAX}
-                            step="0.5"
-                            value={getFloorZeroZ(selectedEntity.item)}
-                            onCommit={(value) => updateEntity('floorZeroZ', value)}
-                          />
-                        </label>
-                        <button type="button" className="secondary-action arcade-tile-snap-button" onClick={snapSelectedTileToNeighbor}>
-                          <Magnet size={15} />
-                          <span>Aimant 20</span>
-                        </button>
-                      </>
-                    ) : null}
-                    {selectedEntity.item.imageData ? (
-                      <button type="button" className="secondary-action" onClick={() => {
-                        setMediaError('');
-                        patchConfig((next) => {
-                          const currentProp = getSelectedEntity(next, selected);
-                          if (!currentProp?.item) return;
-                          currentProp.item.imageData = '';
-                          currentProp.item.imageName = '';
-                        });
-                      }}>Retirer image decor</button>
-                    ) : null}
-                    {mediaError ? <p className="arcade-empty-state">{mediaError}</p> : null}
-                    {selectedPropIsFloorTile ? null : selectedEntity.item.imageData ? (
-                      <>
-                        <label>
-                          <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.propWidth}>Largeur</Rpg3DHelpLabel>
-                          <ArcadeInspectorNumberInput min="12" max="600" value={Math.round(getPropWidth(selectedEntity.item))} onCommit={(value) => updateEntity('w', value)} />
-                        </label>
-                        <label>
-                          <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.propDepth}>Profondeur / longueur</Rpg3DHelpLabel>
-                          <ArcadeInspectorNumberInput min="12" max="600" value={Math.round(getPropHeight(selectedEntity.item))} onCommit={(value) => updateEntity('h', value)} />
-                        </label>
-                        {selectedPropRenderMode !== 'floor' ? (
-                          <label>
-                            <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.propModelHeight}>Hauteur 3D</Rpg3DHelpLabel>
-                            <ArcadeInspectorNumberInput min="12" max="800" value={Math.round(getPropModelHeight(selectedEntity.item))} onCommit={(value) => updateEntity('modelHeight', value)} />
-                          </label>
-                        ) : null}
-                      </>
-                    ) : (
-                      <>
-                        <label>
-                          <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.propModelHeight}>Hauteur 3D</Rpg3DHelpLabel>
-                          <ArcadeInspectorNumberInput min="12" max="800" value={Math.round(getPropModelHeight(selectedEntity.item))} onCommit={(value) => updateEntity('modelHeight', value)} />
-                        </label>
-                      </>
-                    )}
-                    {!selectedPropIsFloorTile ? (
-                      <label>
-                        <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.collision}>Collision</Rpg3DHelpLabel>
-                        <select
-                          value={selectedEntity.item.blocksMovement ? 'blocked' : 'free'}
-                          onChange={(event) => patchConfig((next) => {
-                            const currentProp = getSelectedEntity(next, selected);
-                            if (currentProp?.item) currentProp.item.blocksMovement = event.target.value === 'blocked';
-                          })}
-                        >
-                          <option value="free">Passage libre</option>
-                          <option value="blocked">Bloque le passage</option>
-                        </select>
-                      </label>
-                    ) : null}
-                  </>
-                )}
-                {selectedEntity.type !== 'spawn' && (
-                  <div className="arcade-inspector-actions">
-                    <button type="button" className="secondary-action" onClick={duplicateSelected}>
-                      <Copy size={15} />
-                      <span>Dupliquer</span>
-                    </button>
-                    <button type="button" className="danger-button" onClick={deleteSelected}>
-                      <Trash2 size={15} />
-                      <span>Supprimer</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {showArcadeElementLibrary ? (
-          <div className="arcade-panel-section arcade-library">
-            <h2>Elements</h2>
-            <button type="button" onClick={() => setTool('obstacle')}><Plus size={15} /> Mur</button>
-            <button type="button" onClick={() => setTool('enemy')}><Sword size={15} /> Ennemi</button>
-            <button type="button" onClick={() => setTool('pickup')}><HeartPulse size={15} /> Bonus</button>
-            <button type="button" onClick={() => setTool('relief')}><Mountain size={15} /> Relief</button>
-            <button type="button" onClick={() => setTool('prop')}><Box size={15} /> Image 3D</button>
-            <button type="button" onClick={() => setTool('actionZone')}><MousePointerClick size={15} /> Zone</button>
-            <button type="button" onClick={exportConfig}><Download size={15} /> Copier JSON</button>
-          </div>
-          ) : null}
-        </aside>
+          <Rpg3DInspector
+            actionZoneNpcTargets={actionZoneNpcTargets}
+            activeCanvasId={activeRpg3DCanvasId}
+            config={config}
+            fieldHelp={RPG3D_FIELD_HELP}
+            getEntityRotation={getEntityRotation}
+            getModelRotationValue={getModelRotationValue}
+            getNpcChoiceItems={getNpcChoiceItems}
+            getNpcInteractionMode={getNpcInteractionMode}
+            getNpcQuestionText={getNpcQuestionText}
+            getSelectedEntityTypeLabel={getSelectedEntityTypeLabel}
+            hasMultiInspectorSelection={hasMultiInspectorSelection}
+            inspectorSelectionBounds={inspectorSelectionBounds}
+            inspectorSelectionEntities={inspectorSelectionEntities}
+            mediaError={mediaError}
+            modelEraserActive={tool === 'modelEraser' && selectedPropCanEraseModel}
+            modelEraserMaxRadius={MODEL_ERASER_MAX_RADIUS}
+            modelEraserMinRadius={MODEL_ERASER_MIN_RADIUS}
+            modelEraserRadius={selectedModelEraserRadius}
+            multiPositionRowClassName={multiPositionRowClassName}
+            multiSelectionAllFlatTiles={multiSelectionAllFlatTiles}
+            multiSelectionCanEditActions={multiSelectionCanEditActions}
+            multiSelectionCanLevitate={multiSelectionCanLevitate}
+            multiSelectionCanRotate={multiSelectionCanRotate}
+            multiSelectionFloorZeroValue={multiSelectionFloorZeroValue}
+            multiSelectionRotationValue={multiSelectionRotationValue}
+            multiSelectionZValue={multiSelectionZValue}
+            positionRowClassName={positionRowClassName}
+            reliefStyleOptions={RELIEF_STYLE_OPTIONS}
+            rpg3DCanvasOptions={rpg3DCanvasOptions}
+            selectedCanLevitate={selectedCanLevitate}
+            selectedCanRotate={selectedCanRotate}
+            selectedEntity={selectedEntity}
+            selectedPropIsFlatTile={selectedPropIsFlatTile}
+            selectedPropIsFloorTile={selectedPropIsFloorTile}
+            selectedPropRenderMode={selectedPropRenderMode}
+            selectedPropTileSize={selectedPropTileSize}
+            selectedReliefStyle={selectedReliefStyle}
+            selectedModelEraserCount={selectedModelEraserCount}
+            showArcadeElementLibrary={showArcadeElementLibrary}
+            onActionZoneTypeChange={handleActionZoneTypeChange}
+            onAddSelectedNpcChoice={addSelectedNpcChoice}
+            onClearPropImage={handleClearPropImage}
+            onDeleteSelected={deleteSelected}
+            onDuplicateSelected={duplicateSelected}
+            onExportConfig={exportConfig}
+            onClearModelEraser={handleClearModelEraser}
+            onModelEraserRadiusChange={handleModelEraserRadiusChange}
+            onNpcInteractionModeChange={handleNpcInteractionModeChange}
+            onPropCollisionChange={handlePropCollisionChange}
+            onReliefCollisionChange={handleReliefCollisionChange}
+            onRemoveSelectedNpcChoice={removeSelectedNpcChoice}
+            onSelectTool={setTool}
+            onSnapSelectedTileToNeighbor={snapSelectedTileToNeighbor}
+            onToggleModelEraser={handleToggleModelEraser}
+            onUpdateEntity={updateEntity}
+            onUpdateSelectedNpcChoice={updateSelectedNpcChoice}
+            onUpdateSelectionEntities={updateSelectionEntities}
+            onZoneVisibilityChange={handleZoneVisibilityChange}
+          />
         ) : null}
       </section>
       )}
 
-      {activeNpcChoice ? (
-        <div className="overlay arcade-npc-choice-overlay" onClick={(event) => { if (event.target === event.currentTarget) closeNpcChoice(); }}>
-          <div className="overlay-card wide arcade-npc-choice-card">
-            <div className="panel-head">
-              <div>
-                <span className="section-kicker"><MousePointerClick size={14} /> PNJ</span>
-                <h2>{activeNpcChoice.speaker || 'PNJ'}</h2>
-                <p className="small-note">{activeNpcChoice.question || 'Que veux-tu demander ?'}</p>
-              </div>
-              <button type="button" className="danger-button" onClick={closeNpcChoice}>Fermer</button>
-            </div>
-            <div className={`arcade-npc-choice-buttons arcade-npc-choice-buttons-${Math.min(3, Math.max(1, activeNpcChoice.choices?.length || 1))}`}>
-              {(activeNpcChoice.choices || []).map((choice) => (
-                <button key={choice.id || choice.label} type="button" className="secondary-action" onClick={() => handleNpcChoiceSelect(choice)}>
-                  <span>{choice.label || 'Repondre'}</span>
-                </button>
-              ))}
-              {!activeNpcChoice.choices?.length ? (
-                <button type="button" className="code-primary-button" onClick={closeNpcChoice}>Continuer</button>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <Rpg3DNpcChoiceOverlay
+        choiceState={activeNpcChoice}
+        onClose={closeNpcChoice}
+        onSelectChoice={handleNpcChoiceSelect}
+      />
 
-      <section className="arcade-controls" aria-label="Controles">
-        {workspaceTab === 'arcade' ? (
-          <>
-            <span><Cuboid size={14} /> Vue 3D: clic sol pour placer</span>
-            <span>{pendingPlacement ? 'Placement: deplace la souris, clic gauche pour deposer' : playMode ? 'Clic gauche: deplacement' : 'Selection: choisir un objet'}</span>
-            <span>{playMode ? 'Clic droit maintenu: tir' : <><Orbit size={14} /> Orbit: clic gauche maintenu autour du point</>}</span>
-            <span>{playMode ? `Espace: dash ${dashReady ? 'pret' : 'en recharge'}` : 'Clic droit maintenu: glisse camera a l ecran'}</span>
-            <span>{playMode ? 'Q/E: pouvoir mana' : 'Mode 3D uniquement'}</span>
-            {playMode && snapshot.actionMessage ? <span>{snapshot.actionMessage}</span> : null}
-            <span>P: pause</span>
-          </>
-        ) : workspaceTab === 'management' ? (
-          <>
-            <span><List size={14} /> Gestion</span>
-            <span>{(studioProject.characterModels3d || []).length + (studioProject.decorModels3d || []).length} modeles 3D</span>
-            <span>{arcadeObjectCount} elements sur la carte</span>
-          </>
-        ) : (
-          <>
-            <span><ActiveWorkspaceIcon size={14} /> {activeWorkspace.label}</span>
-            <span>Clic gauche maintenu: rotation autour du point clique</span>
-            <span>Clic droit maintenu: glisse camera a l ecran</span>
-            <span>{workspaceTab === 'decors3d' ? 'Image importee: texture appliquee au modele 3D' : 'GLB importe: modele personnage 3D'}</span>
-          </>
-        )}
-      </section>
+      <Rpg3DControls
+        ActiveWorkspaceIcon={ActiveWorkspaceIcon}
+        activeWorkspace={activeWorkspace}
+        arcadeObjectCount={arcadeObjectCount}
+        dashReady={dashReady}
+        pendingPlacement={pendingPlacement}
+        playMode={playMode}
+        snapshot={snapshot}
+        studioProject={studioProject}
+        tool={tool}
+        workspaceTab={workspaceTab}
+      />
     </main>
   );
 }

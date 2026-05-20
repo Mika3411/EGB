@@ -4,6 +4,10 @@
 .decor3d-tab.decor3d-tab-minimal{grid-template-columns:minmax(0,1fr)}
 .decor3d-tab.decor3d-tab-with-inspector{grid-template-columns:minmax(220px,300px) minmax(0,1fr) minmax(280px,360px)}
 .decor3d-library-panel,.decor3d-preview-panel,.decor3d-editor-panel,.decor3d-side-card{min-width:0;min-height:0;max-height:100%;overflow:auto}
+.decor3d-editor-panel{display:grid;grid-template-rows:auto minmax(0,1fr);overflow:hidden}
+.decor3d-editor-fixed{display:grid;gap:8px;min-width:0;padding-bottom:10px;border-bottom:1px solid rgba(245,158,11,.14);background:linear-gradient(180deg,rgba(15,23,42,.98),rgba(15,23,42,.92))}
+.decor3d-editor-fixed .panel-head{margin:0}
+.decor3d-editor-scroll{min-width:0;min-height:0;overflow:auto;padding-top:10px;padding-right:2px}
 .decor3d-list{display:grid;gap:8px;min-height:0;padding-right:2px}
 .decor3d-list-item{display:grid!important;grid-template-columns:46px minmax(0,1fr);align-items:center;justify-content:start;gap:10px;width:100%;min-height:58px;padding:8px!important;border:1px solid rgba(148,163,184,.18)!important;border-radius:8px!important;background:rgba(15,23,42,.7)!important;color:#eaf2ff!important;text-align:left;box-shadow:none!important}
 .decor3d-list-item.selected{border-color:rgba(245,158,11,.76)!important;background:rgba(120,53,15,.3)!important}
@@ -35,6 +39,14 @@
 .decor3d-orientation-grid input{width:100%;min-width:0;padding-inline:8px}
 .decor3d-orientation-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .decor3d-orientation-actions button{display:inline-flex;align-items:center;justify-content:center;min-width:0;min-height:34px}
+.decor3d-axis-size{display:grid;gap:7px}
+.decor3d-axis-size-head{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;color:#fff7ed}
+.decor3d-proportional-toggle{display:inline-flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0;margin:0;color:#fed7aa;font-size:11px;font-weight:850;white-space:nowrap}
+.decor3d-proportional-toggle input{width:14px;height:14px;margin:0;accent-color:#f59e0b}
+.decor3d-axis-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.decor3d-axis-grid label{display:grid;gap:4px;min-width:0;margin:0}
+.decor3d-axis-grid span{color:#fbbf24;font-size:11px;font-weight:900}
+.decor3d-axis-grid input{width:100%;min-width:0;padding-inline:8px;font-variant-numeric:tabular-nums}
 .decor3d-editor-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0}
 .decor3d-new-button{min-height:30px!important;min-width:0;padding:5px 8px!important;border-radius:8px!important;gap:5px;font-size:11px;font-weight:900;line-height:1;white-space:nowrap}
 .decor3d-new-button svg{flex:0 0 auto}
@@ -43,6 +55,12 @@
 .decor3d-save-button svg{flex:0 0 auto}
 .decor3d-save-button:disabled{opacity:.62;cursor:wait}
 .decor3d-save-status{margin:-4px 0 2px;color:#a7f3d0;font-size:12px;font-weight:850}
+.decor3d-import-status{margin:-4px 0 2px;color:#fde68a;font-size:12px;font-weight:850}
+.decor3d-progress{position:relative;height:6px;overflow:hidden;border:1px solid rgba(245,158,11,.2);border-radius:999px;background:rgba(15,23,42,.78)}
+.decor3d-progress span{position:absolute;inset:0 auto 0 0;width:42%;border-radius:inherit;background:linear-gradient(90deg,rgba(245,158,11,.08),rgba(253,230,138,.98),rgba(245,158,11,.08));animation:rpg3d-progress-slide 1.05s ease-in-out infinite}
+.decor3d-progress-save{border-color:rgba(52,211,153,.24);background:rgba(6,78,59,.28)}
+.decor3d-progress-save span{background:linear-gradient(90deg,rgba(52,211,153,.08),rgba(167,243,208,.98),rgba(52,211,153,.08))}
+@keyframes rpg3d-progress-slide{0%{transform:translateX(-110%)}100%{transform:translateX(250%)}}
 
 .decor3d-tab-fullscreen{position:fixed;inset:0;z-index:900;grid-template-columns:minmax(0,1fr)!important;gap:0;padding:0;background:#020617}
 .decor3d-tab-fullscreen .decor3d-preview-panel{position:fixed;inset:0;z-index:910;display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:0;padding:12px;border:0;border-radius:0;background:#07111e}
@@ -51,6 +69,7 @@
 .decor3d-tab-fullscreen .decor3d-canvas-shell{height:100%;aspect-ratio:auto;margin-top:10px;border-radius:8px}
 .decor3d-tab-fullscreen .decor3d-meta-strip{margin-top:10px}
 .decor3d-tab-fullscreen .decor3d-side-card,.decor3d-tab-fullscreen .decor3d-editor-panel{position:fixed;left:12px;z-index:970;width:min(340px,calc(100vw - 24px));max-height:calc(50vh - 24px);transform:translateX(calc(-100% - 28px));transition:transform .18s ease;pointer-events:none;overflow:auto;box-shadow:0 22px 70px rgba(0,0,0,.58)}
+.decor3d-tab-fullscreen .decor3d-editor-panel{display:grid;grid-template-rows:auto minmax(0,1fr);overflow:hidden}
 .decor3d-tab-fullscreen .decor3d-side-card{top:88px}
 .decor3d-tab-fullscreen .decor3d-editor-panel{bottom:12px}
 .decor3d-tab-fullscreen.decor3d-drawer-open .decor3d-side-card,.decor3d-tab-fullscreen.decor3d-drawer-open .decor3d-editor-panel{transform:translateX(0);pointer-events:auto}
@@ -66,6 +85,8 @@
   .decor3d-tab{grid-template-columns:1fr;height:auto;max-height:none;padding:10px}
   .decor3d-tab.decor3d-tab-with-inspector{grid-template-columns:1fr}
   .decor3d-library-panel,.decor3d-preview-panel,.decor3d-editor-panel,.decor3d-side-card{max-height:none;overflow:visible}
+  .decor3d-editor-panel{display:grid}
+  .decor3d-editor-scroll{overflow:visible}
   .decor3d-editor-actions{justify-content:stretch}
   .decor3d-new-button{flex:0 0 auto;min-width:0}
   .decor3d-save-button{flex:0 0 auto;min-width:0}

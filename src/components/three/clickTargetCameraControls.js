@@ -32,6 +32,9 @@ export const attachClickTargetCameraControls = ({
   domElement,
   scene,
   enabled = () => true,
+  onPanStart,
+  onPanMove,
+  onPanEnd,
 }) => {
   if (!camera || !controls || !domElement || !scene) return () => {};
 
@@ -67,6 +70,7 @@ export const attachClickTargetCameraControls = ({
     panState.up.setFromMatrixColumn(camera.matrixWorld, 1).normalize();
     panState.scale = getScreenSpacePanScale({ camera, controls, domElement });
     domElement.setPointerCapture?.(event.pointerId);
+    onPanStart?.();
   };
 
   const moveScreenPan = (event) => {
@@ -82,6 +86,7 @@ export const attachClickTargetCameraControls = ({
     camera.position.copy(panState.startCamera).add(panOffset);
     controls.target.copy(panState.startTarget).add(panOffset);
     controls.update();
+    onPanMove?.(panOffset.clone());
   };
 
   const endScreenPan = (event) => {
@@ -92,6 +97,7 @@ export const attachClickTargetCameraControls = ({
     panState.active = false;
     panState.pointerId = null;
     domElement.releasePointerCapture?.(event.pointerId);
+    onPanEnd?.();
   };
 
   const preventContextMenu = (event) => {

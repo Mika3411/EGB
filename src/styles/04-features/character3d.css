@@ -20,6 +20,7 @@
 .character3d-canvas-shell{position:relative;aspect-ratio:16/10;min-height:0;border:1px solid rgba(147,197,253,.18);border-radius:8px;overflow:hidden;background:#07111e;box-shadow:inset 0 1px rgba(255,255,255,.05)}
 .character3d-canvas{display:block;width:100%;height:100%;min-height:0}
 .character3d-webgl-error{position:absolute;inset:0;display:grid;place-items:center;padding:18px;color:#bfdbfe;background:#07111e;text-align:center;font-weight:800}
+.character3d-preview-status{position:absolute;left:10px;right:10px;bottom:10px;z-index:5;display:inline-flex;align-items:center;justify-content:center;min-height:30px;padding:6px 10px;border:1px solid rgba(147,197,253,.22);border-radius:8px;background:rgba(4,10,16,.84);color:#dbeafe;font-size:12px;font-weight:850;text-align:center;pointer-events:none}
 .character3d-card-role-buttons{display:grid;gap:8px}
 .character3d-card-role-buttons button{display:inline-flex;align-items:center;justify-content:flex-start;gap:8px;width:100%;min-height:42px;padding:9px 11px;border:1px solid rgba(147,197,253,.18);border-radius:8px;background:rgba(15,23,42,.72);color:#dbeafe;box-shadow:none;font-size:13px;font-weight:900;white-space:nowrap}
 .character3d-card-role-buttons button.active{border-color:rgba(96,165,250,.78);background:rgba(37,99,235,.34);color:#fff}
@@ -34,11 +35,34 @@
 .character3d-save-button svg{flex:0 0 auto}
 .character3d-save-button:disabled{opacity:.62;cursor:wait}
 .character3d-save-status{margin:-4px 0 2px;color:#a7f3d0;font-size:12px;font-weight:850}
+.character3d-import-status{margin:-4px 0 2px;color:#bfdbfe;font-size:12px;font-weight:850}
+.character3d-progress{position:relative;height:6px;overflow:hidden;border:1px solid rgba(147,197,253,.18);border-radius:999px;background:rgba(15,23,42,.78)}
+.character3d-progress span{position:absolute;inset:0 auto 0 0;width:42%;border-radius:inherit;background:linear-gradient(90deg,rgba(96,165,250,.1),rgba(147,197,253,.95),rgba(96,165,250,.1));animation:rpg3d-progress-slide 1.05s ease-in-out infinite}
+.character3d-progress-save{border-color:rgba(52,211,153,.24);background:rgba(6,78,59,.28)}
+.character3d-progress-save span{background:linear-gradient(90deg,rgba(52,211,153,.08),rgba(167,243,208,.98),rgba(52,211,153,.08))}
+@keyframes rpg3d-progress-slide{0%{transform:translateX(-110%)}100%{transform:translateX(250%)}}
 .character3d-range{display:grid;gap:6px;margin:0}
 .character3d-range span{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#dbeafe}
 .character3d-range strong{font-size:12px}
 .character3d-range em{font-style:normal;color:#93c5fd;font-size:11px;font-weight:850;font-variant-numeric:tabular-nums}
 .character3d-range input{padding:0;height:22px}
+.character3d-axis-scale{display:grid;gap:7px}
+.character3d-axis-scale-head{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;color:#dbeafe}
+.character3d-proportional-toggle{display:inline-flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0;margin:0;color:#bfdbfe;font-size:11px;font-weight:850;white-space:nowrap}
+.character3d-proportional-toggle input{width:14px;height:14px;margin:0;accent-color:#3b82f6}
+.character3d-axis-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.character3d-axis-grid label{display:grid;gap:4px;min-width:0;margin:0}
+.character3d-axis-grid span{color:#93c5fd;font-size:11px;font-weight:900}
+.character3d-axis-grid input{width:100%;min-width:0;padding-inline:8px;font-variant-numeric:tabular-nums}
+.character3d-animation-imports{display:grid;gap:8px}
+.character3d-animation-row{display:grid;gap:6px}
+.character3d-animation-meta{display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0}
+.character3d-animation-meta small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#aebdd3;font-weight:800}
+.character3d-animation-meta .compact{min-height:26px;padding:4px 7px;border-radius:8px;font-size:11px;white-space:nowrap}
+.character3d-animation-meta .active{border-color:rgba(96,165,250,.72)!important;background:rgba(37,99,235,.42)!important;color:#fff!important}
+.character3d-embedded-animations{display:grid;gap:6px;padding:8px;border:1px solid rgba(147,197,253,.18);border-radius:8px;background:rgba(15,23,42,.56)}
+.character3d-embedded-animation-list{display:flex;flex-wrap:wrap;gap:5px;min-width:0}
+.character3d-embedded-animation-list span{max-width:100%;padding:4px 7px;border:1px solid rgba(96,165,250,.24);border-radius:7px;background:rgba(37,99,235,.18);color:#dbeafe;font-size:11px;font-weight:850;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 .character3d-tab-fullscreen{position:fixed;inset:0;z-index:900;grid-template-columns:minmax(0,1fr)!important;gap:0;padding:0;background:#020617}
 .character3d-tab-fullscreen .character3d-preview-panel{position:fixed;inset:0;z-index:910;display:grid;grid-template-rows:auto minmax(0,1fr);gap:0;padding:12px;border:0;border-radius:0;background:#07111e}

@@ -1,7 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {
   Box,
   Home,
@@ -17,19 +14,43 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
-import { attachClickTargetCameraControls } from './three/clickTargetCameraControls.js';
 import { makeDecor3DModel } from '../data/projectData';
-import { fileToDataURL } from '../utils/fileHelpers';
-import { formatBytes, optimizeCharacterGlbFile } from '../utils/glbOptimizer';
+import { formatBytes } from '../utils/glbOptimizer';
+import Decor3DPreview from './rpg3d/Decor3DPreview.jsx';
 import {
-  applyTextureToGltfModel,
-  fitObjectToHeight,
-  getGltfModelSource,
-  getGltfModelSources,
-  loadGltfFromSource,
-  prepareGltfModel,
-  snapObjectToGround,
+  DECOR_FLOOR_MATERIAL_BRIGHTNESS,
+  DECOR_MATERIAL_BRIGHTNESS_MAX,
+  DECOR_MATERIAL_BRIGHTNESS_MIN,
+  DECOR_MODEL_DIMENSION_MAX,
+  DECOR_MODEL_DIMENSION_MIN,
+  FLOOR_ZERO_Z_MAX,
+  FLOOR_ZERO_Z_MIN,
+  getDecorModelDimensions,
+  getDecorImportFileInfo,
+  getDecorKindId,
+  getDecorMaterialBrightness,
+  getFloorTileSize,
+  getFloorZeroZ,
+  getModelRotationValue,
+  getModelRotationX,
+  getModelRotationY,
+  getModelRotationZ,
+  isDecorModelSizeProportional,
+  isFloorTileKind,
+  numberValue,
+  readDecorModelImport,
+  resizeAxesProportionally,
+} from '../utils/rpg3dModelImport';
+import {
+  THREE_MODEL_ACCEPT,
+  getThreeModelFormatLabel,
+  getThreeModelSource,
 } from '../utils/threeGltfUtils';
+import {
+  createLocalModelFileId,
+  forgetRpg3DLocalBlobFile,
+  rememberRpg3DLocalBlobFile,
+} from '../utils/rpg3dAssetsStorage.js';
 import MediaSourcePicker from './MediaSourcePicker.jsx';
 import HelpLabel from './forms/HelpLabel.jsx';
 
@@ -38,21 +59,22 @@ const KIND_OPTIONS = [
   { id: 'road', label: 'sol', icon: MapIcon, renderKind: 'road' },
   { id: 'water', label: 'eau', icon: ImageIcon, renderKind: 'water' },
   { id: 'wall', label: 'mur', icon: Box, renderKind: 'wall' },
-  { id: 'house', label: 'habitions', icon: Home, renderKind: 'house' },
+  { id: 'house', label: 'habitations', icon: Home, renderKind: 'house' },
 ];
 
 const DECOR_FIELD_HELP = {
   name: 'Nom interne de cet objet 3D. Il sert a le retrouver dans la bibliotheque et sur la carte.',
-  rotationX: 'Incline le modele vers l avant ou l arriere. Utile pour coucher une image ou corriger un GLB importe.',
+  rotationX: 'Incline le modele vers l avant ou l arriere. Utile pour coucher une image ou corriger un modele importe.',
   rotationY: 'Tourne le modele autour de l axe vertical pour orienter sa face principale.',
   rotationZ: 'Incline le modele sur le cote pour ajuster un objet mal aligne.',
   floorTileSize: 'Largeur et profondeur de la dalle au sol. Les deux valeurs restent identiques pour garder un carre.',
   floorZeroZ: 'Hauteur de reference ou les personnages marchent sur cette dalle. Ajuste-la si le sol semble flotter ou avaler les pieds.',
   baseColor: 'Couleur principale du sol ou de l objet procedural quand aucune texture ne la remplace.',
   accentColor: 'Couleur secondaire utilisee pour les details visibles: lignes, reflets ou reperes.',
-  tileTexture: 'Image appliquee comme texture de dalle. Elle remplace le rendu procedural pour ce sol.',
-  glbImport: 'Charge ou remplace un modele 3D au format .glb pour cet objet.',
-  glbTexture: 'Image appliquee sur le modele GLB importe, pratique pour tester une variation de materiau.',
+  glbImport: 'Charge ou remplace un modele 3D au format .glb, .fbx, .obj ou .zip. Pour un FBX/OBJ avec textures, importe un ZIP contenant le modele et ses images.',
+  glbTexture: 'Image appliquee sur le modele 3D importe, pratique pour tester une variation de materiau.',
+  modelScale: 'Regle les dimensions de cet objet quand il est place sur la carte RPG 3D. X = largeur, Y = profondeur, Z = hauteur.',
+  materialBrightness: 'Regle la luminosite de cet objet sur la carte RPG 3D sans changer la lumiere globale.',
   repeatTexture: 'Repete l image sur le modele au lieu de l etirer une seule fois.',
 };
 
@@ -60,58 +82,25 @@ const DecorHelpLabel = ({ children, help }) => (
   <HelpLabel as="span" className="builder3d-help-label" help={help}>{children}</HelpLabel>
 );
 
-const LEGACY_KIND_MAP = {
-  billboard: 'decor',
-  crate: 'wall',
-  rock: 'decor',
-  tree: 'decor',
-};
-
-const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-const DEFAULT_FLOOR_ZERO_Z = 2.5;
-const FLOOR_ZERO_Z_MIN = -120;
-const FLOOR_ZERO_Z_MAX = 120;
-const DECOR_MODEL_SCALE_MIN = 0.5;
-const DECOR_MODEL_SCALE_MAX = 5;
 const isHexColor = (value) => /^#[0-9a-f]{6}$/i.test(value || '');
 const colorValue = (value, fallback) => (isHexColor(value) ? value : fallback);
-const numberValue = (value, fallback, min, max) => clamp(Number.isFinite(Number(value)) ? Number(value) : fallback, min, max);
-const getDecorKindId = (kind = '') => LEGACY_KIND_MAP[kind] || kind || 'decor';
 const getDecorKindConfig = (kind = '') => KIND_OPTIONS.find((option) => option.id === getDecorKindId(kind)) || KIND_OPTIONS[0];
-const getDecorRenderKind = (kind = '') => getDecorKindConfig(kind).renderKind || getDecorKindId(kind);
-const isFloorTileKind = (kind = '') => ['road', 'water'].includes(getDecorKindId(kind));
-const getFloorTileSize = (model = {}) => numberValue(Math.max(Number(model.width) || 0, Number(model.depth) || 0), 2.2, 0.4, 8);
-const getFloorZeroZ = (model = {}) => numberValue(model.floorZeroZ, DEFAULT_FLOOR_ZERO_Z, FLOOR_ZERO_Z_MIN, FLOOR_ZERO_Z_MAX);
-const getModelRotationX = (model = {}) => numberValue(model.modelRotationX, 0, -180, 180);
-const getModelRotationY = (model = {}) => numberValue(model.modelRotationY, 0, -180, 180);
-const getModelRotationZ = (model = {}) => numberValue(model.modelRotationZ, 0, -180, 180);
-const applyModelRotation = (object, model = {}) => {
-  object.rotation.set(
-    THREE.MathUtils.degToRad(getModelRotationX(model)),
-    THREE.MathUtils.degToRad(getModelRotationY(model)),
-    THREE.MathUtils.degToRad(getModelRotationZ(model)),
-  );
+const DECOR_SIZE_AXES = [
+  { id: 'x', label: 'X' },
+  { id: 'y', label: 'Y' },
+  { id: 'z', label: 'Z' },
+];
+const formatDraftNumber = (value) => (Number.isFinite(Number(value)) ? String(Number(value)) : '');
+const normalizeDraftNumber = (value = '') => String(value ?? '').trim().replace(',', '.');
+const isValidDraftNumber = (value = '') => {
+  const normalized = normalizeDraftNumber(value);
+  return normalized !== '' && Number.isFinite(Number(normalized));
 };
-const centerObjectHorizontallyOnOrigin = (object) => {
-  if (!object) return false;
-  object.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(object, true);
-  if (!Number.isFinite(box.min.x) || !Number.isFinite(box.max.x) || !Number.isFinite(box.min.z) || !Number.isFinite(box.max.z)) return false;
-  const center = box.getCenter(new THREE.Vector3());
-  object.position.x -= center.x;
-  object.position.z -= center.z;
-  object.updateMatrixWorld(true);
-  return true;
-};
-const alignObjectTopToGround = (object, groundY = 0.018) => {
-  if (!object) return false;
-  object.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(object, true);
-  if (!Number.isFinite(box.max.y)) return false;
-  object.position.y += groundY - box.max.y;
-  object.updateMatrixWorld(true);
-  return true;
-};
+const toDecorUserAxes = (dimensions = {}) => ({
+  x: dimensions.x,
+  y: dimensions.z,
+  z: dimensions.y,
+});
 
 const getKindDefaults = (kind, current = {}) => {
   const nextKind = getDecorKindId(kind);
@@ -125,9 +114,7 @@ const getKindDefaults = (kind, current = {}) => {
       floorZeroZ: getFloorZeroZ(current),
       collision: false,
       repeatTexture: false,
-      modelUrl: '',
-      modelData: '',
-      modelName: '',
+      materialBrightness: Number.isFinite(Number(current.materialBrightness)) ? Number(current.materialBrightness) : DECOR_FLOOR_MATERIAL_BRIGHTNESS,
       baseColor: current.baseColor === '#64748b' || !current.baseColor ? '#334155' : current.baseColor,
     };
   }
@@ -141,9 +128,7 @@ const getKindDefaults = (kind, current = {}) => {
       floorZeroZ: getFloorZeroZ(current),
       collision: false,
       repeatTexture: false,
-      modelUrl: '',
-      modelData: '',
-      modelName: '',
+      materialBrightness: Number.isFinite(Number(current.materialBrightness)) ? Number(current.materialBrightness) : DECOR_FLOOR_MATERIAL_BRIGHTNESS,
       baseColor: current.baseColor === '#64748b' || !current.baseColor ? '#2563eb' : current.baseColor,
       accentColor: current.accentColor === '#f59e0b' || !current.accentColor ? '#67e8f9' : current.accentColor,
     };
@@ -172,480 +157,10 @@ const getKindDefaults = (kind, current = {}) => {
   };
 };
 
-const getDecorBuildSignature = (model = {}) => [
-  model.id || '',
-  model.kind || '',
-  model.modelUrl || '',
-  model.modelData || '',
-  model.modelName || '',
-  model.imageData || '',
-  model.imageName || '',
-  model.width || '',
-  model.depth || '',
-  model.height || '',
-  model.scale || '',
-  model.elevation || '',
-  model.modelRotationX || '',
-  model.modelRotationY || '',
-  model.modelRotationZ || '',
-  model.modelCenterOnOrigin ? 'center' : '',
-  model.modelFlushToGround ? 'flush' : '',
-  model.baseColor || '',
-  model.accentColor || '',
-  model.roofColor || '',
-  model.collision ? 'collision' : '',
-  model.repeatTexture ? 'repeat' : '',
-].join('|');
-
 const ensureDecorModels = (draft) => {
   if (!Array.isArray(draft.decorModels3d)) draft.decorModels3d = [];
   return draft.decorModels3d;
 };
-
-const disposeMaterial = (material) => {
-  if (!material) return;
-  if (material.userData?.disposeTextures) {
-    Object.values(material).forEach((value) => {
-      if (value?.isTexture) value.dispose();
-    });
-  }
-  material.dispose?.();
-};
-
-const disposeObject = (object) => {
-  object.traverse((child) => {
-    child.geometry?.dispose?.();
-    const materials = Array.isArray(child.material) ? child.material : [child.material];
-    materials.filter(Boolean).forEach(disposeMaterial);
-  });
-};
-
-const clearGroup = (group) => {
-  [...group.children].forEach((child) => {
-    group.remove(child);
-    disposeObject(child);
-  });
-};
-
-const createTexture = (src, repeat = false) => {
-  if (!src) return null;
-  const texture = new THREE.TextureLoader().load(src);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 4;
-  if (repeat) {
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(2, 2);
-  }
-  return texture;
-};
-
-const makeMaterial = (color, options = {}) => {
-  const texture = options.texture || null;
-  const created = new THREE.MeshStandardMaterial({
-    color: texture ? '#ffffff' : color,
-    map: texture,
-    roughness: options.roughness ?? 0.68,
-    metalness: options.metalness ?? 0.04,
-    emissive: options.emissive || '#000000',
-    emissiveIntensity: options.emissiveIntensity ?? 0,
-    transparent: options.transparent || false,
-    opacity: options.opacity ?? 1,
-    side: options.side || THREE.FrontSide,
-  });
-  if (texture) created.userData.disposeTextures = true;
-  return created;
-};
-
-const addMesh = (group, geometry, meshMaterial, position, rotation = null, scale = null) => {
-  const mesh = new THREE.Mesh(geometry, meshMaterial);
-  mesh.position.set(position[0], position[1], position[2]);
-  if (rotation) mesh.rotation.set(rotation[0], rotation[1], rotation[2]);
-  if (scale) mesh.scale.set(scale[0], scale[1], scale[2]);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  group.add(mesh);
-  return mesh;
-};
-
-const hashString = (value = '') => [...String(value)].reduce((hash, char) => (((hash << 5) - hash + char.charCodeAt(0)) | 0), 0);
-
-const createRockGeometry = (seedValue) => {
-  const geometry = new THREE.DodecahedronGeometry(1, 2);
-  const seed = Math.abs(hashString(seedValue)) + 1;
-  const positions = geometry.attributes.position;
-  const vertex = new THREE.Vector3();
-  for (let index = 0; index < positions.count; index += 1) {
-    vertex.fromBufferAttribute(positions, index);
-    const jitter = 0.78 + (((Math.sin(seed * (index + 5) * 10.318) * 41237.42) % 1 + 1) % 1) * 0.36;
-    vertex.multiplyScalar(jitter);
-    positions.setXYZ(index, vertex.x, vertex.y, vertex.z);
-  }
-  positions.needsUpdate = true;
-  geometry.computeVertexNormals();
-  return geometry;
-};
-
-const addImagePanel = (group, texture, width, height, y, z) => {
-  if (!texture) return;
-  const panelMaterial = new THREE.MeshBasicMaterial({
-    map: texture,
-    transparent: true,
-    opacity: 0.98,
-    alphaTest: 0.05,
-    side: THREE.DoubleSide,
-  });
-  panelMaterial.userData.disposeTextures = true;
-  const panel = new THREE.Mesh(new THREE.PlaneGeometry(width, height), panelMaterial);
-  panel.position.set(0, y, z);
-  panel.renderOrder = 8;
-  group.add(panel);
-};
-
-const buildDecorObject = (model) => {
-  const root = new THREE.Group();
-  const group = new THREE.Group();
-  const kind = getDecorRenderKind(model.kind);
-  const width = numberValue(model.width, 2.2, 0.4, 8);
-  const depth = numberValue(model.depth, 2.2, 0.4, 8);
-  const height = numberValue(model.height, kind === 'road' ? 0.05 : 1.2, 0.05, 6);
-  const scale = numberValue(model.scale, 1, DECOR_MODEL_SCALE_MIN, DECOR_MODEL_SCALE_MAX);
-  const elevation = numberValue(model.elevation, 0, -1, 3);
-  const baseColor = colorValue(model.baseColor, '#64748b');
-  const accentColor = colorValue(model.accentColor, '#f59e0b');
-  const roofColor = colorValue(model.roofColor, '#7f1d1d');
-  const texture = createTexture(model.imageData, Boolean(model.repeatTexture || kind === 'road'));
-  const baseMaterial = makeMaterial(baseColor, { texture, roughness: kind === 'road' ? 0.86 : 0.64 });
-  const accentMaterial = makeMaterial(accentColor, { roughness: 0.48, emissive: accentColor, emissiveIntensity: 0.06 });
-  const roofMaterial = makeMaterial(roofColor, { roughness: 0.72 });
-
-  group.scale.setScalar(scale);
-  applyModelRotation(group, model);
-
-  const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(Math.max(width, depth) * 0.58, 40),
-    new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: kind === 'road' ? 0.08 : 0.2 }),
-  );
-  shadow.rotation.x = -Math.PI / 2;
-  shadow.position.y = 0.01;
-  root.add(shadow);
-
-  if (kind === 'road') {
-    addMesh(group, new THREE.BoxGeometry(width, Math.max(0.035, height), depth), baseMaterial, [0, Math.max(0.018, height / 2), 0]);
-    addMesh(group, new THREE.BoxGeometry(width * 0.08, 0.022, depth * 0.08), accentMaterial, [-width * 0.22, height + 0.025, 0]);
-    addMesh(group, new THREE.BoxGeometry(width * 0.08, 0.022, depth * 0.08), accentMaterial, [0, height + 0.025, 0]);
-    addMesh(group, new THREE.BoxGeometry(width * 0.08, 0.022, depth * 0.08), accentMaterial, [width * 0.22, height + 0.025, 0]);
-  } else if (kind === 'water') {
-    const waterMaterial = makeMaterial(baseColor, {
-      roughness: 0.18,
-      metalness: 0,
-      transparent: true,
-      opacity: 0.72,
-      emissive: accentColor,
-      emissiveIntensity: 0.12,
-    });
-    addMesh(group, new THREE.BoxGeometry(width, Math.max(0.035, height), depth), waterMaterial, [0, Math.max(0.018, height / 2), 0]);
-    addMesh(group, new THREE.TorusGeometry(Math.max(width, depth) * 0.24, 0.018, 8, 48), accentMaterial, [0, height + 0.035, 0], [Math.PI / 2, 0, 0]);
-  } else if (kind === 'wall') {
-    addMesh(group, new THREE.BoxGeometry(width, height, Math.max(0.12, depth * 0.28)), baseMaterial, [0, height / 2, 0]);
-    addMesh(group, new THREE.BoxGeometry(width * 1.02, 0.05, Math.max(0.14, depth * 0.3)), accentMaterial, [0, height * 0.52, 0]);
-    addMesh(group, new THREE.BoxGeometry(0.05, height * 0.86, Math.max(0.15, depth * 0.32)), accentMaterial, [-width * 0.22, height * 0.5, 0]);
-    addMesh(group, new THREE.BoxGeometry(0.05, height * 0.86, Math.max(0.15, depth * 0.32)), accentMaterial, [width * 0.22, height * 0.5, 0]);
-  } else if (kind === 'house') {
-    const bodyHeight = height * 0.68;
-    addMesh(group, new THREE.BoxGeometry(width, bodyHeight, depth), baseMaterial, [0, bodyHeight / 2, 0]);
-    const roof = addMesh(group, new THREE.ConeGeometry(Math.max(width, depth) * 0.72, height * 0.42, 4), roofMaterial, [0, bodyHeight + height * 0.18, 0], [0, Math.PI / 4, 0]);
-    roof.scale.z = Math.max(0.72, depth / Math.max(width, 0.1));
-    addMesh(group, new THREE.BoxGeometry(width * 0.22, bodyHeight * 0.46, 0.035), accentMaterial, [0, bodyHeight * 0.23, depth / 2 + 0.025]);
-    addMesh(group, new THREE.BoxGeometry(width * 0.18, bodyHeight * 0.18, 0.036), roofMaterial, [-width * 0.28, bodyHeight * 0.56, depth / 2 + 0.026]);
-    addMesh(group, new THREE.BoxGeometry(width * 0.18, bodyHeight * 0.18, 0.036), roofMaterial, [width * 0.28, bodyHeight * 0.56, depth / 2 + 0.026]);
-  } else if (kind === 'tree') {
-    addMesh(group, new THREE.CylinderGeometry(width * 0.12, width * 0.16, height * 0.48, 14), makeMaterial('#7c4a22', { roughness: 0.82 }), [0, height * 0.24, 0]);
-    addMesh(group, new THREE.SphereGeometry(Math.max(width, depth) * 0.32, 22, 16), baseMaterial, [0, height * 0.65, 0]);
-    addMesh(group, new THREE.ConeGeometry(Math.max(width, depth) * 0.38, height * 0.45, 18), accentMaterial, [0, height * 0.92, 0]);
-    addImagePanel(group, texture, width * 0.72, height * 0.5, height * 0.7, depth * 0.23);
-  } else if (kind === 'crate') {
-    addMesh(group, new THREE.BoxGeometry(width, height, depth), baseMaterial, [0, height / 2, 0]);
-    addMesh(group, new THREE.BoxGeometry(width * 1.02, 0.04, depth * 0.1), accentMaterial, [0, height * 0.52, depth * 0.51]);
-    addMesh(group, new THREE.BoxGeometry(width * 0.1, 0.04, depth * 1.02), accentMaterial, [0, height * 0.52, 0], [0, 0, Math.PI / 2]);
-  } else if (kind === 'billboard') {
-    addImagePanel(group, texture, width, height, height / 2, 0.04);
-    addMesh(group, new THREE.BoxGeometry(width, height, 0.08), texture ? makeMaterial('#1e293b', { transparent: true, opacity: 0.12 }) : baseMaterial, [0, height / 2, 0]);
-    addMesh(group, new THREE.BoxGeometry(width * 0.1, height * 0.25, 0.12), accentMaterial, [0, height * 0.125, -0.05]);
-  } else {
-    addMesh(group, createRockGeometry(model.id || model.name), baseMaterial, [0, height * 0.48, 0], null, [width * 0.42, height * 0.48, depth * 0.42]);
-    addMesh(group, new THREE.SphereGeometry(Math.min(width, depth) * 0.12, 12, 8), accentMaterial, [-width * 0.12, height * 0.72, depth * 0.18]);
-    addImagePanel(group, texture, width * 0.72, height * 0.6, height * 0.52, depth * 0.42);
-  }
-
-  if (model.collision) {
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(Math.max(width, depth) * 0.52, 0.018, 8, 52),
-      new THREE.MeshBasicMaterial({ color: '#f8fafc', transparent: true, opacity: 0.42 }),
-    );
-    ring.rotation.x = Math.PI / 2;
-    ring.position.y = 0.045;
-    root.add(ring);
-  }
-
-  root.add(group);
-  if (model.modelCenterOnOrigin) centerObjectHorizontallyOnOrigin(group);
-  snapObjectToGround(group, elevation);
-  if (model.modelFlushToGround) alignObjectTopToGround(group, elevation + 0.018);
-  return root;
-};
-
-const buildDecorGltfObject = (object, model) => {
-  const root = new THREE.Group();
-  const group = new THREE.Group();
-  const width = numberValue(model.width, 2.2, 0.4, 8);
-  const depth = numberValue(model.depth, 2.2, 0.4, 8);
-  const height = numberValue(model.height, 1.2, 0.05, 6);
-  const scale = numberValue(model.scale, 1, DECOR_MODEL_SCALE_MIN, DECOR_MODEL_SCALE_MAX);
-  const elevation = numberValue(model.elevation, 0, -1, 3);
-  const texture = createTexture(model.imageData, Boolean(model.repeatTexture));
-
-  applyModelRotation(group, model);
-
-  const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(Math.max(width, depth) * 0.52, 40),
-    new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.22 }),
-  );
-  shadow.rotation.x = -Math.PI / 2;
-  shadow.position.y = 0.01;
-  root.add(shadow);
-
-  prepareGltfModel(object, { restoreTextureColor: true });
-  applyTextureToGltfModel(object, texture, { disposeTextureWithMaterial: true });
-  fitObjectToHeight(object, height * scale, { groundY: 0 });
-  group.add(object);
-  root.add(group);
-  if (model.modelCenterOnOrigin) centerObjectHorizontallyOnOrigin(group);
-  snapObjectToGround(group, elevation);
-  if (model.modelFlushToGround) alignObjectTopToGround(group, elevation + 0.018);
-
-  if (model.collision) {
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(Math.max(width, depth) * 0.52, 0.018, 8, 52),
-      new THREE.MeshBasicMaterial({ color: '#f8fafc', transparent: true, opacity: 0.42 }),
-    );
-    ring.rotation.x = Math.PI / 2;
-    ring.position.y = 0.045;
-    root.add(ring);
-  }
-
-  return root;
-};
-
-const loadGltfDecor = (sources, model, onLoaded, onError) => {
-  const loader = new GLTFLoader();
-  const sourceList = (Array.isArray(sources) ? sources : [sources]).filter(Boolean);
-  const handleLoaded = (gltf) => {
-    const object = gltf.scene || gltf.scenes?.[0];
-    if (!object) {
-      onError?.();
-      return;
-    }
-    onLoaded?.(buildDecorGltfObject(object, model));
-  };
-  const trySource = (index = 0) => {
-    const source = sourceList[index];
-    if (!source) {
-      onError?.();
-      return;
-    }
-    loadGltfFromSource(loader, source, handleLoaded, () => trySource(index + 1));
-  };
-  trySource();
-};
-
-const createPreviewFloor = () => {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 512;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#132033';
-  ctx.fillRect(0, 0, 512, 512);
-  for (let x = 0; x < 512; x += 64) {
-    for (let y = 0; y < 512; y += 64) {
-      ctx.fillStyle = ((x + y) / 64) % 2 ? '#1d2c43' : '#142238';
-      ctx.fillRect(x, y, 64, 64);
-      ctx.strokeStyle = 'rgba(148, 163, 184, .16)';
-      ctx.strokeRect(x + 0.5, y + 0.5, 63, 63);
-    }
-  }
-  ctx.strokeStyle = 'rgba(103, 232, 249, .2)';
-  ctx.lineWidth = 4;
-  ctx.strokeRect(96, 96, 320, 320);
-  return canvas;
-};
-
-function Decor3DPreview({ model }) {
-  const containerRef = useRef(null);
-  const decorRootRef = useRef(null);
-  const rendererRef = useRef(null);
-  const [webglError, setWebglError] = useState('');
-  const buildSignature = useMemo(() => getDecorBuildSignature(model), [model]);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return undefined;
-
-    let renderer;
-    try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'default' });
-    } catch {
-      setWebglError('Apercu 3D indisponible.');
-      return undefined;
-    }
-
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.6));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFShadowMap;
-    renderer.domElement.className = 'decor3d-canvas';
-    container.appendChild(renderer.domElement);
-    rendererRef.current = renderer;
-    setWebglError('');
-
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#07111e');
-    scene.fog = new THREE.Fog('#07111e', 8, 22);
-    const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 80);
-    camera.position.set(4.2, 3.2, 5.4);
-
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.08;
-    controls.minDistance = 2.8;
-    controls.maxDistance = 10;
-    controls.maxPolarAngle = Math.PI * 0.49;
-    controls.target.set(0, 0.75, 0);
-    const detachCameraControls = attachClickTargetCameraControls({
-      camera,
-      controls,
-      domElement: renderer.domElement,
-      scene,
-      groundY: 0,
-    });
-
-    scene.add(new THREE.HemisphereLight('#c9f5ff', '#24160c', 1.15));
-    const sun = new THREE.DirectionalLight('#fff0c7', 2.1);
-    sun.position.set(-4.5, 6, 5);
-    sun.castShadow = true;
-    sun.shadow.camera.near = 0.5;
-    sun.shadow.camera.far = 24;
-    sun.shadow.camera.left = -7;
-    sun.shadow.camera.right = 7;
-    sun.shadow.camera.top = 7;
-    sun.shadow.camera.bottom = -7;
-    scene.add(sun);
-    scene.add(new THREE.AmbientLight('#4f8cff', 0.28));
-
-    const floorTexture = new THREE.CanvasTexture(createPreviewFloor());
-    floorTexture.wrapS = THREE.RepeatWrapping;
-    floorTexture.wrapT = THREE.RepeatWrapping;
-    floorTexture.repeat.set(5, 5);
-    floorTexture.colorSpace = THREE.SRGBColorSpace;
-    const floorMaterial = makeMaterial('#172033', { texture: floorTexture, roughness: 0.9 });
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), floorMaterial);
-    floor.rotation.x = -Math.PI / 2;
-    floor.receiveShadow = true;
-    scene.add(floor);
-
-    const grid = new THREE.GridHelper(8, 16, '#67e8f9', '#263c5c');
-    grid.material.transparent = true;
-    grid.material.opacity = 0.24;
-    grid.position.y = 0.018;
-    scene.add(grid);
-
-    const decorRoot = new THREE.Group();
-    decorRootRef.current = decorRoot;
-    scene.add(decorRoot);
-
-    const resize = () => {
-      const width = Math.max(320, container.clientWidth);
-      const height = Math.max(320, container.clientHeight);
-      if (renderer.domElement.width !== Math.floor(width * renderer.getPixelRatio()) || renderer.domElement.height !== Math.floor(height * renderer.getPixelRatio())) {
-        renderer.setSize(width, height, false);
-        camera.aspect = width / height;
-        camera.updateProjectionMatrix();
-      }
-    };
-
-    let frameId = 0;
-    const render = (time = 0) => {
-      resize();
-      if (decorRoot.children[0]) {
-        decorRoot.children[0].rotation.y = Math.sin(time * 0.00036) * 0.08;
-      }
-      controls.update();
-      renderer.render(scene, camera);
-      frameId = requestAnimationFrame(render);
-    };
-    render();
-
-    return () => {
-      cancelAnimationFrame(frameId);
-      detachCameraControls();
-      controls.dispose();
-      clearGroup(decorRoot);
-      disposeObject(floor);
-      renderer.dispose();
-      renderer.forceContextLoss?.();
-      if (renderer.domElement.parentNode === container) container.removeChild(renderer.domElement);
-      decorRootRef.current = null;
-      rendererRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    const decorRoot = decorRootRef.current;
-    if (!decorRoot || !model) return;
-    let cancelled = false;
-    clearGroup(decorRoot);
-    const sources = getGltfModelSources(model);
-    if (sources.length) {
-      const loadingRoot = new THREE.Group();
-      decorRoot.add(loadingRoot);
-      const placeholderHeight = numberValue(model.height, 1.2, 0.05, 6) * numberValue(model.scale, 1, DECOR_MODEL_SCALE_MIN, DECOR_MODEL_SCALE_MAX);
-      loadingRoot.add(new THREE.Mesh(
-        new THREE.BoxGeometry(0.9, Math.max(0.18, placeholderHeight), 0.9),
-        new THREE.MeshStandardMaterial({
-          color: '#1f2937',
-          roughness: 0.68,
-          metalness: 0.12,
-          emissive: '#0f172a',
-          emissiveIntensity: 0.18,
-        }),
-      ));
-      loadingRoot.children[0].position.y = Math.max(0.09, placeholderHeight / 2);
-      loadGltfDecor(sources, model, (object) => {
-        if (cancelled || decorRoot.userData?.disposed) {
-          disposeObject(object);
-          return;
-        }
-        clearGroup(loadingRoot);
-        loadingRoot.add(object);
-      }, () => {
-        if (cancelled) return;
-        clearGroup(loadingRoot);
-        loadingRoot.add(buildDecorObject({ ...model, modelUrl: '', modelData: '', modelName: '' }));
-      });
-    } else {
-      decorRoot.add(buildDecorObject(model));
-    }
-    return () => {
-      cancelled = true;
-    };
-  }, [buildSignature]);
-
-  return (
-    <div ref={containerRef} className="decor3d-canvas-shell">
-      {webglError ? <div className="decor3d-webgl-error">{webglError}</div> : null}
-    </div>
-  );
-}
 
 export default function Decor3DTab({
   project,
@@ -667,14 +182,11 @@ export default function Decor3DTab({
     onSelectedModelIdChange?.(nextModelId);
   }, [onSelectedModelIdChange]);
   const [copyStatus, setCopyStatus] = useState('');
+  const [importInProgress, setImportInProgress] = useState(false);
   const [activeCardField, setActiveCardField] = useState('');
   const localModelUrlsRef = useRef(new Map());
   const modelFileInputRef = useRef(null);
-
-  useEffect(() => () => {
-    localModelUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
-    localModelUrlsRef.current.clear();
-  }, []);
+  const [dimensionDraft, setDimensionDraft] = useState({ modelId: '', x: '', y: '', z: '' });
 
   useEffect(() => {
     if (!models.length) {
@@ -687,12 +199,16 @@ export default function Decor3DTab({
   }, [models, selectedModelId, setSelectedModelId]);
 
   const selectedModel = models.find((model) => model.id === selectedModelId) || models[0] || null;
-  const selectedGltfSource = selectedModel ? getGltfModelSource(selectedModel) : '';
+  const selectedModelSource = selectedModel ? getThreeModelSource(selectedModel) : '';
   const previewModel = useMemo(() => selectedModel || makeDecor3DModel({ name: 'Nouveau decor' }), [selectedModel]);
   const kindConfig = getDecorKindConfig(previewModel.kind);
   const KindIcon = kindConfig.icon;
+  const editorKindLabel = selectedModel ? getDecorKindConfig(selectedModel.kind).label : kindConfig.label;
   const selectedKindId = getDecorKindId(selectedModel?.kind);
+  const activeKindId = selectedModel ? selectedKindId : (activeCardField || getDecorKindId(previewModel.kind));
   const selectedIsFloorTile = selectedModel ? isFloorTileKind(selectedModel.kind) : false;
+  const showFloorTileInspectorFields = selectedIsFloorTile && selectedKindId !== 'road';
+  const showObjectSizeControl = Boolean(selectedModel) && (!selectedIsFloorTile || selectedModelSource);
 
   const patchSelectedModel = useCallback((updater, options) => {
     if (!selectedModelId) return;
@@ -702,41 +218,154 @@ export default function Decor3DTab({
     }, options);
   }, [patchProject, selectedModelId]);
 
+  const commitSelectedModelDimension = useCallback((axisId, rawValue) => {
+    if (!selectedModel) return;
+    if (!isValidDraftNumber(rawValue)) {
+      const dimensions = toDecorUserAxes(getDecorModelDimensions(selectedModel));
+      setDimensionDraft((current) => ({
+        ...current,
+        modelId: selectedModel.id || '',
+        [axisId]: formatDraftNumber(dimensions[axisId]),
+      }));
+      return;
+    }
+    patchSelectedModel((model) => {
+      const dimensions = toDecorUserAxes(getDecorModelDimensions(model));
+      const nextValue = numberValue(rawValue, dimensions[axisId] || 1, DECOR_MODEL_DIMENSION_MIN, DECOR_MODEL_DIMENSION_MAX);
+      const isProportional = isDecorModelSizeProportional(model);
+      const nextDimensions = isProportional
+        ? resizeAxesProportionally(dimensions, axisId, nextValue, DECOR_MODEL_DIMENSION_MIN, DECOR_MODEL_DIMENSION_MAX)
+        : { ...dimensions, [axisId]: nextValue };
+      model.width = nextDimensions.x;
+      model.height = nextDimensions.z;
+      model.depth = nextDimensions.y;
+      model.scale = 1;
+    }, { rememberHistory: false });
+  }, [patchSelectedModel, selectedModel]);
+
+  const setSelectedModelDimensionDraft = useCallback((axisId, rawValue) => {
+    setDimensionDraft((current) => ({
+      ...current,
+      modelId: selectedModelId || '',
+      [axisId]: rawValue,
+    }));
+  }, [selectedModelId]);
+
+  const setSelectedModelSizeProportional = useCallback((checked) => {
+    patchSelectedModel((model) => {
+      model.modelSizeProportional = checked;
+    }, { rememberHistory: false });
+  }, [patchSelectedModel]);
+
+  useEffect(() => {
+    const dimensions = selectedModel ? toDecorUserAxes(getDecorModelDimensions(selectedModel)) : { x: 2.2, y: 2.2, z: 1.2 };
+    setDimensionDraft({
+      modelId: selectedModel?.id || '',
+      x: formatDraftNumber(dimensions.x),
+      y: formatDraftNumber(dimensions.y),
+      z: formatDraftNumber(dimensions.z),
+    });
+  }, [
+    selectedModel?.id,
+    selectedModel?.width,
+    selectedModel?.height,
+    selectedModel?.depth,
+    selectedModel?.scale,
+  ]);
+
   const setSelectedModelFile = useCallback(async (file) => {
     if (!file || !selectedModelId) return;
-    const isGlb = file.name?.toLowerCase().endsWith('.glb') || file.type === 'model/gltf-binary';
-    if (!isGlb) {
-      setCopyStatus('Choisis un fichier .glb');
+    const fileInfo = getDecorImportFileInfo(file);
+    const { archiveFormat, modelFormat, isZip } = fileInfo;
+    if (!archiveFormat && !modelFormat) {
+      setCopyStatus('Choisis un fichier .glb, .fbx, .obj ou .zip');
       return;
     }
     const previousUrl = localModelUrlsRef.current.get(selectedModelId);
-    if (previousUrl) URL.revokeObjectURL(previousUrl);
+    if (previousUrl) {
+      forgetRpg3DLocalBlobFile(previousUrl);
+      URL.revokeObjectURL(previousUrl);
+    }
     localModelUrlsRef.current.delete(selectedModelId);
-    setCopyStatus('Optimisation GLB...');
+    setImportInProgress(true);
+    setCopyStatus(isZip ? 'Lecture ZIP...' : modelFormat === 'glb' ? 'Optimisation GLB...' : `Import ${getThreeModelFormatLabel(modelFormat)}...`);
     try {
-      const optimization = await optimizeCharacterGlbFile(file);
-      const optimizedFile = optimization.file || file;
+      const {
+        zipBundle,
+        sourceFile,
+        sourceFormat,
+        isGlb,
+        optimization,
+        optimizedFile,
+        modelData,
+        modelDimensions,
+        modelFileSize,
+      } = await readDecorModelImport(file, fileInfo);
+      if (isZip) {
+        setCopyStatus(`ZIP: ${getThreeModelFormatLabel(sourceFormat)} + ${zipBundle.modelResources.length} texture${zipBundle.modelResources.length > 1 ? 's' : ''}`);
+      }
+      const localModelFileId = createLocalModelFileId('decor', selectedModelId, optimizedFile);
       const modelUrl = URL.createObjectURL(optimizedFile);
+      rememberRpg3DLocalBlobFile(modelUrl, optimizedFile, localModelFileId);
       localModelUrlsRef.current.set(selectedModelId, modelUrl);
-      const modelData = await fileToDataURL(optimizedFile);
       patchSelectedModel((model) => {
+        if (activeCardField && getDecorKindId(model.kind) !== activeCardField) {
+          Object.assign(model, getKindDefaults(activeCardField, model));
+        }
         if (isFloorTileKind(model.kind)) {
-          model.kind = 'decor';
-          model.height = Math.max(Number(model.height) || 0, 1.2);
-          model.collision = true;
+          model.height = numberValue(model.height, 0.08, DECOR_MODEL_DIMENSION_MIN, DECOR_MODEL_DIMENSION_MAX);
+          model.floorZeroZ = getFloorZeroZ(model);
+          model.collision = false;
           model.repeatTexture = false;
+          model.modelCenterOnOrigin = true;
+          if (!Number.isFinite(Number(model.materialBrightness))) model.materialBrightness = DECOR_FLOOR_MATERIAL_BRIGHTNESS;
+        }
+        if (modelDimensions) {
+          model.width = modelDimensions.width;
+          model.depth = modelDimensions.depth;
+          model.height = modelDimensions.height;
+          model.scale = 1;
         }
         model.modelUrl = modelUrl;
         model.modelData = modelData || '';
-        model.modelName = optimizedFile.name || file.name || 'modele.glb';
+        model.localModelFileId = localModelFileId;
+        model.modelName = optimizedFile.name || zipBundle?.modelFile?.name || file.name || `modele.${sourceFormat}`;
+        model.modelFormat = sourceFormat;
+        model.modelFileSize = modelFileSize || Number(optimizedFile?.size || sourceFile?.size || file?.size) || 0;
+        model.modelResources = zipBundle?.modelResources || [];
       });
-      setCopyStatus(optimization.optimized
+      setCopyStatus(isGlb && optimization.optimized
         ? `GLB allege ${formatBytes(optimization.originalSize)} -> ${formatBytes(optimization.optimizedSize)}`
-        : 'GLB charge');
-    } catch {
-      setCopyStatus('Import GLB impossible');
+        : isGlb && optimization.skipped
+          ? `GLB optimise charge sans recompression${modelData ? '' : ' en local'}`
+          : isZip
+            ? `ZIP charge: ${getThreeModelFormatLabel(sourceFormat)} + ${zipBundle.modelResources.length} texture${zipBundle.modelResources.length > 1 ? 's' : ''}${modelData ? '' : ' en local'}`
+            : `${getThreeModelFormatLabel(sourceFormat)} charge${modelData ? '' : ' en local'}`);
+    } catch (error) {
+      console.error(error);
+      setCopyStatus('Import du modele 3D impossible');
+    } finally {
+      setImportInProgress(false);
     }
-  }, [patchSelectedModel, selectedModelId]);
+  }, [activeCardField, patchSelectedModel, selectedModelId]);
+
+  const handleTextureUpload = useCallback(async (event, onSelect) => {
+    const file = event?.target?.files?.[0];
+    if (!file || !handleUpload) {
+      await handleUpload?.(event, onSelect);
+      return;
+    }
+    setImportInProgress(true);
+    setCopyStatus('Import texture...');
+    try {
+      await handleUpload(event, onSelect);
+      setCopyStatus('Texture importee');
+    } catch {
+      setCopyStatus('Import texture impossible');
+    } finally {
+      setImportInProgress(false);
+    }
+  }, [handleUpload]);
 
   const setSelectedTileSize = useCallback((value) => {
     patchSelectedModel((model) => {
@@ -751,7 +380,7 @@ export default function Decor3DTab({
 
   const setSelectedModelRotation = useCallback((field, value) => {
     patchSelectedModel((model) => {
-      model[field] = numberValue(value, 0, -180, 180);
+      model[field] = getModelRotationValue({ [field]: value }, field);
     }, false);
   }, [patchSelectedModel]);
 
@@ -788,11 +417,20 @@ export default function Decor3DTab({
   }, [patchSelectedModel]);
 
   const createModel = (overrides = {}) => {
-    const next = makeDecor3DModel({ name: `Objet 3D ${models.length + 1}`, ...getKindDefaults(overrides.kind || 'decor'), ...overrides });
+    const kindId = getDecorKindId(overrides.kind || activeKindId || 'decor');
+    const kindDefaults = getKindDefaults(kindId, overrides);
+    const kindLabel = getDecorKindConfig(kindId).label;
+    const next = makeDecor3DModel({
+      name: `Nouveau ${kindLabel}`,
+      ...kindDefaults,
+      ...overrides,
+      kind: kindId,
+    });
     patchProject((draft) => {
       ensureDecorModels(draft).push(next);
     });
     setCopyStatus('');
+    setActiveCardField(kindId);
     setSelectedModelId(next.id);
     return next;
   };
@@ -824,6 +462,16 @@ export default function Decor3DTab({
       return next;
     });
   };
+  const selectedDimensions = selectedModel ? toDecorUserAxes(getDecorModelDimensions(selectedModel)) : { x: 2.2, y: 2.2, z: 1.2 };
+  const selectedSizeProportional = selectedModel ? isDecorModelSizeProportional(selectedModel) : false;
+  const activeDimensionDraft = dimensionDraft.modelId === (selectedModel?.id || '')
+    ? dimensionDraft
+    : {
+      modelId: selectedModel?.id || '',
+      x: formatDraftNumber(selectedDimensions.x),
+      y: formatDraftNumber(selectedDimensions.y),
+      z: formatDraftNumber(selectedDimensions.z),
+    };
   const setDecorKind = (kindId) => {
     if (selectedModel?.id) {
       setSelectedModelId(selectedModel.id);
@@ -831,7 +479,8 @@ export default function Decor3DTab({
         Object.assign(model, getKindDefaults(kindId, model));
       });
     } else {
-      createModel({ name: 'Nouveau decor', ...getKindDefaults(kindId) });
+      const nextKind = getDecorKindConfig(kindId);
+      createModel({ name: `Nouveau ${nextKind.label}`, ...getKindDefaults(kindId) });
     }
     setActiveCardField(kindId);
   };
@@ -887,7 +536,7 @@ export default function Decor3DTab({
         <div className="decor3d-card-grid">
           {KIND_OPTIONS.map((option) => {
             const OptionIcon = option.icon;
-            const isActive = (activeCardField || getDecorKindId(previewModel.kind)) === option.id;
+            const isActive = activeKindId === option.id;
             return (
               <button key={option.id} type="button" className={isActive ? 'active' : ''} onClick={() => setDecorKind(option.id)}>
                 <OptionIcon aria-hidden="true" size={14} /> {option.label}
@@ -937,45 +586,50 @@ export default function Decor3DTab({
 
       {showInspectorPanel ? (
       <section className="panel decor3d-editor-panel">
-        <div className="panel-head panel-head-stack">
-          <div>
-            <span className="section-kicker">Reglages</span>
-            <h2>{selectedModel ? 'Fiche decor' : 'Aucun decor'}</h2>
-          </div>
-          <div className="decor3d-editor-actions">
-            <button
-              type="button"
-              className="secondary-action decor3d-new-button"
-              aria-label="Nouvel objet 3D"
-              title="Nouvel objet 3D"
-              onClick={() => {
-                setActiveCardField('');
-                createModel();
-              }}
-            >
-              <Plus aria-hidden="true" size={15} />
-              <span>Nouveau</span>
-            </button>
-            {onSaveAssets ? (
+        <div className="decor3d-editor-fixed">
+          <div className="panel-head panel-head-stack">
+            <div>
+              <span className="section-kicker">Reglages</span>
+              <h2>{selectedModel ? `Fiche ${editorKindLabel}` : `Aucun ${editorKindLabel}`}</h2>
+            </div>
+            <div className="decor3d-editor-actions">
               <button
                 type="button"
-                className="secondary-action decor3d-save-button"
-                aria-label="Sauvegarder objet"
-                title="Sauvegarder objet"
-                onClick={onSaveAssets}
-                disabled={saveInProgress}
+                className="secondary-action decor3d-new-button"
+                aria-label="Nouvel objet 3D"
+                title="Nouvel objet 3D"
+                onClick={() => {
+                  createModel();
+                }}
               >
-                <Save aria-hidden="true" size={15} />
-                <span>Sauver</span>
+                <Plus aria-hidden="true" size={15} />
+                <span>Nouveau</span>
               </button>
-            ) : null}
-            <button type="button" className="danger-button compact" onClick={deleteModel} disabled={!selectedModel || models.length <= 1}>
-              <Trash2 aria-hidden="true" size={15} />
-            </button>
+              {onSaveAssets ? (
+                <button
+                  type="button"
+                  className="secondary-action decor3d-save-button"
+                  aria-label="Sauvegarder objet"
+                  title="Sauvegarder objet"
+                  onClick={onSaveAssets}
+                  disabled={saveInProgress}
+                >
+                  <Save aria-hidden="true" size={15} />
+                  <span>Sauver</span>
+                </button>
+              ) : null}
+              <button type="button" className="danger-button compact" onClick={deleteModel} disabled={!selectedModel || models.length <= 1}>
+                <Trash2 aria-hidden="true" size={15} />
+              </button>
+            </div>
           </div>
+          {saveStatus ? <p className="decor3d-save-status" role="status">{saveStatus}</p> : null}
+          {saveInProgress ? <div className="decor3d-progress decor3d-progress-save" role="progressbar" aria-label="Sauvegarde en cours"><span /></div> : null}
+          {copyStatus ? <p className="decor3d-import-status" role="status">{copyStatus}</p> : null}
+          {importInProgress ? <div className="decor3d-progress decor3d-progress-import" role="progressbar" aria-label="Import en cours"><span /></div> : null}
         </div>
-        {saveStatus ? <p className="decor3d-save-status" role="status">{saveStatus}</p> : null}
 
+        <div className="decor3d-editor-scroll">
         {selectedModel ? (
           <div className="decor3d-form">
             <label>
@@ -1020,13 +674,55 @@ export default function Decor3DTab({
             <div className="decor3d-orientation-actions">
               <button type="button" className="secondary-action" onClick={setSelectedModelFlat}>A plat</button>
               <button type="button" className="secondary-action" onClick={centerSelectedModelOnOrigin}>Centrer</button>
-              {selectedGltfSource ? (
+              {selectedModelSource ? (
                 <button type="button" className="secondary-action" onClick={flushSelectedModelToGround}>Niveau sol</button>
               ) : null}
               <button type="button" className="secondary-action" onClick={resetSelectedModelOrientation}>Debout</button>
             </div>
 
-            {selectedIsFloorTile ? (
+            {showObjectSizeControl ? (
+              <div className="decor3d-axis-size">
+                <div className="decor3d-axis-size-head">
+                  <DecorHelpLabel help={DECOR_FIELD_HELP.modelScale}>Taille XYZ</DecorHelpLabel>
+                  <label className="decor3d-proportional-toggle">
+                    <input
+                      type="checkbox"
+                      checked={selectedSizeProportional}
+                      onChange={(event) => setSelectedModelSizeProportional(event.target.checked)}
+                    />
+                    <span>Proportionnel</span>
+                  </label>
+                </div>
+                <div className="decor3d-axis-grid">
+                  {DECOR_SIZE_AXES.map(({ id, label }) => (
+                    <label key={id}>
+                      <span>{label}</span>
+                      <input
+                        type="number"
+                        min={DECOR_MODEL_DIMENSION_MIN}
+                        max={DECOR_MODEL_DIMENSION_MAX}
+                        step="0.05"
+                        value={activeDimensionDraft[id]}
+                        onChange={(event) => setSelectedModelDimensionDraft(id, event.target.value)}
+                        onBlur={(event) => commitSelectedModelDimension(id, event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            commitSelectedModelDimension(id, event.currentTarget.value);
+                            event.currentTarget.blur();
+                          }
+                          if (event.key === 'Escape') {
+                            setSelectedModelDimensionDraft(id, formatDraftNumber(selectedDimensions[id]));
+                            event.currentTarget.blur();
+                          }
+                        }}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {showFloorTileInspectorFields ? (
               <>
                 <label>
                   <DecorHelpLabel help={DECOR_FIELD_HELP.floorTileSize}>Taille carre</DecorHelpLabel>
@@ -1068,47 +764,20 @@ export default function Decor3DTab({
                     onChange={(event) => patchSelectedModel((model) => { model.accentColor = event.target.value; })}
                   />
                 </label>
-                <DecorHelpLabel help={DECOR_FIELD_HELP.tileTexture}>Texture de dalle</DecorHelpLabel>
-                <MediaSourcePicker
-                  className="button like full secondary-action decor3d-file-button"
-                  accept="image/*"
-                  handleUpload={handleUpload}
-                  mediaLibrary={mediaLibrary}
-                  onSelect={(data, name) => patchSelectedModel((model) => {
-                    model.imageData = data;
-                    model.imageName = name;
-                    model.modelUrl = '';
-                    model.modelData = '';
-                    model.modelName = '';
-                    model.repeatTexture = false;
-                    model.collision = false;
-                  })}
-                >
-                  <ImageIcon aria-hidden="true" size={16} />
-                  <span>{selectedModel.imageName || 'Texture de dalle'}</span>
-                </MediaSourcePicker>
-                {selectedModel.imageData ? (
-                  <button type="button" className="secondary-action full" onClick={() => patchSelectedModel((model) => {
-                    model.imageData = '';
-                    model.imageName = '';
-                  })}>
-                    Retirer texture
-                  </button>
-                ) : null}
               </>
             ) : null}
 
             {showGlbImportControl ? (
               <>
-                <DecorHelpLabel help={DECOR_FIELD_HELP.glbImport}>Modele GLB</DecorHelpLabel>
+                <DecorHelpLabel help={DECOR_FIELD_HELP.glbImport}>Modele 3D</DecorHelpLabel>
                 <button type="button" className="button like full secondary-action decor3d-file-button" onClick={() => modelFileInputRef.current?.click()}>
                   <Upload aria-hidden="true" size={16} />
-                  <span>{selectedModel.modelName ? 'Remplacer GLB' : 'Importer GLB'}</span>
+                  <span>{selectedModel.modelName ? 'Remplacer modele 3D' : 'Importer modele 3D'}</span>
                 </button>
                 <input
                   ref={modelFileInputRef}
                   type="file"
-                  accept=".glb,model/gltf-binary"
+                  accept={THREE_MODEL_ACCEPT}
                   hidden
                   onChange={(event) => {
                     const file = event.target.files?.[0];
@@ -1116,16 +785,36 @@ export default function Decor3DTab({
                     setSelectedModelFile(file);
                   }}
                 />
+                {selectedModelSource ? (
+                  <label>
+                    <DecorHelpLabel help={DECOR_FIELD_HELP.materialBrightness}>Lumiere carte {Math.round(getDecorMaterialBrightness(selectedModel) * 100)}%</DecorHelpLabel>
+                    <input
+                      type="range"
+                      min={DECOR_MATERIAL_BRIGHTNESS_MIN}
+                      max={DECOR_MATERIAL_BRIGHTNESS_MAX}
+                      step="0.05"
+                      value={getDecorMaterialBrightness(selectedModel)}
+                      onChange={(event) => patchSelectedModel((model) => {
+                        model.materialBrightness = numberValue(
+                          event.target.value,
+                          getDecorMaterialBrightness(model),
+                          DECOR_MATERIAL_BRIGHTNESS_MIN,
+                          DECOR_MATERIAL_BRIGHTNESS_MAX,
+                        );
+                      })}
+                    />
+                  </label>
+                ) : null}
               </>
             ) : null}
 
-            {selectedGltfSource ? (
+            {selectedModelSource ? (
               <>
-                <DecorHelpLabel help={DECOR_FIELD_HELP.glbTexture}>Texture GLB</DecorHelpLabel>
+                <DecorHelpLabel help={DECOR_FIELD_HELP.glbTexture}>Texture modele</DecorHelpLabel>
                 <MediaSourcePicker
                   className="button like full secondary-action decor3d-file-button"
                   accept="image/*"
-                  handleUpload={handleUpload}
+                  handleUpload={handleTextureUpload}
                   mediaLibrary={mediaLibrary}
                   onSelect={(data, name) => patchSelectedModel((model) => {
                     model.imageData = data;
@@ -1133,7 +822,7 @@ export default function Decor3DTab({
                   })}
                 >
                   <ImageIcon aria-hidden="true" size={16} />
-                  <span>{selectedModel.imageName || 'Texture GLB'}</span>
+                  <span>{selectedModel.imageName || 'Texture modele'}</span>
                 </MediaSourcePicker>
                 {selectedModel.imageData ? (
                   <>
@@ -1152,25 +841,32 @@ export default function Decor3DTab({
                       model.imageName = '';
                       model.repeatTexture = false;
                     })}>
-                      Retirer texture GLB
+                      Retirer texture modele
                     </button>
                   </>
                 ) : null}
               </>
             ) : null}
 
-            {selectedGltfSource ? (
+            {selectedModelSource ? (
               <button type="button" className="secondary-action full" onClick={() => patchSelectedModel((model) => {
                 if (String(model.modelUrl || '').startsWith('blob:')) {
                   const previousUrl = localModelUrlsRef.current.get(model.id);
-                  if (previousUrl) URL.revokeObjectURL(previousUrl);
+                  if (previousUrl) {
+                    forgetRpg3DLocalBlobFile(previousUrl);
+                    URL.revokeObjectURL(previousUrl);
+                  }
                   localModelUrlsRef.current.delete(model.id);
                 }
                 model.modelUrl = '';
                 model.modelData = '';
+                model.localModelFileId = '';
                 model.modelName = '';
+                model.modelFormat = '';
+                model.modelFileSize = 0;
+                model.modelResources = [];
               })}>
-                Retirer modele GLB
+                Retirer modele 3D
               </button>
             ) : null}
 
@@ -1178,6 +874,7 @@ export default function Decor3DTab({
         ) : (
           <div className="empty-state-inline">Aucun decor 3D.</div>
         )}
+        </div>
       </section>
       ) : null}
     </main>

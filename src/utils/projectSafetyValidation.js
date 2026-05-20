@@ -136,13 +136,15 @@ const ITEM_KEYS = makeSet([
 ]);
 
 const CHARACTER_3D_MODEL_KEYS = makeSet([
-  'id', 'name', 'role', 'shape', 'modelUrl', 'modelData', 'modelName', 'previewLightIntensity', 'previewLightOrientation',
+  'id', 'name', 'role', 'shape', 'modelUrl', 'modelData', 'modelName', 'modelResources',
+  'characterModelScale', 'characterModelScaleX', 'characterModelScaleY', 'characterModelScaleZ', 'characterModelScaleProportional',
+  'materialBrightness', 'previewLightIntensity', 'previewLightOrientation',
   ...SHARED_AI_KEYS,
 ]);
 
 const DECOR_3D_MODEL_KEYS = makeSet([
   'id', 'name', 'kind', 'imageData', 'imageName', 'baseColor', 'accentColor', 'roofColor',
-  'modelUrl', 'modelData', 'modelName', 'width', 'depth', 'height', 'floorZeroZ', 'scale', 'elevation', 'collision', 'repeatTexture', 'notes',
+  'modelUrl', 'modelData', 'modelName', 'modelResources', 'width', 'depth', 'height', 'floorZeroZ', 'scale', 'modelSizeProportional', 'elevation', 'materialBrightness', 'collision', 'repeatTexture', 'notes',
   ...MEDIA_ID_KEYS, ...SHARED_AI_KEYS,
 ]);
 
@@ -259,6 +261,9 @@ const MEDIA_KEY_PATTERN = /(?:backgroundData|imageData|objectImageData|popupImag
 const PROMPT_KEY_PATTERN = /prompt$/i;
 const TEXT_KEY_PATTERN = /(?:text|dialogue|message|summary|description|question|narration|instructions|notes|label|name|title)$/i;
 const ALLOWED_DATA_MIME_PATTERN = /^(image\/(?:png|jpeg|jpg|webp|gif|svg\+xml)|audio\/(?:mpeg|mp3|wav|ogg|webm|mp4)|video\/(?:mp4|webm|ogg)|application\/json)$/i;
+const ALLOWED_MODEL_DATA_MIME_PATTERN = /^(model\/(?:gltf-binary|gltf\+json|obj|vnd\.fbx)|application\/(?:octet-stream|vnd\.autodesk\.fbx))$/i;
+const ALLOWED_MODEL_RESOURCE_DATA_MIME_PATTERN = /^(image\/(?:png|jpeg|jpg|webp|gif|bmp)|text\/plain)$/i;
+const MODEL_DATA_URL_KEYS = makeSet(['modelData', 'modelUrl', 'characterModelUrl', 'decorModelUrl']);
 const SVG_RISK_PATTERN = /<\s*script\b|javascript\s*:|on[a-z]+\s*=|<\s*foreignObject\b/i;
 
 const ACTIVE_CONTENT_PATTERNS = [
@@ -395,6 +400,12 @@ const validateStringContent = (key, value, path, options, errors, warnings) => {
 
 const parseDataUrl = (value) => String(value).match(/^data:([^;,]+)(?:;[^,]*)?,/i);
 
+const isModelResourceDataPath = (key, path) => (
+  key === 'data'
+  && path[path.length - 1] === 'data'
+  && path.includes('modelResources')
+);
+
 const validateUrlValue = (key, value, path, options, errors, warnings, mediaStats) => {
   const text = String(value || '').trim();
   if (!text || !URL_LIKE_KEY_PATTERN.test(key)) return;
@@ -403,7 +414,9 @@ const validateUrlValue = (key, value, path, options, errors, warnings, mediaStat
   const dataMatch = parseDataUrl(text);
   if (dataMatch) {
     const mimeType = dataMatch[1].toLowerCase();
-    if (!ALLOWED_DATA_MIME_PATTERN.test(mimeType)) {
+    const isAllowedModelData = MODEL_DATA_URL_KEYS.has(key) && ALLOWED_MODEL_DATA_MIME_PATTERN.test(mimeType);
+    const isAllowedModelResourceData = isModelResourceDataPath(key, path) && ALLOWED_MODEL_RESOURCE_DATA_MIME_PATTERN.test(mimeType);
+    if (!ALLOWED_DATA_MIME_PATTERN.test(mimeType) && !isAllowedModelData && !isAllowedModelResourceData) {
       addLimited(errors, `${label}: type data URL interdit (${mimeType}).`);
     }
     if (mimeType === 'image/svg+xml') {

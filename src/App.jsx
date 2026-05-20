@@ -372,51 +372,7 @@ function ShellApp() {
     </Suspense>
   ) : null;
 
-  if (screen === 'builder' || screen === 'shared-preview') {
-    return (
-      <Suspense fallback={<LandingLoadingFallback />}>
-        <BuilderApp
-          key={builderLaunch.key}
-          auth={auth}
-          initialProjectId={builderLaunch.projectId}
-          initialTab={builderLaunch.tab}
-          initialTutorialTab={builderLaunch.tutorialTab}
-          initialScreen={builderLaunch.screen}
-          onExitToProfile={openProfileScreen}
-        />
-      </Suspense>
-    );
-  }
-
-  if (screen === 'arcade') {
-    return (
-      <Suspense fallback={<LandingLoadingFallback />}>
-        <Rpg3DMode user={auth.user} authReady={auth.isReady} project={auth.activeProject?.data || null} />
-      </Suspense>
-    );
-  }
-
-  if (screen === 'gallery') {
-    return (
-      <Suspense fallback={<TabLoadingFallback />}>
-        <PublicGallery
-          user={auth.user}
-          authorProfile={auth.authorProfile}
-          initialGameKey={window.__escapeInitialGalleryGame || ''}
-          initialCreatorId={window.__escapeInitialGalleryCreator || ''}
-          onUpdateAuthorProfile={updateAuthorProfileFromProfile}
-          onSignup={openProfileScreen}
-          onClose={auth.user ? openProfileScreen : null}
-        />
-      </Suspense>
-    );
-  }
-
-  if (!auth.isReady) {
-    return <div className="app-shell"><div className="panel">Chargement du compte...</div></div>;
-  }
-
-  if (!auth.user) {
+  const renderAuthEntryScreen = () => {
     if (!showAuthPanel && !auth.isPasswordRecovery) {
       return (
         <Suspense fallback={<LandingLoadingFallback />}>
@@ -447,6 +403,57 @@ function ShellApp() {
         {accessibleDialog}
       </div>
     );
+  };
+
+  if (screen === 'builder' || screen === 'shared-preview') {
+    return (
+      <Suspense fallback={<LandingLoadingFallback />}>
+        <BuilderApp
+          key={builderLaunch.key}
+          auth={auth}
+          initialProjectId={builderLaunch.projectId}
+          initialTab={builderLaunch.tab}
+          initialTutorialTab={builderLaunch.tutorialTab}
+          initialScreen={builderLaunch.screen}
+          onExitToProfile={openProfileScreen}
+        />
+      </Suspense>
+    );
+  }
+
+  if (screen === 'arcade') {
+    if (!auth.isReady) {
+      return <div className="app-shell"><div className="panel">Chargement du compte...</div></div>;
+    }
+    return (
+      <Suspense fallback={<LandingLoadingFallback />}>
+        <Rpg3DMode user={auth.user} authReady={auth.isReady} project={auth.activeProject?.data || null} />
+      </Suspense>
+    );
+  }
+
+  if (screen === 'gallery') {
+    return (
+      <Suspense fallback={<TabLoadingFallback />}>
+        <PublicGallery
+          user={auth.user}
+          authorProfile={auth.authorProfile}
+          initialGameKey={window.__escapeInitialGalleryGame || ''}
+          initialCreatorId={window.__escapeInitialGalleryCreator || ''}
+          onUpdateAuthorProfile={updateAuthorProfileFromProfile}
+          onSignup={openProfileScreen}
+          onClose={auth.user ? openProfileScreen : null}
+        />
+      </Suspense>
+    );
+  }
+
+  if (!auth.isReady) {
+    return <div className="app-shell"><div className="panel">Chargement du compte...</div></div>;
+  }
+
+  if (!auth.user) {
+    return renderAuthEntryScreen();
   }
 
   if (screen === 'admin') {
