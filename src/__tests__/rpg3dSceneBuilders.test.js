@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import {
   DEFAULT_ENGINE,
   addProp,
+  getStaticSceneSignature,
 } from '../components/arcade/rpg3dSceneBuilders.js';
 import { DEFAULT_ARCADE_CONFIG, cloneConfig } from '../utils/rpg3dDomain.js';
 
@@ -33,5 +34,23 @@ describe('rpg3d scene builders', () => {
     addProp(group, config, floor, DEFAULT_ENGINE, false, getTexture, () => null);
 
     expect(getTexture).toHaveBeenCalledWith(floor.imageData, true);
+  });
+
+  it('keeps GLB material brightness out of the static rebuild signature', () => {
+    const config = createSceneConfig();
+    config.props = [{
+      id: 'statue-1',
+      x: 250,
+      y: 200,
+      w: 120,
+      h: 120,
+      decorModelUrl: 'statue.glb',
+      materialBrightness: 0.55,
+    }];
+    const signature = getStaticSceneSignature(config);
+
+    config.props[0].materialBrightness = 1.2;
+
+    expect(getStaticSceneSignature(config)).toBe(signature);
   });
 });
