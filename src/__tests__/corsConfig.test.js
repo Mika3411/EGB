@@ -36,6 +36,26 @@ describe('CORS configuration', () => {
     expect(headers.Vary).toBe('Origin');
   });
 
+  it('allows dynamic loopback ports during local development', () => {
+    expect(() => assertCorsRequestAllowed(
+      { origin: 'http://127.0.0.1:5177' },
+      { NODE_ENV: 'development' },
+    )).not.toThrow();
+
+    const headers = makeCorsHeaders(
+      { origin: 'http://localhost:5182' },
+      { NODE_ENV: 'development' },
+    );
+    expect(headers['Access-Control-Allow-Origin']).toBe('http://localhost:5182');
+  });
+
+  it('keeps dynamic loopback ports closed in production by default', () => {
+    expect(() => assertCorsRequestAllowed(
+      { origin: 'http://127.0.0.1:5177' },
+      { NODE_ENV: 'production' },
+    )).toThrow(/Origine CORS refusee/);
+  });
+
   it('rejects disallowed browser origins', () => {
     expect(() => assertCorsRequestAllowed(
       { origin: 'https://evil.example' },

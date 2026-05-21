@@ -15,6 +15,7 @@ import ArcadeThreeViewport from '../arcade/ArcadeThreeViewport.jsx';
 
 export default function Rpg3DStage({
   activeTransformTool,
+  actionZoneEdgeInsertMode,
   cameraTargetPickMode,
   cameraToolsHidden,
   cameraZoomDragMode,
@@ -22,6 +23,7 @@ export default function Rpg3DStage({
   config,
   configRef,
   dragMode,
+  loadingState,
   mapFullscreen,
   mode,
   modelEraserMode,
@@ -35,6 +37,7 @@ export default function Rpg3DStage({
   playMode,
   quickSelectionCanResize,
   quickSelectionCanRotate,
+  scaleProportionalAxes,
   selected,
   stateRef,
   studioProject,
@@ -56,12 +59,19 @@ export default function Rpg3DStage({
   onToggleFullscreen,
   onToggleMultiSelectMode,
   onToggleRotateTransform,
+  onToggleScaleProportionalAxis,
   onToggleScaleTransform,
   onUndo,
+  onActionZoneEdgeDrag,
+  onActionZoneEdgeDragStart,
+  onActionZoneEdgeInsert,
+  onActionZoneVertexDrag,
+  onActionZoneVertexDragStart,
   onWorldClick,
   onWorldDrag,
   onWorldDragStart,
   onWorldDrop,
+  onMoveHoldChange,
   onModelEraseEnd,
   onModelEraseMove,
   onModelEraseStart,
@@ -192,6 +202,46 @@ export default function Rpg3DStage({
           >
             <Maximize2 size={17} />
           </button>
+          {activeTransformTool === 'scale' ? (
+            <div className="arcade-stage-transform-axis-locks" role="group" aria-label="Axes proportionnels du redimensionnement">
+              {['x', 'y', 'z'].map((axis) => {
+                const label = axis.toUpperCase();
+                const checked = Boolean(scaleProportionalAxes?.[axis]);
+                return (
+                  <label
+                    key={axis}
+                    className={checked ? 'active' : ''}
+                    title={`Inclure ${label} dans le redimensionnement proportionnel`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      aria-label={`Inclure ${label} dans le redimensionnement proportionnel`}
+                      onChange={() => onToggleScaleProportionalAxis?.(axis)}
+                    />
+                    <span>{label}</span>
+                  </label>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {loadingState ? (
+        <div
+          key={loadingState.key}
+          className={`arcade-stage-loading arcade-stage-loading-${loadingState.tone || 'action'}`}
+          role="status"
+          aria-live="polite"
+          style={{ '--rpg3d-loading-duration': `${loadingState.durationMs || 900}ms` }}
+        >
+          <div className="arcade-stage-loading-copy">
+            <strong>{loadingState.label || 'Chargement'}</strong>
+            {loadingState.detail ? <span>{loadingState.detail}</span> : null}
+          </div>
+          <div className="arcade-stage-loading-track" role="progressbar" aria-label="Chargement en cours">
+            <span />
+          </div>
         </div>
       ) : null}
       <ArcadeThreeViewport
@@ -206,6 +256,7 @@ export default function Rpg3DStage({
         cameraTargetPickMode={cameraTargetPickMode && mode === 'edit'}
         cameraZoomDragMode={cameraZoomDragMode && mode === 'edit'}
         transformMode={activeTransformTool}
+        scaleProportionalAxes={scaleProportionalAxes}
         placementEntity={pendingPlacement}
         dragEnabled={dragMode && mode === 'edit'}
         paintMode={tool === 'terrainPaint' && mode === 'edit'}
@@ -225,11 +276,18 @@ export default function Rpg3DStage({
         onCameraTargetPick={onCameraTargetPick}
         onCameraZoomDrag={onCameraZoomDrag}
         onSelectionTransformCommit={onSelectionTransformCommit}
+        actionZoneEdgeInsertMode={actionZoneEdgeInsertMode}
+        onActionZoneEdgeDrag={onActionZoneEdgeDrag}
+        onActionZoneEdgeDragStart={onActionZoneEdgeDragStart}
+        onActionZoneEdgeInsert={onActionZoneEdgeInsert}
+        onActionZoneVertexDrag={onActionZoneVertexDrag}
+        onActionZoneVertexDragStart={onActionZoneVertexDragStart}
         resolveWorldDragPoint={resolveWorldDragPoint}
         onWorldDragStart={onWorldDragStart}
         onWorldDrag={onWorldDrag}
         onWorldDrop={onWorldDrop}
         onMarqueeSelect={onMarqueeSelect}
+        onMoveHoldChange={onMoveHoldChange}
         onShootChange={onShootChange}
       />
     </section>

@@ -9,7 +9,10 @@ import {
   getActionZoneHeight,
   getActionZoneModelHeight,
   getActionZoneRect,
+  getActionZoneTopVertices,
+  getActionZoneVertices,
   getActionZoneWidth,
+  hasCustomActionZoneVertices,
   getCharacterModelAxisScale,
   getFlatTileEdgeSnapDistance,
   getFlatTileSnapOverlap,
@@ -44,6 +47,274 @@ const RESIZABLE_ENTITY_TYPES = new Set(['hero', 'enemy', 'prop', 'relief', 'obst
 
 const createId = (prefix) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 const clampWithFloor = (value, min, max) => clamp(value, min, Math.max(min, max));
+const roundMapPoint = (point = {}) => ({
+  x: Math.round(Number(point.x) || 0),
+  y: Math.round(Number(point.y) || 0),
+  ...(Number.isFinite(Number(point.z)) ? { z: Math.round(clamp(Number(point.z), 0, 900)) } : {}),
+});
+
+const getActionZoneVertexBounds = (vertices = []) => {
+  if (!vertices.length) return null;
+  const minX = Math.min(...vertices.map((point) => point.x));
+  const maxX = Math.max(...vertices.map((point) => point.x));
+  const minY = Math.min(...vertices.map((point) => point.y));
+  const maxY = Math.max(...vertices.map((point) => point.y));
+  return {
+    minX,
+    maxX,
+    minY,
+    maxY,
+    width: Math.max(0, maxX - minX),
+    height: Math.max(0, maxY - minY),
+    centerX: minX + Math.max(0, maxX - minX) / 2,
+    centerY: minY + Math.max(0, maxY - minY) / 2,
+  };
+};
+
+const updateActionZoneBoundsFromVertices = (zone) => {
+  const vertices = getActionZoneVertices(zone).map(roundMapPoint);
+  const bounds = getActionZoneVertexBounds(vertices);
+  if (!bounds) return;
+  zone.vertices = vertices;
+  zone.x = Math.round(bounds.centerX);
+  zone.y = Math.round(bounds.centerY);
+  zone.w = Math.max(ACTION_ZONE_MIN_SIZE, Math.round(bounds.width));
+  zone.h = Math.max(ACTION_ZONE_MIN_SIZE, Math.round(bounds.height));
+};
+
+const ensureActionZoneTopVertices = (zone) => {
+  const bottomVertices = getActionZoneVertices(zone).map(roundMapPoint);
+  const topVertices = getActionZoneTopVertices(zone).map(roundMapPoint);
+  zone.topVertices = topVertices.length === bottomVertices.length ? topVertices : bottomVertices;
+  return zone.topVertices;
+};
+
+const clampActionZoneVerticesToWorld = (zone, world = DEFAULT_ARCADE_CONFIG.world) => {
+  const worldWidth = Number(world.width) || DEFAULT_ARCADE_CONFIG.world.width;
+  const worldHeight = Number(world.height) || DEFAULT_ARCADE_CONFIG.world.height;
+  let vertices = getActionZoneVertices(zone).map((point) => ({
+    x: Number(point.x) || 0,
+    y: Number(point.y) || 0,
+    ...(Number.isFinite(Number(point.z)) ? { z: Number(point.z) } : {}),
+  }));
+  const bounds = getActionZoneVertexBounds(vertices);
+  if (!bounds) return;
+  const offsetX = bounds.minX < 0
+    ? -bounds.minX
+    : bounds.maxX > worldWidth
+      ? worldWidth - bounds.maxX
+      : 0;
+  const offsetY = bounds.minY < 0
+    ? -bounds.minY
+    : bounds.maxY > worldHeight
+      ? worldHeight - bounds.maxY
+      : 0;
+  vertices = vertices.map((point) => ({
+    x: clamp(point.x + offsetX, 0, worldWidth),
+    y: clamp(point.y + offsetY, 0, worldHeight),
+    ...(Number.isFinite(Number(point.z)) ? { z: Number(point.z) } : {}),
+  }));
+  zone.rotation = 0;
+  zone.vertices = vertices.map(roundMapPoint);
+  if (Array.isArray(zone.topVertices)) {
+    zone.topVertices = getActionZoneTopVertices(zone).map((point) => roundMapPoint({
+      x: clamp(point.x + offsetX, 0, worldWidth),
+      y: clamp(point.y + offsetY, 0, worldHeight),
+      ...(Number.isFinite(Number(point.z)) ? { z: Number(point.z) } : {}),
+    }));
+  }
+  updateActionZoneBoundsFromVertices(zone);
+};
+
+export const moveActionZoneVertex = (config, zoneId, vertexIndex, point, vertexLayer = 'bottom') => {
+  const zone = (config.actionZones || []).find((entry) => entry.id === zoneId);
+  if (!zone || !point) return false;
+  const index = Number(vertexIndex);
+  const vertices = getActionZoneVertices(zone).map(roundMapPoint);
+  if (!Number.isInteger(index) || index < 0 || index >= vertices.length) return false;
+  const world = config.world || DEFAULT_ARCADE_CONFIG.world;
+  const nextPoint = {
+    x: Math.round(clamp(Number(point.x) || 0, 0, Number(world.width) || DEFAULT_ARCADE_CONFIG.world.width)),
+    y: Math.round(clamp(Number(point.y) || 0, 0, Number(world.height) || DEFAULT_ARCADE_CONFIG.world.height)),
+  };
+  const pointZ = Number(point.z);
+  const currentVertices = vertexLayer === 'top' ? ensureActionZoneTopVertices(zone) : vertices;
+  if (Number.isFinite(pointZ)) nextPoint.z = Math.round(clamp(pointZ, 0, 900));
+  else if (Number.isFinite(Number(currentVertices[index]?.z))) nextPoint.z = currentVertices[index].z;
+  if (vertexLayer === 'top') {
+    const topVertices = currentVertices;
+    topVertices[index] = nextPoint;
+    zone.topVertices = topVertices;
+    zone.rotation = 0;
+    return true;
+  }
+  ensureActionZoneTopVertices(zone);
+  vertices[index] = nextPoint;
+  zone.rotation = 0;
+  zone.vertices = vertices;
+  updateActionZoneBoundsFromVertices(zone);
+  return true;
+};
+
+export const moveActionZoneEdge = (config, zoneId, edgeIndex, delta = {}, vertexLayer = 'bottom') => {
+  const zone = (config.actionZones || []).find((entry) => entry.id === zoneId);
+  if (!zone || !delta) return false;
+  const index = Number(edgeIndex);
+  const vertices = getActionZoneVertices(zone).map(roundMapPoint);
+  if (!Number.isInteger(index) || index < 0 || index >= vertices.length) return false;
+  const topVertices = ensureActionZoneTopVertices(zone).map(roundMapPoint);
+  const nextIndex = (index + 1) % vertices.length;
+  const world = config.world || DEFAULT_ARCADE_CONFIG.world;
+  const worldWidth = Number(world.width) || DEFAULT_ARCADE_CONFIG.world.width;
+  const worldHeight = Number(world.height) || DEFAULT_ARCADE_CONFIG.world.height;
+  const moveTopLayer = vertexLayer === 'top';
+  const edgeVertices = moveTopLayer
+    ? [topVertices[index], topVertices[nextIndex]]
+    : [vertices[index], vertices[nextIndex]];
+  const minX = Math.min(edgeVertices[0].x, edgeVertices[1].x);
+  const maxX = Math.max(edgeVertices[0].x, edgeVertices[1].x);
+  const minY = Math.min(edgeVertices[0].y, edgeVertices[1].y);
+  const maxY = Math.max(edgeVertices[0].y, edgeVertices[1].y);
+  const dz = Number.isFinite(Number(delta.z)) ? Number(delta.z) : 0;
+  const dx = clamp(Number(delta.x) || 0, -minX, worldWidth - maxX);
+  const dy = clamp(Number(delta.y) || 0, -minY, worldHeight - maxY);
+  if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01 && Math.abs(dz) < 0.01) return false;
+  const targetVertices = moveTopLayer ? topVertices : vertices;
+  const fallbackZ = moveTopLayer ? getActionZoneModelHeight(zone) : 0;
+  const movePoint = (point) => {
+    const next = {
+      x: point.x + dx,
+      y: point.y + dy,
+    };
+    if (Number.isFinite(Number(point.z)) || Math.abs(dz) >= 0.01) {
+      next.z = clamp((Number.isFinite(Number(point.z)) ? Number(point.z) : fallbackZ) + dz, 0, 900);
+    }
+    return roundMapPoint(next);
+  };
+  targetVertices[index] = movePoint(targetVertices[index]);
+  targetVertices[nextIndex] = movePoint(targetVertices[nextIndex]);
+  zone.rotation = 0;
+  if (moveTopLayer) {
+    zone.topVertices = targetVertices;
+  } else {
+    zone.vertices = targetVertices;
+    updateActionZoneBoundsFromVertices(zone);
+  }
+  return true;
+};
+
+export const insertActionZoneVertex = (config, zoneId, edgeIndex, point = null) => {
+  const zone = (config.actionZones || []).find((entry) => entry.id === zoneId);
+  if (!zone) return false;
+  const index = Number(edgeIndex);
+  const vertices = getActionZoneVertices(zone).map(roundMapPoint);
+  if (!Number.isInteger(index) || index < 0 || index >= vertices.length) return false;
+  const start = vertices[index];
+  const end = vertices[(index + 1) % vertices.length];
+  const topVertices = Array.isArray(zone.topVertices) ? ensureActionZoneTopVertices(zone) : null;
+  const world = config.world || DEFAULT_ARCADE_CONFIG.world;
+  const worldWidth = Number(world.width) || DEFAULT_ARCADE_CONFIG.world.width;
+  const worldHeight = Number(world.height) || DEFAULT_ARCADE_CONFIG.world.height;
+  const startZ = Number(start.z);
+  const endZ = Number(end.z);
+  const inserted = point || {
+    x: start.x + (end.x - start.x) / 2,
+    y: start.y + (end.y - start.y) / 2,
+    ...(Number.isFinite(startZ) || Number.isFinite(endZ)
+      ? {
+        z: (Number.isFinite(startZ) ? startZ : 0)
+          + ((Number.isFinite(endZ) ? endZ : 0) - (Number.isFinite(startZ) ? startZ : 0)) / 2,
+      }
+      : {}),
+  };
+  const nextVertex = roundMapPoint({
+    x: clamp(Number(inserted.x) || 0, 0, worldWidth),
+    y: clamp(Number(inserted.y) || 0, 0, worldHeight),
+    ...(Number.isFinite(Number(inserted.z)) ? { z: Number(inserted.z) } : {}),
+  });
+  zone.rotation = 0;
+  zone.vertices = [
+    ...vertices.slice(0, index + 1),
+    nextVertex,
+    ...vertices.slice(index + 1),
+  ];
+  if (topVertices) {
+    const topStart = topVertices[index];
+    const topEnd = topVertices[(index + 1) % topVertices.length];
+    const nextTopVertexDraft = {
+      x: clamp(topStart.x + (topEnd.x - topStart.x) / 2, 0, worldWidth),
+      y: clamp(topStart.y + (topEnd.y - topStart.y) / 2, 0, worldHeight),
+    };
+    if (Number.isFinite(Number(topStart.z)) || Number.isFinite(Number(topEnd.z))) {
+      nextTopVertexDraft.z = clamp(
+        (Number.isFinite(Number(topStart.z)) ? Number(topStart.z) : getActionZoneModelHeight(zone))
+          + ((Number.isFinite(Number(topEnd.z)) ? Number(topEnd.z) : getActionZoneModelHeight(zone)) - (Number.isFinite(Number(topStart.z)) ? Number(topStart.z) : getActionZoneModelHeight(zone))) / 2,
+        0,
+        900,
+      );
+    }
+    const nextTopVertex = roundMapPoint(nextTopVertexDraft);
+    zone.topVertices = [
+      ...topVertices.slice(0, index + 1),
+      nextTopVertex,
+      ...topVertices.slice(index + 1),
+    ];
+  }
+  updateActionZoneBoundsFromVertices(zone);
+  return true;
+};
+
+export const resizeActionZoneGeometry = (zone, world = DEFAULT_ARCADE_CONFIG.world, size = {}) => {
+  if (!zone) return false;
+  if (!hasCustomActionZoneVertices(zone)) {
+    if (Number.isFinite(Number(size.width))) zone.w = Math.round(clamp(Number(size.width), ACTION_ZONE_MIN_SIZE, Number(world.width) || DEFAULT_ARCADE_CONFIG.world.width));
+    if (Number.isFinite(Number(size.height))) zone.h = Math.round(clamp(Number(size.height), ACTION_ZONE_MIN_SIZE, Number(world.height) || DEFAULT_ARCADE_CONFIG.world.height));
+    const width = getActionZoneWidth(zone);
+    const height = getActionZoneHeight(zone);
+    const worldWidth = Number(world.width) || DEFAULT_ARCADE_CONFIG.world.width;
+    const worldHeight = Number(world.height) || DEFAULT_ARCADE_CONFIG.world.height;
+    zone.x = Math.round(clamp(Number(zone.x) || width / 2, width / 2, Math.max(width / 2, worldWidth - width / 2)));
+    zone.y = Math.round(clamp(Number(zone.y) || height / 2, height / 2, Math.max(height / 2, worldHeight - height / 2)));
+    return true;
+  }
+  const vertices = getActionZoneVertices(zone).map((point) => ({
+    x: Number(point.x) || 0,
+    y: Number(point.y) || 0,
+    ...(Number.isFinite(Number(point.z)) ? { z: Number(point.z) } : {}),
+  }));
+  const bounds = getActionZoneVertexBounds(vertices);
+  if (!bounds) return false;
+  const nextWidth = Number.isFinite(Number(size.width))
+    ? Math.round(clamp(Number(size.width), ACTION_ZONE_MIN_SIZE, Number(world.width) || DEFAULT_ARCADE_CONFIG.world.width))
+    : Math.max(ACTION_ZONE_MIN_SIZE, bounds.width);
+  const nextHeight = Number.isFinite(Number(size.height))
+    ? Math.round(clamp(Number(size.height), ACTION_ZONE_MIN_SIZE, Number(world.height) || DEFAULT_ARCADE_CONFIG.world.height))
+    : Math.max(ACTION_ZONE_MIN_SIZE, bounds.height);
+  const scaleX = nextWidth / Math.max(1, bounds.width);
+  const scaleY = nextHeight / Math.max(1, bounds.height);
+  const topVertices = Array.isArray(zone.topVertices)
+    ? getActionZoneTopVertices(zone).map((point) => ({
+      x: Number(point.x) || 0,
+      y: Number(point.y) || 0,
+      ...(Number.isFinite(Number(point.z)) ? { z: Number(point.z) } : {}),
+    }))
+    : null;
+  zone.vertices = vertices.map((point) => roundMapPoint({
+    x: bounds.centerX + (point.x - bounds.centerX) * scaleX,
+    y: bounds.centerY + (point.y - bounds.centerY) * scaleY,
+    ...(Number.isFinite(Number(point.z)) ? { z: Number(point.z) } : {}),
+  }));
+  if (topVertices) {
+    zone.topVertices = topVertices.map((point) => roundMapPoint({
+      x: bounds.centerX + (point.x - bounds.centerX) * scaleX,
+      y: bounds.centerY + (point.y - bounds.centerY) * scaleY,
+      ...(Number.isFinite(Number(point.z)) ? { z: Number(point.z) } : {}),
+    }));
+  }
+  zone.rotation = 0;
+  clampActionZoneVerticesToWorld(zone, world);
+  return true;
+};
 
 export const getEntityKey = (entity = {}) => (entity?.type && entity?.id ? `${entity.type}:${entity.id}` : '');
 export const isSameEntity = (a = {}, b = {}) => a?.type === b?.type && a?.id === b?.id;
@@ -73,6 +344,10 @@ export const clampArcadeEntitiesToWorld = (config) => {
     });
   });
   (config.actionZones || []).forEach((zone) => {
+    if (hasCustomActionZoneVertices(zone)) {
+      clampActionZoneVerticesToWorld(zone, config.world);
+      return;
+    }
     const zoneWidth = getActionZoneWidth(zone);
     const zoneHeight = getActionZoneHeight(zone);
     zone.w = Math.round(zoneWidth);
@@ -88,10 +363,31 @@ export const clampArcadeEntitiesToWorld = (config) => {
 
 export const isPointInActionZone = (zone, point) => {
   const rect = getActionZoneRect(zone);
-  return point.x >= rect.x
-    && point.x <= rect.x + rect.w
-    && point.y >= rect.y
-    && point.y <= rect.y + rect.h;
+  if (
+    point.x < rect.x
+    || point.x > rect.x + rect.w
+    || point.y < rect.y
+    || point.y > rect.y + rect.h
+  ) return false;
+  const vertices = getActionZoneVertices(zone);
+  if (vertices.length < 3) return false;
+  for (let index = 0; index < vertices.length; index += 1) {
+    const start = vertices[index];
+    const end = vertices[(index + 1) % vertices.length];
+    const cross = (point.y - start.y) * (end.x - start.x) - (point.x - start.x) * (end.y - start.y);
+    const dot = (point.x - start.x) * (end.x - start.x) + (point.y - start.y) * (end.y - start.y);
+    const lengthSq = ((end.x - start.x) ** 2) + ((end.y - start.y) ** 2);
+    if (Math.abs(cross) < 0.001 && dot >= -0.001 && dot <= lengthSq + 0.001) return true;
+  }
+  let inside = false;
+  for (let index = 0, previous = vertices.length - 1; index < vertices.length; previous = index, index += 1) {
+    const current = vertices[index];
+    const last = vertices[previous];
+    const intersects = ((current.y > point.y) !== (last.y > point.y))
+      && point.x < ((last.x - current.x) * (point.y - current.y)) / ((last.y - current.y) || 1) + current.x;
+    if (intersects) inside = !inside;
+  }
+  return inside;
 };
 
 export const snapFlatTileToWorldEdges = (tile, world = {}, options = {}) => {
@@ -343,6 +639,8 @@ export const getSelectionEntities = (config, selected, multiSelected = []) => {
 
 export const canResizeSelectionEntity = (entity = {}) => Boolean(entity?.item && RESIZABLE_ENTITY_TYPES.has(entity.type));
 
+const SCALE_AXIS_IDS = ['x', 'y', 'z'];
+
 const getScaleFactorAxis = (factor = 1, axis = 'x') => {
   if (factor && typeof factor === 'object') {
     const value = Number(factor[axis]);
@@ -354,12 +652,32 @@ const getScaleFactorAxis = (factor = 1, axis = 'x') => {
 
 const getUniformScaleFactor = (factor = 1) => {
   if (factor && typeof factor === 'object') {
-    const values = ['x', 'y', 'z']
+    const values = SCALE_AXIS_IDS
       .map((axis) => getScaleFactorAxis(factor, axis))
       .filter((value) => Number.isFinite(value) && value > 0);
     return values.length ? Math.max(...values) : 1;
   }
   return getScaleFactorAxis(factor, 'x');
+};
+
+export const resolveProportionalScaleDelta = (factor = 1, proportionalAxes = {}) => {
+  const scale = SCALE_AXIS_IDS.reduce((next, axis) => ({
+    ...next,
+    [axis]: getScaleFactorAxis(factor, axis),
+  }), {});
+  const linkedAxes = SCALE_AXIS_IDS.filter((axis) => Boolean(proportionalAxes?.[axis]));
+  if (linkedAxes.length < 2) return scale;
+
+  const sourceAxis = linkedAxes.reduce((bestAxis, axis) => {
+    const distance = Math.abs(Math.log(Math.max(0.001, scale[axis])));
+    const bestDistance = Math.abs(Math.log(Math.max(0.001, scale[bestAxis])));
+    return distance > bestDistance ? axis : bestAxis;
+  }, linkedAxes[0]);
+  const linkedScale = scale[sourceAxis];
+  return linkedAxes.reduce((next, axis) => ({
+    ...next,
+    [axis]: linkedScale,
+  }), scale);
 };
 
 const clampCenteredEntityToWorld = (item, world = {}, width = 0, height = 0, centerX = item?.x, centerY = item?.y) => {
@@ -372,12 +690,13 @@ const clampCenteredEntityToWorld = (item, world = {}, width = 0, height = 0, cen
   item.y = Math.round(clamp(Number(centerY) || halfHeight, halfHeight, Math.max(halfHeight, worldHeight - halfHeight)));
 };
 
-export const scaleSelectionEntity = (config, entity, factor = 1) => {
+export const scaleSelectionEntity = (config, entity, factor = 1, options = {}) => {
   if (!canResizeSelectionEntity(entity)) return false;
-  const scaleFactor = getUniformScaleFactor(factor);
-  const scaleX = getScaleFactorAxis(factor, 'x');
-  const scaleY = getScaleFactorAxis(factor, 'y');
-  const scaleZ = getScaleFactorAxis(factor, 'z');
+  const scaleDelta = resolveProportionalScaleDelta(factor, options.proportionalAxes);
+  const scaleFactor = getUniformScaleFactor(scaleDelta);
+  const scaleX = getScaleFactorAxis(scaleDelta, 'x');
+  const scaleY = getScaleFactorAxis(scaleDelta, 'y');
+  const scaleZ = getScaleFactorAxis(scaleDelta, 'z');
   if (!Number.isFinite(scaleFactor) || scaleFactor <= 0) return false;
   const { type, item } = entity;
   const world = config.world || DEFAULT_ARCADE_CONFIG.world;
@@ -428,10 +747,27 @@ export const scaleSelectionEntity = (config, entity, factor = 1) => {
     const centerY = Number(item.y) || height / 2;
     const nextWidth = Math.round(clamp(width * scaleX, ACTION_ZONE_MIN_SIZE, worldWidth));
     const nextHeight = Math.round(clamp(height * scaleZ, ACTION_ZONE_MIN_SIZE, worldHeight));
-    item.w = nextWidth;
-    item.h = nextHeight;
+    resizeActionZoneGeometry(item, world, { width: nextWidth, height: nextHeight });
     item.modelHeight = Math.round(clamp(getActionZoneModelHeight(item) * scaleY, 60, 900));
-    clampCenteredEntityToWorld(item, world, nextWidth, nextHeight, centerX, centerY);
+    if (hasCustomActionZoneVertices(item)) {
+      const deltaX = centerX - (Number(item.x) || centerX);
+      const deltaY = centerY - (Number(item.y) || centerY);
+      item.vertices = getActionZoneVertices(item).map((point) => roundMapPoint({
+        x: point.x + deltaX,
+        y: point.y + deltaY,
+        ...(Number.isFinite(Number(point.z)) ? { z: Number(point.z) } : {}),
+      }));
+      if (Array.isArray(item.topVertices)) {
+        item.topVertices = getActionZoneTopVertices(item).map((point) => roundMapPoint({
+          x: point.x + deltaX,
+          y: point.y + deltaY,
+          ...(Number.isFinite(Number(point.z)) ? { z: Number(point.z) } : {}),
+        }));
+      }
+      clampActionZoneVerticesToWorld(item, world);
+    } else {
+      clampCenteredEntityToWorld(item, world, nextWidth, nextHeight, centerX, centerY);
+    }
     return true;
   }
 
@@ -505,6 +841,21 @@ export const duplicateMapEntityIntoConfig = (config, entity, offsetOverride = nu
   copy.id = createId(entity.type);
   if (Number.isFinite(Number(copy.x))) copy.x = Number(copy.x) + offsetX;
   if (Number.isFinite(Number(copy.y))) copy.y = Number(copy.y) + offsetY;
+  if (entity.type === 'actionZone' && Array.isArray(copy.vertices)) {
+    copy.vertices = getActionZoneVertices(copy).map((point) => roundMapPoint({
+      x: point.x + offsetX,
+      y: point.y + offsetY,
+      ...(Number.isFinite(Number(point.z)) ? { z: Number(point.z) } : {}),
+    }));
+    if (Array.isArray(copy.topVertices)) {
+      copy.topVertices = getActionZoneTopVertices(copy).map((point) => roundMapPoint({
+        x: point.x + offsetX,
+        y: point.y + offsetY,
+        ...(Number.isFinite(Number(point.z)) ? { z: Number(point.z) } : {}),
+      }));
+    }
+    updateActionZoneBoundsFromVertices(copy);
+  }
 
   if (isFloorTile) {
     const { width, height } = getFlatTileWorldDimensions(original);
@@ -532,10 +883,14 @@ export const duplicateMapEntityIntoConfig = (config, entity, offsetOverride = nu
     copy.x = Math.round(clamp(Number(copy.x) || 0, dimensions.width / 2, Math.max(dimensions.width / 2, worldWidth - dimensions.width / 2)));
     copy.y = Math.round(clamp(Number(copy.y) || 0, dimensions.height / 2, Math.max(dimensions.height / 2, worldHeight - dimensions.height / 2)));
   } else if (entity.type === 'actionZone') {
-    const width = getActionZoneWidth(copy);
-    const height = getActionZoneHeight(copy);
-    copy.x = Math.round(clamp(Number(copy.x) || 0, width / 2, Math.max(width / 2, worldWidth - width / 2)));
-    copy.y = Math.round(clamp(Number(copy.y) || 0, height / 2, Math.max(height / 2, worldHeight - height / 2)));
+    if (hasCustomActionZoneVertices(copy)) {
+      clampActionZoneVerticesToWorld(copy, world);
+    } else {
+      const width = getActionZoneWidth(copy);
+      const height = getActionZoneHeight(copy);
+      copy.x = Math.round(clamp(Number(copy.x) || 0, width / 2, Math.max(width / 2, worldWidth - width / 2)));
+      copy.y = Math.round(clamp(Number(copy.y) || 0, height / 2, Math.max(height / 2, worldHeight - height / 2)));
+    }
   } else {
     const radius = entity.type === 'pickup' ? PICKUP_RADIUS : PLAYER_RADIUS;
     copy.x = Math.round(clamp(Number(copy.x) || 0, radius, Math.max(radius, worldWidth - radius)));
@@ -589,8 +944,28 @@ export const moveMapEntityToPoint = (config, selected, point, options = {}) => {
   if (selectedEntity.type === 'actionZone') {
     const width = getActionZoneWidth(item);
     const height = getActionZoneHeight(item);
-    item.x = Math.round(clamp(centerX, width / 2, Math.max(width / 2, world.width - width / 2)));
-    item.y = Math.round(clamp(centerY, height / 2, Math.max(height / 2, world.height - height / 2)));
+    const nextX = Math.round(clamp(centerX, width / 2, Math.max(width / 2, world.width - width / 2)));
+    const nextY = Math.round(clamp(centerY, height / 2, Math.max(height / 2, world.height - height / 2)));
+    if (hasCustomActionZoneVertices(item)) {
+      const deltaX = nextX - (Number(item.x) || nextX);
+      const deltaY = nextY - (Number(item.y) || nextY);
+      item.vertices = getActionZoneVertices(item).map((vertex) => roundMapPoint({
+        x: vertex.x + deltaX,
+        y: vertex.y + deltaY,
+        ...(Number.isFinite(Number(vertex.z)) ? { z: Number(vertex.z) } : {}),
+      }));
+      if (Array.isArray(item.topVertices)) {
+        item.topVertices = getActionZoneTopVertices(item).map((vertex) => roundMapPoint({
+          x: vertex.x + deltaX,
+          y: vertex.y + deltaY,
+          ...(Number.isFinite(Number(vertex.z)) ? { z: Number(vertex.z) } : {}),
+        }));
+      }
+      updateActionZoneBoundsFromVertices(item);
+    } else {
+      item.x = nextX;
+      item.y = nextY;
+    }
     return true;
   }
   const radius = selectedEntity.type === 'pickup' ? PICKUP_RADIUS : PLAYER_RADIUS;

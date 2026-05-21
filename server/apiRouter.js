@@ -25,6 +25,7 @@ export const apiRouteDefinitions = [
   exactRoute('creditsAdminUpdate', ['POST'], '/api/ai-credits/admin'),
   prefixRoute('credits', ['GET'], '/api/ai-credits'),
   exactRoute('storageUpgrade', ['POST'], '/api/storage-upgrade'),
+  exactRoute('storageUpload', ['POST'], '/api/storage-upload'),
   exactRoute('shopPurchase', ['POST'], '/api/shop/purchase'),
   exactRoute('gumroadWebhook', ['POST'], '/api/gumroad/webhook'),
   exactRoute('generate', ['POST'], '/api/generate'),

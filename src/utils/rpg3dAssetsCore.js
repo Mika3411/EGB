@@ -1,0 +1,616 @@
+import {
+  DEFAULT_ARCADE_CONFIG,
+  MATERIAL_BRIGHTNESS_MAX,
+  MATERIAL_BRIGHTNESS_MIN,
+  cloneConfig,
+  clonePlainObjectArray,
+  getCharacterModelAxisScale,
+  getDecorMaterialBrightness,
+  getDecorModelScale,
+  getStudioDecorKindId,
+  isFloorDecorKind,
+  clamp,
+} from './rpg3dDomain.js';
+import {
+  cloneStudioProjectForEdit,
+  createConfigFromSavedAssets,
+  createDefaultStudioProject,
+} from './rpg3dStudioProject.js';
+
+export const ARCADE_ASSETS_STORAGE_KEY = 'escape-game-builder:arcade-assets:v1';
+export const ARCADE_ASSETS_REMOTE_VERSION = 2;
+export const RPG3D_HISTORY_DATA_URL_MAX_CHARS = 512 * 1024;
+
+const ARCADE_WORLD_SCALE = 0.018;
+
+export const readSavedArcadeAssets = () => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(ARCADE_ASSETS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+export const isBlobUrl = (value = '') => String(value || '').startsWith('blob:');
+export const isDataUrl = (value = '') => String(value || '').startsWith('data:');
+
+const localBlobFileCache = new Map();
+const localModelObjectUrlCache = new Map();
+const LOCAL_MODEL_DB_NAME = 'escape-game-builder:rpg3d-local-models';
+const LOCAL_MODEL_DB_VERSION = 1;
+const LOCAL_MODEL_STORE_NAME = 'modelFiles';
+
+const canUseIndexedDb = () => typeof window !== 'undefined' && typeof window.indexedDB !== 'undefined';
+
+const openLocalModelDb = () => new Promise((resolve, reject) => {
+  if (!canUseIndexedDb()) {
+    resolve(null);
+    return;
+  }
+  const request = window.indexedDB.open(LOCAL_MODEL_DB_NAME, LOCAL_MODEL_DB_VERSION);
+  request.onupgradeneeded = () => {
+    const db = request.result;
+    if (!db.objectStoreNames.contains(LOCAL_MODEL_STORE_NAME)) db.createObjectStore(LOCAL_MODEL_STORE_NAME, { keyPath: 'id' });
+  };
+  request.onsuccess = () => resolve(request.result);
+  request.onerror = () => reject(request.error || new Error('Stockage local 3D indisponible.'));
+});
+
+const runLocalModelStore = async (mode, runner) => {
+  const db = await openLocalModelDb();
+  if (!db) return null;
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(LOCAL_MODEL_STORE_NAME, mode);
+    const store = transaction.objectStore(LOCAL_MODEL_STORE_NAME);
+    const request = runner(store);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error || new Error('Operation de stockage local impossible.'));
+    transaction.oncomplete = () => db.close();
+    transaction.onerror = () => {
+      db.close();
+      reject(transaction.error || new Error('Transaction de stockage local impossible.'));
+    };
+  });
+};
+
+export const createLocalModelFileId = (modelType = 'model', modelId = '', file = null) => (
+  [
+    'rpg3d',
+    modelType || 'model',
+    modelId || 'model',
+    file?.name || 'asset',
+    Number(file?.size) || 0,
+    Number(file?.lastModified) || Date.now(),
+  ]
+    .map((part) => encodeURIComponent(String(part)))
+    .join(':')
+);
+
+export const persistLocalModelFile = async (localModelFileId = '', file = null) => {
+  if (!localModelFileId || !file) return false;
+  try {
+    await runLocalModelStore('readwrite', (store) => store.put({
+      id: localModelFileId,
+      file,
+      name: file.name || '',
+      type: file.type || '',
+      size: Number(file.size) || 0,
+      updatedAt: Date.now(),
+    }));
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export const loadLocalModelFile = async (localModelFileId = '') => {
+  if (!localModelFileId) return null;
+  try {
+    const record = await runLocalModelStore('readonly', (store) => store.get(localModelFileId));
+    return record?.file || null;
+  } catch {
+    return null;
+  }
+};
+
+export const createLocalModelObjectUrl = async (localModelFileId = '') => {
+  if (!localModelFileId) return '';
+  const cachedUrl = localModelObjectUrlCache.get(localModelFileId);
+  if (cachedUrl) return cachedUrl;
+  const file = await loadLocalModelFile(localModelFileId);
+  if (!file) return '';
+  const objectUrl = URL.createObjectURL(file);
+  localModelObjectUrlCache.set(localModelFileId, objectUrl);
+  localBlobFileCache.set(objectUrl, file);
+  return objectUrl;
+};
+
+export const rememberRpg3DLocalBlobFile = (blobUrl = '', file = null, localModelFileId = '') => {
+  if (!isBlobUrl(blobUrl) || !file) return false;
+  localBlobFileCache.set(blobUrl, file);
+  if (localModelFileId) {
+    localModelObjectUrlCache.set(localModelFileId, blobUrl);
+    persistLocalModelFile(localModelFileId, file);
+  }
+  return true;
+};
+
+export const forgetRpg3DLocalBlobFile = (blobUrl = '') => {
+  if (!isBlobUrl(blobUrl)) return false;
+  return localBlobFileCache.delete(blobUrl);
+};
+
+export const createArcadeAssetsPayload = (config, studioProject) => ({
+  version: ARCADE_ASSETS_REMOTE_VERSION,
+  savedAt: new Date().toISOString(),
+  config: {
+    ...cloneConfig(config),
+  },
+  studioProject: cloneStudioProjectForEdit(studioProject),
+});
+
+export const getPersistedModelSource = (model = {}) => {
+  if (isDataUrl(model.modelData)) return model.modelData;
+  if (model.modelData && isBlobUrl(model.modelUrl)) return model.modelData;
+  if (isBlobUrl(model.modelUrl)) return '';
+  return model.modelUrl || model.modelData || '';
+};
+
+export const getLiveModelSource = (model = {}) => {
+  if (isBlobUrl(model.modelUrl)) return model.modelUrl;
+  return getPersistedModelSource(model);
+};
+
+export const getModelSourceForMode = (model = {}, options = {}) => (
+  options.preferLocalBlob ? getLiveModelSource(model) : getPersistedModelSource(model)
+);
+
+export const getPersistedModelAnimations = (model = {}, options = {}) => (
+  Object.entries(model.modelAnimations || {}).reduce((next, [slot, animation]) => {
+    const source = getModelSourceForMode(animation || {}, options);
+    if (!source) return next;
+    next[slot] = {
+      ...(animation || {}),
+      modelUrl: source,
+    };
+    return next;
+  }, {})
+);
+
+const stripVolatileModelSourceData = (model = {}) => {
+  const next = { ...(model || {}) };
+  if (next.localModelFileId && isDataUrl(next.modelData)) next.modelData = '';
+  if (next.localModelFileId && isDataUrl(next.modelUrl)) next.modelUrl = '';
+  if (isDataUrl(next.modelData) && next.modelUrl && !isBlobUrl(next.modelUrl) && !isDataUrl(next.modelUrl)) next.modelUrl = '';
+  if (isBlobUrl(next.modelUrl) && !next.modelData) next.modelUrl = '';
+  if (next.modelUrl && !isBlobUrl(next.modelUrl) && !isDataUrl(next.modelUrl)) next.modelData = '';
+  return next;
+};
+
+export const stripVolatileModelData = (model = {}) => {
+  const next = stripVolatileModelSourceData(model);
+  if (next.modelAnimations && typeof next.modelAnimations === 'object') {
+    next.modelAnimations = Object.entries(next.modelAnimations).reduce((animations, [slot, animation]) => {
+      animations[slot] = stripVolatileModelSourceData(animation);
+      return animations;
+    }, {});
+  }
+  return next;
+};
+
+export const createLocalArcadeAssetsSnapshot = (payload = {}) => {
+  const studioProject = {
+    ...createDefaultStudioProject(),
+    ...(payload.studioProject || {}),
+    characterModels3d: (payload.studioProject?.characterModels3d || []).map(stripVolatileModelData),
+    decorModels3d: (payload.studioProject?.decorModels3d || []).map(stripVolatileModelData),
+    mediaAssets: clonePlainObjectArray(payload.studioProject?.mediaAssets || []),
+  };
+  const synced = syncConfigModelReferences(payload.config || DEFAULT_ARCADE_CONFIG, studioProject);
+  return {
+    ...payload,
+    config: synced.config,
+    studioProject,
+  };
+};
+
+const rehydrateLocalModelSource = async (model = {}) => {
+  if (!model?.localModelFileId) return model;
+  const persistedSource = getPersistedModelSource(model);
+  if (persistedSource && !isBlobUrl(persistedSource)) return model;
+  const objectUrl = await createLocalModelObjectUrl(model.localModelFileId);
+  if (!objectUrl) return model;
+  return {
+    ...model,
+    modelUrl: objectUrl,
+    modelData: '',
+  };
+};
+
+const rehydrateLocalModel = async (model = {}) => {
+  const nextModel = await rehydrateLocalModelSource(model);
+  if (!nextModel?.modelAnimations || typeof nextModel.modelAnimations !== 'object') return nextModel;
+  const animationEntries = await Promise.all(Object.entries(nextModel.modelAnimations).map(async ([slot, animation]) => [
+    slot,
+    await rehydrateLocalModelSource(animation || {}),
+  ]));
+  const animationsChanged = animationEntries.some(([slot, animation]) => animation !== nextModel.modelAnimations?.[slot]);
+  if (!animationsChanged) return nextModel;
+  return {
+    ...nextModel,
+    modelAnimations: Object.fromEntries(animationEntries),
+  };
+};
+
+export const restoreLocalArcadeAssetsSources = async ({ config, studioProject } = {}) => {
+  const baseStudioProject = cloneStudioProjectForEdit(studioProject || createDefaultStudioProject());
+  const characterModels3d = await Promise.all((baseStudioProject.characterModels3d || []).map(rehydrateLocalModel));
+  const decorModels3d = await Promise.all((baseStudioProject.decorModels3d || []).map(rehydrateLocalModel));
+  const nextStudioProject = {
+    ...baseStudioProject,
+    characterModels3d,
+    decorModels3d,
+  };
+  const synced = syncConfigModelReferences(config || DEFAULT_ARCADE_CONFIG, nextStudioProject, { preferLocalBlob: true });
+  const changed = synced.changed
+    || characterModels3d.some((model, index) => model !== baseStudioProject.characterModels3d?.[index])
+    || decorModels3d.some((model, index) => model !== baseStudioProject.decorModels3d?.[index]);
+  return {
+    changed,
+    config: synced.config,
+    studioProject: nextStudioProject,
+  };
+};
+
+export const rememberArcadeAssetsLocally = (payload) => {
+  if (typeof window === 'undefined') return false;
+  try {
+    window.localStorage.removeItem(ARCADE_ASSETS_STORAGE_KEY);
+    window.localStorage.setItem(ARCADE_ASSETS_STORAGE_KEY, JSON.stringify(createLocalArcadeAssetsSnapshot(payload)));
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export const getExtensionForMimeType = (mimeType = '') => ({
+  'model/gltf-binary': 'glb',
+  'model/obj': 'obj',
+  'application/vnd.autodesk.fbx': 'fbx',
+  'model/vnd.fbx': 'fbx',
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'image/svg+xml': 'svg',
+  'image/bmp': 'bmp',
+  'text/plain': 'txt',
+}[String(mimeType).toLowerCase()] || 'bin');
+
+const MIME_TYPE_BY_EXTENSION = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  svg: 'image/svg+xml',
+  bmp: 'image/bmp',
+  mtl: 'text/plain',
+};
+
+export const getMimeTypeForFilename = (filename = '') => {
+  const extension = String(filename || '').split(/[?#]/)[0].match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase() || '';
+  return MIME_TYPE_BY_EXTENSION[extension] || '';
+};
+
+export const dataUrlToFile = (dataUrl, fallbackName = 'asset.bin', options = {}) => {
+  const [header = '', encoded = ''] = String(dataUrl || '').split(',');
+  const headerMimeType = header.match(/^data:([^;,]+)/i)?.[1] || '';
+  const sourceName = fallbackName || options.defaultName || 'asset';
+  const nameMimeType = getMimeTypeForFilename(sourceName);
+  const mimeType = (
+    !headerMimeType
+    || headerMimeType === 'application/octet-stream'
+    || headerMimeType === 'binary/octet-stream'
+  )
+    ? (nameMimeType || options.mimeType || 'application/octet-stream')
+    : headerMimeType;
+  const binary = atob(encoded);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  const extension = options.extension || getExtensionForMimeType(mimeType);
+  const fileName = /\.[a-z0-9]+$/i.test(sourceName) ? sourceName : `${sourceName}.${extension}`;
+  return new File([bytes], fileName, { type: mimeType });
+};
+
+export const blobUrlToFile = async (blobUrl, fallbackName = 'asset.bin', options = {}) => {
+  const cachedFile = localBlobFileCache.get(blobUrl);
+  if (cachedFile) {
+    const sourceName = fallbackName || cachedFile.name || options.defaultName || 'asset.bin';
+    const mimeType = cachedFile.type || getMimeTypeForFilename(sourceName) || options.mimeType || 'application/octet-stream';
+    const extension = options.extension || getExtensionForMimeType(mimeType);
+    const fileName = /\.[a-z0-9]+$/i.test(sourceName) ? sourceName : `${sourceName}.${extension}`;
+    return new File([cachedFile], fileName, { type: mimeType });
+  }
+  const response = await fetch(blobUrl);
+  if (!response.ok) throw new Error('Fichier local inaccessible. Reimporte le modele puis relance la sauvegarde.');
+  const blob = await response.blob();
+  const sourceName = fallbackName || options.defaultName || 'asset.bin';
+  const mimeType = blob.type || getMimeTypeForFilename(sourceName) || options.mimeType || 'application/octet-stream';
+  const extension = options.extension || getExtensionForMimeType(mimeType);
+  const fileName = /\.[a-z0-9]+$/i.test(sourceName) ? sourceName : `${sourceName}.${extension}`;
+  return new File([blob], fileName, { type: mimeType });
+};
+
+export const getStudioModelSource = (model = {}) => {
+  if (isBlobUrl(model.modelUrl)) return model.modelUrl;
+  if (isDataUrl(model.modelData)) return model.modelData;
+  return model.modelUrl || model.modelData || '';
+};
+
+const getStudioMaterialBrightness = (model = {}) => {
+  const value = Number(model.materialBrightness);
+  return clamp(Number.isFinite(value) ? value : 1, MATERIAL_BRIGHTNESS_MIN, MATERIAL_BRIGHTNESS_MAX);
+};
+
+const getStudioCharacterRenderMode = (model = {}) => {
+  if (getStudioModelSource(model)) return 'glb';
+  if (model.shape === 'robot') return 'block';
+  if (model.shape === 'creature') return 'boss';
+  return 'capsule';
+};
+
+const getDecorImportRenderMode = (model = {}) => {
+  if (getStudioModelSource(model)) return 'glb';
+  if (isFloorDecorKind(model.kind)) return 'floor';
+  if (model.kind === 'wall') return 'box';
+  if (model.kind === 'house') return 'house';
+  if (model.imageData) return 'billboard';
+  return 'rock';
+};
+
+const getDecorModelWorldSize = (model = {}) => {
+  const modelScale = getDecorModelScale(model);
+  const width = Math.round(clamp(((Number(model.width) || 2.2) * modelScale) / ARCADE_WORLD_SCALE, 24, 9000));
+  const depth = Math.round(clamp(((Number(model.depth) || 2.2) * modelScale) / ARCADE_WORLD_SCALE, 24, 9000));
+  const modelHeight = Number(model.height) || 1.2;
+  const height = Math.round(clamp((modelHeight * modelScale) / ARCADE_WORLD_SCALE, 12, 9000));
+  if (isFloorDecorKind(model.kind) && !getStudioModelSource(model)) {
+    const tileSize = Math.max(width, depth);
+    return { width: tileSize, depth: tileSize, height: Math.max(12, height) };
+  }
+  return { width, depth, height };
+};
+
+const shouldPropBlockByMode = (mode) => ['box', 'rock', 'house'].includes(mode);
+
+const getModelRotationValue = (item = {}, field = 'modelRotationX') => {
+  const numeric = Number(item[field]);
+  return clamp(Number.isFinite(numeric) ? numeric : 0, -180, 180);
+};
+
+export const syncConfigModelReferences = (config, studioProject, options = {}) => {
+  const next = createConfigFromSavedAssets(config);
+  let changed = false;
+  const characterModels = new Map((studioProject.characterModels3d || []).map((model) => [model.id, model]));
+  const decorModels = new Map((studioProject.decorModels3d || []).map((model) => [model.id, model]));
+  const setField = (target, field, value) => {
+    if (!target || target[field] === value) return;
+    target[field] = value;
+    changed = true;
+  };
+  const setMissingField = (target, field, value) => {
+    if (!target || (target[field] !== undefined && target[field] !== null && target[field] !== '')) return;
+    setField(target, field, value);
+  };
+  const setActorModelDefaultField = (actor, field, value) => {
+    if (!actor) return;
+    const currentValue = actor[field];
+    const hasValue = currentValue !== undefined && currentValue !== null && currentValue !== '';
+    if (actor.characterModelUrl && hasValue) return;
+    const defaultValue = DEFAULT_ARCADE_CONFIG.player[field];
+    if (hasValue && defaultValue !== undefined && currentValue !== defaultValue) return;
+    setField(actor, field, value);
+  };
+  const syncActor = (actor) => {
+    if (!actor) return;
+    const model = characterModels.get(actor.characterModel3dId);
+    if (model) {
+      const axisScale = getCharacterModelAxisScale(model);
+      setActorModelDefaultField(actor, 'characterModelScale', axisScale.y);
+      setActorModelDefaultField(actor, 'characterModelScaleX', axisScale.x);
+      setActorModelDefaultField(actor, 'characterModelScaleY', axisScale.y);
+      setActorModelDefaultField(actor, 'characterModelScaleZ', axisScale.z);
+      setActorModelDefaultField(actor, 'characterModelScaleProportional', model.characterModelScaleProportional !== false);
+      setActorModelDefaultField(actor, 'characterMaterialBrightness', getStudioMaterialBrightness(model));
+      const source = getModelSourceForMode(model, options);
+      if (source) {
+        setField(actor, 'characterModelUrl', source);
+        setField(actor, 'characterModelName', model.modelName || model.name || actor.characterModelName || '');
+        setField(actor, 'characterModelFormat', model.modelFormat || '');
+        setField(actor, 'characterModelFileSize', Number(model.modelFileSize) || 0);
+        setField(actor, 'characterModelResources', Array.isArray(model.modelResources) ? model.modelResources : []);
+        setField(actor, 'characterModelAnimations', getPersistedModelAnimations(model, options));
+        setField(actor, 'characterLocalModelFileId', model.localModelFileId || '');
+        setField(actor, 'characterRenderMode', 'glb');
+        return;
+      }
+      setField(actor, 'characterModelUrl', '');
+      setField(actor, 'characterModelName', '');
+      setField(actor, 'characterModelFormat', '');
+      setField(actor, 'characterModelFileSize', 0);
+      setField(actor, 'characterModelResources', []);
+      setField(actor, 'characterModelAnimations', {});
+      setField(actor, 'characterLocalModelFileId', model.localModelFileId || '');
+      if (actor.characterRenderMode === 'glb') setField(actor, 'characterRenderMode', getStudioCharacterRenderMode(model));
+    } else if (actor.characterModel3dId || isBlobUrl(actor.characterModelUrl)) {
+      setField(actor, 'characterModel3dId', '');
+      setField(actor, 'characterModelUrl', '');
+      setField(actor, 'characterModelName', '');
+      setField(actor, 'characterModelFormat', '');
+      setField(actor, 'characterModelFileSize', 0);
+      setField(actor, 'characterModelResources', []);
+      setField(actor, 'characterModelAnimations', {});
+      setField(actor, 'characterLocalModelFileId', '');
+      setField(actor, 'characterModelScale', 1);
+      setField(actor, 'characterModelScaleX', 1);
+      setField(actor, 'characterModelScaleY', 1);
+      setField(actor, 'characterModelScaleZ', 1);
+      setField(actor, 'characterModelScaleProportional', true);
+      setField(actor, 'characterMaterialBrightness', 1);
+      if (actor.characterRenderMode === 'glb') setField(actor, 'characterRenderMode', 'capsule');
+    }
+  };
+  const syncActorInventoryWeapons = (actor) => {
+    if (!actor || !Array.isArray(actor.inventory)) return;
+    actor.inventory.forEach((item) => {
+      if (item?.type !== 'weapon' && item?.type !== 'shield') return;
+      const model = decorModels.get(item.weaponModel3dId);
+      if (model) {
+        const source = getModelSourceForMode(model, options);
+        if (source) {
+          setField(item, 'weaponModelUrl', source);
+          setField(item, 'weaponModelName', model.modelName || model.name || item.weaponModelName || '');
+          setField(item, 'weaponModelFormat', model.modelFormat || '');
+          setField(item, 'weaponModelFileSize', Number(model.modelFileSize) || 0);
+          setField(item, 'weaponModelResources', Array.isArray(model.modelResources) ? model.modelResources : []);
+          return;
+        }
+        setField(item, 'weaponModelUrl', '');
+        setField(item, 'weaponModelName', '');
+        setField(item, 'weaponModelFormat', '');
+        setField(item, 'weaponModelFileSize', 0);
+        setField(item, 'weaponModelResources', []);
+      } else if (item.weaponModel3dId || isBlobUrl(item.weaponModelUrl)) {
+        setField(item, 'weaponModel3dId', '');
+        setField(item, 'weaponModelUrl', '');
+        setField(item, 'weaponModelName', '');
+        setField(item, 'weaponModelFormat', '');
+        setField(item, 'weaponModelFileSize', 0);
+        setField(item, 'weaponModelResources', []);
+        setField(item, 'equipped', false);
+      }
+    });
+  };
+  syncActor(next.player);
+  (next.heroes || []).forEach(syncActor);
+  (next.enemies || []).forEach(syncActor);
+  syncActorInventoryWeapons(next.player);
+  (next.heroes || []).forEach(syncActorInventoryWeapons);
+  (next.enemies || []).forEach(syncActorInventoryWeapons);
+  (next.props || []).forEach((prop) => {
+    const model = decorModels.get(prop.decorModel3dId);
+    if (model) {
+      const decorKind = getStudioDecorKindId(model.kind);
+      setMissingField(prop, 'materialBrightness', getDecorMaterialBrightness(model));
+      setMissingField(prop, 'decorModelScale', 1);
+      setMissingField(prop, 'decorKind', decorKind);
+      setMissingField(prop, 'modelRotationX', getModelRotationValue(model, 'modelRotationX'));
+      setMissingField(prop, 'modelRotationY', getModelRotationValue(model, 'modelRotationY'));
+      setMissingField(prop, 'modelRotationZ', getModelRotationValue(model, 'modelRotationZ'));
+      setMissingField(prop, 'modelCenterOnOrigin', Boolean(model.modelCenterOnOrigin));
+      setMissingField(prop, 'modelFlushToGround', Boolean(model.modelFlushToGround));
+      const source = getModelSourceForMode(model, options);
+      if (source) {
+        setField(prop, 'decorModelUrl', source);
+        setField(prop, 'decorModelName', model.modelName || model.name || prop.decorModelName || '');
+        setField(prop, 'decorLocalModelFileId', model.localModelFileId || '');
+        setField(prop, 'modelFormat', model.modelFormat || '');
+        setField(prop, 'modelFileSize', Number(model.modelFileSize) || 0);
+        setField(prop, 'modelResources', Array.isArray(model.modelResources) ? model.modelResources : []);
+        setField(prop, 'renderMode', 'glb');
+        const size = getDecorModelWorldSize(model);
+        setMissingField(prop, 'w', size.width);
+        setMissingField(prop, 'h', size.depth);
+        setMissingField(prop, 'r', Math.round(Math.max(size.width, size.depth) / 2));
+        setMissingField(prop, 'modelHeight', size.height);
+        setMissingField(prop, 'blocksMovement', model.collision ?? shouldPropBlockByMode('glb'));
+        if (!prop.imageData || prop.imageData === model.imageData || prop.imageName === model.imageName) {
+          setField(prop, 'imageData', '');
+          setField(prop, 'imageName', '');
+          setField(prop, 'repeatTexture', false);
+        }
+        return;
+      }
+      setField(prop, 'decorModelUrl', '');
+      setField(prop, 'decorModelName', '');
+      setField(prop, 'decorLocalModelFileId', model.localModelFileId || '');
+      setField(prop, 'modelFormat', '');
+      setField(prop, 'modelFileSize', 0);
+      setField(prop, 'modelResources', []);
+      setField(prop, 'materialBrightness', getDecorMaterialBrightness(model));
+      const renderMode = getDecorImportRenderMode(model);
+      const size = getDecorModelWorldSize(model);
+      const tileSize = renderMode === 'floor' ? Math.max(size.width, size.depth) : 0;
+      setField(prop, 'renderMode', renderMode);
+      setMissingField(prop, 'w', tileSize || size.width);
+      setMissingField(prop, 'h', tileSize || size.depth);
+      setMissingField(prop, 'r', Math.round((tileSize || Math.max(size.width, size.depth)) / 2));
+      setMissingField(prop, 'modelHeight', renderMode === 'floor' ? 12 : size.height);
+      setMissingField(prop, 'blocksMovement', model.collision ?? shouldPropBlockByMode(renderMode));
+      setMissingField(prop, 'imageData', model.imageData || '');
+      setMissingField(prop, 'imageName', model.imageName || '');
+      setMissingField(prop, 'repeatTexture', Boolean(model.repeatTexture));
+    } else if (isBlobUrl(prop.decorModelUrl)) {
+      setField(prop, 'decorModelUrl', '');
+      setField(prop, 'decorLocalModelFileId', '');
+      setField(prop, 'modelFormat', '');
+      setField(prop, 'modelFileSize', 0);
+      setField(prop, 'modelResources', []);
+    }
+  });
+  return { config: changed ? next : config, changed };
+};
+
+export const syncConfigModelUrls = (config, studioProject) => syncConfigModelReferences(config, studioProject).config;
+
+export const compactHistoryDataUrl = (value = '') => (
+  isDataUrl(value) && value.length > RPG3D_HISTORY_DATA_URL_MAX_CHARS ? '' : value
+);
+
+export const compactHistoryModel = (model = {}) => stripVolatileModelData({
+  ...model,
+  modelData: compactHistoryDataUrl(model.modelData || ''),
+  modelUrl: isDataUrl(model.modelUrl || '') ? compactHistoryDataUrl(model.modelUrl) : (model.modelUrl || ''),
+  imageData: compactHistoryDataUrl(model.imageData || ''),
+  modelResources: Array.isArray(model.modelResources)
+    ? model.modelResources.map((resource) => ({
+      ...(resource || {}),
+      data: compactHistoryDataUrl(resource?.data || ''),
+    }))
+    : [],
+  modelAnimations: Object.entries(model.modelAnimations || {}).reduce((animations, [slot, animation]) => {
+    animations[slot] = {
+      ...(animation || {}),
+      modelData: compactHistoryDataUrl(animation?.modelData || ''),
+      modelUrl: isDataUrl(animation?.modelUrl || '') ? compactHistoryDataUrl(animation.modelUrl) : (animation?.modelUrl || ''),
+      modelResources: Array.isArray(animation?.modelResources)
+        ? animation.modelResources.map((resource) => ({
+          ...(resource || {}),
+          data: compactHistoryDataUrl(resource?.data || ''),
+        }))
+        : [],
+    };
+    return animations;
+  }, {}),
+});
+
+export const createHistoryStudioProjectSnapshot = (studioProject = null) => ({
+  ...createDefaultStudioProject(),
+  ...(studioProject && typeof studioProject === 'object' ? studioProject : {}),
+  characterModels3d: (studioProject?.characterModels3d || []).map(compactHistoryModel),
+  decorModels3d: (studioProject?.decorModels3d || []).map(compactHistoryModel),
+  mediaAssets: (studioProject?.mediaAssets || []).map((asset) => ({
+    ...(asset || {}),
+    url: compactHistoryDataUrl(asset?.url || ''),
+  })),
+});
+
+export const createRpg3DHistorySnapshot = (config, studioProject) => ({
+  config: cloneConfig(config),
+  studioProject: createHistoryStudioProjectSnapshot(studioProject),
+});

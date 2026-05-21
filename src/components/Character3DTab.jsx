@@ -13,8 +13,6 @@ import {
   User,
 } from 'lucide-react';
 import { makeCharacter3DModel } from '../data/projectData';
-import { formatBytes } from '../utils/glbOptimizer';
-import Character3DPreview from './rpg3d/Character3DPreview.jsx';
 import {
   CHARACTER_ANIMATION_SLOTS,
   CHARACTER_MATERIAL_BRIGHTNESS_MAX,
@@ -32,11 +30,9 @@ import {
   isCharacterModelScaleProportional,
   isHeavyLocalFbxAsset,
   numberValue,
-  readCharacterAnimationImport,
-  readCharacterModelImport,
   resizeAxesProportionally,
   summarizeEmbeddedAnimationClips,
-} from '../utils/rpg3dModelImport';
+} from '../utils/rpg3dModelImportCore.js';
 import {
   THREE_MODEL_ACCEPT,
   getThreeModelFormatLabel,
@@ -46,8 +42,10 @@ import {
   createLocalModelFileId,
   forgetRpg3DLocalBlobFile,
   rememberRpg3DLocalBlobFile,
-} from '../utils/rpg3dAssetsStorage.js';
+} from '../utils/rpg3dAssetsCore.js';
 import HelpLabel from './forms/HelpLabel.jsx';
+
+const Character3DPreview = React.lazy(() => import('./rpg3d/Character3DPreview.jsx'));
 
 const ROLE_OPTIONS = [
   { id: 'hero', label: 'Heros', icon: Shield },
@@ -249,13 +247,13 @@ export default function Character3DTab({
     localModelUrlsRef.current.delete(selectedModelId);
     const importLabel = isZip ? 'ZIP' : getThreeModelFormatLabel(modelFormat);
     setImportInProgress(true);
-    setCopyStatus(isZip ? 'Lecture ZIP...' : modelFormat === 'glb' ? 'Optimisation GLB...' : `Import ${importLabel}...`);
+    setCopyStatus(isZip ? 'Lecture ZIP...' : `Import ${importLabel}...`);
     try {
+      const { readCharacterModelImport } = await import('../utils/rpg3dModelImport');
       const {
         zipBundle,
         sourceFormat,
         isGlb,
-        optimization,
         optimizedFile,
         modelData,
         modelFileSize,
@@ -280,11 +278,9 @@ export default function Character3DTab({
         delete next[selectedModelId];
         return next;
       });
-      setCopyStatus(isGlb && optimization.optimized
-        ? `GLB allege ${formatBytes(optimization.originalSize)} -> ${formatBytes(optimization.optimizedSize)}`
-        : isGlb && optimization.skipped
-          ? `GLB optimise charge sans recompression${modelData ? '' : ' en local'}`
-          : isZip
+      setCopyStatus(isGlb
+        ? `GLB charge sans recompression${modelData ? '' : ' en local'}`
+        : isZip
           ? `ZIP charge: ${getThreeModelFormatLabel(sourceFormat)} + ${zipBundle.modelResources.length} texture${zipBundle.modelResources.length > 1 ? 's' : ''}${modelData ? '' : ' en local'}${isHeavyLocalFbxAsset({ modelFormat: sourceFormat, modelUrl, modelFileSize }) ? ' - preview GLB conseille' : ''}`
           : `${getThreeModelFormatLabel(sourceFormat)} charge${modelData ? '' : ' en local'}${isHeavyLocalFbxAsset({ modelFormat: sourceFormat, modelUrl, modelFileSize }) ? ' - preview GLB conseille' : ''}`);
     } catch {
@@ -316,6 +312,7 @@ export default function Character3DTab({
     setImportInProgress(true);
     setCopyStatus(isZip ? 'Lecture ZIP animation...' : `Import animation ${getThreeModelFormatLabel(modelFormat)}...`);
     try {
+      const { readCharacterAnimationImport } = await import('../utils/rpg3dModelImport');
       const {
         zipBundle,
         sourceFile,
@@ -533,11 +530,13 @@ export default function Character3DTab({
           </div>
         </div>
 
-        <Character3DPreview
-          model={previewModel}
-          animationSlot={previewAnimationSlot}
-          onAnimationClipsLoaded={handlePreviewAnimationClipsLoaded}
-        />
+        <React.Suspense fallback={<div className="character3d-preview-loading" />}>
+          <Character3DPreview
+            model={previewModel}
+            animationSlot={previewAnimationSlot}
+            onAnimationClipsLoaded={handlePreviewAnimationClipsLoaded}
+          />
+        </React.Suspense>
       </section>
 
       {showInspectorPanel ? (

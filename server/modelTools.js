@@ -9,6 +9,7 @@ import { makeCorsHeaders } from '../src/utils/corsConfig.js';
 const MODEL_TOOL_MAX_BYTES = 350 * 1024 * 1024;
 const MODEL_TOOL_TIMEOUT_MS = 30 * 60 * 1000;
 const MODEL_TOOL_JOB_TTL_MS = 60 * 60 * 1000;
+const MODEL_TOOL_MIB = 1024 * 1024;
 const MODEL_EXTENSIONS = new Set(['.glb', '.fbx']);
 const modelToolJobs = new Map();
 
@@ -68,6 +69,36 @@ const cleanupJob = async (jobId) => {
   if (job.cleanupTimer) clearTimeout(job.cleanupTimer);
   modelToolJobs.delete(jobId);
   if (job.workDir) await fs.rm(job.workDir, { recursive: true, force: true }).catch(() => {});
+};
+
+const getModelToolTempRootCandidates = () => [
+  process.env.MODEL_TOOL_TMP_DIR,
+  ...(process.platform === 'win32'
+    ? [
+      'G:\\escape-model-tools-temp',
+      'E:\\escape-model-tools-temp',
+      'D:\\escape-model-tools-temp',
+    ]
+    : []),
+  path.join(os.tmpdir(), 'escape-model-tools'),
+].filter(Boolean);
+
+const getModelToolTempRoot = async () => {
+  for (const candidate of getModelToolTempRootCandidates()) {
+    try {
+      await fs.mkdir(candidate, { recursive: true });
+      await fs.access(candidate);
+      return candidate;
+    } catch {
+      // Try the next configured location.
+    }
+  }
+  return os.tmpdir();
+};
+
+const makeModelToolWorkDir = async (prefix) => {
+  const tempRoot = await getModelToolTempRoot();
+  return fs.mkdtemp(path.join(tempRoot, `${prefix}-`));
 };
 
 const scheduleJobCleanup = (jobId, delayMs = MODEL_TOOL_JOB_TTL_MS) => {
@@ -314,34 +345,214 @@ const getGltfTransformCommand = async () => {
   }
 };
 
-const optimizeGlb = async (inputPath, outputPath, settings = {}, progressOptions = {}) => {
+export const buildGltfTransformOptimizeArgs = (inputPath, outputPath, settings = {}) => {
   const textureSize = Math.max(256, Math.min(4096, Number(settings.textureSize) || 1024));
   const simplify = settings.simplify !== false;
   const simplifyRatio = Math.max(0.25, Math.min(1, Number(settings.simplifyRatio) || 0.75));
-  const gltfTransform = await getGltfTransformCommand();
+  const compression = settings.compression === false ? 'false' : (settings.compression || 'meshopt');
+  const textureCompression = settings.textureCompression === false
+    ? 'false'
+    : (settings.textureCompression || 'webp');
   const args = [
-    ...gltfTransform.argsPrefix,
     'optimize',
     inputPath,
     outputPath,
     '--compress',
-    'meshopt',
+    compression,
     '--texture-compress',
-    'webp',
+    textureCompression,
     '--texture-size',
     String(textureSize),
-    '--meshopt-level',
-    'high',
     '--simplify',
     simplify ? 'true' : 'false',
   ];
+  if (compression === 'meshopt') {
+    args.push('--meshopt-level', settings.meshoptLevel || 'high');
+  }
   if (simplify) args.push('--simplify-ratio', String(simplifyRatio));
-  await runCommand(gltfTransform.command, args, {
+  return args;
+};
+
+export const buildGltfTransformResizeArgs = (inputPath, outputPath, settings = {}) => {
+  const textureSize = Math.max(256, Math.min(4096, Number(settings.textureSize) || 1024));
+  return [
+    'resize',
+    inputPath,
+    outputPath,
+    '--width',
+    String(textureSize),
+    '--height',
+    String(textureSize),
+  ];
+};
+
+export const buildGltfTransformWebpArgs = (inputPath, outputPath, settings = {}) => {
+  const textureQuality = Math.max(1, Math.min(100, Number(settings.textureQuality) || 92));
+  const textureEffort = Math.max(0, Math.min(100, Number(settings.textureEffort) || 80));
+  const args = [
+    'webp',
+    inputPath,
+    outputPath,
+    '--quality',
+    String(textureQuality),
+    '--effort',
+    String(textureEffort),
+  ];
+  if (settings.textureLossless === true) args.push('--lossless', 'true');
+  if (settings.textureNearLossless === true) args.push('--near-lossless', 'true');
+  return args;
+};
+
+export const buildGltfTransformMeshoptArgs = (inputPath, outputPath, settings = {}) => [
+  'meshopt',
+  inputPath,
+  outputPath,
+  '--level',
+  settings.meshoptLevel || 'high',
+];
+
+export const getQualityTextureVariants = (settings = {}) => {
+  const variants = Array.isArray(settings.textureVariants) && settings.textureVariants.length
+    ? settings.textureVariants
+    : [
+      { textureSize: settings.textureSize, textureQuality: settings.textureQuality },
+      ...(settings.textureFallbackQualities || []).map((textureQuality) => ({
+        textureSize: settings.textureSize,
+        textureQuality,
+      })),
+    ];
+  const seen = new Set();
+
+  return variants
+    .map((variant = {}) => {
+      const textureSize = Math.max(256, Math.min(4096, Number(variant.textureSize) || Number(settings.textureSize) || 1024));
+      const textureQuality = Math.max(1, Math.min(100, Number(variant.textureQuality) || Number(settings.textureQuality) || 92));
+      return {
+        textureSize,
+        textureQuality,
+        textureLossless: variant.textureLossless === true,
+        textureNearLossless: variant.textureNearLossless === true,
+      };
+    })
+    .filter((variant) => {
+      const key = `${variant.textureSize}:${variant.textureQuality}:${variant.textureLossless}:${variant.textureNearLossless}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+};
+
+const runGltfTransformCli = async (args, progressOptions = {}) => {
+  const gltfTransform = await getGltfTransformCommand();
+  await runCommand(gltfTransform.command, [
+    ...gltfTransform.argsPrefix,
+    ...args,
+  ], {
     ...progressOptions,
     shell: gltfTransform.shell,
     label: gltfTransform.label,
     timeoutMs: MODEL_TOOL_TIMEOUT_MS,
   });
+};
+
+const withProgressRange = (progressOptions = {}, progressStart, progressMax) => ({
+  ...progressOptions,
+  progressStart,
+  progressMax,
+});
+
+const optimizeGlb = async (inputPath, outputPath, settings = {}, progressOptions = {}) => {
+  if (settings.texturePipeline === 'webp-quality') {
+    const progressStart = Number(progressOptions.progressStart) || 0;
+    const progressMax = Number(progressOptions.progressMax) || 100;
+    const progressRange = Math.max(1, progressMax - progressStart);
+    const stageBase = path.basename(outputPath, path.extname(outputPath));
+    const stageDir = path.dirname(outputPath);
+    const textureVariants = getQualityTextureVariants(settings);
+    const resizedPathsBySize = new Map();
+    const targetOutputBytes = Number(settings.targetOutputBytes) || 0;
+    const minOutputBytes = Number(settings.minOutputBytes) || 0;
+    const maxOutputBytes = Number(settings.maxOutputBytes) || 0;
+    let bestSize = 0;
+    let bestScore = Number.POSITIVE_INFINITY;
+
+    const getCandidateScore = (size) => {
+      if (!targetOutputBytes) return 0;
+      const undersizePenalty = minOutputBytes && size < minOutputBytes
+        ? ((minOutputBytes - size) / minOutputBytes) * 2.5
+        : 0;
+      return Math.abs(size - targetOutputBytes) / targetOutputBytes + undersizePenalty;
+    };
+
+    for (let index = 0; index < textureVariants.length; index += 1) {
+      const variant = textureVariants[index];
+      const variantStart = progressStart + progressRange * (index / textureVariants.length);
+      const variantResizeEnd = progressStart + progressRange * ((index + 0.42) / textureVariants.length);
+      const variantWebpEnd = progressStart + progressRange * ((index + 0.78) / textureVariants.length);
+      const variantEnd = progressStart + progressRange * ((index + 1) / textureVariants.length);
+      let resizedStagePath = resizedPathsBySize.get(variant.textureSize);
+      const hasResizedStage = Boolean(resizedStagePath);
+      if (!resizedStagePath) {
+        resizedStagePath = path.join(stageDir, `${stageBase}-resized-${variant.textureSize}.glb`);
+        resizedPathsBySize.set(variant.textureSize, resizedStagePath);
+        await runGltfTransformCli(
+          buildGltfTransformResizeArgs(inputPath, resizedStagePath, {
+            ...settings,
+            textureSize: variant.textureSize,
+          }),
+          withProgressRange(progressOptions, variantStart, variantResizeEnd),
+        );
+      }
+      const webpStagePath = settings.compression === 'meshopt'
+        ? path.join(stageDir, `${stageBase}-webp-${variant.textureSize}-${variant.textureQuality}-${variant.textureLossless ? 'lossless' : variant.textureNearLossless ? 'near' : 'lossy'}.glb`)
+        : outputPath;
+      const candidatePath = settings.compression === 'meshopt'
+        ? path.join(stageDir, `${stageBase}-candidate-${variant.textureSize}-${variant.textureQuality}-${variant.textureLossless ? 'lossless' : variant.textureNearLossless ? 'near' : 'lossy'}.glb`)
+        : outputPath;
+      await runGltfTransformCli(
+        buildGltfTransformWebpArgs(resizedStagePath, webpStagePath, {
+          ...settings,
+          textureQuality: variant.textureQuality,
+          textureLossless: variant.textureLossless,
+          textureNearLossless: variant.textureNearLossless,
+        }),
+        withProgressRange(progressOptions, hasResizedStage ? variantStart : variantResizeEnd, settings.compression === 'meshopt' ? variantWebpEnd : variantEnd),
+      );
+      if (settings.compression === 'meshopt') {
+        await runGltfTransformCli(
+          buildGltfTransformMeshoptArgs(webpStagePath, candidatePath, settings),
+          withProgressRange(progressOptions, variantWebpEnd, variantEnd),
+        );
+        await fs.rm(webpStagePath, { force: true }).catch(() => {});
+      }
+      const outputStats = await fs.stat(candidatePath).catch(() => null);
+      if (outputStats) {
+        const candidateScore = getCandidateScore(outputStats.size);
+        if (candidateScore < bestScore) {
+          bestScore = candidateScore;
+          bestSize = outputStats.size;
+          if (candidatePath !== outputPath) await fs.copyFile(candidatePath, outputPath);
+        }
+        const inTargetBand = (!minOutputBytes || outputStats.size >= minOutputBytes)
+          && (!maxOutputBytes || outputStats.size <= maxOutputBytes);
+        if (candidatePath !== outputPath) await fs.rm(candidatePath, { force: true }).catch(() => {});
+        if (!targetOutputBytes || inTargetBand) break;
+        if (minOutputBytes && outputStats.size < minOutputBytes) break;
+      }
+      const nextVariant = textureVariants[index + 1];
+      if (nextVariant && nextVariant.textureSize !== variant.textureSize) {
+        await fs.rm(resizedStagePath, { force: true }).catch(() => {});
+        resizedPathsBySize.delete(variant.textureSize);
+      }
+    }
+    if (bestSize <= 0) throw makeHttpError('Optimisation qualite impossible.', 500, 'MODEL_TOOL_QUALITY_FAILED');
+    return;
+  }
+
+  await runGltfTransformCli(
+    buildGltfTransformOptimizeArgs(inputPath, outputPath, settings),
+    progressOptions,
+  );
 };
 
 const writeUploadedModel = async (file, workDir) => {
@@ -395,10 +606,65 @@ const writeUploadedModel = async (file, workDir) => {
   };
 };
 
-const qualitySettings = (quality = 'web') => {
-  if (quality === 'quality') return { textureSize: 2048, simplify: false, simplifyRatio: 1 };
-  if (quality === 'lite') return { textureSize: 512, simplify: true, simplifyRatio: 0.55 };
-  return { textureSize: 1024, simplify: true, simplifyRatio: 0.75 };
+export const getModelToolQualitySettings = (quality = 'web') => {
+  if (quality === 'quality') {
+    return {
+      textureSize: 2048,
+      textureCompression: false,
+      texturePipeline: 'webp-quality',
+      textureQuality: 92,
+      textureVariants: [
+        { textureSize: 4096, textureQuality: 100, textureLossless: true },
+        { textureSize: 4096, textureQuality: 100, textureNearLossless: true },
+        { textureSize: 4096, textureQuality: 100 },
+        { textureSize: 4096, textureQuality: 99 },
+        { textureSize: 4096, textureQuality: 98 },
+        { textureSize: 4096, textureQuality: 97 },
+        { textureSize: 4096, textureQuality: 96 },
+        { textureSize: 4096, textureQuality: 94 },
+        { textureSize: 4096, textureQuality: 92 },
+        { textureSize: 4096, textureQuality: 88 },
+        { textureSize: 4096, textureQuality: 80 },
+        { textureSize: 3072, textureQuality: 90 },
+        { textureSize: 3072, textureQuality: 84 },
+        { textureSize: 2048, textureQuality: 96 },
+        { textureSize: 2048, textureQuality: 92 },
+        { textureSize: 2048, textureQuality: 88 },
+        { textureSize: 2048, textureQuality: 84 },
+        { textureSize: 2048, textureQuality: 82 },
+        { textureSize: 1536, textureQuality: 92 },
+        { textureSize: 1536, textureQuality: 86 },
+        { textureSize: 1536, textureQuality: 80 },
+      ],
+      textureEffort: 85,
+      compression: 'meshopt',
+      simplify: false,
+      simplifyRatio: 1,
+      outputSuffix: 'quality',
+      targetOutputRatio: 0.6,
+      minOutputRatio: 0.85,
+      maxOutputRatio: 1.15,
+      minTargetOutputBytes: 48 * MODEL_TOOL_MIB,
+    };
+  }
+  if (quality === 'lite') {
+    return {
+      textureSize: 512,
+      textureCompression: 'webp',
+      compression: 'meshopt',
+      simplify: true,
+      simplifyRatio: 0.55,
+      outputSuffix: 'lite',
+    };
+  }
+  return {
+    textureSize: 1024,
+    textureCompression: 'webp',
+    compression: 'meshopt',
+    simplify: true,
+    simplifyRatio: 0.75,
+    outputSuffix: 'web',
+  };
 };
 
 const prepareUploadedToolRequest = async (req) => {
@@ -417,8 +683,19 @@ const prepareUploadedToolRequest = async (req) => {
 const buildOptimizedGlb = async (uploadedFile, fields, workDir, onProgress = () => {}) => {
   onProgress({ progress: 12, label: 'Preparation...', detail: 'Lecture du fichier.' });
   const source = await writeUploadedModel(uploadedFile, workDir);
+  const settings = { ...getModelToolQualitySettings(fields.quality || 'web') };
+  if (settings.targetOutputRatio && source.originalSize && source.sourceFormat === 'fbx') {
+    const targetOutputBytes = Math.max(
+      Number(settings.minTargetOutputBytes) || 0,
+      Math.round(source.originalSize * settings.targetOutputRatio),
+    );
+    settings.targetOutputBytes = targetOutputBytes;
+    settings.minOutputBytes = Math.round(targetOutputBytes * (Number(settings.minOutputRatio) || 0.8));
+    settings.maxOutputBytes = Math.round(targetOutputBytes * (Number(settings.maxOutputRatio) || 1.2));
+  }
   const convertedPath = path.join(workDir, `${baseName(source.sourceName)}-converted.glb`);
-  const optimizedPath = path.join(workDir, `${baseName(source.sourceName)}-web.glb`);
+  const outputSuffix = settings.outputSuffix || 'web';
+  const optimizedPath = path.join(workDir, `${baseName(source.sourceName)}-${outputSuffix}.glb`);
   onProgress({
     progress: 24,
     label: source.sourceFormat === 'fbx' ? 'FBX prepare...' : 'GLB prepare...',
@@ -436,14 +713,17 @@ const buildOptimizedGlb = async (uploadedFile, fields, workDir, onProgress = () 
     await fs.copyFile(source.inputPath, convertedPath);
   }
 
-  onProgress({ progress: 70, label: 'Optimisation GLB...', detail: 'Compression Meshopt/WebP.' });
-  await optimizeGlb(convertedPath, optimizedPath, qualitySettings(fields.quality || 'web'), {
+  const optimizeDetail = settings.texturePipeline === 'webp-quality'
+    ? 'Textures 4096 haute qualite.'
+    : 'Compression Meshopt/WebP.';
+  onProgress({ progress: 70, label: 'Optimisation GLB...', detail: optimizeDetail });
+  await optimizeGlb(convertedPath, optimizedPath, settings, {
     progressStart: 70,
     progressMax: 96,
-    onProgress: (progress) => onProgress({ progress, label: 'Optimisation GLB...', detail: 'Compression Meshopt/WebP.' }),
+    onProgress: (progress) => onProgress({ progress, label: 'Optimisation GLB...', detail: optimizeDetail }),
   });
   const outputStats = await fs.stat(optimizedPath);
-  const outputName = `${baseName(uploadedFile.filename || source.sourceName)}-web.glb`;
+  const outputName = `${baseName(uploadedFile.filename || source.sourceName)}-${outputSuffix}.glb`;
   onProgress({ progress: 99, label: 'GLB pret...', detail: outputName });
   return {
     outputPath: optimizedPath,
@@ -455,7 +735,7 @@ const buildOptimizedGlb = async (uploadedFile, fields, workDir, onProgress = () 
 };
 
 const handleSyncConversion = async (req, res) => {
-  const workDir = await fs.mkdtemp(path.join(os.tmpdir(), 'escape-model-tools-'));
+  const workDir = await makeModelToolWorkDir('escape-model-tools');
   try {
     const { fields, uploadedFile } = await prepareUploadedToolRequest(req);
     const result = await buildOptimizedGlb(uploadedFile, fields, workDir);
@@ -517,7 +797,7 @@ const formatBytesForServer = (bytes = 0) => {
 const createModelToolJob = async (req, res) => {
   const { fields, uploadedFile } = await prepareUploadedToolRequest(req);
   const jobId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-  const workDir = await fs.mkdtemp(path.join(os.tmpdir(), `escape-model-job-${jobId}-`));
+  const workDir = await makeModelToolWorkDir(`escape-model-job-${jobId}`);
   const now = Date.now();
   const job = {
     id: jobId,

@@ -31,9 +31,10 @@ import {
   getSupportSurfaceHeightAtPoint,
   toScenePosition,
 } from './rpg3dSceneBuilders.js';
+import { resolveProportionalScaleDelta } from '../../utils/rpg3dMapEditing.js';
 
 const DYNAMIC_SELECTION_TYPES = new Set(['hero', 'enemy', 'pickup']);
-const TRANSFORM_ROTATE_TYPES = new Set(['hero', 'enemy', 'prop', 'actionZone']);
+const TRANSFORM_ROTATE_TYPES = new Set(['hero', 'enemy', 'prop']);
 const TRANSFORM_SCALE_TYPES = new Set(['hero', 'enemy', 'prop', 'relief', 'obstacle', 'actionZone']);
 
 const getSingleTransformSelection = (selected, multiSelected = []) => {
@@ -193,11 +194,11 @@ const applyTransformPreview = (session, proxy) => {
     return;
   }
   if (session.mode === 'scale') {
-    const scaleRatio = {
+    const scaleRatio = resolveProportionalScaleDelta({
       x: proxy.scale.x / Math.max(0.001, session.startProxyScale.x),
       y: proxy.scale.y / Math.max(0.001, session.startProxyScale.y),
       z: proxy.scale.z / Math.max(0.001, session.startProxyScale.z),
-    };
+    }, session.proportionalAxes);
     session.previewRoots.forEach(({ root, scale }) => {
       root.scale.set(
         scale.x * scaleRatio.x,

@@ -5,9 +5,13 @@ import {
   duplicateMapEntityIntoConfig,
   findEntityAt,
   getSelectedEntity,
+  insertActionZoneVertex,
+  moveActionZoneEdge,
+  moveActionZoneVertex,
   moveMapEntityByDelta,
   moveMapEntityToPoint,
   resolveFlatTileDragPoint,
+  resolveProportionalScaleDelta,
   scaleSelectionEntity,
   snapFlatTileToNeighbors,
 } from '../utils/rpg3dMapEditing.js';
@@ -146,6 +150,43 @@ describe('rpg3d map editing helpers', () => {
     });
   });
 
+  it('links selected resize axes proportionally', () => {
+    expect(resolveProportionalScaleDelta(
+      { x: 1.6, y: 1, z: 1 },
+      { x: true, y: true, z: false },
+    )).toEqual({ x: 1.6, y: 1.6, z: 1 });
+    expect(resolveProportionalScaleDelta(
+      { x: 1, y: 0.75, z: 1 },
+      { x: false, y: true, z: true },
+    )).toEqual({ x: 1, y: 0.75, z: 0.75 });
+  });
+
+  it('scales only the checked proportional axes together', () => {
+    const config = createMapConfig();
+    config.props = [{
+      id: 'crate-1',
+      x: 250,
+      y: 200,
+      w: 80,
+      h: 60,
+      modelHeight: 100,
+      renderMode: 'billboard',
+    }];
+    const entity = getSelectedEntity(config, { type: 'prop', id: 'crate-1' });
+
+    expect(scaleSelectionEntity(
+      config,
+      entity,
+      { x: 2, y: 1, z: 1 },
+      { proportionalAxes: { x: true, y: true, z: false } },
+    )).toBe(true);
+    expect(config.props[0]).toMatchObject({
+      w: 160,
+      h: 60,
+      modelHeight: 200,
+    });
+  });
+
   it('clamps action zone bounds and finds zones from their rectangle edges', () => {
     const config = createMapConfig();
     config.actionZones = [{
@@ -174,5 +215,62 @@ describe('rpg3d map editing helpers', () => {
       h: 400,
       modelHeight: 60,
     });
+  });
+
+  it('edits action zone vertices and uses the polygon for picking and movement', () => {
+    const config = createMapConfig();
+    config.actionZones = [{
+      id: 'zone-1',
+      name: 'Zone libre',
+      x: 200,
+      y: 200,
+      w: 120,
+      h: 120,
+      vertices: [
+        { x: 160, y: 160 },
+        { x: 300, y: 180 },
+        { x: 250, y: 280 },
+        { x: 170, y: 260 },
+      ],
+    }];
+
+    expect(findEntityAt(config, { x: 210, y: 220 })).toEqual({ type: 'actionZone', id: 'zone-1' });
+    expect(findEntityAt(config, { x: 295, y: 270 })).toBeNull();
+
+    expect(moveActionZoneVertex(config, 'zone-1', 1, { x: 330, y: 160 })).toBe(true);
+    expect(config.actionZones[0].vertices[1]).toEqual({ x: 330, y: 160 });
+    expect(config.actionZones[0].topVertices[1]).toEqual({ x: 300, y: 180, z: 240 });
+    expect(config.actionZones[0]).toMatchObject({ x: 245, y: 220, w: 170, h: 120 });
+
+    expect(moveActionZoneEdge(config, 'zone-1', 1, { x: -40, y: 20 })).toBe(true);
+    expect(config.actionZones[0].vertices[1]).toEqual({ x: 290, y: 180 });
+    expect(config.actionZones[0].vertices[2]).toEqual({ x: 210, y: 300 });
+    expect(config.actionZones[0].topVertices[1]).toEqual({ x: 300, y: 180, z: 240 });
+    expect(config.actionZones[0]).toMatchObject({ x: 225, y: 230, w: 130, h: 140 });
+
+    expect(moveActionZoneEdge(config, 'zone-1', 1, { x: 15, y: -10 }, 'top')).toBe(true);
+    expect(config.actionZones[0].vertices[1]).toEqual({ x: 290, y: 180 });
+    expect(config.actionZones[0].vertices[2]).toEqual({ x: 210, y: 300 });
+    expect(config.actionZones[0].topVertices[1]).toEqual({ x: 315, y: 170, z: 240 });
+    expect(config.actionZones[0].topVertices[2]).toEqual({ x: 265, y: 270, z: 240 });
+
+    expect(moveActionZoneVertex(config, 'zone-1', 2, { x: 340, y: 310, z: 315 }, 'top')).toBe(true);
+    expect(config.actionZones[0].vertices[2]).toEqual({ x: 210, y: 300 });
+    expect(config.actionZones[0].topVertices[2]).toEqual({ x: 340, y: 310, z: 315 });
+
+    expect(moveMapEntityByDelta(config, { type: 'actionZone', id: 'zone-1' }, { x: 20, y: -10 })).toBe(true);
+    expect(config.actionZones[0].vertices[1]).toEqual({ x: 310, y: 170 });
+    expect(config.actionZones[0].topVertices[2]).toEqual({ x: 360, y: 300, z: 315 });
+    expect(config.actionZones[0]).toMatchObject({ x: 245, y: 220 });
+
+    expect(insertActionZoneVertex(config, 'zone-1', 1)).toBe(true);
+    expect(config.actionZones[0].vertices).toHaveLength(5);
+    expect(config.actionZones[0].topVertices).toHaveLength(5);
+    expect(config.actionZones[0].vertices[2]).toEqual({ x: 270, y: 230 });
+    expect(config.actionZones[0].topVertices[2]).toEqual({ x: 348, y: 230, z: 278 });
+    expect(moveActionZoneEdge(config, 'zone-1', 1, { x: 0, y: 0, z: -18 }, 'top')).toBe(true);
+    expect(config.actionZones[0].topVertices[1]).toEqual({ x: 335, y: 160, z: 222 });
+    expect(config.actionZones[0].topVertices[2]).toEqual({ x: 348, y: 230, z: 260 });
+    expect(findEntityAt(config, { x: 270, y: 230 })).toEqual({ type: 'actionZone', id: 'zone-1' });
   });
 });

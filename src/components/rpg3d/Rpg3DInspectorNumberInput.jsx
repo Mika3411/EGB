@@ -24,8 +24,8 @@ export default function Rpg3DInspectorNumberInput({
     setDraft(String(value ?? ''));
   }, [value]);
 
-  const commitDraft = useCallback(() => {
-    const trimmed = String(draft).trim();
+  const commitDraft = useCallback((nextDraft = draft) => {
+    const trimmed = String(nextDraft).trim();
     const numericValue = Number(trimmed);
     if (trimmed === '') return;
     if (!Number.isFinite(numericValue)) {
@@ -48,7 +48,7 @@ export default function Rpg3DInspectorNumberInput({
       onChange={(event) => setDraft(event.target.value)}
       onBlur={(event) => {
         setIsEditing(false);
-        commitDraft();
+        commitDraft(event.currentTarget.value);
         props.onBlur?.(event);
       }}
       onKeyDown={(event) => {

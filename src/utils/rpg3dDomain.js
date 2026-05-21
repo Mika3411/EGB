@@ -94,6 +94,7 @@ export const DEFAULT_ARCADE_CONFIG = {
     powers: [
       { id: 'flamme', name: 'Flamme', type: 'fire', manaCost: 2, force: 4 },
     ],
+    inventory: [],
   },
   ai: {
     visionRange: 850,
@@ -112,10 +113,15 @@ export const DEFAULT_ARCADE_CONFIG = {
 
 export const clonePlainObjectArray = (items = []) => (Array.isArray(items) ? items.map((item) => ({ ...(item || {}) })) : []);
 
-export const cloneActionZoneArray = (items = []) => clonePlainObjectArray(items).map((zone) => ({
-  ...zone,
-  npcChoices: clonePlainObjectArray(zone.npcChoices || []),
-}));
+export const cloneActionZoneArray = (items = []) => clonePlainObjectArray(items).map((zone) => {
+  const next = {
+    ...zone,
+    npcChoices: clonePlainObjectArray(zone.npcChoices || []),
+  };
+  if (Array.isArray(zone.vertices)) next.vertices = clonePlainObjectArray(zone.vertices);
+  if (Array.isArray(zone.topVertices)) next.topVertices = clonePlainObjectArray(zone.topVertices);
+  return next;
+});
 
 export const cloneTerrainPaintArray = (items = []) => clonePlainObjectArray(items).map((stroke) => ({
   ...stroke,
@@ -124,6 +130,11 @@ export const cloneTerrainPaintArray = (items = []) => clonePlainObjectArray(item
 
 export const cloneModelEraserArray = (items = []) => clonePlainObjectArray(items).map((stroke) => ({
   ...stroke,
+}));
+
+export const cloneHeroInventoryArray = (items = []) => clonePlainObjectArray(items).map((item) => ({
+  ...item,
+  weaponModelResources: clonePlainObjectArray(item.weaponModelResources || []),
 }));
 
 export const clonePropArray = (items = []) => clonePlainObjectArray(items).map((prop) => (
@@ -136,7 +147,15 @@ export const clonePlayerConfig = (player = DEFAULT_ARCADE_CONFIG.player) => ({
   ...(player || {}),
   skills: clonePlainObjectArray(player?.skills || []),
   powers: clonePlainObjectArray(player?.powers || []),
+  inventory: cloneHeroInventoryArray(player?.inventory || []),
 });
+
+export const cloneHeroConfigArray = (heroes = []) => clonePlainObjectArray(heroes).map((hero) => ({
+  ...hero,
+  skills: clonePlainObjectArray(hero?.skills || []),
+  powers: clonePlainObjectArray(hero?.powers || []),
+  inventory: cloneHeroInventoryArray(hero?.inventory || []),
+}));
 
 export const cloneConfig = (config = DEFAULT_ARCADE_CONFIG) => ({
   meta: { ...(config.meta || {}) },
@@ -146,7 +165,7 @@ export const cloneConfig = (config = DEFAULT_ARCADE_CONFIG) => ({
   ai: { ...(config.ai || DEFAULT_ARCADE_CONFIG.ai) },
   obstacles: clonePlainObjectArray(config.obstacles || []),
   reliefs: clonePlainObjectArray(config.reliefs || []),
-  heroes: clonePlainObjectArray(config.heroes || []),
+  heroes: cloneHeroConfigArray(config.heroes || []),
   props: clonePropArray(config.props || []),
   enemies: clonePlainObjectArray(config.enemies || []),
   pickups: clonePlainObjectArray(config.pickups || []),
@@ -502,9 +521,123 @@ export const getFlatTileEdgeSnapDistance = (width = 0, height = 0) => (
   Math.min(92, Math.max(FLOOR_TILE_EDGE_SNAP_DISTANCE, Math.min(width, height) * 0.35))
 );
 
-export const getActionZoneWidth = (zone = {}) => Math.max(ACTION_ZONE_MIN_SIZE, Number(zone.w) || ACTION_ZONE_DEFAULT_WIDTH);
-export const getActionZoneHeight = (zone = {}) => Math.max(ACTION_ZONE_MIN_SIZE, Number(zone.h) || ACTION_ZONE_DEFAULT_HEIGHT);
-export const getActionZoneModelHeight = (zone = {}) => Math.max(60, Number(zone.modelHeight) || ACTION_ZONE_DEFAULT_MODEL_HEIGHT);
+const getActionZoneBaseWidth = (zone = {}) => Math.max(ACTION_ZONE_MIN_SIZE, Number(zone.w) || ACTION_ZONE_DEFAULT_WIDTH);
+const getActionZoneBaseHeight = (zone = {}) => Math.max(ACTION_ZONE_MIN_SIZE, Number(zone.h) || ACTION_ZONE_DEFAULT_HEIGHT);
+const getActionZoneBaseModelHeight = (zone = {}) => Math.max(60, Number(zone.modelHeight) || ACTION_ZONE_DEFAULT_MODEL_HEIGHT);
+
+const getFiniteActionZoneVertices = (zone = {}) => (
+  Array.isArray(zone.vertices)
+    ? zone.vertices
+      .map((point) => {
+        const next = {
+          x: Number(point?.x),
+          y: Number(point?.y),
+        };
+        const z = Number(point?.z);
+        if (Number.isFinite(z)) next.z = z;
+        return next;
+      })
+      .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
+    : []
+);
+
+const getFiniteActionZoneTopVertices = (zone = {}) => (
+  Array.isArray(zone.topVertices)
+    ? zone.topVertices
+      .map((point) => {
+        const next = {
+          x: Number(point?.x),
+          y: Number(point?.y),
+        };
+        const z = Number(point?.z);
+        if (Number.isFinite(z)) next.z = z;
+        return next;
+      })
+      .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
+    : []
+);
+
+const rotatePointAround = (point, center, radians = 0) => {
+  if (!radians) return point;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const dx = point.x - center.x;
+  const dy = point.y - center.y;
+  return {
+    x: center.x + dx * cos - dy * sin,
+    y: center.y + dx * sin + dy * cos,
+    ...(Number.isFinite(Number(point.z)) ? { z: Number(point.z) } : {}),
+  };
+};
+
+const getActionZoneFallbackVertices = (zone = {}) => {
+  const width = getActionZoneBaseWidth(zone);
+  const height = getActionZoneBaseHeight(zone);
+  const center = {
+    x: Number(zone.x) || 0,
+    y: Number(zone.y) || 0,
+  };
+  const halfWidth = width / 2;
+  const halfHeight = height / 2;
+  const radians = normalizeDegrees(zone.rotation || 0) * (Math.PI / 180);
+  return [
+    { x: center.x - halfWidth, y: center.y - halfHeight },
+    { x: center.x + halfWidth, y: center.y - halfHeight },
+    { x: center.x + halfWidth, y: center.y + halfHeight },
+    { x: center.x - halfWidth, y: center.y + halfHeight },
+  ].map((point) => rotatePointAround(point, center, radians));
+};
+
+export const hasCustomActionZoneVertices = (zone = {}) => getFiniteActionZoneVertices(zone).length >= 3;
+
+export const getActionZoneVertices = (zone = {}) => {
+  const vertices = getFiniteActionZoneVertices(zone);
+  return vertices.length >= 3 ? vertices : getActionZoneFallbackVertices(zone);
+};
+
+export const getActionZoneTopVertices = (zone = {}) => {
+  const bottomVertices = getActionZoneVertices(zone);
+  const topVertices = getFiniteActionZoneTopVertices(zone);
+  return topVertices.length === bottomVertices.length
+    ? topVertices
+    : bottomVertices.map((point) => ({
+      x: point.x,
+      y: point.y,
+      z: getActionZoneBaseModelHeight(zone),
+    }));
+};
+
+export const getActionZoneBounds = (zone = {}) => {
+  const vertices = getActionZoneVertices(zone);
+  const minX = Math.min(...vertices.map((point) => point.x));
+  const maxX = Math.max(...vertices.map((point) => point.x));
+  const minY = Math.min(...vertices.map((point) => point.y));
+  const maxY = Math.max(...vertices.map((point) => point.y));
+  const width = Math.max(0, maxX - minX);
+  const height = Math.max(0, maxY - minY);
+  return {
+    minX,
+    maxX,
+    minY,
+    maxY,
+    width,
+    height,
+    centerX: minX + width / 2,
+    centerY: minY + height / 2,
+  };
+};
+
+export const getActionZoneWidth = (zone = {}) => (
+  hasCustomActionZoneVertices(zone)
+    ? Math.max(ACTION_ZONE_MIN_SIZE, getActionZoneBounds(zone).width)
+    : getActionZoneBaseWidth(zone)
+);
+export const getActionZoneHeight = (zone = {}) => (
+  hasCustomActionZoneVertices(zone)
+    ? Math.max(ACTION_ZONE_MIN_SIZE, getActionZoneBounds(zone).height)
+    : getActionZoneBaseHeight(zone)
+);
+export const getActionZoneModelHeight = (zone = {}) => getActionZoneBaseModelHeight(zone);
 export const getActionZoneOpacity = (zone = {}) => clamp(Number(zone.opacity) || ACTION_ZONE_DEFAULT_OPACITY, 0.05, 0.95);
 
 export const getActionZoneType = (zone = {}) => zone.actionType || 'portal';
@@ -515,12 +648,25 @@ export const getActionZoneColor = (zone = {}) => (
 
 export const getActionZoneRenderMode = (zone = {}) => zone.renderMode || 'volume';
 
-export const getActionZoneRect = (zone = {}) => ({
-  x: (Number(zone.x) || 0) - getActionZoneWidth(zone) / 2,
-  y: (Number(zone.y) || 0) - getActionZoneHeight(zone) / 2,
-  w: getActionZoneWidth(zone),
-  h: getActionZoneHeight(zone),
-});
+export const getActionZoneRect = (zone = {}) => {
+  if (!hasCustomActionZoneVertices(zone)) {
+    return {
+      x: (Number(zone.x) || 0) - getActionZoneWidth(zone) / 2,
+      y: (Number(zone.y) || 0) - getActionZoneHeight(zone) / 2,
+      w: getActionZoneWidth(zone),
+      h: getActionZoneHeight(zone),
+    };
+  }
+  const bounds = getActionZoneBounds(zone);
+  const width = Math.max(ACTION_ZONE_MIN_SIZE, bounds.width);
+  const height = Math.max(ACTION_ZONE_MIN_SIZE, bounds.height);
+  return {
+    x: bounds.centerX - width / 2,
+    y: bounds.centerY - height / 2,
+    w: width,
+    h: height,
+  };
+};
 
 export const getReliefWidth = (relief = {}) => Math.max(40, Number(relief.w) || 300);
 export const getReliefHeight = (relief = {}) => Math.max(40, Number(relief.h) || 180);
@@ -560,11 +706,8 @@ export const getSelectionEntityBounds = ({ type, item } = {}) => {
     };
   }
   if (type === 'actionZone') {
-    const width = getActionZoneWidth(item);
-    const height = getActionZoneHeight(item);
-    const x = Number(item.x) || 0;
-    const y = Number(item.y) || 0;
-    return { minX: x - width / 2, maxX: x + width / 2, minY: y - height / 2, maxY: y + height / 2 };
+    const rect = getActionZoneRect(item);
+    return { minX: rect.x, maxX: rect.x + rect.w, minY: rect.y, maxY: rect.y + rect.h };
   }
   const radius = type === 'pickup' ? PICKUP_RADIUS : PLAYER_RADIUS;
   const x = Number(item.x) || 0;
@@ -664,6 +807,9 @@ export const getControlledPlayerSource = (config = {}, controlledHeroId = '') =>
     powers: Array.isArray(controlledHero.powers) && controlledHero.powers.length
       ? controlledHero.powers
       : basePlayer.powers,
+    inventory: Array.isArray(controlledHero.inventory)
+      ? controlledHero.inventory
+      : basePlayer.inventory,
   };
 };
 
@@ -696,6 +842,9 @@ export const createInitialState = (config, options = {}) => {
       shootCooldown: 0,
       powerCooldown: 0,
       moveTarget: null,
+      movePath: [],
+      moveContinuous: false,
+      moveDirection: null,
     },
     bullets: [],
     enemies: config.enemies.map(createEnemyRuntime),

@@ -17,7 +17,7 @@ import {
 
 const QUALITY_OPTIONS = [
   { id: 'web', label: 'Jeu fluide', textureSize: 1024, jpegQuality: 0.82 },
-  { id: 'quality', label: 'Qualite', textureSize: 2048, jpegQuality: 0.88 },
+  { id: 'quality', label: 'Qualite', textureSize: 2048, jpegQuality: 0.92 },
   { id: 'lite', label: 'Tres leger', textureSize: 512, jpegQuality: 0.74 },
 ];
 const PROGRESS_IDLE = { active: false, value: 0, label: '', detail: '' };

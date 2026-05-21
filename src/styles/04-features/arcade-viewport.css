@@ -33,6 +33,27 @@
   cursor: crosshair;
 }
 
+.arcade-three-viewport.action-zone-vertex-hover {
+  cursor: grab;
+}
+
+.arcade-three-viewport.action-zone-vertex-hover:active {
+  cursor: grabbing;
+}
+
+.arcade-three-viewport.action-zone-edge-hover {
+  cursor: grab;
+}
+
+.arcade-three-viewport.action-zone-edge-hover:active {
+  cursor: grabbing;
+}
+
+.arcade-three-viewport.action-zone-edge-insert-hover,
+.arcade-three-viewport.action-zone-edge-insert-hover:active {
+  cursor: copy;
+}
+
 .arcade-three-canvas {
   position: absolute;
   inset: 0;
@@ -63,6 +84,84 @@
   background: rgba(14, 165, 233, .16);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18), 0 0 18px rgba(14, 165, 233, .2);
   pointer-events: none;
+}
+
+.action-zone-view-pole {
+  position: absolute;
+  right: 12px;
+  bottom: 48px;
+  z-index: 26;
+  display: grid;
+  grid-template-columns: repeat(3, 28px);
+  grid-template-rows: repeat(3, 28px);
+  gap: 3px;
+  pointer-events: auto;
+}
+
+.action-zone-view-pole button {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(148, 163, 184, .42);
+  border-radius: 5px;
+  background: rgba(7, 16, 22, .78);
+  color: rgba(226, 232, 240, .92);
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 5px 14px rgba(0, 0, 0, .22);
+}
+
+.action-zone-view-pole button:hover,
+.action-zone-view-pole button:focus-visible {
+  border-color: rgba(125, 211, 252, .82);
+  color: #ecfeff;
+}
+
+.action-zone-view-pole button.active {
+  border-color: rgba(34, 211, 238, .92);
+  background: rgba(8, 47, 73, .92);
+  color: #cffafe;
+}
+
+.action-zone-view-pole button[data-view="north"] {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.action-zone-view-pole button[data-view="east"] {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.action-zone-view-pole button[data-view="south"] {
+  grid-column: 2;
+  grid-row: 3;
+}
+
+.action-zone-view-pole button[data-view="west"] {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.action-zone-view-pole button[data-view="height"] {
+  grid-column: 2;
+  grid-row: 2;
+  border-color: rgba(250, 204, 21, .42);
+}
+
+.action-zone-view-pole button[data-view="height"].active {
+  border-color: rgba(250, 204, 21, .94);
+  background: rgba(113, 63, 18, .92);
+  color: #fef3c7;
+}
+
+.arcade-three-viewport.action-zone-height-mode canvas {
+  cursor: ns-resize;
 }
 
 .arcade-three-badge {
@@ -153,12 +252,31 @@
   .arcade-management-stats,
   .arcade-management-list,
   .arcade-management-row,
+  .arcade-hero-summary-stats,
+  .arcade-hero-workspace,
+  .arcade-hero-form-grid,
+  .arcade-hero-combat-grid,
+  .arcade-hero-inventory-row,
+  .arcade-hero-weapon-settings,
   .model-tools-tab,
   .model-tools-file-row,
   .model-tools-quality,
   .model-tools-actions,
   .model-tools-result-grid {
     grid-template-columns: 1fr;
+  }
+
+  .arcade-hero-profile-picker {
+    width: 100%;
+    justify-self: stretch;
+  }
+
+  .arcade-hero-sidebar {
+    position: static;
+  }
+
+  .arcade-hero-section-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .arcade-canvas-row-actions,
@@ -210,6 +328,22 @@
   }
 
   .arcade-stage-transform-toolbar button {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
+  }
+
+  .arcade-stage-transform-axis-locks {
+    grid-column: span 3;
+    grid-auto-flow: column;
+    grid-auto-columns: 34px;
+    gap: 4px;
+    padding-top: 0;
+    padding-left: 0;
+  }
+
+  .arcade-stage-transform-axis-locks label {
     width: 34px;
     min-width: 34px;
     height: 34px;

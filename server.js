@@ -21,6 +21,7 @@ import {
   handleGumroadWebhook,
   handleStorageUpgrade,
 } from './server/credits.js';
+import { handleStorageUpload } from './server/storageUploads.js';
 import {
   handleAiJob,
   handleGenerate,
@@ -45,6 +46,7 @@ const apiRouteHandlers = {
   creditsAdminUpdate: handleCreditsAdminUpdate,
   credits: handleCredits,
   storageUpgrade: handleStorageUpgrade,
+  storageUpload: handleStorageUpload,
   shopPurchase: handleShopPurchase,
   gumroadWebhook: handleGumroadWebhook,
   generate: handleGenerate,

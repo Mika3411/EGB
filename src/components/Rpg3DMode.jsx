@@ -46,9 +46,6 @@ import {
   ZoomIn,
 } from 'lucide-react';
 import ArcadeThreeViewport from './arcade/ArcadeThreeViewport';
-import Character3DTab from './Character3DTab.jsx';
-import Decor3DTab from './Decor3DTab.jsx';
-import ModelToolsTab from './ModelToolsTab.jsx';
 import Rpg3DControls from './rpg3d/Rpg3DControls.jsx';
 import Rpg3DHeader from './rpg3d/Rpg3DHeader.jsx';
 import Rpg3DInspector from './rpg3d/Rpg3DInspector.jsx';
@@ -57,33 +54,26 @@ import Rpg3DNpcChoiceOverlay from './rpg3d/Rpg3DNpcChoiceOverlay.jsx';
 import Rpg3DStage from './rpg3d/Rpg3DStage.jsx';
 import Rpg3DWorkspaceTabs from './rpg3d/Rpg3DWorkspaceTabs.jsx';
 import HelpLabel from './forms/HelpLabel.jsx';
-import { makeCharacter3DModel, makeDecor3DModel } from '../data/projectData';
+
+const Character3DTab = React.lazy(() => import('./Character3DTab.jsx'));
+const Decor3DTab = React.lazy(() => import('./Decor3DTab.jsx'));
+const ModelToolsTab = React.lazy(() => import('./ModelToolsTab.jsx'));
 import useRpg3DGameLoop from '../hooks/useRpg3DGameLoop.js';
 import useRpg3DProjectState from '../hooks/useRpg3DProjectState.js';
+import useRpg3DCanvasManagement from '../hooks/rpg3d/useRpg3DCanvasManagement.js';
+import useRpg3DPlacement from '../hooks/rpg3d/useRpg3DPlacement.js';
+import useRpg3DSaveSync from '../hooks/rpg3d/useRpg3DSaveSync.js';
+import useRpg3DStudioAssets from '../hooks/rpg3d/useRpg3DStudioAssets.js';
+import useRpg3DTerrainPaint from '../hooks/rpg3d/useRpg3DTerrainPaint.js';
 import {
-  createArcadeAssetsPayload,
-  createSupabaseArcadeAssetsPayload,
   getPersistedModelAnimations,
   getStudioModelSource,
-  hasRpg3DAssetsSupabaseConfig,
-  isRpg3DAssetsNotFoundError,
-  loadArcadeAssetsFromSupabase,
-  rememberArcadeAssetsLocally,
-  restoreLocalArcadeAssetsSources,
-  syncConfigModelReferences,
-  uploadArcadeAssetsManifest,
-} from '../utils/rpg3dAssetsStorage.js';
+} from '../utils/rpg3dAssetsCore.js';
 import {
   DEFAULT_RPG3D_ACT_ID,
-  DEFAULT_RPG3D_CANVAS_ID,
-  cloneStudioProjectForEdit,
   createConfigFromSavedAssets,
-  createFallbackRpg3DCanvas,
-  createRpg3DCanvasDraft,
-  createStudioProjectFromSavedAssets,
   getActiveRpg3DCanvas,
   getDefaultPortalTargetCanvasId,
-  getDefaultRpg3DActs,
   getRpg3DCanvasStructure,
   syncStudioProjectActiveCanvasConfig,
 } from '../utils/rpg3dStudioProject.js';
@@ -97,11 +87,14 @@ import {
   getEntityCenterPoint,
   getSelectedEntity,
   getSelectionEntities,
+  insertActionZoneVertex,
   isSameEntity,
+  moveActionZoneEdge,
+  moveActionZoneVertex,
   moveMapEntityByDelta,
   moveMapEntityToPoint,
-  normalizeTerrainPaintPoint,
   resolveFlatTileDragPoint,
+  resizeActionZoneGeometry,
   scaleSelectionEntity,
   snapFlatTileToNeighbors,
   snapFlatTileToWorldEdges,
@@ -113,10 +106,8 @@ import {
   ACTION_ZONE_DEFAULT_WIDTH,
   ACTION_ZONE_MIN_SIZE,
   DEFAULT_ARCADE_CONFIG,
-  DEFAULT_FLOOR_ZERO_Z,
   ENTITY_Z_MAX,
   ENTITY_Z_MIN,
-  FLAT_GROUND_DEFAULT_COLOR,
   FLOOR_ZERO_Z_MAX,
   FLOOR_ZERO_Z_MIN,
   MATERIAL_BRIGHTNESS_MAX,
@@ -127,10 +118,6 @@ import {
   MODEL_ERASER_MIN_RADIUS,
   MODEL_SCALE_MAX,
   MODEL_SCALE_MIN,
-  TERRAIN_PAINT_DEFAULT_COLOR,
-  TERRAIN_PAINT_DEFAULT_OPACITY,
-  TERRAIN_PAINT_DEFAULT_RADIUS,
-  TERRAIN_PAINT_DEFAULT_SHAPE,
   TERRAIN_PAINT_MAX_RADIUS,
   TERRAIN_PAINT_MIN_RADIUS,
   clamp,
@@ -145,11 +132,9 @@ import {
   getCharacterMaterialBrightness,
   getCharacterModelAxisScale,
   getCharacterModelScale,
-  getDecorMaterialBrightness,
   getDecorModelScale,
   getEnemyStats,
   getEntityZ,
-  getFlatGroundPlateauColor,
   getFlatTileSnapOverlap,
   getFlatTileWorldBounds,
   getFlatTileWorldDimensions,
@@ -160,17 +145,13 @@ import {
   getModelEraserRadius,
   getModelEraserStrokes,
   getPlayableHeroId,
-  getPropHeight,
-  getPropModelHeight,
   getPropRenderMode,
-  getPropWidth,
   getReliefElevation,
   getReliefHeight,
   getReliefWidth,
   getSelectionBoundsFromEntities,
   getStudioDecorKindId,
   getTerrainPaintColor,
-  getTerrainPaintOpacity,
   getTerrainPaintRadius,
   getTerrainPaintShape,
   getWorldCoverTileSize,
@@ -186,20 +167,7 @@ const CHARACTER_PLACEMENT_CAMERA_DISTANCE = 16;
 const CAMERA_DISTANCE_MIN = 3.5;
 const CAMERA_DISTANCE_MAX = 60;
 const CAMERA_ZOOM_DRAG_SENSITIVITY = 0.08;
-const TERRAIN_PAINT_FLUSH_INTERVAL_MS = 32;
-const RPG3D_LOGIN_REQUIRED_STATUS = 'Connecte-toi pour sauvegarder dans Supabase.';
-const RPG3D_LOCAL_SESSION_FALLBACK_STATUS = 'Sauvegarde locale terminee. Connecte-toi pour synchroniser Supabase.';
-
-const getNow = () => (
-  typeof performance !== 'undefined' && typeof performance.now === 'function'
-    ? performance.now()
-    : Date.now()
-);
-
-const isDisconnectedSaveStatus = (status = '') => (
-  status === RPG3D_LOGIN_REQUIRED_STATUS
-  || status === RPG3D_LOCAL_SESSION_FALLBACK_STATUS
-);
+const RPG3D_ACTION_LOADING_DURATION_MS = 900;
 
 const RPG3D_FIELD_HELP = {
   mapWidth: 'Largeur totale de la carte en unites du builder. Augmente-la pour donner plus d espace horizontal au parcours.',
@@ -283,6 +251,7 @@ const RPG3D_FIELD_HELP = {
   actionZoneWidth: 'Largeur du cube transparent que le joueur peut traverser pour declencher l action.',
   actionZoneDepth: 'Profondeur du cube transparent que le joueur peut traverser pour declencher l action.',
   actionZoneModelHeight: 'Hauteur visible du cube transparent 3D.',
+  actionZoneAddEdge: 'Active le prochain clic sur une arete de la zone pour ajouter un nouveau sommet a cet endroit.',
   targetCanvas: 'Canevas de destination utilise quand le joueur entre dans cette zone portail.',
   targetNpc: 'Personnage de carte concerne par l action PNJ declenchee dans cette zone.',
   zoneMessage: 'Texte ou cle d action associee a la zone, utile pour un dialogue, une interaction ou un script.',
@@ -290,7 +259,7 @@ const RPG3D_FIELD_HELP = {
   npcQuestion: 'Question affichee au joueur quand il declenche cette action PNJ.',
   npcChoice: 'Reponse selectionnable par le joueur dans le QCM du PNJ.',
   npcChoiceResponse: 'Retour affiche apres le choix. Il servira plus tard de consequence narrative.',
-  zoneVisibility: 'Affiche ou masque le contour de debug au sol en plus du cube transparent.',
+  zoneVisibility: 'En test, la zone reste invisible et se met en surbrillance quand le curseur la survole.',
 };
 
 const Rpg3DHelpLabel = ({ children, help, className = '' }) => (
@@ -389,6 +358,25 @@ const TERRAIN_PAINT_SHAPE_OPTIONS = [
   { id: 'triangle', label: 'Triangle', icon: Triangle },
 ];
 
+const HERO_PROFILE_SECTION_TABS = [
+  { id: 'profile', label: 'Profil', meta: 'Identite', icon: Shield },
+  { id: 'stats', label: 'Stats', meta: 'Ressources', icon: HeartPulse },
+  { id: 'skills', label: 'Compétences', icon: Sparkles },
+  { id: 'inventory', label: 'Inventaire', icon: Box },
+];
+const HERO_INVENTORY_TYPE_OPTIONS = [
+  { id: 'item', label: 'Objet' },
+  { id: 'weapon', label: 'Arme' },
+  { id: 'shield', label: 'Bouclier' },
+  { id: 'key', label: 'Clé' },
+  { id: 'consumable', label: 'Consommable' },
+  { id: 'quest', label: 'Quête' },
+];
+const HERO_INVENTORY_TYPE_LABELS = HERO_INVENTORY_TYPE_OPTIONS.reduce((labels, option) => {
+  labels[option.id] = option.label;
+  return labels;
+}, {});
+
 const STUDIO_CHARACTER_ROLE_LABELS = {
   hero: 'Heros',
   enemy: 'Ennemi',
@@ -399,6 +387,12 @@ const STUDIO_DECOR_KIND_LABELS = {
   crate: 'mur',
   decor: 'décors',
   house: 'habitations',
+  'inventory-armor': 'armures',
+  'inventory-jewelry': 'bijoux',
+  'inventory-leggings': 'jambières',
+  'inventory-misc': 'divers',
+  'inventory-shield': 'boucliers',
+  'inventory-weapon': 'armes',
   road: 'sol',
   rock: 'décors',
   tree: 'décors',
@@ -410,13 +404,28 @@ const CHARACTER_IMPORT_GROUPS = [
   { id: 'enemy', label: 'Ennemis' },
   { id: 'npc', label: 'PNJ' },
 ];
+const DECOR_INVENTORY_IMPORT_GROUPS = [
+  { id: 'inventory-weapon', label: 'Armes' },
+  { id: 'inventory-armor', label: 'Armures' },
+  { id: 'inventory-shield', label: 'Boucliers' },
+  { id: 'inventory-leggings', label: 'Jambières' },
+  { id: 'inventory-jewelry', label: 'Bijoux' },
+  { id: 'inventory-misc', label: 'Divers' },
+];
 const DECOR_IMPORT_GROUPS = [
   { id: 'road', label: 'Sol' },
   { id: 'water', label: 'Eau' },
   { id: 'wall', label: 'Mur' },
   { id: 'house', label: 'Habitations' },
+  { id: 'inventory', label: 'Inventaire', children: DECOR_INVENTORY_IMPORT_GROUPS },
   { id: 'decor', label: 'Decors' },
 ];
+const flattenImportGroups = (groups = []) => groups.flatMap((group) => [
+  group,
+  ...flattenImportGroups(group.children || []),
+]);
+const DECOR_IMPORT_GROUP_LOOKUP = flattenImportGroups(DECOR_IMPORT_GROUPS);
+const DECOR_IMPORT_GROUP_IDS = new Set(DECOR_IMPORT_GROUP_LOOKUP.map((group) => group.id));
 const SELECTED_ENTITY_TYPE_LABELS = {
   hero: 'HEROS',
   enemy: 'ENNEMI',
@@ -427,7 +436,7 @@ const SELECTED_ENTITY_TYPE_LABELS = {
   actionZone: 'ZONE',
 };
 const MULTI_SELECT_ENTITY_TYPES = new Set(['hero', 'enemy', 'prop', 'relief', 'obstacle', 'pickup', 'actionZone']);
-const ROTATABLE_ENTITY_TYPES = new Set(['hero', 'enemy', 'prop', 'actionZone']);
+const ROTATABLE_ENTITY_TYPES = new Set(['hero', 'enemy', 'prop']);
 const MAP_ENTITY_META = {
   hero: { label: 'Heros carte', icon: Shield, tone: 'character' },
   enemy: { label: 'Personnage carte', icon: Crosshair, tone: 'character' },
@@ -544,13 +553,6 @@ const getModelRotationValue = (item = {}, field = 'modelRotationX') => {
   const numeric = Number(item[field]);
   return clamp(Number.isFinite(numeric) ? numeric : 0, -180, 180);
 };
-const shouldAppendTerrainPaintPoint = (stroke = {}, point = {}) => {
-  const points = Array.isArray(stroke.points) ? stroke.points : [];
-  const previous = points[points.length - 1];
-  if (!previous) return true;
-  const spacing = Math.max(10, getTerrainPaintRadius(stroke) * 0.18);
-  return distance(previous, point) >= spacing;
-};
 const getEntityRotation = (item = {}) => normalizeDegrees(item.rotation || 0);
 const isCountedMapProp = (prop = {}, config = {}) => !isFlatGroundPlateauProp(prop, config.world);
 const getCountedMapProps = (config = {}) => (config.props || []).filter((prop) => isCountedMapProp(prop, config));
@@ -574,6 +576,115 @@ const getArcadeImportPoint = (config, index = 0) => {
 };
 const getCharacterRenderMode = (actor = {}) => actor.characterRenderMode || 'capsule';
 const getCharacterRenderLabel = (actor = {}) => CHARACTER_RENDER_OPTIONS.find((option) => option.id === getCharacterRenderMode(actor))?.label || 'Personnage volume';
+const HERO_PROFILE_PLAYER_ID = 'player';
+const cloneHeroProfileItems = (items = []) => (Array.isArray(items) ? items.map((item) => ({ ...(item || {}) })) : []);
+const HERO_WEAPON_MODEL_SCALE_MIN = 0.02;
+const HERO_WEAPON_MODEL_SCALE_MAX = 8;
+const HERO_WEAPON_OFFSET_MIN = -2;
+const HERO_WEAPON_OFFSET_MAX = 2;
+const normalizeHeroInventoryItem = (item = {}, index = 0) => {
+  const type = HERO_INVENTORY_TYPE_LABELS[item.type] ? item.type : 'item';
+  const normalized = {
+    id: item.id || `inventory-${index + 1}`,
+    name: item.name || '',
+    type,
+    quantity: Math.max(1, Number(item.quantity) || 1),
+    effect: item.effect || '',
+  };
+  if (type !== 'weapon' && type !== 'shield') return normalized;
+  return {
+    ...normalized,
+    equipped: Boolean(item.equipped),
+    weaponModel3dId: item.weaponModel3dId || item.model3dId || '',
+    weaponModelUrl: item.weaponModelUrl || item.modelUrl || '',
+    weaponModelName: item.weaponModelName || item.modelName || '',
+    weaponModelFormat: item.weaponModelFormat || item.modelFormat || '',
+    weaponModelFileSize: Number(item.weaponModelFileSize || item.modelFileSize) || 0,
+    weaponModelResources: cloneHeroProfileItems(item.weaponModelResources || item.modelResources || []),
+    weaponModelScale: clamp(Number(item.weaponModelScale) || 1, HERO_WEAPON_MODEL_SCALE_MIN, HERO_WEAPON_MODEL_SCALE_MAX),
+    weaponOffsetX: clamp(Number(item.weaponOffsetX) || 0, HERO_WEAPON_OFFSET_MIN, HERO_WEAPON_OFFSET_MAX),
+    weaponOffsetY: clamp(Number(item.weaponOffsetY) || 0, HERO_WEAPON_OFFSET_MIN, HERO_WEAPON_OFFSET_MAX),
+    weaponOffsetZ: clamp(Number(item.weaponOffsetZ) || 0, HERO_WEAPON_OFFSET_MIN, HERO_WEAPON_OFFSET_MAX),
+    weaponRotationX: getModelRotationValue(item, 'weaponRotationX'),
+    weaponRotationY: getModelRotationValue(item, 'weaponRotationY'),
+    weaponRotationZ: getModelRotationValue(item, 'weaponRotationZ'),
+  };
+};
+const getHeroProfileInventory = (source = {}, fallback = {}) => {
+  const sourceInventory = Array.isArray(source?.inventory) ? source.inventory : null;
+  const fallbackInventory = Array.isArray(fallback?.inventory) ? fallback.inventory : [];
+  return (sourceInventory || fallbackInventory).map(normalizeHeroInventoryItem);
+};
+const createDefaultHeroPlayerConfig = () => ({
+  ...DEFAULT_ARCADE_CONFIG.player,
+  skills: cloneHeroProfileItems(DEFAULT_ARCADE_CONFIG.player.skills),
+  powers: cloneHeroProfileItems(DEFAULT_ARCADE_CONFIG.player.powers),
+  inventory: cloneHeroProfileItems(DEFAULT_ARCADE_CONFIG.player.inventory),
+});
+const getHeroProfileNumber = (source = {}, fallback = {}, field, defaultValue = 0) => {
+  const candidates = [
+    source?.[field],
+    fallback?.[field],
+    DEFAULT_ARCADE_CONFIG.player?.[field],
+    defaultValue,
+  ];
+  for (const value of candidates) {
+    const numberValue = Number(value);
+    if (Number.isFinite(numberValue)) return numberValue;
+  }
+  return Number(defaultValue) || 0;
+};
+const getHeroProfileSkill = (source = {}, fallback = {}, index = 0) => {
+  const defaultSkill = DEFAULT_ARCADE_CONFIG.player.skills?.[index] || {
+    id: `skill-${index + 1}`,
+    name: 'Competence',
+    value: 0,
+    manaCost: 0,
+  };
+  const fallbackSkill = Array.isArray(fallback?.skills) ? fallback.skills[index] : null;
+  const sourceSkill = Array.isArray(source?.skills) ? source.skills[index] : null;
+  return {
+    ...defaultSkill,
+    ...(fallbackSkill || {}),
+    ...(sourceSkill || {}),
+  };
+};
+const ensureHeroProfileSkill = (target, fallback = {}, index = 0) => {
+  const skills = Array.isArray(target.skills) ? target.skills.map((skill) => ({ ...(skill || {}) })) : [];
+  while (skills.length <= index) skills.push({});
+  skills[index] = {
+    ...getHeroProfileSkill(target, fallback, index),
+    ...(skills[index] || {}),
+  };
+  target.skills = skills;
+  return target.skills[index];
+};
+const getHeroProfilePower = (source = {}, fallback = {}, index = 0) => {
+  const defaultPower = DEFAULT_ARCADE_CONFIG.player.powers?.[index] || {
+    id: `power-${index + 1}`,
+    name: 'Pouvoir',
+    type: 'fire',
+    manaCost: 0,
+    force: 0,
+  };
+  const fallbackPower = Array.isArray(fallback?.powers) ? fallback.powers[index] : null;
+  const sourcePower = Array.isArray(source?.powers) ? source.powers[index] : null;
+  return {
+    ...defaultPower,
+    ...(fallbackPower || {}),
+    ...(sourcePower || {}),
+  };
+};
+const ensureHeroProfilePower = (target, fallback = {}, index = 0) => {
+  const powers = Array.isArray(target.powers) ? target.powers.map((power) => ({ ...(power || {}) })) : [];
+  while (powers.length <= index) powers.push({});
+  powers[index] = {
+    ...getHeroProfilePower(target, fallback, index),
+    ...(powers[index] || {}),
+  };
+  target.powers = powers;
+  return target.powers[index];
+};
 const getStudioMaterialBrightness = (model = {}) => {
   const value = Number(model.materialBrightness);
   return clamp(Number.isFinite(value) ? value : 1, MATERIAL_BRIGHTNESS_MIN, MATERIAL_BRIGHTNESS_MAX);
@@ -652,6 +763,24 @@ const applyCharacterModelToActor = (actor, model = null) => {
   actor.characterRenderMode = 'glb';
   applyCharacterModelScaleToActor(actor, model);
   actor.characterMaterialBrightness = getStudioMaterialBrightness(model);
+};
+const applyWeaponModelToInventoryItem = (item, model = null) => {
+  if (!item) return;
+  if (!model || !getStudioModelSource(model)) {
+    item.weaponModel3dId = '';
+    item.weaponModelUrl = '';
+    item.weaponModelName = '';
+    item.weaponModelFormat = '';
+    item.weaponModelFileSize = 0;
+    item.weaponModelResources = [];
+    return;
+  }
+  item.weaponModel3dId = model.id || '';
+  item.weaponModelUrl = getStudioModelSource(model);
+  item.weaponModelName = model.modelName || model.name || 'arme.glb';
+  item.weaponModelFormat = model.modelFormat || '';
+  item.weaponModelFileSize = Number(model.modelFileSize) || 0;
+  item.weaponModelResources = Array.isArray(model.modelResources) ? model.modelResources : [];
 };
 const guessCharacterRenderMode = (fileName = '') => {
   const name = fileName.toLowerCase();
@@ -830,14 +959,14 @@ const countExplorerAssets = (nodes = []) => nodes.reduce((count, node) => (
 
 const getExplorerCountLabel = (count) => `${count} fichier${count > 1 ? 's' : ''}`;
 const getImportGroup = (groups, groupId, fallbackLabel) => (
-  groups.find((group) => group.id === groupId) || { id: groupId, label: fallbackLabel }
+  flattenImportGroups(groups).find((group) => group.id === groupId) || { id: groupId, label: fallbackLabel }
 );
 const getCharacterImportRoleId = (model = {}) => (
   CHARACTER_IMPORT_GROUPS.some((group) => group.id === model.role) ? model.role : 'npc'
 );
 const getDecorImportKindId = (model = {}) => {
   const kind = getStudioDecorKindId(model.kind);
-  if (DECOR_IMPORT_GROUPS.some((group) => group.id === kind) && kind !== 'decor') return kind;
+  if (DECOR_IMPORT_GROUP_IDS.has(kind) && kind !== 'decor' && kind !== 'inventory') return kind;
   const haystack = normalizeAssetExplorerText([
     model.name,
     model.modelName,
@@ -848,7 +977,13 @@ const getDecorImportKindId = (model = {}) => {
   if (/(maison|house|cabane|hut|building|batiment|cottage|habitation|stonegate)/.test(haystack)) return 'house';
   if (/(mur|wall|brick|brique|stone|pierre|beton|concrete|fence|barriere|rempart|cloison)/.test(haystack)) return 'wall';
   if (/(sol|floor|ground|terrain|terre|soil|herbe|grass|gazon|route|road|chemin|path|dalle|pave|tile|square|verdant|brown_soil|brown soil)/.test(haystack)) return 'road';
-  return DECOR_IMPORT_GROUPS.some((group) => group.id === kind) ? kind : 'decor';
+  if (/(bouclier|shield|buckler|targe)/.test(haystack)) return 'inventory-shield';
+  if (/(arme|weapon|sword|epee|épée|blade|lame|hache|axe|mace|massue|dagger|dague|bow|arc|staff|baton|bâton)/.test(haystack)) return 'inventory-weapon';
+  if (/(armure|armor|armour|cuirasse|plastron|chestplate|breastplate|helmet|casque|helm)/.test(haystack)) return 'inventory-armor';
+  if (/(jambiere|jambière|jambieres|jambières|leggings|greaves|botte|boots|chausses)/.test(haystack)) return 'inventory-leggings';
+  if (/(bijou|bijoux|jewel|jewelry|jewellery|ring|anneau|amulet|amulette|collier|necklace|bracelet|gem|gemme)/.test(haystack)) return 'inventory-jewelry';
+  if (/(inventaire|inventory|loot|item|objet|potion|cle|clé|key|relique|relic|scroll|parchemin)/.test(haystack)) return 'inventory-misc';
+  return DECOR_IMPORT_GROUP_IDS.has(kind) && kind !== 'inventory' ? kind : 'decor';
 };
 const getCharacterImportSubtitle = (model = {}) => (
   `${STUDIO_CHARACTER_ROLE_LABELS[model.role] || 'Heros'} - ${getStudioModelSource(model) ? (model.modelName || 'Modele 3D') : 'Personnage volume'}`
@@ -913,27 +1048,21 @@ const buildAssetExplorerRoot = ({
     groups.get(groupId).push(createAsset(item, group.label));
   });
 
-  const children = groupOptions
-    .map((group) => {
-      const assets = (groups.get(group.id) || []).sort(compareAssetExplorerNodes);
-      if (!assets.length) {
-        return showEmptyGroups
-          ? makeAssetExplorerFolder({
-            id: `${id}:${group.id}`,
-            label: group.label,
-            tone,
-            children: [],
-          })
-          : null;
-      }
-      return makeAssetExplorerFolder({
-        id: `${id}:${group.id}`,
-        label: group.label,
-        tone,
-        children: assets,
-      });
-    })
-    .filter(Boolean);
+  const buildGroupFolder = (group) => {
+    const childFolders = (group.children || [])
+      .map(buildGroupFolder)
+      .filter(Boolean);
+    const assets = (groups.get(group.id) || []).sort(compareAssetExplorerNodes);
+    if (!assets.length && !childFolders.length && !showEmptyGroups) return null;
+    return makeAssetExplorerFolder({
+      id: `${id}:${group.id}`,
+      label: group.label,
+      tone,
+      children: [...childFolders, ...assets],
+    });
+  };
+
+  const children = groupOptions.map(buildGroupFolder).filter(Boolean);
 
   return makeAssetExplorerFolder({ id, label, tone, children });
 };
@@ -998,6 +1127,740 @@ function ArcadeManagementSection({ title, count, actions = null, emptyLabel, chi
       ) : (
         <div className="empty-state-inline">{emptyLabel}</div>
       )}
+    </section>
+  );
+}
+
+function ArcadeHeroTab({
+  config,
+  selected,
+  mediaError,
+  studioHeroModels = [],
+  studioWeaponModels = [],
+  onPatchConfig,
+  onSetMediaError,
+}) {
+  const selectedHeroId = selected?.type === 'hero' ? selected.id : '';
+  const [heroProfileId, setHeroProfileId] = useState(selectedHeroId || HERO_PROFILE_PLAYER_ID);
+  const [activeHeroSectionId, setActiveHeroSectionId] = useState('profile');
+  const basePlayer = config.player || DEFAULT_ARCADE_CONFIG.player;
+  const heroProfiles = useMemo(() => [
+    {
+      id: HERO_PROFILE_PLAYER_ID,
+      type: 'player',
+      label: basePlayer.name || 'Heros principal',
+      item: basePlayer,
+    },
+    ...(config.heroes || []).map((hero, index) => ({
+      id: hero.id,
+      type: 'hero',
+      label: hero.name || `Heros ${index + 1}`,
+      item: hero,
+      index,
+    })),
+  ], [basePlayer, config.heroes]);
+
+  useEffect(() => {
+    if (!heroProfiles.some((profile) => profile.id === heroProfileId)) {
+      setHeroProfileId(HERO_PROFILE_PLAYER_ID);
+    }
+  }, [heroProfileId, heroProfiles]);
+
+  const activeProfile = heroProfiles.find((profile) => profile.id === heroProfileId) || heroProfiles[0];
+  const activeSource = activeProfile?.item || basePlayer;
+  const isPlayerProfile = activeProfile?.type !== 'hero';
+  const activeDisplayName = isPlayerProfile
+    ? activeSource.name || 'Heros principal'
+    : activeSource.name || `Heros ${(activeProfile?.index || 0) + 1}`;
+  const playerCharacterPreset = getCharacterPreset(activeSource.character || 'runner', 'runner');
+  const activeMaxHealth = Math.max(1, getHeroProfileNumber(activeSource, basePlayer, 'maxHealth', DEFAULT_ARCADE_CONFIG.player.maxHealth));
+  const activeHealth = clamp(getHeroProfileNumber(activeSource, basePlayer, 'health', activeMaxHealth), 0, activeMaxHealth);
+  const activeMaxMana = Math.max(0, getHeroProfileNumber(activeSource, basePlayer, 'maxMana', DEFAULT_ARCADE_CONFIG.player.maxMana));
+  const activeMana = clamp(getHeroProfileNumber(activeSource, basePlayer, 'mana', activeMaxMana), 0, activeMaxMana);
+  const activeSpeed = Math.round(getHeroProfileNumber(activeSource, basePlayer, 'speed', DEFAULT_ARCADE_CONFIG.player.speed));
+  const activeDashSpeed = Math.round(getHeroProfileNumber(activeSource, basePlayer, 'dashSpeed', DEFAULT_ARCADE_CONFIG.player.dashSpeed));
+  const activeDashCooldown = getHeroProfileNumber(activeSource, basePlayer, 'dashCooldown', DEFAULT_ARCADE_CONFIG.player.dashCooldown);
+  const activeBulletSpeed = Math.round(getHeroProfileNumber(activeSource, basePlayer, 'bulletSpeed', DEFAULT_ARCADE_CONFIG.player.bulletSpeed));
+  const activeFireRate = getHeroProfileNumber(activeSource, basePlayer, 'fireRate', DEFAULT_ARCADE_CONFIG.player.fireRate);
+  const activeInventory = getHeroProfileInventory(activeSource, basePlayer);
+  const forceSkill = getHeroProfileSkill(activeSource, basePlayer, 0);
+  const ruseSkill = getHeroProfileSkill(activeSource, basePlayer, 1);
+  const magicSkill = getHeroProfileSkill(activeSource, basePlayer, 2);
+  const mainPower = getHeroProfilePower(activeSource, basePlayer, 0);
+  const visualLabel = activeSource.characterModelName
+    || (activeSource.characterImageData
+      ? `${activeSource.characterImageName || 'Image personnalisee'} - ${getCharacterRenderLabel(activeSource)}`
+      : getCharacterRenderLabel(activeSource));
+
+  const patchActiveHero = useCallback((recipe, recordHistory = true) => {
+    const targetProfileId = heroProfileId;
+    onPatchConfig((next) => {
+      if (!next.player) next.player = createDefaultHeroPlayerConfig();
+      const fallbackPlayer = next.player;
+      const target = targetProfileId === HERO_PROFILE_PLAYER_ID
+        ? fallbackPlayer
+        : (next.heroes || []).find((hero) => hero.id === targetProfileId);
+      if (!target) return;
+      recipe(target, fallbackPlayer, next);
+    }, recordHistory);
+  }, [heroProfileId, onPatchConfig]);
+
+  const updateField = (field, value, recordHistory = true) => {
+    patchActiveHero((target) => {
+      target[field] = value;
+    }, recordHistory);
+  };
+
+  const updateNumber = (field, value, min, max, recordHistory = true) => {
+    patchActiveHero((target) => {
+      const numberValue = Number(value);
+      const parsedValue = Number.isFinite(numberValue) ? numberValue : min;
+      target[field] = Number.isFinite(Number(max))
+        ? clamp(parsedValue, min, max)
+        : Math.max(min, parsedValue);
+    }, recordHistory);
+  };
+
+  const updateSkill = (index, field, value, options = {}) => {
+    patchActiveHero((target, fallback) => {
+      const skill = ensureHeroProfileSkill(target, fallback, index);
+      if (options.numeric) {
+        const min = Number.isFinite(Number(options.min)) ? Number(options.min) : -999;
+        const max = Number.isFinite(Number(options.max)) ? Number(options.max) : 999;
+        const numberValue = Number(value);
+        skill[field] = clamp(Number.isFinite(numberValue) ? numberValue : min, min, max);
+      } else {
+        skill[field] = value;
+      }
+    });
+  };
+
+  const updatePower = (index, field, value, options = {}) => {
+    patchActiveHero((target, fallback) => {
+      const power = ensureHeroProfilePower(target, fallback, index);
+      if (options.numeric) {
+        const min = Number.isFinite(Number(options.min)) ? Number(options.min) : 0;
+        const max = Number.isFinite(Number(options.max)) ? Number(options.max) : 999;
+        const numberValue = Number(value);
+        power[field] = clamp(Number.isFinite(numberValue) ? numberValue : min, min, max);
+      } else {
+        power[field] = value;
+      }
+    });
+  };
+
+  const addInventoryItem = (type = 'item') => {
+    patchActiveHero((target, fallback) => {
+      const inventory = getHeroProfileInventory(target, fallback);
+      const itemType = HERO_INVENTORY_TYPE_LABELS[type] ? type : 'item';
+      target.inventory = [
+        ...inventory,
+        {
+          id: createId('hero-item'),
+          name: itemType === 'weapon'
+            ? `Arme ${inventory.length + 1}`
+            : itemType === 'shield'
+              ? `Bouclier ${inventory.length + 1}`
+              : `Objet ${inventory.length + 1}`,
+          type: itemType,
+          quantity: 1,
+          effect: '',
+        },
+      ];
+    });
+  };
+
+  const updateInventoryItem = (itemId, field, value, options = {}) => {
+    patchActiveHero((target, fallback) => {
+      const inventory = getHeroProfileInventory(target, fallback);
+      target.inventory = inventory.map((item) => {
+        if (item.id !== itemId) return item;
+        if (options.numeric) {
+          const min = Number.isFinite(Number(options.min)) ? Number(options.min) : 1;
+          const max = Number.isFinite(Number(options.max)) ? Number(options.max) : 99;
+          const numberValue = Number(value);
+          return {
+            ...item,
+            [field]: clamp(Number.isFinite(numberValue) ? numberValue : min, min, max),
+          };
+        }
+        return { ...item, [field]: value };
+      });
+    });
+  };
+
+  const updateInventoryWeaponModel = (itemId, modelId) => {
+    patchActiveHero((target, fallback) => {
+      const inventory = getHeroProfileInventory(target, fallback);
+      const model = studioWeaponModels.find((entry) => entry.id === modelId);
+      target.inventory = inventory.map((item) => {
+        if (item.id !== itemId) return item;
+        const next = { ...item, type: item.type === 'shield' ? 'shield' : 'weapon' };
+        applyWeaponModelToInventoryItem(next, model);
+        return normalizeHeroInventoryItem(next);
+      });
+    }, false);
+  };
+
+  const setInventoryWeaponEquipped = (itemId, equipped) => {
+    patchActiveHero((target, fallback) => {
+      const inventory = getHeroProfileInventory(target, fallback);
+      const targetType = inventory.find((item) => item.id === itemId)?.type;
+      if (targetType !== 'weapon' && targetType !== 'shield') return;
+      target.inventory = inventory.map((item) => (
+        item.type === targetType
+          ? { ...item, equipped: equipped && item.id === itemId }
+          : item
+      ));
+    });
+  };
+
+  const removeInventoryItem = (itemId) => {
+    patchActiveHero((target, fallback) => {
+      target.inventory = getHeroProfileInventory(target, fallback).filter((item) => item.id !== itemId);
+    });
+  };
+
+  const updateMaxHealth = (value) => {
+    patchActiveHero((target, fallback) => {
+      const nextMaxHealth = Math.max(1, Number(value) || 1);
+      target.maxHealth = nextMaxHealth;
+      target.health = clamp(getHeroProfileNumber(target, fallback, 'health', nextMaxHealth), 0, nextMaxHealth);
+    });
+  };
+
+  const updateMaxMana = (value) => {
+    patchActiveHero((target, fallback) => {
+      const nextMaxMana = Math.max(0, Number(value) || 0);
+      target.maxMana = nextMaxMana;
+      target.mana = clamp(getHeroProfileNumber(target, fallback, 'mana', nextMaxMana), 0, nextMaxMana);
+    });
+  };
+
+  const handleCharacterImageUpload = useCallback(async (file) => {
+    if (!file) return;
+    const targetProfileId = heroProfileId;
+    try {
+      const imageData = await readArcadeImageFile(file);
+      onSetMediaError?.('');
+      onPatchConfig((next) => {
+        if (!next.player) next.player = createDefaultHeroPlayerConfig();
+        const target = targetProfileId === HERO_PROFILE_PLAYER_ID
+          ? next.player
+          : (next.heroes || []).find((hero) => hero.id === targetProfileId);
+        if (!target) return;
+        const guessedRenderMode = guessCharacterRenderMode(file.name || '');
+        target.characterImageData = imageData;
+        target.characterImageName = file.name || 'heros';
+        target.characterModel3dId = '';
+        target.characterModelUrl = '';
+        target.characterModelName = '';
+        target.characterModelFormat = '';
+        target.characterModelFileSize = 0;
+        target.characterModelResources = [];
+        target.characterModelAnimations = {};
+        target.characterLocalModelFileId = '';
+        target.characterRenderMode = guessedRenderMode === 'capsule' ? 'sprite' : guessedRenderMode;
+        if (!target.characterModelScale) target.characterModelScale = 1;
+        if (!target.characterModelScaleX) target.characterModelScaleX = target.characterModelScale;
+        if (!target.characterModelScaleY) target.characterModelScaleY = target.characterModelScale;
+        if (!target.characterModelScaleZ) target.characterModelScaleZ = target.characterModelScale;
+        target.characterModelScaleProportional = target.characterModelScaleProportional !== false;
+        target.characterMaterialBrightness = getCharacterMaterialBrightness(target);
+      });
+    } catch (error) {
+      onSetMediaError?.(error?.message || "Impossible de charger l'image.");
+    }
+  }, [heroProfileId, onPatchConfig, onSetMediaError]);
+
+  return (
+    <section className="arcade-management-tab arcade-hero-tab" aria-label="Gestion du heros">
+      <section className="panel arcade-management-summary arcade-hero-summary">
+        <div>
+          <span className="section-kicker"><HeartPulse aria-hidden="true" size={14} /> Heros</span>
+          <h2>{activeDisplayName}</h2>
+        </div>
+        <div className="arcade-canvas-summary-stats arcade-hero-summary-stats">
+          <span>
+            <strong>{Math.round(activeHealth)} / {Math.round(activeMaxHealth)}</strong>
+            <small>Points de vie</small>
+          </span>
+          <span>
+            <strong>{Math.round(activeMana)} / {Math.round(activeMaxMana)}</strong>
+            <small>Mana</small>
+          </span>
+          <span>
+            <strong>{Number(forceSkill.value) || 0}</strong>
+            <small>Force</small>
+          </span>
+          <span>
+            <strong>{mainPower.name || 'Pouvoir'}</strong>
+            <small>Pouvoir</small>
+          </span>
+        </div>
+      </section>
+
+      <div className="arcade-hero-workspace">
+        <aside className="panel arcade-hero-sidebar" aria-label="Navigation héros">
+          <label className="arcade-hero-profile-picker">
+            <span>Profil</span>
+            <select value={activeProfile?.id || HERO_PROFILE_PLAYER_ID} onChange={(event) => setHeroProfileId(event.target.value)}>
+              {heroProfiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>{profile.label}</option>
+              ))}
+            </select>
+          </label>
+          <div className="arcade-hero-section-tabs" role="tablist" aria-label="Sections du héros">
+            {HERO_PROFILE_SECTION_TABS.map((tab) => {
+              const Icon = tab.icon;
+              const active = activeHeroSectionId === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  id={`arcade-hero-tab-${tab.id}`}
+                  type="button"
+                  role="tab"
+                  aria-label={tab.meta ? `${tab.label} ${tab.meta}` : tab.label}
+                  aria-selected={active}
+                  aria-controls={`arcade-hero-panel-${tab.id}`}
+                  className={active ? 'active' : ''}
+                  onClick={() => setActiveHeroSectionId(tab.id)}
+                >
+                  <Icon aria-hidden="true" size={16} />
+                  <span className="arcade-hero-section-text">
+                    <span>{tab.label}</span>
+                    {tab.meta ? <small>{tab.meta}</small> : null}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </aside>
+
+        <div className="arcade-hero-content">
+          {activeHeroSectionId === 'profile' ? (
+      <section
+        id="arcade-hero-panel-profile"
+        className="panel arcade-management-panel arcade-hero-appearance-panel"
+        role="tabpanel"
+        aria-labelledby="arcade-hero-tab-profile"
+      >
+        <div className="panel-head">
+          <div>
+            <span className="section-kicker"><Shield aria-hidden="true" size={14} /> Profil</span>
+            <h2>Identite & apparence</h2>
+          </div>
+        </div>
+        <div className="arcade-hero-form-grid">
+          <label>
+            <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.heroName}>Nom</Rpg3DHelpLabel>
+            <input
+              value={activeSource.name || ''}
+              placeholder={activeDisplayName}
+              onChange={(event) => updateField('name', event.target.value)}
+            />
+          </label>
+          <label>
+            <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.playerCharacter}>Personnage principal</Rpg3DHelpLabel>
+            <select value={activeSource.character || 'runner'} onChange={(event) => updateField('character', event.target.value)}>
+              {PLAYER_CHARACTER_OPTIONS.map((preset) => (
+                <option key={preset.id} value={preset.id}>{preset.label}</option>
+              ))}
+            </select>
+          </label>
+          <div className="arcade-character-summary arcade-hero-character-summary">
+            <span
+              className="arcade-character-token"
+              style={{ '--arcade-character-body': playerCharacterPreset.body, '--arcade-character-accent': playerCharacterPreset.accent }}
+            >
+              {activeSource.characterImageData ? <img src={activeSource.characterImageData} alt="" /> : null}
+            </span>
+            <div>
+              <strong>{playerCharacterPreset.label}</strong>
+              <small>{visualLabel}</small>
+            </div>
+          </div>
+          <label>
+            <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.characterRenderMode}>Rendu personnage 3D</Rpg3DHelpLabel>
+            <select value={getCharacterRenderMode(activeSource)} onChange={(event) => updateField('characterRenderMode', event.target.value, false)}>
+              {CHARACTER_RENDER_OPTIONS.map((option) => (
+                <option key={option.id} value={option.id}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.characterModel}>Modele 3D</Rpg3DHelpLabel>
+            <select value={activeSource.characterModel3dId || ''} onChange={(event) => patchActiveHero((target) => {
+              const model = studioHeroModels.find((entry) => entry.id === event.target.value);
+              applyCharacterModelToActor(target, model);
+            }, false)}>
+              <option value="">Aucun</option>
+              {studioHeroModels.map((model) => (
+                <option key={model.id} value={model.id}>{model.name || model.modelName || 'Modele 3D'}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.characterScale}>Taille 3D ({getCharacterModelScale(activeSource).toFixed(2)})</Rpg3DHelpLabel>
+            <input
+              type="range"
+              min={MODEL_SCALE_MIN}
+              max={MODEL_SCALE_MAX}
+              step="0.1"
+              value={getCharacterModelScale(activeSource)}
+              onChange={(event) => patchActiveHero((target) => {
+                const scale = clamp(Number(event.target.value), MODEL_SCALE_MIN, MODEL_SCALE_MAX);
+                target.characterModelScale = scale;
+                target.characterModelScaleY = scale;
+                if (target.characterModelScaleProportional !== false) {
+                  target.characterModelScaleX = scale;
+                  target.characterModelScaleZ = scale;
+                }
+              }, false)}
+            />
+          </label>
+          <label>
+            <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.characterMaterialBrightness}>Lumiere carte {Math.round(getCharacterMaterialBrightness(activeSource) * 100)}%</Rpg3DHelpLabel>
+            <input
+              type="range"
+              min={MATERIAL_BRIGHTNESS_MIN}
+              max={MATERIAL_BRIGHTNESS_MAX}
+              step="0.05"
+              value={getCharacterMaterialBrightness(activeSource)}
+              onChange={(event) => updateNumber('characterMaterialBrightness', event.target.value, MATERIAL_BRIGHTNESS_MIN, MATERIAL_BRIGHTNESS_MAX, false)}
+            />
+          </label>
+        </div>
+        <div className="arcade-hero-media-actions">
+          <label className="button like secondary-action arcade-file-button">
+            Importer image heros
+            <input
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = '';
+                handleCharacterImageUpload(file);
+              }}
+            />
+          </label>
+          {activeSource.characterImageData ? (
+            <button type="button" className="secondary-action" onClick={() => {
+              onSetMediaError?.('');
+              patchActiveHero((target) => {
+                target.characterImageData = '';
+                target.characterImageName = '';
+              });
+            }}>Retirer image</button>
+          ) : null}
+          {activeSource.characterModelUrl ? (
+            <button type="button" className="secondary-action" onClick={() => {
+              onSetMediaError?.('');
+              patchActiveHero((target) => {
+                applyCharacterModelToActor(target, null);
+              }, false);
+            }}>Retirer modele 3D</button>
+          ) : null}
+        </div>
+        {mediaError ? <p className="arcade-empty-state">{mediaError}</p> : null}
+      </section>
+          ) : null}
+
+          {activeHeroSectionId === 'stats' ? (
+      <section
+        id="arcade-hero-panel-stats"
+        className="panel arcade-management-panel arcade-hero-stats-panel"
+        role="tabpanel"
+        aria-labelledby="arcade-hero-tab-stats"
+      >
+        <div className="panel-head">
+          <div>
+            <span className="section-kicker"><HeartPulse aria-hidden="true" size={14} /> Stats</span>
+            <h2>Points & ressources</h2>
+          </div>
+        </div>
+        <div className="arcade-hero-form-grid">
+          <label>
+            <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.currentHealth}>PV actuels</Rpg3DHelpLabel>
+            <input type="number" min="0" max={activeMaxHealth} value={activeHealth} onChange={(event) => updateNumber('health', event.target.value, 0, activeMaxHealth)} />
+          </label>
+          <label>
+            <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.maxHealth}>PV max</Rpg3DHelpLabel>
+            <input type="number" min="1" max="999" value={activeMaxHealth} onChange={(event) => updateMaxHealth(event.target.value)} />
+          </label>
+          <label>
+            <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.currentMana}>Mana actuelle</Rpg3DHelpLabel>
+            <input type="number" min="0" max={activeMaxMana} value={activeMana} onChange={(event) => updateNumber('mana', event.target.value, 0, activeMaxMana)} />
+          </label>
+          <label>
+            <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.maxMana}>Mana max</Rpg3DHelpLabel>
+            <input type="number" min="0" max="999" value={activeMaxMana} onChange={(event) => updateMaxMana(event.target.value)} />
+          </label>
+          <label>
+            <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.playerSpeed}>Vitesse joueur ({activeSpeed})</Rpg3DHelpLabel>
+            <input type="range" min="120" max="520" step="10" value={activeSpeed} onChange={(event) => updateNumber('speed', event.target.value, 120, 520, false)} />
+          </label>
+          <label>
+            <span>Vitesse dash ({activeDashSpeed})</span>
+            <input type="range" min="300" max="1100" step="10" value={activeDashSpeed} onChange={(event) => updateNumber('dashSpeed', event.target.value, 300, 1100, false)} />
+          </label>
+          <label>
+            <span>Recharge dash ({activeDashCooldown.toFixed(2)}s)</span>
+            <input type="range" min="0.2" max="3" step="0.05" value={activeDashCooldown} onChange={(event) => updateNumber('dashCooldown', event.target.value, 0.2, 3, false)} />
+          </label>
+        </div>
+      </section>
+          ) : null}
+
+      {activeHeroSectionId === 'skills' ? (
+      <section
+        id="arcade-hero-panel-skills"
+        className="panel arcade-management-panel arcade-hero-combat-panel"
+        role="tabpanel"
+        aria-labelledby="arcade-hero-tab-skills"
+      >
+        <div className="panel-head">
+          <div>
+            <span className="section-kicker"><Sword aria-hidden="true" size={14} /> Competences</span>
+            <h2>Force & pouvoirs</h2>
+          </div>
+        </div>
+        <div className="arcade-hero-combat-grid">
+          <div className="arcade-hero-subsection">
+            <h3>Caracteristiques</h3>
+            <div className="arcade-hero-form-grid">
+              <label>
+                <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.attackBonus}>Force</Rpg3DHelpLabel>
+                <input type="number" min="-20" max="999" value={Number(forceSkill.value) || 0} onChange={(event) => updateSkill(0, 'value', event.target.value, { numeric: true, min: -20, max: 999 })} />
+              </label>
+              <label>
+                <span>Ruse</span>
+                <input type="number" min="-20" max="999" value={Number(ruseSkill.value) || 0} onChange={(event) => updateSkill(1, 'value', event.target.value, { numeric: true, min: -20, max: 999 })} />
+              </label>
+              <label>
+                <span>Magie</span>
+                <input type="number" min="-20" max="999" value={Number(magicSkill.value) || 0} onChange={(event) => updateSkill(2, 'value', event.target.value, { numeric: true, min: -20, max: 999 })} />
+              </label>
+              <label>
+                <span>Cout mana magie</span>
+                <input type="number" min="0" max="99" value={Number(magicSkill.manaCost) || 0} onChange={(event) => updateSkill(2, 'manaCost', event.target.value, { numeric: true, min: 0, max: 99 })} />
+              </label>
+            </div>
+          </div>
+          <div className="arcade-hero-subsection">
+            <h3>Attaque principale</h3>
+            <div className="arcade-hero-form-grid">
+              <label>
+                <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.attackSkill}>Nom attaque</Rpg3DHelpLabel>
+                <input value={forceSkill.name || ''} onChange={(event) => updateSkill(0, 'name', event.target.value)} />
+              </label>
+              <label>
+                <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.attackManaCost}>Cout mana attaque</Rpg3DHelpLabel>
+                <input type="number" min="0" max="99" value={Number(forceSkill.manaCost) || 0} onChange={(event) => updateSkill(0, 'manaCost', event.target.value, { numeric: true, min: 0, max: 99 })} />
+              </label>
+              <label>
+                <span>Vitesse projectile ({activeBulletSpeed})</span>
+                <input type="range" min="260" max="1200" step="10" value={activeBulletSpeed} onChange={(event) => updateNumber('bulletSpeed', event.target.value, 260, 1200, false)} />
+              </label>
+              <label>
+                <span>Cadence ({activeFireRate.toFixed(2)}s)</span>
+                <input type="range" min="0.05" max="0.8" step="0.01" value={activeFireRate} onChange={(event) => updateNumber('fireRate', event.target.value, 0.05, 0.8, false)} />
+              </label>
+            </div>
+          </div>
+          <div className="arcade-hero-subsection">
+            <h3>Pouvoir</h3>
+            <div className="arcade-hero-form-grid">
+              <label>
+                <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.powerName}>Nom pouvoir</Rpg3DHelpLabel>
+                <input value={mainPower.name || ''} onChange={(event) => updatePower(0, 'name', event.target.value)} />
+              </label>
+              <label>
+                <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.powerForce}>Force pouvoir</Rpg3DHelpLabel>
+                <input type="number" min="0" max="999" value={Number(mainPower.force) || 0} onChange={(event) => updatePower(0, 'force', event.target.value, { numeric: true, min: 0, max: 999 })} />
+              </label>
+              <label>
+                <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.powerManaCost}>Cout mana pouvoir</Rpg3DHelpLabel>
+                <input type="number" min="0" max="999" value={Number(mainPower.manaCost) || 0} onChange={(event) => updatePower(0, 'manaCost', event.target.value, { numeric: true, min: 0, max: 999 })} />
+              </label>
+              <label>
+                <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.powerElement}>Element pouvoir</Rpg3DHelpLabel>
+                <select value={mainPower.type || 'fire'} onChange={(event) => updatePower(0, 'type', event.target.value)}>
+                  <option value="fire">Feu</option>
+                  <option value="water">Eau</option>
+                  <option value="earth">Terre</option>
+                  <option value="lightning">Foudre</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+      ) : null}
+
+      {activeHeroSectionId === 'inventory' ? (
+      <section
+        id="arcade-hero-panel-inventory"
+        className="panel arcade-management-panel arcade-hero-inventory-panel"
+        role="tabpanel"
+        aria-labelledby="arcade-hero-tab-inventory"
+      >
+        <div className="panel-head">
+          <div>
+            <span className="section-kicker"><Box aria-hidden="true" size={14} /> Inventaire</span>
+            <h2>Objets du heros</h2>
+          </div>
+          <div className="arcade-hero-inventory-head-actions">
+            <button type="button" onClick={() => addInventoryItem()}>
+              <Plus aria-hidden="true" size={16} />
+              Objet
+            </button>
+            <button type="button" className="secondary-action" onClick={() => addInventoryItem('weapon')}>
+              <Sword aria-hidden="true" size={16} />
+              Arme
+            </button>
+            <button type="button" className="secondary-action" onClick={() => addInventoryItem('shield')}>
+              <Shield aria-hidden="true" size={16} />
+              Bouclier
+            </button>
+          </div>
+        </div>
+        {activeInventory.length ? (
+          <div className="arcade-hero-inventory-list">
+            {activeInventory.map((item) => (
+              <article className={`arcade-hero-inventory-row${item.type === 'weapon' || item.type === 'shield' ? ' weapon' : ''}`} key={item.id}>
+                <label>
+                  <span>Nom</span>
+                  <input
+                    value={item.name}
+                    placeholder="Objet"
+                    onChange={(event) => updateInventoryItem(item.id, 'name', event.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>Type</span>
+                  <select value={item.type} onChange={(event) => updateInventoryItem(item.id, 'type', event.target.value)}>
+                    {HERO_INVENTORY_TYPE_OPTIONS.map((option) => (
+                      <option key={option.id} value={option.id}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>Quantite</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="99"
+                    value={item.quantity}
+                    onChange={(event) => updateInventoryItem(item.id, 'quantity', event.target.value, { numeric: true, min: 1, max: 99 })}
+                  />
+                </label>
+                <label>
+                  <span>Effet</span>
+                  <input
+                    value={item.effect}
+                    placeholder="Bonus, cle, soin..."
+                    onChange={(event) => updateInventoryItem(item.id, 'effect', event.target.value)}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="danger-button arcade-hero-inventory-delete"
+                  title="Supprimer l'objet"
+                  aria-label={`Supprimer ${item.name || 'cet objet'}`}
+                  onClick={() => removeInventoryItem(item.id)}
+                >
+                  <Trash2 aria-hidden="true" size={16} />
+                </button>
+                {item.type === 'weapon' || item.type === 'shield' ? (
+                  <div className="arcade-hero-weapon-settings">
+                    <label>
+                      <span>Modele {item.type === 'shield' ? 'bouclier' : 'arme'}</span>
+                      <select value={item.weaponModel3dId || ''} onChange={(event) => updateInventoryWeaponModel(item.id, event.target.value)}>
+                        <option value="">Aucun modele</option>
+                        {studioWeaponModels.map((model) => (
+                          <option key={model.id} value={model.id}>{model.name || model.modelName || (item.type === 'shield' ? 'Bouclier 3D' : 'Arme 3D')}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      className={item.equipped ? 'secondary-action active' : 'secondary-action'}
+                      disabled={!item.weaponModelUrl}
+                      onClick={() => setInventoryWeaponEquipped(item.id, !item.equipped)}
+                    >
+                      {item.type === 'shield'
+                        ? <Shield aria-hidden="true" size={16} />
+                        : <Sword aria-hidden="true" size={16} />}
+                      {item.equipped ? 'Equipe' : 'Equiper'}
+                    </button>
+                    <label>
+                      <span>Taille {Number(item.weaponModelScale || 1).toFixed(2)}</span>
+                      <input
+                        type="range"
+                        min={HERO_WEAPON_MODEL_SCALE_MIN}
+                        max={HERO_WEAPON_MODEL_SCALE_MAX}
+                        step="0.02"
+                        value={item.weaponModelScale || 1}
+                        onChange={(event) => updateInventoryItem(item.id, 'weaponModelScale', event.target.value, {
+                          numeric: true,
+                          min: HERO_WEAPON_MODEL_SCALE_MIN,
+                          max: HERO_WEAPON_MODEL_SCALE_MAX,
+                        })}
+                      />
+                    </label>
+                    <label>
+                      <span>Offset X</span>
+                      <input type="number" min={HERO_WEAPON_OFFSET_MIN} max={HERO_WEAPON_OFFSET_MAX} step="0.01" value={item.weaponOffsetX || 0} onChange={(event) => updateInventoryItem(item.id, 'weaponOffsetX', event.target.value, { numeric: true, min: HERO_WEAPON_OFFSET_MIN, max: HERO_WEAPON_OFFSET_MAX })} />
+                    </label>
+                    <label>
+                      <span>Offset Y</span>
+                      <input type="number" min={HERO_WEAPON_OFFSET_MIN} max={HERO_WEAPON_OFFSET_MAX} step="0.01" value={item.weaponOffsetY || 0} onChange={(event) => updateInventoryItem(item.id, 'weaponOffsetY', event.target.value, { numeric: true, min: HERO_WEAPON_OFFSET_MIN, max: HERO_WEAPON_OFFSET_MAX })} />
+                    </label>
+                    <label>
+                      <span>Offset Z</span>
+                      <input type="number" min={HERO_WEAPON_OFFSET_MIN} max={HERO_WEAPON_OFFSET_MAX} step="0.01" value={item.weaponOffsetZ || 0} onChange={(event) => updateInventoryItem(item.id, 'weaponOffsetZ', event.target.value, { numeric: true, min: HERO_WEAPON_OFFSET_MIN, max: HERO_WEAPON_OFFSET_MAX })} />
+                    </label>
+                    <label>
+                      <span>Rot X</span>
+                      <input type="number" min="-180" max="180" step="5" value={item.weaponRotationX || 0} onChange={(event) => updateInventoryItem(item.id, 'weaponRotationX', event.target.value, { numeric: true, min: -180, max: 180 })} />
+                    </label>
+                    <label>
+                      <span>Rot Y</span>
+                      <input type="number" min="-180" max="180" step="5" value={item.weaponRotationY || 0} onChange={(event) => updateInventoryItem(item.id, 'weaponRotationY', event.target.value, { numeric: true, min: -180, max: 180 })} />
+                    </label>
+                    <label>
+                      <span>Rot Z</span>
+                      <input type="number" min="-180" max="180" step="5" value={item.weaponRotationZ || 0} onChange={(event) => updateInventoryItem(item.id, 'weaponRotationZ', event.target.value, { numeric: true, min: -180, max: 180 })} />
+                    </label>
+                  </div>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="arcade-hero-inventory-empty">
+            <Box aria-hidden="true" size={22} />
+            <p>Aucun objet dans l'inventaire de depart.</p>
+            <button type="button" className="secondary-action" onClick={() => addInventoryItem()}>
+              <Plus aria-hidden="true" size={16} />
+              Ajouter un objet
+            </button>
+            <button type="button" className="secondary-action" onClick={() => addInventoryItem('weapon')}>
+              <Sword aria-hidden="true" size={16} />
+              Ajouter une arme
+            </button>
+            <button type="button" className="secondary-action" onClick={() => addInventoryItem('shield')}>
+              <Shield aria-hidden="true" size={16} />
+              Ajouter un bouclier
+            </button>
+          </div>
+        )}
+      </section>
+      ) : null}
+        </div>
+      </div>
     </section>
   );
 }
@@ -1960,16 +2823,10 @@ function ArcadeManagementTab({
 function Rpg3DMode({ user = null, authReady = true, project = null }) {
   const wrapperRef = useRef(null);
   const multiDragRef = useRef(null);
-  const isSavingAssetsRef = useRef(false);
-  const projectRef = useRef(project);
-  const remoteAssetsLoadKeyRef = useRef('');
   const lastFrameRef = useRef(0);
   const actionZoneTriggerRef = useRef({ key: '', cooldownUntil: 0 });
-  const terrainPaintSessionRef = useRef(null);
-  const terrainPaintPendingPointsRef = useRef([]);
-  const terrainPaintLastPointRef = useRef(null);
-  const terrainPaintFlushTimerRef = useRef(null);
-  const terrainPaintLastFlushRef = useRef(0);
+  const activateRpg3DCanvasPortalRef = useRef(() => false);
+  const loadingBarSequenceRef = useRef(0);
   const modelEraserSessionRef = useRef(null);
   const modelEraserLastPointRef = useRef(null);
   const [mode, setMode] = useState('edit');
@@ -1978,17 +2835,11 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [cameraTargetPickMode, setCameraTargetPickMode] = useState(false);
   const [cameraZoomDragMode, setCameraZoomDragMode] = useState(false);
+  const [actionZoneEdgeInsertMode, setActionZoneEdgeInsertMode] = useState(false);
   const [cameraToolsHidden, setCameraToolsHidden] = useState(false);
   const [transformTool, setTransformTool] = useState('');
-  const [pendingPlacement, setPendingPlacement] = useState(null);
-  const [terrainPaintDraft, setTerrainPaintDraft] = useState({
-    color: TERRAIN_PAINT_DEFAULT_COLOR,
-    radius: TERRAIN_PAINT_DEFAULT_RADIUS,
-    opacity: TERRAIN_PAINT_DEFAULT_OPACITY,
-    shape: TERRAIN_PAINT_DEFAULT_SHAPE,
-  });
+  const [scaleProportionalAxes, setScaleProportionalAxes] = useState({ x: true, y: true, z: true });
   const [modelEraserRadiusDraft, setModelEraserRadiusDraft] = useState(MODEL_ERASER_DEFAULT_RADIUS);
-  const [flatGroundColorDraft, setFlatGroundColorDraft] = useState(FLAT_GROUND_DEFAULT_COLOR);
   const [multiSelected, setMultiSelected] = useState([]);
   const [selected, setSelected] = useState(null);
   const selectedRef = useRef(selected);
@@ -1996,6 +2847,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
   const [isPaused, setIsPaused] = useState(false);
   const [mediaError, setMediaError] = useState('');
   const [activeNpcChoice, setActiveNpcChoice] = useState(null);
+  const [rpg3DLoadingBar, setRpg3DLoadingBar] = useState(null);
   const [workspaceTab, setWorkspaceTab] = useState('arcade');
   const [mapFullscreen, setMapFullscreen] = useState(false);
   const [mapDrawerOpen, setMapDrawerOpen] = useState(false);
@@ -2003,6 +2855,36 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
 
   selectedRef.current = selected;
   modeRef.current = mode;
+
+  useEffect(() => {
+    if (mode !== 'edit' || selected?.type !== 'actionZone') setActionZoneEdgeInsertMode(false);
+  }, [mode, selected]);
+
+  const showRpg3DLoadingBar = useCallback((options = {}) => {
+    loadingBarSequenceRef.current += 1;
+    const durationMs = Math.max(400, Number(options.durationMs) || RPG3D_ACTION_LOADING_DURATION_MS);
+    setRpg3DLoadingBar({
+      key: `rpg3d-loading-${loadingBarSequenceRef.current}`,
+      tone: options.tone || 'action',
+      label: options.label || 'Activation',
+      detail: options.detail || '',
+      durationMs,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!rpg3DLoadingBar) return undefined;
+    const timeoutId = window.setTimeout(() => {
+      setRpg3DLoadingBar((current) => (
+        current?.key === rpg3DLoadingBar.key ? null : current
+      ));
+    }, rpg3DLoadingBar.durationMs);
+    return () => window.clearTimeout(timeoutId);
+  }, [rpg3DLoadingBar]);
+
+  useEffect(() => {
+    if (mode !== 'play') setRpg3DLoadingBar(null);
+  }, [mode]);
 
   const {
     autosaveVersionRef,
@@ -2039,60 +2921,28 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
   });
 
   const savedArcadeAssets = initialArcadeAssets.saved;
-  const [studioSelection, setStudioSelection] = useState({
-    characterModelId: '',
-    decorModelId: '',
+
+  const {
+    isSavingAssets,
+    managementSaveStatus,
+    saveArcadeAssets,
+  } = useRpg3DSaveSync({
+    authReady,
+    autosaveVersionRef,
+    clearHistoryStacks,
+    configRef,
+    lastSavedAutosaveVersionRef,
+    project,
+    resetGame,
+    savedArcadeAssets,
+    setConfig,
+    setStudioProject,
+    studioProject,
+    studioProjectRef,
+    syncActiveCanvasConfigInRef,
+    user,
+    workspaceTab,
   });
-
-  const [managementSaveStatus, setManagementSaveStatus] = useState(
-    savedArcadeAssets ? 'Sauvegarde locale chargee.' : '',
-  );
-  const [isSavingAssets, setIsSavingAssets] = useState(false);
-
-  useEffect(() => {
-    isSavingAssetsRef.current = isSavingAssets;
-  }, [isSavingAssets]);
-
-  useEffect(() => {
-    projectRef.current = project;
-  }, [project]);
-
-  const clearTerrainPaintFlushTimer = useCallback(() => {
-    if (terrainPaintFlushTimerRef.current === null) return;
-    window.clearTimeout(terrainPaintFlushTimerRef.current);
-    terrainPaintFlushTimerRef.current = null;
-  }, []);
-
-  const flushTerrainPaintPoints = useCallback(() => {
-    clearTerrainPaintFlushTimer();
-    const strokeId = terrainPaintSessionRef.current;
-    const queuedPoints = terrainPaintPendingPointsRef.current;
-    terrainPaintPendingPointsRef.current = [];
-    terrainPaintLastFlushRef.current = getNow();
-    if (!strokeId || !queuedPoints.length) return;
-    patchConfigWithoutHistory((next) => {
-      const stroke = (next.terrainPaintStrokes || []).find((item) => item.id === strokeId);
-      if (!stroke) return;
-      stroke.points = Array.isArray(stroke.points) ? stroke.points : [];
-      queuedPoints.forEach((paintPoint) => {
-        if (shouldAppendTerrainPaintPoint(stroke, paintPoint)) stroke.points.push(paintPoint);
-      });
-    }, false);
-  }, [clearTerrainPaintFlushTimer, patchConfigWithoutHistory]);
-
-  const scheduleTerrainPaintFlush = useCallback(() => {
-    if (terrainPaintFlushTimerRef.current !== null) return;
-    const wait = Math.max(0, TERRAIN_PAINT_FLUSH_INTERVAL_MS - (getNow() - terrainPaintLastFlushRef.current));
-    terrainPaintFlushTimerRef.current = window.setTimeout(() => {
-      terrainPaintFlushTimerRef.current = null;
-      flushTerrainPaintPoints();
-    }, wait);
-  }, [flushTerrainPaintPoints]);
-
-  useEffect(() => () => {
-    clearTerrainPaintFlushTimer();
-    terrainPaintPendingPointsRef.current = [];
-  }, [clearTerrainPaintFlushTimer]);
 
   useEffect(() => {
     if (workspaceTab !== 'arcade') {
@@ -2100,14 +2950,6 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
       setMapDrawerOpen(false);
     }
   }, [workspaceTab]);
-
-  useEffect(() => {
-    if (mode === 'edit' && tool === 'terrainPaint') return;
-    flushTerrainPaintPoints();
-    terrainPaintSessionRef.current = null;
-    terrainPaintLastPointRef.current = null;
-    terrainPaintPendingPointsRef.current = [];
-  }, [flushTerrainPaintPoints, mode, tool]);
 
   useEffect(() => {
     if (mode === 'edit' && tool === 'modelEraser') return;
@@ -2123,78 +2965,6 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     if (stateRef.current.player?.controlledHeroId === controlledHeroId) return;
     resetGame(configRef.current, { mode: 'play' });
   }, [mode, resetGame, selected?.id, selected?.type]);
-
-  useEffect(() => {
-    let cancelled = false;
-    restoreLocalArcadeAssetsSources({
-      config: configRef.current,
-      studioProject: studioProjectRef.current,
-    }).then((restored) => {
-      if (cancelled || !restored?.changed) return;
-      const nextConfig = createConfigFromSavedAssets(restored.config);
-      const nextStudioProject = syncStudioProjectActiveCanvasConfig(restored.studioProject, nextConfig);
-      configRef.current = nextConfig;
-      studioProjectRef.current = nextStudioProject;
-      setConfig(nextConfig);
-      setStudioProject(nextStudioProject);
-      resetGame(nextConfig);
-      setManagementSaveStatus((current) => current || 'Modeles 3D locaux restaures.');
-    }).catch(() => {
-      // Local model recovery is best-effort; missing files fall back to normal asset sync.
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [resetGame, setConfig, setStudioProject, syncStudioProjectActiveCanvasConfig]);
-
-  useEffect(() => {
-    if (!authReady || !user?.id || !hasRpg3DAssetsSupabaseConfig()) return undefined;
-    const loadKey = user.id;
-    if (remoteAssetsLoadKeyRef.current === loadKey) return undefined;
-    remoteAssetsLoadKeyRef.current = loadKey;
-    let cancelled = false;
-    setManagementSaveStatus((current) => (
-      !current || isDisconnectedSaveStatus(current) ? 'Chargement Supabase...' : current
-    ));
-    loadArcadeAssetsFromSupabase(user.id)
-      .then(async (remoteAssets) => {
-        if (cancelled || !remoteAssets) return;
-        const remoteStudioProject = createStudioProjectFromSavedAssets(remoteAssets.studioProject, remoteAssets.config, projectRef.current);
-        const remoteConfig = createConfigFromSavedAssets(getActiveRpg3DCanvas(remoteStudioProject)?.config || remoteAssets.config);
-        const restored = await restoreLocalArcadeAssetsSources({
-          config: remoteConfig,
-          studioProject: remoteStudioProject,
-        });
-        if (cancelled) return;
-        const nextConfig = createConfigFromSavedAssets(restored.config);
-        const nextStudioProject = syncStudioProjectActiveCanvasConfig(restored.studioProject, nextConfig);
-        configRef.current = nextConfig;
-        studioProjectRef.current = nextStudioProject;
-        setConfig(nextConfig);
-        setStudioProject(nextStudioProject);
-        clearHistoryStacks();
-        resetGame(nextConfig);
-        rememberArcadeAssetsLocally({
-          ...remoteAssets,
-          config: nextConfig,
-          studioProject: nextStudioProject,
-        });
-        setManagementSaveStatus(restored.changed
-          ? 'Sauvegarde Supabase chargee, modeles locaux restaures.'
-          : 'Sauvegarde Supabase chargee.');
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        if (isRpg3DAssetsNotFoundError(error)) {
-          setManagementSaveStatus((current) => current === 'Chargement Supabase...' ? '' : current);
-          return;
-        }
-        setManagementSaveStatus('Chargement Supabase impossible.');
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [authReady, clearHistoryStacks, resetGame, setConfig, setStudioProject, syncStudioProjectActiveCanvasConfig, user?.id]);
 
   const patchViewportEngineConfig = useCallback((recipe) => {
     const currentConfig = configRef.current || DEFAULT_ARCADE_CONFIG;
@@ -2272,180 +3042,25 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
   }, [mode]);
 
   useEffect(() => {
-    setConfig((current) => {
-      const synced = syncConfigModelReferences(current, studioProject, { preferLocalBlob: true });
-      if (!synced.changed) return current;
-      configRef.current = synced.config;
-      syncActiveCanvasConfigInRef(synced.config);
-      return synced.config;
-    });
-  }, [studioProject, syncActiveCanvasConfigInRef]);
-
-  useEffect(() => {
     if (workspaceTab !== 'canvases') return;
     syncActiveCanvasConfigInRef(configRef.current, { updateState: true });
   }, [syncActiveCanvasConfigInRef, workspaceTab]);
 
-  const saveArcadeAssets = useCallback(async (options = {}) => {
-    const localOnly = Boolean(options.localOnly);
-    const supabaseConfigured = hasRpg3DAssetsSupabaseConfig();
-    const saveLocallyBecauseSessionMissing = !localOnly && supabaseConfigured && authReady && !user?.id;
-    const effectiveLocalOnly = localOnly || saveLocallyBecauseSessionMissing;
-    const savingVersion = autosaveVersionRef.current;
-    if (isSavingAssetsRef.current) return;
-    if (!effectiveLocalOnly && supabaseConfigured) {
-      if (!authReady) {
-        setManagementSaveStatus('Compte en cours de chargement...');
-        return;
-      }
-      if (!user?.id) {
-        setManagementSaveStatus(RPG3D_LOGIN_REQUIRED_STATUS);
-        return;
-      }
-    }
+  const handleActionZoneTriggered = useCallback((zone, context = {}) => {
+    const actionType = context.actionType || getActionZoneType(zone);
+    if (actionType === 'portal') return;
+    const zoneName = String(zone?.name || zone?.message || '').trim();
+    showRpg3DLoadingBar({
+      tone: 'action',
+      label: actionType === 'npcAction' ? 'Action PNJ' : 'Zone d action',
+      detail: zoneName || 'Activation de la zone',
+      durationMs: RPG3D_ACTION_LOADING_DURATION_MS,
+    });
+  }, [showRpg3DLoadingBar]);
 
-    isSavingAssetsRef.current = true;
-    setIsSavingAssets(true);
-    setManagementSaveStatus(
-      effectiveLocalOnly ? 'Sauvegarde locale...' : (supabaseConfigured ? 'Sauvegarde Supabase...' : 'Sauvegarde locale...'),
-    );
-    try {
-      const currentConfig = configRef.current;
-      const currentStudioProject = syncActiveCanvasConfigInRef(currentConfig, { updateState: workspaceTab === 'canvases' });
-      if (effectiveLocalOnly) {
-        const localSync = syncConfigModelReferences(currentConfig, currentStudioProject, { preferLocalBlob: true });
-        const localPayload = createArcadeAssetsPayload(localSync.config, currentStudioProject);
-        if (!rememberArcadeAssetsLocally(localPayload)) {
-          setManagementSaveStatus('Sauvegarde impossible: stockage local plein.');
-          return;
-        }
-        if (localSync.changed) {
-          configRef.current = localSync.config;
-          syncActiveCanvasConfigInRef(localSync.config, { updateState: workspaceTab === 'canvases' });
-          setConfig(localSync.config);
-          resetGame(localSync.config);
-        }
-        lastSavedAutosaveVersionRef.current = Math.max(lastSavedAutosaveVersionRef.current, savingVersion);
-        setManagementSaveStatus(saveLocallyBecauseSessionMissing
-          ? RPG3D_LOCAL_SESSION_FALLBACK_STATUS
-          : 'Sauvegarde locale terminee.');
-        return;
-      }
-
-      if (supabaseConfigured && user?.id) {
-        const remotePayload = await createSupabaseArcadeAssetsPayload(currentConfig, currentStudioProject, user.id);
-        await uploadArcadeAssetsManifest(remotePayload, user.id);
-        rememberArcadeAssetsLocally(remotePayload);
-        const nextStudioProject = createStudioProjectFromSavedAssets(remotePayload.studioProject, remotePayload.config, project);
-        const nextConfig = createConfigFromSavedAssets(getActiveRpg3DCanvas(nextStudioProject)?.config || remotePayload.config);
-        lastSavedAutosaveVersionRef.current = Math.max(lastSavedAutosaveVersionRef.current, savingVersion);
-        if (autosaveVersionRef.current === savingVersion) {
-          configRef.current = nextConfig;
-          studioProjectRef.current = syncStudioProjectActiveCanvasConfig(nextStudioProject, nextConfig);
-          setConfig(nextConfig);
-          setStudioProject(studioProjectRef.current);
-          resetGame(nextConfig);
-        }
-        setManagementSaveStatus('Sauvegarde Supabase terminee.');
-        return;
-      }
-
-      const localSync = syncConfigModelReferences(currentConfig, currentStudioProject);
-      const localPayload = createArcadeAssetsPayload(localSync.config, currentStudioProject);
-      if (!rememberArcadeAssetsLocally(localPayload)) {
-        setManagementSaveStatus('Sauvegarde impossible: stockage local plein.');
-        return;
-      }
-      if (localSync.changed) {
-        configRef.current = localSync.config;
-        syncActiveCanvasConfigInRef(localSync.config, { updateState: workspaceTab === 'canvases' });
-        setConfig(localSync.config);
-      }
-      lastSavedAutosaveVersionRef.current = Math.max(lastSavedAutosaveVersionRef.current, savingVersion);
-      setManagementSaveStatus('Sauvegarde locale terminee.');
-    } catch (error) {
-      if (!effectiveLocalOnly && supabaseConfigured) {
-        try {
-          const currentConfig = configRef.current;
-          const currentStudioProject = syncActiveCanvasConfigInRef(currentConfig, { updateState: workspaceTab === 'canvases' });
-          const localSync = syncConfigModelReferences(currentConfig, currentStudioProject, { preferLocalBlob: true });
-          const localPayload = createArcadeAssetsPayload(localSync.config, currentStudioProject);
-          if (rememberArcadeAssetsLocally(localPayload)) {
-            if (localSync.changed) {
-              configRef.current = localSync.config;
-              syncActiveCanvasConfigInRef(localSync.config, { updateState: workspaceTab === 'canvases' });
-              setConfig(localSync.config);
-              resetGame(localSync.config);
-            }
-            lastSavedAutosaveVersionRef.current = Math.max(lastSavedAutosaveVersionRef.current, savingVersion);
-            setManagementSaveStatus(`Sauvegarde locale terminee. Supabase inaccessible: ${error?.message || 'upload impossible'}`);
-            return;
-          }
-        } catch {
-          // Keep the original Supabase error below if the local fallback also fails.
-        }
-      }
-      const errorPrefix = effectiveLocalOnly
-        ? 'Mode local impossible'
-        : supabaseConfigured
-          ? 'Sauvegarde Supabase impossible'
-          : 'Sauvegarde locale impossible';
-      setManagementSaveStatus(error?.message ? `${errorPrefix}: ${error.message}` : `${errorPrefix}.`);
-    } finally {
-      isSavingAssetsRef.current = false;
-      setIsSavingAssets(false);
-    }
-  }, [authReady, project, resetGame, syncActiveCanvasConfigInRef, user?.id, workspaceTab]);
-
-  const selectRpg3DCanvas = useCallback((canvasId) => {
-    const syncedProject = syncActiveCanvasConfigInRef(configRef.current, { updateState: workspaceTab === 'canvases' });
-    const targetCanvas = (syncedProject.rpg3dCanvases || []).find((canvas) => canvas.id === canvasId);
-    if (!targetCanvas) return;
-    if (syncedProject.rpg3dActiveCanvasId === targetCanvas.id) {
-      setStudioProject(syncedProject);
-      return;
-    }
-    pushHistorySnapshot();
-    const nextProject = cloneStudioProjectForEdit(syncedProject, null, null);
-    nextProject.rpg3dActiveCanvasId = targetCanvas.id;
-    const nextCanvas = nextProject.rpg3dCanvases.find((canvas) => canvas.id === targetCanvas.id) || targetCanvas;
-    const synced = syncConfigModelReferences(createConfigFromSavedAssets(nextCanvas.config), nextProject, { preferLocalBlob: true });
-    const nextConfig = synced.config;
-    const finalProject = syncStudioProjectActiveCanvasConfig(nextProject, nextConfig, targetCanvas.id);
-    configRef.current = nextConfig;
-    studioProjectRef.current = finalProject;
-    setConfig(nextConfig);
-    setStudioProject(finalProject);
-    setSelected(null);
-    setMultiSelected([]);
-    setPendingPlacement(null);
-    resetGame(nextConfig);
-    markAutosaveDirty();
-  }, [markAutosaveDirty, pushHistorySnapshot, resetGame, syncActiveCanvasConfigInRef, workspaceTab]);
-
-  const activateRpg3DCanvasPortal = useCallback((canvasId) => {
-    const syncedProject = syncActiveCanvasConfigInRef(configRef.current, { updateState: workspaceTab === 'canvases' });
-    const targetCanvas = (syncedProject.rpg3dCanvases || []).find((canvas) => canvas.id === canvasId);
-    if (!targetCanvas || syncedProject.rpg3dActiveCanvasId === targetCanvas.id) return false;
-    const nextProject = cloneStudioProjectForEdit(syncedProject, null, null);
-    nextProject.rpg3dActiveCanvasId = targetCanvas.id;
-    const nextCanvas = nextProject.rpg3dCanvases.find((canvas) => canvas.id === targetCanvas.id) || targetCanvas;
-    const synced = syncConfigModelReferences(createConfigFromSavedAssets(nextCanvas.config), nextProject, { preferLocalBlob: true });
-    const nextConfig = synced.config;
-    const finalProject = syncStudioProjectActiveCanvasConfig(nextProject, nextConfig, targetCanvas.id);
-    configRef.current = nextConfig;
-    studioProjectRef.current = finalProject;
-    setConfig(nextConfig);
-    setStudioProject(finalProject);
-    setSelected(null);
-    setMultiSelected([]);
-    setPendingPlacement(null);
-    resetGame(nextConfig);
-    actionZoneTriggerRef.current = { key: 'portal-transition', cooldownUntil: performance.now() + 950 };
-    setMode('play');
-    setIsPaused(false);
-    return true;
-  }, [resetGame, syncActiveCanvasConfigInRef, workspaceTab]);
+  const activateRpg3DCanvasPortalForLoop = useCallback((canvasId) => (
+    activateRpg3DCanvasPortalRef.current?.(canvasId) || false
+  ), []);
 
   const {
     clearInputState,
@@ -2456,7 +3071,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     stateRef,
     updateWorldPointer,
   } = useRpg3DGameLoop({
-    activateRpg3DCanvasPortal,
+    activateRpg3DCanvasPortal: activateRpg3DCanvasPortalForLoop,
     actionZoneTriggerRef,
     configRef,
     getActionZoneNpcLabel,
@@ -2466,6 +3081,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     isPaused,
     lastFrameRef,
     mode,
+    onActionZoneTriggered: handleActionZoneTriggered,
     setActiveNpcChoice,
     setIsPaused,
     setSnapshot: setGameSnapshot,
@@ -2473,6 +3089,142 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     stateRef: projectStateRef,
     workspaceTab,
   });
+
+  const {
+    beginEntityPlacement,
+    commitPendingPlacement,
+    getCurrentPlacementPoint,
+    pendingPlacement,
+    setPendingPlacement,
+  } = useRpg3DPlacement({
+    canMultiSelectEntity,
+    configRef,
+    getPlacementCameraDistance,
+    patchConfigWithoutHistory,
+    patchViewportEngineConfig,
+    pointerRef,
+    setCameraTargetPickMode,
+    setDragMode,
+    setIsPaused,
+    setMode,
+    setMultiSelectMode,
+    setMultiSelected,
+    setSelected,
+    setTool,
+  });
+
+  const {
+    createStudioCharacter,
+    createStudioDecor,
+    deleteStudioCharacter,
+    deleteStudioDecor,
+    editStudioCharacter,
+    editStudioDecor,
+    handleStudioUpload,
+    importStudioCharacterToCanvas,
+    importStudioDecorToCanvas,
+    renameStudioCharacter,
+    renameStudioDecor,
+    setPlayerCharacterImage,
+    setSelectedPropImage,
+    setStudioSelection,
+    studioSelection,
+  } = useRpg3DStudioAssets({
+    applyCharacterModelToActor,
+    beginEntityPlacement,
+    createId,
+    getCurrentPlacementPoint,
+    getDecorImportRenderMode,
+    getDecorModelWorldSize,
+    getModelRotationValue,
+    getStudioCharacterRenderMode,
+    guessCharacterRenderMode,
+    guessPropRenderMode,
+    markAutosaveDirty,
+    patchConfig,
+    patchStudioProject,
+    pushHistorySnapshot,
+    readArcadeImageFile,
+    selected,
+    setMediaError,
+    setStudioProject,
+    setWorkspaceTab,
+    shouldPropBlockByMode,
+    studioProject,
+    studioProjectRef,
+  });
+
+  const {
+    addFlatGroundToCanvas,
+    clearTerrainPaint,
+    flatGroundColorValue,
+    handleTerrainPaintEnd,
+    handleTerrainPaintMove,
+    handleTerrainPaintStart,
+    handleToggleTerrainPaint,
+    terrainPaintDraft,
+    terrainPaintStrokeCount,
+    updateFlatGroundColor,
+    updateTerrainPaintDraft,
+  } = useRpg3DTerrainPaint({
+    config,
+    configRef,
+    createId,
+    mode,
+    modeRef,
+    patchConfig,
+    patchConfigWithoutHistory,
+    setActionZoneEdgeInsertMode,
+    setCameraTargetPickMode,
+    setCameraZoomDragMode,
+    setDragMode,
+    setMode,
+    setMultiSelectMode,
+    setMultiSelected,
+    setPendingPlacement,
+    setSelected,
+    setTool,
+    setTransformTool,
+    tool,
+  });
+
+  const {
+    activeRpg3DCanvas,
+    activeRpg3DCanvasId,
+    activateRpg3DCanvasPortal,
+    createRpg3DAct,
+    createRpg3DCanvas,
+    deleteRpg3DAct,
+    deleteRpg3DCanvas,
+    keepOnlyActiveRpg3DCanvas,
+    moveRpg3DCanvasToAct,
+    renameRpg3DAct,
+    renameRpg3DCanvas,
+    rpg3DCanvasOptions,
+    selectRpg3DCanvas,
+  } = useRpg3DCanvasManagement({
+    actionZoneTriggerRef,
+    configRef,
+    createId,
+    markAutosaveDirty,
+    playMode: mode === 'play',
+    pushHistorySnapshot,
+    resetGame,
+    setConfig,
+    setIsPaused,
+    setMode,
+    setMultiSelected,
+    setPendingPlacement,
+    setSelected,
+    setStudioProject,
+    showRpg3DLoadingBar,
+    studioProject,
+    studioProjectRef,
+    syncActiveCanvasConfigInRef,
+    workspaceTab,
+  });
+
+  activateRpg3DCanvasPortalRef.current = activateRpg3DCanvasPortal;
 
   useEffect(() => {
     if (workspaceTab === 'arcade') return;
@@ -2483,308 +3235,6 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     setIsPaused(false);
     resetGame(configRef.current, { mode: 'edit' });
   }, [clearInputState, resetGame, workspaceTab]);
-
-  const createRpg3DCanvas = useCallback(({ actId = '' } = {}) => {
-    const syncedProject = syncActiveCanvasConfigInRef(configRef.current, { updateState: workspaceTab === 'canvases' });
-    pushHistorySnapshot();
-    const nextProject = cloneStudioProjectForEdit(syncedProject, null, null);
-    const fallbackAct = nextProject.rpg3dActs[0] || getDefaultRpg3DActs()[0];
-    const targetActId = nextProject.rpg3dActs.some((act) => act.id === actId)
-      ? actId
-      : fallbackAct.id;
-    const nextCanvas = createRpg3DCanvasDraft({
-      index: nextProject.rpg3dCanvases.length,
-      actId: targetActId,
-    });
-    nextProject.rpg3dCanvases = [...(nextProject.rpg3dCanvases || []), nextCanvas];
-    nextProject.rpg3dScenes = [
-      ...(nextProject.rpg3dScenes || []),
-      { id: nextCanvas.id, name: nextCanvas.name, actId: targetActId, parentSceneId: '' },
-    ];
-    nextProject.rpg3dActiveCanvasId = nextCanvas.id;
-    const nextConfig = createConfigFromSavedAssets(nextCanvas.config);
-    const finalProject = syncStudioProjectActiveCanvasConfig(nextProject, nextConfig, nextCanvas.id);
-    configRef.current = nextConfig;
-    studioProjectRef.current = finalProject;
-    setConfig(nextConfig);
-    setStudioProject(finalProject);
-    setSelected(null);
-    setMultiSelected([]);
-    setPendingPlacement(null);
-    resetGame(nextConfig);
-    markAutosaveDirty();
-    return nextCanvas.id;
-  }, [markAutosaveDirty, pushHistorySnapshot, resetGame, syncActiveCanvasConfigInRef, workspaceTab]);
-
-  const deleteRpg3DCanvas = useCallback((canvasId) => {
-    const syncedProject = syncActiveCanvasConfigInRef(configRef.current, { updateState: workspaceTab === 'canvases' });
-    const canvases = syncedProject.rpg3dCanvases || [];
-    if (canvases.length <= 1) return;
-    if (!canvases.some((canvas) => canvas.id === canvasId)) return;
-    pushHistorySnapshot();
-    const nextProject = cloneStudioProjectForEdit(syncedProject, null, null);
-    const removedCanvas = nextProject.rpg3dCanvases.find((canvas) => canvas.id === canvasId);
-    const wasActive = nextProject.rpg3dActiveCanvasId === canvasId;
-    nextProject.rpg3dCanvases = nextProject.rpg3dCanvases.filter((canvas) => canvas.id !== canvasId);
-    nextProject.rpg3dScenes = (nextProject.rpg3dScenes || []).filter((scene) => (
-      scene.id !== canvasId && scene.id !== removedCanvas?.sceneId
-    ));
-    let nextConfig = configRef.current;
-    if (wasActive) {
-      const nextCanvas = nextProject.rpg3dCanvases[0] || createFallbackRpg3DCanvas();
-      nextProject.rpg3dActiveCanvasId = nextCanvas.id;
-      nextConfig = createConfigFromSavedAssets(nextCanvas.config);
-    }
-    const finalProject = wasActive
-      ? syncStudioProjectActiveCanvasConfig(nextProject, nextConfig, nextProject.rpg3dActiveCanvasId)
-      : nextProject;
-    configRef.current = nextConfig;
-    studioProjectRef.current = finalProject;
-    setConfig(nextConfig);
-    setStudioProject(finalProject);
-    if (wasActive) {
-      setSelected(null);
-      setMultiSelected([]);
-      setPendingPlacement(null);
-      resetGame(nextConfig);
-    }
-    markAutosaveDirty();
-  }, [markAutosaveDirty, pushHistorySnapshot, resetGame, syncActiveCanvasConfigInRef, workspaceTab]);
-
-  const keepOnlyActiveRpg3DCanvas = useCallback(() => {
-    const syncedProject = syncActiveCanvasConfigInRef(configRef.current, { updateState: workspaceTab === 'canvases' });
-    const activeCanvasId = syncedProject.rpg3dActiveCanvasId || syncedProject.rpg3dCanvases?.[0]?.id || '';
-    const activeCanvas = (syncedProject.rpg3dCanvases || []).find((canvas) => canvas.id === activeCanvasId);
-    if (!activeCanvas || (syncedProject.rpg3dCanvases || []).length <= 1) return;
-    pushHistorySnapshot();
-    const structure = getRpg3DCanvasStructure(syncedProject);
-    const activeAct = structure.acts.find((act) => act.id === activeCanvas.actId) || {
-      id: activeCanvas.actId || DEFAULT_RPG3D_ACT_ID,
-      name: 'Acte I',
-    };
-    const nextProject = cloneStudioProjectForEdit(syncedProject, null, null);
-    nextProject.rpg3dActs = [{ id: activeAct.id, name: activeAct.name || 'Acte I' }];
-    nextProject.rpg3dScenes = [{
-      id: activeCanvas.id,
-      name: activeCanvas.name || 'Scene 1',
-      actId: activeAct.id,
-      parentSceneId: '',
-    }];
-    nextProject.rpg3dCanvases = [{
-      ...activeCanvas,
-      actId: activeAct.id,
-      sceneId: activeCanvas.id,
-      config: cloneConfig(configRef.current),
-      updatedAt: new Date().toISOString(),
-    }];
-    nextProject.rpg3dActiveCanvasId = activeCanvas.id;
-    const nextConfig = createConfigFromSavedAssets(nextProject.rpg3dCanvases[0].config);
-    const finalProject = syncStudioProjectActiveCanvasConfig(nextProject, nextConfig, activeCanvas.id);
-    configRef.current = nextConfig;
-    studioProjectRef.current = finalProject;
-    setConfig(nextConfig);
-    setStudioProject(finalProject);
-    setSelected(null);
-    setMultiSelected([]);
-    setPendingPlacement(null);
-    resetGame(nextConfig);
-    markAutosaveDirty();
-  }, [markAutosaveDirty, pushHistorySnapshot, resetGame, syncActiveCanvasConfigInRef, workspaceTab]);
-
-  const createRpg3DAct = useCallback(() => {
-    const syncedProject = syncActiveCanvasConfigInRef(configRef.current, { updateState: workspaceTab === 'canvases' });
-    pushHistorySnapshot();
-    const nextProject = cloneStudioProjectForEdit(syncedProject, null, null);
-    const nextAct = {
-      id: createId('rpg3d-act'),
-      name: `Acte ${nextProject.rpg3dActs.length + 1}`,
-    };
-    nextProject.rpg3dActs = [...(nextProject.rpg3dActs || []), nextAct];
-    studioProjectRef.current = nextProject;
-    setStudioProject(nextProject);
-    markAutosaveDirty();
-    return nextAct.id;
-  }, [markAutosaveDirty, pushHistorySnapshot, syncActiveCanvasConfigInRef, workspaceTab]);
-
-  const renameRpg3DAct = useCallback((actId, name) => {
-    const nextName = String(name ?? '').slice(0, 80);
-    const syncedProject = syncActiveCanvasConfigInRef(configRef.current, { updateState: workspaceTab === 'canvases' });
-    const currentAct = (syncedProject.rpg3dActs || []).find((act) => act.id === actId);
-    if (!currentAct || currentAct.name === nextName) return;
-    pushHistorySnapshot();
-    const nextProject = cloneStudioProjectForEdit(syncedProject, null, null);
-    nextProject.rpg3dActs = nextProject.rpg3dActs.map((act) => (
-      act.id === actId ? { ...act, name: nextName } : act
-    ));
-    studioProjectRef.current = nextProject;
-    setStudioProject(nextProject);
-    markAutosaveDirty();
-  }, [markAutosaveDirty, pushHistorySnapshot, syncActiveCanvasConfigInRef, workspaceTab]);
-
-  const deleteRpg3DAct = useCallback((actId) => {
-    const syncedProject = syncActiveCanvasConfigInRef(configRef.current, { updateState: workspaceTab === 'canvases' });
-    const acts = syncedProject.rpg3dActs || [];
-    const canvases = syncedProject.rpg3dCanvases || [];
-    if (acts.length <= 1) return;
-    if (canvases.some((canvas) => canvas.actId === actId)) return;
-    if (!acts.some((act) => act.id === actId)) return;
-    pushHistorySnapshot();
-    const nextProject = cloneStudioProjectForEdit(syncedProject, null, null);
-    nextProject.rpg3dActs = nextProject.rpg3dActs.filter((act) => act.id !== actId);
-    nextProject.rpg3dScenes = (nextProject.rpg3dScenes || []).filter((scene) => scene.actId !== actId);
-    studioProjectRef.current = nextProject;
-    setStudioProject(nextProject);
-    markAutosaveDirty();
-  }, [markAutosaveDirty, pushHistorySnapshot, syncActiveCanvasConfigInRef, workspaceTab]);
-
-  const renameRpg3DCanvas = useCallback((canvasId, name) => {
-    const nextName = String(name ?? '').slice(0, 100);
-    const syncedProject = syncActiveCanvasConfigInRef(configRef.current, { updateState: workspaceTab === 'canvases' });
-    const targetCanvas = (syncedProject.rpg3dCanvases || []).find((canvas) => canvas.id === canvasId);
-    if (!targetCanvas || targetCanvas.name === nextName) return;
-    pushHistorySnapshot();
-    const renamedAt = new Date().toISOString();
-    const nextProject = cloneStudioProjectForEdit(syncedProject, null, null);
-    nextProject.rpg3dCanvases = nextProject.rpg3dCanvases.map((canvas) => {
-      if (canvas.id !== canvasId) return canvas;
-      const nextCanvasConfig = createConfigFromSavedAssets(canvas.config);
-      nextCanvasConfig.meta = {
-        ...(nextCanvasConfig.meta || {}),
-        title: nextName || nextCanvasConfig.meta?.title || 'Canevas',
-      };
-      return {
-        ...canvas,
-        name: nextName,
-        sceneId: canvas.id,
-        config: nextCanvasConfig,
-        updatedAt: renamedAt,
-      };
-    });
-    nextProject.rpg3dScenes = (nextProject.rpg3dScenes || []).map((scene) => (
-      scene.id === targetCanvas.sceneId || scene.id === targetCanvas.id
-        ? { ...scene, id: targetCanvas.id, name: nextName || scene.name }
-        : scene
-    ));
-
-    let finalProject = nextProject;
-    if (nextProject.rpg3dActiveCanvasId === canvasId) {
-      const nextConfig = cloneConfig(configRef.current);
-      nextConfig.meta = {
-        ...(nextConfig.meta || {}),
-        title: nextName || nextConfig.meta?.title || 'Canevas',
-      };
-      configRef.current = nextConfig;
-      setConfig(nextConfig);
-      finalProject = syncStudioProjectActiveCanvasConfig(nextProject, nextConfig, canvasId);
-    }
-    studioProjectRef.current = finalProject;
-    setStudioProject(finalProject);
-    markAutosaveDirty();
-  }, [markAutosaveDirty, pushHistorySnapshot, syncActiveCanvasConfigInRef, workspaceTab]);
-
-  const moveRpg3DCanvasToAct = useCallback((canvasId, actId) => {
-    const syncedProject = syncActiveCanvasConfigInRef(configRef.current, { updateState: workspaceTab === 'canvases' });
-    const targetCanvas = (syncedProject.rpg3dCanvases || []).find((canvas) => canvas.id === canvasId);
-    const targetAct = (syncedProject.rpg3dActs || []).find((act) => act.id === actId);
-    if (!targetCanvas || !targetAct || targetCanvas.actId === actId) return;
-    pushHistorySnapshot();
-    const movedAt = new Date().toISOString();
-    const nextProject = cloneStudioProjectForEdit(syncedProject, null, null);
-    nextProject.rpg3dCanvases = nextProject.rpg3dCanvases.map((canvas) => (
-      canvas.id === canvasId
-        ? { ...canvas, actId, sceneId: canvas.id, updatedAt: movedAt }
-        : canvas
-    ));
-    nextProject.rpg3dScenes = (nextProject.rpg3dScenes || []).map((scene) => (
-      scene.id === targetCanvas.sceneId || scene.id === targetCanvas.id
-        ? { ...scene, id: targetCanvas.id, actId }
-        : scene
-    ));
-    const finalProject = nextProject.rpg3dActiveCanvasId === canvasId
-      ? syncStudioProjectActiveCanvasConfig(nextProject, configRef.current, canvasId)
-      : nextProject;
-    studioProjectRef.current = finalProject;
-    setStudioProject(finalProject);
-    markAutosaveDirty();
-  }, [markAutosaveDirty, pushHistorySnapshot, syncActiveCanvasConfigInRef, workspaceTab]);
-
-  const createStudioCharacter = useCallback(() => {
-    const next = makeCharacter3DModel({
-      name: `Personnage 3D ${(studioProject.characterModels3d || []).length + 1}`,
-      role: 'npc',
-      shape: 'glb',
-    });
-    patchStudioProject((draft) => {
-      draft.characterModels3d = Array.isArray(draft.characterModels3d) ? draft.characterModels3d : [];
-      draft.characterModels3d.push(next);
-    });
-    setStudioSelection((current) => ({ ...current, characterModelId: next.id }));
-    setWorkspaceTab('characters3d');
-  }, [patchStudioProject, studioProject.characterModels3d]);
-
-  const createStudioDecor = useCallback(() => {
-    const next = makeDecor3DModel({
-      name: `Objet 3D ${(studioProject.decorModels3d || []).length + 1}`,
-      kind: 'decor',
-    });
-    patchStudioProject((draft) => {
-      draft.decorModels3d = Array.isArray(draft.decorModels3d) ? draft.decorModels3d : [];
-      draft.decorModels3d.push(next);
-    });
-    setStudioSelection((current) => ({ ...current, decorModelId: next.id }));
-    setWorkspaceTab('decors3d');
-  }, [patchStudioProject, studioProject.decorModels3d]);
-
-  const renameStudioCharacter = useCallback((modelId, name) => {
-    patchStudioProject((draft) => {
-      const model = (draft.characterModels3d || []).find((entry) => entry.id === modelId);
-      if (model) model.name = name;
-    });
-  }, [patchStudioProject]);
-
-  const renameStudioDecor = useCallback((modelId, name) => {
-    patchStudioProject((draft) => {
-      const model = (draft.decorModels3d || []).find((entry) => entry.id === modelId);
-      if (model) model.name = name;
-    });
-  }, [patchStudioProject]);
-
-  const deleteStudioCharacter = useCallback((modelId) => {
-    patchStudioProject((draft) => {
-      draft.characterModels3d = (draft.characterModels3d || []).filter((model) => model.id !== modelId);
-    });
-    patchConfig((next) => {
-      if (next.player.characterModel3dId === modelId) applyCharacterModelToActor(next.player, null);
-      (next.heroes || []).forEach((hero) => {
-        if (hero.characterModel3dId === modelId) applyCharacterModelToActor(hero, null);
-      });
-      (next.enemies || []).forEach((enemy) => {
-        if (enemy.characterModel3dId === modelId) applyCharacterModelToActor(enemy, null);
-      });
-    }, false);
-    setStudioSelection((current) => (
-      current.characterModelId === modelId ? { ...current, characterModelId: '' } : current
-    ));
-  }, [patchConfig, patchStudioProject]);
-
-  const deleteStudioDecor = useCallback((modelId) => {
-    patchStudioProject((draft) => {
-      draft.decorModels3d = (draft.decorModels3d || []).filter((model) => model.id !== modelId);
-    });
-    setStudioSelection((current) => (
-      current.decorModelId === modelId ? { ...current, decorModelId: '' } : current
-    ));
-  }, [patchStudioProject]);
-
-  const editStudioCharacter = useCallback((modelId) => {
-    setStudioSelection((current) => ({ ...current, characterModelId: modelId }));
-    setWorkspaceTab('characters3d');
-  }, []);
-
-  const editStudioDecor = useCallback((modelId) => {
-    setStudioSelection((current) => ({ ...current, decorModelId: modelId }));
-    setWorkspaceTab('decors3d');
-  }, []);
 
   const createNewProject = useCallback(() => {
     if (!window.confirm('Creer un nouveau projet RPG 3D ? La carte actuelle sera remplacee.')) return;
@@ -2801,98 +3251,6 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     resetGame(next);
   }, [markAutosaveDirty, pushHistorySnapshot, resetGame]);
 
-  const handleStudioUpload = useCallback(async (event, callback) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    try {
-      const imageData = await readArcadeImageFile(file);
-      const asset = {
-        id: createId('arcade-asset'),
-        name: file.name || 'image',
-        type: 'image',
-        url: imageData,
-        size: file.size || 0,
-        storageMode: 'local',
-      };
-      pushHistorySnapshot();
-      setStudioProject((current) => {
-        const next = {
-          ...current,
-          mediaAssets: [asset, ...(current.mediaAssets || []).filter((item) => item.url !== imageData)],
-        };
-        studioProjectRef.current = next;
-        return next;
-      });
-      markAutosaveDirty();
-      setMediaError('');
-      callback?.(imageData, asset.name);
-    } catch (error) {
-      setMediaError(error?.message || "Impossible de charger l'image.");
-    } finally {
-      event.target.value = '';
-    }
-  }, [markAutosaveDirty, pushHistorySnapshot]);
-
-  const setPlayerCharacterImage = useCallback(async (file) => {
-    if (!file) return;
-    try {
-      const imageData = await readArcadeImageFile(file);
-      setMediaError('');
-      patchConfig((next) => {
-        const hadImage = Boolean(next.player.characterImageData);
-        next.player.characterImageData = imageData;
-        next.player.characterImageName = file.name || 'heros';
-        next.player.characterModel3dId = '';
-        next.player.characterModelUrl = '';
-        next.player.characterModelName = '';
-        next.player.characterModelResources = [];
-        next.player.characterModelAnimations = {};
-        if (!hadImage) next.player.characterRenderMode = guessCharacterRenderMode(file.name || '');
-        if (!next.player.characterModelScale) next.player.characterModelScale = 1;
-        if (!next.player.characterModelScaleX) next.player.characterModelScaleX = next.player.characterModelScale;
-        if (!next.player.characterModelScaleY) next.player.characterModelScaleY = next.player.characterModelScale;
-        if (!next.player.characterModelScaleZ) next.player.characterModelScaleZ = next.player.characterModelScale;
-        next.player.characterModelScaleProportional = next.player.characterModelScaleProportional !== false;
-        next.player.characterMaterialBrightness = 1;
-      });
-    } catch (error) {
-      setMediaError(error?.message || "Impossible de charger l'image.");
-    }
-  }, [patchConfig]);
-
-  const setSelectedPropImage = useCallback(async (file) => {
-    if (!file || selected?.type !== 'prop') return;
-    const target = { ...selected };
-    try {
-      const imageData = await readArcadeImageFile(file);
-      setMediaError('');
-      patchConfig((next) => {
-        const selectedEntity = getSelectedEntity(next, target);
-        if (!selectedEntity?.item) return;
-        const prop = selectedEntity.item;
-        const renderMode = prop.renderMode || guessPropRenderMode(file.name || '');
-        prop.imageData = imageData;
-        prop.imageName = file.name || 'decor';
-        prop.renderMode = renderMode;
-        prop.blocksMovement = shouldPropBlockByMode(renderMode);
-        if (renderMode === 'floor') {
-          const tileSize = getFloorTileWorldSize(prop);
-          prop.floorZeroZ = getFloorZeroZ(prop);
-          prop.w = tileSize;
-          prop.h = tileSize;
-          prop.r = Math.round(tileSize / 2);
-          prop.modelHeight = 12;
-        } else {
-          prop.w = Math.round(getPropWidth(prop));
-          prop.h = Math.round(getPropHeight(prop));
-          prop.modelHeight = Math.round(getPropModelHeight(prop));
-        }
-      });
-    } catch (error) {
-      setMediaError(error?.message || "Impossible de charger l'image.");
-    }
-  }, [patchConfig, selected]);
-
   const updateArcadeWorldField = useCallback((field, rawValue) => {
     const value = Number(rawValue);
     if (!Number.isFinite(value)) return;
@@ -2907,323 +3265,6 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
       if (field !== 'grid') clampArcadeEntitiesToWorld(next);
     }, limits.shouldReset);
   }, [patchConfig]);
-
-  const getCurrentPlacementPoint = useCallback((nextConfig) => {
-    const world = nextConfig.world || DEFAULT_ARCADE_CONFIG.world;
-    const pointer = pointerRef.current;
-    const fallbackX = Number(nextConfig.player?.x) || world.width / 2;
-    const fallbackY = Number(nextConfig.player?.y) || world.height / 2;
-    return {
-      x: clamp(pointer.hasWorldPoint && Number.isFinite(pointer.worldX) ? pointer.worldX : fallbackX, 0, world.width),
-      y: clamp(pointer.hasWorldPoint && Number.isFinite(pointer.worldY) ? pointer.worldY : fallbackY, 0, world.height),
-    };
-  }, []);
-
-  const beginEntityPlacement = useCallback((entity) => {
-    if (!entity?.type || !entity.id) return;
-    const cameraDistance = getPlacementCameraDistance(configRef.current, entity);
-    setMode('edit');
-    setIsPaused(false);
-    setTool('select');
-    setDragMode(false);
-    setMultiSelectMode(false);
-    setCameraTargetPickMode(false);
-    setPendingPlacement(entity);
-    setSelected(entity);
-    setMultiSelected(canMultiSelectEntity(entity) ? [entity] : []);
-    if (!['hero', 'enemy'].includes(entity.type)) return;
-    patchViewportEngineConfig((engine) => {
-      const currentDistance = Number(engine.cameraDistance) || DEFAULT_ARCADE_CONFIG.engine.cameraDistance;
-      if (Math.abs(currentDistance - cameraDistance) > 0.5) engine.cameraDistance = cameraDistance;
-    });
-  }, [patchViewportEngineConfig]);
-
-  const commitPendingPlacement = useCallback((point) => {
-    if (!pendingPlacement || !point) return false;
-    const entity = pendingPlacement;
-    patchConfigWithoutHistory((next) => {
-      moveMapEntityToPoint(next, entity, point, { snap: false });
-    }, false);
-    setPendingPlacement(null);
-    setSelected(entity);
-    setMultiSelected(canMultiSelectEntity(entity) ? [entity] : []);
-    return true;
-  }, [patchConfigWithoutHistory, pendingPlacement]);
-
-  const importStudioCharacterToCanvas = useCallback((model) => {
-    if (!model) return;
-    let placedEntity = null;
-    patchConfig((next) => {
-      const position = getCurrentPlacementPoint(next);
-      const axisScale = getCharacterModelAxisScale(model);
-      if ((model.role || 'hero') === 'hero') {
-        next.heroes = Array.isArray(next.heroes) ? next.heroes : [];
-        const item = {
-          id: createId('hero'),
-          name: model.name || 'Heros',
-          x: position.x,
-          y: position.y,
-          z: 0,
-          rotation: 0,
-          character: 'runner',
-          characterImageData: '',
-          characterImageName: '',
-          characterModel3dId: '',
-          characterModelUrl: '',
-          characterModelName: '',
-          characterModelResources: [],
-          characterModelAnimations: {},
-          characterRenderMode: getStudioCharacterRenderMode(model),
-          characterModelScale: axisScale.y,
-          characterModelScaleX: axisScale.x,
-          characterModelScaleY: axisScale.y,
-          characterModelScaleZ: axisScale.z,
-          characterModelScaleProportional: model.characterModelScaleProportional !== false,
-          characterMaterialBrightness: 1,
-          sourceCharacterRole: 'hero',
-        };
-        if (getStudioModelSource(model)) applyCharacterModelToActor(item, model);
-        next.heroes.push(item);
-        placedEntity = { type: 'hero', id: item.id };
-        return;
-      }
-
-      next.enemies = Array.isArray(next.enemies) ? next.enemies : [];
-      const item = {
-        id: createId('enemy'),
-        x: position.x,
-        y: position.y,
-        z: 0,
-        rotation: 0,
-        role: 'rifle',
-        character: 'guard',
-        characterImageData: '',
-        characterImageName: '',
-        characterModel3dId: '',
-        characterModelUrl: '',
-        characterModelName: '',
-        characterModelResources: [],
-        characterModelAnimations: {},
-        characterRenderMode: getStudioCharacterRenderMode(model),
-        characterModelScale: axisScale.y,
-        characterModelScaleX: axisScale.x,
-        characterModelScaleY: axisScale.y,
-        characterModelScaleZ: axisScale.z,
-        characterModelScaleProportional: model.characterModelScaleProportional !== false,
-        characterMaterialBrightness: 1,
-        sourceCharacterRole: model.role || 'enemy',
-        combatEnemyName: model.name || 'Personnage',
-        combatEnemyMaxHealth: 8,
-        combatEnemyStrength: 2,
-        combatEnemyMaxMana: 0,
-        combatEnemyPowerManaCost: 3,
-        combatEnemyPowerDamage: 0,
-        combatEnemyPowerUsageChance: 25,
-      };
-      if (getStudioModelSource(model)) applyCharacterModelToActor(item, model);
-      next.enemies.push(item);
-      placedEntity = { type: 'enemy', id: item.id };
-    });
-    beginEntityPlacement(placedEntity);
-  }, [beginEntityPlacement, getCurrentPlacementPoint, patchConfig]);
-
-  const importStudioDecorToCanvas = useCallback((model) => {
-    if (!model) return;
-    let placedEntity = null;
-    patchConfig((next) => {
-      next.props = Array.isArray(next.props) ? next.props : [];
-      const position = getCurrentPlacementPoint(next);
-      const renderMode = getDecorImportRenderMode(model);
-      const source = getStudioModelSource(model);
-      const size = getDecorModelWorldSize(model);
-      const tileSize = renderMode === 'floor' ? Math.max(size.width, size.depth) : 0;
-      const item = {
-        id: createId('prop'),
-        name: model.name || 'Objet 3D',
-        decorKind: getStudioDecorKindId(model.kind),
-        x: position.x,
-        y: position.y,
-        z: 0,
-        floorZeroZ: getFloorZeroZ(model),
-        rotation: 0,
-        modelRotationX: getModelRotationValue(model, 'modelRotationX'),
-        modelRotationY: getModelRotationValue(model, 'modelRotationY'),
-        modelRotationZ: getModelRotationValue(model, 'modelRotationZ'),
-        modelCenterOnOrigin: Boolean(model.modelCenterOnOrigin),
-        modelFlushToGround: Boolean(model.modelFlushToGround),
-        r: Math.round((tileSize || Math.max(size.width, size.depth)) / 2),
-        w: tileSize || size.width,
-        h: tileSize || size.depth,
-        modelHeight: renderMode === 'floor' ? 12 : size.height,
-        renderMode,
-        blocksMovement: model.collision ?? shouldPropBlockByMode(renderMode),
-        imageData: source ? '' : (model.imageData || ''),
-        imageName: source ? '' : (model.imageName || ''),
-        repeatTexture: source ? false : Boolean(model.repeatTexture),
-        decorModel3dId: model.id || '',
-        decorModelUrl: source,
-        decorModelName: model.modelName || model.name || '',
-        decorLocalModelFileId: model.localModelFileId || '',
-        modelFormat: model.modelFormat || '',
-        modelFileSize: Number(model.modelFileSize) || 0,
-        modelResources: Array.isArray(model.modelResources) ? model.modelResources : [],
-        materialBrightness: getDecorMaterialBrightness(model),
-        decorModelScale: 1,
-        baseColor: model.baseColor || '#64748b',
-        accentColor: model.accentColor || '#f59e0b',
-        roofColor: model.roofColor || '#7f1d1d',
-      };
-      next.props.push(item);
-      placedEntity = { type: 'prop', id: item.id };
-    });
-    beginEntityPlacement(placedEntity);
-  }, [beginEntityPlacement, getCurrentPlacementPoint, patchConfig]);
-
-  const addFlatGroundToCanvas = useCallback(() => {
-    const baseColor = getFlatGroundPlateauColor(configRef.current, flatGroundColorDraft);
-    patchConfig((next) => {
-      const world = next.world || DEFAULT_ARCADE_CONFIG.world;
-      const width = Math.max(12, Math.round(Number(world.width) || DEFAULT_ARCADE_CONFIG.world.width));
-      const height = Math.max(12, Math.round(Number(world.height) || DEFAULT_ARCADE_CONFIG.world.height));
-      next.props = Array.isArray(next.props) ? next.props : [];
-      const existingIndex = next.props.findIndex((prop) => isFlatGroundPlateauProp(prop, world));
-      const existing = existingIndex >= 0 ? next.props[existingIndex] : null;
-      const plateau = {
-        ...(existing || {}),
-        id: existing?.id || createId('prop'),
-        name: 'Sol plat',
-        decorKind: 'road',
-        x: Math.round(width / 2),
-        y: Math.round(height / 2),
-        z: 0,
-        floorZeroZ: DEFAULT_FLOOR_ZERO_Z,
-        rotation: 0,
-        modelRotationX: 0,
-        modelRotationY: 0,
-        modelRotationZ: 0,
-        modelCenterOnOrigin: true,
-        modelFlushToGround: false,
-        r: Math.round(Math.max(width, height) / 2),
-        w: width,
-        h: height,
-        modelHeight: 12,
-        renderMode: 'floor',
-        blocksMovement: false,
-        imageData: '',
-        imageName: '',
-        repeatTexture: false,
-        baseColor,
-        floorColor: baseColor,
-      };
-      if (existingIndex >= 0) {
-        const keptProps = next.props
-          .filter((prop, index) => index === existingIndex || !isFlatGroundPlateauProp(prop, world));
-        const keptIndex = keptProps.findIndex((prop) => prop.id === existing.id);
-        keptProps[keptIndex] = plateau;
-        next.props = keptProps;
-      } else {
-        next.props.push(plateau);
-      }
-      setSelected(null);
-      setMultiSelected([]);
-    }, false);
-    setMode('edit');
-    setTool('select');
-    setPendingPlacement(null);
-    setTransformTool('');
-    setDragMode(false);
-    setMultiSelectMode(false);
-    setCameraTargetPickMode(false);
-  }, [flatGroundColorDraft, patchConfig]);
-
-  const updateFlatGroundColor = useCallback((value) => {
-    const color = getHexColor(value, FLAT_GROUND_DEFAULT_COLOR);
-    setFlatGroundColorDraft(color);
-    const liveConfig = configRef.current || DEFAULT_ARCADE_CONFIG;
-    const hasPlateau = (liveConfig.props || []).some((prop) => isFlatGroundPlateauProp(prop, liveConfig.world));
-    if (!hasPlateau) return;
-    patchConfigWithoutHistory((next) => {
-      (next.props || []).forEach((prop) => {
-        if (!isFlatGroundPlateauProp(prop, next.world)) return;
-        prop.baseColor = color;
-        prop.floorColor = color;
-      });
-    }, false);
-  }, [patchConfigWithoutHistory]);
-
-  const updateTerrainPaintDraft = useCallback((field, value) => {
-    setTerrainPaintDraft((current) => {
-      if (field === 'color') return { ...current, color: getHexColor(value, TERRAIN_PAINT_DEFAULT_COLOR) };
-      if (field === 'radius') {
-        const radius = Number(value);
-        return {
-          ...current,
-          radius: clamp(Number.isFinite(radius) ? radius : TERRAIN_PAINT_DEFAULT_RADIUS, TERRAIN_PAINT_MIN_RADIUS, TERRAIN_PAINT_MAX_RADIUS),
-        };
-      }
-      if (field === 'opacity') {
-        const opacity = Number(value);
-        return { ...current, opacity: clamp(Number.isFinite(opacity) ? opacity : TERRAIN_PAINT_DEFAULT_OPACITY, 0.12, 1) };
-      }
-      if (field === 'shape') return { ...current, shape: getTerrainPaintShape({ shape: value }) };
-      return current;
-    });
-  }, []);
-
-  const clearTerrainPaint = useCallback(() => {
-    if (!(configRef.current?.terrainPaintStrokes || []).length) return;
-    clearTerrainPaintFlushTimer();
-    terrainPaintPendingPointsRef.current = [];
-    terrainPaintLastPointRef.current = null;
-    terrainPaintSessionRef.current = null;
-    patchConfig((next) => {
-      next.terrainPaintStrokes = [];
-    }, false);
-  }, [clearTerrainPaintFlushTimer, patchConfig]);
-
-  const handleTerrainPaintStart = useCallback((point) => {
-    if (!point || modeRef.current !== 'edit') return;
-    const strokeId = createId('paint');
-    clearTerrainPaintFlushTimer();
-    terrainPaintPendingPointsRef.current = [];
-    terrainPaintSessionRef.current = strokeId;
-    setSelected(null);
-    setMultiSelected([]);
-    patchConfig((next) => {
-      const paintPoint = normalizeTerrainPaintPoint(point, next.world);
-      terrainPaintLastPointRef.current = paintPoint;
-      next.terrainPaintStrokes = Array.isArray(next.terrainPaintStrokes) ? next.terrainPaintStrokes : [];
-      next.terrainPaintStrokes.push({
-        id: strokeId,
-        color: getTerrainPaintColor(terrainPaintDraft),
-        radius: getTerrainPaintRadius(terrainPaintDraft),
-        opacity: getTerrainPaintOpacity(terrainPaintDraft),
-        shape: getTerrainPaintShape(terrainPaintDraft),
-        points: [paintPoint],
-      });
-    }, false);
-  }, [clearTerrainPaintFlushTimer, patchConfig, terrainPaintDraft]);
-
-  const handleTerrainPaintMove = useCallback((point) => {
-    const strokeId = terrainPaintSessionRef.current;
-    if (!strokeId || !point) return;
-    const currentStroke = (configRef.current?.terrainPaintStrokes || []).find((stroke) => stroke.id === strokeId);
-    if (!currentStroke) return;
-    const paintPoint = normalizeTerrainPaintPoint(point, configRef.current?.world);
-    const previousPoint = terrainPaintLastPointRef.current
-      || currentStroke.points?.[currentStroke.points.length - 1];
-    const spacing = Math.max(10, getTerrainPaintRadius(currentStroke) * 0.18);
-    if (previousPoint && distance(previousPoint, paintPoint) < spacing) return;
-    terrainPaintLastPointRef.current = paintPoint;
-    terrainPaintPendingPointsRef.current.push(paintPoint);
-    scheduleTerrainPaintFlush();
-  }, [scheduleTerrainPaintFlush]);
-
-  const handleTerrainPaintEnd = useCallback(() => {
-    flushTerrainPaintPoints();
-    terrainPaintSessionRef.current = null;
-    terrainPaintLastPointRef.current = null;
-  }, [flushTerrainPaintPoints]);
 
   const appendModelEraserStroke = useCallback((point, entity, withHistory = false) => {
     if (!point || !entity?.id || entity.type !== 'prop') return false;
@@ -3282,6 +3323,20 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     patchConfig((next) => {
       const selectedEntity = getSelectedEntity(next, selected);
       if (!selectedEntity?.item) return;
+      if (selectedEntity.type === 'actionZone' && ['x', 'y', 'w', 'h'].includes(field)) {
+        if (field === 'x' || field === 'y') {
+          moveMapEntityToPoint(next, selected, {
+            x: field === 'x' ? value : Number(selectedEntity.item.x) || 0,
+            y: field === 'y' ? value : Number(selectedEntity.item.y) || 0,
+          });
+          return;
+        }
+        resizeActionZoneGeometry(selectedEntity.item, next.world, {
+          width: field === 'w' ? value : getActionZoneWidth(selectedEntity.item),
+          height: field === 'h' ? value : getActionZoneHeight(selectedEntity.item),
+        });
+        return;
+      }
       selectedEntity.item[field] = field === 'rotation' ? normalizeDegrees(value) : value;
       if (field === 'x') selectedEntity.item.x = clamp(value, 0, next.world.width);
       if (field === 'y') selectedEntity.item.y = clamp(value, 0, next.world.height);
@@ -3322,14 +3377,8 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
         snapFlatTileToWorldEdges(selectedEntity.item, next.world);
       }
       if (selectedEntity.type === 'actionZone') {
-        if (field === 'w') selectedEntity.item.w = Math.round(clamp(Number(value) || ACTION_ZONE_DEFAULT_WIDTH, ACTION_ZONE_MIN_SIZE, next.world.width));
-        if (field === 'h') selectedEntity.item.h = Math.round(clamp(Number(value) || ACTION_ZONE_DEFAULT_HEIGHT, ACTION_ZONE_MIN_SIZE, next.world.height));
         if (field === 'modelHeight') selectedEntity.item.modelHeight = Math.round(clamp(Number(value) || ACTION_ZONE_DEFAULT_MODEL_HEIGHT, 60, 900));
         if (field === 'opacity') selectedEntity.item.opacity = clamp(Number(value) || ACTION_ZONE_DEFAULT_OPACITY, 0.05, 0.95);
-        const width = getActionZoneWidth(selectedEntity.item);
-        const height = getActionZoneHeight(selectedEntity.item);
-        selectedEntity.item.x = Math.round(clamp(Number(selectedEntity.item.x) || width / 2, width / 2, Math.max(width / 2, next.world.width - width / 2)));
-        selectedEntity.item.y = Math.round(clamp(Number(selectedEntity.item.y) || height / 2, height / 2, Math.max(height / 2, next.world.height - height / 2)));
       }
     });
   }, [patchConfig, selected]);
@@ -3394,7 +3443,13 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
   }, [multiSelected, patchConfig, selected]);
 
   const handleSelectionTransformCommit = useCallback((payload = {}) => {
-    const { entity, mode: transformMode, rotationDelta = {}, scaleDelta = {} } = payload;
+    const {
+      entity,
+      mode: transformMode,
+      rotationDelta = {},
+      scaleDelta = {},
+      proportionalAxes = scaleProportionalAxes,
+    } = payload;
     if (!entity?.type || !entity.id) return;
     patchConfig((next) => {
       const selectedEntity = getSelectedEntity(next, entity);
@@ -3418,10 +3473,10 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
           type: selectedEntity.type,
           id: entity.id,
           item,
-        }, scaleDelta);
+        }, scaleDelta, { proportionalAxes });
       }
     }, false);
-  }, [patchConfig]);
+  }, [patchConfig, scaleProportionalAxes]);
 
   const updateSelectedNpcChoice = useCallback((choiceId, field, value) => {
     if (!selected || selected.type !== 'actionZone') return;
@@ -3515,6 +3570,79 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     }, false);
     multiDragRef.current = null;
   }, [patchConfig]);
+
+  const handleActionZoneVertexDragStart = useCallback((entity) => {
+    if (modeRef.current !== 'edit' || entity?.type !== 'actionZoneVertex' || !entity.id) return;
+    pushHistorySnapshot();
+    const zoneEntity = { type: 'actionZone', id: entity.id };
+    setMode('edit');
+    setIsPaused(false);
+    setTool('select');
+    setSelected(zoneEntity);
+    setMultiSelected([zoneEntity]);
+    setTransformTool('');
+    setDragMode(false);
+    setMultiSelectMode(false);
+    setCameraTargetPickMode(false);
+  }, [pushHistorySnapshot]);
+
+  const handleActionZoneVertexDrag = useCallback((entity, point) => {
+    if (entity?.type !== 'actionZoneVertex' || !entity.id || !point) return;
+    patchConfigWithoutHistory((next) => {
+      moveActionZoneVertex(next, entity.id, entity.vertexIndex, point, entity.vertexLayer);
+    }, false);
+  }, [patchConfigWithoutHistory]);
+
+  const handleActionZoneEdgeDragStart = useCallback((entity) => {
+    if (modeRef.current !== 'edit' || entity?.type !== 'actionZoneEdge' || !entity.id) return;
+    pushHistorySnapshot();
+    const zoneEntity = { type: 'actionZone', id: entity.id };
+    setMode('edit');
+    setIsPaused(false);
+    setTool('select');
+    setSelected(zoneEntity);
+    setMultiSelected([zoneEntity]);
+    setTransformTool('');
+    setDragMode(false);
+    setMultiSelectMode(false);
+    setCameraTargetPickMode(false);
+  }, [pushHistorySnapshot]);
+
+  const handleActionZoneEdgeDrag = useCallback((entity, delta) => {
+    if (entity?.type !== 'actionZoneEdge' || !entity.id || !delta) return;
+    patchConfigWithoutHistory((next) => {
+      moveActionZoneEdge(next, entity.id, entity.edgeIndex, delta, entity.vertexLayer);
+    }, false);
+  }, [patchConfigWithoutHistory]);
+
+  const handleInsertActionZoneEdge = useCallback((zoneId, edgeIndex, point = null) => {
+    const vertexIndex = Number(edgeIndex) + 1;
+    if (!zoneId || !Number.isInteger(vertexIndex) || vertexIndex < 1) return null;
+    let inserted = false;
+    patchConfig((next) => {
+      inserted = insertActionZoneVertex(next, zoneId, edgeIndex, point);
+    }, false);
+    if (!inserted) return null;
+    const zoneEntity = { type: 'actionZone', id: zoneId };
+    setSelected(zoneEntity);
+    setMultiSelected([zoneEntity]);
+    setMode('edit');
+    setIsPaused(false);
+    setTool('select');
+    setTransformTool('');
+    return { type: 'actionZoneVertex', id: zoneId, vertexIndex };
+  }, [patchConfig]);
+
+  const handleActionZoneEdgeInsert = useCallback((entity, point) => {
+    if (modeRef.current !== 'edit' || entity?.type !== 'actionZoneEdge' || !entity.id) return null;
+    if (!actionZoneEdgeInsertMode) return null;
+    setDragMode(false);
+    setMultiSelectMode(false);
+    setCameraTargetPickMode(false);
+    const inserted = handleInsertActionZoneEdge(entity.id, entity.edgeIndex, point);
+    if (inserted) setActionZoneEdgeInsertMode(false);
+    return inserted;
+  }, [actionZoneEdgeInsertMode, handleInsertActionZoneEdge]);
 
   const duplicateSelected = useCallback(() => {
     const liveTargets = getSelectionEntities(configRef.current, selected, multiSelected);
@@ -3746,10 +3874,10 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     setWorkspaceTab('arcade');
   }, []);
 
-  const handleWorldClick = useCallback((point, entity = null, button = 0) => {
+  const handleWorldClick = useCallback((point, entity = null, button = 0, options = {}) => {
     if (mode === 'play') {
       if (button === 0) {
-        setPlayerMoveTarget(point);
+        setPlayerMoveTarget(point, { continuous: Boolean(options.continuous) });
       }
       return;
     }
@@ -3889,6 +4017,10 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     if (tool === 'actionZone') setTool('select');
   }, [commitPendingPlacement, duplicateSelectedTile, mode, multiSelectMode, patchConfig, pendingPlacement, selectSingleEntity, setPlayerMoveTarget, toggleMultiSelectedEntity, tool]);
 
+  const handleMoveHoldChange = useCallback((held) => {
+    if (!held) setPlayerMoveTarget(null);
+  }, [setPlayerMoveTarget]);
+
   const handleMarqueeSelect = useCallback((entities = []) => {
     setMode('edit');
     setIsPaused(false);
@@ -3950,9 +4082,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
   const studioImportDecors = studioProject.decorModels3d || [];
   const studioCharacterModels = (studioProject.characterModels3d || []).filter((model) => getStudioModelSource(model));
   const studioHeroModels = studioCharacterModels.filter((model) => (model.role || 'hero') === 'hero');
-  const activeRpg3DCanvas = getActiveRpg3DCanvas(studioProject);
-  const activeRpg3DCanvasId = activeRpg3DCanvas?.id || studioProject.rpg3dActiveCanvasId || DEFAULT_RPG3D_CANVAS_ID;
-  const rpg3DCanvasOptions = studioProject.rpg3dCanvases || [];
+  const studioWeaponModels = (studioProject.decorModels3d || []).filter((model) => getStudioModelSource(model));
   const actionZoneNpcTargets = [
     ...(config.heroes || []).map((hero, index) => ({
       id: hero.id,
@@ -3965,6 +4095,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
   ];
   const workspaceTabs = [
     { id: 'arcade', label: 'Carte RPG 3D', icon: MapIcon },
+    { id: 'heroes', label: 'Heros', icon: HeartPulse },
     { id: 'canvases', label: 'Canevas', icon: FolderOpen },
     { id: 'management', label: 'Gestion', icon: List },
     { id: 'characters3d', label: 'Personnages 3D', icon: Cuboid },
@@ -4053,8 +4184,6 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     modelEraserLastPointRef.current = null;
     setTool('select');
   }, [mode, selectedPropCanEraseModel, tool]);
-  const flatGroundColorValue = getFlatGroundPlateauColor(config, flatGroundColorDraft);
-  const terrainPaintStrokeCount = config.terrainPaintStrokes?.length || 0;
   const canUndoRpg3D = undoStack.length > 0;
   const canRedoRpg3D = redoStack.length > 0;
   const positionRowClassName = [
@@ -4107,16 +4236,6 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
       engine.lightOrientation = value;
     });
   };
-  const handleToggleTerrainPaint = () => {
-    setMode('edit');
-    setTool((current) => (current === 'terrainPaint' ? 'select' : 'terrainPaint'));
-    setTransformTool('');
-    setPendingPlacement(null);
-    setDragMode(false);
-    setMultiSelectMode(false);
-    setCameraTargetPickMode(false);
-    setCameraZoomDragMode(false);
-  };
   const handleToggleModelEraser = () => {
     const currentProp = getSelectedEntity(configRef.current, selectedRef.current);
     if (!currentProp?.item || currentProp.type !== 'prop' || getPropRenderMode(currentProp.item) !== 'glb') return;
@@ -4129,6 +4248,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     setMultiSelectMode(false);
     setCameraTargetPickMode(false);
     setCameraZoomDragMode(false);
+    setActionZoneEdgeInsertMode(false);
   };
   const handleModelEraserRadiusChange = (value) => {
     const radius = getModelEraserRadius({ modelEraserRadius: value });
@@ -4157,17 +4277,33 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     setPendingPlacement(null);
     setMultiSelectMode(false);
     setCameraTargetPickMode(false);
+    setActionZoneEdgeInsertMode(false);
   };
+  const handleToggleActionZoneEdgeInsertMode = useCallback(() => {
+    if (selectedRef.current?.type !== 'actionZone') return;
+    setMode('edit');
+    setIsPaused(false);
+    setTool('select');
+    setTransformTool('');
+    setPendingPlacement(null);
+    setDragMode(false);
+    setMultiSelectMode(false);
+    setCameraTargetPickMode(false);
+    setCameraZoomDragMode(false);
+    setActionZoneEdgeInsertMode((current) => !current);
+  }, []);
   const handleToggleDragMode = () => {
     setCameraTargetPickMode(false);
     setCameraZoomDragMode(false);
     setTransformTool('');
+    setActionZoneEdgeInsertMode(false);
     setDragMode((current) => !current);
   };
   const handleToggleMultiSelectMode = () => {
     setCameraTargetPickMode(false);
     setCameraZoomDragMode(false);
     setTransformTool('');
+    setActionZoneEdgeInsertMode(false);
     setMultiSelectMode((current) => {
       const next = !current;
       setMultiSelected(next && canMultiSelectEntity(selected) ? [selected] : []);
@@ -4183,6 +4319,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     setCameraTargetPickMode(false);
     setTransformTool('');
     setPendingPlacement(null);
+    setActionZoneEdgeInsertMode(false);
     setCameraZoomDragMode((current) => !current);
   };
   const handleToggleRotateTransform = () => {
@@ -4191,6 +4328,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     setMultiSelectMode(false);
     setCameraTargetPickMode(false);
     setPendingPlacement(null);
+    setActionZoneEdgeInsertMode(false);
     setTransformTool((current) => (current === 'rotate' ? '' : 'rotate'));
   };
   const handleToggleScaleTransform = () => {
@@ -4199,8 +4337,16 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
     setMultiSelectMode(false);
     setCameraTargetPickMode(false);
     setPendingPlacement(null);
+    setActionZoneEdgeInsertMode(false);
     setTransformTool((current) => (current === 'scale' ? '' : 'scale'));
   };
+  const handleToggleScaleProportionalAxis = useCallback((axis) => {
+    if (!['x', 'y', 'z'].includes(axis)) return;
+    setScaleProportionalAxes((current) => ({
+      ...current,
+      [axis]: !current[axis],
+    }));
+  }, []);
   const handleActionZoneTypeChange = (value) => {
     patchConfig((next) => {
       const currentZone = getSelectedEntity(next, selected);
@@ -4220,12 +4366,6 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
         currentZone.item.npcQuestion = currentZone.item.npcQuestion || currentZone.item.message || 'Que veux-tu demander ?';
         currentZone.item.npcChoices = getNpcChoiceItems(currentZone.item);
       }
-    });
-  };
-  const handleZoneVisibilityChange = (value) => {
-    patchConfig((next) => {
-      const currentZone = getSelectedEntity(next, selected);
-      if (currentZone?.item) currentZone.item.visibleInPlay = value === 'visible';
     });
   };
   const handleReliefCollisionChange = (value) => {
@@ -4288,11 +4428,13 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
         onTogglePlayMode={handleTogglePlayMode}
       />
 
-      <Rpg3DWorkspaceTabs
-        tabs={workspaceTabs}
-        activeTabId={workspaceTab}
-        onSelectTab={setWorkspaceTab}
-      />
+      {!mapFullscreen ? (
+        <Rpg3DWorkspaceTabs
+          tabs={workspaceTabs}
+          activeTabId={workspaceTab}
+          onSelectTab={setWorkspaceTab}
+        />
+      ) : null}
 
       {workspaceTab === 'canvases' ? (
         <ArcadeCanvasManagerTab
@@ -4309,6 +4451,16 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
           onDeleteCanvas={deleteRpg3DCanvas}
           onKeepOnlyActiveCanvas={keepOnlyActiveRpg3DCanvas}
           onOpenCanvas={() => setWorkspaceTab('arcade')}
+        />
+      ) : workspaceTab === 'heroes' ? (
+        <ArcadeHeroTab
+          config={config}
+          selected={selected}
+          mediaError={mediaError}
+          studioHeroModels={studioHeroModels}
+          studioWeaponModels={studioWeaponModels}
+          onPatchConfig={patchConfig}
+          onSetMediaError={setMediaError}
         />
       ) : workspaceTab === 'management' ? (
         <ArcadeManagementTab
@@ -4328,31 +4480,37 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
           onEditMapEntity={editMapEntity}
         />
       ) : workspaceTab === 'characters3d' ? (
-        <Character3DTab
-          project={studioProject}
-          patchProject={patchStudioProject}
-          handleUpload={handleStudioUpload}
-          mediaLibrary={studioMediaLibrary}
-          selectedModelId={studioSelection.characterModelId || undefined}
-          onSelectedModelIdChange={(modelId) => setStudioSelection((current) => ({ ...current, characterModelId: modelId }))}
-          onSaveAssets={saveArcadeAssets}
-          saveStatus={managementSaveStatus}
-          saveInProgress={isSavingAssets}
-        />
+        <React.Suspense fallback={<div className="arcade-tab-loading" />}>
+          <Character3DTab
+            project={studioProject}
+            patchProject={patchStudioProject}
+            handleUpload={handleStudioUpload}
+            mediaLibrary={studioMediaLibrary}
+            selectedModelId={studioSelection.characterModelId || undefined}
+            onSelectedModelIdChange={(modelId) => setStudioSelection((current) => ({ ...current, characterModelId: modelId }))}
+            onSaveAssets={saveArcadeAssets}
+            saveStatus={managementSaveStatus}
+            saveInProgress={isSavingAssets}
+          />
+        </React.Suspense>
       ) : workspaceTab === 'decors3d' ? (
-        <Decor3DTab
-          project={studioProject}
-          patchProject={patchStudioProject}
-          handleUpload={handleStudioUpload}
-          mediaLibrary={studioMediaLibrary}
-          selectedModelId={studioSelection.decorModelId || undefined}
-          onSelectedModelIdChange={(modelId) => setStudioSelection((current) => ({ ...current, decorModelId: modelId }))}
-          onSaveAssets={saveArcadeAssets}
-          saveStatus={managementSaveStatus}
-          saveInProgress={isSavingAssets}
-        />
+        <React.Suspense fallback={<div className="arcade-tab-loading" />}>
+          <Decor3DTab
+            project={studioProject}
+            patchProject={patchStudioProject}
+            handleUpload={handleStudioUpload}
+            mediaLibrary={studioMediaLibrary}
+            selectedModelId={studioSelection.decorModelId || undefined}
+            onSelectedModelIdChange={(modelId) => setStudioSelection((current) => ({ ...current, decorModelId: modelId }))}
+            onSaveAssets={saveArcadeAssets}
+            saveStatus={managementSaveStatus}
+            saveInProgress={isSavingAssets}
+          />
+        </React.Suspense>
       ) : workspaceTab === 'modelTools' ? (
-        <ModelToolsTab />
+        <React.Suspense fallback={<div className="arcade-tab-loading" />}>
+          <ModelToolsTab />
+        </React.Suspense>
       ) : (
       <section className={arcadeBuilderLayoutClassName}>
         {showLegacyToolsPanel ? (
@@ -4642,6 +4800,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
 
         <Rpg3DStage
           activeTransformTool={activeTransformTool}
+          actionZoneEdgeInsertMode={actionZoneEdgeInsertMode}
           cameraTargetPickMode={cameraTargetPickMode}
           cameraToolsHidden={cameraToolsHidden}
           cameraZoomDragMode={cameraZoomDragMode}
@@ -4651,6 +4810,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
           config={config}
           configRef={configRef}
           dragMode={dragMode}
+          loadingState={playMode ? rpg3DLoadingBar : null}
           mapFullscreen={mapFullscreen}
           mode={mode}
           modelEraserMode={tool === 'modelEraser' && selectedPropCanEraseModel}
@@ -4664,6 +4824,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
           playMode={playMode}
           quickSelectionCanResize={quickSelectionCanResize}
           quickSelectionCanRotate={quickSelectionCanRotate}
+          scaleProportionalAxes={scaleProportionalAxes}
           selected={selected}
           stateRef={stateRef}
           studioProject={studioProject}
@@ -4673,6 +4834,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
           onCameraZoomDrag={handleCameraZoomDrag}
           onHideCameraTools={() => setCameraToolsHidden(true)}
           onMarqueeSelect={handleMarqueeSelect}
+          onMoveHoldChange={handleMoveHoldChange}
           onRedo={redoProjectChange}
           onSelectionTransformCommit={handleSelectionTransformCommit}
           onShootChange={setPointerShooting}
@@ -4683,12 +4845,18 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
           onToggleFullscreen={toggleMapFullscreen}
           onToggleMultiSelectMode={handleToggleMultiSelectMode}
           onToggleRotateTransform={handleToggleRotateTransform}
+          onToggleScaleProportionalAxis={handleToggleScaleProportionalAxis}
           onToggleScaleTransform={handleToggleScaleTransform}
           onUndo={undoProjectChange}
           onWorldClick={handleWorldClick}
           onWorldDrag={handleWorldDrag}
           onWorldDragStart={handleWorldDragStart}
           onWorldDrop={handleWorldDrop}
+          onActionZoneEdgeDrag={handleActionZoneEdgeDrag}
+          onActionZoneEdgeDragStart={handleActionZoneEdgeDragStart}
+          onActionZoneEdgeInsert={handleActionZoneEdgeInsert}
+          onActionZoneVertexDrag={handleActionZoneVertexDrag}
+          onActionZoneVertexDragStart={handleActionZoneVertexDragStart}
           onModelEraseEnd={handleModelEraseEnd}
           onModelEraseMove={handleModelEraseMove}
           onModelEraseStart={handleModelEraseStart}
@@ -4701,6 +4869,7 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
 
         {showArcadeInspector ? (
           <Rpg3DInspector
+            actionZoneEdgeInsertMode={actionZoneEdgeInsertMode}
             actionZoneNpcTargets={actionZoneNpcTargets}
             activeCanvasId={activeRpg3DCanvasId}
             config={config}
@@ -4754,11 +4923,11 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
             onRemoveSelectedNpcChoice={removeSelectedNpcChoice}
             onSelectTool={setTool}
             onSnapSelectedTileToNeighbor={snapSelectedTileToNeighbor}
+            onToggleActionZoneEdgeInsertMode={handleToggleActionZoneEdgeInsertMode}
             onToggleModelEraser={handleToggleModelEraser}
             onUpdateEntity={updateEntity}
             onUpdateSelectedNpcChoice={updateSelectedNpcChoice}
             onUpdateSelectionEntities={updateSelectionEntities}
-            onZoneVisibilityChange={handleZoneVisibilityChange}
           />
         ) : null}
       </section>

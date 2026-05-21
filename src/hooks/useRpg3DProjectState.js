@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   createRpg3DHistorySnapshot,
   readSavedArcadeAssets,
-} from '../utils/rpg3dAssetsStorage.js';
+} from '../utils/rpg3dAssetsCore.js';
 import {
   cloneConfig,
   createInitialState,

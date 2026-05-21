@@ -27,6 +27,21 @@ const isLocalCorsAllowed = (env = {}) => {
     && String(env.NETLIFY || '').toLowerCase() !== 'true';
 };
 
+const isLoopbackOrigin = (origin = '') => {
+  try {
+    const { hostname, protocol } = new URL(origin);
+    const normalizedHostname = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+    return ['http:', 'https:'].includes(protocol)
+      && (
+        normalizedHostname === 'localhost'
+        || normalizedHostname === '::1'
+        || normalizedHostname.startsWith('127.')
+      );
+  } catch {
+    return false;
+  }
+};
+
 export const getAllowedCorsOrigins = (env = {}) => {
   const explicitOrigins = [
     ...splitList(env.CORS_ALLOWED_ORIGINS),
@@ -55,6 +70,7 @@ export const isCorsOriginAllowed = (headers = {}, env = {}) => {
   const origin = getRequestOrigin(headers);
   if (!origin) return true;
   if (String(env.CORS_ALLOW_ANY_ORIGIN || '').toLowerCase() === 'true') return true;
+  if (isLocalCorsAllowed(env) && isLoopbackOrigin(origin)) return true;
   return getAllowedCorsOrigins(env).includes(origin);
 };
 

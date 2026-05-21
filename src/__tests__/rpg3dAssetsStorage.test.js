@@ -206,6 +206,95 @@ describe('rpg3d assets storage helpers', () => {
     });
   });
 
+  it('preserves placed object overrides while syncing model asset references', () => {
+    const config = cloneConfig(DEFAULT_ARCADE_CONFIG);
+    config.player.characterModel3dId = 'hero-model';
+    config.player.characterModelUrl = 'old-hero.glb';
+    config.player.characterModelScale = 2.4;
+    config.player.characterModelScaleX = 1.5;
+    config.player.characterModelScaleY = 2.4;
+    config.player.characterModelScaleZ = 0.8;
+    config.player.characterMaterialBrightness = 0.45;
+    config.props = [{
+      id: 'statue-prop',
+      x: 120,
+      y: 240,
+      decorModel3dId: 'statue-model',
+      decorModelUrl: 'old-statue.glb',
+      renderMode: 'glb',
+      w: 320,
+      h: 180,
+      r: 220,
+      modelHeight: 260,
+      blocksMovement: false,
+      materialBrightness: 0.4,
+      decorModelScale: 2.25,
+      modelRotationX: 25,
+      modelRotationY: -35,
+      modelRotationZ: 12,
+      modelCenterOnOrigin: false,
+      modelFlushToGround: false,
+    }];
+
+    const studioProject = {
+      ...createDefaultStudioProject(),
+      characterModels3d: [{
+        id: 'hero-model',
+        name: 'Hero model',
+        modelUrl: 'https://cdn.example.com/hero.glb',
+        materialBrightness: 1.3,
+        characterModelScaleX: 0.7,
+        characterModelScaleY: 0.8,
+        characterModelScaleZ: 0.9,
+      }],
+      decorModels3d: [{
+        id: 'statue-model',
+        kind: 'wall',
+        modelUrl: 'https://cdn.example.com/statue.glb',
+        modelName: 'statue.glb',
+        width: 5,
+        depth: 4,
+        height: 3,
+        materialBrightness: 1.2,
+        decorModelScale: 1,
+        modelRotationX: -90,
+        modelRotationY: 90,
+        modelRotationZ: 45,
+        modelCenterOnOrigin: true,
+        modelFlushToGround: true,
+        collision: true,
+      }],
+    };
+
+    const synced = syncConfigModelReferences(config, studioProject);
+
+    expect(synced.config.player).toMatchObject({
+      characterModelUrl: 'https://cdn.example.com/hero.glb',
+      characterModelScale: 2.4,
+      characterModelScaleX: 1.5,
+      characterModelScaleY: 2.4,
+      characterModelScaleZ: 0.8,
+      characterMaterialBrightness: 0.45,
+    });
+    expect(synced.config.props[0]).toMatchObject({
+      decorModelUrl: 'https://cdn.example.com/statue.glb',
+      decorModelName: 'statue.glb',
+      renderMode: 'glb',
+      w: 320,
+      h: 180,
+      r: 220,
+      modelHeight: 260,
+      blocksMovement: false,
+      materialBrightness: 0.4,
+      decorModelScale: 2.25,
+      modelRotationX: 25,
+      modelRotationY: -35,
+      modelRotationZ: 12,
+      modelCenterOnOrigin: false,
+      modelFlushToGround: false,
+    });
+  });
+
   it('strips stale local model blob URLs from saved snapshots while keeping recovery ids', () => {
     const config = cloneConfig(DEFAULT_ARCADE_CONFIG);
     config.player.characterModel3dId = 'hero-model';
@@ -227,10 +316,12 @@ describe('rpg3d assets storage helpers', () => {
         characterModels3d: [{
           id: 'hero-model',
           modelUrl: 'blob:http://localhost/hero',
+          modelData: toDataUrl('model/gltf-binary', 'hero-glb'),
           localModelFileId: 'local-hero-file',
           modelAnimations: {
             walk: {
               modelUrl: 'blob:http://localhost/walk',
+              modelData: toDataUrl('application/vnd.autodesk.fbx', 'walk-fbx'),
               localModelFileId: 'local-walk-file',
             },
           },
@@ -238,6 +329,7 @@ describe('rpg3d assets storage helpers', () => {
         decorModels3d: [{
           id: 'floor-model',
           modelUrl: 'blob:http://localhost/floor',
+          modelData: toDataUrl('model/gltf-binary', 'floor-glb'),
           localModelFileId: 'local-floor-file',
         }],
       },
@@ -245,16 +337,19 @@ describe('rpg3d assets storage helpers', () => {
 
     expect(snapshot.studioProject.characterModels3d[0]).toMatchObject({
       modelUrl: '',
+      modelData: '',
       localModelFileId: 'local-hero-file',
       modelAnimations: {
         walk: {
           modelUrl: '',
+          modelData: '',
           localModelFileId: 'local-walk-file',
         },
       },
     });
     expect(snapshot.studioProject.decorModels3d[0]).toMatchObject({
       modelUrl: '',
+      modelData: '',
       localModelFileId: 'local-floor-file',
     });
     expect(snapshot.config.player).toMatchObject({

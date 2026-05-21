@@ -12,6 +12,90 @@
   overflow: hidden;
 }
 
+.arcade-stage-loading {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  z-index: 36;
+  display: grid;
+  gap: 8px;
+  width: min(360px, calc(100% - 32px));
+  min-height: 58px;
+  padding: 10px 12px;
+  border: 1px solid rgba(125, 211, 252, .34);
+  border-radius: 8px;
+  background: rgba(4, 10, 16, .86);
+  color: #eaf2ff;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .38), inset 0 1px rgba(255, 255, 255, .06);
+  transform: translateX(-50%);
+  pointer-events: none;
+  backdrop-filter: blur(10px);
+}
+
+.arcade-stage-loading-copy {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.arcade-stage-loading-copy strong,
+.arcade-stage-loading-copy span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.arcade-stage-loading-copy strong {
+  color: #f8fbff;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.arcade-stage-loading-copy span {
+  color: #a7f3d0;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.arcade-stage-loading-track {
+  position: relative;
+  height: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, .22);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, .78);
+}
+
+.arcade-stage-loading-track span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22d3ee, #facc15);
+  transform-origin: left center;
+  animation: arcadeStageLoadingBar var(--rpg3d-loading-duration, 900ms) linear both;
+}
+
+.arcade-stage-loading-canvas {
+  border-color: rgba(250, 204, 21, .38);
+}
+
+.arcade-stage-loading-canvas .arcade-stage-loading-copy span {
+  color: #fde68a;
+}
+
+@keyframes arcadeStageLoadingBar {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
 .arcade-stage-zoom-control {
   position: absolute;
   top: 12px;
@@ -177,10 +261,51 @@
   color: #eaf2ff;
 }
 
+.arcade-stage-transform-axis-locks {
+  display: grid;
+  gap: 4px;
+  padding-top: 1px;
+}
+
+.arcade-stage-transform-axis-locks label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 36px;
+  min-width: 36px;
+  height: 28px;
+  min-height: 28px;
+  margin: 0;
+  border: 1px solid rgba(148, 163, 184, .22);
+  border-radius: 7px;
+  background: rgba(15, 23, 42, .72);
+  color: #dbeafe;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.arcade-stage-transform-axis-locks label:hover,
+.arcade-stage-transform-axis-locks label:focus-within,
+.arcade-stage-transform-axis-locks label.active {
+  border-color: rgba(245, 158, 11, .72);
+  background: rgba(120, 53, 15, .72);
+  color: #fff7ed;
+}
+
+.arcade-stage-transform-axis-locks input {
+  width: 11px;
+  min-width: 11px;
+  height: 11px;
+  margin: 0;
+  accent-color: #f59e0b;
+}
+
 .arcade-stage-transform-divider {
   display: block;
   width: 100%;
   height: 1px;
   background: rgba(148, 163, 184, .2);
 }
-

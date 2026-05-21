@@ -75,6 +75,9 @@ type StorageDebugEvent =
   | 'upload:start'
   | 'upload:success'
   | 'upload:failure'
+  | 'upload:proxy-start'
+  | 'upload:proxy-success'
+  | 'upload:proxy-failure'
   | 'download:start'
   | 'download:success'
   | 'download:failure'
@@ -312,6 +315,7 @@ const normalizeStorageVisibility = (visibility?: StorageVisibility): StorageVisi
 );
 
 const RETRYABLE_UPLOAD_ERROR_CODES = new Set<StorageErrorCode>(['network']);
+const PROXYABLE_UPLOAD_ERROR_CODES = new Set<StorageErrorCode>(['network', 'permission-denied', 'storage-error']);
 const DEFAULT_UPLOAD_TIMEOUT_MS = 45000;
 const DEFAULT_UPLOAD_RETRIES = 2;
 const DEFAULT_RETRY_DELAY_MS = 700;
@@ -584,6 +588,87 @@ const shouldRetryUploadError = (error: unknown): boolean => (
   && !(typeof navigator !== 'undefined' && navigator.onLine === false)
 );
 
+const shouldProxyUploadError = (error: unknown): boolean => (
+  error instanceof StorageError
+  && error.code !== undefined
+  && PROXYABLE_UPLOAD_ERROR_CODES.has(error.code)
+);
+
+const getCurrentSupabaseAccessToken = async (): Promise<string> => {
+  try {
+    const client = getSupabaseClient();
+    const { data } = await client.auth.getSession();
+    return data.session?.access_token || '';
+  } catch {
+    return '';
+  }
+};
+
+const parseJsonResponse = async (response: Response): Promise<Record<string, unknown>> => {
+  try {
+    const payload = await response.json();
+    return payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+};
+
+const uploadToStorageViaServer = async (
+  path: string,
+  file: UploadFile,
+  {
+    upsert,
+    cacheControl,
+    contentType,
+    visibility,
+    signal,
+  }: Required<Pick<UploadOptions, 'upsert' | 'cacheControl' | 'visibility'>> & Pick<UploadOptions, 'contentType' | 'signal'>,
+): Promise<UploadResult | null> => {
+  if (typeof window === 'undefined' || typeof fetch !== 'function') return null;
+  if (!path.startsWith('users/')) return null;
+
+  const accessToken = await getCurrentSupabaseAccessToken();
+  if (!accessToken) return null;
+
+  const params = new URLSearchParams({
+    path,
+    visibility,
+    upsert: String(Boolean(upsert)),
+    cacheControl,
+    contentType: contentType || file?.type || 'application/octet-stream',
+  });
+  const response = await fetch(`/api/storage-upload?${params.toString()}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': contentType || file?.type || 'application/octet-stream',
+    },
+    body: file,
+    signal,
+  });
+
+  const payload = await parseJsonResponse(response);
+  if (!response.ok) {
+    throw createStorageError({
+      action: 'upload proxy du fichier',
+      bucket: typeof payload.bucket === 'string' ? payload.bucket : resolveStorageBucket(visibility),
+      path,
+      cause: {
+        message: typeof payload.error === 'string' ? payload.error : response.statusText,
+        code: payload.code,
+        status: response.status,
+      },
+    });
+  }
+
+  return {
+    bucket: String(payload.bucket || resolveStorageBucket(visibility)),
+    path: String(payload.path || path),
+    visibility,
+    publicUrl: typeof payload.publicUrl === 'string' ? payload.publicUrl : null,
+  };
+};
+
 const FORBIDDEN_STORAGE_SEGMENTS = new Set(['.', '..', '/', '\\']);
 const MAX_STORAGE_SEGMENT_LENGTH = 120;
 
@@ -813,6 +898,53 @@ export async function uploadToStorage(path: string, file: UploadFile, options: U
 
       lastError = storageError;
       if (attempt >= maxAttempts || !shouldRetryUploadError(storageError)) {
+        if (shouldProxyUploadError(storageError)) {
+          logStorageDebug('upload:proxy-start', {
+            action,
+            bucket,
+            path: storagePath,
+            visibility: normalizedVisibility,
+            attempt,
+            size: file?.size,
+          });
+          try {
+            const proxyResult = await uploadToStorageViaServer(storagePath, file, {
+              upsert,
+              cacheControl,
+              contentType,
+              visibility: normalizedVisibility,
+              signal,
+            });
+            if (proxyResult) {
+              logStorageDebug('upload:proxy-success', {
+                action,
+                bucket: proxyResult.bucket,
+                path: storagePath,
+                visibility: normalizedVisibility,
+                durationMs: getRoundedDuration(startedAt),
+                size: file?.size,
+              });
+              return proxyResult;
+            }
+          } catch (proxyError) {
+            const storageProxyError = proxyError instanceof StorageError ? proxyError : createStorageError({
+              action: 'upload proxy du fichier',
+              bucket,
+              path: storagePath,
+              cause: proxyError,
+            });
+            logStorageDebug('upload:proxy-failure', {
+              action,
+              bucket,
+              path: storagePath,
+              visibility: normalizedVisibility,
+              attempt,
+              durationMs: getRoundedDuration(startedAt),
+              code: storageProxyError.code,
+            }, 'warn');
+            throw storageProxyError;
+          }
+        }
         logStorageDebug('upload:failure', {
           action,
           bucket,

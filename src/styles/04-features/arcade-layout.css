@@ -460,6 +460,332 @@
   overflow-wrap: anywhere;
 }
 
+.arcade-hero-summary-stats {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.arcade-hero-summary {
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+}
+
+.arcade-hero-workspace {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(190px, 230px) minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+  min-width: 0;
+}
+
+.arcade-hero-sidebar {
+  position: sticky;
+  top: 12px;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.arcade-hero-content {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.arcade-hero-content > .arcade-management-panel {
+  min-width: 0;
+}
+
+.arcade-hero-profile-picker,
+.arcade-hero-form-grid label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.arcade-hero-profile-picker {
+  width: 100%;
+  justify-self: stretch;
+}
+
+.arcade-hero-profile-picker span,
+.arcade-hero-form-grid label > span {
+  min-width: 0;
+  color: #e8d8ba;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.arcade-hero-profile-picker select,
+.arcade-hero-form-grid input,
+.arcade-hero-form-grid select {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 7px 9px;
+  border: 1px solid rgba(185, 118, 58, .28);
+  border-radius: 8px;
+  background: rgba(5, 5, 6, .86);
+  color: #fff7ed;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.arcade-hero-form-grid input[type="range"] {
+  min-height: 30px;
+  padding: 0;
+  accent-color: #f59e0b;
+}
+
+.arcade-hero-profile-picker select:focus,
+.arcade-hero-form-grid input:focus,
+.arcade-hero-form-grid select:focus {
+  border-color: rgba(245, 158, 11, .68);
+  outline: none;
+}
+
+.arcade-hero-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.arcade-hero-character-summary {
+  grid-column: 1 / -1;
+}
+
+.arcade-hero-media-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.arcade-hero-media-actions .arcade-file-button,
+.arcade-hero-media-actions button {
+  flex: 1 1 170px;
+  min-height: 36px;
+  border-radius: 8px;
+  gap: 8px;
+}
+
+.arcade-hero-inventory-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.arcade-hero-inventory-head-actions button {
+  min-height: 36px;
+  border-radius: 8px;
+  gap: 8px;
+}
+
+.arcade-hero-inventory-panel {
+  grid-column: 1 / -1;
+}
+
+.arcade-hero-section-tabs {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  min-width: 0;
+}
+
+.arcade-hero-section-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 9px 12px;
+  border: 1px solid rgba(185, 118, 58, .24);
+  border-radius: 8px;
+  background: rgba(10, 7, 6, .58);
+  color: #e8d8ba;
+  font-weight: 900;
+  box-shadow: none;
+  text-align: left;
+}
+
+.arcade-hero-section-tabs button:hover,
+.arcade-hero-section-tabs button:focus-visible,
+.arcade-hero-section-tabs button.active {
+  border-color: rgba(245, 158, 11, .68);
+  background: rgba(120, 53, 15, .42);
+  color: #fff7ed;
+}
+
+.arcade-hero-section-tabs button svg {
+  flex: 0 0 auto;
+}
+
+.arcade-hero-section-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.arcade-hero-section-text span,
+.arcade-hero-section-text small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.arcade-hero-section-text small {
+  color: #bda98a;
+  font-size: 11px;
+  line-height: 1.1;
+}
+
+.arcade-hero-section-tabs button:hover .arcade-hero-section-text small,
+.arcade-hero-section-tabs button:focus-visible .arcade-hero-section-text small,
+.arcade-hero-section-tabs button.active .arcade-hero-section-text small {
+  color: #fde68a;
+}
+
+.arcade-hero-inventory-list {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.arcade-hero-inventory-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 1.05fr) minmax(130px, .6fr) minmax(92px, .35fr) minmax(180px, 1fr) 42px;
+  align-items: end;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(185, 118, 58, .18);
+  border-radius: 8px;
+  background: rgba(10, 7, 6, .42);
+}
+
+.arcade-hero-inventory-row.weapon {
+  align-items: start;
+}
+
+.arcade-hero-inventory-row label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.arcade-hero-inventory-row label > span {
+  min-width: 0;
+  color: #e8d8ba;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.arcade-hero-inventory-row input,
+.arcade-hero-inventory-row select {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 7px 9px;
+  border: 1px solid rgba(185, 118, 58, .28);
+  border-radius: 8px;
+  background: rgba(5, 5, 6, .86);
+  color: #fff7ed;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.arcade-hero-inventory-row input:focus,
+.arcade-hero-inventory-row select:focus {
+  border-color: rgba(245, 158, 11, .68);
+  outline: none;
+}
+
+.arcade-hero-inventory-delete {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  min-width: 40px;
+  height: 36px;
+  padding: 0;
+  border-radius: 8px;
+}
+
+.arcade-hero-weapon-settings {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(190px, 1.3fr) minmax(120px, .45fr) minmax(150px, .8fr) repeat(6, minmax(84px, .38fr));
+  align-items: end;
+  gap: 10px;
+  min-width: 0;
+  padding-top: 10px;
+  border-top: 1px solid rgba(185, 118, 58, .16);
+}
+
+.arcade-hero-weapon-settings button {
+  min-height: 36px;
+  border-radius: 8px;
+  gap: 8px;
+}
+
+.arcade-hero-weapon-settings button.active {
+  border-color: rgba(52, 211, 153, .42);
+  background: rgba(6, 78, 59, .24);
+  color: #d1fae5;
+}
+
+.arcade-hero-inventory-empty {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  min-height: 170px;
+  padding: 28px;
+  border: 1px dashed rgba(185, 118, 58, .28);
+  border-radius: 8px;
+  background: rgba(10, 7, 6, .34);
+  color: #e8d8ba;
+  text-align: center;
+}
+
+.arcade-hero-inventory-empty p {
+  margin: 0;
+  color: #bda98a;
+  font-weight: 850;
+}
+
+.arcade-hero-combat-panel {
+  grid-column: 1 / -1;
+}
+
+.arcade-hero-combat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  min-width: 0;
+}
+
+.arcade-hero-subsection {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.arcade-hero-subsection h3 {
+  margin: 0;
+  color: #fff7ed;
+  font-size: 14px;
+  letter-spacing: 0;
+}
+
 .arcade-canvas-active-card {
   min-width: 0;
   align-self: stretch;
@@ -1095,4 +1421,3 @@
   flex: 1;
   min-width: 0;
 }
-

@@ -9,6 +9,7 @@ import {
   createPreviewFloorCanvas,
   disposeThreeObject,
   getCharacterBuildSignature,
+  getCharacterMaterialBrightness,
   getCharacterModelAxisScale,
   getCharacterModelSources,
   getPreviewAnimationOptions,
@@ -25,6 +26,7 @@ import {
   fitObjectToHeight,
   playGltfAnimations,
   resetObjectBaseTransform,
+  updateGltfModelMaterialAppearance,
 } from '../../utils/threeGltfUtils';
 
 const applyPreviewLighting = (model, renderer, lights) => {
@@ -51,6 +53,7 @@ const getCharacterSizeSignature = (model = {}) => {
   const axisScale = getCharacterModelAxisScale(model);
   return `${axisScale.x}:${axisScale.y}:${axisScale.z}`;
 };
+const getCharacterAppearanceSignature = (model = {}) => `${getCharacterMaterialBrightness(model)}`;
 
 const applyCharacterPreviewSize = (object, model = {}) => {
   if (!object) return;
@@ -73,6 +76,7 @@ export default function Character3DPreview({ model, animationSlot = '', onAnimat
   const [previewStatus, setPreviewStatus] = useState('');
   const buildSignature = useMemo(() => `${getCharacterBuildSignature(model)}|preview:${animationSlot}`, [animationSlot, model]);
   const sizeSignature = useMemo(() => getCharacterSizeSignature(model), [model]);
+  const appearanceSignature = useMemo(() => getCharacterAppearanceSignature(model), [model]);
 
   useEffect(() => {
     latestModelRef.current = model;
@@ -93,7 +97,7 @@ export default function Character3DPreview({ model, animationSlot = '', onAnimat
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.08;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.6));
+    renderer.setPixelRatio(window.devicePixelRatio || 1);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.domElement.className = 'character3d-canvas';
@@ -236,6 +240,12 @@ export default function Character3DPreview({ model, animationSlot = '', onAnimat
   useEffect(() => {
     applyCharacterPreviewSize(characterObjectRef.current, latestModelRef.current);
   }, [sizeSignature]);
+
+  useEffect(() => {
+    updateGltfModelMaterialAppearance(characterObjectRef.current, {
+      materialBrightness: getCharacterMaterialBrightness(latestModelRef.current),
+    });
+  }, [appearanceSignature]);
 
   useEffect(() => {
     const characterRoot = characterRootRef.current;

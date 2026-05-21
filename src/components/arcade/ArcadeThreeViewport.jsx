@@ -13,6 +13,9 @@ import {
   TERRAIN_PAINT_DEFAULT_SHAPE,
   clamp,
   getActionZoneHeight,
+  getActionZoneModelHeight,
+  getActionZoneTopVertices,
+  getActionZoneVertices,
   getActionZoneWidth,
   getDecorMaterialBrightness,
   getCharacterModelScale,
@@ -27,28 +30,22 @@ import {
   getTerrainPaintShape,
   isFloorDecorKind,
 } from '../../utils/rpg3dDomain.js';
+import { isPointInActionZone } from '../../utils/rpg3dMapEditing.js';
 import { updateGltfModelMaterialAppearance } from '../../utils/threeGltfUtils';
 import {
   DEFAULT_ENGINE,
   EDIT_MODEL_ANIMATION_FRAME_MS,
-  EDIT_RENDER_PIXEL_RATIO_MAX,
   ENEMY_RADIUS,
   FLOOR_VISUAL_PADDING_WORLD,
-  PLAY_RENDER_PIXEL_RATIO_MAX,
   SHADOW_CAMERA_MIN_EXTENT,
   SHADOW_MAP_SIZE,
   WORLD_SCALE,
-  addActionZone,
   addActor,
   addBullet,
   addParticle,
   addPickup,
-  addProp,
-  addRelief,
   addStaticSelectionOverlays,
   addTerrainPaintLayer,
-  addWall,
-  buildContinuousFloorUvMap,
   clearGroup,
   configureSunShadowCamera,
   createFloorTexture,
@@ -68,14 +65,21 @@ import {
   getEntityLiftHeight,
   getHeroCharacterId,
   getSelectionOverlaySignature,
+  getStaticModelEraserSignature,
   getStaticSceneSignature,
+  getStaticSceneTransformSignature,
   getTerrainPaintLayerSignature,
   isSelectionActive,
   readEntity,
   removeGroupChild,
+  syncEditableDynamicEntities,
+  syncStaticModelErasers,
+  syncStaticSceneEntities,
   toScenePosition,
+  updateActionZoneHoverHighlight,
   updateDynamicTransforms,
   updateSceneLighting,
+  updateStaticEntityTransforms,
 } from './rpg3dSceneBuilders.js';
 import {
   createCachedModelGetter,
@@ -102,6 +106,43 @@ import {
 } from './rpg3dViewportPicking.js';
 
 const MODEL_ERASER_PREVIEW_COLOR = '#fb923c';
+const ACTION_ZONE_EDGE_DRAG_THRESHOLD = 6;
+const ACTION_ZONE_VERTEX_HIT_RADIUS_WORLD = 6;
+const ACTION_ZONE_VERTEX_POINTS_RAY_THRESHOLD = 0.08;
+const ACTION_ZONE_HEIGHT_DRAG_UNITS_PER_PIXEL = 2;
+
+const getHoveredActionZoneId = (config = {}, point = null) => {
+  if (!point) return '';
+  const zones = Array.isArray(config.actionZones) ? config.actionZones : [];
+  for (let index = zones.length - 1; index >= 0; index -= 1) {
+    const zone = zones[index];
+    if (zone?.id && isPointInActionZone(zone, point)) return zone.id;
+  }
+  return '';
+};
+
+export const syncArcadeShadowMapForFrame = (renderer) => {
+  if (!renderer?.shadowMap) return;
+  renderer.shadowMap.autoUpdate = true;
+  renderer.shadowMap.needsUpdate = true;
+};
+
+export const getActionZoneHeightDragPoint = (startPoint = {}, startClientY = 0, currentClientY = 0) => ({
+  x: Number(startPoint.x) || 0,
+  y: Number(startPoint.y) || 0,
+  z: clamp(
+    (Number.isFinite(Number(startPoint.z)) ? Number(startPoint.z) : 0)
+      - ((Number(currentClientY) || 0) - (Number(startClientY) || 0)) * ACTION_ZONE_HEIGHT_DRAG_UNITS_PER_PIXEL,
+    0,
+    900,
+  ),
+});
+
+export const getActionZoneHeightDragDelta = (lastClientY = 0, currentClientY = 0) => ({
+  x: 0,
+  y: 0,
+  z: -((Number(currentClientY) || 0) - (Number(lastClientY) || 0)) * ACTION_ZONE_HEIGHT_DRAG_UNITS_PER_PIXEL,
+});
 
 const getEntityRootObject = (object, entity) => {
   let current = object;
@@ -148,6 +189,172 @@ const createModelEraserSurfacePreview = (radiusWorld, color = MODEL_ERASER_PREVI
   return group;
 };
 
+const getPointSegmentDistance = (point, start, end) => {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSq = dx * dx + dy * dy;
+  if (lengthSq <= 0.0001) return Math.hypot(point.x - start.x, point.y - start.y);
+  const ratio = clamp(((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSq, 0, 1);
+  return Math.hypot(point.x - (start.x + dx * ratio), point.y - (start.y + dy * ratio));
+};
+
+const resolveActionZoneShapeControl = (config, selected, multiSelected = [], point) => {
+  if (!config?.actionZones?.length || !point) return null;
+  const actionZoneSelection = selected?.type === 'actionZone'
+    ? selected
+    : (multiSelected || []).find((entity) => entity?.type === 'actionZone');
+  if (!actionZoneSelection?.id) return null;
+  const zone = (config.actionZones || []).find((entry) => entry.id === actionZoneSelection.id);
+  if (!zone) return null;
+  const vertices = getActionZoneVertices(zone);
+  if (vertices.length < 3) return null;
+  const vertexHitThreshold = ACTION_ZONE_VERTEX_HIT_RADIUS_WORLD;
+  const edgeHitThreshold = 22;
+  const closestVertex = vertices
+    .map((vertex, index) => ({
+      index,
+      distance: Math.hypot(point.x - vertex.x, point.y - vertex.y),
+    }))
+    .sort((left, right) => left.distance - right.distance)[0];
+  if (closestVertex && closestVertex.distance <= vertexHitThreshold) {
+    return { type: 'actionZoneVertex', id: zone.id, vertexIndex: closestVertex.index, vertexLayer: 'bottom' };
+  }
+  const closestEdge = vertices
+    .map((vertex, index) => ({
+      index,
+      distance: getPointSegmentDistance(point, vertex, vertices[(index + 1) % vertices.length]),
+    }))
+    .sort((left, right) => left.distance - right.distance)[0];
+  if (closestEdge && closestEdge.distance <= edgeHitThreshold) {
+    return { type: 'actionZoneEdge', id: zone.id, edgeIndex: closestEdge.index, vertexLayer: 'bottom' };
+  }
+  return null;
+};
+
+const ACTION_ZONE_VIEW_MODES = [
+  { id: 'north', label: 'N', title: 'Voir de face', direction: new THREE.Vector3(0, 0, -1) },
+  { id: 'east', label: 'E', title: 'Voir le cote droit', direction: new THREE.Vector3(1, 0, 0) },
+  { id: 'south', label: 'S', title: 'Voir de dos', direction: new THREE.Vector3(0, 0, 1) },
+  { id: 'west', label: 'O', title: 'Voir le cote gauche', direction: new THREE.Vector3(-1, 0, 0) },
+];
+const ACTION_ZONE_VIEW_BY_ID = ACTION_ZONE_VIEW_MODES.reduce((map, mode) => {
+  map[mode.id] = mode;
+  return map;
+}, {});
+const NESO_VIEW_ENTITY_TYPES = new Set(['actionZone', 'hero', 'enemy', 'pickup', 'prop']);
+
+export const getNesoViewEntity = (selected, multiSelected = []) => (
+  selected?.id && NESO_VIEW_ENTITY_TYPES.has(selected.type)
+    ? selected
+    : (multiSelected || []).find((entity) => entity?.id && NESO_VIEW_ENTITY_TYPES.has(entity.type)) || null
+);
+
+const getSelectedActionZone = (config, selected, multiSelected = []) => {
+  const selection = selected?.type === 'actionZone'
+    ? selected
+    : (multiSelected || []).find((entity) => entity?.type === 'actionZone');
+  if (!selection?.id) return null;
+  return (config?.actionZones || []).find((zone) => zone.id === selection.id) || null;
+};
+
+const getActionZonePointZ = (point = {}, fallback = 0) => (
+  clamp(Number.isFinite(Number(point.z)) ? Number(point.z) : Number(fallback) || 0, 0, 900)
+);
+
+const getActionZoneLayerVertices = (zone, vertexLayer = 'bottom') => (
+  vertexLayer === 'top' ? getActionZoneTopVertices(zone) : getActionZoneVertices(zone)
+);
+
+const getActionZonePointForEntity = (config, entity) => {
+  if (!config?.actionZones?.length || !entity?.id) return null;
+  const zone = (config.actionZones || []).find((entry) => entry.id === entity.id);
+  if (!zone) return null;
+  const vertexLayer = entity.vertexLayer === 'top' ? 'top' : 'bottom';
+  const fallbackZ = vertexLayer === 'top' ? getActionZoneModelHeight(zone) : 0;
+  const vertices = getActionZoneLayerVertices(zone, vertexLayer);
+  const index = Number(entity.vertexIndex ?? entity.edgeIndex);
+  if (!Number.isInteger(index) || index < 0 || index >= vertices.length) return null;
+  if (entity.type === 'actionZoneVertex') {
+    const point = vertices[index];
+    return { x: point.x, y: point.y, z: getActionZonePointZ(point, fallbackZ) };
+  }
+  if (entity.type === 'actionZoneEdge') {
+    const start = vertices[index];
+    const end = vertices[(index + 1) % vertices.length];
+    return {
+      x: start.x + (end.x - start.x) / 2,
+      y: start.y + (end.y - start.y) / 2,
+      z: getActionZonePointZ(start, fallbackZ) + (getActionZonePointZ(end, fallbackZ) - getActionZonePointZ(start, fallbackZ)) / 2,
+    };
+  }
+  return null;
+};
+
+const getActionZoneCameraTarget = (config, zone) => {
+  if (!config?.world || !zone) return null;
+  const bottomVertices = getActionZoneVertices(zone);
+  const topVertices = getActionZoneTopVertices(zone);
+  const modelHeight = getActionZoneModelHeight(zone);
+  const zValues = [
+    ...bottomVertices.map((point) => getActionZonePointZ(point, 0)),
+    ...topVertices.map((point) => getActionZonePointZ(point, modelHeight)),
+  ];
+  const minZ = zValues.length ? Math.min(...zValues) : 0;
+  const maxZ = zValues.length ? Math.max(...zValues) : modelHeight;
+  return toScenePosition(
+    config,
+    Number(zone.x) || 0,
+    Number(zone.y) || 0,
+    ((minZ + maxZ) / 2) * WORLD_SCALE,
+  );
+};
+
+const getActionZoneSideViewDistance = (zone) => (
+  clamp(
+    Math.max(getActionZoneWidth(zone), getActionZoneHeight(zone), getActionZoneModelHeight(zone), 220) * WORLD_SCALE * 2.6,
+    5,
+    70,
+  )
+);
+
+export const getNesoCameraTarget = (config, entity, engine = DEFAULT_ENGINE) => {
+  if (!config?.world || !entity?.id) return null;
+  if (entity.type === 'actionZone') {
+    const zone = (config.actionZones || []).find((entry) => entry.id === entity.id);
+    return zone ? getActionZoneCameraTarget(config, zone) : null;
+  }
+  const targetPoint = getCameraTargetPoint(config, entity, engine);
+  if (!targetPoint) return null;
+  return toScenePosition(
+    config,
+    targetPoint.x,
+    targetPoint.y,
+    Number.isFinite(Number(targetPoint.height)) ? Number(targetPoint.height) : 0.65,
+  );
+};
+
+const getNesoFallbackViewDistance = (config, entity, fallbackDistance = 12) => {
+  if (entity?.type === 'actionZone') {
+    const zone = (config?.actionZones || []).find((entry) => entry.id === entity.id);
+    if (zone) return getActionZoneSideViewDistance(zone);
+  }
+  return fallbackDistance;
+};
+
+export const getActionZoneCurrentViewDistance = (camera, controls, fallbackDistance = 12) => {
+  const currentDistance = camera?.position?.distanceTo?.(controls?.target);
+  const minDistance = Number.isFinite(Number(controls?.minDistance)) ? Number(controls.minDistance) : 2.6;
+  const maxDistance = Number.isFinite(Number(controls?.maxDistance)) ? Number(controls.maxDistance) : 90;
+  const fallback = Number.isFinite(Number(fallbackDistance)) ? Number(fallbackDistance) : 12;
+  return clamp(
+    Number.isFinite(Number(currentDistance)) && Number(currentDistance) > 0.01
+      ? Number(currentDistance)
+      : fallback,
+    minDistance,
+    maxDistance,
+  );
+};
+
 function ArcadeThreeViewport({
   config,
   configRef,
@@ -160,6 +367,7 @@ function ArcadeThreeViewport({
   cameraTargetPickMode = false,
   cameraZoomDragMode = false,
   transformMode = '',
+  scaleProportionalAxes = null,
   placementEntity = null,
   dragEnabled = false,
   paintMode = false,
@@ -183,7 +391,14 @@ function ArcadeThreeViewport({
   onWorldDragStart,
   onWorldDrag,
   onWorldDrop,
+  actionZoneEdgeInsertMode = false,
+  onActionZoneEdgeInsert,
+  onActionZoneEdgeDrag,
+  onActionZoneEdgeDragStart,
+  onActionZoneVertexDrag,
+  onActionZoneVertexDragStart,
   onMarqueeSelect,
+  onMoveHoldChange,
   onShootChange,
   onUnavailable,
 }) {
@@ -210,11 +425,15 @@ function ArcadeThreeViewport({
   const clickStartRef = useRef(null);
   const heldMoveRef = useRef(null);
   const dragRef = useRef(null);
+  const actionZoneVertexDragRef = useRef(null);
+  const actionZoneEdgeDragRef = useRef(null);
   const paintRef = useRef(null);
   const modelEraserRef = useRef(null);
   const cameraZoomDragRef = useRef(null);
   const playCameraPanOffsetRef = useRef(new THREE.Vector3());
   const playCameraPanStartOffsetRef = useRef(new THREE.Vector3());
+  const playCameraFollowTargetRef = useRef(new THREE.Vector3());
+  const playCameraFollowReadyRef = useRef(false);
   const paintPreviewRef = useRef(null);
   const modelEraserPreviewRef = useRef(null);
   const placementPreviewRef = useRef(null);
@@ -232,6 +451,7 @@ function ArcadeThreeViewport({
     cameraTargetPickMode,
     cameraZoomDragMode,
     transformMode,
+    scaleProportionalAxes,
     placementEntity,
     dragEnabled,
     paintMode,
@@ -255,7 +475,14 @@ function ArcadeThreeViewport({
     onWorldDragStart,
     onWorldDrag,
     onWorldDrop,
+    actionZoneEdgeInsertMode,
+    onActionZoneEdgeInsert,
+    onActionZoneEdgeDrag,
+    onActionZoneEdgeDragStart,
+    onActionZoneVertexDrag,
+    onActionZoneVertexDragStart,
     onMarqueeSelect,
+    onMoveHoldChange,
     onShootChange,
     onUnavailable,
   });
@@ -265,6 +492,11 @@ function ArcadeThreeViewport({
   const [webglError, setWebglError] = useState('');
   const [staticAssetVersion, setStaticAssetVersion] = useState(0);
   const [marqueeRect, setMarqueeRect] = useState(null);
+  const [actionZoneCursorMode, setActionZoneCursorMode] = useState('');
+  const [actionZoneViewMode, setActionZoneViewMode] = useState('');
+  const [actionZoneHeightMode, setActionZoneHeightMode] = useState(false);
+  const actionZoneCursorModeRef = useRef('');
+  const actionZoneHoverIdRef = useRef('');
   const studioDecorTextureById = React.useMemo(() => {
     const entries = (studioProject?.decorModels3d || [])
       .filter((model) => model?.id && model.imageData)
@@ -283,6 +515,23 @@ function ArcadeThreeViewport({
     config.obstacles,
     config.reliefs,
     config.actionZones,
+    config.props,
+  ]);
+  const staticWorldSignature = React.useMemo(() => [
+    Number(config.world?.width) || 0,
+    Number(config.world?.height) || 0,
+    Number(config.world?.grid) || 0,
+  ].join(':'), [config.world]);
+  const staticSceneTransformSignature = React.useMemo(() => getStaticSceneTransformSignature(config), [
+    config.engine?.wallHeight,
+    config.engine?.reliefScale,
+    config.engine?.propHeight,
+    config.obstacles,
+    config.reliefs,
+    config.actionZones,
+    config.props,
+  ]);
+  const staticModelEraserSignature = React.useMemo(() => getStaticModelEraserSignature(config), [
     config.props,
   ]);
   const propMaterialAppearanceSignature = React.useMemo(() => (
@@ -324,6 +573,7 @@ function ArcadeThreeViewport({
     cameraTargetPickMode,
     cameraZoomDragMode,
     transformMode,
+    scaleProportionalAxes,
     placementEntity,
     dragEnabled,
     paintMode,
@@ -347,10 +597,34 @@ function ArcadeThreeViewport({
     onWorldDragStart,
     onWorldDrag,
     onWorldDrop,
+    actionZoneEdgeInsertMode,
+    onActionZoneEdgeInsert,
+    onActionZoneEdgeDrag,
+    onActionZoneEdgeDragStart,
+    onActionZoneVertexDrag,
+    onActionZoneVertexDragStart,
+    actionZoneViewMode,
+    actionZoneHeightMode,
     onMarqueeSelect,
+    onMoveHoldChange,
     onShootChange,
     onUnavailable,
   };
+
+  const updateActionZoneCursorMode = useCallback((nextMode = '') => {
+    if (actionZoneCursorModeRef.current === nextMode) return;
+    actionZoneCursorModeRef.current = nextMode;
+    setActionZoneCursorMode(nextMode);
+  }, []);
+
+  const updateHoveredActionZone = useCallback((nextZoneId = '') => {
+    const normalizedId = nextZoneId ? String(nextZoneId) : '';
+    if (actionZoneHoverIdRef.current === normalizedId) return;
+    actionZoneHoverIdRef.current = normalizedId;
+    if (updateActionZoneHoverHighlight(staticGroupRef.current, normalizedId)) {
+      invalidateRenderRef.current({ followupFrames: 2 });
+    }
+  }, []);
 
   const getScreenPoint = useCallback((event) => {
     const renderer = rendererRef.current;
@@ -378,17 +652,43 @@ function ArcadeThreeViewport({
     raycaster.setFromCamera(pointerRef.current, camera);
 
     const entityHit = pickEntity
-      ? raycaster
-        .intersectObjects([staticGroupRef.current, selectionGroupRef.current, dynamicGroupRef.current].filter(Boolean), true)
-        .map((hit) => readEntity(hit.object))
-        .find(Boolean)
+      ? (() => {
+        const previousPointsThreshold = raycaster.params.Points?.threshold;
+        if (raycaster.params.Points) {
+          raycaster.params.Points.threshold = ACTION_ZONE_VERTEX_POINTS_RAY_THRESHOLD;
+        }
+        const hitEntities = raycaster
+          .intersectObjects([staticGroupRef.current, selectionGroupRef.current, dynamicGroupRef.current].filter(Boolean), true)
+          .map((hit) => readEntity(hit.object))
+          .filter(Boolean);
+        if (raycaster.params.Points) {
+          if (typeof previousPointsThreshold === 'number') raycaster.params.Points.threshold = previousPointsThreshold;
+          else delete raycaster.params.Points.threshold;
+        }
+        return hitEntities.find((entity) => entity.type === 'actionZoneVertex')
+          || hitEntities.find((entity) => entity.type === 'actionZoneEdge')
+          || hitEntities[0]
+          || null;
+      })()
       : null;
-    const groundPoint = new THREE.Vector3();
-    const hitGround = raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), groundPoint);
-    if (!hitGround) return null;
+    let point = null;
+    if (!point) {
+      const groundPoint = new THREE.Vector3();
+      const hitGround = raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), groundPoint);
+      if (hitGround) point = fromScenePosition(liveConfig, groundPoint);
+    }
+    if (!point && ['actionZoneVertex', 'actionZoneEdge'].includes(entityHit?.type)) {
+      point = getActionZonePointForEntity(liveConfig, entityHit);
+    }
+    if (!point) return null;
+    const actionZoneControlHit = pickEntity
+      && entityHit?.type !== 'actionZoneVertex'
+      && entityHit?.type !== 'actionZoneEdge'
+        ? resolveActionZoneShapeControl(liveConfig, latestRef.current.selected, latestRef.current.multiSelected, point)
+      : null;
     return {
-      point: fromScenePosition(liveConfig, groundPoint),
-      entity: entityHit,
+      point,
+      entity: actionZoneControlHit || entityHit,
       screenX: event.clientX - rect.left,
       screenY: event.clientY - rect.top,
     };
@@ -686,7 +986,7 @@ function ArcadeThreeViewport({
       renderer = new THREE.WebGLRenderer({
         antialias: false,
         alpha: false,
-        preserveDrawingBuffer: false,
+        preserveDrawingBuffer: Boolean(window.__escapeGameBuilderRpg3DE2E),
         powerPreference: 'high-performance',
       });
     } catch {
@@ -698,10 +998,11 @@ function ArcadeThreeViewport({
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.08;
     renderer.setClearColor('#081521', 1);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.15));
+    renderer.setPixelRatio(window.devicePixelRatio || 1);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.domElement.className = 'arcade-three-canvas';
+    renderer.domElement.setAttribute('data-testid', 'rpg3d-canvas');
     const handleContextLost = (event) => {
       event.preventDefault();
       setWebglError('La vue 3D a ete suspendue par le navigateur.');
@@ -744,7 +1045,11 @@ function ArcadeThreeViewport({
         && !latest.placementEntity
         && !latest.paintMode
         && !latest.modelEraserMode
+        && !latest.actionZoneViewMode
+        && !latest.actionZoneHeightMode
         && !dragRef.current
+        && !actionZoneVertexDragRef.current
+        && !actionZoneEdgeDragRef.current
         && !paintRef.current
         && !modelEraserRef.current
         && !marqueeRef.current
@@ -836,6 +1141,7 @@ function ArcadeThreeViewport({
         startScale: transformProxyRef.current.scale.clone(),
         startProxyQuaternion: transformProxyRef.current.quaternion.clone(),
         startProxyScale: transformProxyRef.current.scale.clone(),
+        proportionalAxes: latestRef.current.scaleProportionalAxes,
         previewRoots: getTransformPreviewRoots(findEntityRoots(descriptor.entity), descriptor),
       };
       if (controlsRef.current) controlsRef.current.enabled = false;
@@ -866,6 +1172,7 @@ function ArcadeThreeViewport({
             y: scaleRatio('y'),
             z: scaleRatio('z'),
           },
+          proportionalAxes: session.proportionalAxes,
         });
       }
       transformSessionRef.current = null;
@@ -967,25 +1274,47 @@ function ArcadeThreeViewport({
         : 0.65;
       const target = toScenePosition(liveConfig, focus.x, focus.y, focusHeight);
       const playCameraTarget = playMode ? target.clone().add(playCameraPanOffsetRef.current) : target;
+      const selectedNesoEntity = !playMode && latest.actionZoneViewMode
+        ? getNesoViewEntity(latest.selected, latest.multiSelected)
+        : null;
+      const nesoSideView = selectedNesoEntity ? ACTION_ZONE_VIEW_BY_ID[latest.actionZoneViewMode] : null;
 
-      const nextPixelRatio = Math.min(window.devicePixelRatio || 1, playMode ? PLAY_RENDER_PIXEL_RATIO_MAX : EDIT_RENDER_PIXEL_RATIO_MAX);
+      const nextPixelRatio = window.devicePixelRatio || 1;
       if (renderer.getPixelRatio() !== nextPixelRatio) renderer.setPixelRatio(nextPixelRatio);
-      renderer.shadowMap.autoUpdate = !playMode;
-      if (!playMode) renderer.shadowMap.needsUpdate = true;
+      syncArcadeShadowMapForFrame(renderer);
       resize(timestamp);
-      updateSceneLighting(scene, engine);
       controls.enabled = canUseOrbitControls();
+      const cameraDistanceSetting = getCameraDistance(engine);
 
       if (playMode) {
-        const distance = getCameraDistance(engine);
+        const distance = cameraDistanceSetting;
         const height = getCameraHeightForDistance(engine, distance);
         const offset = new THREE.Vector3(-distance * 0.48, height, distance * 0.72);
-        controls.target.copy(playCameraTarget);
-        camera.position.lerp(playCameraTarget.clone().add(offset), 0.12);
-        camera.lookAt(playCameraTarget);
+        const cameraFollowTarget = playCameraFollowTargetRef.current;
+        if (!playCameraFollowReadyRef.current || cameraFollowTarget.distanceToSquared(playCameraTarget) > 144) {
+          cameraFollowTarget.copy(playCameraTarget);
+          playCameraFollowReadyRef.current = true;
+        } else {
+          cameraFollowTarget.lerp(playCameraTarget, 0.08);
+        }
+        controls.target.copy(cameraFollowTarget);
+        camera.position.lerp(cameraFollowTarget.clone().add(offset), 0.12);
+        camera.lookAt(cameraFollowTarget);
+        lastEditCameraDistanceRef.current = null;
+      } else if (nesoSideView && selectedNesoEntity) {
+        const sideTarget = getNesoCameraTarget(liveConfig, selectedNesoEntity, engine) || target;
+        const sideDirection = nesoSideView.direction.clone().normalize();
+        const sideDistance = getActionZoneCurrentViewDistance(
+          camera,
+          controls,
+          getNesoFallbackViewDistance(liveConfig, selectedNesoEntity, cameraDistanceSetting),
+        );
+        camera.position.copy(sideTarget).add(sideDirection.multiplyScalar(sideDistance));
+        camera.lookAt(sideTarget);
+        controls.target.copy(sideTarget);
         lastEditCameraDistanceRef.current = null;
       } else {
-        const distance = getCameraDistance(engine);
+        const distance = cameraDistanceSetting;
         if (!cameraReadyRef.current) {
           const height = getCameraHeightForDistance(engine, distance);
           camera.position.copy(target.clone().add(new THREE.Vector3(-distance * 0.65, height, distance * 0.78)));
@@ -1000,7 +1329,11 @@ function ArcadeThreeViewport({
           lastEditCameraDistanceRef.current = distance;
         }
       }
-      controls.update();
+      if (!nesoSideView) controls.update();
+      updateSceneLighting(scene, engine, {
+        shadowTarget: controls.target,
+        shadowExtent: clamp(camera.position.distanceTo(controls.target) * 0.72, 10, 36),
+      });
 
       const now = performance.now();
       const dynamicSelectedKey = [
@@ -1061,58 +1394,65 @@ function ArcadeThreeViewport({
           dynamicFrameRef.current.forceSignature = '';
           queueRender({ followupFrames: 2 });
         });
-        clearGroup(dynamicGroup);
-
-        dynamicPickups.forEach((pickup) => addPickup(dynamicGroup, liveConfig, pickup, isSelectionActive('pickup', pickup.id, latest.selected, latest.multiSelected), state.time || 0));
-
-        state.bullets.forEach((bullet) => addBullet(dynamicGroup, liveConfig, bullet));
-        state.particles.forEach((particle, index) => addParticle(dynamicGroup, liveConfig, particle, index));
-
-        dynamicHeroes.forEach((hero) => {
-          addActor(dynamicGroup, liveConfig, hero, {
-            type: 'hero',
-            id: hero.id,
-            radius: PLAYER_RADIUS,
-            preset: getCharacterPreset(getHeroCharacterId(hero), 'runner'),
-            selected: isSelectionActive('hero', hero.id, latest.selected, latest.multiSelected),
-            active: false,
-            imageData: hero.characterImageData,
-            renderMode: getCharacterRenderMode(hero),
-            modelScale: getCharacterModelScale(hero),
-            animationTime: (state.time || timestamp * 0.001) + Math.abs(hashString(hero.id || 'hero')) * 0.001,
-            aimTarget: playMode ? state.player : liveConfig.player,
+        if (!playMode) {
+          syncEditableDynamicEntities(dynamicGroup, liveConfig, {
+            selected: latest.selected,
+            multiSelected: latest.multiSelected,
             getTexture,
             getModel,
-            useStoredRotation: true,
-            editMode: !playMode,
-            supportHeight: getActorSupportHeight(hero),
+            animationTime: state.time || timestamp * 0.001,
+            getSupportHeight: getActorSupportHeight,
           });
-        });
+        } else {
+          clearGroup(dynamicGroup);
+          dynamicPickups.forEach((pickup) => addPickup(dynamicGroup, liveConfig, pickup, isSelectionActive('pickup', pickup.id, latest.selected, latest.multiSelected), state.time || 0));
 
-        dynamicEnemies.forEach((enemy) => {
-          const enemyPreset = getCharacterPreset(getEnemyCharacterId(enemy), 'guard');
-          const aimTarget = playMode ? state.player : liveConfig.player;
-          addActor(dynamicGroup, liveConfig, enemy, {
-            type: 'enemy',
-            id: enemy.id,
-            radius: ENEMY_RADIUS,
-            preset: enemyPreset,
-            selected: isSelectionActive('enemy', enemy.id, latest.selected, latest.multiSelected),
-            active: Boolean(enemy.alert),
-            imageData: enemy.characterImageData,
-            renderMode: getCharacterRenderMode(enemy),
-            modelScale: getCharacterModelScale(enemy),
-            animationTime: (state.time || timestamp * 0.001) + Math.abs(hashString(enemy.id || 'enemy')) * 0.001,
-            aimTarget,
-            getTexture,
-            getModel,
-            useStoredRotation: !playMode,
-            editMode: !playMode,
-            supportHeight: getActorSupportHeight(enemy),
+          state.bullets.forEach((bullet) => addBullet(dynamicGroup, liveConfig, bullet));
+          state.particles.forEach((particle, index) => addParticle(dynamicGroup, liveConfig, particle, index));
+
+          dynamicHeroes.forEach((hero) => {
+            addActor(dynamicGroup, liveConfig, hero, {
+              type: 'hero',
+              id: hero.id,
+              radius: PLAYER_RADIUS,
+              preset: getCharacterPreset(getHeroCharacterId(hero), 'runner'),
+              selected: isSelectionActive('hero', hero.id, latest.selected, latest.multiSelected),
+              active: false,
+              imageData: hero.characterImageData,
+              renderMode: getCharacterRenderMode(hero),
+              modelScale: getCharacterModelScale(hero),
+              animationTime: (state.time || timestamp * 0.001) + Math.abs(hashString(hero.id || 'hero')) * 0.001,
+              aimTarget: state.player,
+              getTexture,
+              getModel,
+              useStoredRotation: true,
+              editMode: false,
+              supportHeight: getActorSupportHeight(hero),
+            });
           });
-        });
 
-        if (playMode) {
+          dynamicEnemies.forEach((enemy) => {
+            const enemyPreset = getCharacterPreset(getEnemyCharacterId(enemy), 'guard');
+            addActor(dynamicGroup, liveConfig, enemy, {
+              type: 'enemy',
+              id: enemy.id,
+              radius: ENEMY_RADIUS,
+              preset: enemyPreset,
+              selected: isSelectionActive('enemy', enemy.id, latest.selected, latest.multiSelected),
+              active: Boolean(enemy.alert),
+              imageData: enemy.characterImageData,
+              renderMode: getCharacterRenderMode(enemy),
+              modelScale: getCharacterModelScale(enemy),
+              animationTime: (state.time || timestamp * 0.001) + Math.abs(hashString(enemy.id || 'enemy')) * 0.001,
+              aimTarget: state.player,
+              getTexture,
+              getModel,
+              useStoredRotation: false,
+              editMode: false,
+              supportHeight: getActorSupportHeight(enemy),
+            });
+          });
+
           const playerVisualActor = { ...liveConfig.player, ...player };
           const playerEntityType = controlledHeroId ? 'hero' : 'player';
           const playerEntityId = controlledHeroId || 'player';
@@ -1152,6 +1492,7 @@ function ArcadeThreeViewport({
     queueRender({ followupFrames: 2 });
 
     return () => {
+      if (heldMoveRef.current) latestRef.current.onMoveHoldChange?.(false);
       heldMoveRef.current = null;
       clickStartRef.current = null;
       latestRef.current.onShootChange?.(false);
@@ -1207,9 +1548,40 @@ function ArcadeThreeViewport({
   }, [configRef, stateRef]);
 
   useEffect(() => {
+    if (!import.meta.env.DEV || typeof window === 'undefined') return undefined;
+    const smokeApi = {
+      getConfig: () => configRef.current || latestRef.current.config,
+      getMode: () => latestRef.current.mode,
+      getSelected: () => latestRef.current.selected || null,
+      projectWorldToScreen: ({ x = 0, y = 0, z = 0 } = {}) => {
+        const renderer = rendererRef.current;
+        const camera = cameraRef.current;
+        const liveConfig = configRef.current || latestRef.current.config;
+        if (!renderer || !camera || !liveConfig) return null;
+        const rect = renderer.domElement.getBoundingClientRect();
+        if (!rect.width || !rect.height) return null;
+        const projected = toScenePosition(liveConfig, x, y, z).project(camera);
+        return {
+          x: rect.left + ((projected.x + 1) / 2) * rect.width,
+          y: rect.top + ((1 - projected.y) / 2) * rect.height,
+          inView: projected.z >= -1 && projected.z <= 1,
+        };
+      },
+    };
+    window.__escapeGameBuilderRpg3DSmoke = smokeApi;
+    return () => {
+      if (window.__escapeGameBuilderRpg3DSmoke === smokeApi) {
+        delete window.__escapeGameBuilderRpg3DSmoke;
+      }
+    };
+  }, [configRef]);
+
+  useEffect(() => {
     playCameraPanOffsetRef.current.set(0, 0, 0);
     playCameraPanStartOffsetRef.current.set(0, 0, 0);
+    playCameraFollowReadyRef.current = false;
     if (mode === 'play') return;
+    if (heldMoveRef.current) latestRef.current.onMoveHoldChange?.(false);
     heldMoveRef.current = null;
     clickStartRef.current = null;
     latestRef.current.onShootChange?.(false);
@@ -1250,95 +1622,79 @@ function ArcadeThreeViewport({
     const scene = sceneRef.current;
     const staticGroup = staticGroupRef.current;
     if (!scene || !staticGroup || !liveConfig) return;
-    const engine = getEngine(liveConfig);
     configureSunShadowCamera(scene.userData.sun, liveConfig);
     const getTexture = createCachedTextureGetter(textureCacheRef.current);
     const getModel = createCachedModelGetter(modelCacheRef.current, modelPendingRef.current, modelFailedRef.current, () => {
       setStaticAssetVersion((version) => version + 1);
       invalidateRenderRef.current({ followupFrames: 2 });
     });
-    clearGroup(staticGroup);
+    const shouldRebuildBase = staticGroup.userData.staticWorldSignature !== staticWorldSignature;
+    if (shouldRebuildBase) {
+      clearGroup(staticGroup);
 
-    const floorTexture = createFloorTexture();
-    const floorVisualPadding = Math.max(
-      FLOOR_VISUAL_PADDING_WORLD,
-      (Number(liveConfig.world?.width) || 0) * 0.75,
-      (Number(liveConfig.world?.height) || 0) * 0.75,
-    );
-    const floorVisualWidth = Math.max(1, (Number(liveConfig.world?.width) || 1) + floorVisualPadding * 2);
-    const floorVisualHeight = Math.max(1, (Number(liveConfig.world?.height) || 1) + floorVisualPadding * 2);
-    floorTexture.repeat.set(
-      Math.max(1, floorVisualWidth / Math.max(240, liveConfig.world.grid * 2)),
-      Math.max(1, floorVisualHeight / Math.max(240, liveConfig.world.grid * 2)),
-    );
-    const floorMaterial = new THREE.MeshStandardMaterial({
-      map: floorTexture,
-      roughness: 0.92,
-      metalness: 0,
-      emissive: '#071016',
-      emissiveIntensity: 0.08,
-    });
-    floorMaterial.userData.disposeTextures = true;
-    const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(floorVisualWidth * WORLD_SCALE, floorVisualHeight * WORLD_SCALE),
-      floorMaterial,
-    );
-    floor.rotation.x = -Math.PI / 2;
-    floor.receiveShadow = true;
-    floor.userData.ground = true;
-    groundRef.current = floor;
-    staticGroup.add(floor);
-
-    const gridSize = Math.max(liveConfig.world.width, liveConfig.world.height) * WORLD_SCALE;
-    const grid = new THREE.GridHelper(
-      gridSize,
-      Math.max(8, Math.round(Math.max(liveConfig.world.width, liveConfig.world.height) / liveConfig.world.grid)),
-      '#67e8f9',
-      '#314052',
-    );
-    grid.material.transparent = true;
-    grid.material.opacity = 0.42;
-    grid.material.depthWrite = false;
-    grid.material.depthFunc = THREE.LessDepth;
-    grid.position.y = 0.018;
-    staticGroup.add(grid);
-
-    liveConfig.obstacles.forEach((obstacle) => {
-      addWall(staticGroup, liveConfig, obstacle, engine, false);
-    });
-
-    (liveConfig.reliefs || []).forEach((relief) => {
-      addRelief(staticGroup, liveConfig, relief, engine, false);
-    });
-
-    (liveConfig.actionZones || []).forEach((zone) => {
-      addActionZone(staticGroup, liveConfig, zone, { playMode: mode === 'play' });
-    });
-
-    const renderedProps = liveConfig.props.map((prop) => {
-      const studioTexture = prop.decorModel3dId && !prop.imageData
-        ? studioDecorTextureById.get(prop.decorModel3dId)
-        : null;
-      return studioTexture ? { ...prop, ...studioTexture } : prop;
-    });
-    const continuousFloorUvMap = buildContinuousFloorUvMap(renderedProps);
-
-    renderedProps.forEach((renderedProp) => {
-      addProp(
-        staticGroup,
-        liveConfig,
-        renderedProp,
-        engine,
-        false,
-        getTexture,
-        getModel,
-        { floorUv: continuousFloorUvMap.get(renderedProp.id) || null },
+      const floorTexture = createFloorTexture();
+      const floorVisualPadding = Math.max(
+        FLOOR_VISUAL_PADDING_WORLD,
+        (Number(liveConfig.world?.width) || 0) * 0.75,
+        (Number(liveConfig.world?.height) || 0) * 0.75,
       );
+      const floorVisualWidth = Math.max(1, (Number(liveConfig.world?.width) || 1) + floorVisualPadding * 2);
+      const floorVisualHeight = Math.max(1, (Number(liveConfig.world?.height) || 1) + floorVisualPadding * 2);
+      floorTexture.repeat.set(
+        Math.max(1, floorVisualWidth / Math.max(240, liveConfig.world.grid * 2)),
+        Math.max(1, floorVisualHeight / Math.max(240, liveConfig.world.grid * 2)),
+      );
+      const floorMaterial = new THREE.MeshStandardMaterial({
+        map: floorTexture,
+        roughness: 0.92,
+        metalness: 0,
+        emissive: '#071016',
+        emissiveIntensity: 0.08,
+      });
+      floorMaterial.userData.disposeTextures = true;
+      const floor = new THREE.Mesh(
+        new THREE.PlaneGeometry(floorVisualWidth * WORLD_SCALE, floorVisualHeight * WORLD_SCALE),
+        floorMaterial,
+      );
+      floor.rotation.x = -Math.PI / 2;
+      floor.receiveShadow = true;
+      floor.userData.ground = true;
+      groundRef.current = floor;
+      staticGroup.add(floor);
+
+      const gridSize = Math.max(liveConfig.world.width, liveConfig.world.height) * WORLD_SCALE;
+      const grid = new THREE.GridHelper(
+        gridSize,
+        Math.max(8, Math.round(Math.max(liveConfig.world.width, liveConfig.world.height) / liveConfig.world.grid)),
+        '#67e8f9',
+        '#314052',
+      );
+      grid.material.transparent = true;
+      grid.material.opacity = 0.42;
+      grid.material.depthWrite = false;
+      grid.material.depthFunc = THREE.LessDepth;
+      grid.position.y = 0.018;
+      staticGroup.add(grid);
+      staticGroup.userData.staticWorldSignature = staticWorldSignature;
+    }
+
+    const didSyncEntities = syncStaticSceneEntities(staticGroup, liveConfig, {
+      playMode: mode === 'play',
+      getTexture,
+      getModel,
+      studioDecorTextureById,
     });
-    dynamicFrameRef.current.signature = '';
-    dynamicFrameRef.current.forceSignature = '';
-    invalidateRenderRef.current({ followupFrames: 2 });
-  }, [configRef, mode, staticAssetVersion, staticSceneSignature, studioDecorTextureById]);
+    if (mode !== 'play') actionZoneHoverIdRef.current = '';
+    const didUpdateActionZoneHover = updateActionZoneHoverHighlight(
+      staticGroup,
+      mode === 'play' ? actionZoneHoverIdRef.current : '',
+    );
+    if (shouldRebuildBase || didSyncEntities || didUpdateActionZoneHover) {
+      dynamicFrameRef.current.signature = '';
+      dynamicFrameRef.current.forceSignature = '';
+      invalidateRenderRef.current({ followupFrames: 2 });
+    }
+  }, [configRef, mode, staticAssetVersion, staticSceneSignature, staticWorldSignature, studioDecorTextureById]);
 
   useEffect(() => {
     const liveConfig = configRef.current || config;
@@ -1348,6 +1704,34 @@ function ArcadeThreeViewport({
     addTerrainPaintLayer(terrainPaintGroup, liveConfig);
     invalidateRenderRef.current({ followupFrames: 2 });
   }, [configRef, terrainPaintLayerSignature]);
+
+  useEffect(() => {
+    const staticGroup = staticGroupRef.current;
+    const liveConfig = configRef.current || config;
+    if (!staticGroup || !liveConfig) return;
+    if (updateStaticEntityTransforms(staticGroup, liveConfig)) {
+      invalidateRenderRef.current({ followupFrames: 2 });
+    }
+  }, [configRef, staticSceneTransformSignature]);
+
+  useEffect(() => {
+    const staticGroup = staticGroupRef.current;
+    const liveConfig = configRef.current || config;
+    if (!staticGroup || !liveConfig) return;
+    const getTexture = createCachedTextureGetter(textureCacheRef.current);
+    const getModel = createCachedModelGetter(modelCacheRef.current, modelPendingRef.current, modelFailedRef.current, () => {
+      setStaticAssetVersion((version) => version + 1);
+      invalidateRenderRef.current({ followupFrames: 2 });
+    });
+    if (syncStaticModelErasers(staticGroup, liveConfig, {
+      playMode: mode === 'play',
+      getTexture,
+      getModel,
+      studioDecorTextureById,
+    })) {
+      invalidateRenderRef.current({ followupFrames: 2 });
+    }
+  }, [configRef, mode, staticModelEraserSignature, studioDecorTextureById]);
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -1381,9 +1765,13 @@ function ArcadeThreeViewport({
     const selectionGroup = selectionGroupRef.current;
     if (!selectionGroup || !liveConfig) return;
     clearGroup(selectionGroup);
+    if (mode === 'play') {
+      invalidateRenderRef.current({ followupFrames: 2 });
+      return;
+    }
     addStaticSelectionOverlays(selectionGroup, liveConfig, selected, multiSelected);
     invalidateRenderRef.current({ followupFrames: 2 });
-  }, [configRef, selectionOverlaySignature]);
+  }, [configRef, mode, selectionOverlaySignature]);
 
   useEffect(() => {
     const liveConfig = configRef.current || config;
@@ -1484,6 +1872,20 @@ function ArcadeThreeViewport({
     invalidateRenderRef.current({ followupFrames: mode === 'play' ? 0 : 2 });
   }, [mode, dragEnabled, multiSelectMode, cameraTargetPickMode, cameraZoomDragMode, transformMode]);
 
+  useEffect(() => {
+    const nesoEntity = getNesoViewEntity(selected, multiSelected);
+    if (mode !== 'edit' || !nesoEntity) {
+      setActionZoneViewMode('');
+      setActionZoneHeightMode(false);
+    } else if (nesoEntity.type !== 'actionZone' || !getSelectedActionZone(config, nesoEntity, [])) {
+      setActionZoneHeightMode(false);
+    }
+  }, [config, mode, multiSelected, selected?.id, selected?.type]);
+
+  useEffect(() => {
+    invalidateRenderRef.current({ followupFrames: actionZoneViewMode || actionZoneHeightMode ? 8 : 2 });
+  }, [actionZoneHeightMode, actionZoneViewMode, selected?.id, selected?.type]);
+
   const isTransformInteractionActive = useCallback(() => Boolean(
     transformPointerActiveRef.current
     || transformControlsRef.current?.dragging
@@ -1506,13 +1908,47 @@ function ArcadeThreeViewport({
       return;
     }
     const eraserMode = latestRef.current.modelEraserMode && latestRef.current.mode !== 'play';
-    const resolved = resolvePointer(event);
+    const shouldPickActionZoneControl = latestRef.current.mode === 'edit'
+      && !latestRef.current.placementEntity
+      && !latestRef.current.paintMode
+      && !latestRef.current.modelEraserMode
+      && !latestRef.current.cameraTargetPickMode
+      && !latestRef.current.cameraZoomDragMode
+      && !dragRef.current
+      && !actionZoneVertexDragRef.current
+      && !actionZoneEdgeDragRef.current
+      && !marqueeRef.current
+      && !transformPointerActiveRef.current
+      && !transformControlsRef.current?.dragging;
+    const resolved = resolvePointer(event, {
+      pickEntity: shouldPickActionZoneControl,
+    });
     const modelHit = eraserMode ? resolveSelectedModelHit(event) : null;
     const screenPoint = resolved || modelHit || getScreenPoint(event);
+    if (actionZoneVertexDragRef.current) {
+      updateActionZoneCursorMode('vertex');
+    } else if (actionZoneEdgeDragRef.current) {
+      updateActionZoneCursorMode('edge');
+    } else if (shouldPickActionZoneControl) {
+      updateActionZoneCursorMode(
+        resolved?.entity?.type === 'actionZoneVertex'
+          ? 'vertex'
+          : resolved?.entity?.type === 'actionZoneEdge'
+            ? latestRef.current.actionZoneEdgeInsertMode ? 'edge-insert' : 'edge'
+            : '',
+      );
+    } else {
+      updateActionZoneCursorMode('');
+    }
     if (!resolved && latestRef.current.paintMode) hidePaintPreview();
     if (eraserMode) {
       if (modelHit) updateModelEraserPreview(modelHit);
       else hideModelEraserPreview();
+    }
+    if (latestRef.current.mode === 'play') {
+      updateHoveredActionZone(getHoveredActionZoneId(latestRef.current.config, resolved?.point));
+    } else {
+      updateHoveredActionZone('');
     }
     if (!resolved && !screenPoint) return;
     if (resolved) {
@@ -1550,7 +1986,7 @@ function ArcadeThreeViewport({
       && heldMove.pointerId === event.pointerId
     ) {
       event.preventDefault();
-      latestRef.current.onWorldClick?.(resolved.point, resolved.entity, 0);
+      latestRef.current.onWorldClick?.(resolved.point, resolved.entity, 0, { continuous: true });
       return;
     }
     if (marqueeRef.current && screenPoint) {
@@ -1558,6 +1994,47 @@ function ArcadeThreeViewport({
       marqueeRef.current.currentX = screenPoint.screenX;
       marqueeRef.current.currentY = screenPoint.screenY;
       setMarqueeRect(normalizeScreenRect(marqueeRef.current));
+      return;
+    }
+    if (actionZoneEdgeDragRef.current) {
+      event.preventDefault();
+      const edgeDrag = actionZoneEdgeDragRef.current;
+      if (!resolved && !edgeDrag.heightOnly) return;
+      const movement = Math.hypot(event.clientX - edgeDrag.startX, event.clientY - edgeDrag.startY);
+      if (!edgeDrag.dragging && movement >= ACTION_ZONE_EDGE_DRAG_THRESHOLD) {
+        edgeDrag.dragging = true;
+        latestRef.current.onActionZoneEdgeDragStart?.(edgeDrag.entity);
+      }
+      if (edgeDrag.dragging) {
+        const delta = edgeDrag.heightOnly
+          ? getActionZoneHeightDragDelta(edgeDrag.lastY, event.clientY)
+          : {
+            x: resolved.point.x - edgeDrag.lastPoint.x,
+            y: resolved.point.y - edgeDrag.lastPoint.y,
+          };
+        if (!edgeDrag.heightOnly) {
+          const nextZ = Number(resolved.point.z);
+          const lastZ = Number(edgeDrag.lastPoint?.z);
+          if (Number.isFinite(nextZ) || Number.isFinite(lastZ)) {
+            delta.z = (Number.isFinite(nextZ) ? nextZ : 0) - (Number.isFinite(lastZ) ? lastZ : 0);
+          }
+        }
+        latestRef.current.onActionZoneEdgeDrag?.(edgeDrag.entity, delta, resolved?.point || edgeDrag.lastPoint);
+        edgeDrag.lastPoint = resolved?.point || edgeDrag.lastPoint;
+        edgeDrag.lastY = event.clientY;
+        invalidateRenderRef.current({ followupFrames: 1 });
+      }
+      return;
+    }
+    if (actionZoneVertexDragRef.current) {
+      event.preventDefault();
+      const vertexDrag = actionZoneVertexDragRef.current;
+      const point = vertexDrag.heightOnly
+        ? getActionZoneHeightDragPoint(vertexDrag.startPoint, vertexDrag.startY, event.clientY)
+        : resolved?.point;
+      if (!point) return;
+      latestRef.current.onActionZoneVertexDrag?.(vertexDrag.entity, point);
+      invalidateRenderRef.current({ followupFrames: 1 });
       return;
     }
     if (dragRef.current) {
@@ -1572,7 +2049,7 @@ function ArcadeThreeViewport({
       latestRef.current.onWorldDrag?.(drag.entity, point);
       invalidateRenderRef.current({ followupFrames: 1 });
     }
-  }, [applyDragPreview, applyPlacementPreview, getScreenPoint, hideModelEraserPreview, hidePaintPreview, resolvePointer, resolveSelectedModelHit, updateModelEraserPreview, updatePaintPreview]);
+  }, [applyDragPreview, applyPlacementPreview, getScreenPoint, hideModelEraserPreview, hidePaintPreview, resolvePointer, resolveSelectedModelHit, updateActionZoneCursorMode, updateHoveredActionZone, updateModelEraserPreview, updatePaintPreview]);
 
   const handlePointerDown = useCallback((event) => {
     if (event.button === 0 && isTransformInteractionActive()) {
@@ -1640,7 +2117,8 @@ function ArcadeThreeViewport({
       clickStartRef.current = null;
       heldMoveRef.current = { pointerId: event.pointerId };
       event.currentTarget.setPointerCapture?.(event.pointerId);
-      latestRef.current.onWorldClick?.(resolved.point, resolved.entity, event.button);
+      latestRef.current.onMoveHoldChange?.(true);
+      latestRef.current.onWorldClick?.(resolved.point, resolved.entity, event.button, { continuous: true });
       return;
     }
     if (latestRef.current.placementEntity) {
@@ -1667,6 +2145,52 @@ function ArcadeThreeViewport({
         cameraTargetPick: true,
       };
       event.currentTarget.setPointerCapture?.(event.pointerId);
+      return;
+    }
+    if (resolved.entity?.type === 'actionZoneEdge') {
+      event.preventDefault();
+      clickStartRef.current = null;
+      if (latestRef.current.actionZoneEdgeInsertMode && !latestRef.current.actionZoneHeightMode) {
+        updateActionZoneCursorMode('edge-insert');
+        latestRef.current.onActionZoneEdgeInsert?.(resolved.entity, resolved.point);
+        invalidateRenderRef.current({ followupFrames: 1 });
+        return;
+      }
+      updateActionZoneCursorMode('edge');
+      const startPoint = getActionZonePointForEntity(configRef.current || latestRef.current.config, resolved.entity) || resolved.point;
+      actionZoneEdgeDragRef.current = {
+        pointerId: event.pointerId,
+        entity: resolved.entity,
+        startX: event.clientX,
+        startY: event.clientY,
+        lastY: event.clientY,
+        startPoint,
+        lastPoint: startPoint,
+        heightOnly: Boolean(latestRef.current.actionZoneHeightMode),
+        dragging: false,
+      };
+      if (controlsRef.current) controlsRef.current.enabled = false;
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      invalidateRenderRef.current({ followupFrames: 1 });
+      return;
+    }
+    if (resolved.entity?.type === 'actionZoneVertex') {
+      event.preventDefault();
+      clickStartRef.current = null;
+      updateActionZoneCursorMode('vertex');
+      const startPoint = getActionZonePointForEntity(configRef.current || latestRef.current.config, resolved.entity) || resolved.point;
+      actionZoneVertexDragRef.current = {
+        pointerId: event.pointerId,
+        entity: resolved.entity,
+        startY: event.clientY,
+        startPoint,
+        heightOnly: Boolean(latestRef.current.actionZoneHeightMode),
+      };
+      if (controlsRef.current) controlsRef.current.enabled = false;
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      latestRef.current.onActionZoneVertexDragStart?.(resolved.entity, startPoint);
+      latestRef.current.onActionZoneVertexDrag?.(resolved.entity, startPoint);
+      invalidateRenderRef.current({ followupFrames: 1 });
       return;
     }
     if (latestRef.current.dragEnabled && isDraggableEntity(resolved.entity)) {
@@ -1697,7 +2221,7 @@ function ArcadeThreeViewport({
       if (controlsRef.current) controlsRef.current.enabled = false;
       event.currentTarget.setPointerCapture?.(event.pointerId);
     }
-  }, [configRef, createDragPreviewTargets, getScreenPoint, hideModelEraserPreview, isTransformInteractionActive, resolvePointer, resolveSelectedModelHit, updateModelEraserPreview, updatePaintPreview]);
+  }, [configRef, createDragPreviewTargets, getScreenPoint, hideModelEraserPreview, isTransformInteractionActive, resolvePointer, resolveSelectedModelHit, updateActionZoneCursorMode, updateModelEraserPreview, updatePaintPreview]);
 
   const handlePointerUp = useCallback((event) => {
     const cameraZoomDrag = cameraZoomDragRef.current;
@@ -1714,6 +2238,7 @@ function ArcadeThreeViewport({
       event.preventDefault();
       clickStartRef.current = null;
       heldMoveRef.current = null;
+      latestRef.current.onMoveHoldChange?.(false);
       event.currentTarget.releasePointerCapture?.(event.pointerId);
       return;
     }
@@ -1736,6 +2261,23 @@ function ArcadeThreeViewport({
       paintRef.current = null;
       latestRef.current.onWorldPaintEnd?.();
       event.currentTarget.releasePointerCapture?.(event.pointerId);
+      return;
+    }
+    if (event.button === 0 && actionZoneVertexDragRef.current?.pointerId === event.pointerId) {
+      event.preventDefault();
+      clickStartRef.current = null;
+      actionZoneVertexDragRef.current = null;
+      updateActionZoneCursorMode('');
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+      return;
+    }
+    if (event.button === 0 && actionZoneEdgeDragRef.current?.pointerId === event.pointerId) {
+      event.preventDefault();
+      actionZoneEdgeDragRef.current = null;
+      clickStartRef.current = null;
+      updateActionZoneCursorMode('');
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+      invalidateRenderRef.current({ followupFrames: 1 });
       return;
     }
     if (event.button === 0 && clickStartRef.current?.cameraTargetPick) {
@@ -1800,11 +2342,19 @@ function ArcadeThreeViewport({
       }
     }
     if (event.button === 2) latestRef.current.onShootChange?.(false);
-  }, [getEntitiesInMarquee, getScreenPoint, isTransformInteractionActive, resetDragPreview, resolvePointer, setCameraTargetFromEntity]);
+  }, [getEntitiesInMarquee, getScreenPoint, isTransformInteractionActive, resetDragPreview, resolvePointer, setCameraTargetFromEntity, updateActionZoneCursorMode]);
+
+  const selectedNesoControlEntity = getNesoViewEntity(selected, multiSelected);
+  const showNesoViewPole = mode === 'edit' && Boolean(selectedNesoControlEntity);
+  const showActionZoneHeightControl = selectedNesoControlEntity?.type === 'actionZone'
+    && Boolean(getSelectedActionZone(config, selectedNesoControlEntity, []));
 
   return (
     <div
       ref={containerRef}
+      data-testid="rpg3d-viewport"
+      data-rpg3d-mode={mode}
+      data-rpg3d-selected={selected?.type && selected?.id ? `${selected.type}:${selected.id}` : ''}
       className={[
         'arcade-three-viewport',
         dragEnabled && mode !== 'play' ? 'drag-enabled' : '',
@@ -1813,6 +2363,11 @@ function ArcadeThreeViewport({
         placementEntity && mode !== 'play' ? 'placement-enabled' : '',
         paintMode && mode !== 'play' ? 'terrain-paint-enabled' : '',
         modelEraserMode && mode !== 'play' ? 'model-eraser-enabled' : '',
+        actionZoneCursorMode === 'vertex' ? 'action-zone-vertex-hover' : '',
+        actionZoneCursorMode === 'edge' ? 'action-zone-edge-hover' : '',
+        actionZoneCursorMode === 'edge-insert' ? 'action-zone-edge-insert-hover' : '',
+        actionZoneViewMode ? `action-zone-side-view action-zone-side-view-${actionZoneViewMode}` : '',
+        actionZoneHeightMode ? 'action-zone-height-mode' : '',
       ].filter(Boolean).join(' ')}
       role="application"
       aria-label="Editeur RPG 3D WebGL"
@@ -1826,6 +2381,8 @@ function ArcadeThreeViewport({
         if (!paintRef.current) hidePaintPreview();
         if (!modelEraserRef.current) hideModelEraserPreview();
         if (!dragRef.current) latestRef.current.onShootChange?.(false);
+        if (!actionZoneVertexDragRef.current && !actionZoneEdgeDragRef.current) updateActionZoneCursorMode('');
+        updateHoveredActionZone('');
       }}
       onPointerCancel={(event) => {
         clickStartRef.current = null;
@@ -1841,12 +2398,24 @@ function ArcadeThreeViewport({
         }
         hidePaintPreview();
         hideModelEraserPreview();
+        updateHoveredActionZone('');
         if (heldMoveRef.current?.pointerId === event.pointerId) {
           heldMoveRef.current = null;
+          latestRef.current.onMoveHoldChange?.(false);
           event.currentTarget.releasePointerCapture?.(event.pointerId);
         }
         if (cameraZoomDragRef.current?.pointerId === event.pointerId) {
           cameraZoomDragRef.current = null;
+          event.currentTarget.releasePointerCapture?.(event.pointerId);
+        }
+        if (actionZoneVertexDragRef.current?.pointerId === event.pointerId) {
+          actionZoneVertexDragRef.current = null;
+          updateActionZoneCursorMode('');
+          event.currentTarget.releasePointerCapture?.(event.pointerId);
+        }
+        if (actionZoneEdgeDragRef.current?.pointerId === event.pointerId) {
+          actionZoneEdgeDragRef.current = null;
+          updateActionZoneCursorMode('');
           event.currentTarget.releasePointerCapture?.(event.pointerId);
         }
         if (marqueeRef.current) {
@@ -1877,6 +2446,51 @@ function ArcadeThreeViewport({
             height: `${marqueeRect.height}px`,
           }}
         />
+      ) : null}
+      {showNesoViewPole ? (
+        <div
+          className="action-zone-view-pole"
+          role="group"
+          aria-label="Vues NESO"
+          onPointerDown={(event) => event.stopPropagation()}
+          onPointerUp={(event) => event.stopPropagation()}
+        >
+          {ACTION_ZONE_VIEW_MODES.map((view) => (
+            <button
+              key={view.id}
+              type="button"
+              className={actionZoneViewMode === view.id ? 'active' : ''}
+              data-view={view.id}
+              title={view.title}
+              aria-label={view.title}
+              aria-pressed={actionZoneViewMode === view.id}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setActionZoneViewMode((current) => (current === view.id ? '' : view.id));
+              }}
+            >
+              {view.label}
+            </button>
+          ))}
+          {showActionZoneHeightControl ? (
+            <button
+              type="button"
+              className={actionZoneHeightMode ? 'active' : ''}
+              data-view="height"
+              title="Modifier uniquement la hauteur"
+              aria-label="Modifier uniquement la hauteur"
+              aria-pressed={actionZoneHeightMode}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setActionZoneHeightMode((current) => !current);
+              }}
+            >
+              Z
+            </button>
+          ) : null}
+        </div>
       ) : null}
       <div className="arcade-three-badge">WebGL 3D</div>
     </div>

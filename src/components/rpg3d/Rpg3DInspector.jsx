@@ -47,6 +47,7 @@ import Rpg3DHelpLabel from './Rpg3DHelpLabel.jsx';
 import Rpg3DInspectorNumberInput from './Rpg3DInspectorNumberInput.jsx';
 
 export default function Rpg3DInspector({
+  actionZoneEdgeInsertMode = false,
   actionZoneNpcTargets,
   activeCanvasId,
   config,
@@ -100,11 +101,11 @@ export default function Rpg3DInspector({
   onRemoveSelectedNpcChoice,
   onSelectTool,
   onSnapSelectedTileToNeighbor,
+  onToggleActionZoneEdgeInsertMode,
   onToggleModelEraser,
   onUpdateEntity,
   onUpdateSelectedNpcChoice,
   onUpdateSelectionEntities,
-  onZoneVisibilityChange,
 }) {
   return (
     <aside className="arcade-builder-panel" aria-label="Inspecteur">
@@ -263,6 +264,15 @@ export default function Rpg3DInspector({
                     <Rpg3DInspectorNumberInput min="60" max="900" value={Math.round(getActionZoneModelHeight(selectedEntity.item))} onCommit={(value) => onUpdateEntity('modelHeight', value)} />
                   </label>
                 </div>
+                <button
+                  type="button"
+                  className={`secondary-action${actionZoneEdgeInsertMode ? ' active' : ''}`}
+                  aria-pressed={actionZoneEdgeInsertMode}
+                  onClick={onToggleActionZoneEdgeInsertMode}
+                >
+                  <Plus size={15} />
+                  <span>{actionZoneEdgeInsertMode ? 'Clique une arete' : 'Ajouter arete au clic'}</span>
+                </button>
                 <div className="arcade-action-zone-veil-grid">
                   <label>
                     <Rpg3DHelpLabel help={fieldHelp.actionZoneColor}>Couleur voile</Rpg3DHelpLabel>
@@ -351,14 +361,8 @@ export default function Rpg3DInspector({
                   </>
                 )}
                 <label>
-                  <Rpg3DHelpLabel help={fieldHelp.zoneVisibility}>Visibilite test</Rpg3DHelpLabel>
-                  <select
-                    value={selectedEntity.item.visibleInPlay ? 'visible' : 'hidden'}
-                    onChange={(event) => onZoneVisibilityChange(event.target.value)}
-                  >
-                    <option value="hidden">Masquer repere sol</option>
-                    <option value="visible">Afficher repere sol</option>
-                  </select>
+                  <Rpg3DHelpLabel help={fieldHelp.zoneVisibility}>Mode test</Rpg3DHelpLabel>
+                  <input value="Invisible, surbrillance au survol" readOnly aria-readonly="true" />
                 </label>
               </>
             )}

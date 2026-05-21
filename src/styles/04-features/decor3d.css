@@ -33,6 +33,9 @@
 .decor3d-card-grid button{width:100%;cursor:pointer;box-shadow:none}
 .decor3d-card-grid button:hover,.decor3d-card-grid button.active{border-color:rgba(245,158,11,.62);background:rgba(120,53,15,.34);color:#fff}
 .decor3d-card-grid svg{flex:0 0 auto;color:#fbbf24}
+.decor3d-kind-group{display:grid;gap:6px;min-width:0}
+.decor3d-subkind-grid{display:grid;gap:6px;margin-left:14px;padding-left:10px;border-left:1px solid rgba(245,158,11,.22)}
+.decor3d-card-grid .decor3d-subkind-grid button{min-height:32px;padding-block:7px;font-size:11px}
 .decor3d-form{display:grid;gap:9px}
 .decor3d-orientation-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .decor3d-orientation-grid label{min-width:0}

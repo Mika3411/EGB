@@ -9,30 +9,7 @@
 }
 
 .arcade-shell.arcade-fullscreen-active > .arcade-workspace-tabs {
-  position: fixed;
-  top: 58px;
-  left: 12px;
-  z-index: 970;
-  width: min(400px, calc(100vw - 24px));
-  max-height: min(190px, calc(50vh - 72px));
-  flex-direction: column;
-  align-items: stretch;
-  padding: 8px;
-  border-color: rgba(103, 232, 249, .28);
-  background: rgba(4, 10, 16, .96);
-  box-shadow: 0 22px 70px rgba(0, 0, 0, .58);
-  transform: translateX(calc(-100% - 28px));
-  transition: transform .18s ease;
-  overflow: auto;
-}
-
-.arcade-shell.arcade-fullscreen-active > .arcade-workspace-tabs button {
-  width: 100%;
-  justify-content: flex-start;
-}
-
-.arcade-shell.arcade-fullscreen-active.arcade-map-drawer-open > .arcade-workspace-tabs {
-  transform: translateX(0);
+  display: none;
 }
 
 .arcade-fullscreen-drawer-toggle {
@@ -128,9 +105,9 @@
 }
 
 .arcade-builder-layout-fullscreen > .arcade-map-card {
-  top: 258px;
+  top: 58px;
   left: 12px;
-  max-height: calc(100vh - 270px);
+  max-height: calc(100vh - 72px);
   transform: translateX(calc(-100% - 28px));
 }
 

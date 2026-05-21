@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
+  Footprints,
+  Gem,
   Home,
   Image as ImageIcon,
   Map as MapIcon,
@@ -10,13 +12,15 @@ import {
   PanelLeftOpen,
   Plus,
   Save,
+  Shield,
+  Shirt,
+  ShoppingBag,
   Sparkles,
+  Sword,
   Trash2,
   Upload,
 } from 'lucide-react';
 import { makeDecor3DModel } from '../data/projectData';
-import { formatBytes } from '../utils/glbOptimizer';
-import Decor3DPreview from './rpg3d/Decor3DPreview.jsx';
 import {
   DECOR_FLOOR_MATERIAL_BRIGHTNESS,
   DECOR_MATERIAL_BRIGHTNESS_MAX,
@@ -38,9 +42,8 @@ import {
   isDecorModelSizeProportional,
   isFloorTileKind,
   numberValue,
-  readDecorModelImport,
   resizeAxesProportionally,
-} from '../utils/rpg3dModelImport';
+} from '../utils/rpg3dModelImportCore.js';
 import {
   THREE_MODEL_ACCEPT,
   getThreeModelFormatLabel,
@@ -50,17 +53,36 @@ import {
   createLocalModelFileId,
   forgetRpg3DLocalBlobFile,
   rememberRpg3DLocalBlobFile,
-} from '../utils/rpg3dAssetsStorage.js';
+} from '../utils/rpg3dAssetsCore.js';
 import MediaSourcePicker from './MediaSourcePicker.jsx';
 import HelpLabel from './forms/HelpLabel.jsx';
 
-const KIND_OPTIONS = [
+const Decor3DPreview = React.lazy(() => import('./rpg3d/Decor3DPreview.jsx'));
+
+const WORLD_KIND_OPTIONS = [
   { id: 'decor', label: 'décors', icon: Mountain, renderKind: 'decor' },
   { id: 'road', label: 'sol', icon: MapIcon, renderKind: 'road' },
   { id: 'water', label: 'eau', icon: ImageIcon, renderKind: 'water' },
   { id: 'wall', label: 'mur', icon: Box, renderKind: 'wall' },
   { id: 'house', label: 'habitations', icon: Home, renderKind: 'house' },
 ];
+const INVENTORY_KIND_OPTIONS = [
+  { id: 'inventory-weapon', label: 'armes', createLabel: 'arme', icon: Sword, renderKind: 'decor' },
+  { id: 'inventory-armor', label: 'armures', createLabel: 'armure', icon: Shirt, renderKind: 'decor' },
+  { id: 'inventory-shield', label: 'boucliers', createLabel: 'bouclier', icon: Shield, renderKind: 'decor' },
+  { id: 'inventory-leggings', label: 'jambières', createLabel: 'jambière', icon: Footprints, renderKind: 'decor' },
+  { id: 'inventory-jewelry', label: 'bijoux', createLabel: 'bijou', icon: Gem, renderKind: 'decor' },
+  { id: 'inventory-misc', label: 'divers', createLabel: 'objet divers', icon: Box, renderKind: 'decor' },
+];
+const KIND_OPTIONS = [
+  ...WORLD_KIND_OPTIONS,
+  { id: 'inventory', label: 'inventaire', icon: ShoppingBag, children: INVENTORY_KIND_OPTIONS },
+];
+const SELECTABLE_KIND_OPTIONS = [
+  ...WORLD_KIND_OPTIONS,
+  ...INVENTORY_KIND_OPTIONS,
+];
+const INVENTORY_KIND_IDS = new Set(INVENTORY_KIND_OPTIONS.map((option) => option.id));
 
 const DECOR_FIELD_HELP = {
   name: 'Nom interne de cet objet 3D. Il sert a le retrouver dans la bibliotheque et sur la carte.',
@@ -84,7 +106,8 @@ const DecorHelpLabel = ({ children, help }) => (
 
 const isHexColor = (value) => /^#[0-9a-f]{6}$/i.test(value || '');
 const colorValue = (value, fallback) => (isHexColor(value) ? value : fallback);
-const getDecorKindConfig = (kind = '') => KIND_OPTIONS.find((option) => option.id === getDecorKindId(kind)) || KIND_OPTIONS[0];
+const getDecorKindConfig = (kind = '') => SELECTABLE_KIND_OPTIONS.find((option) => option.id === getDecorKindId(kind)) || SELECTABLE_KIND_OPTIONS[0];
+const isInventoryKindId = (kind = '') => INVENTORY_KIND_IDS.has(getDecorKindId(kind));
 const DECOR_SIZE_AXES = [
   { id: 'x', label: 'X' },
   { id: 'y', label: 'Y' },
@@ -147,6 +170,16 @@ const getKindDefaults = (kind, current = {}) => {
       kind: 'house',
       height: Math.max(Number(current.height) || 1.2, 1.6),
       collision: true,
+      repeatTexture: false,
+    };
+  }
+  if (isInventoryKindId(nextKind)) {
+    return {
+      kind: nextKind,
+      width: Number(current.width) || 0.8,
+      depth: Number(current.depth) || 0.8,
+      height: Number(current.height) || 1,
+      collision: false,
       repeatTexture: false,
     };
   }
@@ -288,14 +321,14 @@ export default function Decor3DTab({
     }
     localModelUrlsRef.current.delete(selectedModelId);
     setImportInProgress(true);
-    setCopyStatus(isZip ? 'Lecture ZIP...' : modelFormat === 'glb' ? 'Optimisation GLB...' : `Import ${getThreeModelFormatLabel(modelFormat)}...`);
+    setCopyStatus(isZip ? 'Lecture ZIP...' : `Import ${getThreeModelFormatLabel(modelFormat)}...`);
     try {
+      const { readDecorModelImport } = await import('../utils/rpg3dModelImport');
       const {
         zipBundle,
         sourceFile,
         sourceFormat,
         isGlb,
-        optimization,
         optimizedFile,
         modelData,
         modelDimensions,
@@ -334,11 +367,9 @@ export default function Decor3DTab({
         model.modelFileSize = modelFileSize || Number(optimizedFile?.size || sourceFile?.size || file?.size) || 0;
         model.modelResources = zipBundle?.modelResources || [];
       });
-      setCopyStatus(isGlb && optimization.optimized
-        ? `GLB allege ${formatBytes(optimization.originalSize)} -> ${formatBytes(optimization.optimizedSize)}`
-        : isGlb && optimization.skipped
-          ? `GLB optimise charge sans recompression${modelData ? '' : ' en local'}`
-          : isZip
+      setCopyStatus(isGlb
+        ? `GLB charge sans recompression${modelData ? '' : ' en local'}`
+        : isZip
             ? `ZIP charge: ${getThreeModelFormatLabel(sourceFormat)} + ${zipBundle.modelResources.length} texture${zipBundle.modelResources.length > 1 ? 's' : ''}${modelData ? '' : ' en local'}`
             : `${getThreeModelFormatLabel(sourceFormat)} charge${modelData ? '' : ' en local'}`);
     } catch (error) {
@@ -419,9 +450,9 @@ export default function Decor3DTab({
   const createModel = (overrides = {}) => {
     const kindId = getDecorKindId(overrides.kind || activeKindId || 'decor');
     const kindDefaults = getKindDefaults(kindId, overrides);
-    const kindLabel = getDecorKindConfig(kindId).label;
+    const kindConfig = getDecorKindConfig(kindId);
     const next = makeDecor3DModel({
-      name: `Nouveau ${kindLabel}`,
+      name: `Nouveau ${kindConfig.createLabel || kindConfig.label}`,
       ...kindDefaults,
       ...overrides,
       kind: kindId,
@@ -536,11 +567,38 @@ export default function Decor3DTab({
         <div className="decor3d-card-grid">
           {KIND_OPTIONS.map((option) => {
             const OptionIcon = option.icon;
-            const isActive = activeKindId === option.id;
+            const childOptions = option.children || [];
+            const isGroup = childOptions.length > 0;
+            const isActive = isGroup
+              ? childOptions.some((child) => child.id === activeKindId)
+              : activeKindId === option.id;
             return (
-              <button key={option.id} type="button" className={isActive ? 'active' : ''} onClick={() => setDecorKind(option.id)}>
-                <OptionIcon aria-hidden="true" size={14} /> {option.label}
-              </button>
+              <div key={option.id} className={isGroup ? 'decor3d-kind-group' : ''}>
+                <button
+                  type="button"
+                  className={isActive ? 'active' : ''}
+                  onClick={() => setDecorKind(isGroup ? childOptions[0].id : option.id)}
+                >
+                  <OptionIcon aria-hidden="true" size={14} /> {option.label}
+                </button>
+                {isGroup ? (
+                  <div className="decor3d-subkind-grid">
+                    {childOptions.map((child) => {
+                      const ChildIcon = child.icon;
+                      return (
+                        <button
+                          key={child.id}
+                          type="button"
+                          className={activeKindId === child.id ? 'active' : ''}
+                          onClick={() => setDecorKind(child.id)}
+                        >
+                          <ChildIcon aria-hidden="true" size={13} /> {child.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
             );
           })}
         </div>
@@ -576,7 +634,9 @@ export default function Decor3DTab({
             </button>
           </div>
         </div>
-        <Decor3DPreview model={previewModel} />
+        <React.Suspense fallback={<div className="decor3d-preview-loading" />}>
+          <Decor3DPreview model={previewModel} />
+        </React.Suspense>
 
         <div className="decor3d-meta-strip">
           <span><KindIcon aria-hidden="true" size={14} /> {kindConfig.label}</span>

@@ -1,14 +1,12 @@
 import * as THREE from 'three';
 import JSZip from 'jszip';
 import { fileToDataURL } from './fileHelpers';
-import { optimizeCharacterGlbFile } from './glbOptimizer';
 import {
   applyObjectAxisScaleRatios,
   applyTextureToGltfModel,
   fitObjectToDimensions,
   fitObjectToHeight,
   getImportedModelPrepareOptions,
-  getThreeModelArchiveFileFormat,
   getThreeModelFileFormat,
   getThreeModelSources,
   hasThreeModelResources,
@@ -18,125 +16,24 @@ import {
   rememberObjectBaseTransform,
   snapObjectToGround,
 } from './threeGltfUtils';
+import {
+  DECOR_MODEL_DIMENSION_MAX,
+  DECOR_MODEL_DIMENSION_MIN,
+  applyModelRotation,
+  getAnimationSource,
+  getCharacterMaterialBrightness,
+  getCharacterModelAxisScale,
+  getDecorMaterialBrightness,
+  getDecorModelDimensions,
+  getFloorZeroZ,
+  getModelImportFileInfo,
+  getPreviewAnimationOptions,
+  isHeavyLocalFbxAsset,
+  numberValue,
+  shouldInlineModelData,
+} from './rpg3dModelImportCore.js';
 
-const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-export const numberValue = (value, fallback, min, max) => {
-  const normalized = typeof value === 'string' ? value.replace(',', '.') : value;
-  return clamp(Number.isFinite(Number(normalized)) ? Number(normalized) : fallback, min, max);
-};
-
-export const resizeAxesProportionally = (axes = {}, changedAxis = 'x', nextAxisValue = 1, min = 0.001, max = 1000) => {
-  const axisIds = ['x', 'y', 'z'];
-  if (!axisIds.includes(changedAxis)) return axes;
-  const axisValue = (value, fallback = 1) => Number(numberValue(value, fallback, min, max).toFixed(4));
-  const currentAxes = axisIds.reduce((next, axisId) => ({
-    ...next,
-    [axisId]: axisValue(axes[axisId]),
-  }), {});
-  const currentAxisValue = currentAxes[changedAxis] || 1;
-  const desiredFactor = axisValue(nextAxisValue, currentAxisValue) / currentAxisValue;
-  const minFactor = axisIds.reduce((factor, axisId) => Math.max(factor, min / currentAxes[axisId]), 0);
-  const maxFactor = axisIds.reduce((factor, axisId) => Math.min(factor, max / currentAxes[axisId]), Infinity);
-  const factor = clamp(Number.isFinite(desiredFactor) && desiredFactor > 0 ? desiredFactor : 1, minFactor, maxFactor);
-  return axisIds.reduce((next, axisId) => ({
-    ...next,
-    [axisId]: axisValue(currentAxes[axisId] * factor, currentAxes[axisId]),
-  }), {});
-};
-
-export const CHARACTER_MATERIAL_BRIGHTNESS_MIN = 0.25;
-export const CHARACTER_MATERIAL_BRIGHTNESS_MAX = 1.4;
-export const CHARACTER_MODEL_SCALE_MIN = 0.4;
-export const CHARACTER_MODEL_SCALE_MAX = 20;
-export const DEFAULT_FLOOR_ZERO_Z = 2.5;
-export const FLOOR_ZERO_Z_MIN = -120;
-export const FLOOR_ZERO_Z_MAX = 120;
-export const DECOR_MODEL_SCALE_MIN = 0.5;
-export const DECOR_MODEL_SCALE_MAX = 20;
-export const DECOR_MODEL_DIMENSION_MIN = 0.05;
-export const DECOR_MODEL_DIMENSION_MAX = 120;
-export const DECOR_MATERIAL_BRIGHTNESS_MIN = 0.25;
-export const DECOR_MATERIAL_BRIGHTNESS_MAX = 1.4;
-export const DECOR_FLOOR_MATERIAL_BRIGHTNESS = 0.55;
-export const INLINE_MODEL_DATA_MAX_BYTES = 24 * 1024 * 1024;
-export const LOCAL_FBX_AUTO_PREVIEW_MAX_BYTES = 24 * 1024 * 1024;
-
-export const CHARACTER_ANIMATION_SLOTS = [
-  { id: 'walk', label: 'Marche', importedLabel: 'Animation marche' },
-  { id: 'attack', label: 'Attaque', importedLabel: 'Animation attaque' },
-];
-
-export const getCharacterMaterialBrightness = (model = {}) => numberValue(
-  model.materialBrightness,
-  1,
-  CHARACTER_MATERIAL_BRIGHTNESS_MIN,
-  CHARACTER_MATERIAL_BRIGHTNESS_MAX,
-);
-export const getCharacterModelScale = (model = {}) => numberValue(
-  model.characterModelScaleY ?? model.modelScaleY ?? model.characterModelScale ?? model.modelScale,
-  1,
-  CHARACTER_MODEL_SCALE_MIN,
-  CHARACTER_MODEL_SCALE_MAX,
-);
-export const getCharacterModelAxisScale = (model = {}) => {
-  const uniform = getCharacterModelScale(model);
-  return {
-    x: numberValue(model.characterModelScaleX ?? model.modelScaleX, uniform, CHARACTER_MODEL_SCALE_MIN, CHARACTER_MODEL_SCALE_MAX),
-    y: numberValue(model.characterModelScaleY ?? model.modelScaleY, uniform, CHARACTER_MODEL_SCALE_MIN, CHARACTER_MODEL_SCALE_MAX),
-    z: numberValue(model.characterModelScaleZ ?? model.modelScaleZ, uniform, CHARACTER_MODEL_SCALE_MIN, CHARACTER_MODEL_SCALE_MAX),
-  };
-};
-export const isCharacterModelScaleProportional = (model = {}) => model.characterModelScaleProportional !== false;
-
-const LEGACY_DECOR_KIND_MAP = {
-  billboard: 'decor',
-  crate: 'wall',
-  rock: 'decor',
-  tree: 'decor',
-};
-
-export const getDecorKindId = (kind = '') => LEGACY_DECOR_KIND_MAP[kind] || kind || 'decor';
-export const isFloorTileKind = (kind = '') => ['road', 'water'].includes(getDecorKindId(kind));
-export const getFloorTileSize = (model = {}) => numberValue(Math.max(Number(model.width) || 0, Number(model.depth) || 0), 2.2, 0.4, 8);
-export const getDefaultDecorMaterialBrightness = (model = {}) => (isFloorTileKind(model.kind) ? DECOR_FLOOR_MATERIAL_BRIGHTNESS : 1);
-export const getDecorMaterialBrightness = (model = {}) => numberValue(
-  model.materialBrightness,
-  getDefaultDecorMaterialBrightness(model),
-  DECOR_MATERIAL_BRIGHTNESS_MIN,
-  DECOR_MATERIAL_BRIGHTNESS_MAX,
-);
-export const getDecorModelScale = (model = {}) => numberValue(
-  model.scale,
-  1,
-  DECOR_MODEL_SCALE_MIN,
-  DECOR_MODEL_SCALE_MAX,
-);
-export const hasImportedDecorModel = (model = {}) => Boolean(model.modelUrl || model.modelData);
-export const getDecorModelFitHeight = (model = {}) => {
-  return numberValue(model.height, 1.2, DECOR_MODEL_DIMENSION_MIN, DECOR_MODEL_DIMENSION_MAX);
-};
-export const getDecorModelDimensions = (model = {}) => {
-  const legacyScale = getDecorModelScale(model);
-  return {
-    x: numberValue(model.width, 2.2, DECOR_MODEL_DIMENSION_MIN, DECOR_MODEL_DIMENSION_MAX) * legacyScale,
-    y: getDecorModelFitHeight(model) * legacyScale,
-    z: numberValue(model.depth, 2.2, DECOR_MODEL_DIMENSION_MIN, DECOR_MODEL_DIMENSION_MAX) * legacyScale,
-  };
-};
-export const isDecorModelSizeProportional = (model = {}) => Boolean(model.modelSizeProportional);
-export const getFloorZeroZ = (model = {}) => numberValue(model.floorZeroZ, DEFAULT_FLOOR_ZERO_Z, FLOOR_ZERO_Z_MIN, FLOOR_ZERO_Z_MAX);
-export const getModelRotationValue = (model = {}, field = 'modelRotationX') => numberValue(model[field], 0, -180, 180);
-export const getModelRotationX = (model = {}) => getModelRotationValue(model, 'modelRotationX');
-export const getModelRotationY = (model = {}) => getModelRotationValue(model, 'modelRotationY');
-export const getModelRotationZ = (model = {}) => getModelRotationValue(model, 'modelRotationZ');
-export const degreesToRadians = (degrees = 0) => (Number(degrees) || 0) * (Math.PI / 180);
-export const applyModelRotation = (object, model = {}) => {
-  object?.rotation?.set(
-    degreesToRadians(getModelRotationX(model)),
-    degreesToRadians(getModelRotationY(model)),
-    degreesToRadians(getModelRotationZ(model)),
-  );
-};
+export * from './rpg3dModelImportCore.js';
 
 export const centerObjectHorizontallyOnOrigin = (object) => {
   if (!object) return false;
@@ -159,100 +56,6 @@ export const alignObjectTopToGround = (object, groundY = 0.018) => {
   object.updateMatrixWorld(true);
   return true;
 };
-
-export const getPreviewLightIntensity = (model = {}) => numberValue(model.previewLightIntensity, 1, 0.2, 2.5);
-export const getPreviewLightOrientation = (model = {}) => numberValue(model.previewLightOrientation, -35, -180, 180);
-
-export const shouldInlineModelData = (file) => (Number(file?.size) || 0) <= INLINE_MODEL_DATA_MAX_BYTES;
-
-export const isBlobUrl = (value = '') => String(value || '').startsWith('blob:');
-
-export const isHeavyLocalFbxAsset = (asset = {}) => (
-  String(asset.modelFormat || '').toLowerCase() === 'fbx'
-  && isBlobUrl(asset.modelUrl)
-  && (Number(asset.modelFileSize) || 0) > LOCAL_FBX_AUTO_PREVIEW_MAX_BYTES
-);
-
-export const getAnimationSource = (animation = {}) => {
-  if (String(animation.modelData || '').startsWith('data:')) return animation.modelData;
-  return animation.modelUrl || animation.modelData || '';
-};
-
-export const getAnimationSignature = (animations = {}) => CHARACTER_ANIMATION_SLOTS.map(({ id }) => {
-  const animation = animations?.[id] || {};
-  return [
-    id,
-    animation.modelUrl || '',
-    animation.modelData || '',
-    animation.modelName || '',
-    animation.modelFormat || '',
-    animation.modelFileSize || '',
-    (animation.modelResources || []).map((resource) => `${resource.path || resource.name || ''}:${resource.data?.length || resource.url?.length || 0}`).join(','),
-  ].join(':');
-}).join('|');
-
-export const getEmbeddedAnimationSignature = (clips = []) => (
-  clips.map((clip) => `${clip.name || ''}:${Number(clip.duration || 0).toFixed(3)}:${clip.trackCount || 0}`).join('|')
-);
-
-export const summarizeEmbeddedAnimationClips = (clips = []) => (
-  clips
-    .filter((clip) => clip && Number(clip.duration) > 0)
-    .map((clip) => ({
-      name: clip.name || 'Animation',
-      duration: Number(clip.duration) || 0,
-      trackCount: Array.isArray(clip.tracks) ? clip.tracks.length : Number(clip.trackCount) || 0,
-    }))
-);
-
-export const getPreviewAnimationSlot = (model = {}, requestedSlot = '') => {
-  if (requestedSlot && getAnimationSource(model.modelAnimations?.[requestedSlot] || {})) return requestedSlot;
-  if (getAnimationSource(model.modelAnimations?.walk || {})) return 'walk';
-  if (getAnimationSource(model.modelAnimations?.attack || {})) return 'attack';
-  return '';
-};
-
-export const getPreviewAnimationOptions = (slot = '') => {
-  if (slot === 'walk') return { preferredNames: ['walk', 'run', 'move', 'locomotion'], fallbackToFirst: true };
-  if (slot === 'attack') return { preferredNames: ['attack', 'cast', 'spell', 'shoot', 'fire'], fallbackToFirst: true };
-  return { preferredNames: ['idle', 'stand', 'breath', 'wait', 'walk', 'run', 'attack', 'cast', 'spell'], fallbackToFirst: true };
-};
-
-export const getCharacterBuildSignature = (model = {}) => [
-  model.id || '',
-  model.shape || '',
-  model.modelUrl || '',
-  model.modelData || '',
-  model.modelName || '',
-  model.modelFormat || '',
-  model.modelFileSize || '',
-  (model.modelResources || []).map((resource) => `${resource.path || resource.name || ''}:${resource.data?.length || resource.url?.length || 0}`).join(';'),
-  getCharacterMaterialBrightness(model),
-  getAnimationSignature(model.modelAnimations),
-].join('|');
-
-export const getDecorBuildSignature = (model = {}) => [
-  model.id || '',
-  model.kind || '',
-  model.modelUrl || '',
-  model.modelData || '',
-  model.modelName || '',
-  model.imageData || '',
-  model.imageName || '',
-  model.elevation || '',
-  model.modelRotationX || '',
-  model.modelRotationY || '',
-  model.modelRotationZ || '',
-  model.modelCenterOnOrigin ? 'center' : '',
-  model.modelFlushToGround ? 'flush' : '',
-  getDecorMaterialBrightness(model),
-  model.baseColor || '',
-  model.accentColor || '',
-  model.roofColor || '',
-  model.collision ? 'collision' : '',
-  model.repeatTexture ? 'repeat' : '',
-  (model.modelResources || []).map((resource) => `${resource.path || resource.name || ''}:${resource.data?.length || resource.url?.length || 0}`).join(';'),
-].join('|');
 
 const MODEL_RESOURCE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'mtl']);
 const MODEL_RESOURCE_MIME_TYPES = {
@@ -278,17 +81,6 @@ const sortModelArchiveEntries = (a, b) => {
   return String(a.name || '').localeCompare(String(b.name || ''));
 };
 
-export const getModelImportFileInfo = (file) => {
-  const archiveFormat = getThreeModelArchiveFileFormat(file);
-  const modelFormat = archiveFormat ? '' : getThreeModelFileFormat(file);
-  return {
-    archiveFormat,
-    modelFormat,
-    isZip: archiveFormat === 'zip',
-  };
-};
-export const getCharacterImportFileInfo = getModelImportFileInfo;
-export const getDecorImportFileInfo = getModelImportFileInfo;
 
 export const readModelZipBundle = async (file) => {
   const zip = await JSZip.loadAsync(file);
@@ -395,16 +187,16 @@ export const readModelImport = async (file, fileInfo = getModelImportFileInfo(fi
     : normalizeThreeModelFile(file, fileInfo.modelFormat);
   const sourceFormat = zipBundle?.modelFormat || fileInfo.modelFormat;
   const isGlb = sourceFormat === 'glb';
-  const optimization = isGlb
-    ? await optimizeCharacterGlbFile(sourceFile)
-    : {
-      file: sourceFile,
-      optimized: false,
-      originalSize: sourceFile?.size || 0,
-      optimizedSize: sourceFile?.size || 0,
-      imageCount: 0,
-    };
-  const optimizedFile = optimization.file || sourceFile;
+  const optimization = {
+    file: sourceFile,
+    optimized: false,
+    originalSize: sourceFile?.size || 0,
+    optimizedSize: sourceFile?.size || 0,
+    imageCount: 0,
+    skipped: isGlb,
+    skipReason: isGlb ? 'preserve-original' : '',
+  };
+  const optimizedFile = sourceFile;
   const modelData = !shouldInlineModelData(optimizedFile)
     ? ''
     : zipBundle && optimizedFile === sourceFile
@@ -580,6 +372,7 @@ export const buildDecorGltfObject = (object, model) => {
   group.add(object);
   root.add(group);
   root.userData.decorModelObject = object;
+  root.userData.decorOrientationObject = group;
   if (model.modelCenterOnOrigin) centerObjectHorizontallyOnOrigin(group);
   snapObjectToGround(group, elevation);
   if (model.modelFlushToGround) alignObjectTopToGround(group, elevation + 0.018);

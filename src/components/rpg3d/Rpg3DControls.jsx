@@ -21,11 +21,11 @@ export default function Rpg3DControls({
       {workspaceTab === 'arcade' ? (
         <>
           <span><Cuboid size={14} /> Vue 3D: clic sol pour placer</span>
-          <span>{pendingPlacement ? 'Placement: deplace la souris, clic gauche pour deposer' : playMode ? 'Clic gauche: deplacement' : tool === 'terrainPaint' ? 'Peinture sol: clic gauche maintenu' : 'Selection: choisir un objet'}</span>
+          <span>{pendingPlacement ? 'Placement: deplace la souris, clic gauche pour deposer' : playMode ? 'Clic gauche ou ZQSD/WASD: deplacement' : tool === 'terrainPaint' ? 'Peinture sol: clic gauche maintenu' : 'Selection: choisir un objet'}</span>
           <span>{playMode ? 'F: tir' : <><Orbit size={14} /> Orbit: clic gauche maintenu autour du point</>}</span>
           <span>Clic droit maintenu: glisse camera a l ecran</span>
           {playMode ? <span>{`Espace: dash ${dashReady ? 'pret' : 'en recharge'}`}</span> : null}
-          <span>{playMode ? 'Q/E: pouvoir mana' : 'Mode 3D uniquement'}</span>
+          <span>{playMode ? 'E: pouvoir mana' : 'Mode 3D uniquement'}</span>
           {playMode && snapshot.actionMessage ? <span>{snapshot.actionMessage}</span> : null}
           <span>P: pause</span>
         </>

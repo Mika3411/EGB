@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { readDecorModelImport, resizeAxesProportionally } from '../utils/rpg3dModelImport.js';
+import {
+  getCharacterBuildSignature,
+  getDecorBuildSignature,
+  readCharacterModelImport,
+  readDecorModelImport,
+  resizeAxesProportionally,
+} from '../utils/rpg3dModelImport.js';
 
 const makeBoxObj = ({ width = 3, height = 2, depth = 4 } = {}) => [
   'o Box',
@@ -32,6 +38,21 @@ describe('rpg3d model import', () => {
     });
   });
 
+  it('keeps imported GLB files untouched by default', async () => {
+    const file = new File(['original-glb-data'], 'epee.glb', { type: 'model/gltf-binary' });
+
+    const result = await readCharacterModelImport(file);
+
+    expect(result.optimizedFile.size).toBe(file.size);
+    expect(result.optimization).toMatchObject({
+      optimized: false,
+      originalSize: file.size,
+      optimizedSize: file.size,
+      skipped: true,
+      skipReason: 'preserve-original',
+    });
+  });
+
   it('resizes proportional axes by keeping their current ratio', () => {
     const resized = resizeAxesProportionally({ x: 2, y: 4, z: 8 }, 'x', 5, 0.05, 120);
 
@@ -40,5 +61,41 @@ describe('rpg3d model import', () => {
       y: 10,
       z: 20,
     });
+  });
+
+  it('keeps character preview build stable when only map brightness changes', () => {
+    const model = {
+      id: 'hero-model',
+      shape: 'glb',
+      modelUrl: 'hero.glb',
+      materialBrightness: 1,
+    };
+    const signature = getCharacterBuildSignature(model);
+
+    model.materialBrightness = 0.55;
+
+    expect(getCharacterBuildSignature(model)).toBe(signature);
+  });
+
+  it('keeps decor preview build stable when only rotation or map brightness changes', () => {
+    const model = {
+      id: 'decor-model',
+      kind: 'decor',
+      modelUrl: 'statue.glb',
+      materialBrightness: 1,
+      modelRotationX: 0,
+      modelRotationY: 0,
+      modelRotationZ: 0,
+    };
+    const signature = getDecorBuildSignature(model);
+
+    Object.assign(model, {
+      materialBrightness: 0.55,
+      modelRotationX: -90,
+      modelRotationY: 45,
+      modelRotationZ: 10,
+    });
+
+    expect(getDecorBuildSignature(model)).toBe(signature);
   });
 });

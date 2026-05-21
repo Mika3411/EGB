@@ -32,7 +32,9 @@ import {
   getActionZoneModelHeight,
   getActionZoneOpacity,
   getActionZoneRect,
+  getActionZoneTopVertices,
   getActionZoneType,
+  getActionZoneVertices,
   getActionZoneWidth,
   getCharacterMaterialBrightness,
   getCharacterModelAxisScale,
@@ -92,6 +94,8 @@ describe('rpg3d domain helpers', () => {
     source.player.powers = [{ id: 'custom-power', force: 3 }];
     source.actionZones = [{
       id: 'zone-1',
+      vertices: [{ x: 1, y: 2 }],
+      topVertices: [{ x: 3, y: 4 }],
       npcChoices: [{ id: 'choice-1', label: 'Ask', response: 'Answer' }],
     }];
     source.terrainPaintStrokes = [{
@@ -110,14 +114,20 @@ describe('rpg3d domain helpers', () => {
     configClone.player.skills[0].value = 99;
     configClone.player.powers[0].force = 9;
     configClone.actionZones[0].npcChoices[0].label = 'Changed';
+    configClone.actionZones[0].vertices[0].x = 777;
+    configClone.actionZones[0].topVertices[0].x = 555;
     configClone.terrainPaintStrokes[0].points[0].x = 999;
     configClone.props[0].modelEraserStrokes[0].localX = 444;
     zonesClone[0].npcChoices[0].response = 'Other';
+    zonesClone[0].vertices[0].y = 666;
+    zonesClone[0].topVertices[0].y = 444;
     paintClone[0].points[0].y = 888;
 
     expect(source.player.skills[0]).toMatchObject({ id: 'custom-skill', value: 7 });
     expect(source.player.powers[0]).toMatchObject({ id: 'custom-power', force: 3 });
     expect(source.actionZones[0].npcChoices[0]).toMatchObject({ label: 'Ask', response: 'Answer' });
+    expect(source.actionZones[0].vertices[0]).toEqual({ x: 1, y: 2 });
+    expect(source.actionZones[0].topVertices[0]).toEqual({ x: 3, y: 4 });
     expect(source.terrainPaintStrokes[0].points[0]).toEqual({ x: 12, y: 34 });
     expect(source.props[0].modelEraserStrokes[0]).toMatchObject({ localX: 4, localY: 8 });
   });
@@ -218,6 +228,29 @@ describe('rpg3d domain helpers', () => {
       w: 120,
       h: 80,
     });
+    expect(getActionZoneVertices({ x: 100, y: 100, w: 80, h: 40 })).toEqual([
+      { x: 60, y: 80 },
+      { x: 140, y: 80 },
+      { x: 140, y: 120 },
+      { x: 60, y: 120 },
+    ]);
+    expect(getActionZoneTopVertices({
+      vertices: [{ x: 1, y: 1 }, { x: 5, y: 1 }, { x: 5, y: 5 }],
+      topVertices: [{ x: 2, y: 2 }, { x: 7, y: 2 }, { x: 7, y: 7 }],
+    })).toEqual([{ x: 2, y: 2 }, { x: 7, y: 2 }, { x: 7, y: 7 }]);
+    expect(getActionZoneRect({
+      vertices: [
+        { x: 10, y: 20 },
+        { x: 110, y: 35 },
+        { x: 90, y: 140 },
+        { x: 30, y: 120 },
+      ],
+    })).toEqual({
+      x: 10,
+      y: 20,
+      w: 100,
+      h: 120,
+    });
   });
 
   it('reads flat ground and floor tile dimensions without changing saved fields', () => {
@@ -247,7 +280,7 @@ describe('rpg3d domain helpers', () => {
   it('computes selection bounds across entity types', () => {
     expect(getSelectionBoundsFromEntities([
       { type: 'prop', item: { renderMode: 'floor', x: 100, y: 100, w: 80, h: 60 } },
-      { type: 'actionZone', item: { x: 200, y: 100, w: 100, h: 40 } },
+      { type: 'actionZone', item: { vertices: [{ x: 150, y: 80 }, { x: 250, y: 80 }, { x: 250, y: 130 }, { x: 150, y: 130 }] } },
       { type: 'pickup', item: { x: 10, y: 20 } },
     ])).toEqual({
       minX: -5,

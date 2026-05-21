@@ -4,22 +4,57 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { attachClickTargetCameraControls } from '../three/clickTargetCameraControls.js';
 import {
   clearGroup,
+  alignObjectTopToGround,
+  applyModelRotation,
+  centerObjectHorizontallyOnOrigin,
   createPreviewFloorCanvas,
   disposeThreeObject,
   getDecorBuildSignature,
+  getDecorMaterialBrightness,
   getDecorModelDimensions,
   getDecorModelSources,
+  isFloorTileKind,
   loadThreeDecor,
   makePreviewStandardMaterial,
+  numberValue,
 } from '../../utils/rpg3dModelImport';
 import {
   fitObjectToDimensions,
   resetObjectBaseTransform,
+  snapObjectToGround,
+  updateGltfModelMaterialAppearance,
 } from '../../utils/threeGltfUtils';
 
 const getDecorSizeSignature = (model = {}) => {
   const dimensions = getDecorModelDimensions(model);
   return `${dimensions.x}:${dimensions.y}:${dimensions.z}`;
+};
+const getDecorPoseSignature = (model = {}) => [
+  model.modelRotationX || '',
+  model.modelRotationY || '',
+  model.modelRotationZ || '',
+].join(':');
+const getDecorAppearanceSignature = (model = {}) => `${getDecorMaterialBrightness(model)}`;
+
+const applyDecorPreviewPose = (decorObject, model = {}) => {
+  const orientationObject = decorObject?.userData?.decorOrientationObject;
+  if (!orientationObject) return;
+  orientationObject.position.set(0, 0, 0);
+  applyModelRotation(orientationObject, model);
+  if (model.modelCenterOnOrigin) centerObjectHorizontallyOnOrigin(orientationObject);
+  const elevation = numberValue(model.elevation, 0, -1, 3);
+  snapObjectToGround(orientationObject, elevation);
+  if (model.modelFlushToGround) alignObjectTopToGround(orientationObject, elevation + 0.018);
+};
+
+const applyDecorPreviewAppearance = (decorObject, model = {}) => {
+  const modelObject = decorObject?.userData?.decorModelObject || decorObject;
+  if (!modelObject) return;
+  updateGltfModelMaterialAppearance(modelObject, {
+    materialBrightness: getDecorMaterialBrightness(model),
+    maxEnvMapIntensity: isFloorTileKind(model.kind) ? 0.42 : 1,
+    maxEmissiveIntensity: isFloorTileKind(model.kind) ? 0.03 : 0.18,
+  });
 };
 
 const applyDecorPreviewSize = (decorObject, model = {}) => {
@@ -39,6 +74,7 @@ const applyDecorPreviewSize = (decorObject, model = {}) => {
     const baseRadius = Number(collisionRing.userData.baseRadius) || nextRadius;
     collisionRing.scale.setScalar(Math.max(0.001, nextRadius / baseRadius));
   }
+  applyDecorPreviewPose(decorObject, model);
 };
 
 export default function Decor3DPreview({ model }) {
@@ -50,6 +86,8 @@ export default function Decor3DPreview({ model }) {
   const [webglError, setWebglError] = useState('');
   const buildSignature = useMemo(() => getDecorBuildSignature(model), [model]);
   const sizeSignature = useMemo(() => getDecorSizeSignature(model), [model]);
+  const poseSignature = useMemo(() => getDecorPoseSignature(model), [model]);
+  const appearanceSignature = useMemo(() => getDecorAppearanceSignature(model), [model]);
 
   useEffect(() => {
     latestModelRef.current = model;
@@ -68,7 +106,7 @@ export default function Decor3DPreview({ model }) {
     }
 
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.6));
+    renderer.setPixelRatio(window.devicePixelRatio || 1);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.domElement.className = 'decor3d-canvas';
@@ -182,6 +220,14 @@ export default function Decor3DPreview({ model }) {
   }, [sizeSignature]);
 
   useEffect(() => {
+    applyDecorPreviewPose(decorObjectRef.current, latestModelRef.current);
+  }, [poseSignature]);
+
+  useEffect(() => {
+    applyDecorPreviewAppearance(decorObjectRef.current, latestModelRef.current);
+  }, [appearanceSignature]);
+
+  useEffect(() => {
     const decorRoot = decorRootRef.current;
     if (!decorRoot || !model) return undefined;
     let cancelled = false;
@@ -200,6 +246,7 @@ export default function Decor3DPreview({ model }) {
         loadingRoot.add(object);
         decorObjectRef.current = object;
         applyDecorPreviewSize(object, latestModelRef.current);
+        applyDecorPreviewAppearance(object, latestModelRef.current);
       }, () => {
         if (cancelled) return;
         clearGroup(loadingRoot);

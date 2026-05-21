@@ -34,9 +34,22 @@ const DECOR_KIND_VALUE_MAP = {
   rock: 'decor',
   tree: 'decor',
 };
+const DECOR_KIND_VALUES = [
+  'decor',
+  'road',
+  'water',
+  'wall',
+  'house',
+  'inventory-weapon',
+  'inventory-armor',
+  'inventory-shield',
+  'inventory-leggings',
+  'inventory-jewelry',
+  'inventory-misc',
+];
 const normalizeDecorKind = (value) => {
   const normalizedValue = normalizeLegacyTechnicalValue(value);
-  return normalizeAllowedValue(DECOR_KIND_VALUE_MAP[normalizedValue] || normalizedValue, ['decor', 'road', 'water', 'wall', 'house'], 'decor');
+  return normalizeAllowedValue(DECOR_KIND_VALUE_MAP[normalizedValue] || normalizedValue, DECOR_KIND_VALUES, 'decor');
 };
 const clampNumber = (value, fallback, min, max) => {
   const numericValue = Number(value);
