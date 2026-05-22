@@ -5,6 +5,7 @@ import {
   buildGltfTransformWebpArgs,
   getQualityTextureVariants,
   getModelToolQualitySettings,
+  getModelToolOutputOversize,
   scoreQualityCandidateSize,
 } from '../../server/modelTools';
 
@@ -103,6 +104,7 @@ describe('model tools quality presets', () => {
       targetOutputBytes: 50 * 1024 * 1024,
       minOutputBytes: 42 * 1024 * 1024,
       maxOutputBytes: 58 * 1024 * 1024,
+      maxOutputBytesFromInput: 83 * 1024 * 1024,
     };
 
     const exactTarget = scoreQualityCandidateSize(50 * 1024 * 1024, settings);
@@ -111,5 +113,21 @@ describe('model tools quality presets', () => {
 
     expect(exactTarget).toBeLessThan(compressedCandidate);
     expect(compressedCandidate).toBeLessThan(hugeCandidate);
+    expect(hugeCandidate).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  it('flags FBX outputs that are larger than the input file', () => {
+    expect(getModelToolOutputOversize(617 * 1024 * 1024, {
+      originalInputBytes: 83 * 1024 * 1024,
+      maxOutputBytesFromInput: 83 * 1024 * 1024,
+    })).toMatchObject({
+      outputSize: 617 * 1024 * 1024,
+      originalSize: 83 * 1024 * 1024,
+    });
+
+    expect(getModelToolOutputOversize(30 * 1024 * 1024, {
+      originalInputBytes: 83 * 1024 * 1024,
+      maxOutputBytesFromInput: 83 * 1024 * 1024,
+    })).toBeNull();
   });
 });

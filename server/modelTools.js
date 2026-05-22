@@ -448,6 +448,9 @@ export const getQualityTextureVariants = (settings = {}) => {
 
 export const scoreQualityCandidateSize = (size, settings = {}) => {
   const outputSize = Number(size) || 0;
+  const maxOutputBytesFromInput = Number(settings.maxOutputBytesFromInput) || 0;
+  if (maxOutputBytesFromInput && outputSize > maxOutputBytesFromInput) return Number.POSITIVE_INFINITY;
+
   const targetOutputBytes = Number(settings.targetOutputBytes) || 0;
   if (!outputSize || !targetOutputBytes) return 0;
 
@@ -464,6 +467,27 @@ export const scoreQualityCandidateSize = (size, settings = {}) => {
   }
 
   return distanceFromTarget;
+};
+
+export const getModelToolOutputOversize = (outputSize, settings = {}) => {
+  const maxOutputBytesFromInput = Number(settings.maxOutputBytesFromInput) || 0;
+  const normalizedOutputSize = Number(outputSize) || 0;
+  if (!maxOutputBytesFromInput || !normalizedOutputSize || normalizedOutputSize <= maxOutputBytesFromInput) return null;
+  return {
+    outputSize: normalizedOutputSize,
+    maxOutputBytesFromInput,
+    originalSize: Number(settings.originalInputBytes) || maxOutputBytesFromInput,
+  };
+};
+
+const assertModelToolOutputFitsInput = (outputSize, settings = {}) => {
+  const oversize = getModelToolOutputOversize(outputSize, settings);
+  if (!oversize) return;
+  throw makeHttpError(
+    `Conversion refusee: le GLB genere (${formatBytesForServer(oversize.outputSize)}) est plus lourd que le fichier source (${formatBytesForServer(oversize.originalSize)}). Essaie le mode Tres leger ou reduis les textures.`,
+    422,
+    'MODEL_TOOL_OUTPUT_TOO_LARGE',
+  );
 };
 
 const runGltfTransformCli = async (args, progressOptions = {}) => {
@@ -581,7 +605,16 @@ const optimizeGlb = async (inputPath, outputPath, settings = {}, progressOptions
         resizedPathsBySize.delete(variant.textureSize);
       }
     }
-    if (bestSize <= 0) throw makeHttpError('Optimisation qualite impossible.', 500, 'MODEL_TOOL_QUALITY_FAILED');
+    if (bestSize <= 0) {
+      const oversizeLimit = Number(settings.maxOutputBytesFromInput) || 0;
+      throw makeHttpError(
+        oversizeLimit
+          ? `Conversion refusee: aucune variante GLB n est plus legere que le fichier source (${formatBytesForServer(Number(settings.originalInputBytes) || oversizeLimit)}). Essaie le mode Tres leger ou reduis les textures.`
+          : 'Optimisation qualite impossible.',
+        oversizeLimit ? 422 : 500,
+        oversizeLimit ? 'MODEL_TOOL_OUTPUT_TOO_LARGE' : 'MODEL_TOOL_QUALITY_FAILED',
+      );
+    }
     return;
   }
 
@@ -729,6 +762,10 @@ const buildOptimizedGlb = async (uploadedFile, fields, workDir, onProgress = () 
   onProgress({ progress: 12, label: 'Preparation...', detail: 'Lecture du fichier.' });
   const source = await writeUploadedModel(uploadedFile, workDir);
   const settings = { ...getModelToolQualitySettings(fields.quality || 'web') };
+  if (source.originalSize && source.sourceFormat === 'fbx') {
+    settings.originalInputBytes = source.originalSize;
+    settings.maxOutputBytesFromInput = Math.floor(source.originalSize * (Number(settings.maxOutputToInputRatio) || 1));
+  }
   if (settings.targetOutputRatio && source.originalSize && source.sourceFormat === 'fbx') {
     const targetOutputBytes = Math.max(
       Number(settings.minTargetOutputBytes) || 0,
@@ -768,6 +805,7 @@ const buildOptimizedGlb = async (uploadedFile, fields, workDir, onProgress = () 
     onProgress: (progress) => onProgress({ progress, label: 'Optimisation GLB...', detail: optimizeDetail }),
   });
   const outputStats = await fs.stat(optimizedPath);
+  assertModelToolOutputFitsInput(outputStats.size, settings);
   const outputName = `${baseName(uploadedFile.filename || source.sourceName)}-${outputSuffix}.glb`;
   const qualityDetail = settings.selectedQualityCandidate
     ? `Preset ${settings.selectedQualityCandidate}.`
