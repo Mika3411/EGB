@@ -4,7 +4,7 @@ import { useAccountStorage } from './hooks/useAccountStorage';
 import { useLocalAuth } from './hooks/useLocalAuth';
 import { upsertProjectAsset } from './lib/assetManager';
 import { isAdminAccount } from './lib/authStorage';
-import { hasSupabaseConfig } from './supabaseStorage';
+import { hasSupabaseStorageConfig } from './supabaseStorage';
 import { readAppUiState, writeAppUiState } from './utils/storageHelpers';
 
 const LandingPage = React.lazy(() => import('./components/LandingPage'));
@@ -261,7 +261,7 @@ function ShellApp() {
   const uploadGalleryThumbnail = useCallback(async (file) => {
     if (!file) throw new Error('Aucune miniature à envoyer.');
     const { fileToDataURL, uploadFileToSupabase } = await import('./utils/fileHelpers');
-    if (!hasSupabaseConfig()) {
+    if (!hasSupabaseStorageConfig()) {
       return {
         publicUrl: await fileToDataURL(file),
         storageMode: 'local',
@@ -504,7 +504,7 @@ function ShellApp() {
           authorProfile={auth.authorProfile}
           isBusy={auth.isBusy}
           statusMessage={saveStatus}
-          syncStatus={auth.isBusy ? 'syncing' : hasSupabaseConfig() ? 'synced' : 'offline'}
+          syncStatus={auth.isBusy ? 'syncing' : hasSupabaseStorageConfig() ? 'synced' : 'offline'}
           onCreateProject={createProjectFromProfile}
           onOpenProject={openProjectInEditor}
           onTestProject={testProjectFromProfile}

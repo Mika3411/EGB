@@ -89,7 +89,7 @@ const smokePayload = {
 async function seedSmokeProject(page) {
   await page.addInitScript(({ storageKey, payload }) => {
     window.__escapeGameBuilderRpg3DE2E = true;
-    window.localStorage.clear();
+    window.localStorage.removeItem(storageKey);
     window.localStorage.setItem(storageKey, JSON.stringify(payload));
   }, { storageKey: STORAGE_KEY, payload: smokePayload });
 }

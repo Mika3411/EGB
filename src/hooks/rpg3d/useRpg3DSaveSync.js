@@ -11,6 +11,7 @@ import {
   getActiveRpg3DCanvas,
   syncStudioProjectActiveCanvasConfig,
 } from '../../utils/rpg3dStudioProject.js';
+import { hasSupabaseStorageConfig } from '../../supabaseStorage';
 
 const RPG3D_LOGIN_REQUIRED_STATUS = 'Connecte-toi pour sauvegarder dans Supabase.';
 const RPG3D_LOCAL_SESSION_FALLBACK_STATUS = 'Sauvegarde locale terminee. Connecte-toi pour synchroniser Supabase.';
@@ -24,16 +25,7 @@ const loadRpg3DAssetsStorage = () => {
   return rpg3DAssetsStorageModulePromise;
 };
 
-const hasRpg3DAssetsSupabaseConfig = () => {
-  const env = import.meta.env || {};
-  const storageBucket = env.VITE_SUPABASE_STORAGE_BUCKET || '';
-  return Boolean(
-    env.VITE_SUPABASE_URL
-    && (env.VITE_SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_ANON_KEY)
-    && (env.VITE_SUPABASE_PUBLIC_ASSETS_BUCKET || storageBucket)
-    && (env.VITE_SUPABASE_PRIVATE_DATA_BUCKET || storageBucket),
-  );
-};
+const hasRpg3DAssetsSupabaseConfig = hasSupabaseStorageConfig;
 
 const isDisconnectedSaveStatus = (status = '') => (
   status === RPG3D_LOGIN_REQUIRED_STATUS

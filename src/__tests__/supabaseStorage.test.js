@@ -103,7 +103,7 @@ describe('supabaseStorage', () => {
     }
   });
 
-  test('hasSupabaseConfig exige une configuration de buckets', async () => {
+  test('hasSupabaseConfig garde la session auth meme sans buckets storage', async () => {
     vi.resetModules();
     vi.unstubAllEnvs();
     vi.stubEnv('VITE_SUPABASE_URL', 'https://project.supabase.co');
@@ -111,20 +111,44 @@ describe('supabaseStorage', () => {
     vi.stubEnv('VITE_SUPABASE_PUBLIC_ASSETS_BUCKET', '');
     vi.stubEnv('VITE_SUPABASE_PRIVATE_DATA_BUCKET', '');
     vi.stubEnv('VITE_SUPABASE_STORAGE_BUCKET', '');
+    supabaseMock.createClient.mockReturnValue({
+      auth: {
+        getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
+      },
+      storage: {
+        from: supabaseMock.from,
+      },
+    });
 
-    const { getSupabaseClient, hasSupabaseConfig } = await import('../supabaseStorage');
+    const {
+      getSupabaseClient,
+      hasSupabaseAuthConfig,
+      hasSupabaseConfig,
+      hasSupabaseStorageConfig,
+      uploadToStorage,
+    } = await import('../supabaseStorage');
 
-    expect(hasSupabaseConfig()).toBe(false);
-    expect(() => getSupabaseClient()).toThrow(
-      'Configuration Supabase manquante. Ajoute VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY (ou VITE_SUPABASE_ANON_KEY), VITE_SUPABASE_PUBLIC_ASSETS_BUCKET et VITE_SUPABASE_PRIVATE_DATA_BUCKET.',
+    expect(hasSupabaseAuthConfig()).toBe(true);
+    expect(hasSupabaseConfig()).toBe(true);
+    expect(hasSupabaseStorageConfig()).toBe(false);
+    expect(() => getSupabaseClient()).not.toThrow();
+    await expect(uploadToStorage('users/user-1/file.txt', new Blob(['data']))).rejects.toThrow(
+      /Configuration Supabase Storage manquante/,
     );
   });
 
-  test('hasSupabaseConfig refuse une configuration partielle sans fallback legacy', async () => {
-    const { getSupabaseClient, hasSupabaseConfig } = await setupSupabaseStorage({ privateBucket: '' });
+  test('hasSupabaseStorageConfig refuse une configuration partielle sans fallback legacy', async () => {
+    const {
+      getSupabaseClient,
+      hasSupabaseConfig,
+      hasSupabaseStorageConfig,
+      uploadToStorage,
+    } = await setupSupabaseStorage({ privateBucket: '' });
 
-    expect(hasSupabaseConfig()).toBe(false);
-    expect(() => getSupabaseClient()).toThrow(/VITE_SUPABASE_PUBLIC_ASSETS_BUCKET et VITE_SUPABASE_PRIVATE_DATA_BUCKET/);
+    expect(hasSupabaseConfig()).toBe(true);
+    expect(hasSupabaseStorageConfig()).toBe(false);
+    expect(() => getSupabaseClient()).not.toThrow();
+    await expect(uploadToStorage('users/user-1/file.txt', new Blob(['data']))).rejects.toThrow(/VITE_SUPABASE_PUBLIC_ASSETS_BUCKET et VITE_SUPABASE_PRIVATE_DATA_BUCKET/);
   });
 
   test('uploadToStorage en mode private ne genere pas d URL publique', async () => {

@@ -3,7 +3,8 @@ import {
   deleteStorageFile,
   downloadTextFile,
   getSupabaseClient,
-  hasSupabaseConfig,
+  hasSupabaseAuthConfig,
+  hasSupabaseStorageConfig,
   isStorageNotFoundError,
   uploadToStorage,
 } from '../supabaseStorage';
@@ -197,7 +198,7 @@ const withTimeout = (promise, milliseconds, fallback = null) => new Promise((res
 });
 
 export async function getSessionUser() {
-  if (hasSupabaseConfig()) {
+  if (hasSupabaseAuthConfig()) {
     const client = getSupabaseClient();
     const session = await withTimeout(client.auth.getSession(), 10000, null);
     if (!session) return null;
@@ -229,7 +230,7 @@ export async function registerUser({
     throw new Error(`Une demande d’inscription vient déjà d’être envoyée pour cet email. Réessaie dans ${formatCooldown(cooldownRemaining)}.`);
   }
 
-  if (hasSupabaseConfig()) {
+  if (hasSupabaseAuthConfig()) {
     const client = getSupabaseClient();
     const { data, error } = await client.auth.signUp({
       email: normalizedEmail,
@@ -294,7 +295,7 @@ export async function registerUser({
 }
 
 export async function loginUser({ email, password }) {
-  if (hasSupabaseConfig()) {
+  if (hasSupabaseAuthConfig()) {
     const client = getSupabaseClient();
     const { data, error } = await client.auth.signInWithPassword({
       email: normalizeEmail(email),
@@ -340,7 +341,7 @@ export async function loginUser({ email, password }) {
 export async function sendPasswordResetEmail(email) {
   const normalizedEmail = normalizeEmail(email);
 
-  if (hasSupabaseConfig()) {
+  if (hasSupabaseAuthConfig()) {
     const client = getSupabaseClient();
     const { error } = await client.auth.resetPasswordForEmail(normalizedEmail, {
       redirectTo: getEmailRedirectUrl(),
@@ -355,7 +356,7 @@ export async function sendPasswordResetEmail(email) {
 }
 
 export async function updateCurrentUserPassword({ password, currentPassword = '' } = {}) {
-  if (hasSupabaseConfig()) {
+  if (hasSupabaseAuthConfig()) {
     const client = getSupabaseClient();
     if (currentPassword) {
       const { data: sessionData } = await client.auth.getSession();
@@ -380,13 +381,13 @@ export async function updateCurrentUserPassword({ password, currentPassword = ''
 }
 
 export function isPasswordRecoverySession() {
-  if (!hasSupabaseConfig() || typeof window === 'undefined') return false;
+  if (!hasSupabaseAuthConfig() || typeof window === 'undefined') return false;
   const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
   return params.get('type') === 'recovery';
 }
 
 export async function logoutUser() {
-  if (hasSupabaseConfig()) {
+  if (hasSupabaseAuthConfig()) {
     const client = getSupabaseClient();
     await client.auth.signOut();
   }
@@ -398,7 +399,7 @@ export async function saveProjectRecordsForUser(userId, projects = [], options =
   if (!userId) return [];
   const normalizedProjects = Array.isArray(projects) ? projects : [];
 
-  if (!hasSupabaseConfig()) {
+  if (!hasSupabaseStorageConfig()) {
     return normalizedProjects;
   }
 
@@ -447,7 +448,7 @@ const uploadProjectRecordForUser = async (userId, project = {}) => {
 };
 
 export async function deleteProjectRecordForUser(userId, project = {}) {
-  if (!userId || !project?.id || !hasSupabaseConfig()) return false;
+  if (!userId || !project?.id || !hasSupabaseStorageConfig()) return false;
 
   const projectsPrefix = buildStoragePath('users', userId, 'projects');
   const storagePath = typeof project.storagePath === 'string' && project.storagePath.startsWith(`${projectsPrefix}/`)
@@ -462,7 +463,7 @@ export async function saveProjectRecordForUser(userId, project = {}, projects = 
   if (!userId || !project?.id) return project;
   const normalizedProjects = Array.isArray(projects) ? projects : [];
 
-  if (!hasSupabaseConfig()) return project;
+  if (!hasSupabaseStorageConfig()) return project;
 
   const storedProject = await uploadProjectRecordForUser(userId, project);
   const storedProjects = [];
@@ -497,7 +498,7 @@ export async function saveProjectRecordForUser(userId, project = {}, projects = 
 }
 
 export async function loadPublicProjectIndex() {
-  if (!hasSupabaseConfig()) return [];
+  if (!hasSupabaseStorageConfig()) return [];
 
   try {
     const text = await downloadTextFile(getPublicProjectsStoragePath(), { visibility: 'public' });
@@ -510,7 +511,7 @@ export async function loadPublicProjectIndex() {
 }
 
 async function savePublicProjectIndex(projects = []) {
-  if (!hasSupabaseConfig()) return projects;
+  if (!hasSupabaseStorageConfig()) return projects;
   const blob = new Blob([JSON.stringify(projects, null, 2)], { type: 'application/json' });
   await uploadToStorage(getPublicProjectsStoragePath(), blob, {
     contentType: 'application/json',
@@ -523,7 +524,7 @@ async function savePublicProjectIndex(projects = []) {
 }
 
 async function updatePublicProjectIndexForUser(userId, projects = []) {
-  if (!userId || !hasSupabaseConfig()) return [];
+  if (!userId || !hasSupabaseStorageConfig()) return [];
 
   const publicRecords = projects
     .filter((project) => project?.id && project.shareState?.isPublic)
@@ -543,7 +544,7 @@ async function updatePublicProjectIndexForUser(userId, projects = []) {
 }
 
 export async function loadProjectRecordsForUser(userId) {
-  if (!userId || !hasSupabaseConfig()) return null;
+  if (!userId || !hasSupabaseStorageConfig()) return null;
 
   try {
     const text = await downloadTextFile(getProjectsStoragePath(userId), { visibility: 'private' });
@@ -568,7 +569,7 @@ export async function loadProjectRecordsForUser(userId) {
 export async function loadProjectForUser(userId) {
   if (!userId) return null;
 
-  if (!hasSupabaseConfig()) {
+  if (!hasSupabaseStorageConfig()) {
     return getLocalProjects()[userId]?.project || null;
   }
 

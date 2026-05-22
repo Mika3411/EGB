@@ -49,7 +49,14 @@ import { collectDescendantSceneIds } from './lib/sceneHelpers';
 import { collectProjectAssetManifest, collectProjectAssets, upsertProjectAsset } from './lib/assetManager';
 import { formatStorageSize } from './lib/storageQuota';
 import { isAdminAccount } from './lib/authStorage';
-import { buildStoragePath, generateStorageFilename, getSupabaseClient, hasSupabaseConfig, uploadToStorage } from './supabaseStorage';
+import {
+  buildStoragePath,
+  generateStorageFilename,
+  getSupabaseClient,
+  hasSupabaseAuthConfig,
+  hasSupabaseStorageConfig,
+  uploadToStorage,
+} from './supabaseStorage';
 
 const AI_CREDITS_ENDPOINT = import.meta.env.VITE_AI_CREDITS_ENDPOINT || '/api/ai-credits';
 const STORAGE_UPGRADE_ENDPOINT = import.meta.env.VITE_STORAGE_UPGRADE_ENDPOINT || '/api/storage-upgrade';
@@ -511,7 +518,7 @@ function BuilderApp({
     const refreshCredits = async () => {
       try {
         const headers = {};
-        if (hasSupabaseConfig()) {
+        if (hasSupabaseAuthConfig()) {
           const { data } = await getSupabaseClient().auth.getSession();
           if (data.session?.access_token) headers.Authorization = `Bearer ${data.session.access_token}`;
         }
@@ -590,7 +597,7 @@ function BuilderApp({
     const fallbackName = mediaInfo.shouldOptimizeImage
       ? (/\.[^.]+$/.test(file.name) ? file.name.replace(/\.[^.]+$/, '.webp') : `${file.name || 'media'}.webp`)
       : file.name;
-    if (!hasSupabaseConfig()) {
+    if (!hasSupabaseStorageConfig()) {
       return {
         name: fallbackName,
         optimized: Boolean(preparedMedia?.optimized),
@@ -681,7 +688,7 @@ function BuilderApp({
       }, { rememberHistory: false });
       invalidateStorageUsage();
 
-      if (hasSupabaseConfig()) {
+      if (hasSupabaseStorageConfig()) {
         const savedPercent = uploaded.optimized && uploaded.originalSize > 0 && uploaded.optimizedSize > 0
           ? Math.round((1 - uploaded.optimizedSize / uploaded.originalSize) * 100)
           : 0;
@@ -697,7 +704,7 @@ function BuilderApp({
       setSaveStatus('Import média impossible');
       await alertDialog({
         title: 'Import média impossible',
-        message: hasSupabaseConfig() ?
+        message: hasSupabaseStorageConfig() ?
            "Impossible d'envoyer ce fichier vers Supabase Storage. Vérifie le bucket et les policies."
           : 'Configuration Supabase manquante. Ajoute VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY (ou VITE_SUPABASE_ANON_KEY), VITE_SUPABASE_PUBLIC_ASSETS_BUCKET et VITE_SUPABASE_PRIVATE_DATA_BUCKET.',
         variant: 'danger',
@@ -741,7 +748,7 @@ function BuilderApp({
   const uploadGalleryThumbnail = useCallback(async (file) => {
     if (!file) throw new Error('Aucune miniature à envoyer.');
 
-    if (!hasSupabaseConfig()) {
+    if (!hasSupabaseStorageConfig()) {
       return {
         publicUrl: await fileToDataURL(file),
         storageMode: 'local',
@@ -1085,7 +1092,7 @@ function BuilderApp({
 
     try {
       const headers = { 'Content-Type': 'application/json' };
-      if (hasSupabaseConfig()) {
+      if (hasSupabaseAuthConfig()) {
         const { data } = await getSupabaseClient().auth.getSession();
         if (data.session?.access_token) headers.Authorization = `Bearer ${data.session.access_token}`;
       }
@@ -1375,7 +1382,7 @@ function BuilderApp({
     const imageNameField = type === 'scene' ? 'backgroundName' : 'imageName';
     const imageData = nextPatch[imageField];
 
-    if (auth.activeProjectId && hasSupabaseConfig() && typeof imageData === 'string' && imageData.startsWith('data:image/')) {
+    if (auth.activeProjectId && hasSupabaseStorageConfig() && typeof imageData === 'string' && imageData.startsWith('data:image/')) {
       try {
           const blob = dataUrlToBlob(imageData);
           if (blob) {
@@ -1688,7 +1695,7 @@ function BuilderApp({
             authorProfile={auth.authorProfile}
             isBusy={auth.isBusy}
             statusMessage={saveStatus}
-            syncStatus={auth.isBusy ? 'syncing' : hasSupabaseConfig() ? 'synced' : 'offline'}
+            syncStatus={auth.isBusy ? 'syncing' : hasSupabaseStorageConfig() ? 'synced' : 'offline'}
             onCreateProject={createProjectFromProfile}
             onOpenProject={openProjectInEditor}
             onTestProject={testProjectFromProfile}

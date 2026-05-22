@@ -5,7 +5,9 @@ const storageMock = vi.hoisted(() => ({
   deleteStorageFile: vi.fn(),
   downloadTextFile: vi.fn(),
   getSupabaseClient: vi.fn(),
+  hasSupabaseAuthConfig: vi.fn(),
   hasSupabaseConfig: vi.fn(),
+  hasSupabaseStorageConfig: vi.fn(),
   isStorageNotFoundError: vi.fn(),
   uploadToStorage: vi.fn(),
 }));
@@ -19,7 +21,9 @@ const missingStorageError = {
 };
 
 const setupMissingStorageFile = () => {
+  storageMock.hasSupabaseAuthConfig.mockReturnValue(true);
   storageMock.hasSupabaseConfig.mockReturnValue(true);
+  storageMock.hasSupabaseStorageConfig.mockReturnValue(true);
   storageMock.deleteStorageFile.mockResolvedValue(true);
   storageMock.downloadTextFile.mockRejectedValue(missingStorageError);
   storageMock.isStorageNotFoundError.mockImplementation((error) => error?.code === 'not-found');

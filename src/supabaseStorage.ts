@@ -147,14 +147,22 @@ export function isSupabaseStorageDebugEnabled(): boolean {
   return storageDebugEnabled;
 }
 
+export function hasSupabaseAuthConfig(): boolean {
+  return Boolean(SUPABASE_URL && SUPABASE_BROWSER_KEY);
+}
+
+export function hasSupabaseStorageConfig(): boolean {
+  return Boolean(hasSupabaseAuthConfig() && PUBLIC_ASSETS_BUCKET && PRIVATE_DATA_BUCKET);
+}
+
 export function hasSupabaseConfig(): boolean {
-  return Boolean(SUPABASE_URL && SUPABASE_BROWSER_KEY && PUBLIC_ASSETS_BUCKET && PRIVATE_DATA_BUCKET);
+  return hasSupabaseAuthConfig();
 }
 
 export function getSupabaseClient(): SupabaseClientInstance {
-  if (!hasSupabaseConfig()) {
+  if (!hasSupabaseAuthConfig()) {
     throw new Error(
-      'Configuration Supabase manquante. Ajoute VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY (ou VITE_SUPABASE_ANON_KEY), VITE_SUPABASE_PUBLIC_ASSETS_BUCKET et VITE_SUPABASE_PRIVATE_DATA_BUCKET.',
+      'Configuration Supabase manquante. Ajoute VITE_SUPABASE_URL et VITE_SUPABASE_PUBLISHABLE_KEY (ou VITE_SUPABASE_ANON_KEY).',
     );
   }
 
@@ -309,6 +317,13 @@ export function createStorageError({ action, bucket = PRIVATE_DATA_BUCKET, path,
 export const resolveStorageBucket = (visibility: StorageVisibility): string => (
   visibility === 'public' ? PUBLIC_ASSETS_BUCKET : PRIVATE_DATA_BUCKET
 );
+
+const assertSupabaseStorageConfig = (): void => {
+  if (hasSupabaseStorageConfig()) return;
+  throw new Error(
+    'Configuration Supabase Storage manquante. Ajoute VITE_SUPABASE_PUBLIC_ASSETS_BUCKET et VITE_SUPABASE_PRIVATE_DATA_BUCKET, ou garde VITE_SUPABASE_STORAGE_BUCKET en fallback.',
+  );
+};
 
 const normalizeStorageVisibility = (visibility?: StorageVisibility): StorageVisibility => (
   visibility === 'public' ? 'public' : 'private'
@@ -813,6 +828,7 @@ export async function uploadPrivateUserFile(userId: string, path: string, file: 
 }
 
 export async function uploadToStorage(path: string, file: UploadFile, options: UploadOptions = {}): Promise<UploadResult> {
+  assertSupabaseStorageConfig();
   const client = getSupabaseClient();
   const storagePath = validateStoragePath(path);
   const action = 'upload du fichier';
@@ -987,6 +1003,7 @@ export async function uploadToStorage(path: string, file: UploadFile, options: U
 }
 
 export async function downloadTextFile(path: string, options: DownloadTextFileOptions = {}): Promise<string> {
+  assertSupabaseStorageConfig();
   const client = getSupabaseClient();
   const storagePath = validateStoragePath(path);
   const visibility = normalizeStorageVisibility(options.visibility);
@@ -1043,6 +1060,7 @@ export async function downloadTextFile(path: string, options: DownloadTextFileOp
 }
 
 export async function deleteStorageFile(path: string, options: DeleteStorageFileOptions = {}): Promise<boolean> {
+  assertSupabaseStorageConfig();
   const client = getSupabaseClient();
   const storagePath = validateStoragePath(path);
   const visibility = normalizeStorageVisibility(options.visibility);

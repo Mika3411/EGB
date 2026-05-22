@@ -18,7 +18,7 @@ import {
 } from '../lib/authStorage';
 import { getAuthorProfile, saveAuthorProfile } from '../lib/authorProfiles';
 import { MODE_RANKS as PROJECT_MODE_RANKS } from '../lib/projectAnalysis';
-import { getSupabaseClient, hasSupabaseConfig } from '../supabaseStorage';
+import { getSupabaseClient, hasSupabaseAuthConfig, hasSupabaseStorageConfig } from '../supabaseStorage';
 import { migrateProjectAssetReferences } from '../lib/assetManager';
 import { canUseLocalStorage, readJsonStorage, removeStorageKey } from '../utils/storageHelpers';
 import { deleteProjectLocalDrafts } from '../utils/projectDraftCleanup';
@@ -447,7 +447,7 @@ const persistSingleProject = async (userId, project, projects, options = {}) => 
   const localSaved = indexedSaved || localWriteStatus.fullSaved;
   const localCacheSaved = localWriteStatus.cacheSaved;
   const localPartial = !localSaved && localCacheSaved;
-  const remoteAttempted = !options.localOnly && hasSupabaseConfig();
+  const remoteAttempted = !options.localOnly && hasSupabaseStorageConfig();
   let remoteSaved = false;
   let remoteError = '';
   if (options.localOnly) {
@@ -495,7 +495,7 @@ const persistProjects = async (userId, projects, options = {}) => {
   const localSaved = indexedSaved || localWriteStatus.fullSaved;
   const localCacheSaved = localWriteStatus.cacheSaved;
   const localPartial = !localSaved && localCacheSaved;
-  const remoteAttempted = hasSupabaseConfig();
+  const remoteAttempted = hasSupabaseStorageConfig();
   let remoteSaved = false;
   let remoteError = '';
   try {
@@ -610,7 +610,7 @@ export function useLocalAuth() {
     hydrateSession();
 
     let subscription = null;
-    if (hasSupabaseConfig()) {
+    if (hasSupabaseAuthConfig()) {
       const { data } = getSupabaseClient().auth.onAuthStateChange((_event, session) => {
         if (!isMounted) return;
         const sessionUser = supabaseUserToAccount(session?.user);
@@ -920,7 +920,7 @@ export function useLocalAuth() {
   };
 
   const requestBackendPublication = async ({ action, projectId, project, settings }) => {
-    if (!hasSupabaseConfig()) return null;
+    if (!hasSupabaseAuthConfig()) return null;
     const { data } = await getSupabaseClient().auth.getSession();
     const token = data.session?.access_token;
     if (!token) throw new Error('Session requise pour publier.');

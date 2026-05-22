@@ -2,7 +2,7 @@ import {
   buildStoragePath,
   downloadTextFile,
   generateStorageFilename,
-  hasSupabaseConfig,
+  hasSupabaseStorageConfig,
   isStorageNotFoundError,
   uploadToStorage,
 } from '../supabaseStorage';
@@ -47,7 +47,7 @@ export const ARCADE_MEDIA_UPLOAD_TIMEOUT = {
   msPerMb: 6000,
 };
 
-export const hasRpg3DAssetsSupabaseConfig = hasSupabaseConfig;
+export const hasRpg3DAssetsSupabaseConfig = hasSupabaseStorageConfig;
 export const isRpg3DAssetsNotFoundError = isStorageNotFoundError;
 
 export const getArcadeAssetsRemotePath = (userId) => buildStoragePath('users', userId, 'arcade-assets', 'assets.json');
