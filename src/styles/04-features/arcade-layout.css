@@ -23,7 +23,7 @@
 .arcade-hud {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(170px, 1fr) auto;
+  grid-template-columns: minmax(170px, 1fr) minmax(190px, auto) auto;
   align-items: center;
   gap: 14px;
   min-height: 58px;
@@ -54,6 +54,64 @@
   font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
+}
+
+.arcade-account-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 280px;
+  padding: 7px 9px;
+  border: 1px solid rgba(148, 163, 184, .2);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, .72);
+  color: #eaf2ff;
+}
+
+.arcade-account-chip.connected {
+  border-color: rgba(34, 197, 94, .36);
+}
+
+.arcade-account-chip.disconnected {
+  border-color: rgba(245, 158, 11, .34);
+}
+
+.arcade-account-chip > div {
+  min-width: 0;
+}
+
+.arcade-account-chip small,
+.arcade-account-chip strong,
+.arcade-account-chip span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.arcade-account-chip small {
+  color: #a7f3d0;
+  font-size: 10px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.arcade-account-chip.disconnected small {
+  color: #fcd34d;
+}
+
+.arcade-account-chip strong {
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 1.1;
+}
+
+.arcade-account-chip span {
+  margin-top: 2px;
+  color: #94a3b8;
+  font-size: 11px;
 }
 
 .arcade-actions {

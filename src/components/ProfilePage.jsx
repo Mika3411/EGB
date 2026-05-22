@@ -90,6 +90,7 @@ export default function ProfilePage({
     <main className="layout">
       <ProfileHeader
         user={user}
+        authorProfile={authorProfile}
         canOpenAdmin={canOpenAdmin}
         statusMessage={statusMessage}
         ordersCount={orders.length}

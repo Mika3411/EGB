@@ -18,8 +18,10 @@ import {
 } from './rpg3dStudioProject.js';
 
 export const ARCADE_ASSETS_STORAGE_KEY = 'escape-game-builder:arcade-assets:v1';
+export const ARCADE_ASSETS_BACKUP_STORAGE_KEY = 'escape-game-builder:arcade-assets-backups:v1';
 export const ARCADE_ASSETS_REMOTE_VERSION = 2;
 export const RPG3D_HISTORY_DATA_URL_MAX_CHARS = 512 * 1024;
+const ARCADE_ASSETS_BACKUP_LIMIT = 8;
 
 const ARCADE_WORLD_SCALE = 0.018;
 
@@ -153,6 +155,59 @@ export const createArcadeAssetsPayload = (config, studioProject) => ({
   studioProject: cloneStudioProjectForEdit(studioProject),
 });
 
+const countArrayItems = (value) => (Array.isArray(value) ? value.length : 0);
+
+const countTerrainPaintPoints = (strokes = []) => (
+  Array.isArray(strokes)
+    ? strokes.reduce((total, stroke) => total + Math.max(1, countArrayItems(stroke?.points)), 0)
+    : 0
+);
+
+export const getArcadeConfigContentScore = (config = {}) => {
+  if (!config || typeof config !== 'object') return 0;
+  return [
+    countArrayItems(config.obstacles),
+    countArrayItems(config.reliefs),
+    countArrayItems(config.heroes),
+    countArrayItems(config.enemies),
+    countArrayItems(config.pickups),
+    countArrayItems(config.props),
+    countArrayItems(config.actionZones),
+    countTerrainPaintPoints(config.terrainPaintStrokes),
+  ].reduce((total, count) => total + count, 0);
+};
+
+export const getArcadeAssetsContentScore = (payload = {}) => {
+  if (!payload || typeof payload !== 'object') return 0;
+  const studioProject = payload.studioProject || {};
+  const canvases = Array.isArray(studioProject.rpg3dCanvases) ? studioProject.rpg3dCanvases : [];
+  const canvasScore = canvases.reduce((total, canvas) => total + getArcadeConfigContentScore(canvas?.config), 0);
+  const mapScore = Math.max(getArcadeConfigContentScore(payload.config), canvasScore);
+  const modelScore = (
+    countArrayItems(studioProject.characterModels3d) * 8
+    + countArrayItems(studioProject.decorModels3d) * 8
+    + countArrayItems(studioProject.mediaAssets) * 2
+  );
+  const structureScore = Math.max(0, canvases.length - 1) * 2
+    + Math.max(0, countArrayItems(studioProject.rpg3dActs) - 1)
+    + Math.max(0, countArrayItems(studioProject.rpg3dScenes) - 1);
+  return mapScore * 4 + modelScore + structureScore;
+};
+
+const getSavedTime = (payload = {}) => {
+  const time = Date.parse(payload?.savedAt || '');
+  return Number.isFinite(time) ? time : 0;
+};
+
+export const selectPreferredArcadeAssets = (candidate = null, fallback = null) => {
+  if (!candidate) return fallback || null;
+  if (!fallback) return candidate;
+  const candidateScore = getArcadeAssetsContentScore(candidate);
+  const fallbackScore = getArcadeAssetsContentScore(fallback);
+  if (candidateScore !== fallbackScore) return candidateScore > fallbackScore ? candidate : fallback;
+  return getSavedTime(candidate) >= getSavedTime(fallback) ? candidate : fallback;
+};
+
 export const getPersistedModelSource = (model = {}) => {
   if (isDataUrl(model.modelData)) return model.modelData;
   if (model.modelData && isBlobUrl(model.modelUrl)) return model.modelData;
@@ -218,6 +273,40 @@ export const createLocalArcadeAssetsSnapshot = (payload = {}) => {
   };
 };
 
+const readLocalArcadeAssetBackups = () => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(ARCADE_ASSETS_BACKUP_STORAGE_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+};
+
+const rememberArcadeAssetBackup = (rawPayload = '') => {
+  if (typeof window === 'undefined' || !rawPayload) return;
+  try {
+    const payload = JSON.parse(rawPayload);
+    if (!payload || typeof payload !== 'object') return;
+    const score = getArcadeAssetsContentScore(payload);
+    if (score <= 0) return;
+    const backup = {
+      backedUpAt: new Date().toISOString(),
+      savedAt: payload.savedAt || '',
+      score,
+      payload,
+    };
+    const backups = readLocalArcadeAssetBackups();
+    const nextBackups = [
+      backup,
+      ...backups.filter((entry) => JSON.stringify(entry?.payload || {}) !== rawPayload),
+    ].slice(0, ARCADE_ASSETS_BACKUP_LIMIT);
+    window.localStorage.setItem(ARCADE_ASSETS_BACKUP_STORAGE_KEY, JSON.stringify(nextBackups));
+  } catch {
+    // Backup creation is best-effort; the active save remains the priority.
+  }
+};
+
 const rehydrateLocalModelSource = async (model = {}) => {
   if (!model?.localModelFileId) return model;
   const persistedSource = getPersistedModelSource(model);
@@ -269,8 +358,11 @@ export const restoreLocalArcadeAssetsSources = async ({ config, studioProject } 
 export const rememberArcadeAssetsLocally = (payload) => {
   if (typeof window === 'undefined') return false;
   try {
-    window.localStorage.removeItem(ARCADE_ASSETS_STORAGE_KEY);
-    window.localStorage.setItem(ARCADE_ASSETS_STORAGE_KEY, JSON.stringify(createLocalArcadeAssetsSnapshot(payload)));
+    const rawCurrent = window.localStorage.getItem(ARCADE_ASSETS_STORAGE_KEY) || '';
+    const nextPayload = createLocalArcadeAssetsSnapshot(payload);
+    const nextRaw = JSON.stringify(nextPayload);
+    if (rawCurrent && rawCurrent !== nextRaw) rememberArcadeAssetBackup(rawCurrent);
+    window.localStorage.setItem(ARCADE_ASSETS_STORAGE_KEY, nextRaw);
     return true;
   } catch {
     return false;

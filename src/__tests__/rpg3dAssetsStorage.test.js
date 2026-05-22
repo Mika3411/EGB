@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { DEFAULT_ARCADE_CONFIG, cloneConfig } from '../utils/rpg3dDomain.js';
 import { createDefaultStudioProject } from '../utils/rpg3dStudioProject.js';
 import {
+  ARCADE_ASSETS_BACKUP_STORAGE_KEY,
   ARCADE_ASSETS_REMOTE_VERSION,
   ARCADE_ASSETS_STORAGE_KEY,
   blobUrlToFile,
@@ -15,17 +16,80 @@ import {
   getArcadeModelRemotePath,
   getArcadeModelResourceRemotePath,
   getArcadeTextureRemotePath,
+  getArcadeAssetsContentScore,
   rememberRpg3DLocalBlobFile,
+  rememberArcadeAssetsLocally,
+  selectPreferredArcadeAssets,
   stripVolatileModelData,
   syncConfigModelReferences,
 } from '../utils/rpg3dAssetsStorage.js';
 
 const toDataUrl = (mimeType, text) => `data:${mimeType};base64,${btoa(text)}`;
 
+afterEach(() => {
+  window.localStorage.clear();
+});
+
 describe('rpg3d assets storage helpers', () => {
   it('keeps the persisted arcade assets format identifiers stable', () => {
     expect(ARCADE_ASSETS_STORAGE_KEY).toBe('escape-game-builder:arcade-assets:v1');
+    expect(ARCADE_ASSETS_BACKUP_STORAGE_KEY).toBe('escape-game-builder:arcade-assets-backups:v1');
     expect(ARCADE_ASSETS_REMOTE_VERSION).toBe(2);
+  });
+
+  it('keeps the richer RPG 3D save instead of replacing it with a thinner one', () => {
+    const richSave = {
+      savedAt: '2026-05-21T10:00:00.000Z',
+      config: {
+        ...cloneConfig(DEFAULT_ARCADE_CONFIG),
+        props: [{ id: 'prop-1' }, { id: 'prop-2' }],
+        actionZones: [{ id: 'zone-1' }],
+      },
+      studioProject: {
+        ...createDefaultStudioProject(),
+        characterModels3d: [{ id: 'hero-model' }],
+        decorModels3d: [{ id: 'door-model' }],
+      },
+    };
+    const thinSave = {
+      savedAt: '2026-05-22T10:00:00.000Z',
+      config: cloneConfig(DEFAULT_ARCADE_CONFIG),
+      studioProject: {
+        ...createDefaultStudioProject(),
+        decorModels3d: [{ id: 'single-object' }],
+      },
+    };
+
+    expect(getArcadeAssetsContentScore(richSave)).toBeGreaterThan(getArcadeAssetsContentScore(thinSave));
+    expect(selectPreferredArcadeAssets(thinSave, richSave)).toBe(richSave);
+    expect(selectPreferredArcadeAssets(richSave, thinSave)).toBe(richSave);
+  });
+
+  it('backs up the previous local RPG 3D save before replacing it', () => {
+    const previousSave = {
+      savedAt: '2026-05-21T10:00:00.000Z',
+      config: {
+        ...cloneConfig(DEFAULT_ARCADE_CONFIG),
+        props: [{ id: 'prop-1' }],
+      },
+      studioProject: createDefaultStudioProject(),
+    };
+    const nextSave = {
+      savedAt: '2026-05-22T10:00:00.000Z',
+      config: {
+        ...cloneConfig(DEFAULT_ARCADE_CONFIG),
+        props: [{ id: 'prop-2' }],
+      },
+      studioProject: createDefaultStudioProject(),
+    };
+
+    window.localStorage.setItem(ARCADE_ASSETS_STORAGE_KEY, JSON.stringify(previousSave));
+
+    expect(rememberArcadeAssetsLocally(nextSave)).toBe(true);
+
+    const backups = JSON.parse(window.localStorage.getItem(ARCADE_ASSETS_BACKUP_STORAGE_KEY) || '[]');
+    expect(backups[0].payload.config.props).toEqual([{ id: 'prop-1' }]);
+    expect(JSON.parse(window.localStorage.getItem(ARCADE_ASSETS_STORAGE_KEY)).config.props).toEqual([{ id: 'prop-2' }]);
   });
 
   it('converts data URLs to files with the existing mime and naming fallbacks', async () => {

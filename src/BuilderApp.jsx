@@ -1777,6 +1777,7 @@ function BuilderApp({
         onExportStandalone={handleExportStandalone}
         onExportAuthorSummary={handleExportAuthorSummary}
         user={auth.user}
+        authorProfile={auth.authorProfile}
         onLogout={auth.logout}
         saveStatus={saveStatus || 'Sauvegarde active'}
         projectMode={getProjectMode(editor.project)}

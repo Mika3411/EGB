@@ -1,4 +1,5 @@
 import bannerImage from '../assets/header-banner.png';
+import { getUserDisplayName } from '../utils/userDisplayName';
 
 export default function Header({
   projectTitle,
@@ -6,6 +7,7 @@ export default function Header({
   onExportStandalone,
   onExportAuthorSummary,
   user,
+  authorProfile = null,
   onLogout,
   saveStatus,
   projectMode = 'expert',
@@ -16,6 +18,8 @@ export default function Header({
   const modeLabel = isBeginnerMode
     ? 'Mode debutant'
     : isIntermediateMode ? 'Mode intermediaire' : isAdventureMode ? 'Mode narration' : 'Mode expert';
+  const userDisplayName = getUserDisplayName(user, authorProfile);
+  const userEmail = String(user?.email || '').trim();
 
   return (
     <header className="topbar topbar-pro">
@@ -54,8 +58,9 @@ export default function Header({
       {user ? (
         <div className="user-chip user-chip-pro">
           <div>
-            <strong>{user.name || user.email}</strong>
-            <small>{user.email}</small>
+            <small>Utilisateur</small>
+            <strong>{userDisplayName}</strong>
+            {userEmail && userEmail !== userDisplayName ? <small>{userEmail}</small> : null}
           </div>
           <div className="user-chip-actions">
             <span className="status-badge">{saveStatus || 'Sauvegardé'}</span>

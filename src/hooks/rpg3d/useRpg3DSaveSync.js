@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   createArcadeAssetsPayload,
   rememberArcadeAssetsLocally,
+  readSavedArcadeAssets,
   restoreLocalArcadeAssetsSources,
+  selectPreferredArcadeAssets,
   syncConfigModelReferences,
 } from '../../utils/rpg3dAssetsCore.js';
 import {
@@ -101,6 +103,12 @@ export function useRpg3DSaveSync({
       .then(({ loadArcadeAssetsFromSupabase }) => loadArcadeAssetsFromSupabase(user.id))
       .then(async (remoteAssets) => {
         if (cancelled || !remoteAssets) return;
+        const localAssets = readSavedArcadeAssets();
+        const preferredAssets = selectPreferredArcadeAssets(remoteAssets, localAssets);
+        if (preferredAssets === localAssets) {
+          setManagementSaveStatus('Sauvegarde locale conservee: Supabase est moins complet.');
+          return;
+        }
         const remoteStudioProject = createStudioProjectFromSavedAssets(remoteAssets.studioProject, remoteAssets.config, projectRef.current);
         const remoteConfig = createConfigFromSavedAssets(getActiveRpg3DCanvas(remoteStudioProject)?.config || remoteAssets.config);
         const restored = await restoreLocalArcadeAssetsSources({

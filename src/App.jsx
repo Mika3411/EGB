@@ -427,7 +427,12 @@ function ShellApp() {
     }
     return (
       <Suspense fallback={<LandingLoadingFallback />}>
-        <Rpg3DMode user={auth.user} authReady={auth.isReady} project={auth.activeProject?.data || null} />
+        <Rpg3DMode
+          user={auth.user}
+          authorProfile={auth.authorProfile}
+          authReady={auth.isReady}
+          project={auth.activeProject?.data || null}
+        />
       </Suspense>
     );
   }

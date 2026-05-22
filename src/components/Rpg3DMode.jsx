@@ -2820,7 +2820,7 @@ function ArcadeManagementTab({
   );
 }
 
-function Rpg3DMode({ user = null, authReady = true, project = null }) {
+function Rpg3DMode({ user = null, authorProfile = null, authReady = true, project = null }) {
   const wrapperRef = useRef(null);
   const multiDragRef = useRef(null);
   const lastFrameRef = useRef(0);
@@ -4417,10 +4417,12 @@ function Rpg3DMode({ user = null, authReady = true, project = null }) {
         </>
       ) : null}
       <Rpg3DHeader
+        authorProfile={authorProfile}
         isPaused={isPaused}
         isSavingAssets={isSavingAssets}
         managementSaveStatus={managementSaveStatus}
         playMode={playMode}
+        user={user}
         workspaceTab={workspaceTab}
         onPauseOrReset={handlePauseOrReset}
         onSave={saveArcadeAssets}
