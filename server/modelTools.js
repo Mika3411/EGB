@@ -430,16 +430,40 @@ export const getQualityTextureVariants = (settings = {}) => {
       return {
         textureSize,
         textureQuality,
+        textureEncoding: variant.textureEncoding || 'webp',
+        compression: Object.prototype.hasOwnProperty.call(variant, 'compression')
+          ? variant.compression
+          : settings.compression,
         textureLossless: variant.textureLossless === true,
         textureNearLossless: variant.textureNearLossless === true,
       };
     })
     .filter((variant) => {
-      const key = `${variant.textureSize}:${variant.textureQuality}:${variant.textureLossless}:${variant.textureNearLossless}`;
+      const key = `${variant.textureSize}:${variant.textureQuality}:${variant.textureEncoding}:${variant.compression}:${variant.textureLossless}:${variant.textureNearLossless}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
+};
+
+export const scoreQualityCandidateSize = (size, settings = {}) => {
+  const outputSize = Number(size) || 0;
+  const targetOutputBytes = Number(settings.targetOutputBytes) || 0;
+  if (!outputSize || !targetOutputBytes) return 0;
+
+  const minOutputBytes = Number(settings.minOutputBytes) || 0;
+  const maxOutputBytes = Number(settings.maxOutputBytes) || 0;
+  const distanceFromTarget = Math.abs(outputSize - targetOutputBytes) / targetOutputBytes;
+
+  if (maxOutputBytes && outputSize > maxOutputBytes) {
+    return 10 + ((outputSize - maxOutputBytes) / targetOutputBytes) + distanceFromTarget;
+  }
+
+  if (minOutputBytes && outputSize < minOutputBytes) {
+    return 1 + ((minOutputBytes - outputSize) / targetOutputBytes) * 0.5 + distanceFromTarget * 0.1;
+  }
+
+  return distanceFromTarget;
 };
 
 const runGltfTransformCli = async (args, progressOptions = {}) => {
@@ -475,14 +499,8 @@ const optimizeGlb = async (inputPath, outputPath, settings = {}, progressOptions
     const maxOutputBytes = Number(settings.maxOutputBytes) || 0;
     let bestSize = 0;
     let bestScore = Number.POSITIVE_INFINITY;
-
-    const getCandidateScore = (size) => {
-      if (!targetOutputBytes) return 0;
-      const undersizePenalty = minOutputBytes && size < minOutputBytes
-        ? ((minOutputBytes - size) / minOutputBytes) * 2.5
-        : 0;
-      return Math.abs(size - targetOutputBytes) / targetOutputBytes + undersizePenalty;
-    };
+    settings.qualityCandidates = [];
+    settings.selectedQualityCandidate = '';
 
     for (let index = 0; index < textureVariants.length; index += 1) {
       const variant = textureVariants[index];
@@ -490,6 +508,7 @@ const optimizeGlb = async (inputPath, outputPath, settings = {}, progressOptions
       const variantResizeEnd = progressStart + progressRange * ((index + 0.42) / textureVariants.length);
       const variantWebpEnd = progressStart + progressRange * ((index + 0.78) / textureVariants.length);
       const variantEnd = progressStart + progressRange * ((index + 1) / textureVariants.length);
+      const variantCompression = variant.compression === false ? false : (variant.compression || settings.compression);
       let resizedStagePath = resizedPathsBySize.get(variant.textureSize);
       const hasResizedStage = Boolean(resizedStagePath);
       if (!resizedStagePath) {
@@ -503,41 +522,58 @@ const optimizeGlb = async (inputPath, outputPath, settings = {}, progressOptions
           withProgressRange(progressOptions, variantStart, variantResizeEnd),
         );
       }
-      const webpStagePath = settings.compression === 'meshopt'
-        ? path.join(stageDir, `${stageBase}-webp-${variant.textureSize}-${variant.textureQuality}-${variant.textureLossless ? 'lossless' : variant.textureNearLossless ? 'near' : 'lossy'}.glb`)
+      const variantLabel = `${variant.textureSize}-${variant.textureEncoding}-${variantCompression || 'raw'}-${variant.textureQuality}-${variant.textureLossless ? 'lossless' : variant.textureNearLossless ? 'near' : 'lossy'}`;
+      const webpStagePath = variantCompression === 'meshopt'
+        ? path.join(stageDir, `${stageBase}-webp-${variantLabel}.glb`)
         : outputPath;
-      const candidatePath = settings.compression === 'meshopt'
-        ? path.join(stageDir, `${stageBase}-candidate-${variant.textureSize}-${variant.textureQuality}-${variant.textureLossless ? 'lossless' : variant.textureNearLossless ? 'near' : 'lossy'}.glb`)
-        : outputPath;
-      await runGltfTransformCli(
-        buildGltfTransformWebpArgs(resizedStagePath, webpStagePath, {
-          ...settings,
-          textureQuality: variant.textureQuality,
-          textureLossless: variant.textureLossless,
-          textureNearLossless: variant.textureNearLossless,
-        }),
-        withProgressRange(progressOptions, hasResizedStage ? variantStart : variantResizeEnd, settings.compression === 'meshopt' ? variantWebpEnd : variantEnd),
-      );
-      if (settings.compression === 'meshopt') {
+      const candidatePath = path.join(stageDir, `${stageBase}-candidate-${variantLabel}.glb`);
+      if (variant.textureEncoding === 'source') {
+        if (variantCompression === 'meshopt') {
+          await runGltfTransformCli(
+            buildGltfTransformMeshoptArgs(resizedStagePath, candidatePath, settings),
+            withProgressRange(progressOptions, hasResizedStage ? variantStart : variantResizeEnd, variantEnd),
+          );
+        } else {
+          await fs.copyFile(resizedStagePath, candidatePath);
+        }
+      } else {
         await runGltfTransformCli(
-          buildGltfTransformMeshoptArgs(webpStagePath, candidatePath, settings),
-          withProgressRange(progressOptions, variantWebpEnd, variantEnd),
+          buildGltfTransformWebpArgs(resizedStagePath, webpStagePath, {
+            ...settings,
+            textureQuality: variant.textureQuality,
+            textureLossless: variant.textureLossless,
+            textureNearLossless: variant.textureNearLossless,
+          }),
+          withProgressRange(progressOptions, hasResizedStage ? variantStart : variantResizeEnd, variantCompression === 'meshopt' ? variantWebpEnd : variantEnd),
         );
+      }
+      if (variantCompression === 'meshopt') {
+        if (variant.textureEncoding !== 'source') {
+          await runGltfTransformCli(
+            buildGltfTransformMeshoptArgs(webpStagePath, candidatePath, settings),
+            withProgressRange(progressOptions, variantWebpEnd, variantEnd),
+          );
+        }
         await fs.rm(webpStagePath, { force: true }).catch(() => {});
       }
       const outputStats = await fs.stat(candidatePath).catch(() => null);
       if (outputStats) {
-        const candidateScore = getCandidateScore(outputStats.size);
+        const candidateScore = scoreQualityCandidateSize(outputStats.size, settings);
+        settings.qualityCandidates.push({
+          label: variantLabel,
+          size: outputStats.size,
+          score: candidateScore,
+        });
         if (candidateScore < bestScore) {
           bestScore = candidateScore;
           bestSize = outputStats.size;
+          settings.selectedQualityCandidate = variantLabel;
           if (candidatePath !== outputPath) await fs.copyFile(candidatePath, outputPath);
         }
         const inTargetBand = (!minOutputBytes || outputStats.size >= minOutputBytes)
           && (!maxOutputBytes || outputStats.size <= maxOutputBytes);
         if (candidatePath !== outputPath) await fs.rm(candidatePath, { force: true }).catch(() => {});
         if (!targetOutputBytes || inTargetBand) break;
-        if (minOutputBytes && outputStats.size < minOutputBytes) break;
       }
       const nextVariant = textureVariants[index + 1];
       if (nextVariant && nextVariant.textureSize !== variant.textureSize) {
@@ -614,6 +650,15 @@ export const getModelToolQualitySettings = (quality = 'web') => {
       texturePipeline: 'webp-quality',
       textureQuality: 92,
       textureVariants: [
+        { textureSize: 4096, textureEncoding: 'source', compression: false },
+        { textureSize: 3072, textureEncoding: 'source', compression: false },
+        { textureSize: 2048, textureEncoding: 'source', compression: false },
+        { textureSize: 1536, textureEncoding: 'source', compression: false },
+        { textureSize: 1024, textureEncoding: 'source', compression: false },
+        { textureSize: 4096, textureEncoding: 'source' },
+        { textureSize: 3072, textureEncoding: 'source' },
+        { textureSize: 2048, textureEncoding: 'source' },
+        { textureSize: 1536, textureEncoding: 'source' },
         { textureSize: 4096, textureQuality: 100, textureLossless: true },
         { textureSize: 4096, textureQuality: 100, textureNearLossless: true },
         { textureSize: 4096, textureQuality: 100 },
@@ -724,13 +769,17 @@ const buildOptimizedGlb = async (uploadedFile, fields, workDir, onProgress = () 
   });
   const outputStats = await fs.stat(optimizedPath);
   const outputName = `${baseName(uploadedFile.filename || source.sourceName)}-${outputSuffix}.glb`;
-  onProgress({ progress: 99, label: 'GLB pret...', detail: outputName });
+  const qualityDetail = settings.selectedQualityCandidate
+    ? `Preset ${settings.selectedQualityCandidate}.`
+    : '';
+  onProgress({ progress: 99, label: 'GLB pret...', detail: qualityDetail || outputName });
   return {
     outputPath: optimizedPath,
     outputName,
     originalSize: source.originalSize || uploadedFile.data.byteLength,
     outputSize: outputStats.size,
     sourceFormat: source.sourceFormat,
+    qualityDetail,
   };
 };
 
@@ -767,7 +816,7 @@ const runModelToolJob = async (jobId, uploadedFile, fields) => {
       status: 'done',
       progress: 100,
       label: 'Termine',
-      detail: `${formatBytesForServer(result.originalSize)} -> ${formatBytesForServer(result.outputSize)}`,
+      detail: `${formatBytesForServer(result.originalSize)} -> ${formatBytesForServer(result.outputSize)}${result.qualityDetail ? ` (${result.qualityDetail})` : ''}`,
       outputPath: result.outputPath,
       filename: result.outputName,
       originalSize: result.originalSize,

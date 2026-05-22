@@ -5,6 +5,7 @@ import {
   buildGltfTransformWebpArgs,
   getQualityTextureVariants,
   getModelToolQualitySettings,
+  scoreQualityCandidateSize,
 } from '../../server/modelTools';
 
 describe('model tools quality presets', () => {
@@ -46,27 +47,36 @@ describe('model tools quality presets', () => {
     ]);
 
     expect(getQualityTextureVariants(settings)).toEqual([
-      { textureSize: 4096, textureQuality: 100, textureLossless: true, textureNearLossless: false },
-      { textureSize: 4096, textureQuality: 100, textureLossless: false, textureNearLossless: true },
-      { textureSize: 4096, textureQuality: 100, textureLossless: false, textureNearLossless: false },
-      { textureSize: 4096, textureQuality: 99, textureLossless: false, textureNearLossless: false },
-      { textureSize: 4096, textureQuality: 98, textureLossless: false, textureNearLossless: false },
-      { textureSize: 4096, textureQuality: 97, textureLossless: false, textureNearLossless: false },
-      { textureSize: 4096, textureQuality: 96, textureLossless: false, textureNearLossless: false },
-      { textureSize: 4096, textureQuality: 94, textureLossless: false, textureNearLossless: false },
-      { textureSize: 4096, textureQuality: 92, textureLossless: false, textureNearLossless: false },
-      { textureSize: 4096, textureQuality: 88, textureLossless: false, textureNearLossless: false },
-      { textureSize: 4096, textureQuality: 80, textureLossless: false, textureNearLossless: false },
-      { textureSize: 3072, textureQuality: 90, textureLossless: false, textureNearLossless: false },
-      { textureSize: 3072, textureQuality: 84, textureLossless: false, textureNearLossless: false },
-      { textureSize: 2048, textureQuality: 96, textureLossless: false, textureNearLossless: false },
-      { textureSize: 2048, textureQuality: 92, textureLossless: false, textureNearLossless: false },
-      { textureSize: 2048, textureQuality: 88, textureLossless: false, textureNearLossless: false },
-      { textureSize: 2048, textureQuality: 84, textureLossless: false, textureNearLossless: false },
-      { textureSize: 2048, textureQuality: 82, textureLossless: false, textureNearLossless: false },
-      { textureSize: 1536, textureQuality: 92, textureLossless: false, textureNearLossless: false },
-      { textureSize: 1536, textureQuality: 86, textureLossless: false, textureNearLossless: false },
-      { textureSize: 1536, textureQuality: 80, textureLossless: false, textureNearLossless: false },
+      expect.objectContaining({ textureSize: 4096, textureEncoding: 'source', compression: false }),
+      expect.objectContaining({ textureSize: 3072, textureEncoding: 'source', compression: false }),
+      expect.objectContaining({ textureSize: 2048, textureEncoding: 'source', compression: false }),
+      expect.objectContaining({ textureSize: 1536, textureEncoding: 'source', compression: false }),
+      expect.objectContaining({ textureSize: 1024, textureEncoding: 'source', compression: false }),
+      expect.objectContaining({ textureSize: 4096, textureEncoding: 'source', compression: 'meshopt' }),
+      expect.objectContaining({ textureSize: 3072, textureEncoding: 'source', compression: 'meshopt' }),
+      expect.objectContaining({ textureSize: 2048, textureEncoding: 'source', compression: 'meshopt' }),
+      expect.objectContaining({ textureSize: 1536, textureEncoding: 'source', compression: 'meshopt' }),
+      expect.objectContaining({ textureSize: 4096, textureQuality: 100, textureEncoding: 'webp', compression: 'meshopt', textureLossless: true }),
+      expect.objectContaining({ textureSize: 4096, textureQuality: 100, textureEncoding: 'webp', compression: 'meshopt', textureNearLossless: true }),
+      expect.objectContaining({ textureSize: 4096, textureQuality: 100, textureEncoding: 'webp', compression: 'meshopt' }),
+      expect.objectContaining({ textureSize: 4096, textureQuality: 99, textureEncoding: 'webp', compression: 'meshopt' }),
+      expect.objectContaining({ textureSize: 4096, textureQuality: 98, textureEncoding: 'webp', compression: 'meshopt' }),
+      expect.objectContaining({ textureSize: 4096, textureQuality: 97, textureEncoding: 'webp', compression: 'meshopt' }),
+      expect.objectContaining({ textureSize: 4096, textureQuality: 96, textureEncoding: 'webp', compression: 'meshopt' }),
+      expect.objectContaining({ textureSize: 4096, textureQuality: 94, textureEncoding: 'webp', compression: 'meshopt' }),
+      expect.objectContaining({ textureSize: 4096, textureQuality: 92, textureEncoding: 'webp', compression: 'meshopt' }),
+      expect.objectContaining({ textureSize: 4096, textureQuality: 88, textureEncoding: 'webp', compression: 'meshopt' }),
+      expect.objectContaining({ textureSize: 4096, textureQuality: 80, textureEncoding: 'webp', compression: 'meshopt' }),
+      expect.objectContaining({ textureSize: 3072, textureQuality: 90, textureEncoding: 'webp', compression: 'meshopt' }),
+      expect.objectContaining({ textureSize: 3072, textureQuality: 84, textureEncoding: 'webp', compression: 'meshopt' }),
+      expect.objectContaining({ textureSize: 2048, textureQuality: 96, textureEncoding: 'webp', compression: 'meshopt' }),
+      expect.objectContaining({ textureSize: 2048, textureQuality: 92, textureEncoding: 'webp', compression: 'meshopt' }),
+      expect.objectContaining({ textureSize: 2048, textureQuality: 88, textureEncoding: 'webp', compression: 'meshopt' }),
+      expect.objectContaining({ textureSize: 2048, textureQuality: 84, textureEncoding: 'webp', compression: 'meshopt' }),
+      expect.objectContaining({ textureSize: 2048, textureQuality: 82, textureEncoding: 'webp', compression: 'meshopt' }),
+      expect.objectContaining({ textureSize: 1536, textureQuality: 92, textureEncoding: 'webp', compression: 'meshopt' }),
+      expect.objectContaining({ textureSize: 1536, textureQuality: 86, textureEncoding: 'webp', compression: 'meshopt' }),
+      expect.objectContaining({ textureSize: 1536, textureQuality: 80, textureEncoding: 'webp', compression: 'meshopt' }),
     ]);
   });
 
@@ -86,5 +96,20 @@ describe('model tools quality presets', () => {
     expect(webArgs[webArgs.indexOf('--texture-compress') + 1]).toBe('webp');
     expect(liteArgs[liteArgs.indexOf('--texture-size') + 1]).toBe('512');
     expect(liteArgs[liteArgs.indexOf('--simplify-ratio') + 1]).toBe('0.55');
+  });
+
+  it('rejects huge quality outputs before undersized compressed candidates', () => {
+    const settings = {
+      targetOutputBytes: 50 * 1024 * 1024,
+      minOutputBytes: 42 * 1024 * 1024,
+      maxOutputBytes: 58 * 1024 * 1024,
+    };
+
+    const exactTarget = scoreQualityCandidateSize(50 * 1024 * 1024, settings);
+    const compressedCandidate = scoreQualityCandidateSize(30 * 1024 * 1024, settings);
+    const hugeCandidate = scoreQualityCandidateSize(617 * 1024 * 1024, settings);
+
+    expect(exactTarget).toBeLessThan(compressedCandidate);
+    expect(compressedCandidate).toBeLessThan(hugeCandidate);
   });
 });
