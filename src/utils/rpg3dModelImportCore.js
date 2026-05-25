@@ -32,18 +32,22 @@ export const FLOOR_ZERO_Z_MIN = -120;
 export const FLOOR_ZERO_Z_MAX = 120;
 export const DECOR_MODEL_SCALE_MIN = 0.5;
 export const DECOR_MODEL_SCALE_MAX = 20;
-export const DECOR_MODEL_DIMENSION_MIN = 0.05;
+export const DECOR_MODEL_DIMENSION_MIN = 0.001;
 export const DECOR_MODEL_DIMENSION_MAX = 120;
 export const DECOR_MATERIAL_BRIGHTNESS_MIN = 0.25;
 export const DECOR_MATERIAL_BRIGHTNESS_MAX = 1.4;
 export const DECOR_FLOOR_MATERIAL_BRIGHTNESS = 0.55;
 export const INLINE_MODEL_DATA_MAX_BYTES = 24 * 1024 * 1024;
-export const LOCAL_FBX_AUTO_PREVIEW_MAX_BYTES = 24 * 1024 * 1024;
+export const LOCAL_FBX_ANIMATION_PREVIEW_MAX_BYTES = 192 * 1024 * 1024;
+export const LOCAL_FBX_AUTO_PREVIEW_MAX_BYTES = INLINE_MODEL_DATA_MAX_BYTES;
 
 export const CHARACTER_ANIMATION_SLOTS = [
+  { id: 'idle', label: 'Stand-by', importedLabel: 'Animation stand-by' },
   { id: 'walk', label: 'Marche', importedLabel: 'Animation marche' },
   { id: 'attack', label: 'Attaque', importedLabel: 'Animation attaque' },
 ];
+const CHARACTER_ANIMATION_SLOT_ORDER = CHARACTER_ANIMATION_SLOTS.map(({ id }) => id);
+const CHARACTER_ANIMATION_SLOT_IDS = new Set(CHARACTER_ANIMATION_SLOT_ORDER);
 
 export const getCharacterMaterialBrightness = (model = {}) => numberValue(
   model.materialBrightness,
@@ -75,6 +79,7 @@ const LEGACY_DECOR_KIND_MAP = {
 };
 
 export const getDecorKindId = (kind = '') => LEGACY_DECOR_KIND_MAP[kind] || kind || 'decor';
+export const isInventoryDecorKind = (kind = '') => String(getDecorKindId(kind)).startsWith('inventory-');
 export const isFloorTileKind = (kind = '') => ['road', 'water'].includes(getDecorKindId(kind));
 export const getFloorTileSize = (model = {}) => numberValue(Math.max(Number(model.width) || 0, Number(model.depth) || 0), 2.2, 0.4, 8);
 export const getDefaultDecorMaterialBrightness = (model = {}) => (isFloorTileKind(model.kind) ? DECOR_FLOOR_MATERIAL_BRIGHTNESS : 1);
@@ -130,23 +135,84 @@ export const isHeavyLocalFbxAsset = (asset = {}) => (
   && (Number(asset.modelFileSize) || 0) > LOCAL_FBX_AUTO_PREVIEW_MAX_BYTES
 );
 
+export const isHeavyLocalFbxAnimationAsset = (asset = {}) => (
+  String(asset.modelFormat || '').toLowerCase() === 'fbx'
+  && isBlobUrl(asset.modelUrl)
+  && (Number(asset.modelFileSize) || 0) > LOCAL_FBX_ANIMATION_PREVIEW_MAX_BYTES
+);
+
 export const getAnimationSource = (animation = {}) => {
   if (String(animation.modelData || '').startsWith('data:')) return animation.modelData;
   return animation.modelUrl || animation.modelData || '';
 };
 
-export const getAnimationSignature = (animations = {}) => CHARACTER_ANIMATION_SLOTS.map(({ id }) => {
-  const animation = animations?.[id] || {};
-  return [
-    id,
-    animation.modelUrl || '',
-    animation.modelData || '',
-    animation.modelName || '',
-    animation.modelFormat || '',
-    animation.modelFileSize || '',
-    (animation.modelResources || []).map((resource) => `${resource.path || resource.name || ''}:${resource.data?.length || resource.url?.length || 0}`).join(','),
-  ].join(':');
-}).join('|');
+const getAnimationSlotFromText = (value = '') => {
+  const text = String(value || '');
+  if (CHARACTER_ANIMATION_SLOT_IDS.has(text)) return text;
+  return CHARACTER_ANIMATION_SLOT_ORDER.find((slot) => text.startsWith(`${slot}__`)) || '';
+};
+
+export const getAnimationBaseSlotId = (animationKey = '', animation = {}) => {
+  const metadataSlot = getAnimationSlotFromText(animation?.animationSlot)
+    || getAnimationSlotFromText(animation?.slot)
+    || getAnimationSlotFromText(animation?.state);
+  if (metadataSlot) return metadataSlot;
+  return getAnimationSlotFromText(animationKey);
+};
+
+const compareAnimationEntries = (left, right) => {
+  const leftBase = getAnimationBaseSlotId(left.key, left.animation);
+  const rightBase = getAnimationBaseSlotId(right.key, right.animation);
+  const leftSlotIndex = CHARACTER_ANIMATION_SLOT_ORDER.indexOf(leftBase);
+  const rightSlotIndex = CHARACTER_ANIMATION_SLOT_ORDER.indexOf(rightBase);
+  if (leftSlotIndex !== rightSlotIndex) return leftSlotIndex - rightSlotIndex;
+  if (left.key === leftBase && right.key !== rightBase) return -1;
+  if (right.key === rightBase && left.key !== leftBase) return 1;
+  return left.index - right.index;
+};
+
+export const getAnimationEntriesForSlot = (animations = {}, slot = '') => {
+  const baseSlot = getAnimationBaseSlotId(slot);
+  if (!baseSlot || !animations || typeof animations !== 'object') return [];
+  return Object.entries(animations)
+    .map(([key, animation], index) => ({ key, animation: animation || {}, index }))
+    .filter((entry) => (
+      entry.animation
+      && typeof entry.animation === 'object'
+      && getAnimationBaseSlotId(entry.key, entry.animation) === baseSlot
+      && getAnimationSource(entry.animation)
+    ))
+    .sort(compareAnimationEntries)
+    .map(({ key, animation }) => ({ key, animation }));
+};
+
+export const getFirstAnimationEntryForSlot = (animations = {}, slot = '') => (
+  getAnimationEntriesForSlot(animations, slot)[0] || null
+);
+
+export const getAnimationSignature = (animations = {}) => (
+  Object.entries(animations && typeof animations === 'object' ? animations : {})
+    .map(([key, animation], index) => ({
+      key,
+      animation: animation || {},
+      baseSlot: getAnimationBaseSlotId(key, animation || {}),
+      index,
+    }))
+    .filter((entry) => entry.baseSlot && getAnimationSource(entry.animation))
+    .sort(compareAnimationEntries)
+    .map(({ key, baseSlot, animation }) => [
+      key,
+      baseSlot,
+      animation.modelUrl || '',
+      animation.modelData || '',
+      animation.localModelFileId || '',
+      animation.modelName || '',
+      animation.modelFormat || '',
+      animation.modelFileSize || '',
+      (animation.modelResources || []).map((resource) => `${resource.path || resource.name || ''}:${resource.data?.length || resource.url?.length || 0}`).join(','),
+    ].join(':'))
+    .join('|')
+);
 
 export const getEmbeddedAnimationSignature = (clips = []) => (
   clips.map((clip) => `${clip.name || ''}:${Number(clip.duration || 0).toFixed(3)}:${clip.trackCount || 0}`).join('|')
@@ -163,17 +229,107 @@ export const summarizeEmbeddedAnimationClips = (clips = []) => (
 );
 
 export const getPreviewAnimationSlot = (model = {}, requestedSlot = '') => {
-  if (requestedSlot && getAnimationSource(model.modelAnimations?.[requestedSlot] || {})) return requestedSlot;
-  if (getAnimationSource(model.modelAnimations?.walk || {})) return 'walk';
-  if (getAnimationSource(model.modelAnimations?.attack || {})) return 'attack';
+  const animations = model.modelAnimations || {};
+  if (requestedSlot) {
+    const requestedAnimation = animations?.[requestedSlot] || {};
+    if (getAnimationBaseSlotId(requestedSlot, requestedAnimation) && getAnimationSource(requestedAnimation)) return requestedSlot;
+    return getFirstAnimationEntryForSlot(animations, requestedSlot)?.key || '';
+  }
+  for (const slot of CHARACTER_ANIMATION_SLOT_ORDER) {
+    const entry = getFirstAnimationEntryForSlot(animations, slot);
+    if (entry?.key) return entry.key;
+  }
   return '';
 };
 
 export const getPreviewAnimationOptions = (slot = '') => {
-  if (slot === 'walk') return { preferredNames: ['walk', 'run', 'move', 'locomotion'], fallbackToFirst: true };
-  if (slot === 'attack') return { preferredNames: ['attack', 'cast', 'spell', 'shoot', 'fire'], fallbackToFirst: true };
+  const baseSlot = getAnimationBaseSlotId(slot);
+  if (baseSlot === 'idle') return { preferredNames: ['idle', 'stand', 'breath', 'wait'], fallbackToFirst: true };
+  if (baseSlot === 'walk') return { preferredNames: ['walk', 'run', 'move', 'locomotion'], fallbackToFirst: true };
+  if (baseSlot === 'attack') {
+    return {
+      preferredNames: ['attack', 'atk', 'counter', 'hit', 'slash', 'melee', 'cast', 'spell', 'shoot', 'fire'],
+      fallbackToFirst: true,
+    };
+  }
   return { preferredNames: ['idle', 'stand', 'breath', 'wait', 'walk', 'run', 'attack', 'cast', 'spell'], fallbackToFirst: true };
 };
+
+const getEquipmentSignature = (items = []) => (
+  (Array.isArray(items) ? items : [])
+    .filter((item) => item?.type === 'weapon' || item?.type === 'shield' || item?.type === 'armor')
+    .map((item) => [
+      item.id || '',
+      item.type || '',
+      item.equipped ? 1 : 0,
+      item.weaponModel3dId || item.model3dId || '',
+      item.weaponModelUrl || item.modelUrl || '',
+      item.weaponModelName || item.modelName || '',
+      item.weaponModelScale || '',
+      item.weaponModelSourceScale || '',
+      item.weaponModelRotationX || '',
+      item.weaponModelRotationY || '',
+      item.weaponModelRotationZ || '',
+      item.weaponOffsetX || '',
+      item.weaponOffsetY || '',
+      item.weaponOffsetZ || '',
+      item.weaponRotationX || '',
+      item.weaponRotationY || '',
+      item.weaponRotationZ || '',
+      item.weaponGripHand || '',
+      item.weaponGripReferenceScale || '',
+      item.weaponGripRightEnabled ? 1 : 0,
+      item.weaponGripRightX || '',
+      item.weaponGripRightY || '',
+      item.weaponGripRightZ || '',
+      item.weaponGripRightRotationX || '',
+      item.weaponGripRightRotationY || '',
+      item.weaponGripRightRotationZ || '',
+      item.weaponGripLeftEnabled ? 1 : 0,
+      item.weaponGripLeftX || '',
+      item.weaponGripLeftY || '',
+      item.weaponGripLeftZ || '',
+      item.weaponGripLeftRotationX || '',
+      item.weaponGripLeftRotationY || '',
+      item.weaponGripLeftRotationZ || '',
+      item.shieldGripArm || '',
+      item.shieldGripReferenceScale || '',
+      item.shieldGripHandEnabled ? 1 : 0,
+      item.shieldGripHandX || '',
+      item.shieldGripHandY || '',
+      item.shieldGripHandZ || '',
+      item.shieldGripElbowEnabled ? 1 : 0,
+      item.shieldGripElbowX || '',
+      item.shieldGripElbowY || '',
+      item.shieldGripElbowZ || '',
+      item.armorGripReferenceScale || '',
+      item.armorGripLeftShoulderEnabled ? 1 : 0,
+      item.armorGripLeftShoulderX || '',
+      item.armorGripLeftShoulderY || '',
+      item.armorGripLeftShoulderZ || '',
+      item.armorGripRightShoulderEnabled ? 1 : 0,
+      item.armorGripRightShoulderX || '',
+      item.armorGripRightShoulderY || '',
+      item.armorGripRightShoulderZ || '',
+      item.armorGripLeftElbowEnabled ? 1 : 0,
+      item.armorGripLeftElbowX || '',
+      item.armorGripLeftElbowY || '',
+      item.armorGripLeftElbowZ || '',
+      item.armorGripRightElbowEnabled ? 1 : 0,
+      item.armorGripRightElbowX || '',
+      item.armorGripRightElbowY || '',
+      item.armorGripRightElbowZ || '',
+      item.armorGripLowerBellyEnabled ? 1 : 0,
+      item.armorGripLowerBellyX || '',
+      item.armorGripLowerBellyY || '',
+      item.armorGripLowerBellyZ || '',
+      item.armorCanvasCutEnabled ? 1 : 0,
+      JSON.stringify(Array.isArray(item.armorSegmentAssignments) ? item.armorSegmentAssignments : []),
+      JSON.stringify(Array.isArray(item.armorCutContours) ? item.armorCutContours : []),
+      JSON.stringify(Array.isArray(item.armorCutPaintStrokes) ? item.armorCutPaintStrokes : []),
+    ].join(':'))
+    .join(';')
+);
 
 export const getCharacterBuildSignature = (model = {}) => [
   model.id || '',
@@ -185,6 +341,7 @@ export const getCharacterBuildSignature = (model = {}) => [
   model.modelFileSize || '',
   (model.modelResources || []).map((resource) => `${resource.path || resource.name || ''}:${resource.data?.length || resource.url?.length || 0}`).join(';'),
   getAnimationSignature(model.modelAnimations),
+  getEquipmentSignature(model.inventory),
 ].join('|');
 
 export const getDecorBuildSignature = (model = {}) => [

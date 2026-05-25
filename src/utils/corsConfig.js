@@ -42,6 +42,21 @@ const isLoopbackOrigin = (origin = '') => {
   }
 };
 
+const isPrivateNetworkOrigin = (origin = '') => {
+  try {
+    const { hostname, protocol } = new URL(origin);
+    const normalizedHostname = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+    if (!['http:', 'https:'].includes(protocol)) return false;
+    if (normalizedHostname === 'localhost' || normalizedHostname === '::1' || normalizedHostname.startsWith('127.')) return true;
+    if (normalizedHostname.startsWith('10.')) return true;
+    if (normalizedHostname.startsWith('192.168.')) return true;
+    const private172 = normalizedHostname.match(/^172\.(\d{1,2})\./);
+    return Boolean(private172 && Number(private172[1]) >= 16 && Number(private172[1]) <= 31);
+  } catch {
+    return false;
+  }
+};
+
 export const getAllowedCorsOrigins = (env = {}) => {
   const explicitOrigins = [
     ...splitList(env.CORS_ALLOWED_ORIGINS),
@@ -71,6 +86,7 @@ export const isCorsOriginAllowed = (headers = {}, env = {}) => {
   if (!origin) return true;
   if (String(env.CORS_ALLOW_ANY_ORIGIN || '').toLowerCase() === 'true') return true;
   if (isLocalCorsAllowed(env) && isLoopbackOrigin(origin)) return true;
+  if (isLocalCorsAllowed(env) && isPrivateNetworkOrigin(origin)) return true;
   return getAllowedCorsOrigins(env).includes(origin);
 };
 
@@ -84,11 +100,14 @@ export const resolveCorsAllowOrigin = (headers = {}, env = {}) => {
 
 export const makeCorsHeaders = (headers = {}, env = {}, baseHeaders = {}) => {
   const allowOrigin = resolveCorsAllowOrigin(headers, env);
+  const allowPrivateNetwork = isCorsOriginAllowed(headers, env)
+    && String(getHeaderValue(headers, 'access-control-request-private-network') || '').toLowerCase() === 'true';
   return {
     ...baseHeaders,
     ...(allowOrigin ? { 'Access-Control-Allow-Origin': allowOrigin } : {}),
-    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-AI-User-Id',
+    ...(allowPrivateNetwork ? { 'Access-Control-Allow-Private-Network': 'true' } : {}),
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin',
   };

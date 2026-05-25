@@ -745,16 +745,120 @@ const selectAnimationClip = (clips, preferredNames = [], options = {}) => {
   return options.fallbackToFirst === false ? null : clips[0] || null;
 };
 
+const ANIMATION_TRACK_NAME_PATTERN = /^(.*)\.(position|quaternion|scale)(?:\[[^\]]+\])?$/;
+
+const normalizeAnimationTargetName = (value = '') => String(value || '')
+  .replace(/\\/g, '/')
+  .split('/')
+  .pop()
+  .replace(/[^a-z0-9]/gi, '')
+  .toLowerCase();
+
+const ROOT_ROTATION_TARGET_NAMES = new Set([
+  'root',
+  'armature',
+]);
+
+const parseAnimationTrackName = (trackName = '') => {
+  const match = String(trackName || '').match(ANIMATION_TRACK_NAME_PATTERN);
+  if (!match) return { target: '', property: '' };
+  return {
+    target: match[1] || '',
+    property: match[2] || '',
+  };
+};
+
+const isRootRotationTrackTarget = (target = '') => {
+  const normalized = normalizeAnimationTargetName(target);
+  if (!normalized) return false;
+  return ROOT_ROTATION_TARGET_NAMES.has(normalized);
+};
+
+const shouldStripAnimationTrack = (track = {}, options = {}) => {
+  const { target, property } = parseAnimationTrackName(track.name);
+  return Boolean(options.stripObjectPositionScaleTracks && !target && (property === 'position' || property === 'scale'));
+};
+
+export const stripImportedAnimationTracks = (clip = null, options = {}) => {
+  if (!clip?.tracks?.length) return clip;
+  const tracks = clip.tracks.filter((track) => !shouldStripAnimationTrack(track, options));
+  if (tracks.length === clip.tracks.length) return clip;
+  if (!tracks.length) return null;
+  const nextClip = new THREE.AnimationClip(clip.name, clip.duration, tracks);
+  nextClip.blendMode = clip.blendMode;
+  return nextClip;
+};
+
+const findAnimationTargetObject = (object, target = '') => {
+  if (!object || !target) return null;
+  if (object.name === target) return object;
+  return object.getObjectByName?.(target) || null;
+};
+
+const isIdentityQuaternion = (quaternion) => (
+  !quaternion
+  || (
+    Math.abs(Number(quaternion.x) || 0) < 0.00001
+    && Math.abs(Number(quaternion.y) || 0) < 0.00001
+    && Math.abs(Number(quaternion.z) || 0) < 0.00001
+    && Math.abs((Number(quaternion.w) || 1) - 1) < 0.00001
+  )
+);
+
+const convertFbxRootQuaternionTrack = (object, track = {}) => {
+  const { target, property } = parseAnimationTrackName(track.name);
+  if (property !== 'quaternion' || !isRootRotationTrackTarget(target)) return track;
+  const animationTarget = findAnimationTargetObject(object, target);
+  const basisQuaternion = animationTarget?.quaternion;
+  if (isIdentityQuaternion(basisQuaternion)) return track;
+  const values = track.values.slice();
+  const sourceQuaternion = new THREE.Quaternion();
+  const convertedQuaternion = new THREE.Quaternion();
+  for (let index = 0; index < values.length; index += 4) {
+    sourceQuaternion.fromArray(values, index);
+    convertedQuaternion.copy(sourceQuaternion).premultiply(basisQuaternion).normalize();
+    convertedQuaternion.toArray(values, index);
+  }
+  const nextTrack = track.clone();
+  nextTrack.values = values;
+  return nextTrack;
+};
+
+const convertFbxRootQuaternionTracksForObject = (object, clip = null, options = {}) => {
+  if (!options.convertFbxRootQuaternionTracks || !clip?.tracks?.length) return clip;
+  let changed = false;
+  const tracks = clip.tracks.map((track) => {
+    const nextTrack = convertFbxRootQuaternionTrack(object, track);
+    if (nextTrack !== track) changed = true;
+    return nextTrack;
+  });
+  if (!changed) return clip;
+  const nextClip = new THREE.AnimationClip(clip.name, clip.duration, tracks);
+  nextClip.blendMode = clip.blendMode;
+  nextClip.userData = { ...(clip.userData || {}) };
+  return nextClip;
+};
+
+export const prepareImportedAnimationClipForObject = (object, clip = null, options = {}) => (
+  stripImportedAnimationTracks(
+    convertFbxRootQuaternionTracksForObject(object, clip, options),
+    options,
+  )
+);
+
 export const playGltfAnimations = (object, clips = [], options = {}) => {
   const animationClips = clips.filter((clip) => clip && Number(clip.duration) > 0);
   if (!object || !animationClips.length) return null;
 
   const mixer = new THREE.AnimationMixer(object);
-  const selectedClips = options.playAll
+  const rawSelectedClips = options.playAll
     ? animationClips
     : [selectAnimationClip(animationClips, options.preferredNames, {
       fallbackToFirst: options.fallbackToFirst,
     })].filter(Boolean);
+  const selectedClips = rawSelectedClips
+    .map((clip) => prepareImportedAnimationClipForObject(object, clip, options))
+    .filter(Boolean);
   if (!selectedClips.length) return null;
   const timeOffset = Number.isFinite(Number(options.timeOffset)) ? Number(options.timeOffset) : 0;
 
@@ -850,13 +954,15 @@ export const resetObjectBaseTransform = (object) => {
   return true;
 };
 
+const MIN_OBJECT_SCALE_FACTOR = 0.000001;
+
 export const fitObjectToHeight = (object, targetHeight = 2, options = {}) => {
   object.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(object, true);
   const size = box.getSize(new THREE.Vector3());
   if (!Number.isFinite(size.y) || size.y <= 0.0001) return false;
 
-  const scale = Math.max(0.001, targetHeight / size.y);
+  const scale = Math.max(MIN_OBJECT_SCALE_FACTOR, targetHeight / size.y);
   object.scale.multiplyScalar(scale);
   object.updateMatrixWorld(true);
 
@@ -881,9 +987,9 @@ export const applyObjectAxisScaleRatios = (object, axisScale = {}, referenceY = 
     ? Number(axisScale.z) / reference
     : 1;
   object.scale.set(
-    object.scale.x * Math.max(0.001, scaleX),
+    object.scale.x * Math.max(MIN_OBJECT_SCALE_FACTOR, scaleX),
     object.scale.y,
-    object.scale.z * Math.max(0.001, scaleZ),
+    object.scale.z * Math.max(MIN_OBJECT_SCALE_FACTOR, scaleZ),
   );
   object.updateMatrixWorld(true);
 
@@ -914,9 +1020,9 @@ export const fitObjectToDimensions = (object, dimensions = {}, options = {}) => 
   const scaleY = Number.isFinite(targetHeight) && targetHeight > 0 ? targetHeight / size.y : 1;
   const scaleZ = Number.isFinite(targetDepth) && targetDepth > 0 ? targetDepth / size.z : 1;
   object.scale.set(
-    object.scale.x * Math.max(0.001, scaleX),
-    object.scale.y * Math.max(0.001, scaleY),
-    object.scale.z * Math.max(0.001, scaleZ),
+    object.scale.x * Math.max(MIN_OBJECT_SCALE_FACTOR, scaleX),
+    object.scale.y * Math.max(MIN_OBJECT_SCALE_FACTOR, scaleY),
+    object.scale.z * Math.max(MIN_OBJECT_SCALE_FACTOR, scaleZ),
   );
   object.updateMatrixWorld(true);
 

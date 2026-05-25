@@ -270,6 +270,193 @@ describe('rpg3d assets storage helpers', () => {
     });
   });
 
+  it('syncs equipped character inventory models onto placed actors', () => {
+    const config = cloneConfig(DEFAULT_ARCADE_CONFIG);
+    config.player.characterModel3dId = 'hero-model';
+
+    const studioProject = {
+      ...createDefaultStudioProject(),
+      characterModels3d: [{
+        id: 'hero-model',
+        name: 'Hero model',
+        modelUrl: 'https://cdn.example.com/hero.glb',
+        inventory: [{
+          id: 'hero-sword-slot',
+          name: 'Epee de test',
+          type: 'weapon',
+          equipped: true,
+          weaponModel3dId: 'sword-model',
+          weaponModelScale: 1.4,
+          weaponOffsetY: 0.2,
+          weaponRotationZ: 45,
+          weaponGripHand: 'left',
+        }],
+      }],
+      decorModels3d: [{
+        id: 'sword-model',
+        kind: 'inventory-weapon',
+        name: 'Epee inventaire',
+        modelUrl: 'https://cdn.example.com/sword.glb',
+        modelName: 'sword.glb',
+        modelFormat: 'glb',
+        modelFileSize: 321,
+        width: 0.5,
+        depth: 0.1,
+        height: 2,
+        modelRotationX: -90,
+        modelRotationY: 15,
+        modelRotationZ: 45,
+        modelResources: [{ name: 'sword.png', url: 'https://cdn.example.com/sword.png' }],
+        weaponGripLeftEnabled: true,
+        weaponGripLeftY: -0.35,
+        weaponGripLeftRotationZ: 90,
+      }],
+    };
+
+    const synced = syncConfigModelReferences(config, studioProject);
+    const weapon = synced.config.player.inventory.find((item) => item.type === 'weapon');
+
+    expect(synced.changed).toBe(true);
+    expect(weapon).toMatchObject({
+      name: 'Epee de test',
+      equipped: true,
+      weaponModel3dId: 'sword-model',
+      weaponModelUrl: 'https://cdn.example.com/sword.glb',
+      weaponModelName: 'sword.glb',
+      weaponModelFormat: 'glb',
+      weaponModelFileSize: 321,
+      weaponModelScale: 1.4,
+      weaponModelSourceScale: 2,
+      weaponModelRotationX: -90,
+      weaponModelRotationY: 15,
+      weaponModelRotationZ: 45,
+      weaponOffsetY: 0.2,
+      weaponRotationZ: 45,
+      weaponGripHand: 'left',
+      weaponGripReferenceScale: 2,
+      weaponGripLeftEnabled: true,
+      weaponGripLeftY: -0.35,
+      weaponGripLeftRotationZ: 90,
+      sourceCharacterEquipment: true,
+      sourceCharacterModel3dId: 'hero-model',
+    });
+    expect(weapon.weaponModelResources).toEqual([{ name: 'sword.png', url: 'https://cdn.example.com/sword.png' }]);
+  });
+
+  it('updates linked character equipment size from resized inventory models', () => {
+    const config = cloneConfig(DEFAULT_ARCADE_CONFIG);
+    config.player.characterModel3dId = 'hero-model';
+
+    const studioProject = {
+      ...createDefaultStudioProject(),
+      characterModels3d: [{
+        id: 'hero-model',
+        name: 'Hero model',
+        modelUrl: 'https://cdn.example.com/hero.glb',
+        inventory: [{
+          id: 'hero-shield-slot',
+          name: 'Bouclier de test',
+          type: 'shield',
+          equipped: true,
+          weaponModel3dId: 'shield-model',
+        }],
+      }],
+      decorModels3d: [{
+        id: 'shield-model',
+        kind: 'inventory-shield',
+        name: 'Bouclier inventaire',
+        modelUrl: 'https://cdn.example.com/shield.glb',
+        width: 0.4,
+        depth: 0.08,
+        height: 0.6,
+      }],
+    };
+
+    const synced = syncConfigModelReferences(config, studioProject);
+    let shield = synced.config.player.inventory.find((item) => item.type === 'shield');
+    expect(shield.weaponModelScale).toBe(0.6);
+    expect(shield.weaponModelSourceScale).toBe(0.6);
+
+    const resizedProject = {
+      ...studioProject,
+      decorModels3d: [{
+        ...studioProject.decorModels3d[0],
+        width: 0.001,
+        depth: 0.001,
+        height: 0.001,
+      }],
+    };
+
+    const resized = syncConfigModelReferences(synced.config, resizedProject);
+    shield = resized.config.player.inventory.find((item) => item.type === 'shield');
+    expect(shield.weaponModelScale).toBe(0.001);
+    expect(shield.weaponModelSourceScale).toBe(0.001);
+  });
+
+  it('ignores stale direct character equipment urls without a linked inventory model', () => {
+    const config = cloneConfig(DEFAULT_ARCADE_CONFIG);
+    config.player.characterModel3dId = 'hero-model';
+
+    const studioProject = {
+      ...createDefaultStudioProject(),
+      characterModels3d: [{
+        id: 'hero-model',
+        name: 'Hero model',
+        modelUrl: 'https://cdn.example.com/hero.glb',
+        inventory: [{
+          id: 'hero-stale-sword',
+          name: 'Ancienne epee',
+          type: 'weapon',
+          equipped: true,
+          weaponModel3dId: '',
+          weaponModelUrl: 'https://cdn.example.com/old-sword.glb',
+        }],
+      }],
+      decorModels3d: [],
+    };
+
+    const synced = syncConfigModelReferences(config, studioProject);
+
+    expect(synced.config.player.inventory.some((item) => item.sourceCharacterEquipment)).toBe(false);
+    expect(synced.config.player.inventory.some((item) => item.weaponModelUrl === 'https://cdn.example.com/old-sword.glb')).toBe(false);
+  });
+
+  it('syncs legacy named equipment models even when their kind is still decor', () => {
+    const config = cloneConfig(DEFAULT_ARCADE_CONFIG);
+    config.player.characterModel3dId = 'hero-model';
+
+    const studioProject = {
+      ...createDefaultStudioProject(),
+      characterModels3d: [{
+        id: 'hero-model',
+        name: 'Hero model',
+        modelUrl: 'https://cdn.example.com/hero.glb',
+        inventory: [{
+          id: 'hero-sword-slot',
+          name: 'Epee heritee',
+          type: 'weapon',
+          equipped: true,
+          weaponModel3dId: 'legacy-sword',
+        }],
+      }],
+      decorModels3d: [{
+        id: 'legacy-sword',
+        kind: 'decor',
+        name: 'Legacy sword',
+        modelUrl: 'https://cdn.example.com/legacy-sword.glb',
+      }],
+    };
+
+    const synced = syncConfigModelReferences(config, studioProject);
+    const weapon = synced.config.player.inventory.find((item) => item.type === 'weapon');
+
+    expect(weapon).toMatchObject({
+      sourceCharacterEquipment: true,
+      weaponModel3dId: 'legacy-sword',
+      weaponModelUrl: 'https://cdn.example.com/legacy-sword.glb',
+    });
+  });
+
   it('preserves placed object overrides while syncing model asset references', () => {
     const config = cloneConfig(DEFAULT_ARCADE_CONFIG);
     config.player.characterModel3dId = 'hero-model';

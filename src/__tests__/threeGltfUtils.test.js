@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
+import { getPreviewAnimationOptions } from '../utils/rpg3dModelImport.js';
 import {
   fitObjectToHeight,
   getGltfAnimationClips,
@@ -14,7 +15,9 @@ import {
   loadThreeModelFromSource,
   loadGltfFromSource,
   playGltfAnimations,
+  prepareImportedAnimationClipForObject,
   prepareGltfModel,
+  stripImportedAnimationTracks,
   THREE_MODEL_ACCEPT,
   updateGltfModelMaterialAppearance,
 } from '../utils/threeGltfUtils';
@@ -343,6 +346,79 @@ describe('prepareGltfModel', () => {
     mixer.stopAllAction();
   });
 
+  it('prefers atk-named clips for attack previews', () => {
+    const object = new THREE.Object3D();
+    const openerClip = new THREE.AnimationClip('0_Open A_UE5', 1, [
+      new THREE.NumberKeyframeTrack('.position[x]', [0, 1], [0, 1]),
+    ]);
+    const attackClip = new THREE.AnimationClip('counter_atk02', 1, [
+      new THREE.NumberKeyframeTrack('.position[y]', [0, 1], [0, 5]),
+    ]);
+
+    const mixer = playGltfAnimations(object, [openerClip, attackClip], {
+      ...getPreviewAnimationOptions('attack'),
+      timeOffset: 0,
+    });
+
+    expect(mixer).toBeTruthy();
+    mixer.update(0.5);
+    expect(object.position.x).toBe(0);
+    expect(object.position.y).toBeGreaterThan(0);
+    mixer.stopAllAction();
+  });
+
+  it('converts FBX root rotation tracks to the displayed model axis basis', () => {
+    const object = new THREE.Object3D();
+    const root = new THREE.Bone();
+    root.name = 'root';
+    root.quaternion.set(-Math.SQRT1_2, 0, 0, Math.SQRT1_2);
+    object.add(root);
+    const sourceRootQuaternion = new THREE.Quaternion(0, 0, -0.4187, 0.9081).normalize();
+    const clip = new THREE.AnimationClip('counter_atk02', 1, [
+      new THREE.VectorKeyframeTrack('.position', [0, 1], [0, 0, 0, 4, 0, 0]),
+      new THREE.VectorKeyframeTrack('root.position', [0, 1], [0, 0, 0, 0, 0, 0]),
+      new THREE.QuaternionKeyframeTrack('root.quaternion', [0, 1], [
+        ...sourceRootQuaternion.toArray(),
+        ...sourceRootQuaternion.toArray(),
+      ]),
+      new THREE.VectorKeyframeTrack('pelvis.position', [0, 1], [0, 0, 92, 0, 0, 93]),
+      new THREE.QuaternionKeyframeTrack('pelvis.quaternion', [0, 1], [0, 0, 0, 1, 0.707, 0, 0, 0.707]),
+      new THREE.QuaternionKeyframeTrack('hand_r.quaternion', [0, 1], [0, 0, 0, 1, 0.25, 0, 0, 0.968]),
+    ]);
+
+    const cleaned = prepareImportedAnimationClipForObject(object, clip, {
+      convertFbxRootQuaternionTracks: true,
+      stripObjectPositionScaleTracks: true,
+    });
+    const rootTrack = cleaned.tracks.find((track) => track.name === 'root.quaternion');
+    const expectedRootQuaternion = sourceRootQuaternion.clone().premultiply(root.quaternion).normalize();
+
+    expect(cleaned.tracks.map((track) => track.name)).toEqual([
+      'root.position',
+      'root.quaternion',
+      'pelvis.position',
+      'pelvis.quaternion',
+      'hand_r.quaternion',
+    ]);
+    Array.from(rootTrack.values.slice(0, 4)).forEach((value, index) => {
+      expect(value).toBeCloseTo(expectedRootQuaternion.toArray()[index], 4);
+    });
+  });
+
+  it('strips only object-level position and scale tracks when requested', () => {
+    const clip = new THREE.AnimationClip('move', 1, [
+      new THREE.VectorKeyframeTrack('.position', [0, 1], [0, 0, 0, 4, 0, 0]),
+      new THREE.VectorKeyframeTrack('.scale', [0, 1], [1, 1, 1, 2, 2, 2]),
+      new THREE.VectorKeyframeTrack('pelvis.position', [0, 1], [0, 0, 92, 0, 0, 93]),
+    ]);
+
+    const cleaned = stripImportedAnimationTracks(clip, {
+      stripObjectPositionScaleTracks: true,
+    });
+
+    expect(cleaned.tracks.map((track) => track.name)).toEqual(['pelvis.position']);
+  });
+
   it('can skip fallback animation clips when a preferred idle clip is absent', () => {
     const object = new THREE.Object3D();
     const walkClip = new THREE.AnimationClip('walk-relaxed-loop', 2, [
@@ -357,4 +433,5 @@ describe('prepareGltfModel', () => {
     expect(mixer).toBeNull();
     expect(object.position.x).toBe(0);
   });
+
 });

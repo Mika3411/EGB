@@ -16,6 +16,10 @@ import {
   createConfigFromSavedAssets,
   createDefaultStudioProject,
 } from './rpg3dStudioProject.js';
+import {
+  getCharacterRigSignature,
+  normalizeCharacterRigPoints,
+} from './rpg3dCharacterRig.js';
 
 export const ARCADE_ASSETS_STORAGE_KEY = 'escape-game-builder:arcade-assets:v1';
 export const ARCADE_ASSETS_BACKUP_STORAGE_KEY = 'escape-game-builder:arcade-assets-backups:v1';
@@ -131,12 +135,12 @@ export const createLocalModelObjectUrl = async (localModelFileId = '') => {
   return objectUrl;
 };
 
-export const rememberRpg3DLocalBlobFile = (blobUrl = '', file = null, localModelFileId = '') => {
+export const rememberRpg3DLocalBlobFile = (blobUrl = '', file = null, localModelFileId = '', options = {}) => {
   if (!isBlobUrl(blobUrl) || !file) return false;
   localBlobFileCache.set(blobUrl, file);
   if (localModelFileId) {
     localModelObjectUrlCache.set(localModelFileId, blobUrl);
-    persistLocalModelFile(localModelFileId, file);
+    if (options.persist !== false) persistLocalModelFile(localModelFileId, file);
   }
   return true;
 };
@@ -485,6 +489,178 @@ const getModelRotationValue = (item = {}, field = 'modelRotationX') => {
   return clamp(Number.isFinite(numeric) ? numeric : 0, -180, 180);
 };
 
+const getEquipmentHand = (value = '') => (value === 'left' ? 'left' : 'right');
+const getEquipmentArm = (value = '') => (value === 'right' ? 'right' : 'left');
+const EQUIPMENT_MODEL_TYPES = new Set(['weapon', 'shield', 'armor', 'helmet']);
+const isEquipmentModelForType = (model = null, type = '') => (
+  Boolean(model && EQUIPMENT_MODEL_TYPES.has(type) && getStudioModelSource(model))
+);
+const EQUIPMENT_MODEL_SCALE_MIN = 0.001;
+const EQUIPMENT_MODEL_SCALE_MAX = 8;
+const ARMOR_SEGMENT_VALUES = new Set(['body', 'left-arm', 'right-arm']);
+const normalizeArmorSegmentAssignments = (assignments = []) => (
+  Array.isArray(assignments)
+    ? assignments.map((entry) => ({
+      path: String(entry?.path || '').slice(0, 260),
+      name: String(entry?.name || '').slice(0, 120),
+      segment: ARMOR_SEGMENT_VALUES.has(entry?.segment) ? entry.segment : 'body',
+    })).filter((entry) => entry.path)
+    : []
+);
+const normalizeArmorCutContourPoint = (point = {}) => ({
+  x: clamp(Number(point?.x) || 0, -2, 2),
+  y: clamp(Number(point?.y) || 0, -2, 2),
+  z: clamp(Number(point?.z) || 0, -2, 2),
+  ...normalizeArmorPaintSurfaceNormal(point),
+});
+const normalizeArmorPaintSurfaceNormal = (point = {}) => {
+  const nx = Number(point?.nx);
+  const ny = Number(point?.ny);
+  const nz = Number(point?.nz);
+  if (!Number.isFinite(nx) || !Number.isFinite(ny) || !Number.isFinite(nz)) return {};
+  const length = Math.hypot(nx, ny, nz);
+  if (length <= 0.001) return {};
+  return {
+    nx: nx / length,
+    ny: ny / length,
+    nz: nz / length,
+  };
+};
+const normalizeArmorCutContours = (contours = []) => {
+  const entries = Array.isArray(contours)
+    ? contours
+    : Object.entries(contours || {}).map(([segment, points]) => ({ segment, points }));
+  return entries
+    .map((entry) => ({
+      segment: ARMOR_SEGMENT_VALUES.has(entry?.segment) ? entry.segment : 'body',
+      points: (Array.isArray(entry?.points) ? entry.points : [])
+        .slice(0, 80)
+        .map(normalizeArmorCutContourPoint),
+    }))
+    .filter((entry) => entry.points.length);
+};
+const normalizeArmorCutPaintStrokes = (strokes = []) => {
+  const entries = Array.isArray(strokes)
+    ? strokes
+    : Object.entries(strokes || {}).map(([segment, points]) => ({ segment, points }));
+  return entries
+    .map((entry) => ({
+      segment: ARMOR_SEGMENT_VALUES.has(entry?.segment) ? entry.segment : 'body',
+      radius: clamp(Number(entry?.radius) || 0.14, 0.04, 0.5),
+      points: (Array.isArray(entry?.points) ? entry.points : [])
+        .slice(0, 240)
+        .map(normalizeArmorCutContourPoint),
+    }))
+    .filter((entry) => entry.points.length);
+};
+const ARMOR_GRIP_POINTS = [
+  { suffix: 'LeftShoulder', defaultX: -0.45, defaultY: 0.55, defaultZ: 0 },
+  { suffix: 'RightShoulder', defaultX: 0.45, defaultY: 0.55, defaultZ: 0 },
+  { suffix: 'LeftElbow', defaultX: -0.65, defaultY: 0.05, defaultZ: 0 },
+  { suffix: 'RightElbow', defaultX: 0.65, defaultY: 0.05, defaultZ: 0 },
+  { suffix: 'LowerBelly', defaultX: 0, defaultY: -0.55, defaultZ: 0 },
+];
+const getEquipmentGripReferenceScale = (source = {}) => {
+  const legacyScale = Number.isFinite(Number(source.scale)) && Number(source.scale) > 0 ? Number(source.scale) : 1;
+  const dimensions = [
+    Number(source.width) || 0,
+    Number(source.height) || 0,
+    Number(source.depth) || 0,
+  ].map((value) => value * legacyScale).filter((value) => Number.isFinite(value) && value > 0.0001);
+  if (dimensions.length) return clamp(Math.max(...dimensions), EQUIPMENT_MODEL_SCALE_MIN, 120);
+  const explicitScale = Number(source.weaponGripReferenceScale);
+  return Number.isFinite(explicitScale) && explicitScale > 0.0001
+    ? clamp(explicitScale, EQUIPMENT_MODEL_SCALE_MIN, 120)
+    : 1;
+};
+const getShieldGripReferenceScale = (source = {}) => {
+  const explicitScale = Number(source.shieldGripReferenceScale);
+  return Number.isFinite(explicitScale) && explicitScale > 0.0001
+    ? clamp(explicitScale, EQUIPMENT_MODEL_SCALE_MIN, 120)
+    : getEquipmentGripReferenceScale(source);
+};
+const getArmorGripReferenceScale = (source = {}) => {
+  const explicitScale = Number(source.armorGripReferenceScale);
+  return Number.isFinite(explicitScale) && explicitScale > 0.0001
+    ? clamp(explicitScale, EQUIPMENT_MODEL_SCALE_MIN, 120)
+    : getEquipmentGripReferenceScale(source);
+};
+const getEquipmentModelReferenceScale = (source = {}) => (
+  clamp(getEquipmentGripReferenceScale(source), EQUIPMENT_MODEL_SCALE_MIN, EQUIPMENT_MODEL_SCALE_MAX)
+);
+const getStoredEquipmentSourceScale = (item = {}) => {
+  const sourceScale = Number(item.weaponModelSourceScale);
+  return Number.isFinite(sourceScale) && sourceScale > 0
+    ? clamp(sourceScale, EQUIPMENT_MODEL_SCALE_MIN, EQUIPMENT_MODEL_SCALE_MAX)
+    : 0;
+};
+const resolveLinkedEquipmentModelScale = (item = {}, source = null) => {
+  const currentScale = Number(item.weaponModelScale);
+  if (!source) {
+    return clamp(Number.isFinite(currentScale) && currentScale > 0 ? currentScale : 1, EQUIPMENT_MODEL_SCALE_MIN, EQUIPMENT_MODEL_SCALE_MAX);
+  }
+  const sourceScale = getEquipmentModelReferenceScale(source);
+  const previousSourceScale = getStoredEquipmentSourceScale(item);
+  if (previousSourceScale > 0) {
+    const itemScale = Number.isFinite(currentScale) && currentScale > 0 ? currentScale : previousSourceScale;
+    return clamp(sourceScale * (itemScale / previousSourceScale), EQUIPMENT_MODEL_SCALE_MIN, EQUIPMENT_MODEL_SCALE_MAX);
+  }
+  if (Number.isFinite(currentScale) && currentScale > 0 && Math.abs(currentScale - 1) > 0.0001) {
+    return clamp(currentScale, EQUIPMENT_MODEL_SCALE_MIN, EQUIPMENT_MODEL_SCALE_MAX);
+  }
+  return sourceScale;
+};
+const getEquipmentModelRotationValue = (source = {}, axis = 'X') => {
+  const modelField = `weaponModelRotation${axis}`;
+  if (source[modelField] !== undefined && source[modelField] !== null && source[modelField] !== '') {
+    return getModelRotationValue(source, modelField);
+  }
+  return getModelRotationValue(source, `modelRotation${axis}`);
+};
+const getEquipmentGripFields = (source = {}) => ({
+  weaponModelRotationX: getEquipmentModelRotationValue(source, 'X'),
+  weaponModelRotationY: getEquipmentModelRotationValue(source, 'Y'),
+  weaponModelRotationZ: getEquipmentModelRotationValue(source, 'Z'),
+  weaponGripHand: getEquipmentHand(source.weaponGripHand),
+  weaponGripReferenceScale: getEquipmentGripReferenceScale(source),
+  weaponGripRightEnabled: Boolean(source.weaponGripRightEnabled),
+  weaponGripRightX: clamp(Number(source.weaponGripRightX) || 0, -2, 2),
+  weaponGripRightY: clamp(Number(source.weaponGripRightY) || 0, -2, 2),
+  weaponGripRightZ: clamp(Number(source.weaponGripRightZ) || 0, -2, 2),
+  weaponGripRightRotationX: getModelRotationValue(source, 'weaponGripRightRotationX'),
+  weaponGripRightRotationY: getModelRotationValue(source, 'weaponGripRightRotationY'),
+  weaponGripRightRotationZ: getModelRotationValue(source, 'weaponGripRightRotationZ'),
+  weaponGripLeftEnabled: Boolean(source.weaponGripLeftEnabled),
+  weaponGripLeftX: clamp(Number(source.weaponGripLeftX) || 0, -2, 2),
+  weaponGripLeftY: clamp(Number(source.weaponGripLeftY) || 0, -2, 2),
+  weaponGripLeftZ: clamp(Number(source.weaponGripLeftZ) || 0, -2, 2),
+  weaponGripLeftRotationX: getModelRotationValue(source, 'weaponGripLeftRotationX'),
+  weaponGripLeftRotationY: getModelRotationValue(source, 'weaponGripLeftRotationY'),
+  weaponGripLeftRotationZ: getModelRotationValue(source, 'weaponGripLeftRotationZ'),
+  shieldGripArm: getEquipmentArm(source.shieldGripArm),
+  shieldGripReferenceScale: getShieldGripReferenceScale(source),
+  shieldGripHandEnabled: Boolean(source.shieldGripHandEnabled),
+  shieldGripHandX: clamp(Number(source.shieldGripHandX) || 0, -2, 2),
+  shieldGripHandY: clamp(Number(source.shieldGripHandY) || -0.35, -2, 2),
+  shieldGripHandZ: clamp(Number(source.shieldGripHandZ) || 0, -2, 2),
+  shieldGripElbowEnabled: Boolean(source.shieldGripElbowEnabled),
+  shieldGripElbowX: clamp(Number(source.shieldGripElbowX) || 0, -2, 2),
+  shieldGripElbowY: clamp(Number(source.shieldGripElbowY) || 0.35, -2, 2),
+  shieldGripElbowZ: clamp(Number(source.shieldGripElbowZ) || 0, -2, 2),
+  armorGripReferenceScale: getArmorGripReferenceScale(source),
+  ...ARMOR_GRIP_POINTS.reduce((fields, point) => ({
+    ...fields,
+    [`armorGrip${point.suffix}Enabled`]: Boolean(source[`armorGrip${point.suffix}Enabled`]),
+    [`armorGrip${point.suffix}X`]: clamp(Number(source[`armorGrip${point.suffix}X`]) || point.defaultX, -2, 2),
+    [`armorGrip${point.suffix}Y`]: clamp(Number(source[`armorGrip${point.suffix}Y`]) || point.defaultY, -2, 2),
+    [`armorGrip${point.suffix}Z`]: clamp(Number(source[`armorGrip${point.suffix}Z`]) || point.defaultZ, -2, 2),
+  }), {}),
+  armorCanvasCutEnabled: Boolean(source.armorCanvasCutEnabled),
+  armorSegmentAssignments: normalizeArmorSegmentAssignments(source.armorSegmentAssignments),
+  armorCutContours: normalizeArmorCutContours(source.armorCutContours),
+  armorCutPaintStrokes: normalizeArmorCutPaintStrokes(source.armorCutPaintStrokes),
+});
+
 export const syncConfigModelReferences = (config, studioProject, options = {}) => {
   const next = createConfigFromSavedAssets(config);
   let changed = false;
@@ -508,6 +684,127 @@ export const syncConfigModelReferences = (config, studioProject, options = {}) =
     if (hasValue && defaultValue !== undefined && currentValue !== defaultValue) return;
     setField(actor, field, value);
   };
+  const getCharacterModelEquipmentInventory = (model = {}) => (
+    (Array.isArray(model?.inventory) ? model.inventory : [])
+      .filter((item) => EQUIPMENT_MODEL_TYPES.has(item?.type))
+      .map((item, index) => {
+        const modelId = item.weaponModel3dId || item.model3dId || '';
+        const equipmentModel = decorModels.get(modelId);
+        if (!isEquipmentModelForType(equipmentModel, item.type)) return null;
+        const source = getModelSourceForMode(equipmentModel, options);
+        if (!source) return null;
+        return {
+          id: `${model.id || 'character'}-${item.type}-${modelId || index}`,
+          name: item.name || (item.type === 'shield' ? 'Bouclier' : (item.type === 'armor' ? 'Armure' : (item.type === 'helmet' ? 'Casque' : 'Arme'))),
+          type: item.type,
+          quantity: 1,
+          effect: item.effect || '',
+          equipped: item.equipped !== false,
+          weaponModel3dId: modelId,
+          weaponModelUrl: source,
+          weaponModelName: equipmentModel.modelName || equipmentModel.name || item.weaponModelName || item.modelName || '',
+          weaponModelFormat: equipmentModel.modelFormat || item.weaponModelFormat || item.modelFormat || '',
+          weaponModelFileSize: Number(equipmentModel.modelFileSize || item.weaponModelFileSize || item.modelFileSize) || 0,
+          weaponModelResources: Array.isArray(equipmentModel.modelResources)
+            ? equipmentModel.modelResources
+            : (Array.isArray(item.weaponModelResources)
+              ? item.weaponModelResources
+              : (Array.isArray(item.modelResources) ? item.modelResources : [])),
+          weaponModelScale: resolveLinkedEquipmentModelScale(item, equipmentModel),
+          weaponModelSourceScale: getEquipmentModelReferenceScale(equipmentModel),
+          weaponOffsetX: Number(item.weaponOffsetX) || 0,
+          weaponOffsetY: Number(item.weaponOffsetY) || 0,
+          weaponOffsetZ: Number(item.weaponOffsetZ) || 0,
+          weaponRotationX: Number(item.weaponRotationX) || 0,
+          weaponRotationY: Number(item.weaponRotationY) || 0,
+          weaponRotationZ: Number(item.weaponRotationZ) || 0,
+          ...getEquipmentGripFields({
+            ...equipmentModel,
+            weaponGripHand: item.weaponGripHand || equipmentModel.weaponGripHand,
+            shieldGripArm: item.shieldGripArm || equipmentModel.shieldGripArm,
+          }),
+          sourceCharacterEquipment: true,
+          sourceCharacterModel3dId: model.id || '',
+        };
+      })
+      .filter((item) => item && item.equipped && item.weaponModel3dId && item.weaponModelUrl)
+  );
+  const getInventorySignature = (items = []) => JSON.stringify((Array.isArray(items) ? items : []).map((item) => ({
+    id: item?.id || '',
+    type: item?.type || '',
+    equipped: Boolean(item?.equipped),
+    weaponModel3dId: item?.weaponModel3dId || '',
+    weaponModelUrl: item?.weaponModelUrl || '',
+    weaponModelName: item?.weaponModelName || '',
+    weaponModelScale: Number(item?.weaponModelScale) || 1,
+    weaponModelSourceScale: getStoredEquipmentSourceScale(item),
+    weaponModelRotationX: getEquipmentModelRotationValue(item, 'X'),
+    weaponModelRotationY: getEquipmentModelRotationValue(item, 'Y'),
+    weaponModelRotationZ: getEquipmentModelRotationValue(item, 'Z'),
+    weaponOffsetX: Number(item?.weaponOffsetX) || 0,
+    weaponOffsetY: Number(item?.weaponOffsetY) || 0,
+    weaponOffsetZ: Number(item?.weaponOffsetZ) || 0,
+    weaponRotationX: Number(item?.weaponRotationX) || 0,
+    weaponRotationY: Number(item?.weaponRotationY) || 0,
+    weaponRotationZ: Number(item?.weaponRotationZ) || 0,
+    weaponGripHand: getEquipmentHand(item?.weaponGripHand),
+    weaponGripRightEnabled: Boolean(item?.weaponGripRightEnabled),
+    weaponGripRightX: Number(item?.weaponGripRightX) || 0,
+    weaponGripRightY: Number(item?.weaponGripRightY) || 0,
+    weaponGripRightZ: Number(item?.weaponGripRightZ) || 0,
+    weaponGripRightRotationX: Number(item?.weaponGripRightRotationX) || 0,
+    weaponGripRightRotationY: Number(item?.weaponGripRightRotationY) || 0,
+    weaponGripRightRotationZ: Number(item?.weaponGripRightRotationZ) || 0,
+    weaponGripLeftEnabled: Boolean(item?.weaponGripLeftEnabled),
+    weaponGripLeftX: Number(item?.weaponGripLeftX) || 0,
+    weaponGripLeftY: Number(item?.weaponGripLeftY) || 0,
+    weaponGripLeftZ: Number(item?.weaponGripLeftZ) || 0,
+    weaponGripLeftRotationX: Number(item?.weaponGripLeftRotationX) || 0,
+    weaponGripLeftRotationY: Number(item?.weaponGripLeftRotationY) || 0,
+    weaponGripLeftRotationZ: Number(item?.weaponGripLeftRotationZ) || 0,
+    shieldGripArm: getEquipmentArm(item?.shieldGripArm),
+    shieldGripReferenceScale: Number(item?.shieldGripReferenceScale) || 1,
+    shieldGripHandEnabled: Boolean(item?.shieldGripHandEnabled),
+    shieldGripHandX: Number(item?.shieldGripHandX) || 0,
+    shieldGripHandY: Number(item?.shieldGripHandY) || 0,
+    shieldGripHandZ: Number(item?.shieldGripHandZ) || 0,
+    shieldGripElbowEnabled: Boolean(item?.shieldGripElbowEnabled),
+    shieldGripElbowX: Number(item?.shieldGripElbowX) || 0,
+    shieldGripElbowY: Number(item?.shieldGripElbowY) || 0,
+    shieldGripElbowZ: Number(item?.shieldGripElbowZ) || 0,
+    armorGripReferenceScale: Number(item?.armorGripReferenceScale) || 1,
+    ...ARMOR_GRIP_POINTS.reduce((fields, point) => ({
+      ...fields,
+      [`armorGrip${point.suffix}Enabled`]: Boolean(item?.[`armorGrip${point.suffix}Enabled`]),
+      [`armorGrip${point.suffix}X`]: Number(item?.[`armorGrip${point.suffix}X`]) || point.defaultX,
+      [`armorGrip${point.suffix}Y`]: Number(item?.[`armorGrip${point.suffix}Y`]) || point.defaultY,
+      [`armorGrip${point.suffix}Z`]: Number(item?.[`armorGrip${point.suffix}Z`]) || point.defaultZ,
+    }), {}),
+    armorCanvasCutEnabled: Boolean(item?.armorCanvasCutEnabled),
+    armorSegmentAssignments: normalizeArmorSegmentAssignments(item?.armorSegmentAssignments),
+    armorCutContours: normalizeArmorCutContours(item?.armorCutContours),
+    armorCutPaintStrokes: normalizeArmorCutPaintStrokes(item?.armorCutPaintStrokes),
+    sourceCharacterEquipment: Boolean(item?.sourceCharacterEquipment),
+    sourceCharacterModel3dId: item?.sourceCharacterModel3dId || '',
+  })));
+  const syncActorCharacterEquipment = (actor, model = null) => {
+    if (!actor) return;
+    const currentInventory = Array.isArray(actor.inventory) ? actor.inventory : [];
+    const baseInventory = currentInventory.filter((item) => !item?.sourceCharacterEquipment);
+    const equipment = getCharacterModelEquipmentInventory(model || {});
+    const equipmentTypes = new Set(equipment.map((item) => item.type));
+    const nextInventory = equipment.length
+      ? [
+        ...baseInventory.map((item) => (
+          equipmentTypes.has(item?.type) ? { ...item, equipped: false } : item
+        )),
+        ...equipment,
+      ]
+      : baseInventory;
+    if (getInventorySignature(currentInventory) !== getInventorySignature(nextInventory)) {
+      setField(actor, 'inventory', nextInventory);
+    }
+  };
   const syncActor = (actor) => {
     if (!actor) return;
     const model = characterModels.get(actor.characterModel3dId);
@@ -519,6 +816,10 @@ export const syncConfigModelReferences = (config, studioProject, options = {}) =
       setActorModelDefaultField(actor, 'characterModelScaleZ', axisScale.z);
       setActorModelDefaultField(actor, 'characterModelScaleProportional', model.characterModelScaleProportional !== false);
       setActorModelDefaultField(actor, 'characterMaterialBrightness', getStudioMaterialBrightness(model));
+      if (getCharacterRigSignature(actor.characterRigPoints) !== getCharacterRigSignature(model.characterRigPoints)) {
+        setField(actor, 'characterRigPoints', normalizeCharacterRigPoints(model.characterRigPoints));
+      }
+      syncActorCharacterEquipment(actor, model);
       const source = getModelSourceForMode(model, options);
       if (source) {
         setField(actor, 'characterModelUrl', source);
@@ -554,15 +855,23 @@ export const syncConfigModelReferences = (config, studioProject, options = {}) =
       setField(actor, 'characterModelScaleZ', 1);
       setField(actor, 'characterModelScaleProportional', true);
       setField(actor, 'characterMaterialBrightness', 1);
+      if (
+        Array.isArray(actor.characterRigPoints)
+        && actor.characterRigPoints.length
+        && getCharacterRigSignature(actor.characterRigPoints) !== getCharacterRigSignature([])
+      ) {
+        setField(actor, 'characterRigPoints', []);
+      }
+      syncActorCharacterEquipment(actor, null);
       if (actor.characterRenderMode === 'glb') setField(actor, 'characterRenderMode', 'capsule');
     }
   };
   const syncActorInventoryWeapons = (actor) => {
     if (!actor || !Array.isArray(actor.inventory)) return;
     actor.inventory.forEach((item) => {
-      if (item?.type !== 'weapon' && item?.type !== 'shield') return;
+      if (!EQUIPMENT_MODEL_TYPES.has(item?.type)) return;
       const model = decorModels.get(item.weaponModel3dId);
-      if (model) {
+      if (isEquipmentModelForType(model, item.type)) {
         const source = getModelSourceForMode(model, options);
         if (source) {
           setField(item, 'weaponModelUrl', source);
@@ -570,6 +879,14 @@ export const syncConfigModelReferences = (config, studioProject, options = {}) =
           setField(item, 'weaponModelFormat', model.modelFormat || '');
           setField(item, 'weaponModelFileSize', Number(model.modelFileSize) || 0);
           setField(item, 'weaponModelResources', Array.isArray(model.modelResources) ? model.modelResources : []);
+          setField(item, 'weaponModelScale', resolveLinkedEquipmentModelScale(item, model));
+          setField(item, 'weaponModelSourceScale', getEquipmentModelReferenceScale(model));
+          const gripFields = getEquipmentGripFields({
+            ...model,
+            weaponGripHand: item.weaponGripHand || model.weaponGripHand,
+            shieldGripArm: item.shieldGripArm || model.shieldGripArm,
+          });
+          Object.entries(gripFields).forEach(([field, value]) => setField(item, field, value));
           return;
         }
         setField(item, 'weaponModelUrl', '');
@@ -577,13 +894,15 @@ export const syncConfigModelReferences = (config, studioProject, options = {}) =
         setField(item, 'weaponModelFormat', '');
         setField(item, 'weaponModelFileSize', 0);
         setField(item, 'weaponModelResources', []);
-      } else if (item.weaponModel3dId || isBlobUrl(item.weaponModelUrl)) {
+        setField(item, 'weaponModelSourceScale', 0);
+      } else if (item.weaponModel3dId || item.weaponModelUrl) {
         setField(item, 'weaponModel3dId', '');
         setField(item, 'weaponModelUrl', '');
         setField(item, 'weaponModelName', '');
         setField(item, 'weaponModelFormat', '');
         setField(item, 'weaponModelFileSize', 0);
         setField(item, 'weaponModelResources', []);
+        setField(item, 'weaponModelSourceScale', 0);
         setField(item, 'equipped', false);
       }
     });

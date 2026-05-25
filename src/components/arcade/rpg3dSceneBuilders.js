@@ -42,7 +42,12 @@ export {
   getCharacterRenderMode,
   getEnemyCharacterId,
   getHeroCharacterId,
+  getEquippedArmorItem,
+  findArmorSocket,
+  findArmorArmSocket,
+  addEquippedArmorToActorModel,
   syncEditableDynamicEntities,
+  updateFingerTipsWeaponSockets,
   updateDynamicTransforms,
 } from './rpg3dSceneActors.js';
 

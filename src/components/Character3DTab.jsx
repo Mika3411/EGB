@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Cuboid,
+  HardHat,
   Maximize2,
   Minimize2,
   PanelLeftOpen,
@@ -19,12 +20,13 @@ import {
   CHARACTER_MATERIAL_BRIGHTNESS_MIN,
   CHARACTER_MODEL_SCALE_MAX,
   CHARACTER_MODEL_SCALE_MIN,
+  getAnimationBaseSlotId,
+  getAnimationEntriesForSlot,
   getAnimationSource,
   getCharacterModelAxisScale,
   getCharacterImportFileInfo,
   getCharacterMaterialBrightness,
   getEmbeddedAnimationSignature,
-  getPreviewAnimationSlot,
   getPreviewLightIntensity,
   getPreviewLightOrientation,
   isCharacterModelScaleProportional,
@@ -41,8 +43,11 @@ import {
 import {
   createLocalModelFileId,
   forgetRpg3DLocalBlobFile,
+  persistLocalModelFile,
   rememberRpg3DLocalBlobFile,
 } from '../utils/rpg3dAssetsCore.js';
+import { getStudioDecorKindId } from '../utils/rpg3dDomain.js';
+import { formatBytes } from '../utils/glbOptimizer';
 import HelpLabel from './forms/HelpLabel.jsx';
 
 const Character3DPreview = React.lazy(() => import('./rpg3d/Character3DPreview.jsx'));
@@ -55,9 +60,10 @@ const ROLE_OPTIONS = [
 
 const CHARACTER_FIELD_HELP = {
   name: 'Nom interne et visible du personnage dans les listes du builder 3D.',
-  glbImport: 'Charge ou remplace le modele 3D du personnage au format .glb, .fbx, .obj ou .zip. Pour un FBX avec dossier .fbm, importe un zip contenant le FBX et ses textures.',
-  animationImport: 'Ajoute un FBX/GLB d animation qui utilise le meme squelette que le modele principal. La marche joue pendant le deplacement, l attaque pendant le tir ou le sort.',
+  glbImport: 'Charge ou remplace le modele 3D du personnage avec son animation stand-by de base au format .glb, .fbx, .obj ou .zip. Pour un FBX avec dossier .fbm, importe un zip contenant le FBX et ses textures.',
+  animationImport: 'Ajoute un FBX/GLB d animation qui utilise le meme squelette que le modele principal. Le stand-by joue quand le joueur est arrete, la marche pendant le deplacement, l attaque pendant le tir ou le sort.',
   characterModelScale: 'Regle les axes du personnage quand il est place sur la carte RPG 3D. X elargit, Y regle la profondeur, Z regle la hauteur.',
+  equipment: 'Choisit une arme, un casque, une armure ou un bouclier cree dans Objets 3D > Inventaire pour l associer au personnage.',
   materialBrightness: 'Regle la luminosite de ce personnage quand il est place sur la carte RPG 3D.',
   previewLightIntensity: 'Regle la puissance de l eclairage dans l apercu personnage. Cela aide a verifier les volumes et les textures.',
   previewLightOrientation: 'Tourne la lumiere principale autour du personnage pour controler les ombres dans l apercu.',
@@ -72,26 +78,88 @@ const ensureCharacterModels = (draft) => {
   return draft.characterModels3d;
 };
 
-const FieldRange = ({ label, help, value, min, max, step = 0.05, onChange }) => (
-  <label className="character3d-range">
-    <span>
-      <CharacterHelpLabel help={help}>{label}</CharacterHelpLabel>
-      <em>{Number(value).toFixed(step < 1 ? 2 : 0)}</em>
-    </span>
-    <input type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} />
-  </label>
-);
-
 const CHARACTER_SCALE_AXES = [
   { id: 'x', label: 'X' },
   { id: 'y', label: 'Y' },
   { id: 'z', label: 'Z' },
 ];
+const CHARACTER_EQUIPMENT_SLOTS = [
+  { type: 'weapon', label: 'Arme', kind: 'inventory-weapon', icon: Swords },
+  { type: 'helmet', label: 'Casque', kind: 'inventory-helmet', icon: HardHat },
+  { type: 'armor', label: 'Armure', kind: 'inventory-armor', icon: Cuboid },
+  { type: 'shield', label: 'Bouclier', kind: 'inventory-shield', icon: Shield },
+];
+const CHARACTER_EQUIPMENT_TYPES = new Set(CHARACTER_EQUIPMENT_SLOTS.map((slot) => slot.type));
+const getCharacterEquipmentLabel = (type = 'weapon') => (
+  CHARACTER_EQUIPMENT_SLOTS.find((slot) => slot.type === type)?.label || 'Arme'
+);
+const CHARACTER_EQUIPMENT_KIND_BY_TYPE = CHARACTER_EQUIPMENT_SLOTS.reduce((map, slot) => ({
+  ...map,
+  [slot.type]: slot.kind,
+}), {});
+const normalizeEquipmentKindText = (value = '') => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase();
+const inferEquipmentKindFromModel = (model = {}) => {
+  const kind = getStudioDecorKindId(model.kind);
+  if (Object.values(CHARACTER_EQUIPMENT_KIND_BY_TYPE).includes(kind)) return kind;
+  const haystack = normalizeEquipmentKindText([
+    model.name,
+    model.modelName,
+    model.imageName,
+    model.kind,
+  ].filter(Boolean).join(' '));
+  if (/(bouclier|shield|buckler|targe)/.test(haystack)) return 'inventory-shield';
+  if (/(arme|weapon|sword|epee|blade|lame|hache|axe|mace|massue|dagger|dague|bow|arc|staff|baton)/.test(haystack)) return 'inventory-weapon';
+  if (/(helmet|casque|helm)/.test(haystack)) return 'inventory-helmet';
+  if (/(armure|armor|armour|cuirasse|plastron|chestplate|breastplate)/.test(haystack)) return 'inventory-armor';
+  return kind;
+};
+const hasEquipmentModelSource = (model = null) => (
+  Boolean(model && (getThreeModelSource(model) || model.localModelFileId))
+);
+const getEquipmentOptionsForSlot = (models = [], slot = {}) => {
+  const exactMatches = [];
+  const fallbackMatches = [];
+  models.forEach((model) => {
+    if (inferEquipmentKindFromModel(model) === slot.kind) exactMatches.push(model);
+    else fallbackMatches.push(model);
+  });
+  return [...exactMatches, ...fallbackMatches];
+};
+const CHARACTER_EQUIPMENT_SCALE_MIN = 0.001;
+const CHARACTER_EQUIPMENT_SCALE_MAX = 8;
+const CHARACTER_EQUIPMENT_OFFSET_MIN = -2;
+const CHARACTER_EQUIPMENT_OFFSET_MAX = 2;
+const CHARACTER_EQUIPMENT_HANDS = [
+  { id: 'right', label: 'Main droite' },
+  { id: 'left', label: 'Main gauche' },
+];
+const ARMOR_GRIP_POINTS = [
+  { suffix: 'LeftShoulder', defaultX: -0.45, defaultY: 0.55, defaultZ: 0 },
+  { suffix: 'RightShoulder', defaultX: 0.45, defaultY: 0.55, defaultZ: 0 },
+  { suffix: 'LeftElbow', defaultX: -0.65, defaultY: 0.05, defaultZ: 0 },
+  { suffix: 'RightElbow', defaultX: 0.65, defaultY: 0.05, defaultZ: 0 },
+  { suffix: 'LowerBelly', defaultX: 0, defaultY: -0.55, defaultZ: 0 },
+];
+const CHARACTER_LOCAL_CONVERSION_QUALITY = 'source-meshopt';
+const CHARACTER_ANIMATION_LOCAL_CONVERSION_QUALITY = 'animation-source-v2';
+const characterLocalConversionCache = new Map();
 const formatDraftNumber = (value) => (Number.isFinite(Number(value)) ? String(Number(value)) : '');
 const normalizeDraftNumber = (value = '') => String(value ?? '').trim().replace(',', '.');
 const isValidDraftNumber = (value = '') => {
   const normalized = normalizeDraftNumber(value);
   return normalized !== '' && Number.isFinite(Number(normalized));
+};
+const getStepDecimals = (step = 1) => {
+  const stepText = String(step);
+  return stepText.includes('.') ? stepText.split('.')[1].length : 0;
+};
+const formatNumericFieldValue = (value, step = 1) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return '';
+  return numeric.toFixed(getStepDecimals(step));
 };
 const toCharacterUserAxes = (axisScale = {}) => ({
   x: axisScale.x,
@@ -99,11 +167,724 @@ const toCharacterUserAxes = (axisScale = {}) => ({
   z: axisScale.y,
 });
 
+const FieldNumber = ({ label, help, value, min, max, step = 1, onChange }) => {
+  const [draft, setDraft] = useState(() => formatNumericFieldValue(value, step));
+
+  useEffect(() => {
+    setDraft(formatNumericFieldValue(value, step));
+  }, [step, value]);
+
+  const commitDraft = useCallback((rawValue = draft) => {
+    if (!isValidDraftNumber(rawValue)) {
+      setDraft(formatNumericFieldValue(value, step));
+      return;
+    }
+    const minValue = Number.isFinite(Number(min)) ? Number(min) : -999;
+    const maxValue = Number.isFinite(Number(max)) ? Number(max) : 999;
+    const nextValue = numberValue(normalizeDraftNumber(rawValue), value, minValue, maxValue);
+    setDraft(formatNumericFieldValue(nextValue, step));
+    onChange(nextValue);
+  }, [draft, max, min, onChange, step, value]);
+
+  return (
+    <label className="character3d-number-field">
+      <span><CharacterHelpLabel help={help}>{label}</CharacterHelpLabel></span>
+      <input
+        type="number"
+        min={min}
+        max={max}
+        step={step}
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={(event) => commitDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            commitDraft(event.currentTarget.value);
+            event.currentTarget.blur();
+          }
+          if (event.key === 'Escape') {
+            setDraft(formatNumericFieldValue(value, step));
+            event.currentTarget.blur();
+          }
+        }}
+      />
+    </label>
+  );
+};
+
+const clampEquipmentNumber = (value, fallback, min, max) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(min, Math.min(max, numeric));
+};
+
+const normalizeEquipmentHand = (value = '') => (
+  value === 'left' ? 'left' : 'right'
+);
+const normalizeEquipmentArm = (value = '') => (
+  value === 'right' ? 'right' : 'left'
+);
+const ARMOR_SEGMENT_VALUES = new Set(['body', 'left-arm', 'right-arm']);
+const normalizeArmorSegmentAssignments = (assignments = []) => (
+  Array.isArray(assignments)
+    ? assignments.map((entry) => ({
+      path: String(entry?.path || '').slice(0, 260),
+      name: String(entry?.name || '').slice(0, 120),
+      segment: ARMOR_SEGMENT_VALUES.has(entry?.segment) ? entry.segment : 'body',
+    })).filter((entry) => entry.path)
+    : []
+);
+const normalizeArmorCutContourPoint = (point = {}) => ({
+  x: clampEquipmentNumber(point?.x, 0, -2, 2),
+  y: clampEquipmentNumber(point?.y, 0, -2, 2),
+  z: clampEquipmentNumber(point?.z, 0, -2, 2),
+  ...normalizeArmorPaintSurfaceNormal(point),
+});
+const normalizeArmorPaintSurfaceNormal = (point = {}) => {
+  const nx = Number(point?.nx);
+  const ny = Number(point?.ny);
+  const nz = Number(point?.nz);
+  if (!Number.isFinite(nx) || !Number.isFinite(ny) || !Number.isFinite(nz)) return {};
+  const length = Math.hypot(nx, ny, nz);
+  if (length <= 0.001) return {};
+  return {
+    nx: nx / length,
+    ny: ny / length,
+    nz: nz / length,
+  };
+};
+const normalizeArmorCutContours = (contours = []) => {
+  const entries = Array.isArray(contours)
+    ? contours
+    : Object.entries(contours || {}).map(([segment, points]) => ({ segment, points }));
+  return entries
+    .map((entry) => ({
+      segment: ARMOR_SEGMENT_VALUES.has(entry?.segment) ? entry.segment : 'body',
+      points: (Array.isArray(entry?.points) ? entry.points : [])
+        .slice(0, 80)
+        .map(normalizeArmorCutContourPoint),
+    }))
+    .filter((entry) => entry.points.length);
+};
+const normalizeArmorCutPaintStrokes = (strokes = []) => {
+  const entries = Array.isArray(strokes)
+    ? strokes
+    : Object.entries(strokes || {}).map(([segment, points]) => ({ segment, points }));
+  return entries
+    .map((entry) => ({
+      segment: ARMOR_SEGMENT_VALUES.has(entry?.segment) ? entry.segment : 'body',
+      radius: clampEquipmentNumber(entry?.radius, 0.14, 0.04, 0.5),
+      points: (Array.isArray(entry?.points) ? entry.points : [])
+        .slice(0, 240)
+        .map(normalizeArmorCutContourPoint),
+    }))
+    .filter((entry) => entry.points.length);
+};
+
+const getEquipmentGripReferenceScale = (source = {}) => {
+  const legacyScale = Number.isFinite(Number(source.scale)) && Number(source.scale) > 0 ? Number(source.scale) : 1;
+  const dimensions = [
+    Number(source.width) || 0,
+    Number(source.height) || 0,
+    Number(source.depth) || 0,
+  ].map((value) => value * legacyScale).filter((value) => Number.isFinite(value) && value > 0.0001);
+  if (dimensions.length) return clampEquipmentNumber(Math.max(...dimensions), 1, CHARACTER_EQUIPMENT_SCALE_MIN, 120);
+  const explicitScale = Number(source.weaponGripReferenceScale);
+  return Number.isFinite(explicitScale) && explicitScale > 0.0001
+    ? clampEquipmentNumber(explicitScale, 1, CHARACTER_EQUIPMENT_SCALE_MIN, 120)
+    : 1;
+};
+const getShieldGripReferenceScale = (source = {}) => {
+  const explicitScale = Number(source.shieldGripReferenceScale);
+  return Number.isFinite(explicitScale) && explicitScale > 0.0001
+    ? clampEquipmentNumber(explicitScale, 1, CHARACTER_EQUIPMENT_SCALE_MIN, 120)
+    : getEquipmentGripReferenceScale(source);
+};
+const getArmorGripReferenceScale = (source = {}) => {
+  const explicitScale = Number(source.armorGripReferenceScale);
+  return Number.isFinite(explicitScale) && explicitScale > 0.0001
+    ? clampEquipmentNumber(explicitScale, 1, CHARACTER_EQUIPMENT_SCALE_MIN, 120)
+    : getEquipmentGripReferenceScale(source);
+};
+const getEquipmentModelReferenceScale = (source = {}) => (
+  clampEquipmentNumber(
+    getEquipmentGripReferenceScale(source),
+    1,
+    CHARACTER_EQUIPMENT_SCALE_MIN,
+    CHARACTER_EQUIPMENT_SCALE_MAX,
+  )
+);
+const getStoredEquipmentSourceScale = (item = {}) => {
+  const sourceScale = Number(item.weaponModelSourceScale);
+  return Number.isFinite(sourceScale) && sourceScale > 0
+    ? clampEquipmentNumber(sourceScale, 1, CHARACTER_EQUIPMENT_SCALE_MIN, CHARACTER_EQUIPMENT_SCALE_MAX)
+    : 0;
+};
+const resolveEquipmentModelScale = (item = {}, source = null) => {
+  const currentScale = Number(item.weaponModelScale);
+  if (!source) {
+    return clampEquipmentNumber(currentScale, 1, CHARACTER_EQUIPMENT_SCALE_MIN, CHARACTER_EQUIPMENT_SCALE_MAX);
+  }
+  const sourceScale = getEquipmentModelReferenceScale(source);
+  const previousSourceScale = getStoredEquipmentSourceScale(item);
+  if (previousSourceScale > 0) {
+    const itemScale = Number.isFinite(currentScale) && currentScale > 0 ? currentScale : previousSourceScale;
+    return clampEquipmentNumber(
+      sourceScale * (itemScale / previousSourceScale),
+      sourceScale,
+      CHARACTER_EQUIPMENT_SCALE_MIN,
+      CHARACTER_EQUIPMENT_SCALE_MAX,
+    );
+  }
+  if (Number.isFinite(currentScale) && currentScale > 0 && Math.abs(currentScale - 1) > 0.0001) {
+    return clampEquipmentNumber(currentScale, 1, CHARACTER_EQUIPMENT_SCALE_MIN, CHARACTER_EQUIPMENT_SCALE_MAX);
+  }
+  return sourceScale;
+};
+const getEquipmentModelRotationValue = (source = {}, axis = 'X') => {
+  const modelField = `weaponModelRotation${axis}`;
+  if (source[modelField] !== undefined && source[modelField] !== null && source[modelField] !== '') {
+    return clampEquipmentNumber(source[modelField], 0, -180, 180);
+  }
+  return clampEquipmentNumber(source[`modelRotation${axis}`], 0, -180, 180);
+};
+
+const copyEquipmentGripFields = (target, source = {}) => {
+  if (!target) return target;
+  ['X', 'Y', 'Z'].forEach((axis) => {
+    target[`weaponModelRotation${axis}`] = getEquipmentModelRotationValue(source, axis);
+  });
+  target.weaponGripHand = normalizeEquipmentHand(source.weaponGripHand || target.weaponGripHand);
+  target.weaponGripReferenceScale = getEquipmentGripReferenceScale(source);
+  ['Right', 'Left'].forEach((hand) => {
+    target[`weaponGrip${hand}Enabled`] = Boolean(source[`weaponGrip${hand}Enabled`]);
+    ['X', 'Y', 'Z'].forEach((axis) => {
+      target[`weaponGrip${hand}${axis}`] = clampEquipmentNumber(source[`weaponGrip${hand}${axis}`], 0, -2, 2);
+      target[`weaponGrip${hand}Rotation${axis}`] = clampEquipmentNumber(source[`weaponGrip${hand}Rotation${axis}`], 0, -180, 180);
+    });
+  });
+  target.shieldGripArm = normalizeEquipmentArm(source.shieldGripArm || target.shieldGripArm);
+  target.shieldGripReferenceScale = getShieldGripReferenceScale(source);
+  ['Hand', 'Elbow'].forEach((point) => {
+    target[`shieldGrip${point}Enabled`] = Boolean(source[`shieldGrip${point}Enabled`]);
+    ['X', 'Y', 'Z'].forEach((axis) => {
+      const fallback = point === 'Hand' && axis === 'Y' ? -0.35 : (point === 'Elbow' && axis === 'Y' ? 0.35 : 0);
+      target[`shieldGrip${point}${axis}`] = clampEquipmentNumber(source[`shieldGrip${point}${axis}`], fallback, -2, 2);
+    });
+  });
+  target.armorGripReferenceScale = getArmorGripReferenceScale(source);
+  ARMOR_GRIP_POINTS.forEach((point) => {
+    target[`armorGrip${point.suffix}Enabled`] = Boolean(source[`armorGrip${point.suffix}Enabled`]);
+    target[`armorGrip${point.suffix}X`] = clampEquipmentNumber(source[`armorGrip${point.suffix}X`], point.defaultX, -2, 2);
+    target[`armorGrip${point.suffix}Y`] = clampEquipmentNumber(source[`armorGrip${point.suffix}Y`], point.defaultY, -2, 2);
+    target[`armorGrip${point.suffix}Z`] = clampEquipmentNumber(source[`armorGrip${point.suffix}Z`], point.defaultZ, -2, 2);
+  });
+  target.armorCanvasCutEnabled = Boolean(source.armorCanvasCutEnabled);
+  target.armorSegmentAssignments = normalizeArmorSegmentAssignments(source.armorSegmentAssignments);
+  target.armorCutContours = normalizeArmorCutContours(source.armorCutContours);
+  target.armorCutPaintStrokes = normalizeArmorCutPaintStrokes(source.armorCutPaintStrokes);
+  return target;
+};
+
+const getCharacterEquipmentItem = (model = {}, type = 'weapon') => {
+  const item = (Array.isArray(model?.inventory) ? model.inventory : [])
+    .find((entry) => entry?.type === type);
+  return normalizeCharacterEquipmentItem(item || { type }, type);
+};
+
+const normalizeCharacterEquipmentItem = (item = {}, forcedType = '') => {
+  const type = CHARACTER_EQUIPMENT_TYPES.has(forcedType)
+    ? forcedType
+    : (CHARACTER_EQUIPMENT_TYPES.has(item.type) ? item.type : 'weapon');
+  return {
+    id: item.id || `character-equipment-${type}`,
+    name: item.name || getCharacterEquipmentLabel(type),
+    type,
+    quantity: 1,
+    effect: item.effect || '',
+    equipped: Boolean(item.equipped),
+    weaponModel3dId: item.weaponModel3dId || item.model3dId || '',
+    weaponModelUrl: item.weaponModelUrl || item.modelUrl || '',
+    weaponModelName: item.weaponModelName || item.modelName || '',
+    weaponModelFormat: item.weaponModelFormat || item.modelFormat || '',
+    weaponModelFileSize: Number(item.weaponModelFileSize || item.modelFileSize) || 0,
+    weaponModelResources: Array.isArray(item.weaponModelResources)
+      ? item.weaponModelResources.map((resource) => ({ ...(resource || {}) }))
+      : (Array.isArray(item.modelResources) ? item.modelResources.map((resource) => ({ ...(resource || {}) })) : []),
+    weaponModelScale: clampEquipmentNumber(item.weaponModelScale, 1, CHARACTER_EQUIPMENT_SCALE_MIN, CHARACTER_EQUIPMENT_SCALE_MAX),
+    weaponModelSourceScale: getStoredEquipmentSourceScale(item),
+    weaponOffsetX: clampEquipmentNumber(item.weaponOffsetX, 0, CHARACTER_EQUIPMENT_OFFSET_MIN, CHARACTER_EQUIPMENT_OFFSET_MAX),
+    weaponOffsetY: clampEquipmentNumber(item.weaponOffsetY, 0, CHARACTER_EQUIPMENT_OFFSET_MIN, CHARACTER_EQUIPMENT_OFFSET_MAX),
+    weaponOffsetZ: clampEquipmentNumber(item.weaponOffsetZ, 0, CHARACTER_EQUIPMENT_OFFSET_MIN, CHARACTER_EQUIPMENT_OFFSET_MAX),
+    weaponRotationX: clampEquipmentNumber(item.weaponRotationX, 0, -180, 180),
+    weaponRotationY: clampEquipmentNumber(item.weaponRotationY, 0, -180, 180),
+    weaponRotationZ: clampEquipmentNumber(item.weaponRotationZ, 0, -180, 180),
+    ...copyEquipmentGripFields({}, item),
+  };
+};
+
+const applyInventoryModelToEquipmentItem = (item, model = null) => {
+  if (!item) return;
+  if (!model || !getThreeModelSource(model)) {
+    item.equipped = false;
+    item.weaponModel3dId = '';
+    item.weaponModelUrl = '';
+    item.weaponModelName = '';
+    item.weaponModelFormat = '';
+    item.weaponModelFileSize = 0;
+    item.weaponModelResources = [];
+    item.weaponModelSourceScale = 0;
+    return;
+  }
+  const sourceScale = getEquipmentModelReferenceScale(model);
+  item.equipped = true;
+  item.weaponModel3dId = model.id || '';
+  item.weaponModelUrl = '';
+  item.weaponModelName = model.modelName || model.name || item.name || '';
+  item.weaponModelFormat = model.modelFormat || '';
+  item.weaponModelFileSize = Number(model.modelFileSize) || 0;
+  item.weaponModelResources = [];
+  item.weaponModelScale = sourceScale;
+  item.weaponModelSourceScale = sourceScale;
+  copyEquipmentGripFields(item, model);
+};
+
+const resolveEquipmentItemModelSource = (item, model = null) => {
+  const sourceScale = model ? getEquipmentModelReferenceScale(model) : getStoredEquipmentSourceScale(item);
+  return {
+    ...item,
+    weaponModelUrl: model ? getThreeModelSource(model) : (item.weaponModelUrl || ''),
+    weaponModelName: model?.modelName || model?.name || item.weaponModelName || '',
+    weaponModelFormat: model?.modelFormat || item.weaponModelFormat || '',
+    weaponModelFileSize: Number(model?.modelFileSize || item.weaponModelFileSize) || 0,
+    weaponModelResources: Array.isArray(model?.modelResources)
+      ? model.modelResources
+      : (Array.isArray(item.weaponModelResources) ? item.weaponModelResources : []),
+    weaponModelScale: resolveEquipmentModelScale(item, model),
+    weaponModelSourceScale: sourceScale,
+    ...(model ? copyEquipmentGripFields({}, {
+      ...model,
+      weaponGripHand: item.weaponGripHand || model.weaponGripHand,
+      shieldGripArm: item.shieldGripArm || model.shieldGripArm,
+    }) : copyEquipmentGripFields({}, item)),
+  };
+};
+
+const isInventoryModelForEquipmentType = (model = null, type = '') => (
+  Boolean(
+    model
+    && CHARACTER_EQUIPMENT_TYPES.has(type)
+    && hasEquipmentModelSource(model),
+  )
+);
+
+const isEquipmentItemLinkedToInventoryModel = (item = {}, inventoryModelById = new Map()) => {
+  const type = CHARACTER_EQUIPMENT_TYPES.has(item?.type) ? item.type : '';
+  if (!type) return false;
+  const modelId = item.weaponModel3dId || item.model3dId || '';
+  if (!modelId) return false;
+  return isInventoryModelForEquipmentType(inventoryModelById.get(modelId), type);
+};
+
+const clearEquipmentItemModelSource = (item = {}) => ({
+  ...item,
+  equipped: false,
+  weaponModel3dId: '',
+  weaponModelUrl: '',
+  weaponModelName: '',
+  weaponModelFormat: '',
+  weaponModelFileSize: 0,
+  weaponModelResources: [],
+  weaponModelSourceScale: 0,
+});
+
+const resolveSelectedEquipmentItemModelSource = (item = {}, inventoryModelById = new Map()) => {
+  const normalized = normalizeCharacterEquipmentItem(item, item.type);
+  if (!normalized.weaponModel3dId) return clearEquipmentItemModelSource(normalized);
+  const inventoryModel = inventoryModelById.get(normalized.weaponModel3dId);
+  if (!isInventoryModelForEquipmentType(inventoryModel, normalized.type)) {
+    return clearEquipmentItemModelSource(normalized);
+  }
+  return resolveEquipmentItemModelSource(normalized, inventoryModel);
+};
+
+const upsertCharacterEquipmentItem = (model, item) => {
+  const normalized = normalizeCharacterEquipmentItem(item, item.type);
+  const inventory = (Array.isArray(model.inventory) ? model.inventory : [])
+    .filter((entry) => entry?.type !== normalized.type && CHARACTER_EQUIPMENT_TYPES.has(entry?.type))
+    .map((entry) => normalizeCharacterEquipmentItem(entry, entry.type));
+  if (normalized.weaponModel3dId || normalized.weaponModelUrl) {
+    inventory.push({
+      ...normalized,
+      weaponModelUrl: '',
+      weaponModelResources: [],
+    });
+  }
+  model.inventory = inventory;
+};
+
+const wait = (durationMs) => new Promise((resolve) => window.setTimeout(resolve, durationMs));
+
+const clampProgressPercent = (value) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  return Math.max(0, Math.min(100, Math.round(numeric)));
+};
+
+const getCharacterLocalConversionCacheKey = (file, quality = CHARACTER_LOCAL_CONVERSION_QUALITY) => [
+  quality,
+  file?.name || '',
+  Number(file?.size) || 0,
+  Number(file?.lastModified) || 0,
+].join(':');
+
+const getDispositionFilename = (value = '') => {
+  const match = String(value).match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
+  if (!match) return '';
+  try {
+    return decodeURIComponent(match[1].replace(/^"|"$/g, ''));
+  } catch {
+    return match[1].replace(/^"|"$/g, '');
+  }
+};
+
+const getLocalModelToolsApiUrl = (pathSuffix = '') => {
+  return `/api/model-tools${pathSuffix}`;
+};
+
+const getLocalModelToolsAssetUrl = (pathSuffix = '') => {
+  if (!pathSuffix) return '';
+  if (/^https?:\/\//i.test(pathSuffix)) return pathSuffix;
+  return pathSuffix.startsWith('/api/model-tools') ? pathSuffix : getLocalModelToolsApiUrl(pathSuffix);
+};
+
+const getLocalModelToolsApiUrls = (pathSuffix = '') => {
+  return [getLocalModelToolsApiUrl(pathSuffix)];
+};
+
+const parseModelToolError = async (response) => {
+  try {
+    const payload = await response.json();
+    return payload.error || 'Conversion locale impossible.';
+  } catch {
+    return 'Conversion locale impossible.';
+  }
+};
+
+const fetchLocalModelTools = async (pathSuffix = '', options = {}) => {
+  let lastError = null;
+  for (const url of getLocalModelToolsApiUrls(pathSuffix)) {
+    try {
+      return await fetch(url, options);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw new Error(lastError?.message ? `API locale 3D indisponible: ${lastError.message}` : 'API locale 3D indisponible. Relance le serveur local puis reessaie.');
+};
+
+const parseModelToolXhrError = (xhr) => {
+  try {
+    const payload = JSON.parse(xhr.responseText || '{}');
+    return payload.error || `API locale 3D erreur ${xhr.status || 0}.`;
+  } catch {
+    return `API locale 3D erreur ${xhr.status || 0}.`;
+  }
+};
+
+const requestModelToolsJsonWithXhr = (pathSuffix = '', { method = 'GET', body = null, headers = {} } = {}) => new Promise((resolve, reject) => {
+  const urls = getLocalModelToolsApiUrls(pathSuffix);
+  const sendToUrl = (urlIndex = 0, lastError = '') => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(method, urls[urlIndex]);
+    xhr.responseType = 'text';
+    Object.entries(headers || {}).forEach(([key, value]) => xhr.setRequestHeader(key, value));
+    xhr.onerror = () => {
+      if (urlIndex + 1 < urls.length) {
+        sendToUrl(urlIndex + 1, 'connexion interrompue');
+        return;
+      }
+      reject(new Error(lastError || 'Connexion API locale 3D interrompue.'));
+    };
+    xhr.ontimeout = () => reject(new Error('API locale 3D trop longue.'));
+    xhr.onload = () => {
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(new Error(parseModelToolXhrError(xhr)));
+        return;
+      }
+      try {
+        resolve(xhr.responseText ? JSON.parse(xhr.responseText) : {});
+      } catch {
+        reject(new Error('Reponse locale invalide.'));
+      }
+    };
+    xhr.send(body);
+  };
+  sendToUrl();
+});
+
+const requestModelToolsBlobWithXhr = (pathSuffix = '') => new Promise((resolve, reject) => {
+  const urls = getLocalModelToolsApiUrls(pathSuffix);
+  const sendToUrl = (urlIndex = 0, lastError = '') => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', urls[urlIndex]);
+    xhr.responseType = 'blob';
+    xhr.onerror = () => {
+      if (urlIndex + 1 < urls.length) {
+        sendToUrl(urlIndex + 1, 'connexion interrompue');
+        return;
+      }
+      reject(new Error(lastError || 'Telechargement GLB interrompu.'));
+    };
+    xhr.ontimeout = () => reject(new Error('Telechargement GLB trop long.'));
+    xhr.onload = () => {
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(new Error(`Telechargement GLB impossible (${xhr.status || 0}).`));
+        return;
+      }
+      resolve({
+        blob: xhr.response,
+        filename: getDispositionFilename(xhr.getResponseHeader('content-disposition')) || 'personnage-fbx-source-meshopt.glb',
+        originalSize: Number(xhr.getResponseHeader('x-model-tools-original-size')) || 0,
+        outputSize: Number(xhr.getResponseHeader('x-model-tools-output-size')) || xhr.response?.size || 0,
+      });
+    };
+    xhr.send();
+  };
+  sendToUrl();
+});
+
+const getVisibleCharacterSaveStatus = (status = '', hasImportStatus = false) => {
+  if (hasImportStatus) return '';
+  const message = String(status || '').trim();
+  if (!message || message === 'Failed to fetch') return '';
+  return message;
+};
+
+const requestLocalCharacterConversionJob = ({
+  file,
+  onProgress,
+  uploadLabel = 'Envoi du ZIP FBX',
+  quality = CHARACTER_LOCAL_CONVERSION_QUALITY,
+  forceConversion = false,
+}) => new Promise((resolve, reject) => {
+  const formData = new FormData();
+  formData.set('file', file);
+  formData.set('quality', quality);
+  if (forceConversion) formData.set('force', 'true');
+  const urls = getLocalModelToolsApiUrls('/jobs');
+
+  const sendToUrl = (urlIndex = 0, lastError = '') => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', urls[urlIndex]);
+    xhr.responseType = 'text';
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable) {
+        onProgress?.(`${uploadLabel}...`, 8);
+        return;
+      }
+      const uploadProgress = 8 + Math.round((event.loaded / Math.max(1, event.total)) * 22);
+      onProgress?.(`${uploadLabel}... ${formatBytes(event.loaded)} / ${formatBytes(event.total)}`, uploadProgress);
+    };
+    xhr.onerror = () => {
+      if (urlIndex + 1 < urls.length) {
+        sendToUrl(urlIndex + 1, 'connexion interrompue');
+        return;
+      }
+      reject(new Error(lastError || 'API locale 3D indisponible. Relance le serveur local puis reessaie.'));
+    };
+    xhr.ontimeout = () => reject(new Error('Conversion locale trop longue.'));
+    xhr.onload = () => {
+      if (xhr.status < 200 || xhr.status >= 300) {
+        try {
+          const payload = JSON.parse(xhr.responseText || '{}');
+          reject(new Error(payload.error || `Conversion locale impossible (${xhr.status}).`));
+        } catch {
+          reject(new Error(`Conversion locale impossible (${xhr.status}).`));
+        }
+        return;
+      }
+      try {
+        resolve(JSON.parse(xhr.responseText || '{}'));
+      } catch {
+        reject(new Error('Reponse locale invalide.'));
+      }
+    };
+    xhr.send(formData);
+  };
+  sendToUrl();
+});
+
+const requestLocalCharacterCachedJob = async (file, onStatus = () => {}, quality = CHARACTER_LOCAL_CONVERSION_QUALITY) => {
+  onStatus('Recherche GLB deja converti...');
+  try {
+    return await requestModelToolsJsonWithXhr('/jobs/from-cache', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filename: file?.name || '',
+        size: Number(file?.size) || 0,
+        quality,
+      }),
+    });
+  } catch (error) {
+    if (/404/.test(String(error?.message || ''))) return null;
+    return null;
+  }
+};
+
+const requestLatestLocalCharacterCachedJob = async (onStatus = () => {}) => {
+  onStatus('Recherche du dernier GLB local...');
+  return requestModelToolsJsonWithXhr('/jobs/from-cache', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      quality: CHARACTER_LOCAL_CONVERSION_QUALITY,
+    }),
+  });
+};
+
+const fetchLocalCharacterConversionJob = async (jobId) => {
+  return requestModelToolsJsonWithXhr(`/jobs/${encodeURIComponent(jobId)}`);
+};
+
+const downloadLocalCharacterConversionJob = async (jobId) => {
+  const result = await requestModelToolsBlobWithXhr(`/jobs/${encodeURIComponent(jobId)}/download`);
+  const blob = result.blob;
+  return {
+    file: new File([blob], result.filename, { type: 'model/gltf-binary' }),
+    originalSize: result.originalSize,
+    outputSize: result.outputSize || blob.size || 0,
+  };
+};
+
+const getCachedCharacterConversionResult = (job = {}) => {
+  const cacheUrl = getLocalModelToolsAssetUrl(job.cacheUrl || '');
+  if (!cacheUrl) return null;
+  return {
+    cacheUrl,
+    originalSize: Number(job.originalSize) || 0,
+    outputSize: Number(job.outputSize) || 0,
+    filename: job.filename || 'personnage-fbx-source-meshopt.glb',
+    sourceFormat: job.sourceFormat || 'fbx',
+    fromCache: Boolean(job.fromCache),
+  };
+};
+
+const CHARACTER_ANIMATION_LOCAL_CONVERSION_MESSAGES = {
+  cachedFileStatus: 'Animation source deja convertie en memoire, liaison locale...',
+  missingCacheStatus: 'Conversion Blender de l animation...',
+  uploadFailureStatus: 'Envoi animation impossible: tentative dernier GLB local...',
+  runningStatus: 'Extraction locale de l animation...',
+  cachedUrlStatus: 'Animation convertie, liaison directe...',
+  readyStatus: 'Animation source prete, import dans le personnage...',
+  uploadLabel: 'Envoi animation 3D',
+  allowLatestCacheFallback: false,
+  useCachedJob: false,
+  forceConversion: true,
+  quality: CHARACTER_ANIMATION_LOCAL_CONVERSION_QUALITY,
+};
+
+const getCharacterAnimationSlotLabel = (slot = '') => (
+  CHARACTER_ANIMATION_SLOTS.find((entry) => entry.id === getAnimationBaseSlotId(slot))?.label || slot
+);
+
+const getCharacterAnimationSlot = (slot = '') => (
+  CHARACTER_ANIMATION_SLOTS.find((entry) => entry.id === getAnimationBaseSlotId(slot))?.id || ''
+);
+
+const makeCharacterAnimationVariantKey = (slot = '', animations = {}) => {
+  const baseSlot = getCharacterAnimationSlot(slot);
+  if (!baseSlot) return '';
+  if (!getAnimationSource(animations?.[baseSlot] || {})) return baseSlot;
+  let key = '';
+  do {
+    key = `${baseSlot}__${Math.random().toString(36).slice(2, 10)}`;
+  } while (animations?.[key]);
+  return key;
+};
+
+const convertCharacterModelWithLocalTool = async (file, onStatus = () => {}, options = {}) => {
+  const {
+    cachedFileStatus = 'GLB source deja converti, import local...',
+    missingCacheStatus = 'Aucun GLB local pour ce ZIP: envoi au convertisseur...',
+    uploadFailureStatus = 'Envoi ZIP impossible: tentative dernier GLB local...',
+    runningStatus = 'Conversion locale du ZIP FBX...',
+    cachedUrlStatus = 'GLB local trouve, liaison directe au canvas...',
+    readyStatus = 'GLB interne pret, import dans le personnage...',
+    uploadLabel = 'Envoi du ZIP FBX',
+    allowLatestCacheFallback = true,
+    useCachedJob = true,
+    forceConversion = false,
+    quality = CHARACTER_LOCAL_CONVERSION_QUALITY,
+  } = options;
+  const cacheKey = getCharacterLocalConversionCacheKey(file, quality);
+  const cachedResult = characterLocalConversionCache.get(cacheKey);
+  if (cachedResult?.file) {
+    onStatus(cachedFileStatus);
+    return cachedResult;
+  }
+  let jobId = '';
+  try {
+    let initialJob = useCachedJob ? await requestLocalCharacterCachedJob(file, onStatus, quality) : null;
+    if (!initialJob) {
+      onStatus(missingCacheStatus);
+      try {
+        initialJob = await requestLocalCharacterConversionJob({
+          file,
+          onProgress: onStatus,
+          uploadLabel,
+          quality,
+          forceConversion,
+        });
+      } catch (error) {
+        if (!allowLatestCacheFallback) throw error;
+        onStatus(uploadFailureStatus);
+        initialJob = await requestLatestLocalCharacterCachedJob(onStatus).catch(() => {
+          throw error;
+        });
+      }
+    }
+    jobId = initialJob.id || '';
+    let job = initialJob;
+    while (job?.status === 'running') {
+      onStatus(job.label || runningStatus, job.progress);
+      await wait(1000);
+      job = await fetchLocalCharacterConversionJob(jobId);
+    }
+    if (job?.status === 'error') {
+      throw new Error(job.error || job.detail || 'Conversion locale impossible.');
+    }
+    if (job?.status !== 'done') {
+      throw new Error('Etat de conversion locale inattendu.');
+    }
+    const cachedConversion = getCachedCharacterConversionResult(job);
+    if (cachedConversion) {
+      onStatus(cachedUrlStatus, 100);
+      return cachedConversion;
+    }
+    onStatus(readyStatus, 100);
+    const result = await downloadLocalCharacterConversionJob(jobId);
+    characterLocalConversionCache.set(cacheKey, result);
+    if (characterLocalConversionCache.size > 2) {
+      const oldestCacheKey = characterLocalConversionCache.keys().next().value;
+      characterLocalConversionCache.delete(oldestCacheKey);
+    }
+    return result;
+  } finally {
+    if (jobId) {
+      requestModelToolsJsonWithXhr(`/jobs/${encodeURIComponent(jobId)}`, { method: 'DELETE' }).catch(() => {});
+    }
+  }
+};
+
 export default function Character3DTab({
   project,
   patchProject,
   selectedModelId: controlledSelectedModelId,
   onSelectedModelIdChange,
+  previewEquipmentTest = null,
+  onPreviewEquipmentTestClear,
   onSaveAssets,
   saveStatus,
   saveInProgress = false,
@@ -118,12 +899,16 @@ export default function Character3DTab({
   }, [onSelectedModelIdChange]);
   const [copyStatus, setCopyStatus] = useState('');
   const [importInProgress, setImportInProgress] = useState(false);
+  const [importProgress, setImportProgress] = useState(null);
   const localModelUrlsRef = useRef(new Map());
   const localAnimationUrlsRef = useRef(new Map());
   const bootstrappedModelRef = useRef(false);
   const [previewAnimationSlot, setPreviewAnimationSlot] = useState('');
   const [embeddedAnimationInfoByModelId, setEmbeddedAnimationInfoByModelId] = useState({});
   const [axisScaleDraft, setAxisScaleDraft] = useState({ modelId: '', x: '', y: '', z: '' });
+  const selectPreviewAnimationSlot = useCallback((slot = '') => {
+    setPreviewAnimationSlot((current) => (current === slot ? '' : slot));
+  }, []);
 
   useEffect(() => {
     if (!models.length) {
@@ -144,14 +929,100 @@ export default function Character3DTab({
   }, [models, patchProject, selectedModelId, setSelectedModelId]);
 
   const selectedModel = models.find((model) => model.id === selectedModelId) || models[0] || null;
+  const displaySaveStatus = getVisibleCharacterSaveStatus(saveStatus, Boolean(copyStatus || importInProgress));
+  const setImportStatus = useCallback((message, progress = null) => {
+    setCopyStatus(message);
+    const percent = clampProgressPercent(progress);
+    if (percent !== null) setImportProgress(percent);
+  }, []);
   const selectedModelSource = selectedModel ? getThreeModelSource(selectedModel) : '';
-  const previewModel = useMemo(() => selectedModel || makeCharacter3DModel({ name: 'Nouveau personnage' }), [selectedModel]);
-  const selectedEmbeddedAnimations = selectedModel?.id ? embeddedAnimationInfoByModelId[selectedModel.id] || [] : [];
+  const inventoryModels = useMemo(() => (
+    (project.decorModels3d || []).filter(hasEquipmentModelSource)
+  ), [project.decorModels3d]);
+  const inventoryModelById = useMemo(() => (
+    new Map(inventoryModels.map((model) => [model.id, model]))
+  ), [inventoryModels]);
+  const equipmentOptionsByType = useMemo(() => (
+    CHARACTER_EQUIPMENT_SLOTS.reduce((next, slot) => {
+      next[slot.type] = getEquipmentOptionsForSlot(inventoryModels, slot);
+      return next;
+    }, {})
+  ), [inventoryModels]);
+  const previewEquipmentTestItem = useMemo(() => {
+    if (!previewEquipmentTest || previewEquipmentTest.characterModelId !== selectedModel?.id) return null;
+    const type = CHARACTER_EQUIPMENT_TYPES.has(previewEquipmentTest.type) ? previewEquipmentTest.type : '';
+    if (!type) return null;
+    const inventoryModel = inventoryModelById.get(previewEquipmentTest.decorModelId);
+    if (!isInventoryModelForEquipmentType(inventoryModel, type)) return null;
+    const sourceScale = getEquipmentModelReferenceScale(inventoryModel);
+    return resolveEquipmentItemModelSource(normalizeCharacterEquipmentItem({
+      id: `character-equipment-${type}-rig-test`,
+      name: inventoryModel.name || inventoryModel.modelName || getCharacterEquipmentLabel(type),
+      type,
+      equipped: true,
+      weaponModel3dId: inventoryModel.id || '',
+      weaponModelScale: sourceScale,
+      weaponModelSourceScale: sourceScale,
+    }, type), inventoryModel);
+  }, [inventoryModelById, previewEquipmentTest, selectedModel?.id]);
+  const previewModel = useMemo(() => {
+    const baseModel = selectedModel || makeCharacter3DModel({ name: 'Nouveau personnage' });
+    let resolvedInventory = (Array.isArray(baseModel.inventory) ? baseModel.inventory : [])
+      .map((item) => resolveSelectedEquipmentItemModelSource(item, inventoryModelById))
+      .filter((item) => item.equipped && item.weaponModel3dId && item.weaponModelUrl);
+    if (previewEquipmentTestItem) {
+      resolvedInventory = [
+        ...resolvedInventory.filter((item) => item.type !== previewEquipmentTestItem.type),
+        previewEquipmentTestItem,
+      ];
+    }
+    return { ...baseModel, inventory: resolvedInventory };
+  }, [inventoryModelById, previewEquipmentTestItem, selectedModel]);
+  const selectedEquipmentByType = useMemo(() => (
+    CHARACTER_EQUIPMENT_SLOTS.reduce((next, slot) => {
+      const item = getCharacterEquipmentItem(selectedModel || {}, slot.type);
+      next[slot.type] = resolveSelectedEquipmentItemModelSource(item, inventoryModelById);
+      if (previewEquipmentTestItem?.type === slot.type) next[slot.type] = previewEquipmentTestItem;
+      return next;
+    }, {})
+  ), [inventoryModelById, previewEquipmentTestItem, selectedModel]);
   const selectedRole = selectedModel?.role || previewModel.role || 'hero';
   const cardRoleOptions = ['enemy', 'hero', 'npc']
     .map((roleId) => ROLE_OPTIONS.find((option) => option.id === roleId))
     .filter(Boolean);
   const canImportRoleGlb = Boolean(selectedModel);
+
+  const hasInvalidCharacterEquipment = useMemo(() => (
+    models.some((model) => (
+      Array.isArray(model.inventory)
+      && model.inventory.some((item) => (
+        CHARACTER_EQUIPMENT_TYPES.has(item?.type)
+        && !isEquipmentItemLinkedToInventoryModel(item, inventoryModelById)
+      ))
+    ))
+  ), [inventoryModelById, models]);
+
+  useEffect(() => {
+    if (!hasInvalidCharacterEquipment) return;
+    patchProject((draft) => {
+      ensureCharacterModels(draft).forEach((model) => {
+        if (!Array.isArray(model.inventory)) return;
+        const nextInventory = model.inventory.filter((item) => (
+          !CHARACTER_EQUIPMENT_TYPES.has(item?.type)
+          || isEquipmentItemLinkedToInventoryModel(item, inventoryModelById)
+        ));
+        if (nextInventory.length !== model.inventory.length) model.inventory = nextInventory;
+      });
+    }, { rememberHistory: false });
+  }, [hasInvalidCharacterEquipment, inventoryModelById, patchProject]);
+
+  useEffect(() => {
+    if (!previewAnimationSlot) return;
+    const previewAnimation = selectedModel?.modelAnimations?.[previewAnimationSlot] || {};
+    if (!getAnimationBaseSlotId(previewAnimationSlot, previewAnimation) || !getAnimationSource(previewAnimation)) {
+      setPreviewAnimationSlot('');
+    }
+  }, [previewAnimationSlot, selectedModel?.id, selectedModel?.modelAnimations]);
 
   const patchSelectedModel = useCallback((updater, options) => {
     if (!selectedModelId) return;
@@ -200,6 +1071,18 @@ export default function Character3DTab({
     }, { rememberHistory: false });
   }, [patchSelectedModel]);
 
+  const setSelectedEquipmentModel = useCallback((type, modelId) => {
+    if (previewEquipmentTest?.type === type) onPreviewEquipmentTestClear?.();
+    patchSelectedModel((model) => {
+      const item = getCharacterEquipmentItem(model, type);
+      const inventoryModel = inventoryModelById.get(modelId) || null;
+      item.type = type;
+      item.name = inventoryModel?.name || inventoryModel?.modelName || getCharacterEquipmentLabel(type);
+      applyInventoryModelToEquipmentItem(item, inventoryModel);
+      upsertCharacterEquipmentItem(model, item);
+    }, { rememberHistory: false });
+  }, [inventoryModelById, onPreviewEquipmentTestClear, patchSelectedModel, previewEquipmentTest?.type]);
+
   useEffect(() => {
     const axisScale = selectedModel ? toCharacterUserAxes(getCharacterModelAxisScale(selectedModel)) : { x: 1, y: 1, z: 1 };
     setAxisScaleDraft({
@@ -227,6 +1110,187 @@ export default function Character3DTab({
     ));
   }, []);
 
+  const applyConvertedCharacterModel = useCallback(async (storedFile, conversionResult = {}) => {
+    if (!storedFile || !selectedModelId) return null;
+    const previousUrl = localModelUrlsRef.current.get(selectedModelId);
+    if (previousUrl) {
+      forgetRpg3DLocalBlobFile(previousUrl);
+      URL.revokeObjectURL(previousUrl);
+    }
+    localModelUrlsRef.current.delete(selectedModelId);
+    const storedModelFileSize = conversionResult.outputSize || storedFile.size || 0;
+    const localModelFileId = createLocalModelFileId('character', selectedModelId, storedFile);
+    const modelUrl = URL.createObjectURL(storedFile);
+    rememberRpg3DLocalBlobFile(modelUrl, storedFile, localModelFileId, { persist: false });
+    const localModelPersisted = await persistLocalModelFile(localModelFileId, storedFile);
+    localModelUrlsRef.current.set(selectedModelId, modelUrl);
+    patchSelectedModel((model) => {
+      model.shape = 'glb';
+      model.modelUrl = modelUrl;
+      model.modelData = '';
+      model.localModelFileId = localModelPersisted ? localModelFileId : '';
+      model.modelName = storedFile.name || 'personnage-source-meshopt.glb';
+      model.modelFormat = 'glb';
+      model.modelFileSize = storedModelFileSize;
+      model.modelResources = [];
+    });
+    setEmbeddedAnimationInfoByModelId((current) => {
+      const next = { ...current };
+      delete next[selectedModelId];
+      return next;
+    });
+    return { localModelPersisted, storedModelFileSize };
+  }, [patchSelectedModel, selectedModelId]);
+
+  const applyCachedCharacterModelUrl = useCallback((conversionResult = {}) => {
+    const cacheUrl = getLocalModelToolsAssetUrl(conversionResult.cacheUrl || '');
+    if (!cacheUrl || !selectedModelId) return null;
+    const previousUrl = localModelUrlsRef.current.get(selectedModelId);
+    if (previousUrl) {
+      forgetRpg3DLocalBlobFile(previousUrl);
+      URL.revokeObjectURL(previousUrl);
+    }
+    localModelUrlsRef.current.delete(selectedModelId);
+    const storedModelFileSize = Number(conversionResult.outputSize) || 0;
+    patchSelectedModel((model) => {
+      model.shape = 'glb';
+      model.modelUrl = cacheUrl;
+      model.modelData = '';
+      model.localModelFileId = '';
+      model.modelName = conversionResult.filename || 'personnage-source-meshopt.glb';
+      model.modelFormat = 'glb';
+      model.modelFileSize = storedModelFileSize;
+      model.modelResources = [];
+    });
+    setEmbeddedAnimationInfoByModelId((current) => {
+      const next = { ...current };
+      delete next[selectedModelId];
+      return next;
+    });
+    return { localModelPersisted: true, storedModelFileSize };
+  }, [patchSelectedModel, selectedModelId]);
+
+  const applyConvertedCharacterAnimation = useCallback(async (targetKey, slot, storedFile, conversionResult = {}) => {
+    const baseSlot = getCharacterAnimationSlot(slot);
+    if (!storedFile || !selectedModelId || !targetKey || !baseSlot) return null;
+    const localAnimationKey = `${selectedModelId}:${targetKey}`;
+    const previousUrl = localAnimationUrlsRef.current.get(localAnimationKey);
+    if (previousUrl) {
+      forgetRpg3DLocalBlobFile(previousUrl);
+      URL.revokeObjectURL(previousUrl);
+    }
+    localAnimationUrlsRef.current.delete(localAnimationKey);
+    const storedModelFileSize = Number(conversionResult.outputSize) || Number(storedFile.size) || 0;
+    const localModelFileId = createLocalModelFileId(`character-animation-${targetKey}`, selectedModelId, storedFile);
+    const animationUrl = URL.createObjectURL(storedFile);
+    rememberRpg3DLocalBlobFile(animationUrl, storedFile, localModelFileId, { persist: false });
+    const localModelPersisted = await persistLocalModelFile(localModelFileId, storedFile);
+    localAnimationUrlsRef.current.set(localAnimationKey, animationUrl);
+    patchSelectedModel((model) => {
+      model.modelAnimations = {
+        ...(model.modelAnimations || {}),
+        [targetKey]: {
+          animationSlot: baseSlot,
+          animationId: targetKey,
+          modelUrl: animationUrl,
+          modelData: '',
+          localModelFileId: localModelPersisted ? localModelFileId : '',
+          modelName: storedFile.name || conversionResult.filename || `animation-${baseSlot}.glb`,
+          modelFormat: 'glb',
+          modelFileSize: storedModelFileSize,
+          modelResources: [],
+        },
+      };
+    });
+    setPreviewAnimationSlot(targetKey);
+    return { localModelPersisted, storedModelFileSize };
+  }, [patchSelectedModel, selectedModelId]);
+
+  const applyCachedCharacterAnimationUrl = useCallback((targetKey, slot, conversionResult = {}) => {
+    const baseSlot = getCharacterAnimationSlot(slot);
+    const cacheUrl = getLocalModelToolsAssetUrl(conversionResult.cacheUrl || '');
+    if (!cacheUrl || !selectedModelId || !targetKey || !baseSlot) return null;
+    const localAnimationKey = `${selectedModelId}:${targetKey}`;
+    const previousUrl = localAnimationUrlsRef.current.get(localAnimationKey);
+    if (previousUrl) {
+      forgetRpg3DLocalBlobFile(previousUrl);
+      URL.revokeObjectURL(previousUrl);
+    }
+    localAnimationUrlsRef.current.delete(localAnimationKey);
+    const storedModelFileSize = Number(conversionResult.outputSize) || 0;
+    patchSelectedModel((model) => {
+      model.modelAnimations = {
+        ...(model.modelAnimations || {}),
+        [targetKey]: {
+          animationSlot: baseSlot,
+          animationId: targetKey,
+          modelUrl: cacheUrl,
+          modelData: '',
+          localModelFileId: '',
+          modelName: conversionResult.filename || `animation-${baseSlot}.glb`,
+          modelFormat: 'glb',
+          modelFileSize: storedModelFileSize,
+          modelResources: [],
+        },
+      };
+    });
+    setPreviewAnimationSlot(targetKey);
+    return { localModelPersisted: true, storedModelFileSize };
+  }, [patchSelectedModel, selectedModelId]);
+
+  const importLatestCachedCharacterModel = useCallback(async () => {
+    if (!selectedModelId) return;
+    setImportInProgress(true);
+    setCopyStatus('Recherche GLB local...');
+    let jobId = '';
+    try {
+      const job = await requestLatestLocalCharacterCachedJob(setCopyStatus);
+      jobId = job.id || '';
+      const cachedConversion = getCachedCharacterConversionResult(job);
+      if (cachedConversion) {
+        const applyResult = applyCachedCharacterModelUrl(cachedConversion);
+        setCopyStatus(`GLB cache lie au canvas (${formatBytes(cachedConversion.outputSize)})`);
+        return;
+      }
+      setCopyStatus('Telechargement du GLB local...');
+      const conversionResult = await downloadLocalCharacterConversionJob(jobId);
+      const applyResult = await applyConvertedCharacterModel(conversionResult.file, conversionResult);
+      setCopyStatus(`GLB cache charge: modele pret pour le canvas (${formatBytes(conversionResult.outputSize || conversionResult.file.size)})${applyResult?.localModelPersisted ? '' : ' - stockage local non confirme'}`);
+    } catch (error) {
+      setCopyStatus(error?.message ? `Cache GLB impossible: ${error.message}` : 'Cache GLB impossible');
+    } finally {
+      if (jobId) requestModelToolsJsonWithXhr(`/jobs/${encodeURIComponent(jobId)}`, { method: 'DELETE' }).catch(() => {});
+      setImportInProgress(false);
+    }
+  }, [applyCachedCharacterModelUrl, applyConvertedCharacterModel, selectedModelId]);
+
+  const removeSelectedModelFile = useCallback(() => {
+    patchSelectedModel((model) => {
+      if (String(model.modelUrl || '').startsWith('blob:')) {
+        const previousUrl = localModelUrlsRef.current.get(model.id);
+        if (previousUrl) {
+          forgetRpg3DLocalBlobFile(previousUrl);
+          URL.revokeObjectURL(previousUrl);
+        }
+        localModelUrlsRef.current.delete(model.id);
+      }
+      setEmbeddedAnimationInfoByModelId((current) => {
+        const next = { ...current };
+        delete next[model.id];
+        return next;
+      });
+      model.modelUrl = '';
+      model.modelData = '';
+      model.localModelFileId = '';
+      model.modelName = '';
+      model.modelFormat = '';
+      model.modelFileSize = 0;
+      model.modelResources = [];
+      model.modelAnimations = {};
+    });
+    setPreviewAnimationSlot('');
+  }, [patchSelectedModel]);
+
   const setSelectedModelFile = useCallback(async (file) => {
     if (!file || !selectedModelId) return;
     const fileInfo = getCharacterImportFileInfo(file);
@@ -247,8 +1311,22 @@ export default function Character3DTab({
     localModelUrlsRef.current.delete(selectedModelId);
     const importLabel = isZip ? 'ZIP' : getThreeModelFormatLabel(modelFormat);
     setImportInProgress(true);
+    setImportProgress(3);
     setCopyStatus(isZip ? 'Lecture ZIP...' : `Import ${importLabel}...`);
     try {
+      if (isZip) {
+        setCopyStatus('ZIP 3D: recherche du GLB local deja converti...');
+        const conversionResult = await convertCharacterModelWithLocalTool(file, setImportStatus);
+        if (conversionResult.cacheUrl) {
+          const applyResult = applyCachedCharacterModelUrl(conversionResult);
+          setCopyStatus(`ZIP accepte: GLB haute qualite lie au canvas (${formatBytes(conversionResult.originalSize || file.size)} -> ${formatBytes(applyResult?.storedModelFileSize || conversionResult.outputSize)})`);
+          return;
+        }
+        const storedFile = conversionResult.file;
+        const applyResult = await applyConvertedCharacterModel(storedFile, conversionResult);
+        setCopyStatus(`ZIP accepte: GLB haute qualite pret pour le canvas (${formatBytes(conversionResult.originalSize || file.size)} -> ${formatBytes(applyResult?.storedModelFileSize || storedFile.size)})${applyResult?.localModelPersisted ? '' : ' - stockage local non confirme'}`);
+        return;
+      }
       const { readCharacterModelImport } = await import('../utils/rpg3dModelImport');
       const {
         zipBundle,
@@ -259,42 +1337,71 @@ export default function Character3DTab({
         modelFileSize,
       } = await readCharacterModelImport(file, fileInfo);
       if (isZip) setCopyStatus(`ZIP: ${getThreeModelFormatLabel(sourceFormat)} + ${zipBundle.modelResources.length} texture${zipBundle.modelResources.length > 1 ? 's' : ''}`);
-      const localModelFileId = createLocalModelFileId('character', selectedModelId, optimizedFile);
-      const modelUrl = URL.createObjectURL(optimizedFile);
-      rememberRpg3DLocalBlobFile(modelUrl, optimizedFile, localModelFileId);
+      let storedFile = optimizedFile;
+      let storedFormat = sourceFormat;
+      let storedModelData = modelData || '';
+      let storedModelFileSize = modelFileSize;
+      let storedResources = zipBundle?.modelResources || [];
+      let conversionResult = null;
+      if (
+        sourceFormat === 'fbx'
+        && isHeavyLocalFbxAsset({ modelFormat: sourceFormat, modelUrl: 'blob:local-fbx', modelFileSize })
+      ) {
+        setCopyStatus(`${isZip ? 'ZIP FBX' : 'FBX'} lourd: conversion locale haute qualite pour le canvas...`);
+        conversionResult = await convertCharacterModelWithLocalTool(file, setImportStatus);
+        storedFile = conversionResult.file;
+        storedFormat = 'glb';
+        storedModelData = '';
+        storedModelFileSize = conversionResult.outputSize || storedFile.size || 0;
+        storedResources = [];
+      }
+      const localModelFileId = createLocalModelFileId('character', selectedModelId, storedFile);
+      const modelUrl = URL.createObjectURL(storedFile);
+      rememberRpg3DLocalBlobFile(modelUrl, storedFile, localModelFileId, { persist: false });
+      const localModelPersisted = await persistLocalModelFile(localModelFileId, storedFile);
       localModelUrlsRef.current.set(selectedModelId, modelUrl);
       patchSelectedModel((model) => {
         model.shape = 'glb';
         model.modelUrl = modelUrl;
-        model.modelData = modelData || '';
-        model.localModelFileId = localModelFileId;
-        model.modelName = optimizedFile.name || file.name || `modele.${sourceFormat}`;
-        model.modelFormat = sourceFormat;
-        model.modelFileSize = modelFileSize;
-        model.modelResources = zipBundle?.modelResources || [];
+        model.modelData = storedModelData;
+        model.localModelFileId = localModelPersisted ? localModelFileId : '';
+        model.modelName = storedFile.name || file.name || `modele.${storedFormat}`;
+        model.modelFormat = storedFormat;
+        model.modelFileSize = storedModelFileSize;
+        model.modelResources = storedResources;
       });
       setEmbeddedAnimationInfoByModelId((current) => {
         const next = { ...current };
         delete next[selectedModelId];
         return next;
       });
-      setCopyStatus(isGlb
-        ? `GLB charge sans recompression${modelData ? '' : ' en local'}`
+      setCopyStatus(conversionResult
+        ? `${isZip ? 'ZIP FBX accepte' : 'FBX accepte'}: GLB haute qualite pret pour le canvas (${formatBytes(conversionResult.originalSize || file.size)} -> ${formatBytes(storedModelFileSize)})${localModelPersisted ? '' : ' - stockage local non confirme'}`
+        : isGlb
+        ? `GLB charge sans recompression${modelData ? '' : ' en local'}${localModelPersisted ? '' : ' - stockage local non confirme'}`
         : isZip
-          ? `ZIP charge: ${getThreeModelFormatLabel(sourceFormat)} + ${zipBundle.modelResources.length} texture${zipBundle.modelResources.length > 1 ? 's' : ''}${modelData ? '' : ' en local'}${isHeavyLocalFbxAsset({ modelFormat: sourceFormat, modelUrl, modelFileSize }) ? ' - preview GLB conseille' : ''}`
-          : `${getThreeModelFormatLabel(sourceFormat)} charge${modelData ? '' : ' en local'}${isHeavyLocalFbxAsset({ modelFormat: sourceFormat, modelUrl, modelFileSize }) ? ' - preview GLB conseille' : ''}`);
-    } catch {
-      setCopyStatus('Import du modele 3D impossible');
+          ? `ZIP charge: ${getThreeModelFormatLabel(sourceFormat)} + ${zipBundle.modelResources.length} texture${zipBundle.modelResources.length > 1 ? 's' : ''}${modelData ? '' : ' en local'}${localModelPersisted ? '' : ' - stockage local non confirme'}${isHeavyLocalFbxAsset({ modelFormat: sourceFormat, modelUrl, modelFileSize }) ? ' - preview GLB conseille' : ''}`
+          : `${getThreeModelFormatLabel(sourceFormat)} charge${modelData ? '' : ' en local'}${localModelPersisted ? '' : ' - stockage local non confirme'}${isHeavyLocalFbxAsset({ modelFormat: sourceFormat, modelUrl, modelFileSize }) ? ' - preview GLB conseille' : ''}`);
+    } catch (error) {
+      setCopyStatus(error?.message || 'Import du modele 3D impossible');
     } finally {
       setImportInProgress(false);
+      setImportProgress(null);
     }
-  }, [patchSelectedModel, selectedModelId]);
+  }, [applyCachedCharacterModelUrl, applyConvertedCharacterModel, patchSelectedModel, selectedModelId, setImportStatus]);
 
-  const setSelectedAnimationFile = useCallback(async (slot, file) => {
-    if (!file || !selectedModelId || !CHARACTER_ANIMATION_SLOTS.some((entry) => entry.id === slot)) return;
+  const setSelectedAnimationFile = useCallback(async (slot, file, requestedAnimationKey = '') => {
+    const baseSlot = getCharacterAnimationSlot(slot);
+    const targetKey = requestedAnimationKey || makeCharacterAnimationVariantKey(baseSlot, selectedModel?.modelAnimations || {});
+    if (!file || !selectedModelId || !baseSlot || !targetKey) return;
     const fileInfo = getCharacterImportFileInfo(file);
     const { archiveFormat, modelFormat, isZip } = fileInfo;
+    const slotLabel = getCharacterAnimationSlotLabel(baseSlot);
     if (!modelFormat && !archiveFormat) {
+      setCopyStatus('Choisis une animation .glb, .fbx ou .zip');
+      return;
+    }
+    if (modelFormat && !['glb', 'fbx'].includes(modelFormat)) {
       setCopyStatus('Choisis une animation .glb, .fbx ou .zip');
       return;
     }
@@ -302,16 +1409,33 @@ export default function Character3DTab({
       setCopyStatus('Archive animation non supportee');
       return;
     }
-    const animationKey = `${selectedModelId}:${slot}`;
-    const previousUrl = localAnimationUrlsRef.current.get(animationKey);
+    const localAnimationKey = `${selectedModelId}:${targetKey}`;
+    const previousUrl = localAnimationUrlsRef.current.get(localAnimationKey);
     if (previousUrl) {
       forgetRpg3DLocalBlobFile(previousUrl);
       URL.revokeObjectURL(previousUrl);
     }
-    localAnimationUrlsRef.current.delete(animationKey);
+    localAnimationUrlsRef.current.delete(localAnimationKey);
     setImportInProgress(true);
-    setCopyStatus(isZip ? 'Lecture ZIP animation...' : `Import animation ${getThreeModelFormatLabel(modelFormat)}...`);
+    setImportProgress(3);
+    setCopyStatus(isZip ? `${slotLabel}: lecture ZIP animation...` : `${slotLabel}: import animation ${getThreeModelFormatLabel(modelFormat)}...`);
     try {
+      if (isZip) {
+        setCopyStatus(`${slotLabel}: ZIP animation, recherche du GLB local deja converti...`);
+        const conversionResult = await convertCharacterModelWithLocalTool(
+          file,
+          setImportStatus,
+          CHARACTER_ANIMATION_LOCAL_CONVERSION_MESSAGES,
+        );
+        if (conversionResult.cacheUrl) {
+          applyCachedCharacterAnimationUrl(targetKey, baseSlot, conversionResult);
+          setCopyStatus(`${slotLabel}: animation ZIP convertie et liee`);
+          return;
+        }
+        const applyResult = await applyConvertedCharacterAnimation(targetKey, baseSlot, conversionResult.file, conversionResult);
+        setCopyStatus(`${slotLabel}: animation ZIP convertie et liee${applyResult?.localModelPersisted ? '' : ' - stockage local non confirme'}`);
+        return;
+      }
       const { readCharacterAnimationImport } = await import('../utils/rpg3dModelImport');
       const {
         zipBundle,
@@ -320,49 +1444,78 @@ export default function Character3DTab({
         animationData,
         modelFileSize,
       } = await readCharacterAnimationImport(file, fileInfo);
-      const localModelFileId = createLocalModelFileId(`character-animation-${slot}`, selectedModelId, sourceFile);
-      const animationUrl = URL.createObjectURL(sourceFile);
-      rememberRpg3DLocalBlobFile(animationUrl, sourceFile, localModelFileId);
-      localAnimationUrlsRef.current.set(animationKey, animationUrl);
+      let storedFile = sourceFile;
+      let storedFormat = sourceFormat;
+      let storedAnimationData = animationData || '';
+      let storedModelFileSize = modelFileSize;
+      let storedResources = zipBundle?.modelResources || [];
+      let conversionResult = null;
+      if (sourceFormat === 'fbx') {
+        setCopyStatus(`${slotLabel}: FBX animation, conversion locale GLB...`);
+        conversionResult = await convertCharacterModelWithLocalTool(
+          file,
+          setImportStatus,
+          CHARACTER_ANIMATION_LOCAL_CONVERSION_MESSAGES,
+        );
+        if (conversionResult.cacheUrl) {
+          applyCachedCharacterAnimationUrl(targetKey, baseSlot, conversionResult);
+          setCopyStatus(`${slotLabel}: animation FBX convertie et liee`);
+          return;
+        }
+        storedFile = conversionResult.file;
+        storedFormat = 'glb';
+        storedAnimationData = '';
+        storedModelFileSize = Number(conversionResult.outputSize) || Number(storedFile?.size) || 0;
+        storedResources = [];
+      }
+      const localModelFileId = createLocalModelFileId(`character-animation-${targetKey}`, selectedModelId, storedFile);
+      const animationUrl = URL.createObjectURL(storedFile);
+      rememberRpg3DLocalBlobFile(animationUrl, storedFile, localModelFileId, { persist: false });
+      const localModelPersisted = await persistLocalModelFile(localModelFileId, storedFile);
+      localAnimationUrlsRef.current.set(localAnimationKey, animationUrl);
       patchSelectedModel((model) => {
         model.modelAnimations = {
           ...(model.modelAnimations || {}),
-          [slot]: {
+          [targetKey]: {
+            animationSlot: baseSlot,
+            animationId: targetKey,
             modelUrl: animationUrl,
-            modelData: animationData || '',
-            localModelFileId,
-            modelName: sourceFile.name || file.name || `animation-${slot}.${sourceFormat}`,
-            modelFormat: sourceFormat,
-            modelFileSize,
-            modelResources: zipBundle?.modelResources || [],
+            modelData: storedAnimationData,
+            localModelFileId: localModelPersisted ? localModelFileId : '',
+            modelName: storedFile.name || file.name || `animation-${baseSlot}.${storedFormat}`,
+            modelFormat: storedFormat,
+            modelFileSize: storedModelFileSize,
+            modelResources: storedResources,
           },
         };
       });
-      setPreviewAnimationSlot(slot);
-      const slotLabel = CHARACTER_ANIMATION_SLOTS.find((entry) => entry.id === slot)?.label || slot;
-      setCopyStatus(`${slotLabel}: animation ${getThreeModelFormatLabel(sourceFormat)} chargee${animationData ? '' : ' en local'}`);
-    } catch {
-      setCopyStatus('Import animation impossible');
+      setPreviewAnimationSlot(targetKey);
+      setCopyStatus(conversionResult
+        ? `${slotLabel}: animation FBX convertie et liee${localModelPersisted ? '' : ' - stockage local non confirme'}`
+        : `${slotLabel}: animation ${getThreeModelFormatLabel(storedFormat)} chargee${storedAnimationData ? '' : ' en local'}${localModelPersisted ? '' : ' - stockage local non confirme'}`);
+    } catch (error) {
+      setCopyStatus(error?.message ? `${slotLabel}: ${error.message}` : `${slotLabel}: import animation impossible`);
     } finally {
       setImportInProgress(false);
+      setImportProgress(null);
     }
-  }, [patchSelectedModel, selectedModelId]);
+  }, [applyCachedCharacterAnimationUrl, applyConvertedCharacterAnimation, patchSelectedModel, selectedModel?.modelAnimations, selectedModelId, setImportStatus]);
 
-  const removeSelectedAnimation = useCallback((slot) => {
-    if (!selectedModelId) return;
-    const animationKey = `${selectedModelId}:${slot}`;
-    const previousUrl = localAnimationUrlsRef.current.get(animationKey);
+  const removeSelectedAnimation = useCallback((animationKey) => {
+    if (!selectedModelId || !animationKey) return;
+    const localAnimationKey = `${selectedModelId}:${animationKey}`;
+    const previousUrl = localAnimationUrlsRef.current.get(localAnimationKey);
     if (previousUrl) {
       forgetRpg3DLocalBlobFile(previousUrl);
       URL.revokeObjectURL(previousUrl);
     }
-    localAnimationUrlsRef.current.delete(animationKey);
+    localAnimationUrlsRef.current.delete(localAnimationKey);
     patchSelectedModel((model) => {
       const nextAnimations = { ...(model.modelAnimations || {}) };
-      delete nextAnimations[slot];
+      delete nextAnimations[animationKey];
       model.modelAnimations = nextAnimations;
     });
-    setPreviewAnimationSlot((current) => (current === slot ? '' : current));
+    setPreviewAnimationSlot((current) => (current === animationKey ? '' : current));
   }, [patchSelectedModel, selectedModelId]);
 
   const createModel = () => {
@@ -500,42 +1653,43 @@ export default function Character3DTab({
       </section>
 
       <section className="panel character3d-preview-panel">
-        <div className="character3d-preview-head">
-          <div>
-            <span className="section-kicker"><Cuboid size={14} /> Modele</span>
-            <h2>{previewModel.name || 'Personnage 3D'}</h2>
-          </div>
-          <div className="character3d-preview-actions">
-            {previewFullscreen ? (
-              <button
-                type="button"
-                className={previewDrawerOpen ? 'active' : ''}
-                title={previewDrawerOpen ? 'Fermer le tiroir' : 'Ouvrir le tiroir'}
-                aria-label={previewDrawerOpen ? 'Fermer le tiroir de navigation' : 'Ouvrir le tiroir de navigation'}
-                aria-pressed={previewDrawerOpen}
-                onClick={() => setPreviewDrawerOpen((open) => !open)}
-              >
-                <PanelLeftOpen aria-hidden="true" size={16} />
-              </button>
-            ) : null}
-            <button
-              type="button"
-              title={previewFullscreen ? 'Quitter le plein ecran' : 'Plein ecran'}
-              aria-label={previewFullscreen ? 'Quitter le plein ecran' : 'Activer le plein ecran'}
-              aria-pressed={previewFullscreen}
-              onClick={togglePreviewFullscreen}
-            >
-              {previewFullscreen ? <Minimize2 aria-hidden="true" size={16} /> : <Maximize2 aria-hidden="true" size={16} />}
-            </button>
-          </div>
-        </div>
-
         <React.Suspense fallback={<div className="character3d-preview-loading" />}>
           <Character3DPreview
             model={previewModel}
             animationSlot={previewAnimationSlot}
+            autoPreviewAnimation={false}
             onAnimationClipsLoaded={handlePreviewAnimationClipsLoaded}
-          />
+          >
+            <div className="character3d-preview-head character3d-canvas-overlay">
+              <div>
+                <span className="section-kicker"><Cuboid size={14} /> Modele</span>
+                <h2>{previewModel.name || 'Personnage 3D'}</h2>
+              </div>
+              <div className="character3d-preview-actions">
+                {previewFullscreen ? (
+                  <button
+                    type="button"
+                    className={previewDrawerOpen ? 'active' : ''}
+                    title={previewDrawerOpen ? 'Fermer le tiroir' : 'Ouvrir le tiroir'}
+                    aria-label={previewDrawerOpen ? 'Fermer le tiroir de navigation' : 'Ouvrir le tiroir de navigation'}
+                    aria-pressed={previewDrawerOpen}
+                    onClick={() => setPreviewDrawerOpen((open) => !open)}
+                  >
+                    <PanelLeftOpen aria-hidden="true" size={16} />
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  title={previewFullscreen ? 'Quitter le plein ecran' : 'Plein ecran'}
+                  aria-label={previewFullscreen ? 'Quitter le plein ecran' : 'Activer le plein ecran'}
+                  aria-pressed={previewFullscreen}
+                  onClick={togglePreviewFullscreen}
+                >
+                  {previewFullscreen ? <Minimize2 aria-hidden="true" size={16} /> : <Maximize2 aria-hidden="true" size={16} />}
+                </button>
+              </div>
+            </div>
+          </Character3DPreview>
         </React.Suspense>
       </section>
 
@@ -575,10 +1729,22 @@ export default function Character3DTab({
             </button>
           </div>
         </div>
-        {saveStatus ? <p className="character3d-save-status" role="status">{saveStatus}</p> : null}
         {saveInProgress ? <div className="character3d-progress character3d-progress-save" role="progressbar" aria-label="Sauvegarde en cours"><span /></div> : null}
         {copyStatus ? <p className="character3d-import-status" role="status">{copyStatus}</p> : null}
-        {importInProgress ? <div className="character3d-progress character3d-progress-import" role="progressbar" aria-label="Import en cours"><span /></div> : null}
+        {importInProgress ? (
+          <div
+            className={`character3d-progress character3d-progress-import ${importProgress !== null ? 'is-determinate' : ''}`}
+            role="progressbar"
+            aria-label="Import en cours"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={importProgress ?? undefined}
+            style={{ '--character3d-progress': `${importProgress ?? 0}%` }}
+          >
+            <span />
+            {importProgress !== null ? <strong>{importProgress}%</strong> : null}
+          </div>
+        ) : null}
 
         {selectedModel ? (
           <div className="character3d-form">
@@ -589,10 +1755,32 @@ export default function Character3DTab({
 
             {canImportRoleGlb ? (
               <>
-                <CharacterHelpLabel help={CHARACTER_FIELD_HELP.glbImport}>Modele 3D</CharacterHelpLabel>
-                <label className="button like full secondary-action character3d-file-button">
-                  <Upload aria-hidden="true" size={16} />
-                  <span>{selectedModel.modelName ? 'Remplacer modele 3D' : 'Importer modele 3D'}</span>
+                <CharacterHelpLabel help={CHARACTER_FIELD_HELP.glbImport}>Animations</CharacterHelpLabel>
+                {!selectedModelSource ? (
+                  <label className="button like full secondary-action character3d-file-button">
+                    <Upload aria-hidden="true" size={16} />
+                    <span>Importer stand-by</span>
+                    <input
+                      type="file"
+                      accept={THREE_MODEL_ACCEPT}
+                      hidden
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = '';
+                        setSelectedModelFile(file);
+                      }}
+                    />
+                  </label>
+                ) : null}
+              </>
+            ) : null}
+
+            {selectedModelSource ? (
+              <div className="character3d-animation-meta character3d-model-meta">
+                <small>{selectedModel.modelName || 'animation 3D'}</small>
+                <label className="button like secondary-action compact character3d-file-button">
+                  <Upload aria-hidden="true" size={14} />
+                  <span>Remplacer</span>
                   <input
                     type="file"
                     accept={THREE_MODEL_ACCEPT}
@@ -604,67 +1792,59 @@ export default function Character3DTab({
                     }}
                   />
                 </label>
-              </>
-            ) : null}
-
-            {selectedModelSource ? (
-              <button type="button" className="secondary-action full" onClick={() => patchSelectedModel((model) => {
-                if (String(model.modelUrl || '').startsWith('blob:')) {
-                  const previousUrl = localModelUrlsRef.current.get(model.id);
-                  if (previousUrl) {
-                    forgetRpg3DLocalBlobFile(previousUrl);
-                    URL.revokeObjectURL(previousUrl);
-                  }
-                  localModelUrlsRef.current.delete(model.id);
-                }
-                setEmbeddedAnimationInfoByModelId((current) => {
-                  const next = { ...current };
-                  delete next[model.id];
-                  return next;
-                });
-                model.modelUrl = '';
-                model.modelData = '';
-                model.localModelFileId = '';
-                model.modelName = '';
-                model.modelFormat = '';
-                model.modelFileSize = 0;
-                model.modelResources = [];
-                model.modelAnimations = {};
-              })}>
-                Retirer modele 3D
-              </button>
-            ) : null}
-
-            {selectedModelSource ? (
-              <>
-                {selectedEmbeddedAnimations.length ? (
-                  <div className="character3d-embedded-animations">
-                    <CharacterHelpLabel help="Ces clips sont inclus directement dans le FBX/GLB importe via Modele 3D. Ils peuvent deja servir au preview et au test sans import marche/attaque separe.">
-                      Animations incluses
-                    </CharacterHelpLabel>
-                    <div className="character3d-embedded-animation-list">
-                      {selectedEmbeddedAnimations.map((clip) => (
-                        <span key={`${clip.name}:${clip.duration}:${clip.trackCount}`}>
-                          {clip.name} - {clip.duration.toFixed(2)}s
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-              </>
+                <button
+                  type="button"
+                  className={`secondary-action compact ${previewAnimationSlot ? '' : 'active'}`}
+                  aria-pressed={!previewAnimationSlot}
+                  onClick={() => selectPreviewAnimationSlot('')}
+                >
+                  Apercu
+                </button>
+                <button type="button" className="secondary-action compact" onClick={removeSelectedModelFile}>
+                  Retirer
+                </button>
+              </div>
             ) : null}
 
             {selectedModelSource ? (
               <div className="character3d-animation-imports">
-                <CharacterHelpLabel help={CHARACTER_FIELD_HELP.animationImport}>Animations</CharacterHelpLabel>
                 {CHARACTER_ANIMATION_SLOTS.map((slot) => {
-                  const animation = selectedModel.modelAnimations?.[slot.id] || {};
-                  const hasAnimation = Boolean(getAnimationSource(animation));
+                  const animationEntries = getAnimationEntriesForSlot(selectedModel.modelAnimations || {}, slot.id);
                   return (
                     <div className="character3d-animation-row" key={slot.id}>
+                      {animationEntries.map(({ key, animation }, index) => (
+                        <div className="character3d-animation-meta" key={key}>
+                          <small>{animation.modelName || 'animation 3D'}</small>
+                          <label className="button like secondary-action compact character3d-file-button">
+                            <Upload aria-hidden="true" size={14} />
+                            <span>Remplacer</span>
+                            <input
+                              type="file"
+                              accept={THREE_MODEL_ACCEPT}
+                              hidden
+                              onChange={(event) => {
+                                const file = event.target.files?.[0];
+                                event.target.value = '';
+                                setSelectedAnimationFile(slot.id, file, key);
+                              }}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            className={`secondary-action compact ${previewAnimationSlot === key ? 'active' : ''}`}
+                            aria-pressed={previewAnimationSlot === key}
+                            onClick={() => selectPreviewAnimationSlot(key)}
+                          >
+                            Apercu
+                          </button>
+                          <button type="button" className="secondary-action compact" onClick={() => removeSelectedAnimation(key)}>
+                            Retirer
+                          </button>
+                        </div>
+                      ))}
                       <label className="button like full secondary-action character3d-file-button">
-                        <Upload aria-hidden="true" size={16} />
-                        <span>{hasAnimation ? `Remplacer ${slot.label.toLowerCase()}` : `Importer ${slot.label.toLowerCase()}`}</span>
+                        <Plus aria-hidden="true" size={16} />
+                        <span>Ajouter {slot.label.toLowerCase()}</span>
                         <input
                           type="file"
                           accept={THREE_MODEL_ACCEPT}
@@ -676,26 +1856,39 @@ export default function Character3DTab({
                           }}
                         />
                       </label>
-                      {hasAnimation ? (
-                        <div className="character3d-animation-meta">
-                          <small>{slot.importedLabel}: {animation.modelName || 'animation 3D'}</small>
-                          <button
-                            type="button"
-                            className={`secondary-action compact ${getPreviewAnimationSlot(selectedModel, previewAnimationSlot) === slot.id ? 'active' : ''}`}
-                            onClick={() => setPreviewAnimationSlot(slot.id)}
-                          >
-                            Apercu
-                          </button>
-                          <button type="button" className="secondary-action compact" onClick={() => removeSelectedAnimation(slot.id)}>
-                            Retirer
-                          </button>
-                        </div>
-                      ) : null}
                     </div>
                   );
                 })}
               </div>
             ) : null}
+
+            <div className="character3d-equipment-section">
+              <CharacterHelpLabel help={CHARACTER_FIELD_HELP.equipment}>Equipement</CharacterHelpLabel>
+              <div className="character3d-equipment-grid">
+                {CHARACTER_EQUIPMENT_SLOTS.map((slot) => {
+                  const SlotIcon = slot.icon;
+                  const item = selectedEquipmentByType[slot.type] || getCharacterEquipmentItem(selectedModel, slot.type);
+                  const options = equipmentOptionsByType[slot.type] || [];
+                  return (
+                    <div className={`character3d-equipment-card character3d-equipment-card-${slot.type}`} key={slot.type}>
+                      <div className="character3d-equipment-card-head">
+                        <SlotIcon aria-hidden="true" size={15} />
+                        <strong>{slot.label}</strong>
+                      </div>
+                      <label>
+                        <span>Modele</span>
+                        <select value={item.weaponModel3dId || ''} onChange={(event) => setSelectedEquipmentModel(slot.type, event.target.value)}>
+                          <option value="">Aucun</option>
+                          {options.map((model) => (
+                            <option key={model.id} value={model.id}>{model.name || model.modelName || slot.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
 
             <div className="character3d-axis-scale">
               <div className="character3d-axis-scale-head">
@@ -736,33 +1929,35 @@ export default function Character3DTab({
                 ))}
               </div>
             </div>
-            <FieldRange
-              label="Lumiere carte"
-              help={CHARACTER_FIELD_HELP.materialBrightness}
-              min={CHARACTER_MATERIAL_BRIGHTNESS_MIN}
-              max={CHARACTER_MATERIAL_BRIGHTNESS_MAX}
-              step="0.05"
-              value={getCharacterMaterialBrightness(selectedModel)}
-              onChange={(value) => patchSelectedModel((model) => { model.materialBrightness = value; }, { rememberHistory: false })}
-            />
-            <FieldRange
-              label="Lumiere apercu"
-              help={CHARACTER_FIELD_HELP.previewLightIntensity}
-              min="0.2"
-              max="2.5"
-              step="0.05"
-              value={getPreviewLightIntensity(selectedModel)}
-              onChange={(value) => patchSelectedModel((model) => { model.previewLightIntensity = value; }, { rememberHistory: false })}
-            />
-            <FieldRange
-              label="Orientation lumiere"
-              help={CHARACTER_FIELD_HELP.previewLightOrientation}
-              min="-180"
-              max="180"
-              step="1"
-              value={getPreviewLightOrientation(selectedModel)}
-              onChange={(value) => patchSelectedModel((model) => { model.previewLightOrientation = value; }, { rememberHistory: false })}
-            />
+            <div className="character3d-light-fields">
+              <FieldNumber
+                label="Lumiere carte"
+                help={CHARACTER_FIELD_HELP.materialBrightness}
+                min={CHARACTER_MATERIAL_BRIGHTNESS_MIN}
+                max={CHARACTER_MATERIAL_BRIGHTNESS_MAX}
+                step="0.05"
+                value={getCharacterMaterialBrightness(selectedModel)}
+                onChange={(value) => patchSelectedModel((model) => { model.materialBrightness = value; }, { rememberHistory: false })}
+              />
+              <FieldNumber
+                label="Lumiere apercu"
+                help={CHARACTER_FIELD_HELP.previewLightIntensity}
+                min="0.2"
+                max="2.5"
+                step="0.05"
+                value={getPreviewLightIntensity(selectedModel)}
+                onChange={(value) => patchSelectedModel((model) => { model.previewLightIntensity = value; }, { rememberHistory: false })}
+              />
+              <FieldNumber
+                label="Orientation lumiere"
+                help={CHARACTER_FIELD_HELP.previewLightOrientation}
+                min="-180"
+                max="180"
+                step="1"
+                value={getPreviewLightOrientation(selectedModel)}
+                onChange={(value) => patchSelectedModel((model) => { model.previewLightOrientation = value; }, { rememberHistory: false })}
+              />
+            </div>
           </div>
         ) : (
           <div className="empty-state-inline">Aucun personnage 3D.</div>

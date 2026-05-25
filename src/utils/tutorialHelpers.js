@@ -1,10 +1,10 @@
 const PROFILE_TUTORIAL_SEEN_KEY_PREFIX = 'escapeGameBuilder.profileTutorialSeen';
 
-const BUILDER_TABS = ['scenes', 'media', 'objects', 'characters3d', 'decors3d', 'map', 'adventure', 'hero', 'combat', 'cinematics', 'combinations', 'enigmas', 'logic', 'ai', 'shop', 'preview', 'animation', 'help', 'score'];
-const BEGINNER_BUILDER_TABS = ['scenes', 'media', 'objects', 'characters3d', 'decors3d', 'enigmas', 'ai', 'shop', 'preview', 'help'];
-const INTERMEDIATE_BUILDER_TABS = ['scenes', 'media', 'objects', 'characters3d', 'decors3d', 'map', 'cinematics', 'enigmas', 'ai', 'shop', 'preview', 'help'];
-const ADVENTURE_BUILDER_TABS = ['scenes', 'media', 'objects', 'characters3d', 'decors3d', 'map', 'adventure', 'hero', 'cinematics', 'enigmas', 'logic', 'shop', 'preview', 'animation', 'help', 'score'];
-const HERO_ADVENTURE_BUILDER_TABS = ['scenes', 'media', 'objects', 'characters3d', 'decors3d', 'map', 'adventure', 'hero', 'combat', 'cinematics', 'enigmas', 'logic', 'shop', 'preview', 'animation', 'help', 'score'];
+const BUILDER_TABS = ['scenes', 'media', 'objects', 'characters3d', 'decors3d', 'map', 'adventure', 'hero', 'combat', 'cinematics', 'combinations', 'enigmas', 'logic', 'ai', 'shop', 'preview', 'animation', 'stunts', 'help', 'score'];
+const BEGINNER_BUILDER_TABS = ['scenes', 'media', 'objects', 'characters3d', 'decors3d', 'enigmas', 'stunts', 'ai', 'shop', 'preview', 'help'];
+const INTERMEDIATE_BUILDER_TABS = ['scenes', 'media', 'objects', 'characters3d', 'decors3d', 'map', 'cinematics', 'enigmas', 'stunts', 'ai', 'shop', 'preview', 'help'];
+const ADVENTURE_BUILDER_TABS = ['scenes', 'media', 'objects', 'characters3d', 'decors3d', 'map', 'adventure', 'hero', 'cinematics', 'enigmas', 'logic', 'shop', 'preview', 'animation', 'stunts', 'help', 'score'];
+const HERO_ADVENTURE_BUILDER_TABS = ['scenes', 'media', 'objects', 'characters3d', 'decors3d', 'map', 'adventure', 'hero', 'combat', 'cinematics', 'enigmas', 'logic', 'shop', 'preview', 'animation', 'stunts', 'help', 'score'];
 const PROJECT_MODES = ['beginner', 'intermediate', 'expert', 'adventure', 'hero_adventure'];
 
 export const getProfileTutorialSeenKey = (userId) => `${PROFILE_TUTORIAL_SEEN_KEY_PREFIX}.${userId}`;

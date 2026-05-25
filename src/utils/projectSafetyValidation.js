@@ -136,15 +136,42 @@ const ITEM_KEYS = makeSet([
 ]);
 
 const CHARACTER_3D_MODEL_KEYS = makeSet([
-  'id', 'name', 'role', 'shape', 'modelUrl', 'modelData', 'modelName', 'modelResources',
+  'id', 'name', 'role', 'shape', 'modelUrl', 'modelData', 'modelName', 'modelResources', 'inventory',
   'characterModelScale', 'characterModelScaleX', 'characterModelScaleY', 'characterModelScaleZ', 'characterModelScaleProportional',
-  'materialBrightness', 'previewLightIntensity', 'previewLightOrientation',
+  'materialBrightness', 'previewLightIntensity', 'previewLightOrientation', 'characterRigPoints',
   ...SHARED_AI_KEYS,
 ]);
+
+const CHARACTER_RIG_POINT_KEYS = makeSet([
+  'id', 'label', 'shortLabel', 'socket', 'group', 'hand', 'finger', 'joint', 'connectTo', 'hideLabel', 'size', 'enabled', 'x', 'y', 'z',
+]);
+
+const EQUIPMENT_GRIP_KEYS = [
+  'weaponModelRotationX', 'weaponModelRotationY', 'weaponModelRotationZ',
+  'weaponGripHand', 'weaponGripReferenceScale',
+  'weaponGripRightEnabled', 'weaponGripRightX', 'weaponGripRightY', 'weaponGripRightZ',
+  'weaponGripRightRotationX', 'weaponGripRightRotationY', 'weaponGripRightRotationZ',
+  'weaponGripLeftEnabled', 'weaponGripLeftX', 'weaponGripLeftY', 'weaponGripLeftZ',
+  'weaponGripLeftRotationX', 'weaponGripLeftRotationY', 'weaponGripLeftRotationZ',
+  'shieldGripArm', 'shieldGripReferenceScale',
+  'shieldGripHandEnabled', 'shieldGripHandX', 'shieldGripHandY', 'shieldGripHandZ',
+  'shieldGripElbowEnabled', 'shieldGripElbowX', 'shieldGripElbowY', 'shieldGripElbowZ',
+  'armorGripReferenceScale',
+  'armorGripLeftShoulderEnabled', 'armorGripLeftShoulderX', 'armorGripLeftShoulderY', 'armorGripLeftShoulderZ',
+  'armorGripRightShoulderEnabled', 'armorGripRightShoulderX', 'armorGripRightShoulderY', 'armorGripRightShoulderZ',
+  'armorGripLeftElbowEnabled', 'armorGripLeftElbowX', 'armorGripLeftElbowY', 'armorGripLeftElbowZ',
+  'armorGripRightElbowEnabled', 'armorGripRightElbowX', 'armorGripRightElbowY', 'armorGripRightElbowZ',
+  'armorGripLowerBellyEnabled', 'armorGripLowerBellyX', 'armorGripLowerBellyY', 'armorGripLowerBellyZ',
+  'armorCanvasCutEnabled',
+  'armorSegmentAssignments',
+  'armorCutContours',
+  'armorCutPaintStrokes',
+];
 
 const DECOR_3D_MODEL_KEYS = makeSet([
   'id', 'name', 'kind', 'imageData', 'imageName', 'baseColor', 'accentColor', 'roofColor',
   'modelUrl', 'modelData', 'modelName', 'modelResources', 'width', 'depth', 'height', 'floorZeroZ', 'scale', 'modelSizeProportional', 'elevation', 'materialBrightness', 'collision', 'repeatTexture', 'notes',
+  ...EQUIPMENT_GRIP_KEYS,
   ...MEDIA_ID_KEYS, ...SHARED_AI_KEYS,
 ]);
 
@@ -305,7 +332,10 @@ const getAllowedKeys = (path) => {
   if (signature === 'acts.[]') return ACT_KEYS;
   if (signature === 'items.[]') return ITEM_KEYS;
   if (signature === 'characterModels3d.[]') return CHARACTER_3D_MODEL_KEYS;
+  if (signature === 'characterModels3d.[].characterRigPoints.[]') return CHARACTER_RIG_POINT_KEYS;
   if (signature === 'decorModels3d.[]') return DECOR_3D_MODEL_KEYS;
+  if (signature === 'decorModels3d.[].armorSegmentAssignments.[]') return makeSet(['path', 'name', 'segment']);
+  if (signature === 'characterModels3d.[].inventory.[].armorSegmentAssignments.[]') return makeSet(['path', 'name', 'segment']);
   if (signature === 'combinations.[]') return COMBINATION_KEYS;
   if (signature === 'combinations.[].conditions.[]') return ADVANCED_CONDITION_KEYS;
   if (signature === 'scenes.[]') return SCENE_KEYS;

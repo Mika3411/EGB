@@ -60,6 +60,13 @@ const isPlayerMoveKeyCode = (code) => (
   ])
 );
 
+export const isEditableKeyboardTarget = (target) => {
+  if (!target || typeof target.closest !== 'function') return false;
+  const editable = target.closest('input, textarea, select, [contenteditable]');
+  if (!editable) return false;
+  return editable.getAttribute?.('contenteditable') !== 'false';
+};
+
 export const getPlayerKeyboardInput = (keys = new Set()) => {
   let inputX = 0;
   let inputY = 0;
@@ -887,6 +894,7 @@ export function useRpg3DGameLoop({
 
   useEffect(() => {
     const handleKeyDown = (event) => {
+      if (workspaceTab !== 'arcade' || isEditableKeyboardTarget(event.target)) return;
       if (PLAYER_PREVENT_DEFAULT_KEYS.has(event.code)) event.preventDefault();
       if (event.code === 'KeyP') setIsPaused((paused) => !paused);
       else if (isPlayerMoveKeyCode(event.code)) setIsPaused(false);
@@ -899,7 +907,7 @@ export function useRpg3DGameLoop({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [setIsPaused]);
+  }, [setIsPaused, workspaceTab]);
 
   const updateWorldPointer = useCallback(({ x, y, screenX, screenY }) => {
     if (Number.isFinite(screenX)) pointerRef.current.x = screenX;

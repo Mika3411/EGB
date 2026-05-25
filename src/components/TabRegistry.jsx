@@ -272,6 +272,15 @@ const TwoDAnimeEditor = React.lazy(() => import('./TwoDAnimeEditor.jsx').then(({
   ),
 })));
 
+const StuntAnimationTab = React.lazy(() => import('./StuntAnimationTab.jsx').then(({ default: Component }) => ({
+  default: ({ project, onUpdateProject }) => (
+    <Component
+      project={project}
+      patchProject={onUpdateProject}
+    />
+  ),
+})));
+
 export const TABS = {
   scenes: { component: ScenesTab, label: 'Scènes' },
   media: { component: MediaTab, label: 'Média' },
@@ -288,6 +297,7 @@ export const TABS = {
   decors3d: { component: Decor3DTab, label: 'Objets 3D' },
   preview: { component: PreviewPlayerPanel, label: 'Preview' },
   animation: { component: TwoDAnimeEditor, label: 'Animation' },
+  stunts: { component: StuntAnimationTab, label: 'Cascadeur' },
   ai: { component: AiTab, label: 'IA' },
   shop: { component: ShopTab, label: 'Boutique' },
   help: { component: HelpTab, label: 'Aide' },

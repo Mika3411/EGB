@@ -50,6 +50,16 @@ export const createFallbackRpg3DCanvas = (config = DEFAULT_ARCADE_CONFIG) => ({
   updatedAt: '',
 });
 
+const cloneStuntAnimationArray = (items = []) => (
+  Array.isArray(items)
+    ? items.map((clip) => ({
+      ...(clip || {}),
+      keyframes: clonePlainObjectArray(clip?.keyframes || []),
+      rigFrames: clonePlainObjectArray(clip?.rigFrames || []),
+    }))
+    : []
+);
+
 export const getSourceProjectActs = (sourceProject = null) => (
   Array.isArray(sourceProject?.acts) && sourceProject.acts.length
     ? sourceProject.acts
@@ -123,6 +133,7 @@ export const createDefaultStudioProject = () => ({
   characterModels3d: [],
   decorModels3d: [],
   mediaAssets: [],
+  stuntAnimations: [],
   rpg3dActs: getDefaultRpg3DActs(),
   rpg3dScenes: getDefaultRpg3DScenes(),
   rpg3dCanvases: [createFallbackRpg3DCanvas()],
@@ -142,6 +153,7 @@ export const cloneStudioProjectForEdit = (studioProject = null, fallbackConfig =
     characterModels3d: clonePlainObjectArray(studioProject?.characterModels3d || []),
     decorModels3d: clonePlainObjectArray(studioProject?.decorModels3d || []),
     mediaAssets: clonePlainObjectArray(studioProject?.mediaAssets || []),
+    stuntAnimations: cloneStuntAnimationArray(studioProject?.stuntAnimations || []),
     rpg3dActs: acts,
     rpg3dScenes: scenes,
     rpg3dCanvases: canvases,

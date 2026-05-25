@@ -34,6 +34,12 @@ const isDisconnectedSaveStatus = (status = '') => (
   || status === RPG3D_LOCAL_SESSION_FALLBACK_STATUS
 );
 
+const formatRpg3DSaveError = (error, fallback = 'upload impossible') => {
+  const message = String(error?.message || error || '').trim();
+  if (!message || message === 'Failed to fetch') return fallback;
+  return message;
+};
+
 export function useRpg3DSaveSync({
   authReady = true,
   autosaveVersionRef,
@@ -253,7 +259,7 @@ export function useRpg3DSaveSync({
               resetGame(localSync.config);
             }
             lastSavedAutosaveVersionRef.current = Math.max(lastSavedAutosaveVersionRef.current, savingVersion);
-            setManagementSaveStatus(`Sauvegarde locale terminee. Supabase inaccessible: ${error?.message || 'upload impossible'}`);
+            setManagementSaveStatus(`Sauvegarde locale terminee. Supabase inaccessible: ${formatRpg3DSaveError(error)}`);
             return;
           }
         } catch {
@@ -265,7 +271,8 @@ export function useRpg3DSaveSync({
         : supabaseConfigured
           ? 'Sauvegarde Supabase impossible'
           : 'Sauvegarde locale impossible';
-      setManagementSaveStatus(error?.message ? `${errorPrefix}: ${error.message}` : `${errorPrefix}.`);
+      const errorMessage = formatRpg3DSaveError(error, '');
+      setManagementSaveStatus(errorMessage ? `${errorPrefix}: ${errorMessage}` : `${errorPrefix}.`);
     } finally {
       isSavingAssetsRef.current = false;
       setIsSavingAssets(false);

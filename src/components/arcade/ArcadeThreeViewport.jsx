@@ -78,6 +78,7 @@ import {
   toScenePosition,
   updateActionZoneHoverHighlight,
   updateDynamicTransforms,
+  updateFingerTipsWeaponSockets,
   updateSceneLighting,
   updateStaticEntityTransforms,
 } from './rpg3dSceneBuilders.js';
@@ -1354,6 +1355,7 @@ function ArcadeThreeViewport({
           getSupportHeight: getActorSupportHeight,
         });
       }
+      updateFingerTipsWeaponSockets(dynamicGroup);
       const heroVisualSignature = dynamicHeroes.map((hero) => [
         getActorVisualSignature(hero),
         playMode ? '' : `${Math.round(hero.x)}:${Math.round(hero.y)}`,

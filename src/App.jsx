@@ -15,6 +15,7 @@ const PublicGallery = React.lazy(() => import('./components/PublicGallery'));
 const BuilderApp = React.lazy(() => import('./BuilderApp.jsx'));
 const BuilderTutorial = React.lazy(() => import('./components/BuilderTutorial'));
 const Rpg3DMode = React.lazy(() => import('./components/Rpg3DMode'));
+const StuntAnimationPage = React.lazy(() => import('./components/StuntAnimationPage.jsx'));
 
 const TabLoadingFallback = () => (
   <section className="panel">
@@ -55,6 +56,7 @@ const LandingLoadingFallback = () => (
 const createShellInitialScreen = () => {
   if (typeof window === 'undefined') return 'profile';
   const params = new URLSearchParams(window.location.search);
+  if (params.get('stunt') === '1') return 'stunts';
   if (params.get('arcade') === '1') return 'arcade';
   if (params.get('playUser') && params.get('playProject')) return 'shared-preview';
   if (params.get('gallery') === '1' || window.__escapeInitialGalleryGame) return 'gallery';
@@ -432,6 +434,24 @@ function ShellApp() {
           authorProfile={auth.authorProfile}
           authReady={auth.isReady}
           project={auth.activeProject?.data || null}
+        />
+      </Suspense>
+    );
+  }
+
+  if (screen === 'stunts') {
+    return (
+      <Suspense fallback={<LandingLoadingFallback />}>
+        <StuntAnimationPage
+          onBack={() => {
+            if (typeof window !== 'undefined') {
+              const url = new URL(window.location.href);
+              url.searchParams.delete('stunt');
+              window.history.replaceState({}, '', url.toString());
+            }
+            writeAppUiState({ screen: 'profile' });
+            setScreen('profile');
+          }}
         />
       </Suspense>
     );

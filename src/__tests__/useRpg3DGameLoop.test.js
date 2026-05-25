@@ -16,6 +16,7 @@ import {
   getBlockingObstaclesForEntityMove,
   getPlayerKeyboardInput,
   hasLineOfSight,
+  isEditableKeyboardTarget,
   resolveMapCollision,
 } from '../hooks/useRpg3DGameLoop.js';
 
@@ -266,5 +267,22 @@ describe('useRpg3DGameLoop pure helpers', () => {
     expect(getPlayerKeyboardInput(new Set(['KeyA']))).toEqual({ inputX: -1, inputY: 0 });
     expect(getPlayerKeyboardInput(new Set(['KeyQ']))).toEqual({ inputX: -1, inputY: 0 });
     expect(getPlayerKeyboardInput(new Set(['KeyD', 'KeyZ']))).toEqual({ inputX: 1, inputY: -1 });
+  });
+
+  it('leaves keyboard input fields to normal text editing', () => {
+    document.body.innerHTML = `
+      <label>
+        Nom
+        <input value="Mefx" />
+      </label>
+      <div contenteditable="true"><span>Texte</span></div>
+      <div contenteditable="false"><span>Non editable</span></div>
+      <button type="button">Carte</button>
+    `;
+
+    expect(isEditableKeyboardTarget(document.querySelector('input'))).toBe(true);
+    expect(isEditableKeyboardTarget(document.querySelector('[contenteditable="true"] span'))).toBe(true);
+    expect(isEditableKeyboardTarget(document.querySelector('[contenteditable="false"] span'))).toBe(false);
+    expect(isEditableKeyboardTarget(document.querySelector('button'))).toBe(false);
   });
 });

@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -48,6 +49,8 @@ const publicJob = (job = {}) => ({
   originalSize: job.originalSize || 0,
   outputSize: job.outputSize || 0,
   sourceFormat: job.sourceFormat || '',
+  cacheUrl: job.cacheUrl || '',
+  fromCache: Boolean(job.fromCache),
   createdAt: job.createdAt || 0,
   updatedAt: job.updatedAt || 0,
 });
@@ -94,6 +97,66 @@ const getModelToolTempRoot = async () => {
     }
   }
   return os.tmpdir();
+};
+
+const getModelToolCacheKey = (uploadedFile, settings = {}) => {
+  const contentHash = createHash('sha256').update(uploadedFile.data).digest('hex').slice(0, 32);
+  return `${safeFilename(settings.outputSuffix || 'web')}-${contentHash}`;
+};
+
+const getModelToolCachePaths = async (cacheKey) => {
+  const cacheDir = path.join(await getModelToolTempRoot(), 'cache');
+  await fs.mkdir(cacheDir, { recursive: true });
+  return {
+    outputPath: path.join(cacheDir, `${cacheKey}.glb`),
+    metadataPath: path.join(cacheDir, `${cacheKey}.json`),
+  };
+};
+
+const getModelToolCacheUrl = (cacheKey = '') => (
+  cacheKey ? `/api/model-tools/cache/${encodeURIComponent(cacheKey)}.glb` : ''
+);
+
+const readModelToolCache = async (cacheKey, outputName = '') => {
+  try {
+    const { outputPath, metadataPath } = await getModelToolCachePaths(cacheKey);
+    const [metadata, outputStats] = await Promise.all([
+      fs.readFile(metadataPath, 'utf8').then((content) => JSON.parse(content.replace(/^\uFEFF/, ''))),
+      fs.stat(outputPath),
+    ]);
+    if (!outputStats?.size) return null;
+    return {
+      ...metadata,
+      outputPath,
+      outputName: outputName || metadata.outputName || path.basename(outputPath),
+      outputSize: outputStats.size,
+      cacheId: cacheKey,
+      cacheUrl: getModelToolCacheUrl(cacheKey),
+      fromCache: true,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const writeModelToolCache = async (cacheKey, result = {}) => {
+  if (!cacheKey || !result.outputPath) return;
+  try {
+    const { outputPath, metadataPath } = await getModelToolCachePaths(cacheKey);
+    if (path.resolve(result.outputPath) !== path.resolve(outputPath)) {
+      await fs.copyFile(result.outputPath, outputPath);
+    }
+    await fs.writeFile(metadataPath, JSON.stringify({
+      outputName: result.outputName || path.basename(outputPath),
+      originalSize: Number(result.originalSize) || 0,
+      outputSize: Number(result.outputSize) || 0,
+      sourceFormat: result.sourceFormat || '',
+      qualityDetail: result.qualityDetail || '',
+      cachedAt: Date.now(),
+    }, null, 2), 'utf8');
+  } catch {
+    // Cache is best-effort; conversion result is still valid.
+  }
 };
 
 const makeModelToolWorkDir = async (prefix) => {
@@ -260,9 +323,19 @@ const runCommand = (command, args, options = {}) => new Promise((resolve, reject
     }, 1200)
     : null;
 
-  const appendOutput = (target, chunk) => {
+const appendOutput = (target, chunk) => {
     const next = `${target}${chunk.toString('utf8')}`;
     return next.length > 12000 ? next.slice(-12000) : next;
+  };
+
+  const summarizeCommandFailureOutput = (value = '') => {
+    const lines = String(value || '')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .filter((line) => !/^(INFO|WARNING)\b/i.test(line));
+    const summary = lines.slice(-6).join(' ');
+    return summary.length > 600 ? `${summary.slice(0, 600)}...` : summary;
   };
 
   child.stdout.on('data', (chunk) => {
@@ -281,7 +354,7 @@ const runCommand = (command, args, options = {}) => new Promise((resolve, reject
       resolve({ output, errorOutput });
       return;
     }
-    const detail = [errorOutput.trim(), output.trim()].filter(Boolean).join('\n').trim();
+    const detail = summarizeCommandFailureOutput([errorOutput.trim(), output.trim()].filter(Boolean).join('\n').trim());
     const commandLabel = options.label || path.basename(command);
     reject(makeHttpError(
       `${commandLabel} a echoue${Number.isFinite(Number(code)) ? ` (code ${code})` : ''}.${detail ? ` ${detail}` : ''}`,
@@ -299,21 +372,26 @@ argv = sys.argv
 separator = argv.index('--')
 input_path = argv[separator + 1]
 output_path = argv[separator + 2]
+animation_only = len(argv) > separator + 3 and argv[separator + 3] == 'animation'
 
 bpy.ops.object.select_all(action='SELECT')
 bpy.ops.object.delete()
 bpy.ops.import_scene.fbx(filepath=input_path)
+if animation_only:
+    for obj in list(bpy.context.scene.objects):
+        if obj.type == 'MESH':
+            bpy.data.objects.remove(obj, do_unlink=True)
 for obj in bpy.context.scene.objects:
     obj.select_set(True)
 bpy.context.view_layer.objects.active = bpy.context.selected_objects[0] if bpy.context.selected_objects else None
-bpy.ops.export_scene.gltf(filepath=output_path, export_format='GLB', export_animations=True)
+bpy.ops.export_scene.gltf(filepath=output_path, export_format='GLB', export_animations=True, export_force_sampling=True)
 `;
 
 const convertFbxWithBlender = async (inputPath, outputPath, workDir, progressOptions = {}) => {
   const blenderPath = await findBlenderExecutable();
   const scriptPath = path.join(workDir, 'fbx_to_glb.py');
   await fs.writeFile(scriptPath, blenderScript, 'utf8');
-  await runCommand(blenderPath, ['--background', '--python', scriptPath, '--', inputPath, outputPath], {
+  await runCommand(blenderPath, ['--background', '--python', scriptPath, '--', inputPath, outputPath, progressOptions.animationOnly ? 'animation' : 'model'], {
     ...progressOptions,
     timeoutMs: MODEL_TOOL_TIMEOUT_MS,
   });
@@ -481,6 +559,7 @@ export const getModelToolOutputOversize = (outputSize, settings = {}) => {
 };
 
 const assertModelToolOutputFitsInput = (outputSize, settings = {}) => {
+  if (settings.allowOutputLargerThanInput === true) return;
   const oversize = getModelToolOutputOversize(outputSize, settings);
   if (!oversize) return;
   throw makeHttpError(
@@ -501,6 +580,19 @@ const runGltfTransformCli = async (args, progressOptions = {}) => {
     label: gltfTransform.label,
     timeoutMs: MODEL_TOOL_TIMEOUT_MS,
   });
+};
+
+const getModelToolRawMessage = (error = null) => String(error?.message || error || '').trim();
+
+const isModelToolResourceFetchError = (error = null) => (
+  getModelToolRawMessage(error) === 'Failed to fetch'
+  || /failed to fetch|fetch failed|network\s*error/i.test(getModelToolRawMessage(error))
+);
+
+const markModelToolOptimizationFallback = (settings = {}, detail = '') => {
+  settings.optimizationFallbackDetail = detail || 'Optimisation contournee: textures source conservees.';
+  settings.allowOutputLargerThanInput = true;
+  settings.maxOutputBytesFromInput = 0;
 };
 
 const withProgressRange = (progressOptions = {}, progressStart, progressMax) => ({
@@ -676,6 +768,47 @@ const writeUploadedModel = async (file, workDir) => {
 };
 
 export const getModelToolQualitySettings = (quality = 'web') => {
+  if (quality === 'animation-source-v2') {
+    return {
+      textureCompression: false,
+      compression: false,
+      simplify: false,
+      outputSuffix: 'animation-source-v2',
+      skipOptimization: true,
+      allowOutputLargerThanInput: true,
+      animationOnly: true,
+    };
+  }
+  if (quality === 'animation-source' || quality === 'animation-source-meshopt' || quality === 'animation') {
+    return {
+      textureCompression: false,
+      compression: false,
+      simplify: false,
+      outputSuffix: 'animation-source',
+      skipOptimization: true,
+      allowOutputLargerThanInput: true,
+      animationOnly: true,
+    };
+  }
+  if (quality === 'source-meshopt' || quality === 'runtime-source' || quality === 'native') {
+    return {
+      textureCompression: false,
+      compression: 'meshopt',
+      simplify: false,
+      outputSuffix: 'source-meshopt',
+      meshoptOnly: true,
+    };
+  }
+  if (quality === 'source' || quality === 'original' || quality === 'raw') {
+    return {
+      textureCompression: false,
+      compression: false,
+      simplify: false,
+      outputSuffix: 'source',
+      skipOptimization: true,
+      allowOutputLargerThanInput: true,
+    };
+  }
   if (quality === 'quality') {
     return {
       textureSize: 2048,
@@ -762,7 +895,24 @@ const buildOptimizedGlb = async (uploadedFile, fields, workDir, onProgress = () 
   onProgress({ progress: 12, label: 'Preparation...', detail: 'Lecture du fichier.' });
   const source = await writeUploadedModel(uploadedFile, workDir);
   const settings = { ...getModelToolQualitySettings(fields.quality || 'web') };
-  if (source.originalSize && source.sourceFormat === 'fbx') {
+  const outputSuffix = settings.outputSuffix || 'web';
+  const outputName = `${baseName(uploadedFile.filename || source.sourceName)}-${outputSuffix}.glb`;
+  const cacheKey = getModelToolCacheKey(uploadedFile, settings);
+  const forceConversion = String(fields.force || fields.forceConversion || '').toLowerCase() === 'true';
+  const cachedResult = forceConversion ? null : await readModelToolCache(cacheKey, outputName);
+  if (cachedResult) {
+    onProgress({
+      progress: 99,
+      label: 'GLB cache local...',
+      detail: `${formatBytesForServer(cachedResult.outputSize)} deja converti.`,
+    });
+    return {
+      ...cachedResult,
+      originalSize: cachedResult.originalSize || source.originalSize || uploadedFile.data.byteLength,
+      sourceFormat: cachedResult.sourceFormat || source.sourceFormat,
+    };
+  }
+  if (source.originalSize && source.sourceFormat === 'fbx' && settings.allowOutputLargerThanInput !== true) {
     settings.originalInputBytes = source.originalSize;
     settings.maxOutputBytesFromInput = Math.floor(source.originalSize * (Number(settings.maxOutputToInputRatio) || 1));
   }
@@ -775,50 +925,125 @@ const buildOptimizedGlb = async (uploadedFile, fields, workDir, onProgress = () 
     settings.minOutputBytes = Math.round(targetOutputBytes * (Number(settings.minOutputRatio) || 0.8));
     settings.maxOutputBytes = Math.round(targetOutputBytes * (Number(settings.maxOutputRatio) || 1.2));
   }
-  const convertedPath = path.join(workDir, `${baseName(source.sourceName)}-converted.glb`);
-  const outputSuffix = settings.outputSuffix || 'web';
+  let convertedPath = path.join(workDir, `${baseName(source.sourceName)}-converted.glb`);
   const optimizedPath = path.join(workDir, `${baseName(source.sourceName)}-${outputSuffix}.glb`);
+  let convertedFromSourceCache = false;
   onProgress({
     progress: 24,
     label: source.sourceFormat === 'fbx' ? 'FBX prepare...' : 'GLB prepare...',
     detail: source.sourceFormat === 'zip' ? 'Archive extraite.' : source.sourceName,
   });
 
+  if (settings.meshoptOnly && source.sourceFormat === 'fbx') {
+    const sourceCacheKey = getModelToolCacheKey(uploadedFile, { outputSuffix: 'source' });
+    const cachedSource = await readModelToolCache(sourceCacheKey, `${baseName(uploadedFile.filename || source.sourceName)}-source.glb`);
+    if (cachedSource?.outputPath) {
+      convertedPath = cachedSource.outputPath;
+      convertedFromSourceCache = true;
+      onProgress({
+        progress: 66,
+        label: 'GLB source cache...',
+        detail: `${formatBytesForServer(cachedSource.outputSize)} deja converti.`,
+      });
+    }
+  }
+
   if (source.sourceFormat === 'fbx') {
-    onProgress({ progress: 34, label: 'Conversion Blender...', detail: 'Import FBX puis export GLB.' });
-    await convertFbxWithBlender(source.inputPath, convertedPath, workDir, {
-      progressStart: 34,
-      progressMax: 66,
-      onProgress: (progress) => onProgress({ progress, label: 'Conversion Blender...', detail: 'Import FBX puis export GLB.' }),
-    });
+    if (!convertedFromSourceCache) {
+      onProgress({ progress: 34, label: 'Conversion Blender...', detail: 'Import FBX puis export GLB.' });
+      await convertFbxWithBlender(source.inputPath, convertedPath, workDir, {
+        animationOnly: Boolean(settings.animationOnly),
+        progressStart: 34,
+        progressMax: 66,
+        onProgress: (progress) => onProgress({ progress, label: 'Conversion Blender...', detail: 'Import FBX puis export GLB.' }),
+      });
+    }
   } else {
     await fs.copyFile(source.inputPath, convertedPath);
   }
 
-  const optimizeDetail = settings.texturePipeline === 'webp-quality'
-    ? 'Textures 4096 haute qualite.'
-    : 'Compression Meshopt/WebP.';
-  onProgress({ progress: 70, label: 'Optimisation GLB...', detail: optimizeDetail });
-  await optimizeGlb(convertedPath, optimizedPath, settings, {
-    progressStart: 70,
-    progressMax: 96,
-    onProgress: (progress) => onProgress({ progress, label: 'Optimisation GLB...', detail: optimizeDetail }),
-  });
+  const optimizeDetail = settings.animationOnly && settings.skipOptimization
+    ? 'Animation seule, aucune compression.'
+    : settings.skipOptimization
+    ? 'Aucune compression ni simplification.'
+    : (settings.meshoptOnly
+      ? 'Textures source conservees, buffers 3D Meshopt.'
+      : settings.texturePipeline === 'webp-quality'
+      ? 'Textures 4096 haute qualite.'
+      : 'Compression Meshopt/WebP.');
+  const optimizeLabel = settings.skipOptimization ? 'Finalisation GLB...' : 'Optimisation GLB...';
+  onProgress({ progress: 70, label: optimizeLabel, detail: optimizeDetail });
+  if (settings.skipOptimization) {
+    await fs.copyFile(convertedPath, optimizedPath);
+    onProgress({ progress: 96, label: optimizeLabel, detail: optimizeDetail });
+  } else if (settings.meshoptOnly) {
+    try {
+      await runGltfTransformCli(
+        buildGltfTransformMeshoptArgs(convertedPath, optimizedPath, settings),
+        {
+          progressStart: 70,
+          progressMax: 96,
+          onProgress: (progress) => onProgress({ progress, label: optimizeLabel, detail: optimizeDetail }),
+        },
+      );
+    } catch (error) {
+      if (!isModelToolResourceFetchError(error)) throw error;
+      markModelToolOptimizationFallback(settings);
+      await fs.copyFile(convertedPath, optimizedPath);
+      onProgress({ progress: 96, label: 'GLB source conserve...', detail: settings.optimizationFallbackDetail });
+    }
+  } else {
+    try {
+      await optimizeGlb(convertedPath, optimizedPath, settings, {
+        progressStart: 70,
+        progressMax: 96,
+        onProgress: (progress) => onProgress({ progress, label: optimizeLabel, detail: optimizeDetail }),
+      });
+    } catch (error) {
+      if (!isModelToolResourceFetchError(error)) throw error;
+      markModelToolOptimizationFallback(settings);
+      try {
+        await runGltfTransformCli(
+          buildGltfTransformMeshoptArgs(convertedPath, optimizedPath, settings),
+          {
+            progressStart: 70,
+            progressMax: 96,
+            onProgress: (progress) => onProgress({ progress, label: 'Fallback Meshopt...', detail: settings.optimizationFallbackDetail }),
+          },
+        );
+      } catch {
+        await fs.copyFile(convertedPath, optimizedPath);
+      }
+      onProgress({ progress: 96, label: 'GLB source conserve...', detail: settings.optimizationFallbackDetail });
+    }
+  }
   const outputStats = await fs.stat(optimizedPath);
   assertModelToolOutputFitsInput(outputStats.size, settings);
-  const outputName = `${baseName(uploadedFile.filename || source.sourceName)}-${outputSuffix}.glb`;
-  const qualityDetail = settings.selectedQualityCandidate
-    ? `Preset ${settings.selectedQualityCandidate}.`
+  const qualityDetail = settings.optimizationFallbackDetail
+    ? settings.optimizationFallbackDetail
+    : settings.selectedQualityCandidate
+      ? `Preset ${settings.selectedQualityCandidate}.`
+    : settings.animationOnly
+      ? 'Animation seule sans mesh ni compression.'
+    : settings.skipOptimization
+      ? 'Qualite source sans compression.'
+    : settings.meshoptOnly
+      ? 'Textures source conservees, Meshopt sans simplification.'
     : '';
   onProgress({ progress: 99, label: 'GLB pret...', detail: qualityDetail || outputName });
-  return {
+  const result = {
     outputPath: optimizedPath,
     outputName,
     originalSize: source.originalSize || uploadedFile.data.byteLength,
     outputSize: outputStats.size,
     sourceFormat: source.sourceFormat,
     qualityDetail,
+    cacheId: cacheKey,
+    cacheUrl: getModelToolCacheUrl(cacheKey),
+    fromCache: false,
   };
+  await writeModelToolCache(cacheKey, result);
+  return result;
 };
 
 const handleSyncConversion = async (req, res) => {
@@ -860,6 +1085,8 @@ const runModelToolJob = async (jobId, uploadedFile, fields) => {
       originalSize: result.originalSize,
       outputSize: result.outputSize,
       sourceFormat: result.sourceFormat,
+      cacheUrl: result.cacheUrl || '',
+      fromCache: Boolean(result.fromCache),
     });
   } catch (error) {
     updateJob(jobId, {
@@ -879,6 +1106,88 @@ const formatBytesForServer = (bytes = 0) => {
   if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} Mo`;
   if (value >= 1024) return `${Math.round(value / 1024)} Ko`;
   return `${Math.round(value)} o`;
+};
+
+const readSmallJsonBody = async (req) => {
+  const body = await readRequestBuffer(req, 64 * 1024);
+  if (!body.byteLength) return {};
+  try {
+    return JSON.parse(body.toString('utf8').replace(/^\uFEFF/, ''));
+  } catch {
+    throw makeHttpError('JSON local invalide.', 400, 'MODEL_TOOL_JSON_INVALID');
+  }
+};
+
+const findModelToolCachedConversion = async ({ filename = '', size = 0, quality = 'web' } = {}) => {
+  const settings = getModelToolQualitySettings(quality || 'web');
+  const outputSuffix = settings.outputSuffix || 'web';
+  const expectedSize = Number(size) || 0;
+  const cacheDir = path.join(await getModelToolTempRoot(), 'cache');
+  const inputBase = filename ? baseName(filename) : '';
+  let entries = [];
+  try {
+    entries = await fs.readdir(cacheDir);
+  } catch {
+    return null;
+  }
+  let latestMatch = null;
+  for (const entry of entries) {
+    if (!entry.startsWith(`${outputSuffix}-`) || !entry.endsWith('.json')) continue;
+    const metadataPath = path.join(cacheDir, entry);
+    try {
+      const metadata = JSON.parse((await fs.readFile(metadataPath, 'utf8')).replace(/^\uFEFF/, ''));
+      if (expectedSize && Number(metadata.originalSize) !== expectedSize) continue;
+      const outputName = metadata.outputName || '';
+      if (inputBase && outputName && !baseName(outputName).startsWith(inputBase)) continue;
+      const outputPath = path.join(cacheDir, entry.replace(/\.json$/i, '.glb'));
+      const outputStats = await fs.stat(outputPath);
+      if (!outputStats.size) continue;
+      const match = {
+        ...metadata,
+        cacheId: entry.replace(/\.json$/i, ''),
+        outputPath,
+        outputName: outputName || `${inputBase || 'modele'}-${outputSuffix}.glb`,
+        outputSize: outputStats.size,
+      };
+      if (expectedSize || inputBase) return match;
+      if (!latestMatch || Number(match.cachedAt || 0) > Number(latestMatch.cachedAt || 0)) latestMatch = match;
+    } catch {
+      // Ignore broken cache entries.
+    }
+  }
+  return latestMatch;
+};
+
+const createCachedModelToolJob = async (req, res) => {
+  const body = await readSmallJsonBody(req);
+  const cachedResult = await findModelToolCachedConversion(body);
+  if (!cachedResult) {
+    sendToolJson(req, res, 404, { error: 'Aucun GLB local deja converti pour ce fichier.' });
+    return;
+  }
+  const jobId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  const now = Date.now();
+  const job = {
+    id: jobId,
+    status: 'done',
+    progress: 100,
+    label: 'Cache local',
+    detail: `${formatBytesForServer(cachedResult.originalSize)} -> ${formatBytesForServer(cachedResult.outputSize)}${cachedResult.qualityDetail ? ` (${cachedResult.qualityDetail})` : ''}`,
+    filename: cachedResult.outputName,
+    cacheUrl: `/api/model-tools/cache/${encodeURIComponent(cachedResult.cacheId)}.glb`,
+    fromCache: true,
+    originalSize: Number(cachedResult.originalSize) || Number(body.size) || 0,
+    outputSize: cachedResult.outputSize,
+    sourceFormat: cachedResult.sourceFormat || 'fbx',
+    outputPath: cachedResult.outputPath,
+    workDir: '',
+    createdAt: now,
+    updatedAt: now,
+    cleanupTimer: null,
+  };
+  modelToolJobs.set(jobId, job);
+  scheduleJobCleanup(jobId);
+  sendToolJson(req, res, 200, publicJob(job));
 };
 
 const createModelToolJob = async (req, res) => {
@@ -946,6 +1255,33 @@ const sendModelToolJobDownload = async (req, res, jobId) => {
   res.end(output);
 };
 
+const sendModelToolCachedDownload = async (req, res, requestUrl) => {
+  const match = requestUrl.pathname.match(/^\/api\/model-tools\/cache\/([^/]+)\.glb$/);
+  if (!match) {
+    sendToolJson(req, res, 404, { error: 'GLB local introuvable.' });
+    return;
+  }
+  const cacheId = safeFilename(decodeURIComponent(match[1] || '')).replace(/\.glb$/i, '');
+  const cachedResult = await readModelToolCache(cacheId);
+  if (!cachedResult?.outputPath) {
+    sendToolJson(req, res, 404, { error: 'GLB local introuvable.' });
+    return;
+  }
+  const output = await fs.readFile(cachedResult.outputPath);
+  const headers = makeCorsHeaders(req.headers || {}, process.env, {
+    'Content-Type': 'model/gltf-binary',
+    'Content-Disposition': `inline; filename="${cachedResult.outputName || 'modele-cache.glb'}"`,
+    'Content-Length': String(output.byteLength),
+    'Cache-Control': 'no-store',
+    'Access-Control-Expose-Headers': 'Content-Disposition,X-Model-Tools-Original-Size,X-Model-Tools-Output-Size,X-Model-Tools-Source-Format',
+    'X-Model-Tools-Original-Size': String(cachedResult.originalSize || 0),
+    'X-Model-Tools-Output-Size': String(output.byteLength),
+    'X-Model-Tools-Source-Format': cachedResult.sourceFormat || '',
+  });
+  res.writeHead(200, headers);
+  res.end(output);
+};
+
 export const handleModelTools = async (req, res) => {
   const requestUrl = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
   if (req.method === 'POST' && requestUrl.pathname === '/api/model-tools/convert') {
@@ -954,6 +1290,14 @@ export const handleModelTools = async (req, res) => {
   }
   if (req.method === 'POST' && requestUrl.pathname === '/api/model-tools/jobs') {
     await createModelToolJob(req, res);
+    return;
+  }
+  if (req.method === 'POST' && requestUrl.pathname === '/api/model-tools/jobs/from-cache') {
+    await createCachedModelToolJob(req, res);
+    return;
+  }
+  if (req.method === 'GET' && requestUrl.pathname.startsWith('/api/model-tools/cache/')) {
+    await sendModelToolCachedDownload(req, res, requestUrl);
     return;
   }
 

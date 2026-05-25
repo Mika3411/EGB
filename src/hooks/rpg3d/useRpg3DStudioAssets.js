@@ -244,7 +244,7 @@ export function useRpg3DStudioAssets({
           characterMaterialBrightness: 1,
           sourceCharacterRole: 'hero',
         };
-        if (getStudioModelSource(model)) applyCharacterModelToActor(item, model);
+        if (getStudioModelSource(model)) applyCharacterModelToActor(item, model, studioProject.decorModels3d || []);
         next.heroes.push(item);
         placedEntity = { type: 'hero', id: item.id };
         return;
@@ -282,7 +282,7 @@ export function useRpg3DStudioAssets({
         combatEnemyPowerDamage: 0,
         combatEnemyPowerUsageChance: 25,
       };
-      if (getStudioModelSource(model)) applyCharacterModelToActor(item, model);
+      if (getStudioModelSource(model)) applyCharacterModelToActor(item, model, studioProject.decorModels3d || []);
       next.enemies.push(item);
       placedEntity = { type: 'enemy', id: item.id };
     });
@@ -294,6 +294,7 @@ export function useRpg3DStudioAssets({
     getCurrentPlacementPoint,
     getStudioCharacterRenderMode,
     patchConfig,
+    studioProject.decorModels3d,
   ]);
 
   const importStudioDecorToCanvas = useCallback((model) => {

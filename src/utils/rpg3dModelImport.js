@@ -28,6 +28,9 @@ import {
   getFloorZeroZ,
   getModelImportFileInfo,
   getPreviewAnimationOptions,
+  isInventoryDecorKind,
+  isFloorTileKind,
+  isHeavyLocalFbxAnimationAsset,
   isHeavyLocalFbxAsset,
   numberValue,
   shouldInlineModelData,
@@ -54,6 +57,25 @@ export const alignObjectTopToGround = (object, groundY = 0.018) => {
   if (!Number.isFinite(box.max.y)) return false;
   object.position.y += groundY - box.max.y;
   object.updateMatrixWorld(true);
+  return true;
+};
+
+export const fitObjectToLargestDimension = (object, targetSize = 1, options = {}) => {
+  if (!object) return false;
+  object.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(object, true);
+  const size = box.getSize(new THREE.Vector3());
+  const largest = Math.max(size.x, size.y, size.z);
+  if (!Number.isFinite(largest) || largest <= 0.0001) return false;
+  const target = Number.isFinite(Number(targetSize)) && Number(targetSize) > 0 ? Number(targetSize) : largest;
+  object.scale.multiplyScalar(Math.max(0.000001, target / largest));
+  object.updateMatrixWorld(true);
+  const fittedBox = new THREE.Box3().setFromObject(object, true);
+  const center = fittedBox.getCenter(new THREE.Vector3());
+  const groundY = Number.isFinite(Number(options.groundY)) ? Number(options.groundY) : 0;
+  object.position.x += options.centerX === false ? 0 : -center.x;
+  object.position.z += options.centerZ === false ? 0 : -center.z;
+  snapObjectToGround(object, groundY);
   return true;
 };
 
@@ -275,6 +297,89 @@ export const clearGroup = (group) => {
   });
 };
 
+const CHARACTER_PREVIEW_ANIMATION_CACHE_LIMIT = 12;
+const characterPreviewAnimationCache = new Map();
+const characterPreviewAnimationPending = new Map();
+
+const hashString = (value = '') => [...String(value)].reduce((hash, char) => (
+  ((hash << 5) - hash + char.charCodeAt(0)) | 0
+), 0);
+
+const hashSourceSample = (source = '') => {
+  const value = String(source || '');
+  if (value.length <= 4096) return hashString(value);
+  const middle = Math.max(0, Math.floor(value.length / 2) - 512);
+  return hashString([
+    value.slice(0, 1024),
+    value.slice(middle, middle + 1024),
+    value.slice(-1024),
+  ].join('|'));
+};
+
+const getPreviewSourceCacheSignature = (source = '') => {
+  const value = String(source || '');
+  if (!value) return 'empty';
+  return `${value.length}:${hashSourceSample(value)}`;
+};
+
+const getPreviewResourceCacheSignature = (asset = {}) => (
+  [
+    ...(Array.isArray(asset.modelResources) ? asset.modelResources : []),
+    ...(Array.isArray(asset.characterModelResources) ? asset.characterModelResources : []),
+    ...(Array.isArray(asset.decorModelResources) ? asset.decorModelResources : []),
+  ]
+    .map((resource) => [
+      resource?.path || resource?.name || '',
+      getPreviewSourceCacheSignature(resource?.data || resource?.url || ''),
+    ].join(':'))
+    .join(';')
+);
+
+const getPreviewAssetCacheKey = (source = '', asset = {}) => [
+  String(asset.modelName || asset.characterModelName || asset.decorModelName || asset.name || ''),
+  String(asset.modelFormat || asset.characterModelFormat || asset.decorModelFormat || ''),
+  Number(asset.modelFileSize || asset.characterModelFileSize || asset.decorModelFileSize) || 0,
+  getPreviewSourceCacheSignature(source),
+  getPreviewResourceCacheSignature(asset),
+].join('|');
+
+const getLimitedCacheEntry = (cache, key) => {
+  if (!cache.has(key)) return null;
+  const entry = cache.get(key);
+  cache.delete(key);
+  cache.set(key, entry);
+  return entry;
+};
+
+const setLimitedCacheEntry = (cache, key, entry, limit, onEvict) => {
+  if (cache.has(key)) cache.delete(key);
+  cache.set(key, entry);
+  while (cache.size > limit) {
+    const oldestKey = cache.keys().next().value;
+    const oldestEntry = cache.get(oldestKey);
+    cache.delete(oldestKey);
+    onEvict?.(oldestEntry);
+  }
+};
+
+const getCachedCharacterPreviewAnimation = (source, animation = {}) => (
+  getLimitedCacheEntry(characterPreviewAnimationCache, getPreviewAssetCacheKey(source, animation))
+);
+
+const setCachedCharacterPreviewAnimation = (source, animation = {}, entry = {}) => {
+  setLimitedCacheEntry(
+    characterPreviewAnimationCache,
+    getPreviewAssetCacheKey(source, animation),
+    entry,
+    CHARACTER_PREVIEW_ANIMATION_CACHE_LIMIT,
+  );
+};
+
+export const clearThreeCharacterPreviewCache = () => {
+  characterPreviewAnimationCache.clear();
+  characterPreviewAnimationPending.clear();
+};
+
 export const createPreviewFloorCanvas = (options = {}) => {
   const size = options.size || 512;
   const cellSize = options.cellSize || 64;
@@ -364,11 +469,15 @@ export const buildDecorGltfObject = (object, model) => {
   });
   applyTextureToGltfModel(object, texture, { disposeTextureWithMaterial: true });
   rememberObjectBaseTransform(object);
-  fitObjectToDimensions(object, {
-    width: dimensions.x,
-    height: dimensions.y,
-    depth: dimensions.z,
-  }, { groundY: 0 });
+  if (isInventoryDecorKind(model.kind)) {
+    fitObjectToLargestDimension(object, Math.max(dimensions.x, dimensions.y, dimensions.z), { groundY: 0 });
+  } else {
+    fitObjectToDimensions(object, {
+      width: dimensions.x,
+      height: dimensions.y,
+      depth: dimensions.z,
+    }, { groundY: 0 });
+  }
   group.add(object);
   root.add(group);
   root.userData.decorModelObject = object;
@@ -396,18 +505,18 @@ export const loadThreeDecor = (sources, model, onLoaded, onError) => {
   const sourceList = (Array.isArray(sources) ? sources : [sources]).filter(Boolean);
   const handleLoaded = ({ object } = {}) => {
     if (!object) {
-      onError?.();
+      onError?.(new Error('Objet 3D introuvable.'));
       return;
     }
     onLoaded?.(buildDecorGltfObject(object, model));
   };
-  const trySource = (index = 0) => {
+  const trySource = (index = 0, lastError = null) => {
     const source = sourceList[index];
     if (!source) {
-      onError?.();
+      onError?.(lastError || new Error('Source 3D introuvable.'));
       return;
     }
-    loadThreeModelFromSource(source, model, handleLoaded, () => trySource(index + 1));
+    loadThreeModelFromSource(source, model, handleLoaded, (error) => trySource(index + 1, error));
   };
   trySource();
 };
@@ -443,21 +552,54 @@ export const loadThreeCharacter = (sources, model, onLoaded, onError) => {
   trySource();
 };
 
-export const loadCharacterAnimationClips = (animation = {}) => new Promise((resolve) => {
+export const loadCharacterAnimationAsset = (animation = {}, options = {}) => new Promise((resolve) => {
   const source = getAnimationSource(animation);
-  if (!source || isHeavyLocalFbxAsset({ ...animation, modelUrl: source })) {
-    resolve([]);
+  if (!source || isHeavyLocalFbxAnimationAsset({ ...animation, modelUrl: source })) {
+    resolve({ clips: [], object: null, format: '' });
     return;
   }
-  loadThreeModelFromSource(
-    source,
-    animation,
-    ({ object, animations = [] } = {}) => {
-      if (object) disposeThreeObject(object);
-      resolve(Array.isArray(animations) ? animations : []);
-    },
-    () => resolve([]),
-  );
+  const cached = getCachedCharacterPreviewAnimation(source, animation);
+  if (cached) {
+    resolve({ clips: cached.clips || [], object: null, format: cached.format || '', cached: true });
+    return;
+  }
+  const cacheKey = getPreviewAssetCacheKey(source, animation);
+  const pending = characterPreviewAnimationPending.get(cacheKey);
+  if (pending) {
+    pending
+      .then((entry) => resolve({ clips: entry.clips || [], object: null, format: entry.format || '', cached: true }))
+      .catch(() => resolve({ clips: [], object: null, format: '' }));
+    return;
+  }
+  const pendingLoad = new Promise((pendingResolve) => {
+    loadThreeModelFromSource(
+      source,
+      animation,
+      ({ object, animations = [], format = '' } = {}) => {
+        const clips = Array.isArray(animations)
+          ? animations.map((clip) => {
+            if (clip) clip.userData = { ...(clip.userData || {}), rpg3dSourceFormat: format };
+            return clip;
+          })
+          : [];
+        const entry = { clips, format };
+        setCachedCharacterPreviewAnimation(source, animation, entry);
+        pendingResolve({ ...entry, object: object || null });
+      },
+      () => pendingResolve({ clips: [], object: null, format: '' }),
+    );
+  }).finally(() => {
+    characterPreviewAnimationPending.delete(cacheKey);
+  });
+  characterPreviewAnimationPending.set(cacheKey, pendingLoad.then(({ clips, format }) => ({ clips, format })));
+  pendingLoad.then(resolve);
+});
+
+export const loadCharacterAnimationClips = (animation = {}, options = {}) => new Promise((resolve) => {
+  loadCharacterAnimationAsset(animation, options).then(({ clips, object }) => {
+    if (object) disposeThreeObject(object);
+    resolve(clips);
+  });
 });
 
 export const getCharacterModelSources = getThreeModelSources;

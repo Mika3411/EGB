@@ -49,6 +49,24 @@ describe('CORS configuration', () => {
     expect(headers['Access-Control-Allow-Origin']).toBe('http://localhost:5182');
   });
 
+  it('allows private LAN origins and private-network preflights during local development', () => {
+    expect(() => assertCorsRequestAllowed(
+      { origin: 'http://192.168.1.42:5173' },
+      { NODE_ENV: 'development' },
+    )).not.toThrow();
+
+    const headers = makeCorsHeaders(
+      {
+        origin: 'http://192.168.1.42:5173',
+        'access-control-request-private-network': 'true',
+      },
+      { NODE_ENV: 'development' },
+    );
+
+    expect(headers['Access-Control-Allow-Origin']).toBe('http://192.168.1.42:5173');
+    expect(headers['Access-Control-Allow-Private-Network']).toBe('true');
+  });
+
   it('keeps dynamic loopback ports closed in production by default', () => {
     expect(() => assertCorsRequestAllowed(
       { origin: 'http://127.0.0.1:5177' },

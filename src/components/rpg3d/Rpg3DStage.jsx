@@ -15,6 +15,7 @@ import ArcadeThreeViewport from '../arcade/ArcadeThreeViewport.jsx';
 
 export default function Rpg3DStage({
   activeTransformTool,
+  actionMessage,
   actionZoneEdgeInsertMode,
   cameraTargetPickMode,
   cameraToolsHidden,
@@ -242,6 +243,11 @@ export default function Rpg3DStage({
           <div className="arcade-stage-loading-track" role="progressbar" aria-label="Chargement en cours">
             <span />
           </div>
+        </div>
+      ) : null}
+      {actionMessage ? (
+        <div className="arcade-stage-action-message" role="status" aria-live="polite">
+          {actionMessage}
         </div>
       ) : null}
       <ArcadeThreeViewport

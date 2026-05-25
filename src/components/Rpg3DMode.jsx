@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Activity,
   Box,
   Camera,
   ChevronDown,
@@ -15,6 +16,7 @@ import {
   Folder,
   FolderOpen,
   Hand,
+  HardHat,
   HeartPulse,
   List,
   Magnet,
@@ -24,7 +26,6 @@ import {
   Mountain,
   MousePointer2,
   MousePointerClick,
-  Orbit,
   PanelLeftOpen,
   PanelRightOpen,
   Pause,
@@ -46,7 +47,6 @@ import {
   ZoomIn,
 } from 'lucide-react';
 import ArcadeThreeViewport from './arcade/ArcadeThreeViewport';
-import Rpg3DControls from './rpg3d/Rpg3DControls.jsx';
 import Rpg3DHeader from './rpg3d/Rpg3DHeader.jsx';
 import Rpg3DInspector from './rpg3d/Rpg3DInspector.jsx';
 import Rpg3DMapPanel from './rpg3d/Rpg3DMapPanel.jsx';
@@ -56,8 +56,11 @@ import Rpg3DWorkspaceTabs from './rpg3d/Rpg3DWorkspaceTabs.jsx';
 import HelpLabel from './forms/HelpLabel.jsx';
 
 const Character3DTab = React.lazy(() => import('./Character3DTab.jsx'));
+const CharacterRiggingTab = React.lazy(() => import('./CharacterRiggingTab.jsx'));
 const Decor3DTab = React.lazy(() => import('./Decor3DTab.jsx'));
 const ModelToolsTab = React.lazy(() => import('./ModelToolsTab.jsx'));
+const ObjectRiggingTab = React.lazy(() => import('./ObjectRiggingTab.jsx'));
+const StuntAnimationTab = React.lazy(() => import('./StuntAnimationTab.jsx'));
 import useRpg3DGameLoop from '../hooks/useRpg3DGameLoop.js';
 import useRpg3DProjectState from '../hooks/useRpg3DProjectState.js';
 import useRpg3DCanvasManagement from '../hooks/rpg3d/useRpg3DCanvasManagement.js';
@@ -69,6 +72,7 @@ import {
   getPersistedModelAnimations,
   getStudioModelSource,
 } from '../utils/rpg3dAssetsCore.js';
+import { normalizeCharacterRigPoints } from '../utils/rpg3dCharacterRig.js';
 import {
   DEFAULT_RPG3D_ACT_ID,
   createConfigFromSavedAssets,
@@ -367,6 +371,8 @@ const HERO_PROFILE_SECTION_TABS = [
 const HERO_INVENTORY_TYPE_OPTIONS = [
   { id: 'item', label: 'Objet' },
   { id: 'weapon', label: 'Arme' },
+  { id: 'helmet', label: 'Casque' },
+  { id: 'armor', label: 'Armure' },
   { id: 'shield', label: 'Bouclier' },
   { id: 'key', label: 'Clé' },
   { id: 'consumable', label: 'Consommable' },
@@ -388,6 +394,7 @@ const STUDIO_DECOR_KIND_LABELS = {
   decor: 'décors',
   house: 'habitations',
   'inventory-armor': 'armures',
+  'inventory-helmet': 'casques',
   'inventory-jewelry': 'bijoux',
   'inventory-leggings': 'jambières',
   'inventory-misc': 'divers',
@@ -407,6 +414,7 @@ const CHARACTER_IMPORT_GROUPS = [
 const DECOR_INVENTORY_IMPORT_GROUPS = [
   { id: 'inventory-weapon', label: 'Armes' },
   { id: 'inventory-armor', label: 'Armures' },
+  { id: 'inventory-helmet', label: 'Casques' },
   { id: 'inventory-shield', label: 'Boucliers' },
   { id: 'inventory-leggings', label: 'Jambières' },
   { id: 'inventory-jewelry', label: 'Bijoux' },
@@ -446,6 +454,18 @@ const MAP_ENTITY_META = {
   pickup: { label: 'Bonus carte', icon: HeartPulse, tone: 'neutral' },
   actionZone: { label: 'Zone transparente', icon: MousePointerClick, tone: 'neutral' },
 };
+const MAP_CHARACTER_MANAGEMENT_GROUPS = [
+  { id: 'hero', label: 'Heros', icon: Shield },
+  { id: 'enemy', label: 'Ennemis', icon: Crosshair },
+];
+const MAP_OBJECT_MANAGEMENT_GROUPS = [
+  { id: 'prop', label: 'Decors', icon: Box },
+  { id: 'relief', label: 'Reliefs', icon: Mountain },
+  { id: 'obstacle', label: 'Murs', icon: Square },
+  { id: 'pickup', label: 'Bonus', icon: HeartPulse },
+  { id: 'actionZone', label: 'Zones', icon: MousePointerClick },
+];
+const MANAGEMENT_DEFAULT_OPEN_FOLDERS = [];
 
 const isEditableShortcutTarget = (target) => Boolean(
   target?.closest?.('input, textarea, select, [contenteditable="true"], [contenteditable="plaintext-only"]'),
@@ -578,10 +598,183 @@ const getCharacterRenderMode = (actor = {}) => actor.characterRenderMode || 'cap
 const getCharacterRenderLabel = (actor = {}) => CHARACTER_RENDER_OPTIONS.find((option) => option.id === getCharacterRenderMode(actor))?.label || 'Personnage volume';
 const HERO_PROFILE_PLAYER_ID = 'player';
 const cloneHeroProfileItems = (items = []) => (Array.isArray(items) ? items.map((item) => ({ ...(item || {}) })) : []);
-const HERO_WEAPON_MODEL_SCALE_MIN = 0.02;
+const HERO_WEAPON_MODEL_SCALE_MIN = 0.001;
 const HERO_WEAPON_MODEL_SCALE_MAX = 8;
 const HERO_WEAPON_OFFSET_MIN = -2;
 const HERO_WEAPON_OFFSET_MAX = 2;
+const getEquipmentHand = (value = '') => (value === 'left' ? 'left' : 'right');
+const getEquipmentArm = (value = '') => (value === 'right' ? 'right' : 'left');
+const EQUIPMENT_MODEL_TYPES = new Set(['weapon', 'shield', 'armor', 'helmet']);
+const isEquipmentModelForType = (model = null, type = '') => (
+  Boolean(model && EQUIPMENT_MODEL_TYPES.has(type) && getStudioModelSource(model))
+);
+const ARMOR_SEGMENT_VALUES = new Set(['body', 'left-arm', 'right-arm']);
+const normalizeArmorSegmentAssignments = (assignments = []) => (
+  Array.isArray(assignments)
+    ? assignments.map((entry) => ({
+      path: String(entry?.path || '').slice(0, 260),
+      name: String(entry?.name || '').slice(0, 120),
+      segment: ARMOR_SEGMENT_VALUES.has(entry?.segment) ? entry.segment : 'body',
+    })).filter((entry) => entry.path)
+    : []
+);
+const normalizeArmorCutContourPoint = (point = {}) => ({
+  x: clamp(Number(point?.x) || 0, HERO_WEAPON_OFFSET_MIN, HERO_WEAPON_OFFSET_MAX),
+  y: clamp(Number(point?.y) || 0, HERO_WEAPON_OFFSET_MIN, HERO_WEAPON_OFFSET_MAX),
+  z: clamp(Number(point?.z) || 0, HERO_WEAPON_OFFSET_MIN, HERO_WEAPON_OFFSET_MAX),
+  ...normalizeArmorPaintSurfaceNormal(point),
+});
+const normalizeArmorPaintSurfaceNormal = (point = {}) => {
+  const nx = Number(point?.nx);
+  const ny = Number(point?.ny);
+  const nz = Number(point?.nz);
+  if (!Number.isFinite(nx) || !Number.isFinite(ny) || !Number.isFinite(nz)) return {};
+  const length = Math.hypot(nx, ny, nz);
+  if (length <= 0.001) return {};
+  return {
+    nx: nx / length,
+    ny: ny / length,
+    nz: nz / length,
+  };
+};
+const normalizeArmorCutContours = (contours = []) => {
+  const entries = Array.isArray(contours)
+    ? contours
+    : Object.entries(contours || {}).map(([segment, points]) => ({ segment, points }));
+  return entries
+    .map((entry) => ({
+      segment: ARMOR_SEGMENT_VALUES.has(entry?.segment) ? entry.segment : 'body',
+      points: (Array.isArray(entry?.points) ? entry.points : [])
+        .slice(0, 80)
+        .map(normalizeArmorCutContourPoint),
+    }))
+    .filter((entry) => entry.points.length);
+};
+const normalizeArmorCutPaintStrokes = (strokes = []) => {
+  const entries = Array.isArray(strokes)
+    ? strokes
+    : Object.entries(strokes || {}).map(([segment, points]) => ({ segment, points }));
+  return entries
+    .map((entry) => ({
+      segment: ARMOR_SEGMENT_VALUES.has(entry?.segment) ? entry.segment : 'body',
+      radius: clamp(Number(entry?.radius) || 0.14, 0.04, 0.5),
+      points: (Array.isArray(entry?.points) ? entry.points : [])
+        .slice(0, 240)
+        .map(normalizeArmorCutContourPoint),
+    }))
+    .filter((entry) => entry.points.length);
+};
+const ARMOR_GRIP_POINTS = [
+  { suffix: 'LeftShoulder', defaultX: -0.45, defaultY: 0.55, defaultZ: 0 },
+  { suffix: 'RightShoulder', defaultX: 0.45, defaultY: 0.55, defaultZ: 0 },
+  { suffix: 'LeftElbow', defaultX: -0.65, defaultY: 0.05, defaultZ: 0 },
+  { suffix: 'RightElbow', defaultX: 0.65, defaultY: 0.05, defaultZ: 0 },
+  { suffix: 'LowerBelly', defaultX: 0, defaultY: -0.55, defaultZ: 0 },
+];
+const getEquipmentGripReferenceScale = (source = {}) => {
+  const legacyScale = Number.isFinite(Number(source.scale)) && Number(source.scale) > 0 ? Number(source.scale) : 1;
+  const dimensions = [
+    Number(source.width) || 0,
+    Number(source.height) || 0,
+    Number(source.depth) || 0,
+  ].map((value) => value * legacyScale).filter((value) => Number.isFinite(value) && value > 0.0001);
+  if (dimensions.length) return clamp(Math.max(...dimensions), HERO_WEAPON_MODEL_SCALE_MIN, 120);
+  const explicitScale = Number(source.weaponGripReferenceScale);
+  return Number.isFinite(explicitScale) && explicitScale > 0.0001
+    ? clamp(explicitScale, HERO_WEAPON_MODEL_SCALE_MIN, 120)
+    : 1;
+};
+const getShieldGripReferenceScale = (source = {}) => {
+  const explicitScale = Number(source.shieldGripReferenceScale);
+  return Number.isFinite(explicitScale) && explicitScale > 0.0001
+    ? clamp(explicitScale, HERO_WEAPON_MODEL_SCALE_MIN, 120)
+    : getEquipmentGripReferenceScale(source);
+};
+const getArmorGripReferenceScale = (source = {}) => {
+  const explicitScale = Number(source.armorGripReferenceScale);
+  return Number.isFinite(explicitScale) && explicitScale > 0.0001
+    ? clamp(explicitScale, HERO_WEAPON_MODEL_SCALE_MIN, 120)
+    : getEquipmentGripReferenceScale(source);
+};
+const getEquipmentModelReferenceScale = (source = {}) => (
+  clamp(getEquipmentGripReferenceScale(source), HERO_WEAPON_MODEL_SCALE_MIN, HERO_WEAPON_MODEL_SCALE_MAX)
+);
+const getStoredEquipmentSourceScale = (item = {}) => {
+  const sourceScale = Number(item.weaponModelSourceScale);
+  return Number.isFinite(sourceScale) && sourceScale > 0
+    ? clamp(sourceScale, HERO_WEAPON_MODEL_SCALE_MIN, HERO_WEAPON_MODEL_SCALE_MAX)
+    : 0;
+};
+const resolveLinkedEquipmentModelScale = (item = {}, source = null) => {
+  const currentScale = Number(item.weaponModelScale);
+  if (!source) {
+    return clamp(
+      Number.isFinite(currentScale) && currentScale > 0 ? currentScale : 1,
+      HERO_WEAPON_MODEL_SCALE_MIN,
+      HERO_WEAPON_MODEL_SCALE_MAX,
+    );
+  }
+  const sourceScale = getEquipmentModelReferenceScale(source);
+  const previousSourceScale = getStoredEquipmentSourceScale(item);
+  if (previousSourceScale > 0) {
+    const itemScale = Number.isFinite(currentScale) && currentScale > 0 ? currentScale : previousSourceScale;
+    return clamp(sourceScale * (itemScale / previousSourceScale), HERO_WEAPON_MODEL_SCALE_MIN, HERO_WEAPON_MODEL_SCALE_MAX);
+  }
+  if (Number.isFinite(currentScale) && currentScale > 0 && Math.abs(currentScale - 1) > 0.0001) {
+    return clamp(currentScale, HERO_WEAPON_MODEL_SCALE_MIN, HERO_WEAPON_MODEL_SCALE_MAX);
+  }
+  return sourceScale;
+};
+const getEquipmentModelRotationValue = (source = {}, axis = 'X') => {
+  const modelField = `weaponModelRotation${axis}`;
+  if (source[modelField] !== undefined && source[modelField] !== null && source[modelField] !== '') {
+    return getModelRotationValue(source, modelField);
+  }
+  return getModelRotationValue(source, `modelRotation${axis}`);
+};
+const getEquipmentGripFields = (source = {}) => ({
+  weaponModelRotationX: getEquipmentModelRotationValue(source, 'X'),
+  weaponModelRotationY: getEquipmentModelRotationValue(source, 'Y'),
+  weaponModelRotationZ: getEquipmentModelRotationValue(source, 'Z'),
+  weaponGripHand: getEquipmentHand(source.weaponGripHand),
+  weaponGripReferenceScale: getEquipmentGripReferenceScale(source),
+  weaponGripRightEnabled: Boolean(source.weaponGripRightEnabled),
+  weaponGripRightX: clamp(Number(source.weaponGripRightX) || 0, HERO_WEAPON_OFFSET_MIN, HERO_WEAPON_OFFSET_MAX),
+  weaponGripRightY: clamp(Number(source.weaponGripRightY) || 0, HERO_WEAPON_OFFSET_MIN, HERO_WEAPON_OFFSET_MAX),
+  weaponGripRightZ: clamp(Number(source.weaponGripRightZ) || 0, HERO_WEAPON_OFFSET_MIN, HERO_WEAPON_OFFSET_MAX),
+  weaponGripRightRotationX: getModelRotationValue(source, 'weaponGripRightRotationX'),
+  weaponGripRightRotationY: getModelRotationValue(source, 'weaponGripRightRotationY'),
+  weaponGripRightRotationZ: getModelRotationValue(source, 'weaponGripRightRotationZ'),
+  weaponGripLeftEnabled: Boolean(source.weaponGripLeftEnabled),
+  weaponGripLeftX: clamp(Number(source.weaponGripLeftX) || 0, HERO_WEAPON_OFFSET_MIN, HERO_WEAPON_OFFSET_MAX),
+  weaponGripLeftY: clamp(Number(source.weaponGripLeftY) || 0, HERO_WEAPON_OFFSET_MIN, HERO_WEAPON_OFFSET_MAX),
+  weaponGripLeftZ: clamp(Number(source.weaponGripLeftZ) || 0, HERO_WEAPON_OFFSET_MIN, HERO_WEAPON_OFFSET_MAX),
+  weaponGripLeftRotationX: getModelRotationValue(source, 'weaponGripLeftRotationX'),
+  weaponGripLeftRotationY: getModelRotationValue(source, 'weaponGripLeftRotationY'),
+  weaponGripLeftRotationZ: getModelRotationValue(source, 'weaponGripLeftRotationZ'),
+  shieldGripArm: getEquipmentArm(source.shieldGripArm),
+  shieldGripReferenceScale: getShieldGripReferenceScale(source),
+  shieldGripHandEnabled: Boolean(source.shieldGripHandEnabled),
+  shieldGripHandX: clamp(Number(source.shieldGripHandX) || 0, HERO_WEAPON_OFFSET_MIN, HERO_WEAPON_OFFSET_MAX),
+  shieldGripHandY: clamp(Number(source.shieldGripHandY) || -0.35, HERO_WEAPON_OFFSET_MIN, HERO_WEAPON_OFFSET_MAX),
+  shieldGripHandZ: clamp(Number(source.shieldGripHandZ) || 0, HERO_WEAPON_OFFSET_MIN, HERO_WEAPON_OFFSET_MAX),
+  shieldGripElbowEnabled: Boolean(source.shieldGripElbowEnabled),
+  shieldGripElbowX: clamp(Number(source.shieldGripElbowX) || 0, HERO_WEAPON_OFFSET_MIN, HERO_WEAPON_OFFSET_MAX),
+  shieldGripElbowY: clamp(Number(source.shieldGripElbowY) || 0.35, HERO_WEAPON_OFFSET_MIN, HERO_WEAPON_OFFSET_MAX),
+  shieldGripElbowZ: clamp(Number(source.shieldGripElbowZ) || 0, HERO_WEAPON_OFFSET_MIN, HERO_WEAPON_OFFSET_MAX),
+  armorGripReferenceScale: getArmorGripReferenceScale(source),
+  ...ARMOR_GRIP_POINTS.reduce((fields, point) => ({
+    ...fields,
+    [`armorGrip${point.suffix}Enabled`]: Boolean(source[`armorGrip${point.suffix}Enabled`]),
+    [`armorGrip${point.suffix}X`]: clamp(Number(source[`armorGrip${point.suffix}X`]) || point.defaultX, HERO_WEAPON_OFFSET_MIN, HERO_WEAPON_OFFSET_MAX),
+    [`armorGrip${point.suffix}Y`]: clamp(Number(source[`armorGrip${point.suffix}Y`]) || point.defaultY, HERO_WEAPON_OFFSET_MIN, HERO_WEAPON_OFFSET_MAX),
+    [`armorGrip${point.suffix}Z`]: clamp(Number(source[`armorGrip${point.suffix}Z`]) || point.defaultZ, HERO_WEAPON_OFFSET_MIN, HERO_WEAPON_OFFSET_MAX),
+  }), {}),
+  armorCanvasCutEnabled: Boolean(source.armorCanvasCutEnabled),
+  armorSegmentAssignments: normalizeArmorSegmentAssignments(source.armorSegmentAssignments),
+  armorCutContours: normalizeArmorCutContours(source.armorCutContours),
+  armorCutPaintStrokes: normalizeArmorCutPaintStrokes(source.armorCutPaintStrokes),
+});
 const normalizeHeroInventoryItem = (item = {}, index = 0) => {
   const type = HERO_INVENTORY_TYPE_LABELS[item.type] ? item.type : 'item';
   const normalized = {
@@ -591,7 +784,7 @@ const normalizeHeroInventoryItem = (item = {}, index = 0) => {
     quantity: Math.max(1, Number(item.quantity) || 1),
     effect: item.effect || '',
   };
-  if (type !== 'weapon' && type !== 'shield') return normalized;
+  if (!EQUIPMENT_MODEL_TYPES.has(type)) return normalized;
   return {
     ...normalized,
     equipped: Boolean(item.equipped),
@@ -602,18 +795,78 @@ const normalizeHeroInventoryItem = (item = {}, index = 0) => {
     weaponModelFileSize: Number(item.weaponModelFileSize || item.modelFileSize) || 0,
     weaponModelResources: cloneHeroProfileItems(item.weaponModelResources || item.modelResources || []),
     weaponModelScale: clamp(Number(item.weaponModelScale) || 1, HERO_WEAPON_MODEL_SCALE_MIN, HERO_WEAPON_MODEL_SCALE_MAX),
+    weaponModelSourceScale: getStoredEquipmentSourceScale(item),
     weaponOffsetX: clamp(Number(item.weaponOffsetX) || 0, HERO_WEAPON_OFFSET_MIN, HERO_WEAPON_OFFSET_MAX),
     weaponOffsetY: clamp(Number(item.weaponOffsetY) || 0, HERO_WEAPON_OFFSET_MIN, HERO_WEAPON_OFFSET_MAX),
     weaponOffsetZ: clamp(Number(item.weaponOffsetZ) || 0, HERO_WEAPON_OFFSET_MIN, HERO_WEAPON_OFFSET_MAX),
     weaponRotationX: getModelRotationValue(item, 'weaponRotationX'),
     weaponRotationY: getModelRotationValue(item, 'weaponRotationY'),
     weaponRotationZ: getModelRotationValue(item, 'weaponRotationZ'),
+    ...getEquipmentGripFields(item),
   };
 };
 const getHeroProfileInventory = (source = {}, fallback = {}) => {
   const sourceInventory = Array.isArray(source?.inventory) ? source.inventory : null;
   const fallbackInventory = Array.isArray(fallback?.inventory) ? fallback.inventory : [];
   return (sourceInventory || fallbackInventory).map(normalizeHeroInventoryItem);
+};
+const getCharacterModelEquipmentInventory = (model = {}, equipmentModels = []) => {
+  const equipmentModelById = new Map(
+    (Array.isArray(equipmentModels) ? equipmentModels : []).map((entry) => [entry.id, entry]),
+  );
+  return (Array.isArray(model?.inventory) ? model.inventory : [])
+    .filter((item) => EQUIPMENT_MODEL_TYPES.has(item?.type))
+    .map((item, index) => {
+      const normalized = normalizeHeroInventoryItem({
+        ...item,
+        equipped: item.equipped !== false,
+        quantity: 1,
+      }, index);
+      const equipmentModel = equipmentModelById.get(normalized.weaponModel3dId);
+      if (!isEquipmentModelForType(equipmentModel, normalized.type)) return null;
+      const equipmentSource = equipmentModel ? getStudioModelSource(equipmentModel) : '';
+      if (!equipmentSource) return null;
+      return {
+        ...normalized,
+        id: `${model.id || 'character'}-${normalized.type}-${normalized.weaponModel3dId || index}`,
+        weaponModelUrl: equipmentSource,
+        weaponModelName: equipmentModel?.modelName || equipmentModel?.name || normalized.weaponModelName,
+        weaponModelFormat: equipmentModel?.modelFormat || normalized.weaponModelFormat,
+        weaponModelFileSize: Number(equipmentModel?.modelFileSize || normalized.weaponModelFileSize) || 0,
+        weaponModelResources: Array.isArray(equipmentModel?.modelResources)
+          ? equipmentModel.modelResources
+          : normalized.weaponModelResources,
+        weaponModelScale: resolveLinkedEquipmentModelScale(normalized, equipmentModel),
+        weaponModelSourceScale: equipmentModel
+          ? getEquipmentModelReferenceScale(equipmentModel)
+          : normalized.weaponModelSourceScale,
+        ...(equipmentModel ? getEquipmentGripFields({
+          ...equipmentModel,
+          weaponGripHand: normalized.weaponGripHand || equipmentModel.weaponGripHand,
+          shieldGripArm: normalized.shieldGripArm || equipmentModel.shieldGripArm,
+        }) : getEquipmentGripFields(normalized)),
+        sourceCharacterEquipment: true,
+        sourceCharacterModel3dId: model.id || '',
+      };
+    })
+    .filter((item) => item && item.equipped && item.weaponModel3dId && item.weaponModelUrl);
+};
+const applyCharacterEquipmentToActor = (actor, model = null, equipmentModels = []) => {
+  if (!actor) return;
+  const currentInventory = Array.isArray(actor.inventory) ? actor.inventory : [];
+  const baseInventory = currentInventory.filter((item) => !item?.sourceCharacterEquipment);
+  const equipment = getCharacterModelEquipmentInventory(model || {}, equipmentModels);
+  if (!equipment.length) {
+    actor.inventory = baseInventory;
+    return;
+  }
+  const equipmentTypes = new Set(equipment.map((item) => item.type));
+  actor.inventory = [
+    ...baseInventory.map((item) => (
+      equipmentTypes.has(item?.type) ? { ...item, equipped: false } : item
+    )),
+    ...equipment,
+  ];
 };
 const createDefaultHeroPlayerConfig = () => ({
   ...DEFAULT_ARCADE_CONFIG.player,
@@ -737,7 +990,7 @@ const applyCharacterModelScaleToActor = (actor, model = null) => {
   actor.characterModelScaleZ = axisScale.z;
   actor.characterModelScaleProportional = model ? model.characterModelScaleProportional !== false : true;
 };
-const applyCharacterModelToActor = (actor, model = null) => {
+const applyCharacterModelToActor = (actor, model = null, equipmentModels = []) => {
   if (!model || !getStudioModelSource(model)) {
     actor.characterModel3dId = '';
     actor.characterModelUrl = '';
@@ -750,6 +1003,8 @@ const applyCharacterModelToActor = (actor, model = null) => {
     actor.characterRenderMode = model ? getStudioCharacterRenderMode(model) : 'capsule';
     applyCharacterModelScaleToActor(actor, model);
     actor.characterMaterialBrightness = model ? getStudioMaterialBrightness(model) : 1;
+    actor.characterRigPoints = model ? normalizeCharacterRigPoints(model.characterRigPoints) : [];
+    applyCharacterEquipmentToActor(actor, model, equipmentModels);
     return;
   }
   actor.characterModel3dId = model.id || '';
@@ -763,6 +1018,8 @@ const applyCharacterModelToActor = (actor, model = null) => {
   actor.characterRenderMode = 'glb';
   applyCharacterModelScaleToActor(actor, model);
   actor.characterMaterialBrightness = getStudioMaterialBrightness(model);
+  actor.characterRigPoints = normalizeCharacterRigPoints(model.characterRigPoints);
+  applyCharacterEquipmentToActor(actor, model, equipmentModels);
 };
 const applyWeaponModelToInventoryItem = (item, model = null) => {
   if (!item) return;
@@ -773,14 +1030,50 @@ const applyWeaponModelToInventoryItem = (item, model = null) => {
     item.weaponModelFormat = '';
     item.weaponModelFileSize = 0;
     item.weaponModelResources = [];
+    item.weaponModelSourceScale = 0;
     return;
   }
+  const sourceScale = getEquipmentModelReferenceScale(model);
   item.weaponModel3dId = model.id || '';
   item.weaponModelUrl = getStudioModelSource(model);
   item.weaponModelName = model.modelName || model.name || 'arme.glb';
   item.weaponModelFormat = model.modelFormat || '';
   item.weaponModelFileSize = Number(model.modelFileSize) || 0;
   item.weaponModelResources = Array.isArray(model.modelResources) ? model.modelResources : [];
+  item.weaponModelScale = sourceScale;
+  item.weaponModelSourceScale = sourceScale;
+  Object.assign(item, getEquipmentGripFields({
+    ...model,
+    weaponGripHand: item.weaponGripHand || model.weaponGripHand,
+    shieldGripArm: item.shieldGripArm || model.shieldGripArm,
+  }));
+};
+const getRigObjectEquipmentType = (model = {}) => {
+  const kind = getDecorImportKindId(model);
+  if (kind === 'inventory-weapon') return 'weapon';
+  if (kind === 'inventory-shield') return 'shield';
+  if (kind === 'inventory-helmet') return 'helmet';
+  return 'armor';
+};
+const getRigObjectInventoryKind = (type = 'armor') => {
+  if (type === 'weapon') return 'inventory-weapon';
+  if (type === 'shield') return 'inventory-shield';
+  if (type === 'helmet') return 'inventory-helmet';
+  return 'inventory-armor';
+};
+const ensureRigObjectEquipmentDefaults = (model, type = 'armor') => {
+  if (!model) return;
+  model.kind = getRigObjectInventoryKind(type);
+  if (type !== 'armor') return;
+  const hasAnyArmorGrip = ARMOR_GRIP_POINTS.some((point) => Boolean(model[`armorGrip${point.suffix}Enabled`]));
+  model.armorGripReferenceScale = model.armorGripReferenceScale || getArmorGripReferenceScale(model);
+  if (hasAnyArmorGrip) return;
+  ARMOR_GRIP_POINTS.forEach((point) => {
+    model[`armorGrip${point.suffix}Enabled`] = true;
+    model[`armorGrip${point.suffix}X`] = model[`armorGrip${point.suffix}X`] ?? point.defaultX;
+    model[`armorGrip${point.suffix}Y`] = model[`armorGrip${point.suffix}Y`] ?? point.defaultY;
+    model[`armorGrip${point.suffix}Z`] = model[`armorGrip${point.suffix}Z`] ?? point.defaultZ;
+  });
 };
 const guessCharacterRenderMode = (fileName = '') => {
   const name = fileName.toLowerCase();
@@ -953,6 +1246,21 @@ const getUniqueManagementEntities = (entities = [], selected = null) => {
   return orderedKeys.map((key) => entitiesByKey.get(key)).filter(Boolean);
 };
 
+const decorModelMatchesManagementGroup = (model = {}, groupId = '') => {
+  const kind = getDecorImportKindId(model);
+  if (groupId === 'inventory') return kind.startsWith('inventory-');
+  return kind === groupId;
+};
+
+const findManagementNode = (nodes = [], filterId = '') => {
+  for (const node of nodes) {
+    if (node.id === filterId) return node;
+    const childMatch = findManagementNode(node.children || [], filterId);
+    if (childMatch) return childMatch;
+  }
+  return null;
+};
+
 const countExplorerAssets = (nodes = []) => nodes.reduce((count, node) => (
   count + (node.type === 'asset' ? 1 : node.count || 0)
 ), 0);
@@ -979,7 +1287,8 @@ const getDecorImportKindId = (model = {}) => {
   if (/(sol|floor|ground|terrain|terre|soil|herbe|grass|gazon|route|road|chemin|path|dalle|pave|tile|square|verdant|brown_soil|brown soil)/.test(haystack)) return 'road';
   if (/(bouclier|shield|buckler|targe)/.test(haystack)) return 'inventory-shield';
   if (/(arme|weapon|sword|epee|épée|blade|lame|hache|axe|mace|massue|dagger|dague|bow|arc|staff|baton|bâton)/.test(haystack)) return 'inventory-weapon';
-  if (/(armure|armor|armour|cuirasse|plastron|chestplate|breastplate|helmet|casque|helm)/.test(haystack)) return 'inventory-armor';
+  if (/(helmet|casque|helm)/.test(haystack)) return 'inventory-helmet';
+  if (/(armure|armor|armour|cuirasse|plastron|chestplate|breastplate)/.test(haystack)) return 'inventory-armor';
   if (/(jambiere|jambière|jambieres|jambières|leggings|greaves|botte|boots|chausses)/.test(haystack)) return 'inventory-leggings';
   if (/(bijou|bijoux|jewel|jewelry|jewellery|ring|anneau|amulet|amulette|collier|necklace|bracelet|gem|gemme)/.test(haystack)) return 'inventory-jewelry';
   if (/(inventaire|inventory|loot|item|objet|potion|cle|clé|key|relique|relic|scroll|parchemin)/.test(haystack)) return 'inventory-misc';
@@ -1084,6 +1393,7 @@ function ArcadeManagementRow({
   active = false,
   label,
   name,
+  subtitle = '',
   placeholder,
   thumbnail,
   onEdit,
@@ -1097,6 +1407,7 @@ function ArcadeManagementRow({
       </span>
       <div className="arcade-management-main">
         <strong>{displayName}</strong>
+        {subtitle ? <small>{subtitle}</small> : null}
       </div>
       <div className="arcade-management-actions">
         <button type="button" className="secondary-action compact" onClick={onEdit}>
@@ -1109,6 +1420,68 @@ function ArcadeManagementRow({
         </button>
       </div>
     </article>
+  );
+}
+
+function ArcadeManagementFolderNode({
+  node,
+  depth = 0,
+  activeFilter,
+  openFolders,
+  onSelect,
+  onToggle,
+}) {
+  const children = node.children || [];
+  const hasChildren = children.length > 0;
+  const isActive = activeFilter === node.id;
+  const isOpen = hasChildren && openFolders.has(node.id);
+  const FolderIcon = isOpen ? FolderOpen : Folder;
+  const LeafIcon = node.icon || Folder;
+  const ChevronIcon = isOpen ? ChevronDown : ChevronRight;
+
+  return (
+    <div className="arcade-management-folder-branch">
+      <button
+        type="button"
+        className={`arcade-map-explorer-row arcade-management-folder-row ${isActive ? 'active' : ''}`}
+        style={{ '--asset-depth': depth }}
+        onClick={() => {
+          onSelect(node.id);
+          if (hasChildren) onToggle(node.id);
+        }}
+        aria-current={isActive ? 'page' : undefined}
+        aria-expanded={hasChildren ? isOpen : undefined}
+      >
+        {hasChildren ? (
+          <ChevronIcon className="arcade-map-explorer-chevron" aria-hidden="true" size={14} />
+        ) : (
+          <span className="arcade-map-explorer-elbow" aria-hidden="true" />
+        )}
+        <span className={`arcade-map-explorer-folder-icon ${node.tone || 'neutral'}`}>
+          {hasChildren ? <FolderIcon aria-hidden="true" size={16} /> : <LeafIcon aria-hidden="true" size={15} />}
+        </span>
+        <span className="arcade-map-explorer-label">
+          <strong>{node.label}</strong>
+          {node.subtitle ? <small>{node.subtitle}</small> : null}
+        </span>
+        <small className="arcade-map-explorer-count">{node.count}</small>
+      </button>
+      {isOpen ? (
+        <div className="arcade-map-explorer-children">
+          {children.map((child) => (
+            <ArcadeManagementFolderNode
+              key={child.id}
+              node={child}
+              depth={depth + 1}
+              activeFilter={activeFilter}
+              openFolders={openFolders}
+              onSelect={onSelect}
+              onToggle={onToggle}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -1261,7 +1634,11 @@ function ArcadeHeroTab({
             ? `Arme ${inventory.length + 1}`
             : itemType === 'shield'
               ? `Bouclier ${inventory.length + 1}`
-              : `Objet ${inventory.length + 1}`,
+              : itemType === 'armor'
+                ? `Armure ${inventory.length + 1}`
+                : itemType === 'helmet'
+                  ? `Casque ${inventory.length + 1}`
+                : `Objet ${inventory.length + 1}`,
           type: itemType,
           quantity: 1,
           effect: '',
@@ -1279,9 +1656,16 @@ function ArcadeHeroTab({
           const min = Number.isFinite(Number(options.min)) ? Number(options.min) : 1;
           const max = Number.isFinite(Number(options.max)) ? Number(options.max) : 99;
           const numberValue = Number(value);
-          return {
+          const nextItem = {
             ...item,
             [field]: clamp(Number.isFinite(numberValue) ? numberValue : min, min, max),
+          };
+          if (field === 'weaponModelScale') {
+            const model = studioWeaponModels.find((entry) => entry.id === item.weaponModel3dId);
+            if (model) nextItem.weaponModelSourceScale = getEquipmentModelReferenceScale(model);
+          }
+          return {
+            ...nextItem,
           };
         }
         return { ...item, [field]: value };
@@ -1295,7 +1679,7 @@ function ArcadeHeroTab({
       const model = studioWeaponModels.find((entry) => entry.id === modelId);
       target.inventory = inventory.map((item) => {
         if (item.id !== itemId) return item;
-        const next = { ...item, type: item.type === 'shield' ? 'shield' : 'weapon' };
+        const next = { ...item, type: EQUIPMENT_MODEL_TYPES.has(item.type) ? item.type : 'weapon' };
         applyWeaponModelToInventoryItem(next, model);
         return normalizeHeroInventoryItem(next);
       });
@@ -1306,7 +1690,7 @@ function ArcadeHeroTab({
     patchActiveHero((target, fallback) => {
       const inventory = getHeroProfileInventory(target, fallback);
       const targetType = inventory.find((item) => item.id === itemId)?.type;
-      if (targetType !== 'weapon' && targetType !== 'shield') return;
+      if (!EQUIPMENT_MODEL_TYPES.has(targetType)) return;
       target.inventory = inventory.map((item) => (
         item.type === targetType
           ? { ...item, equipped: equipped && item.id === itemId }
@@ -1492,7 +1876,7 @@ function ArcadeHeroTab({
             <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.characterModel}>Modele 3D</Rpg3DHelpLabel>
             <select value={activeSource.characterModel3dId || ''} onChange={(event) => patchActiveHero((target) => {
               const model = studioHeroModels.find((entry) => entry.id === event.target.value);
-              applyCharacterModelToActor(target, model);
+              applyCharacterModelToActor(target, model, studioWeaponModels);
             }, false)}>
               <option value="">Aucun</option>
               {studioHeroModels.map((model) => (
@@ -1558,7 +1942,7 @@ function ArcadeHeroTab({
             <button type="button" className="secondary-action" onClick={() => {
               onSetMediaError?.('');
               patchActiveHero((target) => {
-                applyCharacterModelToActor(target, null);
+                applyCharacterModelToActor(target, null, studioWeaponModels);
               }, false);
             }}>Retirer modele 3D</button>
           ) : null}
@@ -1720,6 +2104,14 @@ function ArcadeHeroTab({
               <Sword aria-hidden="true" size={16} />
               Arme
             </button>
+            <button type="button" className="secondary-action" onClick={() => addInventoryItem('helmet')}>
+              <HardHat aria-hidden="true" size={16} />
+              Casque
+            </button>
+            <button type="button" className="secondary-action" onClick={() => addInventoryItem('armor')}>
+              <Cuboid aria-hidden="true" size={16} />
+              Armure
+            </button>
             <button type="button" className="secondary-action" onClick={() => addInventoryItem('shield')}>
               <Shield aria-hidden="true" size={16} />
               Bouclier
@@ -1729,7 +2121,7 @@ function ArcadeHeroTab({
         {activeInventory.length ? (
           <div className="arcade-hero-inventory-list">
             {activeInventory.map((item) => (
-              <article className={`arcade-hero-inventory-row${item.type === 'weapon' || item.type === 'shield' ? ' weapon' : ''}`} key={item.id}>
+              <article className={`arcade-hero-inventory-row${EQUIPMENT_MODEL_TYPES.has(item.type) ? ' weapon' : ''}`} key={item.id}>
                 <label>
                   <span>Nom</span>
                   <input
@@ -1773,14 +2165,14 @@ function ArcadeHeroTab({
                 >
                   <Trash2 aria-hidden="true" size={16} />
                 </button>
-                {item.type === 'weapon' || item.type === 'shield' ? (
+                {EQUIPMENT_MODEL_TYPES.has(item.type) ? (
                   <div className="arcade-hero-weapon-settings">
                     <label>
-                      <span>Modele {item.type === 'shield' ? 'bouclier' : 'arme'}</span>
+                      <span>Modele {item.type === 'shield' ? 'bouclier' : (item.type === 'armor' ? 'armure' : (item.type === 'helmet' ? 'casque' : 'arme'))}</span>
                       <select value={item.weaponModel3dId || ''} onChange={(event) => updateInventoryWeaponModel(item.id, event.target.value)}>
                         <option value="">Aucun modele</option>
                         {studioWeaponModels.map((model) => (
-                          <option key={model.id} value={model.id}>{model.name || model.modelName || (item.type === 'shield' ? 'Bouclier 3D' : 'Arme 3D')}</option>
+                          <option key={model.id} value={model.id}>{model.name || model.modelName || (item.type === 'shield' ? 'Bouclier 3D' : (item.type === 'armor' ? 'Armure 3D' : (item.type === 'helmet' ? 'Casque 3D' : 'Arme 3D')))}</option>
                         ))}
                       </select>
                     </label>
@@ -1792,16 +2184,20 @@ function ArcadeHeroTab({
                     >
                       {item.type === 'shield'
                         ? <Shield aria-hidden="true" size={16} />
-                        : <Sword aria-hidden="true" size={16} />}
+                        : item.type === 'armor'
+                          ? <Cuboid aria-hidden="true" size={16} />
+                          : item.type === 'helmet'
+                            ? <HardHat aria-hidden="true" size={16} />
+                          : <Sword aria-hidden="true" size={16} />}
                       {item.equipped ? 'Equipe' : 'Equiper'}
                     </button>
                     <label>
-                      <span>Taille {Number(item.weaponModelScale || 1).toFixed(2)}</span>
+                      <span>Taille {Number(item.weaponModelScale || 1).toFixed(3)}</span>
                       <input
                         type="range"
                         min={HERO_WEAPON_MODEL_SCALE_MIN}
                         max={HERO_WEAPON_MODEL_SCALE_MAX}
-                        step="0.02"
+                        step="0.001"
                         value={item.weaponModelScale || 1}
                         onChange={(event) => updateInventoryItem(item.id, 'weaponModelScale', event.target.value, {
                           numeric: true,
@@ -1850,6 +2246,14 @@ function ArcadeHeroTab({
             <button type="button" className="secondary-action" onClick={() => addInventoryItem('weapon')}>
               <Sword aria-hidden="true" size={16} />
               Ajouter une arme
+            </button>
+            <button type="button" className="secondary-action" onClick={() => addInventoryItem('helmet')}>
+              <HardHat aria-hidden="true" size={16} />
+              Ajouter un casque
+            </button>
+            <button type="button" className="secondary-action" onClick={() => addInventoryItem('armor')}>
+              <Cuboid aria-hidden="true" size={16} />
+              Ajouter une armure
             </button>
             <button type="button" className="secondary-action" onClick={() => addInventoryItem('shield')}>
               <Shield aria-hidden="true" size={16} />
@@ -2682,140 +3086,367 @@ function ArcadeManagementTab({
   const visibleMapCharacters = getUniqueManagementEntities(mapCharacters, selected);
   const visibleMapObjects = getUniqueManagementEntities(mapObjects, selected);
   const [managementFilter, setManagementFilter] = useState('all');
-  const managementFilters = [
-    {
-      id: 'all',
-      label: 'Tout',
-      count: studioCharacters.length + studioDecors.length + visibleMapCharacters.length + visibleMapObjects.length,
-    },
-    { id: 'studioCharacters', label: 'Personnages 3D', count: studioCharacters.length },
-    { id: 'studioDecors', label: 'Objets 3D', count: studioDecors.length },
-    { id: 'mapCharacters', label: 'Personnages carte', count: visibleMapCharacters.length },
-    { id: 'mapObjects', label: 'Objets carte', count: visibleMapObjects.length },
-  ];
-  const showAllManagement = managementFilter === 'all';
+  const [managementQuery, setManagementQuery] = useState('');
+  const [openManagementFolders, setOpenManagementFolders] = useState(() => new Set(MANAGEMENT_DEFAULT_OPEN_FOLDERS));
+  const normalizedManagementQuery = useMemo(
+    () => normalizeAssetExplorerText(managementQuery.trim()),
+    [managementQuery],
+  );
+  const totalManagementCount = studioCharacters.length + studioDecors.length + visibleMapCharacters.length + visibleMapObjects.length;
+
+  const managementFolderTree = useMemo(() => {
+    const countStudioCharactersByRole = (roleId) => (
+      studioCharacters.filter((model) => getCharacterImportRoleId(model) === roleId).length
+    );
+    const buildDecorNode = (group) => {
+      const children = (group.children || []).map(buildDecorNode);
+      const count = children.length
+        ? children.reduce((sum, child) => sum + child.count, 0)
+        : studioDecors.filter((model) => decorModelMatchesManagementGroup(model, group.id)).length;
+      return {
+        id: `studioDecors:${group.id}`,
+        label: group.label,
+        tone: 'decor',
+        icon: Mountain,
+        count,
+        children,
+      };
+    };
+    const countMapEntitiesByType = (entries, type) => entries.filter((entry) => entry.type === type).length;
+    const studioCount = studioCharacters.length + studioDecors.length;
+    const mapCount = visibleMapCharacters.length + visibleMapObjects.length;
+
+    return [
+      {
+        id: 'all',
+        label: 'Tout',
+        subtitle: 'Bibliotheque et carte',
+        tone: 'neutral',
+        icon: List,
+        count: totalManagementCount,
+      },
+      {
+        id: 'studio',
+        label: 'Bibliotheque 3D',
+        subtitle: 'Fichiers crees',
+        tone: 'character',
+        count: studioCount,
+        children: [
+          {
+            id: 'studioCharacters',
+            label: 'Personnages 3D',
+            tone: 'character',
+            icon: Cuboid,
+            count: studioCharacters.length,
+            children: CHARACTER_IMPORT_GROUPS.map((group) => ({
+              id: `studioCharacters:${group.id}`,
+              label: group.label,
+              tone: 'character',
+              icon: Cuboid,
+              count: countStudioCharactersByRole(group.id),
+            })),
+          },
+          {
+            id: 'studioDecors',
+            label: 'Objets 3D',
+            tone: 'decor',
+            icon: Mountain,
+            count: studioDecors.length,
+            children: DECOR_IMPORT_GROUPS.map(buildDecorNode),
+          },
+        ],
+      },
+      {
+        id: 'map',
+        label: 'Carte active',
+        subtitle: 'Elements poses',
+        tone: 'decor',
+        count: mapCount,
+        children: [
+          {
+            id: 'mapCharacters',
+            label: 'Personnages carte',
+            tone: 'character',
+            icon: Shield,
+            count: visibleMapCharacters.length,
+            children: MAP_CHARACTER_MANAGEMENT_GROUPS.map((group) => ({
+              id: `mapCharacters:${group.id}`,
+              label: group.label,
+              tone: 'character',
+              icon: group.icon,
+              count: countMapEntitiesByType(visibleMapCharacters, group.id),
+            })),
+          },
+          {
+            id: 'mapObjects',
+            label: 'Objets carte',
+            tone: 'decor',
+            icon: Box,
+            count: visibleMapObjects.length,
+            children: MAP_OBJECT_MANAGEMENT_GROUPS.map((group) => ({
+              id: `mapObjects:${group.id}`,
+              label: group.label,
+              tone: MAP_ENTITY_META[group.id]?.tone || 'decor',
+              icon: group.icon,
+              count: countMapEntitiesByType(visibleMapObjects, group.id),
+            })),
+          },
+        ],
+      },
+    ];
+  }, [studioCharacters, studioDecors, totalManagementCount, visibleMapCharacters, visibleMapObjects]);
+
+  const toggleManagementFolder = useCallback((folderId) => {
+    setOpenManagementFolders((current) => {
+      const next = new Set(current);
+      if (next.has(folderId)) next.delete(folderId);
+      else next.add(folderId);
+      return next;
+    });
+  }, []);
+
+  const activeManagementNode = findManagementNode(managementFolderTree, managementFilter);
+  const activeManagementLabel = activeManagementNode?.label || 'Tout';
+  const showStudioCharacters = ['all', 'studio', 'studioCharacters'].includes(managementFilter)
+    || managementFilter.startsWith('studioCharacters:');
+  const showStudioDecors = ['all', 'studio', 'studioDecors'].includes(managementFilter)
+    || managementFilter.startsWith('studioDecors:');
+  const showMapCharacters = ['all', 'map', 'mapCharacters'].includes(managementFilter)
+    || managementFilter.startsWith('mapCharacters:');
+  const showMapObjects = ['all', 'map', 'mapObjects'].includes(managementFilter)
+    || managementFilter.startsWith('mapObjects:');
+
+  const modelMatchesQuery = (parts = []) => (
+    !normalizedManagementQuery || normalizeAssetExplorerText(parts.filter(Boolean).join(' ')).includes(normalizedManagementQuery)
+  );
+  const studioCharacterMatchesFilter = (model) => {
+    if (managementFilter.startsWith('studioCharacters:')) {
+      return getCharacterImportRoleId(model) === managementFilter.replace('studioCharacters:', '');
+    }
+    return showStudioCharacters;
+  };
+  const studioDecorMatchesFilter = (model) => {
+    if (managementFilter.startsWith('studioDecors:')) {
+      return decorModelMatchesManagementGroup(model, managementFilter.replace('studioDecors:', ''));
+    }
+    return showStudioDecors;
+  };
+  const mapEntityMatchesFilter = (entry, sectionId) => {
+    if (!managementFilter.startsWith(`${sectionId}:`)) return true;
+    return entry.type === managementFilter.replace(`${sectionId}:`, '');
+  };
+  const filteredStudioCharacters = showStudioCharacters
+    ? studioCharacters.filter((model) => (
+      studioCharacterMatchesFilter(model)
+      && modelMatchesQuery([model.name, getCharacterImportSubtitle(model), STUDIO_CHARACTER_ROLE_LABELS[getCharacterImportRoleId(model)]])
+    ))
+    : [];
+  const filteredStudioDecors = showStudioDecors
+    ? studioDecors.filter((model) => (
+      studioDecorMatchesFilter(model)
+      && modelMatchesQuery([model.name, getDecorImportSubtitle(model), model.modelName, model.imageName])
+    ))
+    : [];
+  const filteredMapCharacters = showMapCharacters
+    ? visibleMapCharacters.filter((entry) => (
+      mapEntityMatchesFilter(entry, 'mapCharacters')
+      && modelMatchesQuery([
+        getMapEntityEditableName(entry.type, entry.item),
+        getMapEntityFallbackName(entry.type, entry.index),
+        getMapEntitySubtitle(entry.type, entry.item),
+        MAP_ENTITY_META[entry.type]?.label,
+      ])
+    ))
+    : [];
+  const filteredMapObjects = showMapObjects
+    ? visibleMapObjects.filter((entry) => (
+      mapEntityMatchesFilter(entry, 'mapObjects')
+      && modelMatchesQuery([
+        getMapEntityEditableName(entry.type, entry.item),
+        getMapEntityFallbackName(entry.type, entry.index),
+        getMapEntitySubtitle(entry.type, entry.item),
+        MAP_ENTITY_META[entry.type]?.label,
+      ])
+    ))
+    : [];
+  const displayedManagementCount = filteredStudioCharacters.length
+    + filteredStudioDecors.length
+    + filteredMapCharacters.length
+    + filteredMapObjects.length;
+  const visibleManagementSectionCount = [
+    showStudioCharacters,
+    showStudioDecors,
+    showMapCharacters,
+    showMapObjects,
+  ].filter(Boolean).length;
+  const getManagementEmptyLabel = (label) => (
+    normalizedManagementQuery ? `${label} ne correspond.` : `${label}.`
+  );
 
   return (
     <section className="arcade-management-tab" aria-label="Gestion des objets et personnages">
-      <section className="panel arcade-management-summary">
-        <div>
-          <span className="section-kicker"><List aria-hidden="true" size={14} /> Gestion</span>
-          <h2>Objets et personnages</h2>
+      <aside className="panel side panel-nav-pro scene-left-nav arcade-management-nav" aria-label="Dossiers de gestion">
+        <div className="scene-nav-section">
+          <div className="scene-nav-section-head">
+            <div>
+              <span className="section-kicker"><FolderOpen aria-hidden="true" size={14} /> Rangement</span>
+              <h2>Dossiers</h2>
+              <small>
+                {normalizedManagementQuery
+                  ? `${displayedManagementCount}/${totalManagementCount} visibles`
+                  : `${totalManagementCount} element${totalManagementCount > 1 ? 's' : ''}`}
+              </small>
+            </div>
+          </div>
+
+          <label className="arcade-map-explorer-search arcade-management-search">
+            <Search aria-hidden="true" size={14} />
+            <input
+              type="search"
+              value={managementQuery}
+              aria-label="Rechercher dans la gestion"
+              placeholder="Rechercher"
+              onChange={(event) => setManagementQuery(event.target.value)}
+            />
+          </label>
+
+          <div className="arcade-map-explorer-tree arcade-management-folder-tree">
+            {managementFolderTree.map((node) => (
+              <ArcadeManagementFolderNode
+                key={node.id}
+                node={node}
+                activeFilter={managementFilter}
+                openFolders={openManagementFolders}
+                onSelect={setManagementFilter}
+                onToggle={toggleManagementFolder}
+              />
+            ))}
+          </div>
         </div>
-        <div className="arcade-management-stats">
-          {managementFilters.map((filter) => (
-            <button
-              key={filter.id}
-              type="button"
-              className={managementFilter === filter.id ? 'active' : ''}
-              aria-pressed={managementFilter === filter.id}
-              onClick={() => setManagementFilter(filter.id)}
-            >
-              <strong>{filter.count}</strong>
-              <small>{filter.label}</small>
+      </aside>
+
+      <div className={`arcade-management-workspace ${visibleManagementSectionCount === 1 ? 'single-section' : ''}`}>
+        <section className="panel arcade-management-summary">
+          <div>
+            <span className="section-kicker"><List aria-hidden="true" size={14} /> Gestion</span>
+            <h2>Objets et personnages</h2>
+          </div>
+          <span className="status-badge soft">{activeManagementLabel}</span>
+          <div className="arcade-management-top-actions">
+            <button type="button" className="secondary-action" onClick={onCreateStudioCharacter}>
+              <Cuboid aria-hidden="true" size={15} />
+              <span>Personnage 3D</span>
             </button>
-          ))}
-        </div>
-      </section>
+            <button type="button" className="secondary-action" onClick={onCreateStudioDecor}>
+              <Mountain aria-hidden="true" size={15} />
+              <span>Objet 3D</span>
+            </button>
+          </div>
+        </section>
 
-      {showAllManagement || managementFilter === 'studioCharacters' ? (
-        <ArcadeManagementSection
-          title="Personnages 3D crees"
-          count={studioCharacters.length}
-          emptyLabel="Aucun personnage 3D."
-        >
-          {studioCharacters.map((model) => (
-            <ArcadeManagementRow
-              key={model.id}
-              Icon={Cuboid}
-              tone="character"
-              label="Personnage 3D"
-              name={model.name || ''}
-              placeholder="Personnage 3D"
-              onEdit={() => onEditStudioCharacter(model.id)}
-              onDelete={() => onDeleteStudioCharacter(model.id)}
-            />
-          ))}
-        </ArcadeManagementSection>
-      ) : null}
-
-      {showAllManagement || managementFilter === 'studioDecors' ? (
-        <ArcadeManagementSection
-          title="Objets 3D crees"
-          count={studioDecors.length}
-          emptyLabel="Aucun objet 3D."
-        >
-          {studioDecors.map((model) => (
-            <ArcadeManagementRow
-              key={model.id}
-              Icon={Mountain}
-              tone="decor"
-              label="Objet 3D"
-              name={model.name || ''}
-              placeholder="Objet 3D"
-              thumbnail={model.imageData || ''}
-              onEdit={() => onEditStudioDecor(model.id)}
-              onDelete={() => onDeleteStudioDecor(model.id)}
-            />
-          ))}
-        </ArcadeManagementSection>
-      ) : null}
-
-      {showAllManagement || managementFilter === 'mapCharacters' ? (
-        <ArcadeManagementSection
-          title="Personnages sur la carte"
-          count={visibleMapCharacters.length}
-          emptyLabel="Aucun personnage place."
-        >
-          {visibleMapCharacters.map(({ type, item, index }) => {
-            const meta = MAP_ENTITY_META[type];
-            const name = getMapEntityEditableName(type, item);
-            const placeholder = getMapEntityFallbackName(type, index);
-            return (
+        {showStudioCharacters ? (
+          <ArcadeManagementSection
+            title="Personnages 3D crees"
+            count={filteredStudioCharacters.length}
+            emptyLabel={getManagementEmptyLabel('Aucun personnage 3D')}
+          >
+            {filteredStudioCharacters.map((model) => (
               <ArcadeManagementRow
-                key={item.id}
-                Icon={meta.icon}
-                tone={meta.tone}
-                active={selected?.type === type && selected.id === item.id}
-                label={meta.label}
-                name={name}
-                placeholder={placeholder}
-                thumbnail={item.characterImageData || ''}
-                onEdit={() => onEditMapEntity(type, item.id)}
-                onDelete={() => onDeleteMapEntity(type, item.id)}
+                key={model.id}
+                Icon={Cuboid}
+                tone="character"
+                label="Personnage 3D"
+                name={model.name || ''}
+                subtitle={getCharacterImportSubtitle(model)}
+                placeholder="Personnage 3D"
+                onEdit={() => onEditStudioCharacter(model.id)}
+                onDelete={() => onDeleteStudioCharacter(model.id)}
               />
-            );
-          })}
-        </ArcadeManagementSection>
-      ) : null}
+            ))}
+          </ArcadeManagementSection>
+        ) : null}
 
-      {showAllManagement || managementFilter === 'mapObjects' ? (
-        <ArcadeManagementSection
-          title="Objets sur la carte"
-          count={visibleMapObjects.length}
-          emptyLabel="Aucun objet place."
-        >
-          {visibleMapObjects.map(({ type, item, index }) => {
-            const meta = MAP_ENTITY_META[type];
-            const name = getMapEntityEditableName(type, item);
-            const placeholder = getMapEntityFallbackName(type, index);
-            return (
+        {showStudioDecors ? (
+          <ArcadeManagementSection
+            title="Objets 3D crees"
+            count={filteredStudioDecors.length}
+            emptyLabel={getManagementEmptyLabel('Aucun objet 3D')}
+          >
+            {filteredStudioDecors.map((model) => (
               <ArcadeManagementRow
-                key={item.id}
-                Icon={meta.icon}
-                tone={meta.tone}
-                active={selected?.type === type && selected.id === item.id}
-                label={meta.label}
-                name={name}
-                placeholder={placeholder}
-                thumbnail={item.imageData || ''}
-                onEdit={() => onEditMapEntity(type, item.id)}
-                onDelete={() => onDeleteMapEntity(type, item.id)}
+                key={model.id}
+                Icon={Mountain}
+                tone="decor"
+                label="Objet 3D"
+                name={model.name || ''}
+                subtitle={getDecorImportSubtitle(model)}
+                placeholder="Objet 3D"
+                thumbnail={model.imageData || ''}
+                onEdit={() => onEditStudioDecor(model.id)}
+                onDelete={() => onDeleteStudioDecor(model.id)}
               />
-            );
-          })}
-        </ArcadeManagementSection>
-      ) : null}
+            ))}
+          </ArcadeManagementSection>
+        ) : null}
+
+        {showMapCharacters ? (
+          <ArcadeManagementSection
+            title="Personnages sur la carte"
+            count={filteredMapCharacters.length}
+            emptyLabel={getManagementEmptyLabel('Aucun personnage place')}
+          >
+            {filteredMapCharacters.map(({ type, item, index }) => {
+              const meta = MAP_ENTITY_META[type];
+              const name = getMapEntityEditableName(type, item);
+              const placeholder = getMapEntityFallbackName(type, index);
+              return (
+                <ArcadeManagementRow
+                  key={item.id}
+                  Icon={meta.icon}
+                  tone={meta.tone}
+                  active={selected?.type === type && selected.id === item.id}
+                  label={meta.label}
+                  name={name}
+                  subtitle={getMapEntitySubtitle(type, item)}
+                  placeholder={placeholder}
+                  thumbnail={item.characterImageData || ''}
+                  onEdit={() => onEditMapEntity(type, item.id)}
+                  onDelete={() => onDeleteMapEntity(type, item.id)}
+                />
+              );
+            })}
+          </ArcadeManagementSection>
+        ) : null}
+
+        {showMapObjects ? (
+          <ArcadeManagementSection
+            title="Objets sur la carte"
+            count={filteredMapObjects.length}
+            emptyLabel={getManagementEmptyLabel('Aucun objet place')}
+          >
+            {filteredMapObjects.map(({ type, item, index }) => {
+              const meta = MAP_ENTITY_META[type];
+              const name = getMapEntityEditableName(type, item);
+              const placeholder = getMapEntityFallbackName(type, index);
+              return (
+                <ArcadeManagementRow
+                  key={item.id}
+                  Icon={meta.icon}
+                  tone={meta.tone}
+                  active={selected?.type === type && selected.id === item.id}
+                  label={meta.label}
+                  name={name}
+                  subtitle={getMapEntitySubtitle(type, item)}
+                  placeholder={placeholder}
+                  thumbnail={item.imageData || ''}
+                  onEdit={() => onEditMapEntity(type, item.id)}
+                  onDelete={() => onDeleteMapEntity(type, item.id)}
+                />
+              );
+            })}
+          </ArcadeManagementSection>
+        ) : null}
+      </div>
     </section>
   );
 }
@@ -2849,6 +3480,7 @@ function Rpg3DMode({ user = null, authorProfile = null, authReady = true, projec
   const [activeNpcChoice, setActiveNpcChoice] = useState(null);
   const [rpg3DLoadingBar, setRpg3DLoadingBar] = useState(null);
   const [workspaceTab, setWorkspaceTab] = useState('arcade');
+  const [rigCharacterEquipmentTest, setRigCharacterEquipmentTest] = useState(null);
   const [mapFullscreen, setMapFullscreen] = useState(false);
   const [mapDrawerOpen, setMapDrawerOpen] = useState(false);
   const [inspectorDrawerOpen, setInspectorDrawerOpen] = useState(false);
@@ -3225,6 +3857,36 @@ function Rpg3DMode({ user = null, authorProfile = null, authReady = true, projec
   });
 
   activateRpg3DCanvasPortalRef.current = activateRpg3DCanvasPortal;
+
+  const testRigObjectOnCharacter = useCallback(({ decorModelId = '', characterModelId = '' } = {}) => {
+    const currentProject = studioProjectRef.current || studioProject;
+    const sourceModel = (currentProject.decorModels3d || []).find((model) => model.id === decorModelId);
+    const targetCharacter = (currentProject.characterModels3d || []).find((model) => model.id === characterModelId);
+    if (!sourceModel || !targetCharacter) return;
+    const equipmentType = getRigObjectEquipmentType(sourceModel);
+    patchStudioProject((draft) => {
+      const decorModel = (draft.decorModels3d || []).find((model) => model.id === sourceModel.id);
+      if (!decorModel) return;
+      ensureRigObjectEquipmentDefaults(decorModel, equipmentType);
+    }, { rememberHistory: false });
+    setRigCharacterEquipmentTest({
+      decorModelId: sourceModel.id,
+      characterModelId: targetCharacter.id,
+      type: equipmentType,
+    });
+    setStudioSelection((current) => ({
+      ...current,
+      characterModelId: targetCharacter.id,
+      decorModelId: sourceModel.id,
+    }));
+    setWorkspaceTab('characters3d');
+  }, [patchStudioProject, setStudioSelection, setWorkspaceTab, studioProject, studioProjectRef]);
+
+  useEffect(() => {
+    if (rigCharacterEquipmentTest && workspaceTab !== 'characters3d') {
+      setRigCharacterEquipmentTest(null);
+    }
+  }, [rigCharacterEquipmentTest, workspaceTab]);
 
   useEffect(() => {
     if (workspaceTab === 'arcade') return;
@@ -4060,7 +4722,6 @@ function Rpg3DMode({ user = null, authorProfile = null, authReady = true, projec
     () => getSelectionBoundsFromEntities(inspectorSelectionEntities),
     [inspectorSelectionEntities],
   );
-  const dashReady = snapshot.player.dashCooldown <= 0;
   const playMode = mode === 'play';
   const engineConfig = { ...DEFAULT_ARCADE_CONFIG.engine, ...(config.engine || {}) };
   const lightIntensityValue = Number.isFinite(Number(engineConfig.lightIntensity))
@@ -4100,10 +4761,18 @@ function Rpg3DMode({ user = null, authorProfile = null, authReady = true, projec
     { id: 'management', label: 'Gestion', icon: List },
     { id: 'characters3d', label: 'Personnages 3D', icon: Cuboid },
     { id: 'decors3d', label: 'Objets 3D', icon: Mountain },
-    { id: 'modelTools', label: 'Outils GLB', icon: Wrench },
+    {
+      id: 'tools',
+      label: 'Outils',
+      icon: Wrench,
+      children: [
+        { id: 'characterRigging', label: 'Rig personnage', icon: Crosshair },
+        { id: 'objectRigging', label: 'Rig objets', icon: Magnet },
+        { id: 'stunts', label: 'Cascadeur', icon: Activity },
+        { id: 'modelTools', label: 'Outils GLB', icon: Wrench },
+      ],
+    },
   ];
-  const activeWorkspace = workspaceTabs.find((tab) => tab.id === workspaceTab) || workspaceTabs[0];
-  const ActiveWorkspaceIcon = activeWorkspace.icon;
   const showLegacyToolsPanel = false;
   const showArcadeMapCard = true;
   const showArcadeInspector = true;
@@ -4490,8 +5159,10 @@ function Rpg3DMode({ user = null, authorProfile = null, authReady = true, projec
             mediaLibrary={studioMediaLibrary}
             selectedModelId={studioSelection.characterModelId || undefined}
             onSelectedModelIdChange={(modelId) => setStudioSelection((current) => ({ ...current, characterModelId: modelId }))}
+            previewEquipmentTest={rigCharacterEquipmentTest}
+            onPreviewEquipmentTestClear={() => setRigCharacterEquipmentTest(null)}
             onSaveAssets={saveArcadeAssets}
-            saveStatus={managementSaveStatus}
+            saveStatus=""
             saveInProgress={isSavingAssets}
           />
         </React.Suspense>
@@ -4505,8 +5176,41 @@ function Rpg3DMode({ user = null, authorProfile = null, authReady = true, projec
             selectedModelId={studioSelection.decorModelId || undefined}
             onSelectedModelIdChange={(modelId) => setStudioSelection((current) => ({ ...current, decorModelId: modelId }))}
             onSaveAssets={saveArcadeAssets}
+            onTestOnCharacter={testRigObjectOnCharacter}
             saveStatus={managementSaveStatus}
             saveInProgress={isSavingAssets}
+          />
+        </React.Suspense>
+      ) : workspaceTab === 'objectRigging' ? (
+        <React.Suspense fallback={<div className="arcade-tab-loading" />}>
+          <ObjectRiggingTab
+            project={studioProject}
+            patchProject={patchStudioProject}
+            selectedModelId={studioSelection.decorModelId || undefined}
+            onSelectedModelIdChange={(modelId) => setStudioSelection((current) => ({ ...current, decorModelId: modelId }))}
+            onSaveAssets={saveArcadeAssets}
+            onTestOnCharacter={testRigObjectOnCharacter}
+            saveStatus={managementSaveStatus}
+            saveInProgress={isSavingAssets}
+          />
+        </React.Suspense>
+      ) : workspaceTab === 'characterRigging' ? (
+        <React.Suspense fallback={<div className="arcade-tab-loading" />}>
+          <CharacterRiggingTab
+            project={studioProject}
+            patchProject={patchStudioProject}
+            selectedModelId={studioSelection.characterModelId || undefined}
+            onSelectedModelIdChange={(modelId) => setStudioSelection((current) => ({ ...current, characterModelId: modelId }))}
+            onSaveAssets={saveArcadeAssets}
+            saveStatus={managementSaveStatus}
+            saveInProgress={isSavingAssets}
+          />
+        </React.Suspense>
+      ) : workspaceTab === 'stunts' ? (
+        <React.Suspense fallback={<div className="arcade-tab-loading" />}>
+          <StuntAnimationTab
+            project={studioProject}
+            patchProject={patchStudioProject}
           />
         </React.Suspense>
       ) : workspaceTab === 'modelTools' ? (
@@ -4622,7 +5326,7 @@ function Rpg3DMode({ user = null, authorProfile = null, authReady = true, projec
               <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.characterModel}>Modele 3D</Rpg3DHelpLabel>
               <select value={config.player.characterModel3dId || ''} onChange={(event) => patchConfig((next) => {
                 const model = studioHeroModels.find((entry) => entry.id === event.target.value);
-                applyCharacterModelToActor(next.player, model);
+                applyCharacterModelToActor(next.player, model, studioWeaponModels);
               }, false)}>
                 <option value="">Aucun</option>
                 {studioHeroModels.map((model) => (
@@ -4689,7 +5393,7 @@ function Rpg3DMode({ user = null, authorProfile = null, authReady = true, projec
               <button type="button" className="secondary-action" onClick={() => {
                 setMediaError('');
                 patchConfig((next) => {
-                  applyCharacterModelToActor(next.player, null);
+                  applyCharacterModelToActor(next.player, null, studioWeaponModels);
                 }, false);
               }}>Retirer modele 3D</button>
             ) : null}
@@ -4802,6 +5506,7 @@ function Rpg3DMode({ user = null, authorProfile = null, authReady = true, projec
 
         <Rpg3DStage
           activeTransformTool={activeTransformTool}
+          actionMessage={playMode ? snapshot.actionMessage : ''}
           actionZoneEdgeInsertMode={actionZoneEdgeInsertMode}
           cameraTargetPickMode={cameraTargetPickMode}
           cameraToolsHidden={cameraToolsHidden}
@@ -4941,18 +5646,6 @@ function Rpg3DMode({ user = null, authorProfile = null, authReady = true, projec
         onSelectChoice={handleNpcChoiceSelect}
       />
 
-      <Rpg3DControls
-        ActiveWorkspaceIcon={ActiveWorkspaceIcon}
-        activeWorkspace={activeWorkspace}
-        arcadeObjectCount={arcadeObjectCount}
-        dashReady={dashReady}
-        pendingPlacement={pendingPlacement}
-        playMode={playMode}
-        snapshot={snapshot}
-        studioProject={studioProject}
-        tool={tool}
-        workspaceTab={workspaceTab}
-      />
     </main>
   );
 }

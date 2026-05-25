@@ -87,6 +87,26 @@
   color: #fde68a;
 }
 
+.arcade-stage-action-message {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  z-index: 36;
+  max-width: min(520px, calc(100% - 32px));
+  padding: 10px 14px;
+  border: 1px solid rgba(125, 211, 252, .34);
+  border-radius: 8px;
+  background: rgba(4, 10, 16, .88);
+  color: #eaf2ff;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .36), inset 0 1px rgba(255, 255, 255, .06);
+  font-size: 13px;
+  font-weight: 900;
+  text-align: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+  backdrop-filter: blur(10px);
+}
+
 @keyframes arcadeStageLoadingBar {
   from {
     transform: scaleX(0);

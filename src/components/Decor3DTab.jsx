@@ -3,6 +3,7 @@ import {
   Box,
   Footprints,
   Gem,
+  HardHat,
   Home,
   Image as ImageIcon,
   Map as MapIcon,
@@ -52,6 +53,7 @@ import {
 import {
   createLocalModelFileId,
   forgetRpg3DLocalBlobFile,
+  persistLocalModelFile,
   rememberRpg3DLocalBlobFile,
 } from '../utils/rpg3dAssetsCore.js';
 import MediaSourcePicker from './MediaSourcePicker.jsx';
@@ -69,6 +71,7 @@ const WORLD_KIND_OPTIONS = [
 const INVENTORY_KIND_OPTIONS = [
   { id: 'inventory-weapon', label: 'armes', createLabel: 'arme', icon: Sword, renderKind: 'decor' },
   { id: 'inventory-armor', label: 'armures', createLabel: 'armure', icon: Shirt, renderKind: 'decor' },
+  { id: 'inventory-helmet', label: 'casques', createLabel: 'casque', icon: HardHat, renderKind: 'decor' },
   { id: 'inventory-shield', label: 'boucliers', createLabel: 'bouclier', icon: Shield, renderKind: 'decor' },
   { id: 'inventory-leggings', label: 'jambières', createLabel: 'jambière', icon: Footprints, renderKind: 'decor' },
   { id: 'inventory-jewelry', label: 'bijoux', createLabel: 'bijou', icon: Gem, renderKind: 'decor' },
@@ -108,6 +111,30 @@ const isHexColor = (value) => /^#[0-9a-f]{6}$/i.test(value || '');
 const colorValue = (value, fallback) => (isHexColor(value) ? value : fallback);
 const getDecorKindConfig = (kind = '') => SELECTABLE_KIND_OPTIONS.find((option) => option.id === getDecorKindId(kind)) || SELECTABLE_KIND_OPTIONS[0];
 const isInventoryKindId = (kind = '') => INVENTORY_KIND_IDS.has(getDecorKindId(kind));
+const isInventoryWeaponKindId = (kind = '') => getDecorKindId(kind) === 'inventory-weapon';
+const isInventoryArmorKindId = (kind = '') => getDecorKindId(kind) === 'inventory-armor';
+const isInventoryShieldKindId = (kind = '') => getDecorKindId(kind) === 'inventory-shield';
+const WEAPON_GRIP_HANDS = [
+  { id: 'right', label: 'Main droite', suffix: 'Right' },
+  { id: 'left', label: 'Main gauche', suffix: 'Left' },
+];
+const SHIELD_GRIP_ARMS = [
+  { id: 'left', label: 'Bras gauche' },
+  { id: 'right', label: 'Bras droit' },
+];
+const SHIELD_GRIP_POINTS = [
+  { id: 'hand', label: 'Poignet / main', suffix: 'Hand', defaultY: -0.35 },
+  { id: 'elbow', label: 'Coude', suffix: 'Elbow', defaultY: 0.35 },
+];
+const ARMOR_GRIP_POINTS = [
+  { id: 'left-shoulder', label: 'Epaule gauche', suffix: 'LeftShoulder', defaultX: -0.45, defaultY: 0.55, defaultZ: 0 },
+  { id: 'right-shoulder', label: 'Epaule droite', suffix: 'RightShoulder', defaultX: 0.45, defaultY: 0.55, defaultZ: 0 },
+  { id: 'left-elbow', label: 'Coude gauche', suffix: 'LeftElbow', defaultX: -0.65, defaultY: 0.05, defaultZ: 0 },
+  { id: 'right-elbow', label: 'Coude droit', suffix: 'RightElbow', defaultX: 0.65, defaultY: 0.05, defaultZ: 0 },
+  { id: 'lower-belly', label: 'Bas du ventre', suffix: 'LowerBelly', defaultX: 0, defaultY: -0.55, defaultZ: 0 },
+];
+const WEAPON_GRIP_POSITION_MIN = -2;
+const WEAPON_GRIP_POSITION_MAX = 2;
 const DECOR_SIZE_AXES = [
   { id: 'x', label: 'X' },
   { id: 'y', label: 'Y' },
@@ -119,6 +146,8 @@ const isValidDraftNumber = (value = '') => {
   const normalized = normalizeDraftNumber(value);
   return normalized !== '' && Number.isFinite(Number(normalized));
 };
+const normalizeEquipmentHand = (value = '') => (value === 'left' ? 'left' : 'right');
+const normalizeEquipmentArm = (value = '') => (value === 'right' ? 'right' : 'left');
 const toDecorUserAxes = (dimensions = {}) => ({
   x: dimensions.x,
   y: dimensions.z,
@@ -240,6 +269,9 @@ export default function Decor3DTab({
   const selectedKindId = getDecorKindId(selectedModel?.kind);
   const activeKindId = selectedModel ? selectedKindId : (activeCardField || getDecorKindId(previewModel.kind));
   const selectedIsFloorTile = selectedModel ? isFloorTileKind(selectedModel.kind) : false;
+  const selectedIsInventoryWeapon = Boolean(selectedModelSource && selectedModel && isInventoryWeaponKindId(selectedModel.kind));
+  const selectedIsInventoryArmor = Boolean(selectedModelSource && selectedModel && isInventoryArmorKindId(selectedModel.kind));
+  const selectedIsInventoryShield = Boolean(selectedModelSource && selectedModel && isInventoryShieldKindId(selectedModel.kind));
   const showFloorTileInspectorFields = selectedIsFloorTile && selectedKindId !== 'road';
   const showObjectSizeControl = Boolean(selectedModel) && (!selectedIsFloorTile || selectedModelSource);
 
@@ -287,6 +319,124 @@ export default function Decor3DTab({
   const setSelectedModelSizeProportional = useCallback((checked) => {
     patchSelectedModel((model) => {
       model.modelSizeProportional = checked;
+    }, { rememberHistory: false });
+  }, [patchSelectedModel]);
+
+  const setSelectedWeaponGripHand = useCallback((hand) => {
+    patchSelectedModel((model) => {
+      model.weaponGripHand = normalizeEquipmentHand(hand);
+    }, { rememberHistory: false });
+  }, [patchSelectedModel]);
+
+  const setSelectedWeaponGripEnabled = useCallback((hand, checked) => {
+    const suffix = hand === 'left' ? 'Left' : 'Right';
+    patchSelectedModel((model) => {
+      model[`weaponGrip${suffix}Enabled`] = checked;
+      if (checked && !Number(model[`weaponGrip${suffix}Y`])) {
+        model[`weaponGrip${suffix}Y`] = -0.44;
+      }
+      if (checked && !Number(model[`weaponGrip${suffix}RotationZ`])) {
+        model[`weaponGrip${suffix}RotationZ`] = 180;
+      }
+    }, { rememberHistory: false });
+  }, [patchSelectedModel]);
+
+  const updateSelectedWeaponGripField = useCallback((hand, field, rawValue, options = {}) => {
+    const suffix = hand === 'left' ? 'Left' : 'Right';
+    patchSelectedModel((model) => {
+      const key = `weaponGrip${suffix}${field}`;
+      model[key] = options.numeric
+        ? numberValue(rawValue, Number(model[key]) || 0, options.min, options.max)
+        : rawValue;
+    }, { rememberHistory: false });
+  }, [patchSelectedModel]);
+
+  const updateSelectedWeaponGripMarker = useCallback((hand, point = {}) => {
+    const suffix = hand === 'left' ? 'Left' : 'Right';
+    patchSelectedModel((model) => {
+      model[`weaponGrip${suffix}Enabled`] = true;
+      if (!Number(model[`weaponGrip${suffix}RotationZ`])) {
+        model[`weaponGrip${suffix}RotationZ`] = 180;
+      }
+      model[`weaponGrip${suffix}X`] = numberValue(point.x, Number(model[`weaponGrip${suffix}X`]) || 0, WEAPON_GRIP_POSITION_MIN, WEAPON_GRIP_POSITION_MAX);
+      model[`weaponGrip${suffix}Y`] = numberValue(point.y, Number(model[`weaponGrip${suffix}Y`]) || 0, WEAPON_GRIP_POSITION_MIN, WEAPON_GRIP_POSITION_MAX);
+      model[`weaponGrip${suffix}Z`] = numberValue(point.z, Number(model[`weaponGrip${suffix}Z`]) || 0, WEAPON_GRIP_POSITION_MIN, WEAPON_GRIP_POSITION_MAX);
+    }, { rememberHistory: false });
+  }, [patchSelectedModel]);
+
+  const setSelectedShieldGripArm = useCallback((arm) => {
+    patchSelectedModel((model) => {
+      model.shieldGripArm = normalizeEquipmentArm(arm);
+    }, { rememberHistory: false });
+  }, [patchSelectedModel]);
+
+  const setSelectedShieldGripEnabled = useCallback((pointId, checked) => {
+    const config = SHIELD_GRIP_POINTS.find((point) => point.id === pointId);
+    if (!config) return;
+    patchSelectedModel((model) => {
+      model[`shieldGrip${config.suffix}Enabled`] = checked;
+      if (checked && !Number(model[`shieldGrip${config.suffix}Y`])) {
+        model[`shieldGrip${config.suffix}Y`] = config.defaultY;
+      }
+    }, { rememberHistory: false });
+  }, [patchSelectedModel]);
+
+  const updateSelectedShieldGripField = useCallback((pointId, axis, rawValue) => {
+    const config = SHIELD_GRIP_POINTS.find((point) => point.id === pointId);
+    if (!config) return;
+    patchSelectedModel((model) => {
+      const key = `shieldGrip${config.suffix}${axis}`;
+      const fallback = axis === 'Y' ? config.defaultY : 0;
+      model[key] = numberValue(rawValue, Number(model[key]) || fallback, WEAPON_GRIP_POSITION_MIN, WEAPON_GRIP_POSITION_MAX);
+    }, { rememberHistory: false });
+  }, [patchSelectedModel]);
+
+  const updateSelectedShieldGripMarker = useCallback((pointId, point = {}) => {
+    const config = SHIELD_GRIP_POINTS.find((entry) => entry.id === pointId);
+    if (!config) return;
+    patchSelectedModel((model) => {
+      model[`shieldGrip${config.suffix}Enabled`] = true;
+      model[`shieldGrip${config.suffix}X`] = numberValue(point.x, Number(model[`shieldGrip${config.suffix}X`]) || 0, WEAPON_GRIP_POSITION_MIN, WEAPON_GRIP_POSITION_MAX);
+      model[`shieldGrip${config.suffix}Y`] = numberValue(point.y, Number(model[`shieldGrip${config.suffix}Y`]) || config.defaultY, WEAPON_GRIP_POSITION_MIN, WEAPON_GRIP_POSITION_MAX);
+      model[`shieldGrip${config.suffix}Z`] = numberValue(point.z, Number(model[`shieldGrip${config.suffix}Z`]) || 0, WEAPON_GRIP_POSITION_MIN, WEAPON_GRIP_POSITION_MAX);
+    }, { rememberHistory: false });
+  }, [patchSelectedModel]);
+
+  const setSelectedArmorGripEnabled = useCallback((pointId, checked) => {
+    const config = ARMOR_GRIP_POINTS.find((point) => point.id === pointId);
+    if (!config) return;
+    patchSelectedModel((model) => {
+      model[`armorGrip${config.suffix}Enabled`] = checked;
+      if (checked && !isValidDraftNumber(model[`armorGrip${config.suffix}X`])) {
+        model[`armorGrip${config.suffix}X`] = config.defaultX;
+      }
+      if (checked && !isValidDraftNumber(model[`armorGrip${config.suffix}Y`])) {
+        model[`armorGrip${config.suffix}Y`] = config.defaultY;
+      }
+      if (checked && !isValidDraftNumber(model[`armorGrip${config.suffix}Z`])) {
+        model[`armorGrip${config.suffix}Z`] = config.defaultZ;
+      }
+    }, { rememberHistory: false });
+  }, [patchSelectedModel]);
+
+  const updateSelectedArmorGripField = useCallback((pointId, axis, rawValue) => {
+    const config = ARMOR_GRIP_POINTS.find((point) => point.id === pointId);
+    if (!config) return;
+    patchSelectedModel((model) => {
+      const key = `armorGrip${config.suffix}${axis}`;
+      const fallback = Number(config[`default${axis}`]) || 0;
+      model[key] = numberValue(rawValue, Number(model[key]) || fallback, WEAPON_GRIP_POSITION_MIN, WEAPON_GRIP_POSITION_MAX);
+    }, { rememberHistory: false });
+  }, [patchSelectedModel]);
+
+  const updateSelectedArmorGripMarker = useCallback((pointId, point = {}) => {
+    const config = ARMOR_GRIP_POINTS.find((entry) => entry.id === pointId);
+    if (!config) return;
+    patchSelectedModel((model) => {
+      model[`armorGrip${config.suffix}Enabled`] = true;
+      model[`armorGrip${config.suffix}X`] = numberValue(point.x, Number(model[`armorGrip${config.suffix}X`]) || config.defaultX, WEAPON_GRIP_POSITION_MIN, WEAPON_GRIP_POSITION_MAX);
+      model[`armorGrip${config.suffix}Y`] = numberValue(point.y, Number(model[`armorGrip${config.suffix}Y`]) || config.defaultY, WEAPON_GRIP_POSITION_MIN, WEAPON_GRIP_POSITION_MAX);
+      model[`armorGrip${config.suffix}Z`] = numberValue(point.z, Number(model[`armorGrip${config.suffix}Z`]) || config.defaultZ, WEAPON_GRIP_POSITION_MIN, WEAPON_GRIP_POSITION_MAX);
     }, { rememberHistory: false });
   }, [patchSelectedModel]);
 
@@ -339,7 +489,8 @@ export default function Decor3DTab({
       }
       const localModelFileId = createLocalModelFileId('decor', selectedModelId, optimizedFile);
       const modelUrl = URL.createObjectURL(optimizedFile);
-      rememberRpg3DLocalBlobFile(modelUrl, optimizedFile, localModelFileId);
+      rememberRpg3DLocalBlobFile(modelUrl, optimizedFile, localModelFileId, { persist: false });
+      const localModelPersisted = await persistLocalModelFile(localModelFileId, optimizedFile);
       localModelUrlsRef.current.set(selectedModelId, modelUrl);
       patchSelectedModel((model) => {
         if (activeCardField && getDecorKindId(model.kind) !== activeCardField) {
@@ -361,17 +512,17 @@ export default function Decor3DTab({
         }
         model.modelUrl = modelUrl;
         model.modelData = modelData || '';
-        model.localModelFileId = localModelFileId;
+        model.localModelFileId = localModelPersisted ? localModelFileId : '';
         model.modelName = optimizedFile.name || zipBundle?.modelFile?.name || file.name || `modele.${sourceFormat}`;
         model.modelFormat = sourceFormat;
         model.modelFileSize = modelFileSize || Number(optimizedFile?.size || sourceFile?.size || file?.size) || 0;
         model.modelResources = zipBundle?.modelResources || [];
       });
       setCopyStatus(isGlb
-        ? `GLB charge sans recompression${modelData ? '' : ' en local'}`
+        ? `GLB charge sans recompression${modelData ? '' : ' en local'}${localModelPersisted ? '' : ' - stockage local non confirme'}`
         : isZip
-            ? `ZIP charge: ${getThreeModelFormatLabel(sourceFormat)} + ${zipBundle.modelResources.length} texture${zipBundle.modelResources.length > 1 ? 's' : ''}${modelData ? '' : ' en local'}`
-            : `${getThreeModelFormatLabel(sourceFormat)} charge${modelData ? '' : ' en local'}`);
+            ? `ZIP charge: ${getThreeModelFormatLabel(sourceFormat)} + ${zipBundle.modelResources.length} texture${zipBundle.modelResources.length > 1 ? 's' : ''}${modelData ? '' : ' en local'}${localModelPersisted ? '' : ' - stockage local non confirme'}`
+            : `${getThreeModelFormatLabel(sourceFormat)} charge${modelData ? '' : ' en local'}${localModelPersisted ? '' : ' - stockage local non confirme'}`);
     } catch (error) {
       console.error(error);
       setCopyStatus('Import du modele 3D impossible');
@@ -503,6 +654,42 @@ export default function Decor3DTab({
       y: formatDraftNumber(selectedDimensions.y),
       z: formatDraftNumber(selectedDimensions.z),
     };
+  const selectedWeaponGripMarkers = useMemo(() => {
+    if (!selectedIsInventoryWeapon || !selectedModel) return [];
+    return WEAPON_GRIP_HANDS.map((hand) => ({
+      hand: hand.id,
+      label: hand.label,
+      enabled: Boolean(selectedModel[`weaponGrip${hand.suffix}Enabled`]),
+      x: Number(selectedModel[`weaponGrip${hand.suffix}X`]) || 0,
+      y: Number(selectedModel[`weaponGrip${hand.suffix}Y`]) || 0,
+      z: Number(selectedModel[`weaponGrip${hand.suffix}Z`]) || 0,
+    }));
+  }, [selectedIsInventoryWeapon, selectedModel]);
+  const selectedShieldGripMarkers = useMemo(() => {
+    if (!selectedIsInventoryShield || !selectedModel) return [];
+    return SHIELD_GRIP_POINTS.map((point) => ({
+      id: point.id,
+      label: point.label,
+      enabled: Boolean(selectedModel[`shieldGrip${point.suffix}Enabled`]),
+      x: Number(selectedModel[`shieldGrip${point.suffix}X`]) || 0,
+      y: Number(selectedModel[`shieldGrip${point.suffix}Y`]) || point.defaultY,
+      z: Number(selectedModel[`shieldGrip${point.suffix}Z`]) || 0,
+    }));
+  }, [selectedIsInventoryShield, selectedModel]);
+  const selectedArmorGripMarkers = useMemo(() => {
+    if (!selectedIsInventoryArmor || !selectedModel) return [];
+    return ARMOR_GRIP_POINTS.map((point) => ({
+      id: point.id,
+      label: point.label,
+      enabled: Boolean(selectedModel[`armorGrip${point.suffix}Enabled`]),
+      x: isValidDraftNumber(selectedModel[`armorGrip${point.suffix}X`]) ? Number(normalizeDraftNumber(selectedModel[`armorGrip${point.suffix}X`])) : point.defaultX,
+      y: isValidDraftNumber(selectedModel[`armorGrip${point.suffix}Y`]) ? Number(normalizeDraftNumber(selectedModel[`armorGrip${point.suffix}Y`])) : point.defaultY,
+      z: isValidDraftNumber(selectedModel[`armorGrip${point.suffix}Z`]) ? Number(normalizeDraftNumber(selectedModel[`armorGrip${point.suffix}Z`])) : point.defaultZ,
+      defaultX: point.defaultX,
+      defaultY: point.defaultY,
+      defaultZ: point.defaultZ,
+    }));
+  }, [selectedIsInventoryArmor, selectedModel]);
   const setDecorKind = (kindId) => {
     if (selectedModel?.id) {
       setSelectedModelId(selectedModel.id);
@@ -605,37 +792,46 @@ export default function Decor3DTab({
       </section>
 
       <section className="panel decor3d-preview-panel">
-        <div className="decor3d-preview-toolbar">
-          <div>
-            <span className="section-kicker"><KindIcon size={14} /> Modele</span>
-            <h2>{previewModel.name || 'Decor 3D'}</h2>
-          </div>
-          <div className="decor3d-preview-actions">
-            {previewFullscreen ? (
-              <button
-                type="button"
-                className={previewDrawerOpen ? 'active' : ''}
-                title={previewDrawerOpen ? 'Fermer le tiroir' : 'Ouvrir le tiroir'}
-                aria-label={previewDrawerOpen ? 'Fermer le tiroir de navigation' : 'Ouvrir le tiroir de navigation'}
-                aria-pressed={previewDrawerOpen}
-                onClick={() => setPreviewDrawerOpen((open) => !open)}
-              >
-                <PanelLeftOpen aria-hidden="true" size={16} />
-              </button>
-            ) : null}
-            <button
-              type="button"
-              title={previewFullscreen ? 'Quitter le plein ecran' : 'Plein ecran'}
-              aria-label={previewFullscreen ? 'Quitter le plein ecran' : 'Activer le plein ecran'}
-              aria-pressed={previewFullscreen}
-              onClick={togglePreviewFullscreen}
-            >
-              {previewFullscreen ? <Minimize2 aria-hidden="true" size={16} /> : <Maximize2 aria-hidden="true" size={16} />}
-            </button>
-          </div>
-        </div>
         <React.Suspense fallback={<div className="decor3d-preview-loading" />}>
-          <Decor3DPreview model={previewModel} />
+          <Decor3DPreview
+            model={previewModel}
+            weaponGripMarkers={selectedWeaponGripMarkers}
+            onWeaponGripMarkerChange={selectedIsInventoryWeapon ? updateSelectedWeaponGripMarker : undefined}
+            shieldGripMarkers={selectedShieldGripMarkers}
+            onShieldGripMarkerChange={selectedIsInventoryShield ? updateSelectedShieldGripMarker : undefined}
+            armorGripMarkers={selectedArmorGripMarkers}
+            onArmorGripMarkerChange={selectedIsInventoryArmor ? updateSelectedArmorGripMarker : undefined}
+          >
+            <div className="decor3d-preview-toolbar decor3d-canvas-overlay">
+              <div>
+                <span className="section-kicker"><KindIcon size={14} /> Modele</span>
+                <h2>{previewModel.name || 'Decor 3D'}</h2>
+              </div>
+              <div className="decor3d-preview-actions">
+                {previewFullscreen ? (
+                  <button
+                    type="button"
+                    className={previewDrawerOpen ? 'active' : ''}
+                    title={previewDrawerOpen ? 'Fermer le tiroir' : 'Ouvrir le tiroir'}
+                    aria-label={previewDrawerOpen ? 'Fermer le tiroir de navigation' : 'Ouvrir le tiroir de navigation'}
+                    aria-pressed={previewDrawerOpen}
+                    onClick={() => setPreviewDrawerOpen((open) => !open)}
+                  >
+                    <PanelLeftOpen aria-hidden="true" size={16} />
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  title={previewFullscreen ? 'Quitter le plein ecran' : 'Plein ecran'}
+                  aria-label={previewFullscreen ? 'Quitter le plein ecran' : 'Activer le plein ecran'}
+                  aria-pressed={previewFullscreen}
+                  onClick={togglePreviewFullscreen}
+                >
+                  {previewFullscreen ? <Minimize2 aria-hidden="true" size={16} /> : <Maximize2 aria-hidden="true" size={16} />}
+                </button>
+              </div>
+            </div>
+          </Decor3DPreview>
         </React.Suspense>
 
         <div className="decor3d-meta-strip">
@@ -761,7 +957,7 @@ export default function Decor3DTab({
                         type="number"
                         min={DECOR_MODEL_DIMENSION_MIN}
                         max={DECOR_MODEL_DIMENSION_MAX}
-                        step="0.05"
+                        step="0.001"
                         value={activeDimensionDraft[id]}
                         onChange={(event) => setSelectedModelDimensionDraft(id, event.target.value)}
                         onBlur={(event) => commitSelectedModelDimension(id, event.target.value)}
@@ -866,6 +1062,193 @@ export default function Decor3DTab({
                   </label>
                 ) : null}
               </>
+            ) : null}
+
+            {selectedIsInventoryWeapon ? (
+              <div className="decor3d-weapon-grip-section">
+                <DecorHelpLabel help="Definis le point de l arme qui doit tomber dans la main du personnage. Les valeurs sont en coordonnees locales du modele apres taille normalisee.">
+                  Points de prise
+                </DecorHelpLabel>
+                <label>
+                  <span>Main par défaut</span>
+                  <select
+                    value={normalizeEquipmentHand(selectedModel.weaponGripHand)}
+                    onChange={(event) => setSelectedWeaponGripHand(event.target.value)}
+                  >
+                    {WEAPON_GRIP_HANDS.map((hand) => (
+                      <option key={hand.id} value={hand.id}>{hand.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <div className="decor3d-weapon-grip-grid">
+                  {WEAPON_GRIP_HANDS.map((hand) => {
+                    const enabledField = `weaponGrip${hand.suffix}Enabled`;
+                    const enabled = Boolean(selectedModel[enabledField]);
+                    return (
+                      <div className="decor3d-weapon-grip-card" key={hand.id}>
+                        <label className="checkbox-row">
+                          <input
+                            type="checkbox"
+                            checked={enabled}
+                            onChange={(event) => setSelectedWeaponGripEnabled(hand.id, event.target.checked)}
+                          />
+                          <span>{hand.label}</span>
+                        </label>
+                        <div className="decor3d-axis-grid">
+                          {['X', 'Y', 'Z'].map((axis) => {
+                            const field = axis;
+                            const key = `weaponGrip${hand.suffix}${axis}`;
+                            return (
+                              <label key={key}>
+                                <span>Point {axis}</span>
+                                <input
+                                  type="number"
+                                  min={WEAPON_GRIP_POSITION_MIN}
+                                  max={WEAPON_GRIP_POSITION_MAX}
+                                  step="0.01"
+                                  disabled={!enabled}
+                                  value={selectedModel[key] || 0}
+                                  onChange={(event) => updateSelectedWeaponGripField(hand.id, field, event.target.value, {
+                                    numeric: true,
+                                    min: WEAPON_GRIP_POSITION_MIN,
+                                    max: WEAPON_GRIP_POSITION_MAX,
+                                  })}
+                                />
+                              </label>
+                            );
+                          })}
+                        </div>
+                        <div className="decor3d-axis-grid">
+                          {['X', 'Y', 'Z'].map((axis) => {
+                            const field = `Rotation${axis}`;
+                            const key = `weaponGrip${hand.suffix}${field}`;
+                            return (
+                              <label key={key}>
+                                <span>Rot {axis}</span>
+                                <input
+                                  type="number"
+                                  min="-180"
+                                  max="180"
+                                  step="5"
+                                  disabled={!enabled}
+                                  value={selectedModel[key] || 0}
+                                  onChange={(event) => updateSelectedWeaponGripField(hand.id, field, event.target.value, {
+                                    numeric: true,
+                                    min: -180,
+                                    max: 180,
+                                  })}
+                                />
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {selectedIsInventoryArmor ? (
+              <div className="decor3d-weapon-grip-section">
+                <DecorHelpLabel help="Definis les points de l armure qui doivent suivre les epaules, les coudes et le bas du ventre du personnage. Les pastilles se deplacent directement dans l apercu.">
+                  Points de prise armure
+                </DecorHelpLabel>
+                <div className="decor3d-weapon-grip-grid">
+                  {ARMOR_GRIP_POINTS.map((point) => {
+                    const enabledField = `armorGrip${point.suffix}Enabled`;
+                    const enabled = Boolean(selectedModel[enabledField]);
+                    return (
+                      <div className="decor3d-weapon-grip-card" key={point.id}>
+                        <label className="checkbox-row">
+                          <input
+                            type="checkbox"
+                            checked={enabled}
+                            onChange={(event) => setSelectedArmorGripEnabled(point.id, event.target.checked)}
+                          />
+                          <span>{point.label}</span>
+                        </label>
+                        <div className="decor3d-axis-grid">
+                          {['X', 'Y', 'Z'].map((axis) => {
+                            const key = `armorGrip${point.suffix}${axis}`;
+                            const fallback = Number(point[`default${axis}`]) || 0;
+                            return (
+                              <label key={key}>
+                                <span>Point {axis}</span>
+                                <input
+                                  type="number"
+                                  min={WEAPON_GRIP_POSITION_MIN}
+                                  max={WEAPON_GRIP_POSITION_MAX}
+                                  step="0.01"
+                                  disabled={!enabled}
+                                  value={selectedModel[key] ?? fallback}
+                                  onChange={(event) => updateSelectedArmorGripField(point.id, axis, event.target.value)}
+                                />
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {selectedIsInventoryShield ? (
+              <div className="decor3d-weapon-grip-section">
+                <DecorHelpLabel help="Definis les points du bouclier qui doivent suivre la ligne du bras du personnage. Avec main/poignet et coude actifs, le bouclier s'aligne toujours sur cette ligne.">
+                  Points de prise bouclier
+                </DecorHelpLabel>
+                <label>
+                  <span>Bras par defaut</span>
+                  <select
+                    value={normalizeEquipmentArm(selectedModel.shieldGripArm)}
+                    onChange={(event) => setSelectedShieldGripArm(event.target.value)}
+                  >
+                    {SHIELD_GRIP_ARMS.map((arm) => (
+                      <option key={arm.id} value={arm.id}>{arm.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <div className="decor3d-weapon-grip-grid">
+                  {SHIELD_GRIP_POINTS.map((point) => {
+                    const enabledField = `shieldGrip${point.suffix}Enabled`;
+                    const enabled = Boolean(selectedModel[enabledField]);
+                    return (
+                      <div className="decor3d-weapon-grip-card" key={point.id}>
+                        <label className="checkbox-row">
+                          <input
+                            type="checkbox"
+                            checked={enabled}
+                            onChange={(event) => setSelectedShieldGripEnabled(point.id, event.target.checked)}
+                          />
+                          <span>{point.label}</span>
+                        </label>
+                        <div className="decor3d-axis-grid">
+                          {['X', 'Y', 'Z'].map((axis) => {
+                            const key = `shieldGrip${point.suffix}${axis}`;
+                            return (
+                              <label key={key}>
+                                <span>Point {axis}</span>
+                                <input
+                                  type="number"
+                                  min={WEAPON_GRIP_POSITION_MIN}
+                                  max={WEAPON_GRIP_POSITION_MAX}
+                                  step="0.01"
+                                  disabled={!enabled}
+                                  value={selectedModel[key] ?? (axis === 'Y' ? point.defaultY : 0)}
+                                  onChange={(event) => updateSelectedShieldGripField(point.id, axis, event.target.value)}
+                                />
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             ) : null}
 
             {selectedModelSource ? (

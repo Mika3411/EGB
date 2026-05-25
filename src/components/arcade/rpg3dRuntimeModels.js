@@ -3,9 +3,12 @@ import {
   getRuntimeModelPrepareOptions,
   hasThreeModelResources,
   loadThreeModelFromSource,
+  prepareImportedAnimationClipForObject,
   prepareGltfModel,
 } from '../../utils/threeGltfUtils';
+import { getAnimationBaseSlotId } from '../../utils/rpg3dModelImportCore.js';
 
+const LOCAL_FBX_RUNTIME_ANIMATION_MAX_BYTES = 192 * 1024 * 1024;
 const LOCAL_FBX_RUNTIME_MAX_BYTES = 24 * 1024 * 1024;
 const isBlobUrl = (value = '') => String(value || '').startsWith('blob:');
 const getRuntimeModelFormat = (model = {}) => (
@@ -18,6 +21,11 @@ const isHeavyLocalFbxAsset = (source = '', model = {}) => (
   getRuntimeModelFormat(model) === 'fbx'
   && isBlobUrl(source || model.modelUrl || model.characterModelUrl || model.decorModelUrl)
   && getRuntimeModelFileSize(model) > LOCAL_FBX_RUNTIME_MAX_BYTES
+);
+const isHeavyLocalFbxAnimationAsset = (source = '', animation = {}) => (
+  getRuntimeModelFormat(animation) === 'fbx'
+  && isBlobUrl(source || animation.modelUrl)
+  && getRuntimeModelFileSize(animation) > LOCAL_FBX_RUNTIME_ANIMATION_MAX_BYTES
 );
 
 const IMAGE_SIGNATURE_CACHE_LIMIT = 128;
@@ -107,6 +115,14 @@ const getModelAnimationsSignature = (model = {}) => (
     .join(';')
 );
 
+const disposeRuntimeModelObject = (object) => {
+  object?.traverse?.((child) => {
+    child.geometry?.dispose?.();
+    const materials = Array.isArray(child.material) ? child.material : [child.material];
+    materials.filter(Boolean).forEach((material) => material.dispose?.());
+  });
+};
+
 const getModelCacheKey = (src, model = {}) => (
   `${src}|${getModelResourcesSignature(model)}|${getModelAnimationsSignature(model)}`
 );
@@ -114,21 +130,37 @@ const getModelCacheKey = (src, model = {}) => (
 const loadModelAnimationClipMap = async (model = {}) => {
   const entries = Object.entries(getModelAnimationEntries(model));
   if (!entries.length) return {};
-  const loadedEntries = await Promise.all(entries.map(([state, animation]) => new Promise((resolve) => {
+  const loadedEntries = await Promise.all(entries.map(([key, animation]) => new Promise((resolve) => {
+    const state = getAnimationBaseSlotId(key, animation || {});
+    if (!state) {
+      resolve(['', []]);
+      return;
+    }
     const source = getAnimationSource(animation || {});
-    if (!source || isHeavyLocalFbxAsset(source, animation || {})) {
+    if (!source || isHeavyLocalFbxAnimationAsset(source, animation || {})) {
       resolve([state, []]);
       return;
     }
     loadThreeModelFromSource(
       source,
       animation || {},
-      ({ animations = [] } = {}) => resolve([state, animations]),
+      ({ object, animations = [], format = '' } = {}) => {
+        if (object) disposeRuntimeModelObject(object);
+        const clips = Array.isArray(animations)
+          ? animations.map((clip) => {
+            if (clip) clip.userData = { ...(clip.userData || {}), rpg3dSourceFormat: format };
+            return clip;
+          })
+          : [];
+        resolve([state, clips]);
+      },
       () => resolve([state, []]),
     );
   })));
   return loadedEntries.reduce((clipMap, [state, clips]) => {
-    if (Array.isArray(clips) && clips.length) clipMap[state] = clips;
+    if (state && Array.isArray(clips) && clips.length) {
+      clipMap[state] = [...(clipMap[state] || []), ...clips];
+    }
     return clipMap;
   }, {});
 };
@@ -210,7 +242,13 @@ const getActorMovementFacingTarget = (actor = {}) => {
 
 const getActorAnimationOptions = (animationState = 'idle') => {
   if (animationState === 'attack') {
-    return { state: 'attack', preferredNames: ['attack', 'cast', 'spell', 'shoot', 'fire'], fallbackToFirst: true, loopOnce: true, timeOffset: 0 };
+    return {
+      state: 'attack',
+      preferredNames: ['attack', 'atk', 'counter', 'hit', 'slash', 'melee', 'cast', 'spell', 'shoot', 'fire'],
+      fallbackToFirst: true,
+      loopOnce: true,
+      timeOffset: 0,
+    };
   }
   if (animationState === 'dash') {
     return { state: 'dash', preferredNames: ['run', 'sprint', 'dash', 'walk'], fallbackToFirst: true };
@@ -229,17 +267,6 @@ const getActorClipsForAnimationState = (template, state = 'idle') => {
 
 const ACTOR_ANIMATION_STATES = ['idle', 'walk', 'dash', 'attack'];
 const ACTOR_ANIMATION_FADE_SECONDS = 0.1;
-const isRootMotionTrack = (track = {}) => String(track.name || '').toLowerCase().endsWith('.position');
-
-const removeRootMotionTracks = (clip = null) => {
-  if (!clip?.tracks?.length) return clip;
-  const tracks = clip.tracks.filter((track) => !isRootMotionTrack(track));
-  if (tracks.length === clip.tracks.length) return clip;
-  if (!tracks.length) return null;
-  const nextClip = new THREE.AnimationClip(clip.name, clip.duration, tracks);
-  nextClip.blendMode = clip.blendMode;
-  return nextClip;
-};
 
 const selectActorAnimationClip = (clips = [], preferredNames = [], options = {}) => {
   const animationClips = clips.filter((clip) => clip && Number(clip.duration) > 0);
@@ -314,11 +341,18 @@ const createActorAnimationController = (object, template, initialState = 'idle',
 
   ACTOR_ANIMATION_STATES.forEach((state) => {
     const stateOptions = getActorAnimationOptions(state);
-    const clip = removeRootMotionTracks(selectActorAnimationClip(
+    const hasDedicatedStateClips = Array.isArray(template?.userData?.gltfAnimationClipMap?.[state])
+      && template.userData.gltfAnimationClipMap[state].length > 0;
+    const rawSelectedClip = selectActorAnimationClip(
       getActorClipsForAnimationState(template, state),
       stateOptions.preferredNames,
-      { fallbackToFirst: stateOptions.fallbackToFirst },
-    ));
+      { fallbackToFirst: stateOptions.fallbackToFirst || (state === 'idle' && hasDedicatedStateClips) },
+    );
+    const selectedClip = prepareImportedAnimationClipForObject(object, rawSelectedClip, {
+      convertFbxRootQuaternionTracks: String(rawSelectedClip?.userData?.rpg3dSourceFormat || '').toLowerCase() === 'fbx',
+      stripObjectPositionScaleTracks: true,
+    });
+    const clip = selectedClip;
     if (!clip) return;
     const action = mixer.clipAction(clip);
     configureActorAnimationAction(action, stateOptions);

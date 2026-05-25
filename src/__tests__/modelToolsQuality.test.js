@@ -10,6 +10,46 @@ import {
 } from '../../server/modelTools';
 
 describe('model tools quality presets', () => {
+  it('keeps the source-meshopt preset texture-safe for local FBX character imports', () => {
+    const settings = getModelToolQualitySettings('source-meshopt');
+    const args = buildGltfTransformMeshoptArgs('in.glb', 'out.glb', settings);
+
+    expect(settings.outputSuffix).toBe('source-meshopt');
+    expect(settings.meshoptOnly).toBe(true);
+    expect(settings.textureCompression).toBe(false);
+    expect(settings.simplify).toBe(false);
+    expect(args).toEqual([
+      'meshopt',
+      'in.glb',
+      'out.glb',
+      '--level',
+      'high',
+    ]);
+  });
+
+  it('keeps the source preset uncompressed for local FBX character imports', () => {
+    const settings = getModelToolQualitySettings('source');
+    const args = buildGltfTransformOptimizeArgs('in.glb', 'out.glb', settings);
+
+    expect(settings.outputSuffix).toBe('source');
+    expect(settings.skipOptimization).toBe(true);
+    expect(settings.allowOutputLargerThanInput).toBe(true);
+    expect(args[args.indexOf('--compress') + 1]).toBe('false');
+    expect(args[args.indexOf('--texture-compress') + 1]).toBe('false');
+    expect(args[args.indexOf('--simplify') + 1]).toBe('false');
+  });
+
+  it('exports animation-only imports without mesh compression', () => {
+    const settings = getModelToolQualitySettings('animation-source-v2');
+
+    expect(settings.outputSuffix).toBe('animation-source-v2');
+    expect(settings.animationOnly).toBe(true);
+    expect(settings.skipOptimization).toBe(true);
+    expect(settings.textureCompression).toBe(false);
+    expect(settings.compression).toBe(false);
+    expect(settings.simplify).toBe(false);
+  });
+
   it('keeps the quality preset high fidelity instead of web-compressing it', () => {
     const settings = getModelToolQualitySettings('quality');
     const args = buildGltfTransformOptimizeArgs('in.glb', 'out.glb', settings);

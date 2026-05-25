@@ -54,6 +54,92 @@ const getDispositionFilename = (value = '') => {
   }
 };
 
+const MODEL_TOOLS_API_PREFIX = '/api/model-tools';
+const MODEL_TOOLS_HEALTH_PATH = '/api/health';
+const MODEL_TOOLS_LOCAL_PORT = '8787';
+const MODEL_TOOLS_STATUS_RETRY_LIMIT = 8;
+
+const pushUnique = (list, value) => {
+  if (value && !list.includes(value)) list.push(value);
+};
+
+export const getModelToolsApiUrls = (pathSuffix = '') => {
+  const apiPath = `${MODEL_TOOLS_API_PREFIX}${pathSuffix}`;
+  if (typeof window === 'undefined') return [apiPath];
+
+  const urls = [];
+  pushUnique(urls, apiPath);
+  pushUnique(urls, `http://localhost:${MODEL_TOOLS_LOCAL_PORT}${apiPath}`);
+  pushUnique(urls, `http://127.0.0.1:${MODEL_TOOLS_LOCAL_PORT}${apiPath}`);
+  return urls;
+};
+
+const getHealthUrlForApiUrl = (apiUrl = '') => {
+  try {
+    return `${new URL(apiUrl, window.location.origin).origin}${MODEL_TOOLS_HEALTH_PATH}`;
+  } catch {
+    return MODEL_TOOLS_HEALTH_PATH;
+  }
+};
+
+const getModelToolsUnavailableMessage = (error = null) => {
+  const message = String(error?.message || '').trim();
+  if (!message || message === 'Failed to fetch') {
+    return 'API locale 3D indisponible. Relance le serveur local puis reessaie.';
+  }
+  return `API locale 3D indisponible: ${message}`;
+};
+
+export const getModelToolsDisplayError = (error = null, fallback = 'Conversion locale impossible.') => {
+  const message = String(error?.message || error || '').trim();
+  if (!message) return fallback;
+  if (message === 'Failed to fetch') {
+    return error instanceof TypeError
+      ? 'Connexion API locale 3D interrompue. Relance le serveur local puis reessaie.'
+      : 'Optimisation GLB impossible: une ressource du modele n a pas pu etre lue. Reessaie avec un ZIP contenant le modele et toutes ses textures.';
+  }
+  if (/network\s*error|load\s*failed|connexion interrompue|api locale 3d indisponible/i.test(message)) {
+    return 'Connexion API locale 3D interrompue. Relance le serveur local puis reessaie.';
+  }
+  return message;
+};
+
+const isRecoverableModelToolsNetworkError = (error = null) => {
+  const message = String(error?.message || error || '').trim();
+  return message === 'Failed to fetch'
+    || /network\s*error|load\s*failed|connexion interrompue|api locale 3d indisponible/i.test(message);
+};
+
+const getReachableModelToolsApiUrls = async (pathSuffix = '') => {
+  const urls = getModelToolsApiUrls(pathSuffix);
+  if (typeof fetch !== 'function') return urls;
+
+  let lastError = null;
+  for (const url of urls) {
+    try {
+      const response = await fetch(getHealthUrlForApiUrl(url), { cache: 'no-store' });
+      if (response.ok) {
+        return [url, ...urls.filter((candidate) => candidate !== url)];
+      }
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw new Error(getModelToolsUnavailableMessage(lastError));
+};
+
+const fetchModelToolsApi = async (pathSuffix = '', options = {}) => {
+  let lastError = null;
+  for (const url of getModelToolsApiUrls(pathSuffix)) {
+    try {
+      return await fetch(url, options);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw new Error(getModelToolsUnavailableMessage(lastError));
+};
+
 const triggerDownloadUrl = (url, filename) => {
   const link = document.createElement('a');
   link.href = url;
@@ -99,58 +185,73 @@ const parseErrorBlob = async (blob) => {
 
 const wait = (durationMs) => new Promise((resolve) => window.setTimeout(resolve, durationMs));
 
-const requestLocalConversionJob = ({ file, quality, onProgress }) => new Promise((resolve, reject) => {
+const requestLocalConversionJob = async ({ file, quality, onProgress }) => {
   const formData = new FormData();
   formData.set('file', file);
   formData.set('quality', quality);
+  const urls = await getReachableModelToolsApiUrls('/jobs');
 
-  const xhr = new XMLHttpRequest();
-  xhr.open('POST', '/api/model-tools/jobs');
-  xhr.responseType = 'text';
-  xhr.upload.onprogress = (event) => {
-    if (!event.lengthComputable) {
-      onProgress?.({ value: 12, label: 'Envoi du fichier...', detail: 'Preparation du transfert local.' });
-      return;
-    }
-    const ratio = event.total ? event.loaded / event.total : 0;
-    onProgress?.({
-      value: Math.min(35, 5 + ratio * 30),
-      label: 'Envoi du fichier...',
-      detail: `${formatBytes(event.loaded)} / ${formatBytes(event.total)}`,
-    });
-  };
-  xhr.upload.onload = () => {
-    onProgress?.({ value: 31, label: 'Creation du job...', detail: 'Le serveur local prend le relais.' });
-  };
-  xhr.onerror = () => reject(new Error('Conversion locale impossible.'));
-  xhr.ontimeout = () => reject(new Error('Conversion trop longue.'));
-  xhr.onload = () => {
-    if (xhr.status < 200 || xhr.status >= 300) {
-      try {
-        const payload = JSON.parse(xhr.responseText || '{}');
-        reject(new Error(payload.error || 'Conversion locale impossible.'));
-      } catch {
-        reject(new Error('Conversion locale impossible.'));
-      }
-      return;
-    }
-    try {
-      resolve(JSON.parse(xhr.responseText || '{}'));
-    } catch {
-      reject(new Error('Reponse locale invalide.'));
-    }
-  };
-  xhr.send(formData);
-});
+  return new Promise((resolve, reject) => {
+    const sendToUrl = (urlIndex = 0, lastError = '') => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', urls[urlIndex]);
+      xhr.responseType = 'text';
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable) {
+          onProgress?.({ value: 12, label: 'Envoi du fichier...', detail: 'Preparation du transfert local.' });
+          return;
+        }
+        const ratio = event.total ? event.loaded / event.total : 0;
+        onProgress?.({
+          value: Math.min(35, 5 + ratio * 30),
+          label: 'Envoi du fichier...',
+          detail: `${formatBytes(event.loaded)} / ${formatBytes(event.total)}`,
+        });
+      };
+      xhr.upload.onload = () => {
+        onProgress?.({ value: 31, label: 'Creation du job...', detail: 'Le serveur local prend le relais.' });
+      };
+      xhr.onerror = () => {
+        if (urlIndex + 1 < urls.length) {
+          sendToUrl(urlIndex + 1, 'connexion interrompue');
+          return;
+        }
+        reject(new Error(lastError
+          ? getModelToolsUnavailableMessage(new Error(lastError))
+          : getModelToolsUnavailableMessage()));
+      };
+      xhr.ontimeout = () => reject(new Error('Conversion trop longue.'));
+      xhr.onload = () => {
+        if (xhr.status < 200 || xhr.status >= 300) {
+          try {
+            const payload = JSON.parse(xhr.responseText || '{}');
+            reject(new Error(payload.error || 'Conversion locale impossible.'));
+          } catch {
+            reject(new Error('Conversion locale impossible.'));
+          }
+          return;
+        }
+        try {
+          resolve(JSON.parse(xhr.responseText || '{}'));
+        } catch {
+          reject(new Error('Reponse locale invalide.'));
+        }
+      };
+      xhr.send(formData);
+    };
+
+    sendToUrl();
+  });
+};
 
 const fetchModelToolJob = async (jobId) => {
-  const response = await fetch(`/api/model-tools/jobs/${encodeURIComponent(jobId)}`);
+  const response = await fetchModelToolsApi(`/jobs/${encodeURIComponent(jobId)}`);
   if (!response.ok) throw new Error(await parseErrorResponse(response));
   return response.json();
 };
 
 const downloadModelToolJob = async (jobId) => {
-  const response = await fetch(`/api/model-tools/jobs/${encodeURIComponent(jobId)}/download`);
+  const response = await fetchModelToolsApi(`/jobs/${encodeURIComponent(jobId)}/download`);
   if (!response.ok) throw new Error(await parseErrorResponse(response));
   const blob = await response.blob();
   return {
@@ -262,6 +363,7 @@ export default function ModelToolsTab() {
       });
       jobId = initialJob.id || '';
       let job = initialJob;
+      let statusFetchFailures = 0;
       while (job?.status === 'running') {
         setProgress((current) => ({
           active: true,
@@ -271,10 +373,26 @@ export default function ModelToolsTab() {
         }));
         setStatus(job.label || 'Conversion locale en cours...');
         await wait(1000);
-        job = await fetchModelToolJob(jobId);
+        try {
+          job = await fetchModelToolJob(jobId);
+          statusFetchFailures = 0;
+        } catch (error) {
+          if (!isRecoverableModelToolsNetworkError(error) || statusFetchFailures >= MODEL_TOOLS_STATUS_RETRY_LIMIT) {
+            throw error;
+          }
+          statusFetchFailures += 1;
+          const detail = `Tentative ${statusFetchFailures}/${MODEL_TOOLS_STATUS_RETRY_LIMIT}`;
+          setProgress((current) => ({
+            active: true,
+            value: Math.max(current.value, Number(job.progress) || 35),
+            label: 'Connexion locale...',
+            detail,
+          }));
+          setStatus(`Connexion API locale 3D en reprise... ${detail}`);
+        }
       }
       if (job?.status === 'error') {
-        throw new Error(job.error || job.detail || 'Conversion locale impossible.');
+        throw new Error(getModelToolsDisplayError(job.error || job.detail));
       }
       if (job?.status !== 'done') {
         throw new Error('Etat de conversion local inattendu.');
@@ -308,16 +426,17 @@ export default function ModelToolsTab() {
       setStatus(`GLB pret: ${formatBytes(originalSize)} -> ${formatBytes(outputSize)}`);
     } catch (error) {
       stopProgressTicker();
+      const errorMessage = getModelToolsDisplayError(error);
       setProgress({
         active: true,
         value: 100,
         label: 'Erreur',
-        detail: error.message || 'Conversion locale impossible.',
+        detail: errorMessage,
       });
-      setStatus(error.message || 'Conversion locale impossible.');
+      setStatus(errorMessage);
     } finally {
       if (jobId) {
-        fetch(`/api/model-tools/jobs/${encodeURIComponent(jobId)}`, { method: 'DELETE' }).catch(() => {});
+        fetchModelToolsApi(`/jobs/${encodeURIComponent(jobId)}`, { method: 'DELETE' }).catch(() => {});
       }
       setBusy(false);
     }
