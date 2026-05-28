@@ -78,6 +78,11 @@ const IMAGE_STYLE_PRESETS = {
   },
 };
 
+const GLOBAL_VISUAL_STYLE_PRESETS = {
+  realistic: 'réaliste, mystérieux mais clairement éclairé, manoir ancien, caméra large, zones interactives visibles, ombres détaillées non bouchées',
+  illustrated: 'anime / BD adulte, nuit cinématique lisible, contours expressifs, personnages dramatiques, décors détaillés, zones interactives visibles',
+};
+
 const AI_DRAFT_DB = 'escape-game-builder-ai-drafts';
 const AI_DRAFT_AUTOSAVE_DELAY_MS = 2_500;
 const AI_CREDITS_ENDPOINT = import.meta.env.VITE_AI_CREDITS_ENDPOINT || '/api/ai-credits';
@@ -143,7 +148,7 @@ export default function AiTab({
   const [enrichmentType, setEnrichmentType] = useState('all');
   const [sceneVisualConstraints, setSceneVisualConstraints] = useState({});
   const [imageStylePreset, setImageStylePreset] = useState('realistic');
-  const [globalVisualStyle, setGlobalVisualStyle] = useState('réaliste, mystérieux mais clairement éclairé, manoir ancien, caméra large, zones interactives visibles, ombres détaillées non bouchées');
+  const [globalVisualStyle, setGlobalVisualStyle] = useState(GLOBAL_VISUAL_STYLE_PRESETS.realistic);
   const [imageReadabilityLevel, setImageReadabilityLevel] = useState('balanced');
   const [visualInheritance, setVisualInheritance] = useState('même type de poignée de porte, même parquet, même lumière, mêmes matériaux');
   const [storySummary, setStorySummary] = useState(() => makeProjectStorySummary(project));
@@ -158,6 +163,7 @@ export default function AiTab({
   const [draftRestored, setDraftRestored] = useState(false);
   const [draftSaveStatus, setDraftSaveStatus] = useState('');
   const [draftVersion, setDraftVersion] = useState(0);
+  const [aiWizardStep, setAiWizardStep] = useState('visual');
   const indexedDraftSaveTimerRef = useRef(null);
   const isBeginnerAi = project?.creationMode === 'beginner';
   const isIntermediateAi = project?.creationMode === 'intermediate';
@@ -396,6 +402,15 @@ export default function AiTab({
   const formatCreditCost = (cost) => `${cost} crédit${Number(cost) > 1 ? 's' : ''}`;
   const selectedImageStyle = IMAGE_STYLE_PRESETS[imageStylePreset] || IMAGE_STYLE_PRESETS.realistic;
   const effectiveVisualStyle = `${selectedImageStyle.description}. ${globalVisualStyle}`;
+  const selectImageStylePreset = useCallback((preset) => {
+    setImageStylePreset(preset);
+    setGlobalVisualStyle((previous) => {
+      const knownDefaults = Object.values(GLOBAL_VISUAL_STYLE_PRESETS);
+      return knownDefaults.includes(previous)
+        ? (GLOBAL_VISUAL_STYLE_PRESETS[preset] || previous)
+        : previous;
+    });
+  }, []);
   useEffect(() => {
     if (isBeginnerAi && (mode === 'progressive' || mode === 'extend')) {
       setMode('generate');
@@ -427,7 +442,8 @@ export default function AiTab({
       setGeneratedProject(draft.generatedProject);
       setIsPatch(Boolean(draft.isPatch));
       setSceneVisualConstraints(draft.sceneVisualConstraints || {});
-      setGlobalVisualStyle(draft.globalVisualStyle || 'réaliste, mystérieux mais clairement éclairé, manoir ancien, caméra large, zones interactives visibles, ombres détaillées non bouchées');
+      setImageStylePreset(draft.imageStylePreset || 'realistic');
+      setGlobalVisualStyle(draft.globalVisualStyle || GLOBAL_VISUAL_STYLE_PRESETS[draft.imageStylePreset] || GLOBAL_VISUAL_STYLE_PRESETS.realistic);
       setImageReadabilityLevel(draft.imageReadabilityLevel || 'balanced');
       setVisualInheritance(draft.visualInheritance || 'même type de poignée de porte, même parquet, même lumière, mêmes matériaux');
       setStorySummary(draft.storySummary || makeProjectStorySummary(project));
@@ -437,6 +453,7 @@ export default function AiTab({
       setStatus(draft.status || label);
       setImageStatus(draft.imageStatus || '');
       setValidation(validateProject(draft.isPatch ? mergeProjectPatch(project, draft.generatedProject) : draft.generatedProject));
+      setAiWizardStep('result');
     };
 
     readAiDraft(aiDraftKey)
@@ -474,6 +491,7 @@ export default function AiTab({
     setImageStatus('');
     setDraftSaveStatus('');
     setStatus('Brouillon IA effacé. Tu peux relancer une génération.');
+    setAiWizardStep('visual');
     await deleteAiDraft(aiDraftKey).catch(() => null);
     await onSaveAiDraft?.(null).catch(() => null);
     setDraftVersion((version) => version + 1);
@@ -483,6 +501,7 @@ export default function AiTab({
     generatedProject,
     isPatch,
     sceneVisualConstraints,
+    imageStylePreset,
     globalVisualStyle,
     imageReadabilityLevel,
     visualInheritance,
@@ -567,6 +586,7 @@ export default function AiTab({
     draftRestored,
     generatedProject,
     globalVisualStyle,
+    imageStylePreset,
     imageReadabilityLevel,
     imageStatus,
     isPatch,
@@ -645,6 +665,9 @@ export default function AiTab({
       isBeginnerAi={isBeginnerAi}
       isHeroAdventureAi={isHeroAdventureAi}
       shouldGenerateCombinations={shouldGenerateCombinations}
+      projectGenerationCosts={aiCredits.costs?.projectGeneration}
+      countCreditUnits={countCreditUnits}
+      formatCreditCost={formatCreditCost}
     />
   );
   const validateMandatoryBriefCounts = (targetBrief = brief) => {
@@ -734,6 +757,7 @@ export default function AiTab({
       setStatus(aiCreditMessage('text', generationCost));
       return;
     }
+    setAiWizardStep('result');
     setIsGenerating(true);
     setValidation(null);
     setGeneratedProject(null);
@@ -774,6 +798,7 @@ export default function AiTab({
       setStatus(aiCreditMessage('text', generationCost));
       return;
     }
+    setAiWizardStep('result');
     setIsGenerating(true);
     setValidation(null);
     setGeneratedProject(null);
@@ -831,6 +856,7 @@ export default function AiTab({
       setStatus(aiCreditMessage('text', generationCost));
       return;
     }
+    setAiWizardStep('result');
     setIsGenerating(true);
     setValidation(null);
     setGeneratedProject(null);
@@ -1282,9 +1308,11 @@ export default function AiTab({
   };
 
   const isAiBusy = isGenerating || Boolean(generatingImageKey);
+  const shouldShowAiOutput = aiWizardStep === 'result' && (isGenerating || Boolean(generatedProject));
+  const controlsWizardStep = aiWizardStep === 'result' && !shouldShowAiOutput ? 'details' : aiWizardStep;
 
   return (
-    <div className="layout two-cols-wide">
+    <div className="layout ai-page-layout">
       <AiGenerationStatus isBusy={isAiBusy} />
       <AiImageWorkbench
         imagePreview={imagePreview}
@@ -1312,7 +1340,7 @@ export default function AiTab({
         calculateBriefImageCreditCost={calculateBriefImageCreditCost}
         calculateBriefTotalCreditCost={calculateBriefTotalCreditCost}
         imageStylePreset={imageStylePreset}
-        setImageStylePreset={setImageStylePreset}
+        setImageStylePreset={selectImageStylePreset}
         imageStylePresets={IMAGE_STYLE_PRESETS}
         globalVisualStyle={globalVisualStyle}
         setGlobalVisualStyle={setGlobalVisualStyle}
@@ -1356,15 +1384,22 @@ export default function AiTab({
         extendExistingProject={extendExistingProject}
         canRunTextAi={canRunTextAi}
         generate={generate}
+        wizardStep={controlsWizardStep}
+        setWizardStep={setAiWizardStep}
+        hasAiResult={Boolean(generatedProject)}
       />
 
-      <section className="panel main" data-tour="ai-output">
+      {shouldShowAiOutput ? (
+      <section className="panel main ai-output-panel" data-tour="ai-output">
         <div className="panel-head">
           <div>
-            <span className="section-kicker">{isPatch ? 'Amélioration' : 'Génération'}</span>
+            <span className="section-kicker">Étape 4</span>
             <h2>{isPatch ? 'Patch IA' : 'Projet IA'}</h2>
           </div>
             <div className="ai-panel-actions" data-tour="ai-draft-actions">
+            <button type="button" className="secondary-action" disabled={isGenerating} onClick={() => setAiWizardStep('details')}>
+              Retour aux paramètres
+            </button>
             <button type="button" className="secondary-action" disabled={isGenerating && !generatedProject} onClick={clearAiDraft}>
               Nouveau brouillon
             </button>
@@ -1421,6 +1456,7 @@ export default function AiTab({
           onOpenImagePreview={setImagePreview}
         />
       </section>
+      ) : null}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { ArrowLeft, Check, FilePlus2, GitBranch, Layers3, RefreshCw, WandSparkles } from 'lucide-react';
 import {
   AiPrivacyNotice,
   HelpLabel,
@@ -8,11 +9,48 @@ import {
   parseChronologyEntries,
 } from './aiTabHelpers.js';
 
+const STYLE_PREVIEW_IMAGES = {
+  realistic: '/assets/ai-style-realistic.png',
+  illustrated: '/assets/ai-style-anime.png',
+};
+
+const STYLE_PREVIEW_COPY = {
+  realistic: {
+    title: 'Réaliste',
+    description: 'Rendu film, matières naturelles, profondeur et ambiance crédible.',
+    detail: 'Idéal pour un escape game sombre, immersif et proche du cinéma.',
+  },
+  illustrated: {
+    title: 'Anime / BD',
+    description: 'Contours expressifs, ombres dessinées, tension visuelle stylisée.',
+    detail: 'Idéal pour une aventure narrative plus graphique et dramatique.',
+  },
+};
+
+const ACTION_MODE_VISUALS = {
+  generate: {
+    Icon: FilePlus2,
+    label: 'Complet',
+  },
+  progressive: {
+    Icon: Layers3,
+    label: 'Étapes',
+  },
+  extend: {
+    Icon: GitBranch,
+    label: 'Suite',
+  },
+  improve: {
+    Icon: WandSparkles,
+    label: 'Raffiner',
+  },
+};
+
 const getDefaultStepMeta = (statusValue, isLocked, doneLabel, readyLabel, lockedLabel = 'verrouillé') => {
-  if (statusValue === 'running') return { icon: '⏳', label: 'En cours' };
-  if (statusValue === 'done') return { icon: '✔', label: doneLabel };
-  if (isLocked) return { icon: '🔒', label: lockedLabel };
-  return { icon: '→', label: readyLabel };
+  if (statusValue === 'running') return { icon: '...', label: 'En cours' };
+  if (statusValue === 'done') return { icon: 'OK', label: doneLabel };
+  if (isLocked) return { icon: 'LOCK', label: lockedLabel };
+  return { icon: 'GO', label: readyLabel };
 };
 
 export default function AiControlsPanel({
@@ -77,247 +115,374 @@ export default function AiControlsPanel({
   extendExistingProject,
   canRunTextAi,
   generate,
+  wizardStep = 'visual',
+  setWizardStep = () => {},
+  hasAiResult = false,
 }) {
-  return (
-    <section className="panel side" data-tour="ai-controls">
-      <div className="panel-head">
-        <h2>IA</h2>
-        <span className="status-badge soft">{mode === 'improve' ? 'Patch' : 'IA'}</span>
-      </div>
-      <div data-tour="ai-credits" className={`ai-credit-panel ${aiCredits.balance != null && aiCredits.balance < currentTextGenerationCost ? 'low' : ''}`}>
-        <div>
-          <span className="section-kicker">Crédits IA</span>
-          <strong>{aiCredits.isLoading ? '...' : `${aiCredits.balance ?? 0}`}</strong>
-        </div>
-        <button type="button" className="secondary-action" onClick={refreshAiCredits} disabled={aiCredits.isLoading}>
-          Actualiser
-        </button>
-        <p>
-          {isChoiceAdventureAi ?
-            `Projet: ${calculateProjectGenerationCreditCost()} crédits · Texte: ${Number(aiCredits.costs?.text ?? 2)} crédits · Chaque image: ${formatCreditCost(getAiCreditCost('image'))} · Combinaisons incluses dans le calcul`
-            : <>Projet: {calculateProjectGenerationCreditCost()} crédits · Texte: {Number(aiCredits.costs?.text ?? 2)} crédits · Scène: {getAiCreditCost('image')} crédits · Objet détaillé: {formatCreditCost(getAiCreditCost('objectImage'))} · Miniature éco: {formatCreditCost(getAiCreditCost('objectThumbnail'))}</>}
-        </p>
-        <p className="ai-current-cost">
-          Prochaine génération ({mode === 'generate' ? 'projet complet' : mode === 'progressive' ? 'step progressive' : mode === 'extend' ? 'continuer/enrichir' : 'amélioration'}): <strong>{formatCreditCost(currentTextGenerationCost)}</strong>
-        </p>
-        {isChoiceAdventureAi ? (
-          <p className="ai-current-cost">
-            Images du brief: <strong>{countCreditUnits(brief.sceneCount) + countCreditUnits(brief.itemCount) + countCreditUnits(brief.cinematicCount)} image(s) - {formatCreditCost(calculateBriefImageCreditCost())}</strong>
-            {' '}si tu génères toutes les scènes, objets et cinématiques. Total texte + images: <strong>{formatCreditCost(calculateBriefTotalCreditCost())}</strong>
-          </p>
-        ) : null}
-        {aiCredits.error ? <p className="small-note">{aiCredits.error}</p> : null}
-      </div>
-      <AiPrivacyNotice />
-      <p className="small-note">
-        Génère un projet complet ou améliore une scène existante avec un JSON partiel validé avant application.
-      </p>
+  const selectedStyle = STYLE_PREVIEW_COPY[imageStylePreset] || STYLE_PREVIEW_COPY.realistic;
+  const modeOptions = [
+    {
+      value: 'generate',
+      label: 'Nouveau projet',
+      description: 'Créer un jeu complet avec scènes, objets et énigmes.',
+    },
+    ...(!isBeginnerAi ? [
+      {
+        value: 'progressive',
+        label: 'Progressif',
+        description: 'Générer acte par acte pour garder le contrôle.',
+      },
+      {
+        value: 'extend',
+        label: 'Continuer',
+        description: 'Prolonger le projet actuel ou un JSON importé.',
+      },
+    ] : []),
+    {
+      value: 'improve',
+      label: 'Améliorer',
+      description: 'Raffiner une scène sans remplacer tout le projet.',
+    },
+  ];
+  const selectedMode = modeOptions.find((option) => option.value === mode) || modeOptions[0];
+  const selectVisualStyle = (value) => {
+    setImageStylePreset(value);
+    setWizardStep('action');
+  };
+  const selectActionMode = (value) => {
+    setMode(value);
+    setWizardStep('details');
+  };
 
-      <HelpLabel help="Choisis le rendu utilisé par les prochaines images IA: scènes, objets et cinématiques.">Style d'image</HelpLabel>
-      <div className="segmented-control compact ai-style-choice" data-tour="ai-image-style">
-        {Object.entries(imageStylePresets).map(([value, preset]) => (
-          <button
-            type="button"
-            key={value}
-            className={imageStylePreset === value ? 'active' : ''}
-            onClick={() => setImageStylePreset(value)}
-          >
-            {preset.label}
-          </button>
+  const renderCreditPanel = () => (
+    <div data-tour="ai-credits" className="ai-credit-panel ai-credit-summary">
+      <div>
+        <span className="section-kicker">Crédits IA</span>
+        <strong>{aiCredits.isLoading ? '...' : `${aiCredits.balance ?? 0}`}</strong>
+      </div>
+      <button type="button" className="secondary-action ai-refresh-button" onClick={refreshAiCredits} disabled={aiCredits.isLoading}>
+        <RefreshCw size={16} />
+        Actualiser
+      </button>
+      {aiCredits.error ? <p className="small-note">{aiCredits.error}</p> : null}
+    </div>
+  );
+
+  const renderVisualStep = () => (
+    <div className="ai-wizard-step">
+      <div className="ai-step-heading">
+        <span className="section-kicker">Étape 1</span>
+        <h3>Choisir le modèle visuel</h3>
+        <p>Ce choix pilote le style des prochaines images IA: scènes, objets et cinématiques.</p>
+      </div>
+
+      <div className="ai-style-selection-layout">
+        {renderCreditPanel()}
+        <div className="ai-style-card-grid" data-tour="ai-image-style">
+          {Object.entries(imageStylePresets).map(([value, preset]) => {
+            const copy = STYLE_PREVIEW_COPY[value] || { title: preset.label, description: preset.description, detail: '' };
+            const isSelected = imageStylePreset === value;
+            return (
+              <button
+                type="button"
+                key={value}
+                className={`ai-style-card ${isSelected ? 'selected' : ''}`}
+                onClick={() => selectVisualStyle(value)}
+                aria-pressed={isSelected}
+              >
+                <span className="ai-style-card-image">
+                  <img src={STYLE_PREVIEW_IMAGES[value]} alt={`Exemple ${copy.title}`} />
+                </span>
+                <span className="ai-style-card-body">
+                  <span className="ai-style-card-title">
+                    <strong>{preset.label || copy.title}</strong>
+                    {isSelected ? <span><Check size={15} /> Sélectionné</span> : null}
+                  </span>
+                  <span>{copy.description}</span>
+                  <small>{copy.detail}</small>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="ai-wizard-footer">
+        <AiPrivacyNotice />
+      </div>
+    </div>
+  );
+
+  const renderVisualOptions = () => (
+    <details className="ai-advanced-visual-options">
+      <summary>Options visuelles</summary>
+      <div className="ai-visual-tuning-grid">
+        <div>
+          <HelpLabel help="Style partagé par les images de scènes pour éviter que chaque pièce parte dans une direction visuelle différente.">Style visuel global</HelpLabel>
+          <input data-tour="ai-visual-style" value={globalVisualStyle} onChange={(event) => setGlobalVisualStyle(event.target.value)} />
+        </div>
+        <div>
+          <HelpLabel help="Ajuste automatiquement la luminosité après génération pour garder une image jouable sans trop délaver l'ambiance.">Lisibilité des images</HelpLabel>
+          <select data-tour="ai-image-readability" value={imageReadabilityLevel} onChange={(event) => setImageReadabilityLevel(event.target.value)}>
+            <option value="subtle">Ambiance sombre</option>
+            <option value="balanced">Lisibilité renforcée</option>
+            <option value="strong">Très lumineux</option>
+            <option value="none">Aucune correction</option>
+          </select>
+        </div>
+        <div>
+          <HelpLabel help="Détails récurrents à conserver entre les pièces: portes, parquet, lumière, époque, matériaux.">Héritage visuel</HelpLabel>
+          <textarea data-tour="ai-visual-inheritance" value={visualInheritance} onChange={(event) => setVisualInheritance(event.target.value)} />
+        </div>
+      </div>
+    </details>
+  );
+
+  const renderModePicker = ({ advanceOnSelect = false } = {}) => (
+    <div className="ai-wizard-section">
+      <HelpLabel help={fieldHelp.mode}>Action IA</HelpLabel>
+      <div className="ai-mode-card-grid" data-tour="ai-mode">
+        {modeOptions.map((option) => {
+          const visual = ACTION_MODE_VISUALS[option.value] || ACTION_MODE_VISUALS.generate;
+          const ModeVisualIcon = visual.Icon;
+          return (
+            <button
+              type="button"
+              key={option.value}
+              className={mode === option.value ? 'selected' : ''}
+              onClick={() => (advanceOnSelect ? selectActionMode(option.value) : setMode(option.value))}
+              aria-pressed={mode === option.value}
+            >
+              <span className="ai-mode-card-copy">
+                <strong>{option.label}</strong>
+                <span>{option.description}</span>
+              </span>
+              <span className={`ai-mode-card-visual ai-mode-card-visual--${option.value}`} aria-hidden="true">
+                <ModeVisualIcon size={30} strokeWidth={2.2} />
+                <small>{visual.label}</small>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const renderActionStep = () => (
+    <div className="ai-wizard-step ai-action-step">
+      <div className="ai-action-step-header">
+        <button type="button" className="secondary-action ai-back-step-button" onClick={() => setWizardStep('visual')}>
+          <ArrowLeft size={16} />
+          Retour
+        </button>
+        <span className="section-kicker">Étape 2</span>
+      </div>
+      {renderModePicker({ advanceOnSelect: true })}
+    </div>
+  );
+
+  const renderProgressiveControls = () => (
+    <>
+      {briefForm}
+
+      <div className="ai-progressive-steps">
+        {progressiveActStages.map((stage, index) => {
+          const actNumber = index + 1;
+          const previousStage = index > 0 ? progressiveActStages[index - 1] : '';
+          const statusValue = progressiveStatus[stage] || 'pending';
+          const isAvailable = index === 0 || progressiveStatus[previousStage] === 'done';
+          const cost = getTextGenerationCreditCost('progressive', stage);
+          const meta = getStepMeta(statusValue, !isAvailable, `Acte ${actNumber} généré`, `Acte ${actNumber} disponible`);
+          if (!isAvailable && statusValue !== 'running' && statusValue !== 'done') return null;
+          return (
+            <button type="button" key={stage} disabled={isGenerating || aiCredits.isLoading || !hasEnoughAiCredits('text', cost) || !isAvailable} onClick={() => generateProgressiveStep(stage)}>
+              <strong>{meta.icon} Acte {actNumber}</strong>
+              <span>{getProgressiveStageSummary(stage)} - {formatCreditCost(cost)}</span>
+            </button>
+          );
+        })}
+      </div>
+    </>
+  );
+
+  const renderExtendControls = () => (
+    <>
+      {briefForm}
+
+      <HelpLabel help={fieldHelp.source}>Source</HelpLabel>
+      <div className="segmented-control compact">
+        <button type="button" className={extendSource === 'current' ? 'active' : ''} onClick={() => setExtendSource('current')}>Projet actuel</button>
+        <button type="button" className={extendSource === 'imported' ? 'active' : ''} onClick={() => setExtendSource('imported')} disabled={!importedProject}>JSON importé</button>
+      </div>
+
+      <HelpLabel help={fieldHelp.importJson}>Importer un JSON existant</HelpLabel>
+      <label className="button like secondary-action full">
+        Importer un JSON existant
+        <input type="file" accept="application/json,.json" hidden onChange={importExtensionJson} />
+      </label>
+      {importedProject ? <p className="small-note">JSON chargé: {importedProject.title || 'Projet importé'}</p> : null}
+
+      <HelpLabel help={fieldHelp.storySummary}>Résumé de l'histoire</HelpLabel>
+      <textarea
+        value={storySummary}
+        onChange={(event) => setStorySummary(event.target.value)}
+        placeholder="Résume les événements, révélations et objectifs déjà posés."
+      />
+      <button type="button" className="secondary-action full" onClick={() => setStorySummary(makeProjectStorySummary(extensionSourceProject))}>
+        Refaire le résumé depuis le projet
+      </button>
+
+      <HelpLabel help={fieldHelp.sceneChronology}>Chronologie des scènes</HelpLabel>
+      <div className="ai-chronology-list">
+        {parseChronologyEntries(sceneChronology, extensionSourceProject).map((entry, index, entries) => (
+          <div className="ai-chronology-row" key={`${entry.id}:${index}`}>
+            <span>{index + 1}</span>
+            <strong>{entry.name || entry.raw}</strong>
+            <button type="button" className="icon-button" title="Monter" disabled={index === 0} onClick={() => moveChronologyEntry(index, -1)}>↑</button>
+            <button type="button" className="icon-button" title="Descendre" disabled={index === entries.length - 1} onClick={() => moveChronologyEntry(index, 1)}>↓</button>
+          </div>
         ))}
       </div>
+      <textarea
+        value={sceneChronology}
+        onChange={(event) => {
+          setSceneChronology(event.target.value);
+          setContinuationSceneId(getLastSceneIdFromChronology(event.target.value, extensionSourceProject));
+        }}
+        placeholder={[
+          '1. [id_scene] Première scène',
+          '2. [id_scene] Deuxième scène',
+          '3. [id_scene] Dernière scène actuelle',
+        ].join('\n')}
+      />
+      <button type="button" className="secondary-action full" onClick={() => {
+        const chronology = makeSceneChronology(extensionSourceProject);
+        setSceneChronology(chronology);
+        setContinuationSceneId(getLastSceneIdFromChronology(chronology, extensionSourceProject));
+      }}>
+        Reconstruire la chronologie depuis le projet
+      </button>
 
-      <HelpLabel help="Style partagé par les images de scènes pour éviter que chaque pièce parte dans une direction visuelle différente.">Style visuel global</HelpLabel>
-      <input data-tour="ai-visual-style" value={globalVisualStyle} onChange={(event) => setGlobalVisualStyle(event.target.value)} />
-
-      <HelpLabel help="Ajuste automatiquement la luminosité après génération pour garder une image jouable sans trop délaver l'ambiance.">Lisibilité des images</HelpLabel>
-      <select data-tour="ai-image-readability" value={imageReadabilityLevel} onChange={(event) => setImageReadabilityLevel(event.target.value)}>
-        <option value="subtle">Ambiance sombre</option>
-        <option value="balanced">Lisibilité renforcée</option>
-        <option value="strong">Très lumineux</option>
-        <option value="none">Aucune correction</option>
+      <HelpLabel help={fieldHelp.continuationScene}>Scène de départ détectée</HelpLabel>
+      <select value={continuationScene?.id || ''} onChange={(event) => setContinuationSceneId(event.target.value)}>
+        {extensionScenes.map((scene) => (
+          <option key={scene.id} value={scene.id}>{getSceneLabel?.(scene.id) || scene.name}</option>
+        ))}
       </select>
+      <button type="button" className="secondary-action full" onClick={() => setContinuationSceneId(getLastSceneIdFromChronology(sceneChronology, extensionSourceProject))}>
+        Utiliser la dernière ligne de la chronologie
+      </button>
 
-      <HelpLabel help="Détails récurrents à conserver entre les pièces: portes, parquet, lumière, époque, matériaux.">Héritage visuel</HelpLabel>
-      <textarea data-tour="ai-visual-inheritance" value={visualInheritance} onChange={(event) => setVisualInheritance(event.target.value)} />
+      <HelpLabel help={fieldHelp.continuationWish}>Ce que tu aimerais pour la suite</HelpLabel>
+      <textarea
+        value={continuationWish}
+        onChange={(event) => {
+          setContinuationWish(event.target.value);
+          setExtendInstruction(event.target.value);
+        }}
+        placeholder="Vide = suite aléatoire mais cohérente. Ex: révéler une cave secrète avec une énigme mécanique."
+      />
+      <button type="button" className="secondary-action full" onClick={proposeIdeas}>Proposer des idées</button>
+      {ideaSuggestions.length ? (
+        <div className="ai-suggestion-list">
+          {ideaSuggestions.map((suggestion) => (
+            <button type="button" key={suggestion} onClick={() => useSuggestion(suggestion)}>{suggestion}</button>
+          ))}
+        </div>
+      ) : null}
 
-      <HelpLabel help={fieldHelp.mode}>Mode</HelpLabel>
-      <div className="segmented-control" data-tour="ai-mode">
-        <button type="button" className={mode === 'generate' ? 'active' : ''} onClick={() => setMode('generate')}>Nouveau</button>
-        {!isBeginnerAi ? (
-          <>
-            <button type="button" className={mode === 'progressive' ? 'active' : ''} onClick={() => setMode('progressive')}>Progressif</button>
-            <button type="button" className={mode === 'extend' ? 'active' : ''} onClick={() => setMode('extend')}>Continuer</button>
-          </>
-        ) : null}
-        <button type="button" className={mode === 'improve' ? 'active' : ''} onClick={() => setMode('improve')}>Améliorer</button>
+      <div className="ai-progressive-steps">
+        {(() => {
+          const cost = getTextGenerationCreditCost('extend', 'continue_story');
+          return (
+            <button type="button" disabled={isGenerating || aiCredits.isLoading || !hasEnoughAiCredits('text', cost)} onClick={() => extendExistingProject('continue_story')}>
+              <strong>Continuer l'histoire</strong>
+              <span>suite cohérente - {formatCreditCost(cost)}</span>
+            </button>
+          );
+        })()}
+      </div>
+    </>
+  );
+
+  const renderDetailsStep = () => (
+    <div className="ai-wizard-step">
+      <div className="ai-brief-topbar">
+        <span className="section-kicker">Étape 3</span>
+        <strong>Paramètres</strong>
+        <span>{selectedStyle.title} - {selectedMode.label}</span>
       </div>
 
       <div className="ai-estimate-panel" data-tour="ai-estimate">
-        <strong>Modifiera probablement :</strong>
+        <strong>Modifiera :</strong>
         <b className="ai-cost-line">Coût annoncé avant lancement: {formatCreditCost(currentTextGenerationCost)}</b>
         <div className="ai-estimate-tags">
           {getActionEstimate(mode).map((line) => <span key={line}>{line}</span>)}
         </div>
       </div>
 
-      {mode === 'improve' ? (
-        <>
-          <HelpLabel help={fieldHelp.improve}>Scène à améliorer</HelpLabel>
-          <select value={targetSceneId} onChange={(event) => setTargetSceneId(event.target.value)}>
-            {scenes.map((scene) => (
-              <option key={scene.id} value={scene.id}>{getSceneLabel?.(scene) || scene.name}</option>
-            ))}
-          </select>
-
-          <HelpLabel help={fieldHelp.instruction}>Instruction</HelpLabel>
-          <textarea
-            value={instruction}
-            onChange={(event) => setInstruction(event.target.value)}
-            placeholder="Ex: Améliore cette scène pour la rendre plus stressante."
-          />
-          <p className="small-note">Structure protégée: seules l’ambiance, les dialogues et les objets peuvent être raffinés.</p>
-          <button type="button" className="secondary-action full" onClick={proposeIdeas}>Proposer des idées</button>
-          {ideaSuggestions.length ? (
-            <div className="ai-suggestion-list">
-              {ideaSuggestions.map((suggestion) => (
-                <button type="button" key={suggestion} onClick={() => useSuggestion(suggestion)}>{suggestion}</button>
+      <div className="ai-wizard-form">
+        {mode === 'improve' ? (
+          <>
+            <HelpLabel help={fieldHelp.improve}>Scène à améliorer</HelpLabel>
+            <select value={targetSceneId} onChange={(event) => setTargetSceneId(event.target.value)}>
+              {scenes.map((scene) => (
+                <option key={scene.id} value={scene.id}>{getSceneLabel?.(scene) || scene.name}</option>
               ))}
-            </div>
-          ) : null}
-        </>
-      ) : mode === 'progressive' ? (
-        <>
-          {briefForm}
+            </select>
 
-          <div className="ai-progressive-steps">
-            {progressiveActStages.map((stage, index) => {
-              const actNumber = index + 1;
-              const previousStage = index > 0 ? progressiveActStages[index - 1] : '';
-              const statusValue = progressiveStatus[stage] || 'pending';
-              const isAvailable = index === 0 || progressiveStatus[previousStage] === 'done';
-              const cost = getTextGenerationCreditCost('progressive', stage);
-              const meta = getStepMeta(statusValue, !isAvailable, `Acte ${actNumber} généré`, `Acte ${actNumber} disponible`);
-              if (!isAvailable && statusValue !== 'running' && statusValue !== 'done') return null;
-              return (
-                <button type="button" key={stage} disabled={isGenerating || aiCredits.isLoading || !hasEnoughAiCredits('text', cost) || !isAvailable} onClick={() => generateProgressiveStep(stage)}>
-                  <strong>{meta.icon} Acte {actNumber}</strong>
-                  <span>{getProgressiveStageSummary(stage)} · {formatCreditCost(cost)}</span>
-                </button>
-              );
-            })}
-          </div>
-
-        </>
-      ) : mode === 'extend' ? (
-        <>
-          {briefForm}
-
-          <HelpLabel help={fieldHelp.source}>Source</HelpLabel>
-          <div className="segmented-control compact">
-            <button type="button" className={extendSource === 'current' ? 'active' : ''} onClick={() => setExtendSource('current')}>Projet actuel</button>
-            <button type="button" className={extendSource === 'imported' ? 'active' : ''} onClick={() => setExtendSource('imported')} disabled={!importedProject}>JSON importé</button>
-          </div>
-
-          <HelpLabel help={fieldHelp.importJson}>Importer un JSON existant</HelpLabel>
-          <label className="button like secondary-action full">
-            Importer un JSON existant
-            <input type="file" accept="application/json,.json" hidden onChange={importExtensionJson} />
-          </label>
-          {importedProject ? <p className="small-note">JSON chargé: {importedProject.title || 'Projet importé'}</p> : null}
-
-          <HelpLabel help={fieldHelp.storySummary}>Résumé de l'histoire</HelpLabel>
-          <textarea
-            value={storySummary}
-            onChange={(event) => setStorySummary(event.target.value)}
-            placeholder="Résume les événements, révélations et objectifs déjà posés."
-          />
-          <button type="button" className="secondary-action full" onClick={() => setStorySummary(makeProjectStorySummary(extensionSourceProject))}>
-            Refaire le résumé depuis le projet
-          </button>
-
-          <HelpLabel help={fieldHelp.sceneChronology}>Chronologie des scènes</HelpLabel>
-          <div className="ai-chronology-list">
-            {parseChronologyEntries(sceneChronology, extensionSourceProject).map((entry, index, entries) => (
-              <div className="ai-chronology-row" key={`${entry.id}:${index}`}>
-                <span>{index + 1}</span>
-                <strong>{entry.name || entry.raw}</strong>
-                <button type="button" className="icon-button" title="Monter" disabled={index === 0} onClick={() => moveChronologyEntry(index, -1)}>↑</button>
-                <button type="button" className="icon-button" title="Descendre" disabled={index === entries.length - 1} onClick={() => moveChronologyEntry(index, 1)}>↓</button>
+            <HelpLabel help={fieldHelp.instruction}>Instruction</HelpLabel>
+            <textarea
+              value={instruction}
+              onChange={(event) => setInstruction(event.target.value)}
+              placeholder="Ex: Améliore cette scène pour la rendre plus stressante."
+            />
+            <p className="small-note">Structure protégée: seules l'ambiance, les dialogues et les objets peuvent être raffinés.</p>
+            <button type="button" className="secondary-action full" onClick={proposeIdeas}>Proposer des idées</button>
+            {ideaSuggestions.length ? (
+              <div className="ai-suggestion-list">
+                {ideaSuggestions.map((suggestion) => (
+                  <button type="button" key={suggestion} onClick={() => useSuggestion(suggestion)}>{suggestion}</button>
+                ))}
               </div>
-            ))}
-          </div>
-          <textarea
-            value={sceneChronology}
-            onChange={(event) => {
-              setSceneChronology(event.target.value);
-              setContinuationSceneId(getLastSceneIdFromChronology(event.target.value, extensionSourceProject));
-            }}
-            placeholder={[
-              '1. [id_scene] Première scène',
-              '2. [id_scene] Deuxième scène',
-              '3. [id_scene] Dernière scène actuelle',
-            ].join('\n')}
-          />
-          <button type="button" className="secondary-action full" onClick={() => {
-            const chronology = makeSceneChronology(extensionSourceProject);
-            setSceneChronology(chronology);
-            setContinuationSceneId(getLastSceneIdFromChronology(chronology, extensionSourceProject));
-          }}>
-            Reconstruire la chronologie depuis le projet
-          </button>
+            ) : null}
+          </>
+        ) : mode === 'progressive' ? (
+          renderProgressiveControls()
+        ) : mode === 'extend' ? (
+          renderExtendControls()
+        ) : (
+          briefForm
+        )}
+        {mode !== 'improve' ? renderVisualOptions() : null}
+      </div>
 
-          <HelpLabel help={fieldHelp.continuationScene}>Scène de départ détectée</HelpLabel>
-          <select value={continuationScene?.id || ''} onChange={(event) => setContinuationSceneId(event.target.value)}>
-            {extensionScenes.map((scene) => (
-              <option key={scene.id} value={scene.id}>{getSceneLabel?.(scene.id) || scene.name}</option>
-            ))}
-          </select>
-          <button type="button" className="secondary-action full" onClick={() => setContinuationSceneId(getLastSceneIdFromChronology(sceneChronology, extensionSourceProject))}>
-            Utiliser la dernière ligne de la chronologie
-          </button>
-
-          <HelpLabel help={fieldHelp.continuationWish}>Ce que tu aimerais pour la suite</HelpLabel>
-          <textarea
-            value={continuationWish}
-            onChange={(event) => {
-              setContinuationWish(event.target.value);
-              setExtendInstruction(event.target.value);
-            }}
-            placeholder="Vide = suite aléatoire mais cohérente. Ex: révéler une cave secrète avec une énigme mécanique."
-          />
-          <button type="button" className="secondary-action full" onClick={proposeIdeas}>Proposer des idées</button>
-          {ideaSuggestions.length ? (
-            <div className="ai-suggestion-list">
-              {ideaSuggestions.map((suggestion) => (
-                <button type="button" key={suggestion} onClick={() => useSuggestion(suggestion)}>{suggestion}</button>
-              ))}
-            </div>
-          ) : null}
-
-          <div className="ai-progressive-steps">
-            {(() => {
-              const cost = getTextGenerationCreditCost('extend', 'continue_story');
-              return (
-                <button type="button" disabled={isGenerating || aiCredits.isLoading || !hasEnoughAiCredits('text', cost)} onClick={() => extendExistingProject('continue_story')}>
-                  <strong>→ Continuer l’histoire</strong>
-                  <span>suite cohérente · {formatCreditCost(cost)}</span>
-                </button>
-              );
-            })()}
-          </div>
-        </>
-      ) : (
-        <>
-          {briefForm}
-        </>
-      )}
-
-      {mode !== 'progressive' && mode !== 'extend' ? (
-        <button type="button" data-tour="ai-generate-button" disabled={isGenerating || !canRunTextAi || (mode === 'improve' && !targetSceneId)} onClick={generate}>
-          {isGenerating ? 'Traitement...' : `${mode === 'improve' ? 'Améliorer la scène' : 'Générer le jeu complet'} · ${formatCreditCost(currentTextGenerationCost)}`}
+      <div className="ai-wizard-footer ai-wizard-footer-actions">
+        <button type="button" className="secondary-action ai-back-step-button" onClick={() => setWizardStep('action')}>
+          <ArrowLeft size={16} />
+          Retour
         </button>
-      ) : null}
+        {hasAiResult ? (
+          <button type="button" className="secondary-action" onClick={() => setWizardStep('result')}>
+            Voir le résultat
+          </button>
+        ) : null}
+        {mode !== 'progressive' && mode !== 'extend' ? (
+          <button type="button" data-tour="ai-generate-button" disabled={isGenerating || !canRunTextAi || (mode === 'improve' && !targetSceneId)} onClick={generate}>
+            {isGenerating ? 'Traitement...' : `${mode === 'improve' ? 'Améliorer la scène' : 'Générer le jeu complet'} - ${formatCreditCost(currentTextGenerationCost)}`}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+
+  if (wizardStep === 'result') return null;
+
+  return (
+    <section className="panel ai-wizard-panel" data-tour="ai-controls">
+      {wizardStep === 'visual' ? renderVisualStep() : null}
+      {wizardStep === 'action' ? renderActionStep() : null}
+      {wizardStep === 'details' ? renderDetailsStep() : null}
     </section>
   );
 }

@@ -107,6 +107,11 @@ const renderAiTab = ({
   return { ...view, project, onApplyProject, onSaveAiDraft };
 };
 
+const goToDescriptionStep = () => {
+  fireEvent.click(screen.getByRole('button', { name: /R.aliste/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Nouveau projet/i }));
+};
+
 describe('AI critical flows', () => {
   beforeEach(() => {
     draftStorage.read.mockResolvedValue(null);
@@ -130,6 +135,7 @@ describe('AI critical flows', () => {
     const { container, onApplyProject, onSaveAiDraft } = renderAiTab();
 
     await waitFor(() => expect(screen.getByText('100')).toBeTruthy());
+    goToDescriptionStep();
 
     fireEvent.click(container.querySelector('[data-tour="ai-generate-button"]'));
 
@@ -164,10 +170,56 @@ describe('AI critical flows', () => {
     const { container } = renderAiTab({ balance: 1 });
 
     await waitFor(() => expect(screen.getByText('1')).toBeTruthy());
+    goToDescriptionStep();
     const generateButton = container.querySelector('[data-tour="ai-generate-button"]');
 
     expect(generateButton.disabled).toBe(true);
     fireEvent.click(generateButton);
     expect(generateAiProject).not.toHaveBeenCalled();
+  });
+
+  test('keeps the AI wizard split into action, details and result steps', async () => {
+    renderAiTab();
+
+    await waitFor(() => expect(screen.getByText('100')).toBeTruthy());
+    expect(screen.queryByText('Projet IA')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /R.aliste/i }));
+    expect(screen.getByText('Action IA')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Retour/i })).toBeTruthy();
+    expect(screen.queryByDisplayValue('Manoir familial hanté')).toBeNull();
+    expect(screen.queryByText('Projet IA')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Nouveau projet/i }));
+    expect(screen.getByText(/8 cr.dits/i).classList.contains('ai-field-credit-cost')).toBe(true);
+    expect(screen.getByText(/10 cr.dits/i).classList.contains('ai-field-credit-cost')).toBe(true);
+    expect(screen.getAllByText(/5 cr.dits/i).some((element) => element.classList.contains('ai-field-credit-cost'))).toBe(true);
+    expect(screen.getByText('Paramètres')).toBeTruthy();
+    expect(screen.getByDisplayValue('Manoir familial hanté')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Générer le jeu complet/i })).toBeTruthy();
+    expect(screen.queryByText('Projet IA')).toBeNull();
+  });
+
+  test('shows the AI project panel only during and after generation', async () => {
+    let resolveGeneration;
+    generateAiProject.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveGeneration = resolve;
+    }));
+    const { container } = renderAiTab();
+
+    await waitFor(() => expect(screen.getByText('100')).toBeTruthy());
+    goToDescriptionStep();
+    expect(screen.queryByText('Projet IA')).toBeNull();
+
+    fireEvent.click(container.querySelector('[data-tour="ai-generate-button"]'));
+    await waitFor(() => expect(screen.getByText('Projet IA')).toBeTruthy());
+    expect(screen.getByText(/Génération en cours/i)).toBeTruthy();
+
+    resolveGeneration({
+      project: makeGeneratedProject(),
+      source: 'api',
+      isPatch: false,
+    });
+    await waitFor(() => expect(screen.getByText('Projet IA stable')).toBeTruthy());
   });
 });
