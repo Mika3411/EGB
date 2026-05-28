@@ -80,7 +80,7 @@ export default function SceneSidebar({
           </div>
           <div className="toolbar compact-toolbar scene-nav-actions">
             <button type="button" onClick={addAct}>+ Acte</button>
-            <button type="button" onClick={addScene}>+ Scène</button>
+            <button type="button" data-tour="scene-create-button" onClick={addScene}>+ Scène</button>
           </div>
         </div>
 

@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { ListChecks } from 'lucide-react';
 import HelpLabel, { positionHelpBubble } from '../forms/HelpLabel';
 import { CREATION_MODES } from '../../lib/projectAnalysis';
 import { CREATION_TEMPLATES } from './profileUtils';
@@ -34,13 +35,13 @@ export default function CreateProjectPanel({
   const [importError, setImportError] = useState('');
   const fileInputRef = useRef(null);
 
-  const handleCreate = async (event) => {
+  const handleCreate = async (event, options = {}) => {
     event.preventDefault();
     const templateLabel = CREATION_TEMPLATES.find(([value]) => value === creationTemplate)?.[1] || 'Nouveau projet';
     const effectiveCreationMode = creationTemplate === 'hero_adventure' || creationTemplate === 'book_hero'
       ? 'hero_adventure'
       : ADVENTURE_TEMPLATE_IDS.has(creationTemplate) ? 'adventure' : creationMode;
-    await onCreateProject?.(newProjectName.trim() || templateLabel, creationTemplate, effectiveCreationMode);
+    await onCreateProject?.(newProjectName.trim() || templateLabel, creationTemplate, effectiveCreationMode, options);
     setNewProjectName('');
   };
 
@@ -63,7 +64,7 @@ export default function CreateProjectPanel({
   return (
     <section className="panel" data-tour="profile-create-section">
       <div className="grid-two">
-        <form onSubmit={handleCreate}>
+        <form onSubmit={(event) => handleCreate(event)}>
           <HelpLabel help="Nom visible dans ton profil et dans l'éditeur. Tu peux le modifier plus tard depuis la gestion des projets.">Nouveau projet</HelpLabel>
           <input
             id="new-project-name"
@@ -127,9 +128,20 @@ export default function CreateProjectPanel({
               ))}
             </div>
           </div>
-          <button type="submit" className="profile-action-button" disabled={isBusy} data-tour="profile-create-button">
-            + Créer
-          </button>
+          <div className="profile-create-actions">
+            <button type="submit" className="profile-action-button" disabled={isBusy} data-tour="profile-create-button">
+              + Créer
+            </button>
+            <button
+              type="button"
+              className="profile-action-button secondary-action"
+              disabled={isBusy}
+              onClick={(event) => handleCreate(event, { startCreationGuide: true })}
+            >
+              <ListChecks aria-hidden="true" size={17} />
+              <span>Créer avec aide guidée</span>
+            </button>
+          </div>
         </form>
 
         <div data-tour="profile-import-section">

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { CheckCircle2, Circle, PlayCircle, Trophy } from 'lucide-react';
 import helpText from '../MODE_EMPLOI.md?raw';
+import { getCreatorMissionProgress } from '../data/creatorMissions';
 import {
   canUseSupabaseForum,
   createForumPostInSupabase,
@@ -16,6 +18,7 @@ import { showConfirm } from './AccessibleDialog';
 const HELP_MODES = [
   ['manual', "Mode d'emploi"],
   ['faq', 'FAQ'],
+  ['missions', 'Missions'],
   ['tutorials', 'Didacticiel'],
   ['forum', 'Forum'],
 ];
@@ -81,6 +84,7 @@ const HELP_FORUM_DEFAULT_POSTS = [
 ];
 
 const HELP_TUTORIAL_OPTIONS = [
+  ['guided_creation', 'Démarrage guidé', 'Construire la première boucle jouable sur le vrai projet : deux scènes, image, sortie cliquable, scène cible et test Preview.'],
   ['profile', 'Profil', 'Comprendre le tableau dé bord, créer ou reprendre un projet, importer une sauvegarde, tester, partager et publier.'],
   ['scenes', 'Scènes', 'Créer une scène, choisir son acte, poser une ambiance, ajouter des objets et préparer les médias essentiels.'],
   ['media', 'Média', 'Régler les images, sons, effets globaux, transitions, minuteurs et aperçus de scène.'],
@@ -98,8 +102,8 @@ const HELP_TUTORIAL_OPTIONS = [
   ['score', 'Bilan', 'Lire la note globale, les dimensions, les points forts, les alertes et le temps de jeu estime.'],
   ['ai', 'IA', 'Utiliser l’assistant IA, comprendre les crédits, les modes, les brouillons, les validations et les generations d images.'],
 ];
-const BEGINNER_HELP_TUTORIAL_OPTIONS = new Set(['profile', 'scenes', 'media', 'editor', 'enigmas', 'ai', 'preview']);
-const INTERMEDIATE_HELP_TUTORIAL_OPTIONS = new Set(['profile', 'scenes', 'media', 'editor', 'map', 'hero', 'combat', 'cinematics', 'enigmas', 'ai', 'preview']);
+const BEGINNER_HELP_TUTORIAL_OPTIONS = new Set(['guided_creation', 'profile', 'scenes', 'media', 'editor', 'enigmas', 'ai', 'preview']);
+const INTERMEDIATE_HELP_TUTORIAL_OPTIONS = new Set(['guided_creation', 'profile', 'scenes', 'media', 'editor', 'map', 'hero', 'combat', 'cinematics', 'enigmas', 'ai', 'preview']);
 
 const BEGINNER_MANUAL_SECTIONS = [
   {
@@ -1051,7 +1055,74 @@ const HelpForum = ({ user }) => {
   );
 };
 
-export default function HelpTab({ user, projectMode = 'expert', onStartTutorial }) {
+function CreatorMissionPanel({ progress, onStartTutorial }) {
+  const progressPercent = progress.totalCount
+    ? Math.round((progress.completedCount / progress.totalCount) * 100)
+    : 0;
+
+  return (
+    <div className="creator-missions">
+      <div className="creator-mission-summary">
+        <div>
+          <span className="section-kicker">Progression</span>
+          <h3>Mode missions créateur</h3>
+          <p className="small-note">
+            Une feuille de route pour construire un premier escape game jouable, testable, puis publié.
+          </p>
+        </div>
+        <strong>{progress.completedCount}/{progress.totalCount}</strong>
+      </div>
+
+      <div
+        className="creator-mission-progress"
+        role="progressbar"
+        aria-label="Progression des missions créateur"
+        aria-valuenow={progress.completedCount}
+        aria-valuemin={0}
+        aria-valuemax={progress.totalCount}
+      >
+        <span style={{ width: `${progressPercent}%` }} />
+      </div>
+
+      <div className="creator-mission-list">
+        {progress.missions.map((mission) => (
+          <article
+            key={mission.id}
+            className={`creator-mission-card${mission.isComplete ? ' done' : ''}`}
+          >
+            <span className="creator-mission-status" aria-hidden="true">
+              {mission.isComplete ? <CheckCircle2 size={21} /> : <Circle size={21} />}
+            </span>
+            <div className="creator-mission-body">
+              <span>Mission {mission.number}</span>
+              <strong>{mission.title}</strong>
+              <p>{mission.description}</p>
+            </div>
+            {mission.tutorialTab ? (
+              <button
+                type="button"
+                className="secondary-action creator-mission-action"
+                onClick={() => onStartTutorial?.(mission.tutorialTab)}
+              >
+                <PlayCircle size={16} aria-hidden="true" />
+                {mission.isComplete ? 'Rejouer le guide' : mission.actionLabel}
+              </button>
+            ) : null}
+          </article>
+        ))}
+      </div>
+
+      {progress.allDone ? (
+        <div className="creator-mission-badge">
+          <Trophy size={22} aria-hidden="true" />
+          <strong>{progress.badgeLabel}</strong>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export default function HelpTab({ user, project = null, projectRecord = null, projectMode = 'expert', onStartTutorial }) {
   const help = useMemo(() => parseHelpSections(helpText), []);
   const [activeMode, setActiveMode] = useState('manual');
   const [activeIndex, setActiveIndex] = useState(0);
@@ -1067,6 +1138,10 @@ export default function HelpTab({ user, projectMode = 'expert', onStartTutorial 
         ? HELP_TUTORIAL_OPTIONS.filter(([value]) => INTERMEDIATE_HELP_TUTORIAL_OPTIONS.has(value))
         : HELP_TUTORIAL_OPTIONS
   ), [projectMode]);
+  const missionProgress = useMemo(
+    () => getCreatorMissionProgress(project, projectRecord),
+    [project, projectRecord],
+  );
   useEffect(() => {
     if (activeIndex >= manualSections.length) setActiveIndex(0);
   }, [activeIndex, manualSections.length]);
@@ -1170,6 +1245,19 @@ export default function HelpTab({ user, projectMode = 'expert', onStartTutorial 
                 </details>
               ))}
             </div>
+          </>
+        ) : null}
+
+        {activeMode === 'missions' ? (
+          <>
+            <div className="panel-head help-content-head">
+              <div>
+                <span className="section-kicker">Missions</span>
+                <h2>Créer son premier jeu</h2>
+                <p className="small-note">Avance étape par étape, avec validation automatique dès que ton projet remplit l’objectif.</p>
+              </div>
+            </div>
+            <CreatorMissionPanel progress={missionProgress} onStartTutorial={onStartTutorial} />
           </>
         ) : null}
 

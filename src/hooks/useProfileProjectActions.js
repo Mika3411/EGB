@@ -15,6 +15,7 @@ export function useProfileProjectActions({
   saveProject = auth.saveProject,
   setSaveStatus,
   setScreen,
+  startCreationGuide,
 }) {
   const openProjectInEditor = useCallback(async (projectId, options = {}) => {
     try {
@@ -59,9 +60,11 @@ export function useProfileProjectActions({
           selectedSceneId: resumeSceneId,
         });
       }
+      return projectToLoad;
     } catch (error) {
       console.error('Erreur de chargement du projet', error);
       setSaveStatus('Erreur de chargement');
+      return null;
     }
   }, [
     auth.activeProjectId,
@@ -79,12 +82,16 @@ export function useProfileProjectActions({
     setScreen,
   ]);
 
-  const createProjectFromProfile = useCallback(async (name, templateId = 'empty', creationMode = 'beginner') => {
+  const createProjectFromProfile = useCallback(async (name, templateId = 'empty', creationMode = 'beginner', options = {}) => {
     const project = applyCreationTemplate(createInitialProject(), templateId, name);
     project.creationMode = ['beginner', 'intermediate', 'expert', 'adventure', 'hero_adventure'].includes(creationMode) ? creationMode : 'beginner';
     const record = await auth.createProject(project, name || project.title);
-    if (record?.id) await openProjectInEditor(record.id);
-  }, [auth.createProject, openProjectInEditor]);
+    if (record?.id) {
+      const projectToGuide = await openProjectInEditor(record.id, options.startCreationGuide ? { tab: 'scenes' } : {});
+      if (options.startCreationGuide) await startCreationGuide?.(projectToGuide || project);
+    }
+    return record;
+  }, [auth.createProject, openProjectInEditor, startCreationGuide]);
 
   const renameProjectFromProfile = useCallback(async (projectId, name) => {
     await auth.renameProject(projectId, name);

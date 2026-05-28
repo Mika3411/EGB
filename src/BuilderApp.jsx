@@ -267,6 +267,10 @@ function BuilderApp({
   const profileProjects = useMemo(() => (auth.projects || []).map((projectRecord) => (
     projectRecord.id === auth.activeProjectId ? { ...projectRecord, data: editor.project } : projectRecord
   )), [auth.activeProjectId, auth.projects, editor.project]);
+  const activeProjectRecord = useMemo(() => {
+    const record = (auth.projects || []).find((projectRecord) => projectRecord.id === auth.activeProjectId);
+    return record ? { ...record, data: editor.project } : null;
+  }, [auth.activeProjectId, auth.projects, editor.project]);
 
   useEffect(() => {
     const placeHelpTooltip = (target) => {
@@ -313,7 +317,17 @@ function BuilderApp({
     const step = activeTutorialStep;
     if (!step) return;
     if (step?.tab && step.tab !== 'profile' && editor.tab !== step.tab) editor.setTab(step.tab);
-    if (selectedTutorialTab === 'editor' && step?.tab === 'preview') {
+    if (selectedTutorialTab === 'guided_creation' && step.sceneTarget === 'first') {
+      const firstScene = editor.project.scenes[0];
+      if (firstScene?.id && editor.selectedSceneId !== firstScene.id) {
+        editor.setSelectedSceneId(firstScene.id);
+      }
+      const guidedHotspotId = firstScene?.hotspots?.find((hotspot) => hotspot.tutorialCreated)?.id || firstScene?.hotspots?.[0]?.id || '';
+      if (step.focusGuidedHotspot && guidedHotspotId && editor.selectedHotspotId !== guidedHotspotId) {
+        editor.setSelectedHotspotId(guidedHotspotId);
+      }
+    }
+    if ((selectedTutorialTab === 'editor' || selectedTutorialTab === 'guided_creation') && step?.tab === 'preview') {
       const scene = editor.project.scenes.find((entry) => entry.id === editor.selectedSceneId) || editor.project.scenes[0];
       if (!scene) return;
       preview.setPlayingCinematic(null);
@@ -324,6 +338,9 @@ function BuilderApp({
   }, [
     editor.project.scenes,
     editor.selectedSceneId,
+    editor.selectedHotspotId,
+    editor.setSelectedHotspotId,
+    editor.setSelectedSceneId,
     editor.setTab,
     editor.tab,
     preview.setDialogue,
@@ -844,6 +861,26 @@ function BuilderApp({
     editor.setTab('preview');
   }, [editor.setTab]);
 
+  const startLoadedProjectCreationGuide = useCallback(async (projectForGuide = editor.project) => {
+    const steps = await loadTutorialSteps();
+    const firstScene = projectForGuide?.scenes?.[0] || editor.project?.scenes?.[0] || null;
+    editor.setTab('scenes');
+    if (firstScene?.id) {
+      editor.setSelectedSceneId(firstScene.id);
+      editor.setSelectedHotspotId(firstScene.hotspots?.find((hotspot) => hotspot.tutorialCreated)?.id || firstScene.hotspots?.[0]?.id || '');
+    }
+    setScreen('editor');
+    setSelectedTutorialTab('guided_creation');
+    setTutorialStepIndex(getTutorialStepIndexesFromSteps(steps, 'guided_creation')[0] ?? null);
+    setSaveStatus('Aide guidée activée sur ce projet');
+  }, [
+    editor.project,
+    editor.setSelectedHotspotId,
+    editor.setSelectedSceneId,
+    editor.setTab,
+    loadTutorialSteps,
+  ]);
+
   const handleExportProjectJson = useCallback(() => exportProjectJson(editor.project), [editor.project]);
   const handleExportAuthorSummary = useCallback(() => exportAuthorSummary(editor.project), [editor.project]);
   const handleExportStandalone = useCallback(async () => {
@@ -873,6 +910,7 @@ function BuilderApp({
     saveProject: saveProjectAndAcknowledge,
     setSaveStatus,
     setScreen,
+    startCreationGuide: startLoadedProjectCreationGuide,
   });
 
   useEffect(() => {
@@ -901,6 +939,21 @@ function BuilderApp({
   const startBuilderTutorialFromProfile = useCallback(async (requestedTab = 'scenes') => {
     const tutorialTab = BUILDER_TUTORIAL_TABS.includes(requestedTab) ? requestedTab : 'scenes';
     const steps = await loadTutorialSteps();
+    if (tutorialTab === 'guided_creation') {
+      const sourceProjectId = initialProjectId || auth.activeProjectId || auth.projects[0]?.id || '';
+      const isSourceProjectLoaded = !sourceProjectId || hydratedProjectRef.current === sourceProjectId;
+      if (screen === 'editor' && isSourceProjectLoaded) {
+        await startLoadedProjectCreationGuide(editor.project);
+        return;
+      }
+      if (!sourceProjectId) {
+        setSaveStatus('Crée ou ouvre un projet avant de lancer le démarrage guidé');
+        return;
+      }
+      const projectToGuide = await openProjectInEditor(sourceProjectId, { tab: 'scenes' });
+      await startLoadedProjectCreationGuide(projectToGuide || editor.project);
+      return;
+    }
     if (tutorialTab === 'profile') {
       if (auth.user?.id) {
         window.localStorage.setItem(getProfileTutorialSeenKey(auth.user.id), '1');
@@ -933,10 +986,15 @@ function BuilderApp({
     auth.projects,
     auth.user?.id,
     editor.loadProject,
+    editor.project,
     editor.setSelectedSceneId,
     editor.setTab,
+    initialProjectId,
     loadTutorialSteps,
+    openProjectInEditor,
     preview.syncWithProject,
+    screen,
+    startLoadedProjectCreationGuide,
   ]);
 
   useEffect(() => {
@@ -1515,6 +1573,7 @@ function BuilderApp({
     preview,
     heroCharacterPreviewRequestKey,
     user: auth.user,
+    projectRecord: activeProjectRecord,
     projectStorageKey: auth.activeProjectId || editor.project?.title || 'default',
     anime2dStorageId,
     mediaLibrary,
@@ -1538,6 +1597,7 @@ function BuilderApp({
   }), [
     anime2dStorageId,
     applyAiProject,
+    activeProjectRecord,
     auth.activeProjectId,
     auth.user,
     editor,

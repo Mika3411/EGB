@@ -239,6 +239,8 @@ const ShopTab = React.lazy(() => import('./ShopTab').then(({ default: Component 
 const HelpTab = React.lazy(() => import('./HelpTab').then(({ default: Component }) => ({
   default: ({ project, tabContext }) => (
     <Component
+      project={project}
+      projectRecord={tabContext.projectRecord}
       user={tabContext.user}
       projectMode={project?.creationMode}
       onStartTutorial={tabContext.actions.startBuilderTutorialFromProfile}

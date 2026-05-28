@@ -169,7 +169,7 @@ function ShellApp() {
     setScreen(builderScreen === 'shared-preview' ? 'shared-preview' : 'builder');
   }, []);
 
-  const createProjectFromProfile = useCallback(async (name, templateId = 'empty', creationMode = 'beginner') => {
+  const createProjectFromProfile = useCallback(async (name, templateId = 'empty', creationMode = 'beginner', options = {}) => {
     const [{ createInitialProject }, { applyCreationTemplate }] = await Promise.all([
       import('./data/projectData'),
       import('./lib/projectTemplates'),
@@ -177,7 +177,8 @@ function ShellApp() {
     const project = applyCreationTemplate(createInitialProject(), templateId, name);
     project.creationMode = ['beginner', 'intermediate', 'expert', 'adventure', 'hero_adventure'].includes(creationMode) ? creationMode : 'beginner';
     const record = await auth.createProject(project, name || project.title);
-    if (record?.id) openBuilder(record.id);
+    if (record?.id) openBuilder(record.id, '', 'editor', options.startCreationGuide ? 'guided_creation' : '');
+    return record;
   }, [auth.createProject, openBuilder]);
 
   const openProjectInEditor = useCallback(async (projectId, options = {}) => {

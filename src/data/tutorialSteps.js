@@ -1,7 +1,7 @@
 import { makeCinematic, makeCombination, makeEnigma, makeLogicRule, makeRouteMap } from './projectData';
 import { applyCreationTemplate } from '../lib/projectTemplates';
 
-export const BUILDER_TUTORIAL_TABS = ['profile', 'scenes', 'media', 'objects', 'characters3d', 'decors3d', 'editor', 'map', 'adventure', 'hero', 'combat', 'cinematics', 'animation', 'combinations', 'enigmas', 'logic', 'ai', 'preview', 'score'];
+export const BUILDER_TUTORIAL_TABS = ['profile', 'guided_creation', 'scenes', 'media', 'objects', 'characters3d', 'decors3d', 'editor', 'map', 'adventure', 'hero', 'combat', 'cinematics', 'animation', 'combinations', 'enigmas', 'logic', 'ai', 'preview', 'score'];
 
 const getProjectRecordName = (project) =>
   project?.name || project?.data?.title || project?.data?.name || '';
@@ -37,6 +37,13 @@ export const doRectsOverlap = (a, b, padding = 0) => (
 );
 
 const getSelectedTutorialScene = (project) => (project?.scenes || [])[0] || null;
+const getGuidedCreationHotspot = (project) => {
+  const scene = getSelectedTutorialScene(project);
+  if (!scene) return null;
+  return (scene.hotspots || []).find((hotspot) => hotspot.tutorialCreated)
+    || (scene.hotspots || []).find((hotspot) => hotspot.actionType === 'scene' || hotspot.targetSceneId)
+    || null;
+};
 
 export const isTutorialStepComplete = (step, interactedSteps, project) => {
   if (!step?.completedWhen) return true;
@@ -48,6 +55,20 @@ export const isTutorialStepComplete = (step, interactedSteps, project) => {
   if (rule.type === 'select-not') return getTutorialInputValue(rule.selector) !== rule.value;
   if (rule.type === 'select-has-value') return getTutorialInputValue(rule.selector).trim().length > 0;
   if (rule.type === 'details-open') return Boolean(document.querySelector(`${rule.selector}[open]`));
+  if (rule.type === 'project-scene-count-min') return (project?.scenes || []).length >= (rule.min || 1);
+  if (rule.type === 'project-first-scene-background') {
+    const scene = getSelectedTutorialScene(project);
+    return Boolean(scene?.backgroundData || scene?.backgroundId);
+  }
+  if (rule.type === 'project-guided-hotspot-action') {
+    const hotspot = getGuidedCreationHotspot(project);
+    return Boolean(hotspot && (hotspot.actionType || 'dialogue') === (rule.actionType || 'scene'));
+  }
+  if (rule.type === 'project-guided-hotspot-target-scene') {
+    const hotspot = getGuidedCreationHotspot(project);
+    const sceneIds = new Set((project?.scenes || []).map((scene) => scene.id));
+    return Boolean(hotspot?.targetSceneId && sceneIds.has(hotspot.targetSceneId));
+  }
   if (rule.type === 'project-scene-field-not') {
     const scene = getSelectedTutorialScene(project);
     return Boolean(scene && (scene[rule.field] || '') !== rule.value);

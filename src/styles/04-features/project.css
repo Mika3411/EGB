@@ -1147,6 +1147,48 @@
 
 .help-tutorial-card span{color:#bfdbfe;font-size:13px;line-height:1.45}
 
+.creator-missions{display:grid;gap:14px;max-width:980px}
+
+.creator-mission-summary{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:14px 16px;border:1px solid rgba(125,211,252,.28);border-radius:var(--radius-md);background:linear-gradient(135deg,#0f172acf,#12302cbd)}
+
+.creator-mission-summary h3{margin:8px 0 4px;color:#fff;font-size:22px;line-height:1.15}
+
+.creator-mission-summary>strong{display:grid;place-items:center;min-width:64px;height:44px;color:#d1fae5;border:1px solid rgba(52,211,153,.32);border-radius:8px;background:#10b9811c;font-size:20px}
+
+.creator-mission-progress{height:10px;overflow:hidden;border:1px solid rgba(148,163,184,.24);border-radius:var(--radius-pill);background:#020617b5}
+
+.creator-mission-progress span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#22c55e,#38bdf8);transition:width .25s ease}
+
+.creator-mission-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
+
+.creator-mission-card{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:start;min-width:0;padding:13px;border:1px solid rgba(96,165,250,.2);border-radius:8px;background:#0f172a91}
+
+.creator-mission-card.done{border-color:rgba(52,211,153,.34);background:#0b2f2696}
+
+.creator-mission-status{display:grid;place-items:center;width:34px;height:34px;color:#93c5fd;border:1px solid rgba(96,165,250,.28);border-radius:8px;background:#1d4ed81c}
+
+.creator-mission-card.done .creator-mission-status{color:#86efac;border-color:rgba(52,211,153,.34);background:#22c55e1e}
+
+.creator-mission-body{display:grid;gap:4px;min-width:0}
+
+.creator-mission-body span{color:#93c5fd;font-size:11px;font-weight:900;text-transform:uppercase}
+
+.creator-mission-card.done .creator-mission-body span{color:#86efac}
+
+.creator-mission-body strong{color:#fff;font-size:16px;line-height:1.2}
+
+.creator-mission-body p{margin:0;color:#cbd5e1;font-size:13px;line-height:1.45}
+
+.creator-mission-action{grid-column:2;justify-self:start;display:inline-flex;gap:7px;align-items:center;margin-top:2px}
+
+.creator-mission-action svg{flex:0 0 auto}
+
+.creator-mission-badge{display:flex;align-items:center;gap:10px;padding:12px 14px;color:#fef3c7;border:1px solid rgba(245,158,11,.38);border-radius:8px;background:#92400e2b}
+
+.creator-mission-badge svg{color:#fbbf24}
+
+@media (max-width: 620px){.creator-mission-summary,.creator-mission-card{grid-template-columns:1fr}.creator-mission-summary>strong{justify-self:start}.creator-mission-action{grid-column:1;justify-self:stretch;justify-content:center}.creator-mission-status{width:32px;height:32px}}
+
 .help-forum{display:grid;gap:14px;max-width:980px}
 
 .help-forum-toolbar{display:grid;grid-template-columns:minmax(220px,1fr) auto;gap:10px;align-items:end}

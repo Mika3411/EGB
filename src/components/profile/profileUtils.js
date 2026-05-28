@@ -34,6 +34,7 @@ export const PUBLIC_CATEGORIES = ['Horreur', 'Enquête', 'Aventure', 'Science-fi
 export const AGE_RATINGS = ['Tout public', '+18 ans'];
 export const PROFILE_TUTORIAL_OPTIONS = [
   ['profile', 'Profil'],
+  ['guided_creation', 'Démarrage guidé'],
   ['scenes', 'Scènes'],
   ['media', 'Média'],
   ['editor', 'Éditeur'],
