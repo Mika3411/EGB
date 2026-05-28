@@ -4,6 +4,7 @@ import {
   buildDecorGltfObject,
   DECOR_MODEL_DIMENSION_MIN,
   disposeThreeObject,
+  fitDecorModelObjectToDimensions,
   getAnimationEntriesForSlot,
   getCharacterBuildSignature,
   getDecorBuildSignature,
@@ -84,7 +85,7 @@ describe('rpg3d model import', () => {
     disposeThreeObject(decor);
   });
 
-  it('keeps inventory object proportions in the object preview builder', () => {
+  it('applies inventory object XYZ dimensions in the object preview builder', () => {
     const object = new THREE.Mesh(
       new THREE.BoxGeometry(0.48, 2, 0.05),
       new THREE.MeshStandardMaterial({ color: '#d8dee9' }),
@@ -102,9 +103,35 @@ describe('rpg3d model import', () => {
     object.updateMatrixWorld(true);
     const size = new THREE.Box3().setFromObject(object, true).getSize(new THREE.Vector3());
 
-    expect(size.x / size.y).toBeCloseTo(0.24, 3);
-    expect(size.z / size.y).toBeCloseTo(0.025, 3);
+    expect(size.x).toBeCloseTo(6, 3);
+    expect(size.y).toBeCloseTo(4, 3);
+    expect(size.z).toBeCloseTo(0.1, 3);
     disposeThreeObject(decor);
+  });
+
+  it('refits object dimensions before reapplying preview rotation', () => {
+    const orientation = new THREE.Group();
+    const object = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 2, 0.5),
+      new THREE.MeshStandardMaterial({ color: '#d8dee9' }),
+    );
+    orientation.rotation.x = -Math.PI / 2;
+    orientation.add(object);
+    orientation.updateMatrixWorld(true);
+
+    fitDecorModelObjectToDimensions(object, {
+      id: 'rotated-shield',
+      kind: 'inventory-shield',
+      modelFormat: 'glb',
+      width: 0.7,
+      height: 0.85,
+      depth: 0.22,
+    }, { orientationObject: orientation });
+
+    expect(object.scale.x).toBeCloseTo(0.7, 3);
+    expect(object.scale.y).toBeCloseTo(0.425, 3);
+    expect(object.scale.z).toBeCloseTo(0.44, 3);
+    disposeThreeObject(orientation);
   });
 
   it('can render inventory objects at a 0.001 target size', () => {

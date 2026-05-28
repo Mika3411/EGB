@@ -71,6 +71,22 @@ const getActionZoneVertexBounds = (vertices = []) => {
   };
 };
 
+const getStoredActionZoneTopVertices = (zone = {}, expectedLength = 0) => {
+  if (!Array.isArray(zone.topVertices) || zone.topVertices.length !== expectedLength) return null;
+  const topVertices = zone.topVertices
+    .map((point) => {
+      const x = Number(point?.x);
+      const y = Number(point?.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+      const next = { x, y };
+      const z = Number(point?.z);
+      if (Number.isFinite(z)) next.z = z;
+      return next;
+    })
+    .filter(Boolean);
+  return topVertices.length === expectedLength ? topVertices.map(roundMapPoint) : null;
+};
+
 const updateActionZoneBoundsFromVertices = (zone) => {
   const vertices = getActionZoneVertices(zone).map(roundMapPoint);
   const bounds = getActionZoneVertexBounds(vertices);
@@ -84,8 +100,8 @@ const updateActionZoneBoundsFromVertices = (zone) => {
 
 const ensureActionZoneTopVertices = (zone) => {
   const bottomVertices = getActionZoneVertices(zone).map(roundMapPoint);
-  const topVertices = getActionZoneTopVertices(zone).map(roundMapPoint);
-  zone.topVertices = topVertices.length === bottomVertices.length ? topVertices : bottomVertices;
+  zone.topVertices = getStoredActionZoneTopVertices(zone, bottomVertices.length)
+    || getActionZoneTopVertices(zone).map(roundMapPoint);
   return zone.topVertices;
 };
 
@@ -97,6 +113,7 @@ const clampActionZoneVerticesToWorld = (zone, world = DEFAULT_ARCADE_CONFIG.worl
     y: Number(point.y) || 0,
     ...(Number.isFinite(Number(point.z)) ? { z: Number(point.z) } : {}),
   }));
+  const topVertices = getStoredActionZoneTopVertices(zone, vertices.length);
   const bounds = getActionZoneVertexBounds(vertices);
   if (!bounds) return;
   const offsetX = bounds.minX < 0
@@ -116,12 +133,14 @@ const clampActionZoneVerticesToWorld = (zone, world = DEFAULT_ARCADE_CONFIG.worl
   }));
   zone.rotation = 0;
   zone.vertices = vertices.map(roundMapPoint);
-  if (Array.isArray(zone.topVertices)) {
-    zone.topVertices = getActionZoneTopVertices(zone).map((point) => roundMapPoint({
+  if (topVertices) {
+    zone.topVertices = topVertices.map((point) => roundMapPoint({
       x: clamp(point.x + offsetX, 0, worldWidth),
       y: clamp(point.y + offsetY, 0, worldHeight),
       ...(Number.isFinite(Number(point.z)) ? { z: Number(point.z) } : {}),
     }));
+  } else {
+    delete zone.topVertices;
   }
   updateActionZoneBoundsFromVertices(zone);
 };
@@ -132,6 +151,7 @@ export const moveActionZoneVertex = (config, zoneId, vertexIndex, point, vertexL
   const index = Number(vertexIndex);
   const vertices = getActionZoneVertices(zone).map(roundMapPoint);
   if (!Number.isInteger(index) || index < 0 || index >= vertices.length) return false;
+  const storedTopVertices = getStoredActionZoneTopVertices(zone, vertices.length);
   const world = config.world || DEFAULT_ARCADE_CONFIG.world;
   const nextPoint = {
     x: Math.round(clamp(Number(point.x) || 0, 0, Number(world.width) || DEFAULT_ARCADE_CONFIG.world.width)),
@@ -148,7 +168,8 @@ export const moveActionZoneVertex = (config, zoneId, vertexIndex, point, vertexL
     zone.rotation = 0;
     return true;
   }
-  ensureActionZoneTopVertices(zone);
+  if (storedTopVertices) zone.topVertices = storedTopVertices;
+  else delete zone.topVertices;
   vertices[index] = nextPoint;
   zone.rotation = 0;
   zone.vertices = vertices;
@@ -162,12 +183,14 @@ export const moveActionZoneEdge = (config, zoneId, edgeIndex, delta = {}, vertex
   const index = Number(edgeIndex);
   const vertices = getActionZoneVertices(zone).map(roundMapPoint);
   if (!Number.isInteger(index) || index < 0 || index >= vertices.length) return false;
-  const topVertices = ensureActionZoneTopVertices(zone).map(roundMapPoint);
+  const moveTopLayer = vertexLayer === 'top';
+  const topVertices = moveTopLayer
+    ? ensureActionZoneTopVertices(zone).map(roundMapPoint)
+    : getStoredActionZoneTopVertices(zone, vertices.length);
   const nextIndex = (index + 1) % vertices.length;
   const world = config.world || DEFAULT_ARCADE_CONFIG.world;
   const worldWidth = Number(world.width) || DEFAULT_ARCADE_CONFIG.world.width;
   const worldHeight = Number(world.height) || DEFAULT_ARCADE_CONFIG.world.height;
-  const moveTopLayer = vertexLayer === 'top';
   const edgeVertices = moveTopLayer
     ? [topVertices[index], topVertices[nextIndex]]
     : [vertices[index], vertices[nextIndex]];
@@ -197,6 +220,8 @@ export const moveActionZoneEdge = (config, zoneId, edgeIndex, delta = {}, vertex
   if (moveTopLayer) {
     zone.topVertices = targetVertices;
   } else {
+    if (topVertices) zone.topVertices = topVertices;
+    else delete zone.topVertices;
     zone.vertices = targetVertices;
     updateActionZoneBoundsFromVertices(zone);
   }
@@ -211,7 +236,7 @@ export const insertActionZoneVertex = (config, zoneId, edgeIndex, point = null) 
   if (!Number.isInteger(index) || index < 0 || index >= vertices.length) return false;
   const start = vertices[index];
   const end = vertices[(index + 1) % vertices.length];
-  const topVertices = Array.isArray(zone.topVertices) ? ensureActionZoneTopVertices(zone) : null;
+  const topVertices = getStoredActionZoneTopVertices(zone, vertices.length);
   const world = config.world || DEFAULT_ARCADE_CONFIG.world;
   const worldWidth = Number(world.width) || DEFAULT_ARCADE_CONFIG.world.width;
   const worldHeight = Number(world.height) || DEFAULT_ARCADE_CONFIG.world.height;
@@ -292,13 +317,11 @@ export const resizeActionZoneGeometry = (zone, world = DEFAULT_ARCADE_CONFIG.wor
     : Math.max(ACTION_ZONE_MIN_SIZE, bounds.height);
   const scaleX = nextWidth / Math.max(1, bounds.width);
   const scaleY = nextHeight / Math.max(1, bounds.height);
-  const topVertices = Array.isArray(zone.topVertices)
-    ? getActionZoneTopVertices(zone).map((point) => ({
-      x: Number(point.x) || 0,
-      y: Number(point.y) || 0,
-      ...(Number.isFinite(Number(point.z)) ? { z: Number(point.z) } : {}),
-    }))
-    : null;
+  const topVertices = getStoredActionZoneTopVertices(zone, vertices.length)?.map((point) => ({
+    x: Number(point.x) || 0,
+    y: Number(point.y) || 0,
+    ...(Number.isFinite(Number(point.z)) ? { z: Number(point.z) } : {}),
+  })) || null;
   zone.vertices = vertices.map((point) => roundMapPoint({
     x: bounds.centerX + (point.x - bounds.centerX) * scaleX,
     y: bounds.centerY + (point.y - bounds.centerY) * scaleY,
@@ -310,6 +333,8 @@ export const resizeActionZoneGeometry = (zone, world = DEFAULT_ARCADE_CONFIG.wor
       y: bounds.centerY + (point.y - bounds.centerY) * scaleY,
       ...(Number.isFinite(Number(point.z)) ? { z: Number(point.z) } : {}),
     }));
+  } else {
+    delete zone.topVertices;
   }
   zone.rotation = 0;
   clampActionZoneVerticesToWorld(zone, world);
@@ -362,20 +387,25 @@ export const clampArcadeEntitiesToWorld = (config) => {
 };
 
 export const isPointInActionZone = (zone, point) => {
+  const testPoint = {
+    x: Number(point?.x),
+    y: Number(point?.y),
+  };
+  if (!Number.isFinite(testPoint.x) || !Number.isFinite(testPoint.y)) return false;
   const rect = getActionZoneRect(zone);
   if (
-    point.x < rect.x
-    || point.x > rect.x + rect.w
-    || point.y < rect.y
-    || point.y > rect.y + rect.h
+    testPoint.x < rect.x
+    || testPoint.x > rect.x + rect.w
+    || testPoint.y < rect.y
+    || testPoint.y > rect.y + rect.h
   ) return false;
   const vertices = getActionZoneVertices(zone);
   if (vertices.length < 3) return false;
   for (let index = 0; index < vertices.length; index += 1) {
     const start = vertices[index];
     const end = vertices[(index + 1) % vertices.length];
-    const cross = (point.y - start.y) * (end.x - start.x) - (point.x - start.x) * (end.y - start.y);
-    const dot = (point.x - start.x) * (end.x - start.x) + (point.y - start.y) * (end.y - start.y);
+    const cross = (testPoint.y - start.y) * (end.x - start.x) - (testPoint.x - start.x) * (end.y - start.y);
+    const dot = (testPoint.x - start.x) * (end.x - start.x) + (testPoint.y - start.y) * (end.y - start.y);
     const lengthSq = ((end.x - start.x) ** 2) + ((end.y - start.y) ** 2);
     if (Math.abs(cross) < 0.001 && dot >= -0.001 && dot <= lengthSq + 0.001) return true;
   }
@@ -383,8 +413,8 @@ export const isPointInActionZone = (zone, point) => {
   for (let index = 0, previous = vertices.length - 1; index < vertices.length; previous = index, index += 1) {
     const current = vertices[index];
     const last = vertices[previous];
-    const intersects = ((current.y > point.y) !== (last.y > point.y))
-      && point.x < ((last.x - current.x) * (point.y - current.y)) / ((last.y - current.y) || 1) + current.x;
+    const intersects = ((current.y > testPoint.y) !== (last.y > testPoint.y))
+      && testPoint.x < ((last.x - current.x) * (testPoint.y - current.y)) / ((last.y - current.y) || 1) + current.x;
     if (intersects) inside = !inside;
   }
   return inside;
@@ -752,17 +782,20 @@ export const scaleSelectionEntity = (config, entity, factor = 1, options = {}) =
     if (hasCustomActionZoneVertices(item)) {
       const deltaX = centerX - (Number(item.x) || centerX);
       const deltaY = centerY - (Number(item.y) || centerY);
+      const topVertices = getStoredActionZoneTopVertices(item, getActionZoneVertices(item).length);
       item.vertices = getActionZoneVertices(item).map((point) => roundMapPoint({
         x: point.x + deltaX,
         y: point.y + deltaY,
         ...(Number.isFinite(Number(point.z)) ? { z: Number(point.z) } : {}),
       }));
-      if (Array.isArray(item.topVertices)) {
-        item.topVertices = getActionZoneTopVertices(item).map((point) => roundMapPoint({
+      if (topVertices) {
+        item.topVertices = topVertices.map((point) => roundMapPoint({
           x: point.x + deltaX,
           y: point.y + deltaY,
           ...(Number.isFinite(Number(point.z)) ? { z: Number(point.z) } : {}),
         }));
+      } else {
+        delete item.topVertices;
       }
       clampActionZoneVerticesToWorld(item, world);
     } else {
@@ -842,17 +875,21 @@ export const duplicateMapEntityIntoConfig = (config, entity, offsetOverride = nu
   if (Number.isFinite(Number(copy.x))) copy.x = Number(copy.x) + offsetX;
   if (Number.isFinite(Number(copy.y))) copy.y = Number(copy.y) + offsetY;
   if (entity.type === 'actionZone' && Array.isArray(copy.vertices)) {
-    copy.vertices = getActionZoneVertices(copy).map((point) => roundMapPoint({
+    const vertices = getActionZoneVertices(copy);
+    const topVertices = getStoredActionZoneTopVertices(copy, vertices.length);
+    copy.vertices = vertices.map((point) => roundMapPoint({
       x: point.x + offsetX,
       y: point.y + offsetY,
       ...(Number.isFinite(Number(point.z)) ? { z: Number(point.z) } : {}),
     }));
-    if (Array.isArray(copy.topVertices)) {
-      copy.topVertices = getActionZoneTopVertices(copy).map((point) => roundMapPoint({
+    if (topVertices) {
+      copy.topVertices = topVertices.map((point) => roundMapPoint({
         x: point.x + offsetX,
         y: point.y + offsetY,
         ...(Number.isFinite(Number(point.z)) ? { z: Number(point.z) } : {}),
       }));
+    } else {
+      delete copy.topVertices;
     }
     updateActionZoneBoundsFromVertices(copy);
   }
@@ -949,17 +986,20 @@ export const moveMapEntityToPoint = (config, selected, point, options = {}) => {
     if (hasCustomActionZoneVertices(item)) {
       const deltaX = nextX - (Number(item.x) || nextX);
       const deltaY = nextY - (Number(item.y) || nextY);
+      const topVertices = getStoredActionZoneTopVertices(item, getActionZoneVertices(item).length);
       item.vertices = getActionZoneVertices(item).map((vertex) => roundMapPoint({
         x: vertex.x + deltaX,
         y: vertex.y + deltaY,
         ...(Number.isFinite(Number(vertex.z)) ? { z: Number(vertex.z) } : {}),
       }));
-      if (Array.isArray(item.topVertices)) {
-        item.topVertices = getActionZoneTopVertices(item).map((vertex) => roundMapPoint({
+      if (topVertices) {
+        item.topVertices = topVertices.map((vertex) => roundMapPoint({
           x: vertex.x + deltaX,
           y: vertex.y + deltaY,
           ...(Number.isFinite(Number(vertex.z)) ? { z: Number(vertex.z) } : {}),
         }));
+      } else {
+        delete item.topVertices;
       }
       updateActionZoneBoundsFromVertices(item);
     } else {

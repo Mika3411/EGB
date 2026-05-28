@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Cuboid,
+  Footprints,
   HardHat,
   Maximize2,
   Minimize2,
@@ -46,6 +47,9 @@ import {
   persistLocalModelFile,
   rememberRpg3DLocalBlobFile,
 } from '../utils/rpg3dAssetsCore.js';
+import {
+  CHARACTER_RIG_ARMOR_GRIP_POINTS,
+} from '../utils/rpg3dCharacterRig.js';
 import { getStudioDecorKindId } from '../utils/rpg3dDomain.js';
 import { formatBytes } from '../utils/glbOptimizer';
 import HelpLabel from './forms/HelpLabel.jsx';
@@ -63,7 +67,7 @@ const CHARACTER_FIELD_HELP = {
   glbImport: 'Charge ou remplace le modele 3D du personnage avec son animation stand-by de base au format .glb, .fbx, .obj ou .zip. Pour un FBX avec dossier .fbm, importe un zip contenant le FBX et ses textures.',
   animationImport: 'Ajoute un FBX/GLB d animation qui utilise le meme squelette que le modele principal. Le stand-by joue quand le joueur est arrete, la marche pendant le deplacement, l attaque pendant le tir ou le sort.',
   characterModelScale: 'Regle les axes du personnage quand il est place sur la carte RPG 3D. X elargit, Y regle la profondeur, Z regle la hauteur.',
-  equipment: 'Choisit une arme, un casque, une armure ou un bouclier cree dans Objets 3D > Inventaire pour l associer au personnage.',
+  equipment: 'Choisit une arme, un casque, une armure, des jambieres ou un bouclier cree dans Objets 3D > Inventaire pour l associer au personnage.',
   materialBrightness: 'Regle la luminosite de ce personnage quand il est place sur la carte RPG 3D.',
   previewLightIntensity: 'Regle la puissance de l eclairage dans l apercu personnage. Cela aide a verifier les volumes et les textures.',
   previewLightOrientation: 'Tourne la lumiere principale autour du personnage pour controler les ombres dans l apercu.',
@@ -87,6 +91,7 @@ const CHARACTER_EQUIPMENT_SLOTS = [
   { type: 'weapon', label: 'Arme', kind: 'inventory-weapon', icon: Swords },
   { type: 'helmet', label: 'Casque', kind: 'inventory-helmet', icon: HardHat },
   { type: 'armor', label: 'Armure', kind: 'inventory-armor', icon: Cuboid },
+  { type: 'leggings', label: 'Jambieres', kind: 'inventory-leggings', icon: Footprints },
   { type: 'shield', label: 'Bouclier', kind: 'inventory-shield', icon: Shield },
 ];
 const CHARACTER_EQUIPMENT_TYPES = new Set(CHARACTER_EQUIPMENT_SLOTS.map((slot) => slot.type));
@@ -113,6 +118,7 @@ const inferEquipmentKindFromModel = (model = {}) => {
   if (/(bouclier|shield|buckler|targe)/.test(haystack)) return 'inventory-shield';
   if (/(arme|weapon|sword|epee|blade|lame|hache|axe|mace|massue|dagger|dague|bow|arc|staff|baton)/.test(haystack)) return 'inventory-weapon';
   if (/(helmet|casque|helm)/.test(haystack)) return 'inventory-helmet';
+  if (/(jambiere|jambieres|leggings|greaves|greave|legguard|cuissarde|cuissardes|botte|boots|chausse|chausses)/.test(haystack)) return 'inventory-leggings';
   if (/(armure|armor|armour|cuirasse|plastron|chestplate|breastplate)/.test(haystack)) return 'inventory-armor';
   return kind;
 };
@@ -136,13 +142,7 @@ const CHARACTER_EQUIPMENT_HANDS = [
   { id: 'right', label: 'Main droite' },
   { id: 'left', label: 'Main gauche' },
 ];
-const ARMOR_GRIP_POINTS = [
-  { suffix: 'LeftShoulder', defaultX: -0.45, defaultY: 0.55, defaultZ: 0 },
-  { suffix: 'RightShoulder', defaultX: 0.45, defaultY: 0.55, defaultZ: 0 },
-  { suffix: 'LeftElbow', defaultX: -0.65, defaultY: 0.05, defaultZ: 0 },
-  { suffix: 'RightElbow', defaultX: 0.65, defaultY: 0.05, defaultZ: 0 },
-  { suffix: 'LowerBelly', defaultX: 0, defaultY: -0.55, defaultZ: 0 },
-];
+const ARMOR_GRIP_POINTS = CHARACTER_RIG_ARMOR_GRIP_POINTS;
 const CHARACTER_LOCAL_CONVERSION_QUALITY = 'source-meshopt';
 const CHARACTER_ANIMATION_LOCAL_CONVERSION_QUALITY = 'animation-source-v2';
 const characterLocalConversionCache = new Map();
@@ -225,13 +225,56 @@ const normalizeEquipmentArm = (value = '') => (
   value === 'right' ? 'right' : 'left'
 );
 const ARMOR_SEGMENT_VALUES = new Set(['body', 'left-arm', 'right-arm']);
+const ARMOR_RIG_POINT_IDS = new Set(CHARACTER_RIG_ARMOR_GRIP_POINTS.map((point) => point.rigPointId || point.id));
+const getDefaultArmorPieceRigPointId = (segment = 'body') => {
+  if (segment === 'left-arm') return 'left-elbow';
+  if (segment === 'right-arm') return 'right-elbow';
+  return 'lower-belly';
+};
+const normalizeArmorPieceRigPointId = (value = '', segment = 'body') => {
+  const id = String(value || '').trim();
+  return ARMOR_RIG_POINT_IDS.has(id) ? id : getDefaultArmorPieceRigPointId(segment);
+};
+const normalizeArmorPieceId = (value = '') => (
+  String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80)
+);
+const normalizeArmorPieceName = (value = '', fallback = '') => {
+  const cleanName = String(value || '').replace(/\s+/g, ' ').trim().slice(0, 48);
+  return cleanName || fallback;
+};
 const normalizeArmorSegmentAssignments = (assignments = []) => (
   Array.isArray(assignments)
-    ? assignments.map((entry) => ({
-      path: String(entry?.path || '').slice(0, 260),
-      name: String(entry?.name || '').slice(0, 120),
-      segment: ARMOR_SEGMENT_VALUES.has(entry?.segment) ? entry.segment : 'body',
-    })).filter((entry) => entry.path)
+    ? assignments.map((entry) => {
+      const pieceId = normalizeArmorPieceId(entry?.pieceId);
+      const pieceName = normalizeArmorPieceName(entry?.pieceName);
+      const segment = ARMOR_SEGMENT_VALUES.has(entry?.segment) ? entry.segment : 'body';
+      return {
+        path: String(entry?.path || '').slice(0, 260),
+        name: String(entry?.name || '').slice(0, 120),
+        segment,
+        ...(pieceId ? { pieceId } : {}),
+        ...(pieceName ? { pieceName } : {}),
+        ...(pieceId ? { rigPointId: normalizeArmorPieceRigPointId(entry?.rigPointId, segment) } : {}),
+      };
+    }).filter((entry) => entry.path)
+    : []
+);
+const normalizeArmorCustomPieces = (pieces = []) => (
+  Array.isArray(pieces)
+    ? pieces.map((piece, index) => {
+      const id = normalizeArmorPieceId(piece?.id || `piece-${index + 1}`);
+      return {
+        id,
+        name: normalizeArmorPieceName(piece?.name, `Morceau ${index + 1}`),
+        segment: ARMOR_SEGMENT_VALUES.has(piece?.segment) ? piece.segment : 'body',
+        rigPointId: normalizeArmorPieceRigPointId(piece?.rigPointId, piece?.segment),
+      };
+    }).filter((piece) => piece.id)
     : []
 );
 const normalizeArmorCutContourPoint = (point = {}) => ({
@@ -314,32 +357,88 @@ const getEquipmentModelReferenceScale = (source = {}) => (
     CHARACTER_EQUIPMENT_SCALE_MAX,
   )
 );
+const getEquipmentModelDimensions = (source = {}) => {
+  const legacyScale = Number.isFinite(Number(source.scale)) && Number(source.scale) > 0 ? Number(source.scale) : 1;
+  const fallbackScale = getEquipmentModelReferenceScale(source);
+  return {
+    width: clampEquipmentNumber((Number(source.width) || fallbackScale) * legacyScale, fallbackScale, CHARACTER_EQUIPMENT_SCALE_MIN, CHARACTER_EQUIPMENT_SCALE_MAX),
+    height: clampEquipmentNumber((Number(source.height) || fallbackScale) * legacyScale, fallbackScale, CHARACTER_EQUIPMENT_SCALE_MIN, CHARACTER_EQUIPMENT_SCALE_MAX),
+    depth: clampEquipmentNumber((Number(source.depth) || fallbackScale) * legacyScale, fallbackScale, CHARACTER_EQUIPMENT_SCALE_MIN, CHARACTER_EQUIPMENT_SCALE_MAX),
+  };
+};
+const getEquipmentDimensionsScale = (dimensions = {}) => (
+  clampEquipmentNumber(
+    Math.max(Number(dimensions.width) || 0, Number(dimensions.height) || 0, Number(dimensions.depth) || 0),
+    1,
+    CHARACTER_EQUIPMENT_SCALE_MIN,
+    CHARACTER_EQUIPMENT_SCALE_MAX,
+  )
+);
 const getStoredEquipmentSourceScale = (item = {}) => {
   const sourceScale = Number(item.weaponModelSourceScale);
   return Number.isFinite(sourceScale) && sourceScale > 0
     ? clampEquipmentNumber(sourceScale, 1, CHARACTER_EQUIPMENT_SCALE_MIN, CHARACTER_EQUIPMENT_SCALE_MAX)
     : 0;
 };
-const resolveEquipmentModelScale = (item = {}, source = null) => {
-  const currentScale = Number(item.weaponModelScale);
-  if (!source) {
-    return clampEquipmentNumber(currentScale, 1, CHARACTER_EQUIPMENT_SCALE_MIN, CHARACTER_EQUIPMENT_SCALE_MAX);
+const getStoredEquipmentSourceDimensions = (item = {}) => {
+  const fallbackScale = getStoredEquipmentSourceScale(item) || getEquipmentDimensionsScale(item);
+  return {
+    width: clampEquipmentNumber(item.weaponModelSourceWidth, fallbackScale, CHARACTER_EQUIPMENT_SCALE_MIN, CHARACTER_EQUIPMENT_SCALE_MAX),
+    height: clampEquipmentNumber(item.weaponModelSourceHeight, fallbackScale, CHARACTER_EQUIPMENT_SCALE_MIN, CHARACTER_EQUIPMENT_SCALE_MAX),
+    depth: clampEquipmentNumber(item.weaponModelSourceDepth, fallbackScale, CHARACTER_EQUIPMENT_SCALE_MIN, CHARACTER_EQUIPMENT_SCALE_MAX),
+  };
+};
+const hasStoredEquipmentSourceDimensions = (item = {}) => (
+  Number(item.weaponModelSourceWidth) > 0
+  && Number(item.weaponModelSourceHeight) > 0
+  && Number(item.weaponModelSourceDepth) > 0
+);
+const getStoredEquipmentDimensions = (item = {}) => {
+  const fallbackScale = clampEquipmentNumber(item.weaponModelScale, 1, CHARACTER_EQUIPMENT_SCALE_MIN, CHARACTER_EQUIPMENT_SCALE_MAX);
+  return {
+    width: clampEquipmentNumber(item.weaponModelWidth, fallbackScale, CHARACTER_EQUIPMENT_SCALE_MIN, CHARACTER_EQUIPMENT_SCALE_MAX),
+    height: clampEquipmentNumber(item.weaponModelHeight, fallbackScale, CHARACTER_EQUIPMENT_SCALE_MIN, CHARACTER_EQUIPMENT_SCALE_MAX),
+    depth: clampEquipmentNumber(item.weaponModelDepth, fallbackScale, CHARACTER_EQUIPMENT_SCALE_MIN, CHARACTER_EQUIPMENT_SCALE_MAX),
+  };
+};
+const resolveEquipmentModelDimensions = (item = {}, source = null) => {
+  const currentDimensions = getStoredEquipmentDimensions(item);
+  if (!source) return currentDimensions;
+  const sourceDimensions = getEquipmentModelDimensions(source);
+  if (!hasStoredEquipmentSourceDimensions(item)) {
+    const sourceScale = getEquipmentDimensionsScale(sourceDimensions);
+    const currentScale = Number(item.weaponModelScale);
+    const targetScale = Number.isFinite(currentScale) && currentScale > 0 && Math.abs(currentScale - 1) > 0.0001
+      ? clampEquipmentNumber(currentScale, sourceScale, CHARACTER_EQUIPMENT_SCALE_MIN, CHARACTER_EQUIPMENT_SCALE_MAX)
+      : sourceScale;
+    const ratio = targetScale / Math.max(CHARACTER_EQUIPMENT_SCALE_MIN, sourceScale);
+    return {
+      width: clampEquipmentNumber(sourceDimensions.width * ratio, sourceDimensions.width, CHARACTER_EQUIPMENT_SCALE_MIN, CHARACTER_EQUIPMENT_SCALE_MAX),
+      height: clampEquipmentNumber(sourceDimensions.height * ratio, sourceDimensions.height, CHARACTER_EQUIPMENT_SCALE_MIN, CHARACTER_EQUIPMENT_SCALE_MAX),
+      depth: clampEquipmentNumber(sourceDimensions.depth * ratio, sourceDimensions.depth, CHARACTER_EQUIPMENT_SCALE_MIN, CHARACTER_EQUIPMENT_SCALE_MAX),
+    };
   }
-  const sourceScale = getEquipmentModelReferenceScale(source);
-  const previousSourceScale = getStoredEquipmentSourceScale(item);
-  if (previousSourceScale > 0) {
-    const itemScale = Number.isFinite(currentScale) && currentScale > 0 ? currentScale : previousSourceScale;
-    return clampEquipmentNumber(
-      sourceScale * (itemScale / previousSourceScale),
-      sourceScale,
+  const previousSourceDimensions = getStoredEquipmentSourceDimensions(item);
+  return {
+    width: clampEquipmentNumber(
+      sourceDimensions.width * (currentDimensions.width / Math.max(CHARACTER_EQUIPMENT_SCALE_MIN, previousSourceDimensions.width)),
+      sourceDimensions.width,
       CHARACTER_EQUIPMENT_SCALE_MIN,
       CHARACTER_EQUIPMENT_SCALE_MAX,
-    );
-  }
-  if (Number.isFinite(currentScale) && currentScale > 0 && Math.abs(currentScale - 1) > 0.0001) {
-    return clampEquipmentNumber(currentScale, 1, CHARACTER_EQUIPMENT_SCALE_MIN, CHARACTER_EQUIPMENT_SCALE_MAX);
-  }
-  return sourceScale;
+    ),
+    height: clampEquipmentNumber(
+      sourceDimensions.height * (currentDimensions.height / Math.max(CHARACTER_EQUIPMENT_SCALE_MIN, previousSourceDimensions.height)),
+      sourceDimensions.height,
+      CHARACTER_EQUIPMENT_SCALE_MIN,
+      CHARACTER_EQUIPMENT_SCALE_MAX,
+    ),
+    depth: clampEquipmentNumber(
+      sourceDimensions.depth * (currentDimensions.depth / Math.max(CHARACTER_EQUIPMENT_SCALE_MIN, previousSourceDimensions.depth)),
+      sourceDimensions.depth,
+      CHARACTER_EQUIPMENT_SCALE_MIN,
+      CHARACTER_EQUIPMENT_SCALE_MAX,
+    ),
+  };
 };
 const getEquipmentModelRotationValue = (source = {}, axis = 'X') => {
   const modelField = `weaponModelRotation${axis}`;
@@ -380,6 +479,8 @@ const copyEquipmentGripFields = (target, source = {}) => {
     target[`armorGrip${point.suffix}Z`] = clampEquipmentNumber(source[`armorGrip${point.suffix}Z`], point.defaultZ, -2, 2);
   });
   target.armorCanvasCutEnabled = Boolean(source.armorCanvasCutEnabled);
+  target.armorFullCharacterRigEnabled = Boolean(source.armorFullCharacterRigEnabled);
+  target.armorCustomPieces = normalizeArmorCustomPieces(source.armorCustomPieces);
   target.armorSegmentAssignments = normalizeArmorSegmentAssignments(source.armorSegmentAssignments);
   target.armorCutContours = normalizeArmorCutContours(source.armorCutContours);
   target.armorCutPaintStrokes = normalizeArmorCutPaintStrokes(source.armorCutPaintStrokes);
@@ -413,6 +514,12 @@ const normalizeCharacterEquipmentItem = (item = {}, forcedType = '') => {
       : (Array.isArray(item.modelResources) ? item.modelResources.map((resource) => ({ ...(resource || {}) })) : []),
     weaponModelScale: clampEquipmentNumber(item.weaponModelScale, 1, CHARACTER_EQUIPMENT_SCALE_MIN, CHARACTER_EQUIPMENT_SCALE_MAX),
     weaponModelSourceScale: getStoredEquipmentSourceScale(item),
+    weaponModelWidth: getStoredEquipmentDimensions(item).width,
+    weaponModelHeight: getStoredEquipmentDimensions(item).height,
+    weaponModelDepth: getStoredEquipmentDimensions(item).depth,
+    weaponModelSourceWidth: getStoredEquipmentSourceDimensions(item).width,
+    weaponModelSourceHeight: getStoredEquipmentSourceDimensions(item).height,
+    weaponModelSourceDepth: getStoredEquipmentSourceDimensions(item).depth,
     weaponOffsetX: clampEquipmentNumber(item.weaponOffsetX, 0, CHARACTER_EQUIPMENT_OFFSET_MIN, CHARACTER_EQUIPMENT_OFFSET_MAX),
     weaponOffsetY: clampEquipmentNumber(item.weaponOffsetY, 0, CHARACTER_EQUIPMENT_OFFSET_MIN, CHARACTER_EQUIPMENT_OFFSET_MAX),
     weaponOffsetZ: clampEquipmentNumber(item.weaponOffsetZ, 0, CHARACTER_EQUIPMENT_OFFSET_MIN, CHARACTER_EQUIPMENT_OFFSET_MAX),
@@ -437,6 +544,7 @@ const applyInventoryModelToEquipmentItem = (item, model = null) => {
     return;
   }
   const sourceScale = getEquipmentModelReferenceScale(model);
+  const sourceDimensions = getEquipmentModelDimensions(model);
   item.equipped = true;
   item.weaponModel3dId = model.id || '';
   item.weaponModelUrl = '';
@@ -444,13 +552,21 @@ const applyInventoryModelToEquipmentItem = (item, model = null) => {
   item.weaponModelFormat = model.modelFormat || '';
   item.weaponModelFileSize = Number(model.modelFileSize) || 0;
   item.weaponModelResources = [];
-  item.weaponModelScale = sourceScale;
+  item.weaponModelScale = getEquipmentDimensionsScale(sourceDimensions) || sourceScale;
   item.weaponModelSourceScale = sourceScale;
+  item.weaponModelWidth = sourceDimensions.width;
+  item.weaponModelHeight = sourceDimensions.height;
+  item.weaponModelDepth = sourceDimensions.depth;
+  item.weaponModelSourceWidth = sourceDimensions.width;
+  item.weaponModelSourceHeight = sourceDimensions.height;
+  item.weaponModelSourceDepth = sourceDimensions.depth;
   copyEquipmentGripFields(item, model);
 };
 
 const resolveEquipmentItemModelSource = (item, model = null) => {
   const sourceScale = model ? getEquipmentModelReferenceScale(model) : getStoredEquipmentSourceScale(item);
+  const sourceDimensions = model ? getEquipmentModelDimensions(model) : getStoredEquipmentSourceDimensions(item);
+  const resolvedDimensions = resolveEquipmentModelDimensions(item, model);
   return {
     ...item,
     weaponModelUrl: model ? getThreeModelSource(model) : (item.weaponModelUrl || ''),
@@ -460,8 +576,14 @@ const resolveEquipmentItemModelSource = (item, model = null) => {
     weaponModelResources: Array.isArray(model?.modelResources)
       ? model.modelResources
       : (Array.isArray(item.weaponModelResources) ? item.weaponModelResources : []),
-    weaponModelScale: resolveEquipmentModelScale(item, model),
+    weaponModelScale: getEquipmentDimensionsScale(resolvedDimensions),
     weaponModelSourceScale: sourceScale,
+    weaponModelWidth: resolvedDimensions.width,
+    weaponModelHeight: resolvedDimensions.height,
+    weaponModelDepth: resolvedDimensions.depth,
+    weaponModelSourceWidth: sourceDimensions.width,
+    weaponModelSourceHeight: sourceDimensions.height,
+    weaponModelSourceDepth: sourceDimensions.depth,
     ...(model ? copyEquipmentGripFields({}, {
       ...model,
       weaponGripHand: item.weaponGripHand || model.weaponGripHand,
@@ -496,6 +618,9 @@ const clearEquipmentItemModelSource = (item = {}) => ({
   weaponModelFileSize: 0,
   weaponModelResources: [],
   weaponModelSourceScale: 0,
+  weaponModelSourceWidth: 0,
+  weaponModelSourceHeight: 0,
+  weaponModelSourceDepth: 0,
 });
 
 const resolveSelectedEquipmentItemModelSource = (item = {}, inventoryModelById = new Map()) => {

@@ -8,6 +8,7 @@ import {
   addActor,
   addEquippedArmorToActorModel,
   addStaticSelectionOverlays,
+  createSupportSurfaceHeightResolver,
   getStaticModelEraserSignature,
   getStaticSceneSignature,
   getStaticSceneTransformSignature,
@@ -112,6 +113,25 @@ const collectEquippedArmorByRole = (root) => {
     }
   });
   return armorByRole;
+};
+
+const getLargestWorldDimension = (object) => {
+  object.updateMatrixWorld(true);
+  const size = new THREE.Box3().setFromObject(object).getSize(new THREE.Vector3());
+  return Math.max(size.x, size.y, size.z);
+};
+
+const getWorldDimensions = (object) => {
+  object.updateMatrixWorld(true);
+  return new THREE.Box3().setFromObject(object).getSize(new THREE.Vector3());
+};
+
+const getFirstMesh = (object) => {
+  let mesh = null;
+  object?.traverse?.((child) => {
+    if (!mesh && (child.isMesh || child.isSkinnedMesh)) mesh = child;
+  });
+  return mesh;
 };
 
 describe('rpg3d scene builders', () => {
@@ -321,6 +341,47 @@ describe('rpg3d scene builders', () => {
     expect(sun.shadow.camera.top).toBe(12);
     expect(sun.shadow.camera.bottom).toBe(-12);
     expect(sun.shadow.needsUpdate).toBe(true);
+  });
+
+  it('does not invalidate sun shadows when lighting inputs are unchanged', () => {
+    const scene = new THREE.Scene();
+    const sun = new THREE.DirectionalLight('#ffffff', 1);
+    scene.add(sun);
+    scene.add(sun.target);
+    scene.userData.sun = sun;
+
+    const options = {
+      shadowTarget: new THREE.Vector3(4, 1, -3),
+      shadowExtent: 12,
+    };
+    updateSceneLighting(scene, DEFAULT_ENGINE, options);
+    sun.shadow.needsUpdate = false;
+
+    updateSceneLighting(scene, DEFAULT_ENGINE, options);
+
+    expect(sun.shadow.needsUpdate).toBe(false);
+  });
+
+  it('reuses support-surface resolvers until flat tile inputs change', () => {
+    const config = createSceneConfig();
+    config.props = [{
+      id: 'floor-1',
+      x: 250,
+      y: 200,
+      w: 120,
+      h: 80,
+      decorKind: 'floor',
+      renderMode: 'floor',
+      floorZeroZ: 40,
+    }];
+
+    const firstResolver = createSupportSurfaceHeightResolver(config);
+    const secondResolver = createSupportSurfaceHeightResolver(config);
+    config.props[0].x = 360;
+    const movedResolver = createSupportSurfaceHeightResolver(config);
+
+    expect(secondResolver).toBe(firstResolver);
+    expect(movedResolver).not.toBe(firstResolver);
   });
 
   it('renders image props as real shadow-casting meshes', () => {
@@ -692,6 +753,172 @@ describe('rpg3d scene builders', () => {
     expect(Math.max(childScale.x, childScale.y, childScale.z)).toBeCloseTo(1.4, 3);
     const expectedBaseRotation = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, THREE.MathUtils.degToRad(45), 0));
     expect(equippedHelmet[0].children[0].quaternion.angleTo(expectedBaseRotation)).toBeLessThan(0.001);
+  });
+
+  it('uses the helmet mouth grip marker on character mouth rig points', () => {
+    const config = createSceneConfig();
+    const group = new THREE.Group();
+    const characterTemplate = new THREE.Group();
+    const head = new THREE.Bone();
+    head.name = 'Head';
+    head.position.set(0, 1.55, 0);
+    characterTemplate.userData.modelFormat = 'glb';
+    characterTemplate.add(new THREE.Mesh(
+      new THREE.BoxGeometry(1, 2, 0.5),
+      new THREE.MeshStandardMaterial({ color: '#ffffff' }),
+    ));
+    characterTemplate.add(head);
+
+    const helmetTemplate = new THREE.Group();
+    helmetTemplate.userData.modelFormat = 'glb';
+    helmetTemplate.add(new THREE.Mesh(
+      new THREE.BoxGeometry(0.7, 0.6, 0.5),
+      new THREE.MeshStandardMaterial({ color: '#ffffff' }),
+    ));
+
+    const getModel = vi.fn((source) => {
+      if (source === 'hero.glb') return characterTemplate;
+      if (source === 'helmet.glb') return helmetTemplate;
+      return null;
+    });
+    getModel.getStatus = vi.fn(() => 'loaded');
+
+    config.heroes = [{
+      id: 'hero-1',
+      x: 250,
+      y: 200,
+      character: 'runner',
+      characterRenderMode: 'glb',
+      characterModelUrl: 'hero.glb',
+      characterRigPoints: [
+        { id: 'mouth', enabled: true, x: 0.5, y: 0.86, z: 0.76 },
+      ],
+      inventory: [
+        {
+          id: 'helmet-1',
+          type: 'helmet',
+          equipped: true,
+          weaponModelUrl: 'helmet.glb',
+          weaponModelScale: 1,
+          armorGripReferenceScale: 1,
+          armorGripMouthEnabled: true,
+          armorGripMouthX: 0,
+          armorGripMouthY: -0.28,
+          armorGripMouthZ: 0.16,
+        },
+      ],
+    }];
+    config.enemies = [];
+    config.pickups = [];
+
+    expect(syncEditableDynamicEntities(group, config, {
+      getTexture: () => null,
+      getModel,
+    })).toBe(true);
+
+    const equippedHelmet = [];
+    group.traverse((object) => {
+      if (object.userData?.rpg3dEquippedHelmet) equippedHelmet.push(object);
+    });
+
+    expect(equippedHelmet).toHaveLength(1);
+    expect(equippedHelmet[0].parent.name).toBe('Rpg3DCharacterRigMouthSocket');
+    expect(equippedHelmet[0].userData.rpg3dEquipmentGripSocket).toBe('manual-helmet-mouth');
+    expect(equippedHelmet[0].children[0].position.y).toBeCloseTo(0.28);
+    expect(equippedHelmet[0].children[0].position.z).toBeCloseTo(-0.16);
+  });
+
+  it('uses leggings grip markers on character leg rig points', () => {
+    const config = createSceneConfig();
+    const group = new THREE.Group();
+    const characterTemplate = new THREE.Group();
+    characterTemplate.userData.modelFormat = 'glb';
+    characterTemplate.add(new THREE.Mesh(
+      new THREE.BoxGeometry(1, 2, 0.5),
+      new THREE.MeshStandardMaterial({ color: '#ffffff' }),
+    ));
+
+    const leggingsTemplate = new THREE.Group();
+    leggingsTemplate.userData.modelFormat = 'glb';
+    leggingsTemplate.add(new THREE.Mesh(
+      new THREE.BoxGeometry(0.7, 1.1, 0.45),
+      new THREE.MeshStandardMaterial({ color: '#ffffff' }),
+    ));
+
+    const getModel = vi.fn((source) => {
+      if (source === 'hero.glb') return characterTemplate;
+      if (source === 'leggings.glb') return leggingsTemplate;
+      return null;
+    });
+    getModel.getStatus = vi.fn(() => 'loaded');
+
+    config.heroes = [{
+      id: 'hero-leggings',
+      x: 250,
+      y: 200,
+      character: 'runner',
+      characterRenderMode: 'glb',
+      characterModelUrl: 'hero.glb',
+      characterRigPoints: [
+        { id: 'left-groin-fold', enabled: true, x: 0.42, y: 0.34, z: 0.54 },
+        { id: 'right-groin-fold', enabled: true, x: 0.58, y: 0.34, z: 0.54 },
+        { id: 'left-knee', enabled: true, x: 0.42, y: 0.22, z: 0.54 },
+        { id: 'right-knee', enabled: true, x: 0.58, y: 0.22, z: 0.54 },
+        { id: 'left-foot', enabled: true, x: 0.41, y: 0.03, z: 0.68 },
+        { id: 'right-foot', enabled: true, x: 0.59, y: 0.03, z: 0.68 },
+      ],
+      inventory: [
+        {
+          id: 'leggings-1',
+          type: 'leggings',
+          equipped: true,
+          weaponModelUrl: 'leggings.glb',
+          weaponModelScale: 1,
+          armorGripReferenceScale: 1,
+          armorGripLeftGroinFoldEnabled: true,
+          armorGripLeftGroinFoldX: -0.28,
+          armorGripLeftGroinFoldY: -0.38,
+          armorGripLeftGroinFoldZ: 0.05,
+          armorGripRightGroinFoldEnabled: true,
+          armorGripRightGroinFoldX: 0.28,
+          armorGripRightGroinFoldY: -0.38,
+          armorGripRightGroinFoldZ: 0.05,
+          armorGripLeftKneeEnabled: true,
+          armorGripLeftKneeX: -0.25,
+          armorGripLeftKneeY: -0.72,
+          armorGripLeftKneeZ: 0.05,
+          armorGripRightKneeEnabled: true,
+          armorGripRightKneeX: 0.25,
+          armorGripRightKneeY: -0.72,
+          armorGripRightKneeZ: 0.05,
+          armorGripLeftFootEnabled: true,
+          armorGripLeftFootX: -0.22,
+          armorGripLeftFootY: -1.05,
+          armorGripLeftFootZ: 0.1,
+          armorGripRightFootEnabled: true,
+          armorGripRightFootX: 0.22,
+          armorGripRightFootY: -1.05,
+          armorGripRightFootZ: 0.1,
+        },
+      ],
+    }];
+    config.enemies = [];
+    config.pickups = [];
+
+    expect(syncEditableDynamicEntities(group, config, {
+      getTexture: () => null,
+      getModel,
+    })).toBe(true);
+
+    const equippedLeggings = [];
+    group.traverse((object) => {
+      if (object.userData?.rpg3dEquippedLeggings) equippedLeggings.push(object);
+    });
+
+    expect(equippedLeggings).toHaveLength(1);
+    expect(equippedLeggings[0].parent.name).toBe('Rpg3DLeggingsBodySocket');
+    expect(equippedLeggings[0].name).toBe('Rpg3DLeggingsAttachment');
+    expect(equippedLeggings[0].userData.rpg3dEquipmentGripSocket).toBe('manual-leggings-frame');
   });
 
   it('uses a virtual grip on long weapons without named grip nodes', () => {
@@ -1245,6 +1472,167 @@ describe('rpg3d scene builders', () => {
     expect(rightSocket.quaternion.angleTo(initialRightQuaternion)).toBeCloseTo(0);
   });
 
+  it('applies inventory object scale to separated armor segments', () => {
+    const characterTemplate = createArmorSocketCharacterTemplate();
+    const armorTemplate = new THREE.Group();
+    armorTemplate.userData.modelFormat = 'glb';
+    const chest = new THREE.Mesh(
+      new THREE.BoxGeometry(0.9, 1.1, 0.18),
+      new THREE.MeshStandardMaterial({ color: '#ffffff' }),
+    );
+    chest.name = 'ChestPlate';
+    const leftPlate = new THREE.Mesh(
+      new THREE.BoxGeometry(0.28, 0.5, 0.16),
+      new THREE.MeshStandardMaterial({ color: '#ffffff' }),
+    );
+    leftPlate.name = 'LeftPauldronArm';
+    leftPlate.position.set(-0.65, 0.32, 0);
+    const rightPlate = leftPlate.clone();
+    rightPlate.name = 'RightPauldronArm';
+    rightPlate.position.set(0.65, 0.32, 0);
+    armorTemplate.add(chest, leftPlate, rightPlate);
+
+    const armorItem = {
+      id: 'armor-1',
+      type: 'armor',
+      equipped: true,
+      weaponModelScale: 1.1,
+      weaponModelWidth: 0.25,
+      weaponModelHeight: 1.1,
+      weaponModelDepth: 0.18,
+      armorGripReferenceScale: 1.58,
+      armorGripLeftShoulderEnabled: true,
+      armorGripLeftShoulderX: -0.45,
+      armorGripLeftShoulderY: 0.55,
+      armorGripRightShoulderEnabled: true,
+      armorGripRightShoulderX: 0.45,
+      armorGripRightShoulderY: 0.55,
+      armorGripLeftElbowEnabled: true,
+      armorGripLeftElbowX: -1.05,
+      armorGripLeftElbowY: 0.05,
+      armorGripRightElbowEnabled: true,
+      armorGripRightElbowX: 0.65,
+      armorGripRightElbowY: 0.05,
+      armorGripLowerBellyEnabled: true,
+      armorGripLowerBellyY: -0.55,
+    };
+
+    expect(addEquippedArmorToActorModel(characterTemplate, armorTemplate, armorItem, {})).toBe(true);
+
+    const armorByRole = collectEquippedArmorByRole(characterTemplate);
+    const bodyEquipment = armorByRole.get('armor')?.children[0];
+    const leftEquipment = armorByRole.get('armor-left-arm')?.children[0];
+    expect(bodyEquipment).toBeTruthy();
+    expect(leftEquipment).toBeTruthy();
+    const bodySize = getWorldDimensions(bodyEquipment);
+    expect(bodySize.y).toBeGreaterThan(bodySize.x * 3);
+    expect(getLargestWorldDimension(leftEquipment)).toBeLessThan(0.55);
+  });
+
+  it('keeps armor surfaces in front of underlying actor clothing', () => {
+    const characterTemplate = createArmorSocketCharacterTemplate();
+    const armorTemplate = createSingleMeshChestplateTemplate();
+    const armorItem = {
+      id: 'armor-1',
+      type: 'armor',
+      equipped: true,
+      weaponModelScale: 1,
+      armorGripReferenceScale: 1,
+      armorCanvasCutEnabled: true,
+      armorGripLeftShoulderEnabled: false,
+      armorGripRightShoulderEnabled: false,
+      armorGripLeftElbowEnabled: false,
+      armorGripRightElbowEnabled: false,
+      armorGripLowerBellyEnabled: false,
+    };
+
+    expect(addEquippedArmorToActorModel(characterTemplate, armorTemplate, armorItem, {})).toBe(true);
+
+    const armorByRole = collectEquippedArmorByRole(characterTemplate);
+    const bodyEquipment = armorByRole.get('armor')?.children[0];
+    const bodyMesh = getFirstMesh(bodyEquipment);
+    const bodyMaterial = Array.isArray(bodyMesh?.material)
+      ? bodyMesh.material.find(Boolean)
+      : bodyMesh?.material;
+
+    expect(bodyEquipment?.userData.rpg3dArmorSurfaceClearanceApplied).toBe(true);
+    expect(bodyMesh?.userData.rpg3dArmorSurfaceClearanceApplied).toBe(true);
+    expect(bodyMesh?.scale.x).toBeGreaterThan(1);
+    expect(bodyMesh?.renderOrder).toBeGreaterThanOrEqual(18);
+    expect(bodyMaterial?.polygonOffset).toBe(true);
+    expect(bodyMaterial?.polygonOffsetFactor).toBeLessThan(0);
+    expect(bodyMaterial?.polygonOffsetUnits).toBeLessThan(0);
+    expect(bodyMaterial?.depthWrite).toBe(true);
+  });
+
+  it('attaches named armor pieces to their selected character rig bone', () => {
+    const characterTemplate = new THREE.Group();
+    const hips = new THREE.Bone();
+    const rightArm = new THREE.Bone();
+    const rightForeArm = new THREE.Bone();
+    const rightHand = new THREE.Bone();
+    hips.name = 'Hips';
+    rightArm.name = 'RightArm';
+    rightForeArm.name = 'RightForeArm';
+    rightHand.name = 'RightHand';
+    rightArm.position.set(0.45, 1.1, 0);
+    rightForeArm.position.set(0.2, -0.5, 0);
+    rightHand.position.set(0.1, -0.45, 0);
+    rightForeArm.add(rightHand);
+    rightArm.add(rightForeArm);
+    hips.add(rightArm);
+    characterTemplate.add(hips);
+    characterTemplate.add(new THREE.Mesh(
+      new THREE.BoxGeometry(1.2, 2, 0.45),
+      new THREE.MeshStandardMaterial({ color: '#ffffff' }),
+    ));
+
+    const armorTemplate = new THREE.Group();
+    armorTemplate.userData.modelFormat = 'glb';
+    const chest = new THREE.Mesh(
+      new THREE.BoxGeometry(0.7, 1, 0.18),
+      new THREE.MeshStandardMaterial({ color: '#ffffff' }),
+    );
+    chest.name = 'ChestPlate';
+    const handPlate = new THREE.Mesh(
+      new THREE.BoxGeometry(0.18, 0.22, 0.12),
+      new THREE.MeshStandardMaterial({ color: '#ffffff' }),
+    );
+    handPlate.name = 'RightHandPlate';
+    handPlate.position.set(0.72, -0.2, 0);
+    armorTemplate.add(chest, handPlate);
+
+    const armorItem = {
+      id: 'armor-1',
+      type: 'armor',
+      equipped: true,
+      weaponModelScale: 1,
+      armorGripReferenceScale: 1,
+      armorCanvasCutEnabled: true,
+      armorCustomPieces: [{
+        id: 'piece-hand',
+        name: 'Gantelet droit',
+        segment: 'right-arm',
+        rigPointId: 'right-hand',
+      }],
+      armorSegmentAssignments: [{
+        path: '1:righthandplate',
+        name: 'RightHandPlate',
+        segment: 'right-arm',
+        pieceId: 'piece-hand',
+        pieceName: 'Gantelet droit',
+        rigPointId: 'right-hand',
+      }],
+    };
+
+    expect(addEquippedArmorToActorModel(characterTemplate, armorTemplate, armorItem, {})).toBe(true);
+
+    const armorByRole = collectEquippedArmorByRole(characterTemplate);
+    const pieceAttachment = armorByRole.get('armor-piece-piece-hand');
+    expect(pieceAttachment?.parent).toBe(rightHand);
+    expect(pieceAttachment?.userData.rpg3dEquipmentGripSocket).toBe('manual-armor-piece-piece-hand');
+  });
+
   it('canvas-cuts single-mesh chestplates into animated arm segments', () => {
     const config = createSceneConfig();
     const group = new THREE.Group();
@@ -1350,7 +1738,7 @@ describe('rpg3d scene builders', () => {
     expect(leftSocket.quaternion.angleTo(initialLeftQuaternion)).toBeGreaterThan(0.01);
   });
 
-  it('keeps canvas-cut arm sockets enabled for legacy armor items', () => {
+  it('keeps disabled canvas-cut grip points inactive until markers are placed', () => {
     const characterTemplate = createArmorSocketCharacterTemplate();
     const armorTemplate = createSingleMeshChestplateTemplate();
     const armorItem = {
@@ -1370,9 +1758,9 @@ describe('rpg3d scene builders', () => {
     expect(addEquippedArmorToActorModel(characterTemplate, armorTemplate, armorItem, {})).toBe(true);
 
     const armorByRole = collectEquippedArmorByRole(characterTemplate);
-    expect(armorByRole.get('armor')?.parent.name).toBe('Rpg3DArmorBodySocket');
-    expect(armorByRole.get('armor-left-arm')?.parent.name).toBe('Rpg3DLeftArmorArmSocket');
-    expect(armorByRole.get('armor-right-arm')?.parent.name).toBe('Rpg3DRightArmorArmSocket');
+    expect(armorByRole.get('armor')?.parent.name).toBe('Hips');
+    expect(armorByRole.has('armor-left-arm')).toBe(false);
+    expect(armorByRole.has('armor-right-arm')).toBe(false);
   });
 
   it('falls back to the actual mesh scale when canvas-cut armor reference scale is too large', () => {

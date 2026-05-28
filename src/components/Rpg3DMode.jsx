@@ -13,6 +13,7 @@ import {
   Eraser,
   Eye,
   EyeOff,
+  Footprints,
   Folder,
   FolderOpen,
   Hand,
@@ -63,51 +64,48 @@ const ObjectRiggingTab = React.lazy(() => import('./ObjectRiggingTab.jsx'));
 const StuntAnimationTab = React.lazy(() => import('./StuntAnimationTab.jsx'));
 import useRpg3DGameLoop from '../hooks/useRpg3DGameLoop.js';
 import useRpg3DProjectState from '../hooks/useRpg3DProjectState.js';
+import useRpg3DActionZoneEditing from '../hooks/rpg3d/useRpg3DActionZoneEditing.js';
 import useRpg3DCanvasManagement from '../hooks/rpg3d/useRpg3DCanvasManagement.js';
+import useRpg3DDeleteShortcut from '../hooks/rpg3d/useRpg3DDeleteShortcut.js';
+import useRpg3DEditingCommands from '../hooks/rpg3d/useRpg3DEditingCommands.js';
+import useRpg3DMapHandlers from '../hooks/rpg3d/useRpg3DMapHandlers.js';
+import useRpg3DModeActions from '../hooks/rpg3d/useRpg3DModeActions.js';
 import useRpg3DPlacement from '../hooks/rpg3d/useRpg3DPlacement.js';
 import useRpg3DSaveSync from '../hooks/rpg3d/useRpg3DSaveSync.js';
+import useRpg3DSelectionState from '../hooks/rpg3d/useRpg3DSelectionState.js';
 import useRpg3DStudioAssets from '../hooks/rpg3d/useRpg3DStudioAssets.js';
 import useRpg3DTerrainPaint from '../hooks/rpg3d/useRpg3DTerrainPaint.js';
 import {
   getPersistedModelAnimations,
   getStudioModelSource,
 } from '../utils/rpg3dAssetsCore.js';
-import { normalizeCharacterRigPoints } from '../utils/rpg3dCharacterRig.js';
+import {
+  CHARACTER_RIG_ARMOR_GRIP_POINTS,
+  normalizeCharacterRigPoints,
+} from '../utils/rpg3dCharacterRig.js';
 import {
   DEFAULT_RPG3D_ACT_ID,
   createConfigFromSavedAssets,
   getActiveRpg3DCanvas,
-  getDefaultPortalTargetCanvasId,
   getRpg3DCanvasStructure,
   syncStudioProjectActiveCanvasConfig,
 } from '../utils/rpg3dStudioProject.js';
 import {
   MAP_ENTITY_COLLECTIONS,
-  applyGroupDragToConfig,
   canResizeSelectionEntity,
   clampArcadeEntitiesToWorld,
-  duplicateMapEntityIntoConfig,
-  findEntityAt,
-  getEntityCenterPoint,
   getSelectedEntity,
   getSelectionEntities,
-  insertActionZoneVertex,
-  isSameEntity,
-  moveActionZoneEdge,
-  moveActionZoneVertex,
   moveMapEntityByDelta,
   moveMapEntityToPoint,
-  resolveFlatTileDragPoint,
   resizeActionZoneGeometry,
   scaleSelectionEntity,
   snapFlatTileToNeighbors,
   snapFlatTileToWorldEdges,
 } from '../utils/rpg3dMapEditing.js';
 import {
-  ACTION_ZONE_DEFAULT_HEIGHT,
   ACTION_ZONE_DEFAULT_MODEL_HEIGHT,
   ACTION_ZONE_DEFAULT_OPACITY,
-  ACTION_ZONE_DEFAULT_WIDTH,
   ACTION_ZONE_MIN_SIZE,
   DEFAULT_ARCADE_CONFIG,
   ENTITY_Z_MAX,
@@ -139,16 +137,12 @@ import {
   getDecorModelScale,
   getEnemyStats,
   getEntityZ,
-  getFlatTileSnapOverlap,
-  getFlatTileWorldBounds,
-  getFlatTileWorldDimensions,
   getFloorBaseColor,
   getFloorTileWorldSize,
   getFloorZeroZ,
   getHexColor,
   getModelEraserRadius,
   getModelEraserStrokes,
-  getPlayableHeroId,
   getPropRenderMode,
   getReliefElevation,
   getReliefHeight,
@@ -373,6 +367,7 @@ const HERO_INVENTORY_TYPE_OPTIONS = [
   { id: 'weapon', label: 'Arme' },
   { id: 'helmet', label: 'Casque' },
   { id: 'armor', label: 'Armure' },
+  { id: 'leggings', label: 'Jambieres' },
   { id: 'shield', label: 'Bouclier' },
   { id: 'key', label: 'Clé' },
   { id: 'consumable', label: 'Consommable' },
@@ -604,18 +599,61 @@ const HERO_WEAPON_OFFSET_MIN = -2;
 const HERO_WEAPON_OFFSET_MAX = 2;
 const getEquipmentHand = (value = '') => (value === 'left' ? 'left' : 'right');
 const getEquipmentArm = (value = '') => (value === 'right' ? 'right' : 'left');
-const EQUIPMENT_MODEL_TYPES = new Set(['weapon', 'shield', 'armor', 'helmet']);
+const EQUIPMENT_MODEL_TYPES = new Set(['weapon', 'shield', 'armor', 'helmet', 'leggings']);
 const isEquipmentModelForType = (model = null, type = '') => (
   Boolean(model && EQUIPMENT_MODEL_TYPES.has(type) && getStudioModelSource(model))
 );
 const ARMOR_SEGMENT_VALUES = new Set(['body', 'left-arm', 'right-arm']);
+const ARMOR_RIG_POINT_IDS = new Set(CHARACTER_RIG_ARMOR_GRIP_POINTS.map((point) => point.rigPointId || point.id));
+const getDefaultArmorPieceRigPointId = (segment = 'body') => {
+  if (segment === 'left-arm') return 'left-elbow';
+  if (segment === 'right-arm') return 'right-elbow';
+  return 'lower-belly';
+};
+const normalizeArmorPieceRigPointId = (value = '', segment = 'body') => {
+  const id = String(value || '').trim();
+  return ARMOR_RIG_POINT_IDS.has(id) ? id : getDefaultArmorPieceRigPointId(segment);
+};
+const normalizeArmorPieceId = (value = '') => (
+  String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80)
+);
+const normalizeArmorPieceName = (value = '', fallback = '') => {
+  const cleanName = String(value || '').replace(/\s+/g, ' ').trim().slice(0, 48);
+  return cleanName || fallback;
+};
 const normalizeArmorSegmentAssignments = (assignments = []) => (
   Array.isArray(assignments)
-    ? assignments.map((entry) => ({
-      path: String(entry?.path || '').slice(0, 260),
-      name: String(entry?.name || '').slice(0, 120),
-      segment: ARMOR_SEGMENT_VALUES.has(entry?.segment) ? entry.segment : 'body',
-    })).filter((entry) => entry.path)
+    ? assignments.map((entry) => {
+      const pieceId = normalizeArmorPieceId(entry?.pieceId);
+      const pieceName = normalizeArmorPieceName(entry?.pieceName);
+      const segment = ARMOR_SEGMENT_VALUES.has(entry?.segment) ? entry.segment : 'body';
+      return {
+        path: String(entry?.path || '').slice(0, 260),
+        name: String(entry?.name || '').slice(0, 120),
+        segment,
+        ...(pieceId ? { pieceId } : {}),
+        ...(pieceName ? { pieceName } : {}),
+        ...(pieceId ? { rigPointId: normalizeArmorPieceRigPointId(entry?.rigPointId, segment) } : {}),
+      };
+    }).filter((entry) => entry.path)
+    : []
+);
+const normalizeArmorCustomPieces = (pieces = []) => (
+  Array.isArray(pieces)
+    ? pieces.map((piece, index) => {
+      const id = normalizeArmorPieceId(piece?.id || `piece-${index + 1}`);
+      return {
+        id,
+        name: normalizeArmorPieceName(piece?.name, `Morceau ${index + 1}`),
+        segment: ARMOR_SEGMENT_VALUES.has(piece?.segment) ? piece.segment : 'body',
+        rigPointId: normalizeArmorPieceRigPointId(piece?.rigPointId, piece?.segment),
+      };
+    }).filter((piece) => piece.id)
     : []
 );
 const normalizeArmorCutContourPoint = (point = {}) => ({
@@ -664,13 +702,7 @@ const normalizeArmorCutPaintStrokes = (strokes = []) => {
     }))
     .filter((entry) => entry.points.length);
 };
-const ARMOR_GRIP_POINTS = [
-  { suffix: 'LeftShoulder', defaultX: -0.45, defaultY: 0.55, defaultZ: 0 },
-  { suffix: 'RightShoulder', defaultX: 0.45, defaultY: 0.55, defaultZ: 0 },
-  { suffix: 'LeftElbow', defaultX: -0.65, defaultY: 0.05, defaultZ: 0 },
-  { suffix: 'RightElbow', defaultX: 0.65, defaultY: 0.05, defaultZ: 0 },
-  { suffix: 'LowerBelly', defaultX: 0, defaultY: -0.55, defaultZ: 0 },
-];
+const ARMOR_GRIP_POINTS = CHARACTER_RIG_ARMOR_GRIP_POINTS;
 const getEquipmentGripReferenceScale = (source = {}) => {
   const legacyScale = Number.isFinite(Number(source.scale)) && Number(source.scale) > 0 ? Number(source.scale) : 1;
   const dimensions = [
@@ -771,6 +803,8 @@ const getEquipmentGripFields = (source = {}) => ({
     [`armorGrip${point.suffix}Z`]: clamp(Number(source[`armorGrip${point.suffix}Z`]) || point.defaultZ, HERO_WEAPON_OFFSET_MIN, HERO_WEAPON_OFFSET_MAX),
   }), {}),
   armorCanvasCutEnabled: Boolean(source.armorCanvasCutEnabled),
+  armorFullCharacterRigEnabled: Boolean(source.armorFullCharacterRigEnabled),
+  armorCustomPieces: normalizeArmorCustomPieces(source.armorCustomPieces),
   armorSegmentAssignments: normalizeArmorSegmentAssignments(source.armorSegmentAssignments),
   armorCutContours: normalizeArmorCutContours(source.armorCutContours),
   armorCutPaintStrokes: normalizeArmorCutPaintStrokes(source.armorCutPaintStrokes),
@@ -1053,12 +1087,14 @@ const getRigObjectEquipmentType = (model = {}) => {
   if (kind === 'inventory-weapon') return 'weapon';
   if (kind === 'inventory-shield') return 'shield';
   if (kind === 'inventory-helmet') return 'helmet';
+  if (kind === 'inventory-leggings') return 'leggings';
   return 'armor';
 };
 const getRigObjectInventoryKind = (type = 'armor') => {
   if (type === 'weapon') return 'inventory-weapon';
   if (type === 'shield') return 'inventory-shield';
   if (type === 'helmet') return 'inventory-helmet';
+  if (type === 'leggings') return 'inventory-leggings';
   return 'inventory-armor';
 };
 const ensureRigObjectEquipmentDefaults = (model, type = 'armor') => {
@@ -1068,7 +1104,7 @@ const ensureRigObjectEquipmentDefaults = (model, type = 'armor') => {
   const hasAnyArmorGrip = ARMOR_GRIP_POINTS.some((point) => Boolean(model[`armorGrip${point.suffix}Enabled`]));
   model.armorGripReferenceScale = model.armorGripReferenceScale || getArmorGripReferenceScale(model);
   if (hasAnyArmorGrip) return;
-  ARMOR_GRIP_POINTS.forEach((point) => {
+  ARMOR_GRIP_POINTS.filter((point) => point.core).forEach((point) => {
     model[`armorGrip${point.suffix}Enabled`] = true;
     model[`armorGrip${point.suffix}X`] = model[`armorGrip${point.suffix}X`] ?? point.defaultX;
     model[`armorGrip${point.suffix}Y`] = model[`armorGrip${point.suffix}Y`] ?? point.defaultY;
@@ -2168,11 +2204,11 @@ function ArcadeHeroTab({
                 {EQUIPMENT_MODEL_TYPES.has(item.type) ? (
                   <div className="arcade-hero-weapon-settings">
                     <label>
-                      <span>Modele {item.type === 'shield' ? 'bouclier' : (item.type === 'armor' ? 'armure' : (item.type === 'helmet' ? 'casque' : 'arme'))}</span>
+                      <span>Modele {item.type === 'shield' ? 'bouclier' : (item.type === 'armor' ? 'armure' : (item.type === 'helmet' ? 'casque' : (item.type === 'leggings' ? 'jambieres' : 'arme')))}</span>
                       <select value={item.weaponModel3dId || ''} onChange={(event) => updateInventoryWeaponModel(item.id, event.target.value)}>
                         <option value="">Aucun modele</option>
                         {studioWeaponModels.map((model) => (
-                          <option key={model.id} value={model.id}>{model.name || model.modelName || (item.type === 'shield' ? 'Bouclier 3D' : (item.type === 'armor' ? 'Armure 3D' : (item.type === 'helmet' ? 'Casque 3D' : 'Arme 3D')))}</option>
+                          <option key={model.id} value={model.id}>{model.name || model.modelName || (item.type === 'shield' ? 'Bouclier 3D' : (item.type === 'armor' ? 'Armure 3D' : (item.type === 'helmet' ? 'Casque 3D' : (item.type === 'leggings' ? 'Jambieres 3D' : 'Arme 3D'))))}</option>
                         ))}
                       </select>
                     </label>
@@ -2188,6 +2224,8 @@ function ArcadeHeroTab({
                           ? <Cuboid aria-hidden="true" size={16} />
                           : item.type === 'helmet'
                             ? <HardHat aria-hidden="true" size={16} />
+                            : item.type === 'leggings'
+                              ? <Footprints aria-hidden="true" size={16} />
                           : <Sword aria-hidden="true" size={16} />}
                       {item.equipped ? 'Equipe' : 'Equiper'}
                     </button>
@@ -3471,10 +3509,6 @@ function Rpg3DMode({ user = null, authorProfile = null, authReady = true, projec
   const [transformTool, setTransformTool] = useState('');
   const [scaleProportionalAxes, setScaleProportionalAxes] = useState({ x: true, y: true, z: true });
   const [modelEraserRadiusDraft, setModelEraserRadiusDraft] = useState(MODEL_ERASER_DEFAULT_RADIUS);
-  const [multiSelected, setMultiSelected] = useState([]);
-  const [selected, setSelected] = useState(null);
-  const selectedRef = useRef(selected);
-  const modeRef = useRef(mode);
   const [isPaused, setIsPaused] = useState(false);
   const [mediaError, setMediaError] = useState('');
   const [activeNpcChoice, setActiveNpcChoice] = useState(null);
@@ -3485,12 +3519,24 @@ function Rpg3DMode({ user = null, authorProfile = null, authReady = true, projec
   const [mapDrawerOpen, setMapDrawerOpen] = useState(false);
   const [inspectorDrawerOpen, setInspectorDrawerOpen] = useState(false);
 
-  selectedRef.current = selected;
-  modeRef.current = mode;
+  const {
+    handleMarqueeSelect,
+    multiSelected,
+    selectSingleEntity,
+    selected,
+    selectedRef,
+    setMultiSelected,
+    setSelected,
+    toggleMultiSelectedEntity,
+  } = useRpg3DSelectionState({
+    canMultiSelectEntity,
+    setIsPaused,
+    setMode,
+    setTool,
+  });
+  const modeRef = useRef(mode);
 
-  useEffect(() => {
-    if (mode !== 'edit' || selected?.type !== 'actionZone') setActionZoneEdgeInsertMode(false);
-  }, [mode, selected]);
+  modeRef.current = mode;
 
   const showRpg3DLoadingBar = useCallback((options = {}) => {
     loadingBarSequenceRef.current += 1;
@@ -3589,15 +3635,6 @@ function Rpg3DMode({ user = null, authorProfile = null, authReady = true, projec
     modelEraserLastPointRef.current = null;
   }, [mode, tool]);
 
-  useEffect(() => {
-    if (mode !== 'play') return;
-    const selectedHeroId = selected?.type === 'hero' ? selected.id : '';
-    const controlledHeroId = getPlayableHeroId(configRef.current, selectedHeroId);
-    if (!controlledHeroId) return;
-    if (stateRef.current.player?.controlledHeroId === controlledHeroId) return;
-    resetGame(configRef.current, { mode: 'play' });
-  }, [mode, resetGame, selected?.id, selected?.type]);
-
   const patchViewportEngineConfig = useCallback((recipe) => {
     const currentConfig = configRef.current || DEFAULT_ARCADE_CONFIG;
     const currentEngine = { ...DEFAULT_ARCADE_CONFIG.engine, ...(currentConfig.engine || {}) };
@@ -3624,54 +3661,6 @@ function Rpg3DMode({ user = null, authorProfile = null, authReady = true, projec
       );
     });
   }, [patchViewportEngineConfig]);
-
-  const selectSingleEntity = useCallback((entity) => {
-    setSelected(entity);
-    setMultiSelected(entity && canMultiSelectEntity(entity) ? [entity] : []);
-  }, []);
-
-  const toggleMultiSelectedEntity = useCallback((entity) => {
-    if (!canMultiSelectEntity(entity)) {
-      setSelected(entity || null);
-      setMultiSelected([]);
-      return;
-    }
-    setTool('select');
-    setMultiSelected((current) => {
-      const exists = current.some((entry) => isSameEntity(entry, entity));
-      if (exists) {
-        const next = current.filter((entry) => !isSameEntity(entry, entity));
-        const fallback = next[next.length - 1] || entity;
-        setSelected(fallback);
-        return next.length ? next : [entity];
-      }
-      setSelected(entity);
-      return [...current, entity];
-    });
-  }, []);
-
-  const toggleCameraTargetPickMode = useCallback(() => {
-    setMode('edit');
-    setIsPaused(false);
-    setTool('select');
-    setDragMode(false);
-    setMultiSelectMode(false);
-    setCameraZoomDragMode(false);
-    setTransformTool('');
-    setPendingPlacement(null);
-    setCameraTargetPickMode((current) => !current);
-  }, []);
-
-  const handleCameraTargetPick = useCallback((entity, success) => {
-    if (success && entity) setCameraTargetPickMode(false);
-  }, []);
-
-  useEffect(() => {
-    if (mode === 'play') {
-      setCameraTargetPickMode(false);
-      setTransformTool('');
-    }
-  }, [mode]);
 
   useEffect(() => {
     if (workspaceTab !== 'canvases') return;
@@ -3858,6 +3847,76 @@ function Rpg3DMode({ user = null, authorProfile = null, authReady = true, projec
 
   activateRpg3DCanvasPortalRef.current = activateRpg3DCanvasPortal;
 
+  const {
+    handleCameraTargetPick,
+    handlePauseOrReset,
+    handleTogglePlayMode,
+    toggleCameraTargetPickMode,
+  } = useRpg3DModeActions({
+    clearInputState,
+    configRef,
+    mode,
+    modeRef,
+    resetGame,
+    selected,
+    setCameraTargetPickMode,
+    setCameraZoomDragMode,
+    setDragMode,
+    setIsPaused,
+    setMode,
+    setMultiSelectMode,
+    setPendingPlacement,
+    setTool,
+    setTransformTool,
+    stateRef,
+    workspaceTab,
+  });
+
+  const {
+    addSelectedNpcChoice,
+    closeNpcChoice,
+    handleActionZoneEdgeDrag,
+    handleActionZoneEdgeDragStart,
+    handleActionZoneEdgeInsert,
+    handleActionZoneTypeChange,
+    handleActionZoneVertexDrag,
+    handleActionZoneVertexDragStart,
+    handleNpcChoiceSelect,
+    handleNpcInteractionModeChange,
+    handleSelectActionZoneTool,
+    handleToggleActionZoneEdgeInsertMode,
+    removeSelectedNpcChoice,
+    updateSelectedNpcChoice,
+  } = useRpg3DActionZoneEditing({
+    actionZoneEdgeInsertMode,
+    createDefaultNpcChoices,
+    createNpcChoice,
+    getNpcChoiceItems,
+    mode,
+    modeRef,
+    patchConfig,
+    patchConfigWithoutHistory,
+    pushHistorySnapshot,
+    selected,
+    selectedRef,
+    setActionZoneEdgeInsertMode,
+    setActiveNpcChoice,
+    setCameraTargetPickMode,
+    setCameraZoomDragMode,
+    setDragMode,
+    setGameSnapshot,
+    setIsPaused,
+    setMode,
+    setMultiSelectMode,
+    setMultiSelected,
+    setPendingPlacement,
+    setSelected,
+    setTool,
+    setTransformTool,
+    stateRef,
+    studioProjectRef,
+  });
+
   const testRigObjectOnCharacter = useCallback(({ decorModelId = '', characterModelId = '' } = {}) => {
     const currentProject = studioProjectRef.current || studioProject;
     const sourceModel = (currentProject.decorModels3d || []).find((model) => model.id === decorModelId);
@@ -3887,16 +3946,6 @@ function Rpg3DMode({ user = null, authorProfile = null, authReady = true, projec
       setRigCharacterEquipmentTest(null);
     }
   }, [rigCharacterEquipmentTest, workspaceTab]);
-
-  useEffect(() => {
-    if (workspaceTab === 'arcade') return;
-    clearInputState();
-    window.getSelection?.()?.removeAllRanges?.();
-    if (modeRef.current !== 'play') return;
-    setMode('edit');
-    setIsPaused(false);
-    resetGame(configRef.current, { mode: 'edit' });
-  }, [clearInputState, resetGame, workspaceTab]);
 
   const createNewProject = useCallback(() => {
     if (!window.confirm('Creer un nouveau projet RPG 3D ? La carte actuelle sera remplacee.')) return;
@@ -4140,565 +4189,78 @@ function Rpg3DMode({ user = null, authorProfile = null, authReady = true, projec
     }, false);
   }, [patchConfig, scaleProportionalAxes]);
 
-  const updateSelectedNpcChoice = useCallback((choiceId, field, value) => {
-    if (!selected || selected.type !== 'actionZone') return;
-    patchConfig((next) => {
-      const currentZone = getSelectedEntity(next, selected);
-      if (!currentZone?.item) return;
-      currentZone.item.npcChoices = getNpcChoiceItems(currentZone.item).map((choice) => (
-        choice.id === choiceId ? { ...choice, [field]: value } : choice
-      ));
-    }, false);
-  }, [patchConfig, selected]);
+  const {
+    centerSelectedPropModel,
+    deleteMapEntity,
+    deleteSelected,
+    duplicateSelected,
+    duplicateSelectedTile,
+    editMapEntity,
+    flattenSelectedProp,
+    flushSelectedPropToGround,
+    renameMapEntity,
+    resetSelectedPropOrientation,
+    snapSelectedTileToNeighbor,
+  } = useRpg3DEditingCommands({
+    configRef,
+    createId,
+    getDeletableSelectionEntities,
+    getSelectionDuplicateOffset,
+    isDuplicableSelectionEntity,
+    isProtectedMapEntity,
+    multiSelected,
+    patchConfig,
+    selected,
+    setIsPaused,
+    setMode,
+    setMultiSelected,
+    setPendingPlacement,
+    setSelected,
+    setTool,
+    setWorkspaceTab,
+  });
 
-  const addSelectedNpcChoice = useCallback(() => {
-    if (!selected || selected.type !== 'actionZone') return;
-    patchConfig((next) => {
-      const currentZone = getSelectedEntity(next, selected);
-      if (!currentZone?.item) return;
-      currentZone.item.npcChoices = [
-        ...getNpcChoiceItems(currentZone.item),
-        createNpcChoice(`Reponse ${getNpcChoiceItems(currentZone.item).length + 1}`, ''),
-      ];
-    }, false);
-  }, [patchConfig, selected]);
+  useRpg3DDeleteShortcut({
+    configRef,
+    deleteSelected,
+    getDeletableSelectionEntities,
+    isEditableShortcutTarget,
+    mode,
+    multiSelected,
+    selected,
+  });
 
-  const removeSelectedNpcChoice = useCallback((choiceId) => {
-    if (!selected || selected.type !== 'actionZone') return;
-    patchConfig((next) => {
-      const currentZone = getSelectedEntity(next, selected);
-      if (!currentZone?.item) return;
-      const nextChoices = getNpcChoiceItems(currentZone.item).filter((choice) => choice.id !== choiceId);
-      currentZone.item.npcChoices = nextChoices.length ? nextChoices : createDefaultNpcChoices().slice(0, 1);
-    }, false);
-  }, [patchConfig, selected]);
-
-  const closeNpcChoice = useCallback(() => {
-    setActiveNpcChoice(null);
-    setIsPaused(false);
-  }, []);
-
-  const handleNpcChoiceSelect = useCallback((choice) => {
-    const response = choice?.response || choice?.label || 'Choix pris en compte.';
-    stateRef.current.actionMessage = response;
-    stateRef.current.actionMessageTimer = 3;
-    setGameSnapshot({ ...stateRef.current, player: { ...stateRef.current.player } });
-    setActiveNpcChoice(null);
-    setIsPaused(false);
-  }, []);
-
-  const handleWorldDragStart = useCallback((entity) => {
-    if (!entity || entity.type === 'tileDuplicate') return;
-    setMode('edit');
-    setIsPaused(false);
-    setTool('select');
-    setSelected({ type: entity.type, id: entity.id });
-    const liveConfig = configRef.current;
-    const activeEntity = { type: entity.type, id: entity.id };
-    const group = multiSelected.some((entry) => isSameEntity(entry, activeEntity))
-      ? multiSelected
-      : [activeEntity];
-    const anchor = getEntityCenterPoint(liveConfig, activeEntity);
-    multiDragRef.current = anchor ? {
-      anchor,
-      items: group
-        .filter(canMultiSelectEntity)
-        .map((entry) => ({ entity: entry, start: getEntityCenterPoint(liveConfig, entry) }))
-        .filter((entry) => entry.start),
-    } : null;
-    if (!multiSelected.some((entry) => isSameEntity(entry, activeEntity))) {
-      setMultiSelected([activeEntity]);
-    }
-  }, [multiSelected]);
-
-  const handleWorldDrag = useCallback((entity, point) => {
-    if (!entity || entity.type === 'tileDuplicate') return;
-    if (multiDragRef.current) multiDragRef.current.latestPoint = point;
-  }, []);
-
-  const resolveWorldDragPoint = useCallback((entity, point) => {
-    if (!entity || entity.type === 'tileDuplicate' || !multiDragRef.current) return point;
-    return resolveFlatTileDragPoint(configRef.current, multiDragRef.current, entity, point, { snap: true });
-  }, []);
-
-  const handleWorldDrop = useCallback((entity, point) => {
-    if (!entity || entity.type === 'tileDuplicate') return;
-    patchConfig((next) => {
-      if (multiDragRef.current?.items?.length) {
-        applyGroupDragToConfig(next, multiDragRef.current, point, { snap: true });
-      } else {
-        moveMapEntityToPoint(next, entity, point, { snap: true });
-      }
-    }, false);
-    multiDragRef.current = null;
-  }, [patchConfig]);
-
-  const handleActionZoneVertexDragStart = useCallback((entity) => {
-    if (modeRef.current !== 'edit' || entity?.type !== 'actionZoneVertex' || !entity.id) return;
-    pushHistorySnapshot();
-    const zoneEntity = { type: 'actionZone', id: entity.id };
-    setMode('edit');
-    setIsPaused(false);
-    setTool('select');
-    setSelected(zoneEntity);
-    setMultiSelected([zoneEntity]);
-    setTransformTool('');
-    setDragMode(false);
-    setMultiSelectMode(false);
-    setCameraTargetPickMode(false);
-  }, [pushHistorySnapshot]);
-
-  const handleActionZoneVertexDrag = useCallback((entity, point) => {
-    if (entity?.type !== 'actionZoneVertex' || !entity.id || !point) return;
-    patchConfigWithoutHistory((next) => {
-      moveActionZoneVertex(next, entity.id, entity.vertexIndex, point, entity.vertexLayer);
-    }, false);
-  }, [patchConfigWithoutHistory]);
-
-  const handleActionZoneEdgeDragStart = useCallback((entity) => {
-    if (modeRef.current !== 'edit' || entity?.type !== 'actionZoneEdge' || !entity.id) return;
-    pushHistorySnapshot();
-    const zoneEntity = { type: 'actionZone', id: entity.id };
-    setMode('edit');
-    setIsPaused(false);
-    setTool('select');
-    setSelected(zoneEntity);
-    setMultiSelected([zoneEntity]);
-    setTransformTool('');
-    setDragMode(false);
-    setMultiSelectMode(false);
-    setCameraTargetPickMode(false);
-  }, [pushHistorySnapshot]);
-
-  const handleActionZoneEdgeDrag = useCallback((entity, delta) => {
-    if (entity?.type !== 'actionZoneEdge' || !entity.id || !delta) return;
-    patchConfigWithoutHistory((next) => {
-      moveActionZoneEdge(next, entity.id, entity.edgeIndex, delta, entity.vertexLayer);
-    }, false);
-  }, [patchConfigWithoutHistory]);
-
-  const handleInsertActionZoneEdge = useCallback((zoneId, edgeIndex, point = null) => {
-    const vertexIndex = Number(edgeIndex) + 1;
-    if (!zoneId || !Number.isInteger(vertexIndex) || vertexIndex < 1) return null;
-    let inserted = false;
-    patchConfig((next) => {
-      inserted = insertActionZoneVertex(next, zoneId, edgeIndex, point);
-    }, false);
-    if (!inserted) return null;
-    const zoneEntity = { type: 'actionZone', id: zoneId };
-    setSelected(zoneEntity);
-    setMultiSelected([zoneEntity]);
-    setMode('edit');
-    setIsPaused(false);
-    setTool('select');
-    setTransformTool('');
-    return { type: 'actionZoneVertex', id: zoneId, vertexIndex };
-  }, [patchConfig]);
-
-  const handleActionZoneEdgeInsert = useCallback((entity, point) => {
-    if (modeRef.current !== 'edit' || entity?.type !== 'actionZoneEdge' || !entity.id) return null;
-    if (!actionZoneEdgeInsertMode) return null;
-    setDragMode(false);
-    setMultiSelectMode(false);
-    setCameraTargetPickMode(false);
-    const inserted = handleInsertActionZoneEdge(entity.id, entity.edgeIndex, point);
-    if (inserted) setActionZoneEdgeInsertMode(false);
-    return inserted;
-  }, [actionZoneEdgeInsertMode, handleInsertActionZoneEdge]);
-
-  const duplicateSelected = useCallback(() => {
-    const liveTargets = getSelectionEntities(configRef.current, selected, multiSelected);
-    if (!liveTargets.length || !liveTargets.every(isDuplicableSelectionEntity)) return;
-    patchConfig((next) => {
-      const targets = getSelectionEntities(next, selected, multiSelected);
-      if (!targets.length || !targets.every(isDuplicableSelectionEntity)) return;
-      const commonOffset = targets.length > 1
-        ? getSelectionDuplicateOffset(targets, next.world)
-        : null;
-      const nextSelection = targets
-        .map((target) => duplicateMapEntityIntoConfig(next, target, commonOffset))
-        .filter(Boolean);
-      setSelected(nextSelection[nextSelection.length - 1] || null);
-      setMultiSelected(nextSelection);
-    });
-  }, [multiSelected, patchConfig, selected]);
-
-  const duplicateSelectedTile = useCallback((direction, sourceId = selected?.id) => {
-    if (!sourceId) return;
-    patchConfig((next) => {
-      const collection = next.props || [];
-      const selectedTileIds = new Set((multiSelected || [])
-        .filter((entry) => entry?.type === 'prop')
-        .map((entry) => entry.id));
-      const selectedTiles = selectedTileIds.size > 1
-        ? collection.filter((item) => selectedTileIds.has(item.id) && isFlatTileLikeProp(item))
-        : [];
-      if (selectedTiles.length > 1) {
-        const bounds = getFlatTileWorldBounds(selectedTiles);
-        if (!bounds) return;
-        const groupWidth = Math.max(12, bounds.maxX - bounds.minX);
-        const groupHeight = Math.max(12, bounds.maxY - bounds.minY);
-        const overlapX = getFlatTileSnapOverlap(groupWidth);
-        const overlapY = getFlatTileSnapOverlap(groupHeight);
-        const offsets = {
-          left: { x: -(groupWidth - overlapX), y: 0 },
-          right: { x: groupWidth - overlapX, y: 0 },
-          up: { x: 0, y: -(groupHeight - overlapY) },
-          down: { x: 0, y: groupHeight - overlapY },
-        };
-        const offset = { ...(offsets[direction] || offsets.right) };
-        const worldWidth = Number(next.world?.width) || groupWidth;
-        const worldHeight = Number(next.world?.height) || groupHeight;
-        if (bounds.minX + offset.x < 0) offset.x += -(bounds.minX + offset.x);
-        if (bounds.maxX + offset.x > worldWidth) offset.x -= bounds.maxX + offset.x - worldWidth;
-        if (bounds.minY + offset.y < 0) offset.y += -(bounds.minY + offset.y);
-        if (bounds.maxY + offset.y > worldHeight) offset.y -= bounds.maxY + offset.y - worldHeight;
-        const copies = selectedTiles.map((original) => {
-          const { width: tileWidth, height: tileHeight } = getFlatTileWorldDimensions(original);
-          const copy = structuredClone(original);
-          copy.id = createId('prop');
-          copy.name = original.name || 'Dalle sol';
-          if (isFloorTileProp(copy)) {
-            copy.w = tileWidth;
-            copy.h = tileHeight;
-            copy.r = Math.round(Math.max(tileWidth, tileHeight) / 2);
-            copy.modelHeight = 12;
-          }
-          copy.blocksMovement = false;
-          copy.x = clamp((Number(original.x) || 0) + offset.x, tileWidth / 2, worldWidth - tileWidth / 2);
-          copy.y = clamp((Number(original.y) || 0) + offset.y, tileHeight / 2, worldHeight - tileHeight / 2);
-          return copy;
-        });
-        collection.push(...copies);
-        next.props = collection;
-        const nextSelection = copies.map((copy) => ({ type: 'prop', id: copy.id }));
-        setSelected(nextSelection[nextSelection.length - 1] || null);
-        setMultiSelected(nextSelection);
-        return;
-      }
-      const original = collection.find((item) => item.id === sourceId);
-      if (!original || !isFlatTileLikeProp(original)) return;
-      const { width: tileWidth, height: tileHeight } = getFlatTileWorldDimensions(original);
-      const overlapX = getFlatTileSnapOverlap(tileWidth);
-      const overlapY = getFlatTileSnapOverlap(tileHeight);
-      const offsets = {
-        left: { x: -(tileWidth - overlapX), y: 0 },
-        right: { x: tileWidth - overlapX, y: 0 },
-        up: { x: 0, y: -(tileHeight - overlapY) },
-        down: { x: 0, y: tileHeight - overlapY },
-      };
-      const offset = offsets[direction] || offsets.right;
-      const copy = structuredClone(original);
-      copy.id = createId('prop');
-      copy.name = original.name || 'Dalle sol';
-      if (isFloorTileProp(copy)) {
-        copy.w = tileWidth;
-        copy.h = tileHeight;
-        copy.r = Math.round(Math.max(tileWidth, tileHeight) / 2);
-        copy.modelHeight = 12;
-        copy.blocksMovement = false;
-      }
-      copy.blocksMovement = false;
-      copy.x = clamp((Number(original.x) || 0) + offset.x, tileWidth / 2, next.world.width - tileWidth / 2);
-      copy.y = clamp((Number(original.y) || 0) + offset.y, tileHeight / 2, next.world.height - tileHeight / 2);
-      collection.push(copy);
-      next.props = collection;
-      setSelected({ type: 'prop', id: copy.id });
-      setMultiSelected([{ type: 'prop', id: copy.id }]);
-    }, false);
-  }, [multiSelected, patchConfig, selected?.id]);
-
-  const snapSelectedTileToNeighbor = useCallback(() => {
-    if (!selected || selected.type !== 'prop') return;
-    patchConfig((next) => {
-      const currentProp = getSelectedEntity(next, selected);
-      if (!currentProp?.item || !isFloorTileProp(currentProp.item)) return;
-      snapFlatTileToNeighbors(currentProp.item, next.props || [], next.world, { force: true });
-    }, false);
-  }, [patchConfig, selected]);
-
-  const flattenSelectedProp = useCallback(() => {
-    if (!selected || selected.type !== 'prop') return;
-    patchConfig((next) => {
-      const currentProp = getSelectedEntity(next, selected);
-      if (!currentProp?.item) return;
-      const prop = currentProp.item;
-      const renderMode = getPropRenderMode(prop);
-      prop.floorZeroZ = getFloorZeroZ(prop);
-      if (renderMode === 'floor' || (renderMode === 'billboard' && prop.imageData)) {
-        const tileSize = getFloorTileWorldSize(prop);
-        prop.renderMode = 'floor';
-        prop.w = tileSize;
-        prop.h = tileSize;
-        prop.r = Math.round(tileSize / 2);
-        prop.modelHeight = 12;
-        prop.blocksMovement = false;
-        prop.modelRotationX = 0;
-        prop.modelRotationY = 0;
-        prop.modelRotationZ = 0;
-        prop.modelCenterOnOrigin = true;
-        prop.modelFlushToGround = false;
-        return;
-      }
-      prop.modelRotationX = -90;
-      prop.modelRotationY = 0;
-      prop.modelRotationZ = 0;
-      prop.modelCenterOnOrigin = true;
-      prop.modelFlushToGround = true;
-    }, false);
-  }, [patchConfig, selected]);
-
-  const resetSelectedPropOrientation = useCallback(() => {
-    if (!selected || selected.type !== 'prop') return;
-    patchConfig((next) => {
-      const currentProp = getSelectedEntity(next, selected);
-      if (!currentProp?.item) return;
-      currentProp.item.modelRotationX = 0;
-      currentProp.item.modelRotationY = 0;
-      currentProp.item.modelRotationZ = 0;
-      currentProp.item.modelFlushToGround = false;
-    }, false);
-  }, [patchConfig, selected]);
-
-  const centerSelectedPropModel = useCallback(() => {
-    if (!selected || selected.type !== 'prop') return;
-    patchConfig((next) => {
-      const currentProp = getSelectedEntity(next, selected);
-      if (!currentProp?.item) return;
-      currentProp.item.modelCenterOnOrigin = true;
-    }, false);
-  }, [patchConfig, selected]);
-
-  const flushSelectedPropToGround = useCallback(() => {
-    if (!selected || selected.type !== 'prop') return;
-    patchConfig((next) => {
-      const currentProp = getSelectedEntity(next, selected);
-      if (!currentProp?.item) return;
-      currentProp.item.modelFlushToGround = true;
-      currentProp.item.z = 0;
-    }, false);
-  }, [patchConfig, selected]);
-
-  const deleteSelected = useCallback(() => {
-    const targets = getDeletableSelectionEntities(configRef.current, selected, multiSelected);
-    if (!targets.length) return;
-    setPendingPlacement(null);
-    patchConfig((next) => {
-      targets.forEach((target) => {
-        const key = MAP_ENTITY_COLLECTIONS[target.type];
-        if (!key) return;
-        next[key] = (next[key] || []).filter((item) => item.id !== target.id);
-      });
-    });
-    setSelected(null);
-    setMultiSelected([]);
-  }, [multiSelected, patchConfig, selected]);
-
-  useEffect(() => {
-    const handleDeleteShortcut = (event) => {
-      if (!['Delete', 'Backspace'].includes(event.code)) return;
-      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
-      if (mode !== 'edit' || isEditableShortcutTarget(event.target)) return;
-      if (!getDeletableSelectionEntities(configRef.current, selected, multiSelected).length) return;
-      event.preventDefault();
-      deleteSelected();
-    };
-    window.addEventListener('keydown', handleDeleteShortcut);
-    return () => window.removeEventListener('keydown', handleDeleteShortcut);
-  }, [deleteSelected, mode, multiSelected, selected]);
-
-  const renameMapEntity = useCallback((type, id, name) => {
-    patchConfig((next) => {
-      const selectedEntity = getSelectedEntity(next, { type, id });
-      if (!selectedEntity?.item) return;
-      if (type === 'enemy') selectedEntity.item.combatEnemyName = name;
-      else selectedEntity.item.name = name;
-    }, false);
-  }, [patchConfig]);
-
-  const deleteMapEntity = useCallback((type, id) => {
-    const collectionName = MAP_ENTITY_COLLECTIONS[type];
-    if (!collectionName) return;
-    patchConfig((next) => {
-      if (isProtectedMapEntity(next, { type, id })) return;
-      next[collectionName] = (next[collectionName] || []).filter((item) => item.id !== id);
-    });
-    setSelected((current) => (current?.type === type && current.id === id ? null : current));
-    setMultiSelected((current) => current.filter((entry) => !(entry.type === type && entry.id === id)));
-  }, [patchConfig]);
-
-  const editMapEntity = useCallback((type, id) => {
-    setMode('edit');
-    setIsPaused(false);
-    setTool('select');
-    setSelected({ type, id });
-    setMultiSelected([{ type, id }]);
-    setWorkspaceTab('arcade');
-  }, []);
-
-  const handleWorldClick = useCallback((point, entity = null, button = 0, options = {}) => {
-    if (mode === 'play') {
-      if (button === 0) {
-        setPlayerMoveTarget(point, { continuous: Boolean(options.continuous) });
-      }
-      return;
-    }
-    if (mode !== 'edit') return;
-    if (pendingPlacement && button === 0) {
-      commitPendingPlacement(point);
-      return;
-    }
-    if (entity?.type === 'tileDuplicate') {
-      duplicateSelectedTile(entity.direction, entity.id);
-      return;
-    }
-    if (tool === 'select') {
-      const target = entity || findEntityAt(configRef.current, point);
-      if (multiSelectMode) {
-        if (canMultiSelectEntity(target)) toggleMultiSelectedEntity(target);
-        else {
-          setSelected(null);
-          setMultiSelected([]);
-        }
-        return;
-      }
-      selectSingleEntity(target);
-      return;
-    }
-    patchConfig((next) => {
-      if (tool === 'obstacle') {
-        const item = { id: createId('wall'), x: Math.round(point.x - 90), y: Math.round(point.y - 35), z: 0, w: 180, h: 70 };
-        next.obstacles.push(item);
-        setSelected({ type: 'obstacle', id: item.id });
-      }
-      if (tool === 'enemy') {
-        const item = {
-          id: createId('enemy'),
-          x: Math.round(point.x),
-          y: Math.round(point.y),
-          z: 0,
-          rotation: 0,
-          role: 'rifle',
-          character: 'guard',
-          characterImageData: '',
-          characterImageName: '',
-          characterModel3dId: '',
-          characterModelUrl: '',
-          characterModelName: '',
-          characterModelResources: [],
-          characterModelAnimations: {},
-          characterRenderMode: 'capsule',
-          characterModelScale: 1,
-          characterMaterialBrightness: 1,
-          combatEnemyName: 'Ennemi',
-          combatEnemyMaxHealth: 8,
-          combatEnemyStrength: 2,
-          combatEnemyMaxMana: 0,
-          combatEnemyPowerManaCost: 3,
-          combatEnemyPowerDamage: 0,
-          combatEnemyPowerUsageChance: 25,
-        };
-        next.enemies.push(item);
-        setSelected({ type: 'enemy', id: item.id });
-      }
-      if (tool === 'pickup') {
-        const item = { id: createId('pickup'), x: Math.round(point.x), y: Math.round(point.y), z: 0, type: 'health' };
-        next.pickups.push(item);
-        setSelected({ type: 'pickup', id: item.id });
-      }
-      if (tool === 'actionZone') {
-        const item = {
-          id: createId('zone'),
-          name: 'Zone transparente',
-          x: Math.round(point.x),
-          y: Math.round(point.y),
-          rotation: 0,
-          w: ACTION_ZONE_DEFAULT_WIDTH,
-          h: ACTION_ZONE_DEFAULT_HEIGHT,
-          modelHeight: ACTION_ZONE_DEFAULT_MODEL_HEIGHT,
-          renderMode: 'volume',
-          color: '#38bdf8',
-          opacity: ACTION_ZONE_DEFAULT_OPACITY,
-          actionType: 'portal',
-          targetCanvasId: getDefaultPortalTargetCanvasId(studioProjectRef.current),
-          targetNpcId: '',
-          npcAction: 'talk',
-          npcInteractionMode: 'message',
-          npcQuestion: 'Que veux-tu demander ?',
-          npcChoices: createDefaultNpcChoices(),
-          message: '',
-          triggerMode: 'enter',
-          visibleInPlay: false,
-        };
-        next.actionZones = Array.isArray(next.actionZones) ? next.actionZones : [];
-        next.actionZones.push(item);
-        setSelected({ type: 'actionZone', id: item.id });
-      }
-      if (tool === 'relief') {
-        const item = {
-          id: createId('relief'),
-          name: 'Relief',
-          x: Math.round(point.x),
-          y: Math.round(point.y),
-          w: 300,
-          h: 180,
-          elevation: 28,
-          style: 'plateau',
-          blocksMovement: false,
-        };
-        next.reliefs = Array.isArray(next.reliefs) ? next.reliefs : [];
-        next.reliefs.push(item);
-        setSelected({ type: 'relief', id: item.id });
-      }
-      if (tool === 'prop') {
-        const item = {
-          id: createId('prop'),
-          name: 'Decor',
-          x: Math.round(point.x),
-          y: Math.round(point.y),
-          z: 0,
-          rotation: 0,
-          modelRotationX: 0,
-          modelRotationY: 0,
-          modelRotationZ: 0,
-          modelCenterOnOrigin: false,
-          modelFlushToGround: false,
-          r: 34,
-          w: 68,
-          h: 68,
-          modelHeight: 68,
-          renderMode: 'rock',
-          blocksMovement: true,
-          imageData: '',
-          imageName: '',
-        };
-        next.props.push(item);
-        setSelected({ type: 'prop', id: item.id });
-      }
-    });
-    if (tool === 'actionZone') setTool('select');
-  }, [commitPendingPlacement, duplicateSelectedTile, mode, multiSelectMode, patchConfig, pendingPlacement, selectSingleEntity, setPlayerMoveTarget, toggleMultiSelectedEntity, tool]);
-
-  const handleMoveHoldChange = useCallback((held) => {
-    if (!held) setPlayerMoveTarget(null);
-  }, [setPlayerMoveTarget]);
-
-  const handleMarqueeSelect = useCallback((entities = []) => {
-    setMode('edit');
-    setIsPaused(false);
-    setTool('select');
-    const seen = new Set();
-    const nextSelection = entities
-      .filter(canMultiSelectEntity)
-      .filter((entity) => {
-        const key = `${entity.type}:${entity.id}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-    setMultiSelected(nextSelection);
-    setSelected(nextSelection[nextSelection.length - 1] || null);
-  }, []);
+  const {
+    handleMoveHoldChange,
+    handleWorldClick,
+    handleWorldDrag,
+    handleWorldDragStart,
+    handleWorldDrop,
+    resolveWorldDragPoint,
+  } = useRpg3DMapHandlers({
+    canMultiSelectEntity,
+    commitPendingPlacement,
+    configRef,
+    createDefaultNpcChoices,
+    createId,
+    duplicateSelectedTile,
+    mode,
+    multiDragRef,
+    multiSelected,
+    multiSelectMode,
+    patchConfig,
+    pendingPlacement,
+    selectSingleEntity,
+    setIsPaused,
+    setMode,
+    setMultiSelected,
+    setPlayerMoveTarget,
+    setSelected,
+    setTool,
+    studioProjectRef,
+    toggleMultiSelectedEntity,
+    tool,
+  });
 
   const exportConfig = useCallback(async () => {
     const payload = JSON.stringify(config, null, 2);
@@ -4888,13 +4450,6 @@ function Rpg3DMode({ user = null, authorProfile = null, authReady = true, projec
       return next;
     });
   };
-  const handleTogglePlayMode = () => {
-    const nextMode = playMode ? 'edit' : 'play';
-    setMode(nextMode);
-    setIsPaused(false);
-    resetGame(undefined, { mode: nextMode });
-  };
-  const handlePauseOrReset = () => (playMode ? setIsPaused((paused) => !paused) : resetGame());
   const handleLightIntensityChange = (value) => {
     patchViewportEngineConfig((engine) => {
       engine.lightIntensity = value;
@@ -4939,28 +4494,6 @@ function Rpg3DMode({ user = null, authorProfile = null, authReady = true, projec
       nextProp.item.modelEraserStrokes = [];
     }, false);
   };
-  const handleSelectActionZoneTool = () => {
-    setMode('edit');
-    setTool('actionZone');
-    setTransformTool('');
-    setPendingPlacement(null);
-    setMultiSelectMode(false);
-    setCameraTargetPickMode(false);
-    setActionZoneEdgeInsertMode(false);
-  };
-  const handleToggleActionZoneEdgeInsertMode = useCallback(() => {
-    if (selectedRef.current?.type !== 'actionZone') return;
-    setMode('edit');
-    setIsPaused(false);
-    setTool('select');
-    setTransformTool('');
-    setPendingPlacement(null);
-    setDragMode(false);
-    setMultiSelectMode(false);
-    setCameraTargetPickMode(false);
-    setCameraZoomDragMode(false);
-    setActionZoneEdgeInsertMode((current) => !current);
-  }, []);
   const handleToggleDragMode = () => {
     setCameraTargetPickMode(false);
     setCameraZoomDragMode(false);
@@ -5016,27 +4549,6 @@ function Rpg3DMode({ user = null, authorProfile = null, authReady = true, projec
       [axis]: !current[axis],
     }));
   }, []);
-  const handleActionZoneTypeChange = (value) => {
-    patchConfig((next) => {
-      const currentZone = getSelectedEntity(next, selected);
-      if (!currentZone?.item) return;
-      currentZone.item.actionType = value;
-      if (value === 'portal' && !currentZone.item.targetCanvasId) {
-        currentZone.item.targetCanvasId = getDefaultPortalTargetCanvasId(studioProjectRef.current);
-      }
-    });
-  };
-  const handleNpcInteractionModeChange = (value) => {
-    patchConfig((next) => {
-      const currentZone = getSelectedEntity(next, selected);
-      if (!currentZone?.item) return;
-      currentZone.item.npcInteractionMode = value;
-      if (value === 'multipleChoice') {
-        currentZone.item.npcQuestion = currentZone.item.npcQuestion || currentZone.item.message || 'Que veux-tu demander ?';
-        currentZone.item.npcChoices = getNpcChoiceItems(currentZone.item);
-      }
-    });
-  };
   const handleReliefCollisionChange = (value) => {
     patchConfig((next) => {
       const currentRelief = getSelectedEntity(next, selected);

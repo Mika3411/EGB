@@ -33,6 +33,8 @@ const EDIT_MODEL_ANIMATION_FRAME_MS = 125;
 
 const FLOOR_VISUAL_PADDING_WORLD = 3600;
 
+const LIGHT_UPDATE_EPSILON = 0.0001;
+
 const DEFAULT_ENGINE = {
   cameraHeight: 20,
   cameraDistance: 30,
@@ -111,6 +113,45 @@ const getLightOrientation = (engine = {}) => {
   return ((value % 360) + 360) % 360;
 };
 
+const setNumericPropertyIfChanged = (target, property, value, epsilon = LIGHT_UPDATE_EPSILON) => {
+  if (!target || !property || !Number.isFinite(value)) return false;
+  if (Math.abs((Number(target[property]) || 0) - value) <= epsilon) return false;
+  target[property] = value;
+  return true;
+};
+
+const setVector3IfChanged = (vector, x, y, z, epsilon = LIGHT_UPDATE_EPSILON) => {
+  if (!vector) return false;
+  if (
+    Math.abs((Number(vector.x) || 0) - x) <= epsilon
+    && Math.abs((Number(vector.y) || 0) - y) <= epsilon
+    && Math.abs((Number(vector.z) || 0) - z) <= epsilon
+  ) return false;
+  vector.set(x, y, z);
+  return true;
+};
+
+const updateShadowCameraFrustum = (camera, {
+  extent,
+  near = camera?.near,
+  far = camera?.far,
+} = {}) => {
+  if (!camera || !Number.isFinite(extent)) return false;
+  const values = {
+    left: -extent,
+    right: extent,
+    top: extent,
+    bottom: -extent,
+    near,
+    far,
+  };
+  const didChange = Object.entries(values).reduce((changed, [property, value]) => (
+    setNumericPropertyIfChanged(camera, property, Number(value)) || changed
+  ), false);
+  if (didChange) camera.updateProjectionMatrix();
+  return didChange;
+};
+
 const getTransformBase = (object) => object?.userData?.rpg3dTransformBase || {};
 
 const setTransformBase = (object, base = {}) => {
@@ -170,7 +211,7 @@ const applyMaterialBrightnessFromBase = (material, brightness = 1, options = {})
 };
 
 const updateSceneLighting = (scene, engine = DEFAULT_ENGINE, options = {}) => {
-  if (!scene?.userData) return;
+  if (!scene?.userData) return false;
   const intensity = getLightIntensity(engine);
   const orientation = degreesToRadians(getLightOrientation(engine));
   const sunRadius = 36;
@@ -179,35 +220,41 @@ const updateSceneLighting = (scene, engine = DEFAULT_ENGINE, options = {}) => {
   const targetY = Number.isFinite(Number(shadowTarget?.y)) ? Number(shadowTarget.y) : 0;
   const targetZ = Number.isFinite(Number(shadowTarget?.z)) ? Number(shadowTarget.z) : 0;
   const focusedExtent = Number(options.shadowExtent);
-  if (scene.userData.hemi) scene.userData.hemi.intensity = intensity * 0.32;
+  let didRequestShadowUpdate = false;
+  if (scene.userData.hemi) setNumericPropertyIfChanged(scene.userData.hemi, 'intensity', intensity * 0.32);
   if (scene.userData.sun) {
-    scene.userData.sun.intensity = intensity * 3.4;
-    scene.userData.sun.position.set(
+    let shouldUpdateShadow = Boolean(options.forceShadowUpdate);
+    setNumericPropertyIfChanged(scene.userData.sun, 'intensity', intensity * 3.4);
+    shouldUpdateShadow = setVector3IfChanged(
+      scene.userData.sun.position,
       targetX + Math.sin(orientation) * sunRadius,
       targetY + 32,
       targetZ + Math.cos(orientation) * sunRadius,
-    );
-    scene.userData.sun.target?.position.set(targetX, targetY, targetZ);
-    scene.userData.sun.target?.updateMatrixWorld();
+    ) || shouldUpdateShadow;
+    const didMoveTarget = setVector3IfChanged(scene.userData.sun.target?.position, targetX, targetY, targetZ);
+    if (didMoveTarget) scene.userData.sun.target?.updateMatrixWorld();
+    shouldUpdateShadow = didMoveTarget || shouldUpdateShadow;
     if (Number.isFinite(focusedExtent) && scene.userData.sun.shadow?.camera) {
       const extent = clamp(
         focusedExtent,
         SHADOW_CAMERA_FOCUSED_MIN_EXTENT,
         SHADOW_CAMERA_FOCUSED_MAX_EXTENT,
       );
-      scene.userData.sun.shadow.camera.left = -extent;
-      scene.userData.sun.shadow.camera.right = extent;
-      scene.userData.sun.shadow.camera.top = extent;
-      scene.userData.sun.shadow.camera.bottom = -extent;
-      scene.userData.sun.shadow.camera.near = 0.5;
-      scene.userData.sun.shadow.camera.far = Math.max(90, sunRadius + 64);
-      scene.userData.sun.shadow.camera.updateProjectionMatrix();
+      shouldUpdateShadow = updateShadowCameraFrustum(scene.userData.sun.shadow.camera, {
+        extent,
+        near: 0.5,
+        far: Math.max(90, sunRadius + 64),
+      }) || shouldUpdateShadow;
     }
-    scene.userData.sun.shadow.needsUpdate = true;
+    if (shouldUpdateShadow && scene.userData.sun.shadow) {
+      scene.userData.sun.shadow.needsUpdate = true;
+      didRequestShadowUpdate = true;
+    }
   }
-  if (scene.userData.frontFill) scene.userData.frontFill.intensity = intensity * 0.1;
-  if (scene.userData.rim) scene.userData.rim.intensity = intensity * 0.045;
-  if (scene.userData.ambient) scene.userData.ambient.intensity = 0.04 + intensity * 0.04;
+  if (scene.userData.frontFill) setNumericPropertyIfChanged(scene.userData.frontFill, 'intensity', intensity * 0.1);
+  if (scene.userData.rim) setNumericPropertyIfChanged(scene.userData.rim, 'intensity', intensity * 0.045);
+  if (scene.userData.ambient) setNumericPropertyIfChanged(scene.userData.ambient, 'intensity', 0.04 + intensity * 0.04);
+  return didRequestShadowUpdate;
 };
 
 const configureSunShadowCamera = (sun, config = {}) => {
@@ -215,12 +262,12 @@ const configureSunShadowCamera = (sun, config = {}) => {
   const worldWidth = Math.max(1, Number(config.world.width) || 1) * WORLD_SCALE;
   const worldDepth = Math.max(1, Number(config.world.height) || 1) * WORLD_SCALE;
   const extent = Math.max(SHADOW_CAMERA_MIN_EXTENT, worldWidth * 0.5, worldDepth * 0.5) + SHADOW_CAMERA_PADDING;
-  sun.shadow.camera.left = -extent;
-  sun.shadow.camera.right = extent;
-  sun.shadow.camera.top = extent;
-  sun.shadow.camera.bottom = -extent;
-  sun.shadow.camera.far = Math.max(90, extent * 2.8);
-  sun.shadow.camera.updateProjectionMatrix();
+  if (updateShadowCameraFrustum(sun.shadow.camera, {
+    extent,
+    far: Math.max(90, extent * 2.8),
+  })) {
+    sun.shadow.needsUpdate = true;
+  }
 };
 
 const enableObjectShadows = (object, { cast = true, receive = true } = {}) => {
@@ -272,7 +319,32 @@ const getSupportSurfaceHeightAtPoint = (config = {}, point = {}) => {
   return supportHeight;
 };
 
+const EMPTY_SUPPORT_SURFACE_HEIGHT_RESOLVER = () => 0;
+
+const supportSurfaceHeightResolverCache = new WeakMap();
+
+const getSupportSurfaceHeightResolverSignature = (config = {}) => (
+  (config.props || [])
+    .filter((prop) => prop && isFlatTileLikeProp(prop))
+    .map((prop) => {
+      const { width, height } = getFlatTileWorldFootprint(prop);
+      return [
+        prop.id || '',
+        Math.round((Number(prop.x) || 0) * 10),
+        Math.round((Number(prop.y) || 0) * 10),
+        Math.round(width * 10),
+        Math.round(height * 10),
+        Math.round(getFlatTileSurfaceHeight(prop) * 1000),
+      ].join(':');
+    })
+    .join('|')
+);
+
 const createSupportSurfaceHeightResolver = (config = {}) => {
+  if (!config || typeof config !== 'object') return EMPTY_SUPPORT_SURFACE_HEIGHT_RESOLVER;
+  const signature = getSupportSurfaceHeightResolverSignature(config);
+  const cached = supportSurfaceHeightResolverCache.get(config);
+  if (cached?.signature === signature) return cached.resolver;
   const supports = (config.props || [])
     .filter((prop) => prop && isFlatTileLikeProp(prop))
     .map((prop) => {
@@ -287,8 +359,7 @@ const createSupportSurfaceHeightResolver = (config = {}) => {
         surfaceHeight: getFlatTileSurfaceHeight(prop),
       };
     });
-  if (!supports.length) return () => 0;
-  return (point = {}) => {
+  const resolver = supports.length ? (point = {}) => {
     const pointX = Number(point.x) || 0;
     const pointY = Number(point.y) || 0;
     let supportHeight = 0;
@@ -302,7 +373,9 @@ const createSupportSurfaceHeightResolver = (config = {}) => {
       supportHeight = Math.max(supportHeight, support.surfaceHeight);
     });
     return supportHeight;
-  };
+  } : EMPTY_SUPPORT_SURFACE_HEIGHT_RESOLVER;
+  supportSurfaceHeightResolverCache.set(config, { signature, resolver });
+  return resolver;
 };
 
 const toScenePosition = (config, x, y, height = 0) => new THREE.Vector3(
@@ -583,6 +656,7 @@ export {
   getFlatTileSceneDimensions,
   getEntityLiftHeight,
   getFlatTileSurfaceHeight,
+  getSupportSurfaceHeightResolverSignature,
   getSupportSurfaceHeightAtPoint,
   createSupportSurfaceHeightResolver,
   toScenePosition,

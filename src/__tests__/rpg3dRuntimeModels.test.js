@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import {
   createActorAnimationController,
   createCachedModelGetter,
+  disposeRuntimeModelObject,
 } from '../components/arcade/rpg3dRuntimeModels.js';
 
 describe('rpg3d runtime models', () => {
@@ -54,5 +55,43 @@ describe('rpg3d runtime models', () => {
       modelFormat: 'fbx',
       modelFileSize: 128 * 1024 * 1024,
     })).toBe('unsupported');
+  });
+
+  it('disposes runtime model textures with cached model templates', () => {
+    const texture = new THREE.Texture();
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const material = new THREE.MeshStandardMaterial({ map: texture });
+    const object = new THREE.Mesh(geometry, material);
+    const disposeGeometry = vi.spyOn(geometry, 'dispose');
+    const disposeMaterial = vi.spyOn(material, 'dispose');
+    const disposeTexture = vi.spyOn(texture, 'dispose');
+
+    disposeRuntimeModelObject(object);
+
+    expect(disposeGeometry).toHaveBeenCalledTimes(1);
+    expect(disposeMaterial).toHaveBeenCalledTimes(1);
+    expect(disposeTexture).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not cache async models after the viewport cache token is inactive', () => {
+    const cache = new Map();
+    const pending = new Set();
+    const failed = new Set();
+    const onLoaded = vi.fn();
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const object = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial());
+    const disposeGeometry = vi.spyOn(geometry, 'dispose');
+    const getModel = createCachedModelGetter(cache, pending, failed, onLoaded, {
+      isActive: () => false,
+      loadModelFromSource: (source, model, onLoad) => onLoad({ object, animations: [], format: 'glb' }),
+      loadModelAnimationClipMap: async () => ({}),
+    });
+
+    expect(getModel('hero.glb', { modelFormat: 'glb' })).toBeNull();
+
+    expect(cache.size).toBe(0);
+    expect(pending.size).toBe(0);
+    expect(onLoaded).not.toHaveBeenCalled();
+    expect(disposeGeometry).toHaveBeenCalledTimes(1);
   });
 });

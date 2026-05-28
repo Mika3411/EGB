@@ -60,4 +60,17 @@ describe('armor paint depth guard', () => {
     expect(classifyArmorPaintSegment(new THREE.Vector3(0.04, 0.04, 0.02), item, 1)).toBe('');
   });
 
+  it('keeps section-view paint on the selected visible side', () => {
+    const item = {
+      armorCutPaintStrokes: [{
+        segment: 'body',
+        radius: 0.18,
+        points: [{ x: 0, y: 0, z: 0, nx: 0, ny: 0, nz: 1, cx: 1, cy: 0, cz: 0, cw: 0 }],
+      }],
+    };
+
+    expect(classifyArmorPaintSegment(new THREE.Vector3(0.04, 0.04, 0.01), item, 1)).toBe('body');
+    expect(classifyArmorPaintSegment(new THREE.Vector3(-0.04, 0.04, 0.01), item, 1)).toBe('');
+  });
+
 });

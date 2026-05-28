@@ -100,7 +100,14 @@ describe('CharacterRiggingTab', () => {
     expect(screen.getByLabelText('Zoom actuel').textContent).toBe('100%');
     expect(preview.getAttribute('data-initial-camera-zoom')).toBe('1.55');
     expect(preview.getAttribute('data-camera-view')).toBe('north');
-    expect(document.querySelector('.character-rigging-symmetry-guide')).toBeTruthy();
+    const symmetryAxis = document.querySelector('.character-rigging-symmetry-guide');
+    expect(symmetryAxis).toBeTruthy();
+    expect(symmetryAxis.getAttribute('data-axis-percent')).toBe('50');
+    expect(screen.getByRole('group', { name: 'Axe de symetrie' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: "Deplacer l'axe de symetrie vers la gauche" })).toBeTruthy();
+    const moveAxisRight = screen.getByRole('button', { name: "Deplacer l'axe de symetrie vers la droite" });
+    expect(moveAxisRight).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Activer la symetrie des pastilles' })).toBeTruthy();
     expect(screen.getByRole('group', { name: 'Vues NESO' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Voir de face' }).getAttribute('aria-pressed')).toBe('true');
 
@@ -114,6 +121,16 @@ describe('CharacterRiggingTab', () => {
     await waitFor(() => expect(preview.getAttribute('data-selected-marker-ids')).toBe('left-hand'));
     expect(screen.getByRole('option', { name: /Poignet gauche/ }).className).toContain('selected');
 
+    for (let index = 0; index < 5; index += 1) {
+      fireEvent.click(moveAxisRight);
+    }
+
+    await waitFor(() => expect(symmetryAxis.getAttribute('data-axis-percent')).toBe('60'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Activer la symetrie des pastilles' }));
+
+    expect(screen.getByRole('button', { name: 'Desactiver la symetrie des pastilles' }).getAttribute('aria-pressed')).toBe('true');
+
     fireEvent.click(screen.getByRole('button', { name: 'Move right hand' }));
 
     expect(patchProject).toHaveBeenCalled();
@@ -123,6 +140,14 @@ describe('CharacterRiggingTab', () => {
     expect(rightHand).toMatchObject({
       enabled: true,
       x: 0.82,
+      y: 0.5,
+      z: 0.7,
+    });
+    const leftHand = patchedProject.characterModels3d[0].characterRigPoints
+      .find((point) => point.id === 'left-hand');
+    expect(leftHand).toMatchObject({
+      enabled: true,
+      x: 0.38,
       y: 0.5,
       z: 0.7,
     });
@@ -167,12 +192,14 @@ describe('CharacterRiggingTab', () => {
     const helpImages = [...document.querySelectorAll('.character-rigging-help-image')].map((image) => image.getAttribute('src'));
     expect(helpImages).toContain('/assets/character-rig-help-humanoid.png');
     expect(helpImages).toContain('/assets/character-rig-help-hands.png');
+    expect(document.querySelectorAll('.character-rigging-help-body-marker').length).toBe(17);
     expect(document.querySelectorAll('.character-rigging-help-marker.finger').length).toBe(40);
+    expect(screen.queryByRole('button', { name: 'Reinitialiser les pastilles' })).toBeNull();
     const helpLegend = screen.getByLabelText('Legende de pastilles');
     expect(helpLegend).toBeTruthy();
     expect(screen.getByText('Legende de pastilles')).toBeTruthy();
-    expect(screen.getAllByText((_, element) => element?.textContent === 'MD = Poignet droit').length).toBeGreaterThan(0);
-    expect(screen.getAllByText((_, element) => element?.textContent === 'MG = Poignet gauche').length).toBeGreaterThan(0);
+    expect(screen.getAllByText((_, element) => element?.textContent === 'POD = Poignet droit').length).toBeGreaterThan(0);
+    expect(screen.getAllByText((_, element) => element?.textContent === 'POG = Poignet gauche').length).toBeGreaterThan(0);
     expect(screen.getAllByText((_, element) => element?.textContent === 'ED = Epaule droite').length).toBeGreaterThan(0);
     expect(screen.getAllByText((_, element) => element?.textContent === 'CO = Cou').length).toBeGreaterThan(0);
     expect(screen.getAllByText((_, element) => element?.textContent === 'BO = Bouche').length).toBeGreaterThan(0);

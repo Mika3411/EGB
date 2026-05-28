@@ -220,6 +220,7 @@ describe('rpg3d domain helpers', () => {
     expect(getActionZoneOpacity({ opacity: 2 })).toBe(0.95);
     expect(getActionZoneType({})).toBe('portal');
     expect(getActionZoneType({ actionType: 'npcAction' })).toBe('npcAction');
+    expect(getActionZoneType({ actionType: 'dialogue' })).toBe('portal');
     expect(getActionZoneColor({ color: 'bad', actionType: 'portal' })).toBe('#38bdf8');
     expect(getActionZoneColor({ color: 'bad', actionType: 'npcAction' })).toBe('#facc15');
     expect(getActionZoneRect({ x: 500, y: 400, w: 120, h: 80 })).toEqual({

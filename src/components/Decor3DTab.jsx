@@ -56,6 +56,9 @@ import {
   persistLocalModelFile,
   rememberRpg3DLocalBlobFile,
 } from '../utils/rpg3dAssetsCore.js';
+import {
+  CHARACTER_RIG_ARMOR_GRIP_POINTS,
+} from '../utils/rpg3dCharacterRig.js';
 import MediaSourcePicker from './MediaSourcePicker.jsx';
 import HelpLabel from './forms/HelpLabel.jsx';
 
@@ -113,6 +116,8 @@ const getDecorKindConfig = (kind = '') => SELECTABLE_KIND_OPTIONS.find((option) 
 const isInventoryKindId = (kind = '') => INVENTORY_KIND_IDS.has(getDecorKindId(kind));
 const isInventoryWeaponKindId = (kind = '') => getDecorKindId(kind) === 'inventory-weapon';
 const isInventoryArmorKindId = (kind = '') => getDecorKindId(kind) === 'inventory-armor';
+const isInventoryHelmetKindId = (kind = '') => getDecorKindId(kind) === 'inventory-helmet';
+const isInventoryLeggingsKindId = (kind = '') => getDecorKindId(kind) === 'inventory-leggings';
 const isInventoryShieldKindId = (kind = '') => getDecorKindId(kind) === 'inventory-shield';
 const WEAPON_GRIP_HANDS = [
   { id: 'right', label: 'Main droite', suffix: 'Right' },
@@ -126,13 +131,24 @@ const SHIELD_GRIP_POINTS = [
   { id: 'hand', label: 'Poignet / main', suffix: 'Hand', defaultY: -0.35 },
   { id: 'elbow', label: 'Coude', suffix: 'Elbow', defaultY: 0.35 },
 ];
-const ARMOR_GRIP_POINTS = [
-  { id: 'left-shoulder', label: 'Epaule gauche', suffix: 'LeftShoulder', defaultX: -0.45, defaultY: 0.55, defaultZ: 0 },
-  { id: 'right-shoulder', label: 'Epaule droite', suffix: 'RightShoulder', defaultX: 0.45, defaultY: 0.55, defaultZ: 0 },
-  { id: 'left-elbow', label: 'Coude gauche', suffix: 'LeftElbow', defaultX: -0.65, defaultY: 0.05, defaultZ: 0 },
-  { id: 'right-elbow', label: 'Coude droit', suffix: 'RightElbow', defaultX: 0.65, defaultY: 0.05, defaultZ: 0 },
-  { id: 'lower-belly', label: 'Bas du ventre', suffix: 'LowerBelly', defaultX: 0, defaultY: -0.55, defaultZ: 0 },
+const ARMOR_GRIP_POINTS = CHARACTER_RIG_ARMOR_GRIP_POINTS;
+const HELMET_GRIP_POINTS = CHARACTER_RIG_ARMOR_GRIP_POINTS.filter((point) => point.id === 'mouth');
+const LEGGINGS_GRIP_POINT_IDS = [
+  'left-groin-fold',
+  'right-groin-fold',
+  'left-knee',
+  'right-knee',
+  'left-foot',
+  'right-foot',
 ];
+const LEGGINGS_GRIP_POINTS = LEGGINGS_GRIP_POINT_IDS
+  .map((id) => CHARACTER_RIG_ARMOR_GRIP_POINTS.find((point) => point.id === id))
+  .filter(Boolean);
+const getVisibleArmorGripPoints = (model = {}) => (
+  model.armorFullCharacterRigEnabled || ARMOR_GRIP_POINTS.some((point) => !point.core && model[`armorGrip${point.suffix}Enabled`])
+    ? ARMOR_GRIP_POINTS
+    : ARMOR_GRIP_POINTS.filter((point) => point.core)
+);
 const WEAPON_GRIP_POSITION_MIN = -2;
 const WEAPON_GRIP_POSITION_MAX = 2;
 const DECOR_SIZE_AXES = [
@@ -271,6 +287,8 @@ export default function Decor3DTab({
   const selectedIsFloorTile = selectedModel ? isFloorTileKind(selectedModel.kind) : false;
   const selectedIsInventoryWeapon = Boolean(selectedModelSource && selectedModel && isInventoryWeaponKindId(selectedModel.kind));
   const selectedIsInventoryArmor = Boolean(selectedModelSource && selectedModel && isInventoryArmorKindId(selectedModel.kind));
+  const selectedIsInventoryHelmet = Boolean(selectedModelSource && selectedModel && isInventoryHelmetKindId(selectedModel.kind));
+  const selectedIsInventoryLeggings = Boolean(selectedModelSource && selectedModel && isInventoryLeggingsKindId(selectedModel.kind));
   const selectedIsInventoryShield = Boolean(selectedModelSource && selectedModel && isInventoryShieldKindId(selectedModel.kind));
   const showFloorTileInspectorFields = selectedIsFloorTile && selectedKindId !== 'road';
   const showObjectSizeControl = Boolean(selectedModel) && (!selectedIsFloorTile || selectedModelSource);
@@ -678,7 +696,8 @@ export default function Decor3DTab({
   }, [selectedIsInventoryShield, selectedModel]);
   const selectedArmorGripMarkers = useMemo(() => {
     if (!selectedIsInventoryArmor || !selectedModel) return [];
-    return ARMOR_GRIP_POINTS.map((point) => ({
+    return getVisibleArmorGripPoints(selectedModel).map((point) => ({
+      ...point,
       id: point.id,
       label: point.label,
       enabled: Boolean(selectedModel[`armorGrip${point.suffix}Enabled`]),
@@ -690,6 +709,40 @@ export default function Decor3DTab({
       defaultZ: point.defaultZ,
     }));
   }, [selectedIsInventoryArmor, selectedModel]);
+  const selectedHelmetGripMarkers = useMemo(() => {
+    if (!selectedIsInventoryHelmet || !selectedModel) return [];
+    return HELMET_GRIP_POINTS.map((point) => ({
+      ...point,
+      id: point.id,
+      label: point.label,
+      enabled: Boolean(selectedModel[`armorGrip${point.suffix}Enabled`]),
+      x: isValidDraftNumber(selectedModel[`armorGrip${point.suffix}X`]) ? Number(normalizeDraftNumber(selectedModel[`armorGrip${point.suffix}X`])) : point.defaultX,
+      y: isValidDraftNumber(selectedModel[`armorGrip${point.suffix}Y`]) ? Number(normalizeDraftNumber(selectedModel[`armorGrip${point.suffix}Y`])) : point.defaultY,
+      z: isValidDraftNumber(selectedModel[`armorGrip${point.suffix}Z`]) ? Number(normalizeDraftNumber(selectedModel[`armorGrip${point.suffix}Z`])) : point.defaultZ,
+      defaultX: point.defaultX,
+      defaultY: point.defaultY,
+      defaultZ: point.defaultZ,
+    }));
+  }, [selectedIsInventoryHelmet, selectedModel]);
+  const selectedLeggingsGripMarkers = useMemo(() => {
+    if (!selectedIsInventoryLeggings || !selectedModel) return [];
+    return LEGGINGS_GRIP_POINTS.map((point) => ({
+      ...point,
+      id: point.id,
+      label: point.label,
+      enabled: Boolean(selectedModel[`armorGrip${point.suffix}Enabled`]),
+      x: isValidDraftNumber(selectedModel[`armorGrip${point.suffix}X`]) ? Number(normalizeDraftNumber(selectedModel[`armorGrip${point.suffix}X`])) : point.defaultX,
+      y: isValidDraftNumber(selectedModel[`armorGrip${point.suffix}Y`]) ? Number(normalizeDraftNumber(selectedModel[`armorGrip${point.suffix}Y`])) : point.defaultY,
+      z: isValidDraftNumber(selectedModel[`armorGrip${point.suffix}Z`]) ? Number(normalizeDraftNumber(selectedModel[`armorGrip${point.suffix}Z`])) : point.defaultZ,
+      defaultX: point.defaultX,
+      defaultY: point.defaultY,
+      defaultZ: point.defaultZ,
+    }));
+  }, [selectedIsInventoryLeggings, selectedModel]);
+  const selectedRigGripMarkers = selectedIsInventoryHelmet
+    ? selectedHelmetGripMarkers
+    : (selectedIsInventoryLeggings ? selectedLeggingsGripMarkers : selectedArmorGripMarkers);
+  const selectedHasRigGripMarkers = selectedIsInventoryArmor || selectedIsInventoryHelmet || selectedIsInventoryLeggings;
   const setDecorKind = (kindId) => {
     if (selectedModel?.id) {
       setSelectedModelId(selectedModel.id);
@@ -799,8 +852,8 @@ export default function Decor3DTab({
             onWeaponGripMarkerChange={selectedIsInventoryWeapon ? updateSelectedWeaponGripMarker : undefined}
             shieldGripMarkers={selectedShieldGripMarkers}
             onShieldGripMarkerChange={selectedIsInventoryShield ? updateSelectedShieldGripMarker : undefined}
-            armorGripMarkers={selectedArmorGripMarkers}
-            onArmorGripMarkerChange={selectedIsInventoryArmor ? updateSelectedArmorGripMarker : undefined}
+            armorGripMarkers={selectedRigGripMarkers}
+            onArmorGripMarkerChange={selectedHasRigGripMarkers ? updateSelectedArmorGripMarker : undefined}
           >
             <div className="decor3d-preview-toolbar decor3d-canvas-overlay">
               <div>
@@ -1155,7 +1208,99 @@ export default function Decor3DTab({
                   Points de prise armure
                 </DecorHelpLabel>
                 <div className="decor3d-weapon-grip-grid">
-                  {ARMOR_GRIP_POINTS.map((point) => {
+                  {getVisibleArmorGripPoints(selectedModel).map((point) => {
+                    const enabledField = `armorGrip${point.suffix}Enabled`;
+                    const enabled = Boolean(selectedModel[enabledField]);
+                    return (
+                      <div className="decor3d-weapon-grip-card" key={point.id}>
+                        <label className="checkbox-row">
+                          <input
+                            type="checkbox"
+                            checked={enabled}
+                            onChange={(event) => setSelectedArmorGripEnabled(point.id, event.target.checked)}
+                          />
+                          <span>{point.label}</span>
+                        </label>
+                        <div className="decor3d-axis-grid">
+                          {['X', 'Y', 'Z'].map((axis) => {
+                            const key = `armorGrip${point.suffix}${axis}`;
+                            const fallback = Number(point[`default${axis}`]) || 0;
+                            return (
+                              <label key={key}>
+                                <span>Point {axis}</span>
+                                <input
+                                  type="number"
+                                  min={WEAPON_GRIP_POSITION_MIN}
+                                  max={WEAPON_GRIP_POSITION_MAX}
+                                  step="0.01"
+                                  disabled={!enabled}
+                                  value={selectedModel[key] ?? fallback}
+                                  onChange={(event) => updateSelectedArmorGripField(point.id, axis, event.target.value)}
+                                />
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {selectedIsInventoryHelmet ? (
+              <div className="decor3d-weapon-grip-section">
+                <DecorHelpLabel help="Definis le point du casque qui doit tomber sur la bouche du personnage. Active puis deplace la pastille BO dans l apercu pour caler les casques fermes.">
+                  Point de prise casque
+                </DecorHelpLabel>
+                <div className="decor3d-weapon-grip-grid">
+                  {HELMET_GRIP_POINTS.map((point) => {
+                    const enabledField = `armorGrip${point.suffix}Enabled`;
+                    const enabled = Boolean(selectedModel[enabledField]);
+                    return (
+                      <div className="decor3d-weapon-grip-card" key={point.id}>
+                        <label className="checkbox-row">
+                          <input
+                            type="checkbox"
+                            checked={enabled}
+                            onChange={(event) => setSelectedArmorGripEnabled(point.id, event.target.checked)}
+                          />
+                          <span>{point.label}</span>
+                        </label>
+                        <div className="decor3d-axis-grid">
+                          {['X', 'Y', 'Z'].map((axis) => {
+                            const key = `armorGrip${point.suffix}${axis}`;
+                            const fallback = Number(point[`default${axis}`]) || 0;
+                            return (
+                              <label key={key}>
+                                <span>Point {axis}</span>
+                                <input
+                                  type="number"
+                                  min={WEAPON_GRIP_POSITION_MIN}
+                                  max={WEAPON_GRIP_POSITION_MAX}
+                                  step="0.01"
+                                  disabled={!enabled}
+                                  value={selectedModel[key] ?? fallback}
+                                  onChange={(event) => updateSelectedArmorGripField(point.id, axis, event.target.value)}
+                                />
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {selectedIsInventoryLeggings ? (
+              <div className="decor3d-weapon-grip-section">
+                <DecorHelpLabel help="Definis les points des jambieres qui doivent suivre les aines, les genoux et les pieds du personnage. Les pastilles se deplacent directement dans l apercu.">
+                  Points de prise jambieres
+                </DecorHelpLabel>
+                <div className="decor3d-weapon-grip-grid">
+                  {LEGGINGS_GRIP_POINTS.map((point) => {
                     const enabledField = `armorGrip${point.suffix}Enabled`;
                     const enabled = Boolean(selectedModel[enabledField]);
                     return (

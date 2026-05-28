@@ -1,7 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ArrowLeft,
+  ArrowRight,
   Crosshair,
   Fingerprint,
+  FlipHorizontal2,
   HelpCircle,
   RotateCcw,
   Save,
@@ -14,14 +17,13 @@ import { getThreeModelSource } from '../utils/threeGltfUtils';
 import {
   CHARACTER_RIG_POINT_GROUPS,
   normalizeCharacterRigPoints,
+  roundCharacterRigPointValue,
   updateCharacterRigPoint,
 } from '../utils/rpg3dCharacterRig.js';
 
 const Character3DPreview = React.lazy(() => import('./rpg3d/Character3DPreview.jsx'));
 const CHARACTER_RIG_HELP_HUMANOID_IMAGE = '/assets/character-rig-help-humanoid.png';
 const CHARACTER_RIG_HELP_HANDS_IMAGE = '/assets/character-rig-help-hands.png';
-const CHARACTER_RIG_HELP_FINGER_STORAGE_KEY = 'escape-game-builder.characterRigHelpFingerPaths.v1';
-const CHARACTER_RIG_HELP_HANDS_VIEWBOX = { width: 1448, height: 1086 };
 
 const ensureCharacterModels = (draft) => {
   if (!Array.isArray(draft.characterModels3d)) draft.characterModels3d = [];
@@ -33,8 +35,8 @@ const CHARACTER_RIG_LEGEND = [
     id: 'weapon',
     label: 'Arme',
     details: [
-      { code: 'MD', label: 'Poignet droit' },
-      { code: 'MG', label: 'Poignet gauche' },
+      { code: 'POD', label: 'Poignet droit' },
+      { code: 'POG', label: 'Poignet gauche' },
     ],
   },
   {
@@ -113,100 +115,60 @@ const getPhalangeFingerLabel = (fingerId = '') => (
   CHARACTER_RIG_PHALANGE_FINGERS.find((finger) => finger.id === fingerId)?.label || fingerId
 );
 
+const getOppositeRigPointId = (pointId = '') => {
+  if (pointId.startsWith('right-')) return `left-${pointId.slice('right-'.length)}`;
+  if (pointId.startsWith('left-')) return `right-${pointId.slice('left-'.length)}`;
+  return '';
+};
+
+const clampRigSymmetryAxis = (value) => Math.min(0.95, Math.max(0.05, Number(value) || 0.5));
+const CHARACTER_RIG_SYMMETRY_AXIS_STEP = 0.02;
+
+const mirrorRigPointPatch = (patch = {}, axisX = 0.5) => {
+  const mirroredPatch = { ...patch };
+  const numericX = Number(patch.x);
+  if (Number.isFinite(numericX)) {
+    mirroredPatch.x = roundCharacterRigPointValue((clampRigSymmetryAxis(axisX) * 2) - numericX);
+  }
+  return mirroredPatch;
+};
+
 const CHARACTER_RIG_HELP_BODY_MARKERS = [
-  { id: 'mouth', label: 'BO', socket: 'armor', x: 100, y: 39 },
-  { id: 'neck', label: 'CO', socket: 'armor', x: 100, y: 55 },
-  { id: 'left-shoulder', label: 'EG', socket: 'armor', x: 75, y: 62 },
-  { id: 'right-shoulder', label: 'ED', socket: 'armor', x: 125, y: 62 },
-  { id: 'left-elbow', label: 'CG', socket: 'shield', x: 58, y: 94 },
-  { id: 'right-elbow', label: 'CD', socket: 'shield', x: 142, y: 94 },
-  { id: 'left-hand', label: 'MG', socket: 'weapon', x: 33, y: 129 },
-  { id: 'right-hand', label: 'MD', socket: 'weapon', x: 167, y: 129 },
-  { id: 'lower-belly', label: 'BA', socket: 'armor', x: 100, y: 139 },
-  { id: 'left-groin-fold', label: 'AG', socket: 'armor', x: 89, y: 148 },
-  { id: 'right-groin-fold', label: 'AD', socket: 'armor', x: 111, y: 148 },
-  { id: 'left-knee', label: 'GG', socket: 'armor', x: 87, y: 192 },
-  { id: 'right-knee', label: 'GD', socket: 'armor', x: 113, y: 192 },
-  { id: 'left-ankle', label: 'CHG', socket: 'armor', x: 84, y: 235 },
-  { id: 'right-ankle', label: 'CHD', socket: 'armor', x: 116, y: 235 },
-  { id: 'left-foot', label: 'PG', socket: 'armor', x: 79, y: 252 },
-  { id: 'right-foot', label: 'PD', socket: 'armor', x: 121, y: 252 },
+  { id: 'mouth', label: 'BO', socket: 'armor', x: 100, y: 36 },
+  { id: 'neck', label: 'CO', socket: 'armor', x: 100, y: 52 },
+  { id: 'left-shoulder', label: 'EG', socket: 'armor', x: 77, y: 64 },
+  { id: 'right-shoulder', label: 'ED', socket: 'armor', x: 123, y: 64 },
+  { id: 'left-elbow', label: 'CG', socket: 'shield', x: 61, y: 93 },
+  { id: 'right-elbow', label: 'CD', socket: 'shield', x: 140, y: 93 },
+  { id: 'left-hand', label: 'POG', socket: 'weapon', x: 42, y: 117 },
+  { id: 'right-hand', label: 'POD', socket: 'weapon', x: 158, y: 117 },
+  { id: 'lower-belly', label: 'BA', socket: 'armor', x: 100, y: 115 },
+  { id: 'left-groin-fold', label: 'AG', socket: 'armor', x: 89, y: 123 },
+  { id: 'right-groin-fold', label: 'AD', socket: 'armor', x: 111, y: 123 },
+  { id: 'left-knee', label: 'GG', socket: 'armor', x: 80, y: 175 },
+  { id: 'right-knee', label: 'GD', socket: 'armor', x: 116, y: 175 },
+  { id: 'left-ankle', label: 'CHG', socket: 'armor', x: 80, y: 222 },
+  { id: 'right-ankle', label: 'CHD', socket: 'armor', x: 121, y: 222 },
+  { id: 'left-foot', label: 'PG', socket: 'armor', x: 73, y: 238 },
+  { id: 'right-foot', label: 'PD', socket: 'armor', x: 129, y: 238 },
 ];
 
 const CHARACTER_RIG_HELP_FINGER_PATHS = [
-  { id: 'right-thumb', points: [{ x: 224, y: 500 }, { x: 145, y: 520 }, { x: 72, y: 544 }, { x: 35, y: 548 }] },
-  { id: 'right-index', points: [{ x: 207, y: 672 }, { x: 160, y: 765 }, { x: 125, y: 846 }, { x: 112, y: 882 }] },
-  { id: 'right-middle', points: [{ x: 306, y: 680 }, { x: 279, y: 806 }, { x: 262, y: 906 }, { x: 260, y: 944 }] },
-  { id: 'right-ring', points: [{ x: 397, y: 689 }, { x: 374, y: 800 }, { x: 358, y: 892 }, { x: 356, y: 930 }] },
-  { id: 'right-pinky', points: [{ x: 489, y: 682 }, { x: 486, y: 762 }, { x: 480, y: 838 }, { x: 477, y: 866 }] },
-  { id: 'left-thumb', points: [{ x: 1224, y: 500 }, { x: 1303, y: 520 }, { x: 1376, y: 544 }, { x: 1413, y: 548 }] },
-  { id: 'left-index', points: [{ x: 1287, y: 682 }, { x: 1311, y: 762 }, { x: 1319, y: 840 }, { x: 1328, y: 876 }] },
-  { id: 'left-middle', points: [{ x: 1195, y: 690 }, { x: 1220, y: 808 }, { x: 1231, y: 906 }, { x: 1234, y: 944 }] },
-  { id: 'left-ring', points: [{ x: 1107, y: 690 }, { x: 1116, y: 800 }, { x: 1122, y: 890 }, { x: 1124, y: 928 }] },
-  { id: 'left-pinky', points: [{ x: 1014, y: 682 }, { x: 1009, y: 762 }, { x: 1004, y: 838 }, { x: 1001, y: 866 }] },
+  { id: 'right-thumb', points: [{ x: 309, y: 382 }, { x: 229, y: 441 }, { x: 161, y: 504 }, { x: 84, y: 550 }] },
+  { id: 'right-index', points: [{ x: 230, y: 625 }, { x: 190, y: 730 }, { x: 165, y: 830 }, { x: 135, y: 850 }] },
+  { id: 'right-middle', points: [{ x: 303, y: 670 }, { x: 264, y: 766 }, { x: 232, y: 832 }, { x: 202, y: 921 }] },
+  { id: 'right-ring', points: [{ x: 370, y: 679 }, { x: 343, y: 779 }, { x: 298, y: 834 }, { x: 296, y: 914 }] },
+  { id: 'right-pinky', points: [{ x: 443, y: 679 }, { x: 432, y: 746 }, { x: 425, y: 850 }, { x: 414, y: 921 }] },
+  { id: 'left-thumb', points: [{ x: 1139, y: 382 }, { x: 1219, y: 441 }, { x: 1287, y: 504 }, { x: 1364, y: 550 }] },
+  { id: 'left-index', points: [{ x: 1218, y: 625 }, { x: 1258, y: 730 }, { x: 1283, y: 830 }, { x: 1313, y: 850 }] },
+  { id: 'left-middle', points: [{ x: 1145, y: 670 }, { x: 1184, y: 766 }, { x: 1216, y: 832 }, { x: 1246, y: 921 }] },
+  { id: 'left-ring', points: [{ x: 1078, y: 679 }, { x: 1105, y: 779 }, { x: 1150, y: 834 }, { x: 1152, y: 914 }] },
+  { id: 'left-pinky', points: [{ x: 1005, y: 679 }, { x: 1016, y: 746 }, { x: 1023, y: 850 }, { x: 1034, y: 921 }] },
 ];
 
-const clampHelpPoint = (value, min, max) => Math.min(max, Math.max(min, value));
-
-const cloneHelpFingerPaths = (paths = CHARACTER_RIG_HELP_FINGER_PATHS) => (
-  paths.map((path) => ({
-    id: path.id,
-    points: path.points.map((point) => ({ x: point.x, y: point.y })),
-  }))
-);
-
-const normalizeHelpFingerPaths = (value) => {
-  const pathsById = new Map((Array.isArray(value) ? value : []).map((path) => [path?.id, path]));
-  return CHARACTER_RIG_HELP_FINGER_PATHS.map((defaultPath) => {
-    const path = pathsById.get(defaultPath.id);
-    const normalizedPoints = [];
-    defaultPath.points.forEach((defaultPoint, index) => {
-      const point = path?.points?.[index];
-      const x = Number(point?.x);
-      const y = Number(point?.y);
-      if (Number.isFinite(x) && Number.isFinite(y)) {
-        normalizedPoints.push({
-          x: Math.round(clampHelpPoint(x, 0, CHARACTER_RIG_HELP_HANDS_VIEWBOX.width)),
-          y: Math.round(clampHelpPoint(y, 0, CHARACTER_RIG_HELP_HANDS_VIEWBOX.height)),
-        });
-        return;
-      }
-      const previousPoint = normalizedPoints[index - 1];
-      const beforePreviousPoint = normalizedPoints[index - 2];
-      if (previousPoint && beforePreviousPoint) {
-        normalizedPoints.push({
-          x: Math.round(clampHelpPoint(previousPoint.x + (previousPoint.x - beforePreviousPoint.x) * 0.45, 0, CHARACTER_RIG_HELP_HANDS_VIEWBOX.width)),
-          y: Math.round(clampHelpPoint(previousPoint.y + (previousPoint.y - beforePreviousPoint.y) * 0.45, 0, CHARACTER_RIG_HELP_HANDS_VIEWBOX.height)),
-        });
-        return;
-      }
-      normalizedPoints.push({ ...defaultPoint });
-    });
-    return {
-      id: defaultPath.id,
-      points: normalizedPoints,
-    };
-  });
-};
-
-const readHelpFingerPaths = () => {
-  if (typeof window === 'undefined') return cloneHelpFingerPaths();
-  try {
-    const stored = window.localStorage.getItem(CHARACTER_RIG_HELP_FINGER_STORAGE_KEY);
-    if (!stored) return cloneHelpFingerPaths();
-    return normalizeHelpFingerPaths(JSON.parse(stored));
-  } catch {
-    return cloneHelpFingerPaths();
-  }
-};
-
 function CharacterRiggingHelpModal({ onClose }) {
-  const handsSvgRef = useRef(null);
-  const dragMarkerRef = useRef(null);
-  const [fingerPaths, setFingerPaths] = useState(readHelpFingerPaths);
-  const [draggedMarkerId, setDraggedMarkerId] = useState('');
   const fingerMarkers = useMemo(() => (
-    fingerPaths.flatMap((path) => (
+    CHARACTER_RIG_HELP_FINGER_PATHS.flatMap((path) => (
       path.points.map((point, index) => ({
         id: `${path.id}-${index + 1}`,
         pathId: path.id,
@@ -214,72 +176,7 @@ function CharacterRiggingHelpModal({ onClose }) {
         ...point,
       }))
     ))
-  ), [fingerPaths]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(CHARACTER_RIG_HELP_FINGER_STORAGE_KEY, JSON.stringify(fingerPaths));
-  }, [fingerPaths]);
-
-  const getSvgPointFromPointer = (event) => {
-    const svg = handsSvgRef.current;
-    const matrix = svg?.getScreenCTM?.();
-    if (!svg || !matrix) return null;
-    const point = svg.createSVGPoint();
-    point.x = event.clientX;
-    point.y = event.clientY;
-    const svgPoint = point.matrixTransform(matrix.inverse());
-    return {
-      x: Math.round(clampHelpPoint(svgPoint.x, 0, CHARACTER_RIG_HELP_HANDS_VIEWBOX.width)),
-      y: Math.round(clampHelpPoint(svgPoint.y, 0, CHARACTER_RIG_HELP_HANDS_VIEWBOX.height)),
-    };
-  };
-
-  const setHelpFingerPoint = (pathId, pointIndex, point) => {
-    setFingerPaths((currentPaths) => currentPaths.map((path) => {
-      if (path.id !== pathId) return path;
-      return {
-        ...path,
-        points: path.points.map((existingPoint, index) => (
-          index === pointIndex ? point : existingPoint
-        )),
-      };
-    }));
-  };
-
-  const startMarkerDrag = (event, marker) => {
-    event.preventDefault();
-    event.stopPropagation();
-    dragMarkerRef.current = {
-      id: marker.id,
-      pathId: marker.pathId,
-      pointIndex: marker.pointIndex,
-      pointerId: event.pointerId,
-    };
-    setDraggedMarkerId(marker.id);
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    const point = getSvgPointFromPointer(event);
-    if (point) setHelpFingerPoint(marker.pathId, marker.pointIndex, point);
-  };
-
-  const moveMarkerDrag = (event) => {
-    const dragMarker = dragMarkerRef.current;
-    if (!dragMarker || dragMarker.pointerId !== event.pointerId) return;
-    event.preventDefault();
-    const point = getSvgPointFromPointer(event);
-    if (point) setHelpFingerPoint(dragMarker.pathId, dragMarker.pointIndex, point);
-  };
-
-  const stopMarkerDrag = (event) => {
-    const dragMarker = dragMarkerRef.current;
-    if (!dragMarker || dragMarker.pointerId !== event.pointerId) return;
-    dragMarkerRef.current = null;
-    setDraggedMarkerId('');
-  };
-
-  const resetHelpFingerPaths = () => {
-    setFingerPaths(cloneHelpFingerPaths());
-  };
+  ), []);
 
   return (
     <div className="character-rigging-help-backdrop" onClick={onClose}>
@@ -296,9 +193,6 @@ function CharacterRiggingHelpModal({ onClose }) {
             <h2>Exemple pastilles</h2>
           </div>
           <div className="character-rigging-help-head-actions">
-            <button type="button" aria-label="Reinitialiser les pastilles des mains" title="Reinitialiser les pastilles des mains" onClick={resetHelpFingerPaths}>
-              <RotateCcw aria-hidden="true" size={16} />
-            </button>
             <button type="button" aria-label="Fermer l'aide pastilles" onClick={onClose}>
               <X aria-hidden="true" size={17} />
             </button>
@@ -308,10 +202,17 @@ function CharacterRiggingHelpModal({ onClose }) {
           <div className="character-rigging-help-examples">
             <div className="character-rigging-help-figure body" role="img" aria-label="Humanoid 2D exemple pastilles">
               <img className="character-rigging-help-image" src={CHARACTER_RIG_HELP_HUMANOID_IMAGE} alt="" aria-hidden="true" />
-              <svg className="character-rigging-help-overlay" viewBox="0 0 200 268" aria-hidden="true">
+              <svg
+                className="character-rigging-help-overlay"
+                viewBox="0 0 200 268"
+                aria-hidden="true"
+              >
                 <line className="character-rigging-help-center" x1="100" y1="10" x2="100" y2="252" />
                 {CHARACTER_RIG_HELP_BODY_MARKERS.map((marker) => (
-                  <g className={`character-rigging-help-body-marker ${marker.socket}`} key={marker.id}>
+                  <g
+                    className={`character-rigging-help-body-marker ${marker.socket}`}
+                    key={marker.id}
+                  >
                     <circle cx={marker.x} cy={marker.y} r="5.8" />
                     <text x={marker.x} y={marker.y + 2.2}>{marker.label}</text>
                   </g>
@@ -321,16 +222,12 @@ function CharacterRiggingHelpModal({ onClose }) {
             <div className="character-rigging-help-figure hands" role="img" aria-label="Mains exemple pastilles phalanges">
               <img className="character-rigging-help-image" src={CHARACTER_RIG_HELP_HANDS_IMAGE} alt="" aria-hidden="true" />
               <svg
-                className="character-rigging-help-overlay interactive"
-                ref={handsSvgRef}
+                className="character-rigging-help-overlay"
                 viewBox="0 0 1448 1086"
                 aria-hidden="true"
-                onPointerMove={moveMarkerDrag}
-                onPointerUp={stopMarkerDrag}
-                onPointerCancel={stopMarkerDrag}
               >
                 <line className="character-rigging-help-hands-separator" x1="724" y1="0" x2="724" y2="1086" />
-                {fingerPaths.map((path) => (
+                {CHARACTER_RIG_HELP_FINGER_PATHS.map((path) => (
                   <polyline
                     className="character-rigging-help-finger-line"
                     key={path.id}
@@ -339,12 +236,11 @@ function CharacterRiggingHelpModal({ onClose }) {
                 ))}
                 {fingerMarkers.map((marker) => (
                   <circle
-                    className={`character-rigging-help-marker finger ${draggedMarkerId === marker.id ? 'dragging' : ''}`}
+                    className="character-rigging-help-marker finger"
                     key={marker.id}
                     cx={marker.x}
                     cy={marker.y}
                     r="9"
-                    onPointerDown={(event) => startMarkerDrag(event, marker)}
                   />
                 ))}
               </svg>
@@ -384,6 +280,8 @@ export default function CharacterRiggingTab({
 }) {
   const [rigMode, setRigMode] = useState(CHARACTER_RIG_POINT_GROUPS.body);
   const [rigCameraView, setRigCameraView] = useState('north');
+  const [symmetryEnabled, setSymmetryEnabled] = useState(false);
+  const [symmetryAxisX, setSymmetryAxisX] = useState(0.5);
   const [canvasZoomEnabled, setCanvasZoomEnabled] = useState(false);
   const [canvasZoomPercent, setCanvasZoomPercent] = useState(100);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -468,9 +366,24 @@ export default function CharacterRiggingTab({
   const setRigPoint = (pointId, patch) => {
     if (rigControlsDisabled) return;
     setSelectedRigPointId(pointId);
+    const oppositePointId = symmetryEnabled ? getOppositeRigPointId(pointId) : '';
     patchSelectedModel((model) => {
-      model.characterRigPoints = updateCharacterRigPoint(model.characterRigPoints, pointId, patch);
+      let nextRigPoints = updateCharacterRigPoint(model.characterRigPoints, pointId, patch);
+      if (oppositePointId) {
+        nextRigPoints = updateCharacterRigPoint(nextRigPoints, oppositePointId, mirrorRigPointPatch(patch, symmetryAxisX));
+      }
+      model.characterRigPoints = nextRigPoints;
     });
+  };
+
+  const moveSymmetryAxis = (direction = 0) => {
+    setSymmetryAxisX((current) => clampRigSymmetryAxis(
+      current + (Number(direction) || 0) * CHARACTER_RIG_SYMMETRY_AXIS_STEP,
+    ));
+  };
+
+  const stopCanvasPointerEvent = (event) => {
+    event.stopPropagation();
   };
 
   const selectRigPoint = (pointId = '') => {
@@ -557,7 +470,44 @@ export default function CharacterRiggingTab({
               initialCameraZoom={1.55}
               cameraView={rigCameraView}
             >
-              <div className="character-rigging-symmetry-guide" aria-hidden="true" />
+              <div
+                className="character-rigging-symmetry-guide"
+                style={{ left: `${symmetryAxisX * 100}%` }}
+                data-axis-percent={Math.round(symmetryAxisX * 100)}
+                aria-hidden="true"
+              />
+              <div className="character-rigging-symmetry-axis-controls" role="group" aria-label="Axe de symetrie">
+                <button
+                  type="button"
+                  className="character-rigging-symmetry-axis-button left"
+                  aria-label="Deplacer l'axe de symetrie vers la gauche"
+                  title="Deplacer l'axe vers la gauche"
+                  onPointerDown={stopCanvasPointerEvent}
+                  onPointerUp={stopCanvasPointerEvent}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    moveSymmetryAxis(-1);
+                  }}
+                >
+                  <ArrowLeft aria-hidden="true" size={17} />
+                </button>
+                <button
+                  type="button"
+                  className="character-rigging-symmetry-axis-button right"
+                  aria-label="Deplacer l'axe de symetrie vers la droite"
+                  title="Deplacer l'axe vers la droite"
+                  onPointerDown={stopCanvasPointerEvent}
+                  onPointerUp={stopCanvasPointerEvent}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    moveSymmetryAxis(1);
+                  }}
+                >
+                  <ArrowRight aria-hidden="true" size={17} />
+                </button>
+              </div>
               <div className="character3d-preview-head character3d-canvas-overlay">
                 <div>
                   <span className="section-kicker"><Crosshair size={14} /> Rig</span>
@@ -584,6 +534,17 @@ export default function CharacterRiggingTab({
                         );
                       })}
                     </div>
+                    <button
+                      type="button"
+                      className={`character-rigging-symmetry-toggle${symmetryEnabled ? ' active' : ''}`}
+                      aria-label={symmetryEnabled ? 'Desactiver la symetrie des pastilles' : 'Activer la symetrie des pastilles'}
+                      aria-pressed={symmetryEnabled}
+                      title={symmetryEnabled ? 'Symetrie active' : 'Activer la symetrie gauche droite'}
+                      onClick={() => setSymmetryEnabled((current) => !current)}
+                    >
+                      <FlipHorizontal2 aria-hidden="true" size={15} />
+                      <span>Symetrie</span>
+                    </button>
                     <div className="character-rigging-zoom-control" role="group" aria-label="Outils camera">
                       <button
                         type="button"

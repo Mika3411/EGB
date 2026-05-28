@@ -33,6 +33,9 @@ import {
   updateActorAnimationState,
 } from './rpg3dRuntimeModels.js';
 import {
+  CHARACTER_RIG_ARMOR_GRIP_POINTS,
+  CHARACTER_RIG_CORE_ARMOR_GRIP_POINT_IDS,
+  getCharacterRigPointDefinition,
   getCharacterRigSignature,
   getEnabledCharacterRigPointById,
 } from '../../utils/rpg3dCharacterRig.js';
@@ -220,18 +223,44 @@ const HELMET_GRIP_NAME_KEYS = [
   'gripsocket',
 ];
 
-const ARMOR_GRIP_POINTS = [
-  { suffix: 'LeftShoulder', role: 'shoulder', arm: 'left', rigPointId: 'left-shoulder', defaultX: -0.45, defaultY: 0.55, defaultZ: 0 },
-  { suffix: 'RightShoulder', role: 'shoulder', arm: 'right', rigPointId: 'right-shoulder', defaultX: 0.45, defaultY: 0.55, defaultZ: 0 },
-  { suffix: 'LeftElbow', role: 'elbow', arm: 'left', rigPointId: 'left-elbow', defaultX: -0.65, defaultY: 0.05, defaultZ: 0 },
-  { suffix: 'RightElbow', role: 'elbow', arm: 'right', rigPointId: 'right-elbow', defaultX: 0.65, defaultY: 0.05, defaultZ: 0 },
-  { suffix: 'LowerBelly', role: 'lower-belly', rigPointId: 'lower-belly', defaultX: 0, defaultY: -0.55, defaultZ: 0 },
+const ARMOR_GRIP_POINTS = CHARACTER_RIG_ARMOR_GRIP_POINTS;
+const HELMET_MOUTH_GRIP_POINT = ARMOR_GRIP_POINTS.find((point) => point.id === 'mouth') || null;
+const LEGGINGS_GRIP_POINT_IDS = [
+  'left-groin-fold',
+  'right-groin-fold',
+  'left-knee',
+  'right-knee',
+  'left-foot',
+  'right-foot',
 ];
+const LEGGINGS_GRIP_POINT_SET = new Set(LEGGINGS_GRIP_POINT_IDS);
+const LEGGINGS_GRIP_POINTS = ARMOR_GRIP_POINTS.filter((point) => LEGGINGS_GRIP_POINT_SET.has(point.id));
 const ARMOR_BODY_POINT_SUFFIXES = new Set(['LeftShoulder', 'RightShoulder', 'LowerBelly']);
 const ARMOR_LEFT_ARM_POINT_SUFFIXES = new Set(['LeftShoulder', 'LeftElbow']);
 const ARMOR_RIGHT_ARM_POINT_SUFFIXES = new Set(['RightShoulder', 'RightElbow']);
+const CORE_ARMOR_GRIP_SUFFIXES = new Set(
+  ARMOR_GRIP_POINTS
+    .filter((point) => point.core || CHARACTER_RIG_CORE_ARMOR_GRIP_POINT_IDS.includes(point.rigPointId))
+    .map((point) => point.suffix),
+);
 const ARMOR_ARM_SEGMENT_NAME_KEYS = ['arm', 'upperarm', 'shoulder', 'pauldron', 'bracer', 'brassard', 'sleeve', 'manche', 'coude', 'elbow'];
 const ARMOR_SEGMENT_VALUES = ['body', 'left-arm', 'right-arm'];
+const ARMOR_RIG_POINT_IDS = new Set(ARMOR_GRIP_POINTS.map((point) => point.rigPointId || point.id));
+const ARMOR_SURFACE_CLEARANCE_SCALE = 1.018;
+const ARMOR_SURFACE_RENDER_ORDER = 18;
+const ARMOR_SURFACE_POLYGON_OFFSET_FACTOR = -1.5;
+const ARMOR_SURFACE_POLYGON_OFFSET_UNITS = -6;
+
+const getDefaultArmorPieceRigPointId = (segment = 'body') => {
+  if (segment === 'left-arm') return 'left-elbow';
+  if (segment === 'right-arm') return 'right-elbow';
+  return 'lower-belly';
+};
+
+const normalizeArmorPieceRigPointId = (value = '', segment = 'body') => {
+  const id = String(value || '').trim();
+  return ARMOR_RIG_POINT_IDS.has(id) ? id : getDefaultArmorPieceRigPointId(segment);
+};
 
 const FINGER_NAME_KEYS = ['thumb', 'index', 'middle', 'ring', 'pinky', 'little', 'finger'];
 const PALM_SOCKET_FINGER_ROOT_FACTOR = 0.82;
@@ -265,12 +294,36 @@ const normalizeStoredArmorSegment = (value = '') => (
 
 const getArmorSegmentAssignments = (item = {}) => (
   Array.isArray(item.armorSegmentAssignments)
-    ? item.armorSegmentAssignments.map((entry) => ({
-      path: String(entry?.path || ''),
-      name: String(entry?.name || ''),
-      segment: normalizeStoredArmorSegment(entry?.segment),
-    })).filter((entry) => entry.path)
+    ? item.armorSegmentAssignments.map((entry) => {
+      const segment = normalizeStoredArmorSegment(entry?.segment);
+      return {
+        path: String(entry?.path || ''),
+        name: String(entry?.name || ''),
+        segment,
+        ...(entry?.pieceId ? { pieceId: String(entry.pieceId || '') } : {}),
+        ...(entry?.pieceName ? { pieceName: String(entry.pieceName || '') } : {}),
+        ...(entry?.pieceId ? { rigPointId: normalizeArmorPieceRigPointId(entry?.rigPointId, segment) } : {}),
+      };
+    }).filter((entry) => entry.path)
     : []
+);
+
+const getArmorCustomPieces = (item = {}) => (
+  Array.isArray(item.armorCustomPieces)
+    ? item.armorCustomPieces.map((piece, index) => {
+      const segment = normalizeStoredArmorSegment(piece?.segment);
+      return {
+        id: String(piece?.id || `piece-${index + 1}`),
+        name: String(piece?.name || `Morceau ${index + 1}`),
+        segment,
+        rigPointId: normalizeArmorPieceRigPointId(piece?.rigPointId, segment),
+      };
+    }).filter((piece) => piece.id)
+    : []
+);
+
+const getArmorCustomPieceById = (item = {}, pieceId = '') => (
+  getArmorCustomPieces(item).find((piece) => piece.id === String(pieceId || '')) || null
 );
 
 const normalizeArmorCutContourPoint = (point = {}) => ({
@@ -278,6 +331,7 @@ const normalizeArmorCutContourPoint = (point = {}) => ({
   y: Number.isFinite(Number(point?.y)) ? Number(point.y) : 0,
   z: Number.isFinite(Number(point?.z)) ? Number(point.z) : 0,
   ...normalizeArmorPaintSurfaceNormal(point),
+  ...normalizeArmorPaintSectionPlane(point),
 });
 
 const normalizeArmorPaintSurfaceNormal = (point = {}) => {
@@ -292,6 +346,41 @@ const normalizeArmorPaintSurfaceNormal = (point = {}) => {
     ny: ny / length,
     nz: nz / length,
   };
+};
+
+const normalizeArmorPaintSectionPlane = (point = {}) => {
+  const cx = Number(point?.cx);
+  const cy = Number(point?.cy);
+  const cz = Number(point?.cz);
+  const cw = Number(point?.cw);
+  if (!Number.isFinite(cx) || !Number.isFinite(cy) || !Number.isFinite(cz) || !Number.isFinite(cw)) return {};
+  const length = Math.hypot(cx, cy, cz);
+  if (length <= 0.001) return {};
+  return {
+    cx: cx / length,
+    cy: cy / length,
+    cz: cz / length,
+    cw: cw / length,
+  };
+};
+
+const getArmorPaintSectionPlane = (point = {}) => {
+  const cx = Number(point?.cx);
+  const cy = Number(point?.cy);
+  const cz = Number(point?.cz);
+  const cw = Number(point?.cw);
+  if (!Number.isFinite(cx) || !Number.isFinite(cy) || !Number.isFinite(cz) || !Number.isFinite(cw)) return null;
+  const normal = new THREE.Vector3(cx, cy, cz);
+  const length = normal.length();
+  if (length <= 0.000001) return null;
+  normal.multiplyScalar(1 / length);
+  return new THREE.Plane(normal, cw / length);
+};
+
+const isPointOnArmorPaintVisibleSide = (point, paintPoint, radius = 0.14, depthTolerance = 0.04) => {
+  const plane = getArmorPaintSectionPlane(paintPoint);
+  if (!plane) return true;
+  return plane.distanceToPoint(point) >= -getArmorPaintPlaneTolerance(radius, depthTolerance);
 };
 
 const getArmorCutContours = (item = {}, referenceScale = 1) => {
@@ -315,15 +404,15 @@ const getArmorCutContours = (item = {}, referenceScale = 1) => {
 
 const getArmorPaintDepthTolerance = (radius = 0.14, referenceScale = 1) => (
   THREE.MathUtils.clamp(
-    (Number(radius) || 0.14) * 0.28,
-    0.025 * referenceScale,
-    0.08 * referenceScale,
+    (Number(radius) || 0.14) * 0.36,
+    0.035 * referenceScale,
+    0.11 * referenceScale,
   )
 );
 
 const getArmorPaintPlaneTolerance = (radius = 0.14, depthTolerance = 0.04) => (
   THREE.MathUtils.clamp(
-    (Number(radius) || 0.14) * 0.12,
+    (Number(radius) || 0.14) * 0.18,
     depthTolerance * 0.35,
     depthTolerance * 0.9,
   )
@@ -343,12 +432,16 @@ const getArmorCutPaintStrokes = (item = {}, referenceScale = 1) => {
         points: (Array.isArray(entry?.points) ? entry.points : [])
           .slice(0, 240)
           .map(normalizeArmorCutContourPoint)
-          .map((point) => ({
-            x: point.x * referenceScale,
-            y: point.y * referenceScale,
-            z: point.z * referenceScale,
-            ...normalizeArmorPaintSurfaceNormal(point),
-          })),
+          .map((point) => {
+            const sectionPlane = normalizeArmorPaintSectionPlane(point);
+            return {
+              x: point.x * referenceScale,
+              y: point.y * referenceScale,
+              z: point.z * referenceScale,
+              ...normalizeArmorPaintSurfaceNormal(point),
+              ...(sectionPlane.cx !== undefined ? { ...sectionPlane, cw: sectionPlane.cw * referenceScale } : {}),
+            };
+          }),
       };
     })
     .filter((entry) => entry.points.length);
@@ -381,6 +474,7 @@ const getArmorPaintSurfaceNormal = (point = {}) => {
 };
 
 const isPointInsideArmorPaintStamp = (point, paintPoint, radius = 0.14, depthTolerance = 0.04) => {
+  if (!isPointOnArmorPaintVisibleSide(point, paintPoint, radius, depthTolerance)) return false;
   const normal = getArmorPaintSurfaceNormal(paintPoint);
   if (normal) {
     const dx = point.x - paintPoint.x;
@@ -428,6 +522,7 @@ const isPointInsidePaintSegment = (point, start, end, radius = 0.14, depthTolera
     y: start.y + dy * t,
     z: (Number(start.z) || 0) + (((Number(end.z) || 0) - (Number(start.z) || 0)) * t),
     ...(normal ? { nx: normal.x, ny: normal.y, nz: normal.z } : {}),
+    ...normalizeArmorPaintSectionPlane(start.cx !== undefined ? start : end),
   };
   return isPointInsideArmorPaintStamp(point, projectedPoint, radius, depthTolerance);
 };
@@ -631,6 +726,43 @@ const isHeadRigName = (name = '') => {
 const isNeckRigName = (name = '') => {
   const normalized = normalizeRigObjectName(name);
   return normalized.includes('neck') || normalized.includes('cou');
+};
+
+const isUpperLegRigName = (name = '', side = 'left') => {
+  const normalized = normalizeRigObjectName(name);
+  if (
+    normalized.includes('lowerleg')
+    || normalized.includes('calf')
+    || normalized.includes('shin')
+    || normalized.includes('foot')
+    || normalized.includes('toe')
+  ) return false;
+  const hasLegMarker = normalized.includes('upperleg')
+    || normalized.includes('thigh')
+    || normalized.includes(`${side}leg`)
+    || normalized.includes(`leg${side}`);
+  if (!hasLegMarker) return false;
+  return side === 'right' ? hasRightRigMarker(name) : hasLeftRigMarker(name);
+};
+
+const isLowerLegRigName = (name = '', side = 'left') => {
+  const normalized = normalizeRigObjectName(name);
+  if (normalized.includes('foot') || normalized.includes('toe')) return false;
+  const hasLegMarker = normalized.includes('lowerleg')
+    || normalized.includes('calf')
+    || normalized.includes('shin')
+    || normalized.includes('knee');
+  if (!hasLegMarker) return false;
+  return side === 'right' ? hasRightRigMarker(name) : hasLeftRigMarker(name);
+};
+
+const isFootRigName = (name = '', side = 'left') => {
+  const normalized = normalizeRigObjectName(name);
+  const hasFootMarker = normalized.includes('foot')
+    || normalized.includes('ankle')
+    || normalized.includes('toe');
+  if (!hasFootMarker) return false;
+  return side === 'right' ? hasRightRigMarker(name) : hasLeftRigMarker(name);
 };
 
 const findRightHandFromFingerBones = (root) => {
@@ -1226,6 +1358,20 @@ const findShoulderBoneForArm = (root, arm = 'left') => {
     || findFirstRigObject(root, (child) => child?.isBone && isShoulder(child.name));
 };
 
+const findUpperLegBoneForSide = (root, side = 'left') => (
+  findFirstRigObject(root, (child) => child?.isBone && isUpperLegRigName(child.name, side))
+);
+
+const findLowerLegBoneForSide = (root, side = 'left') => (
+  findFirstRigObject(root, (child) => child?.isBone && isLowerLegRigName(child.name, side))
+  || findUpperLegBoneForSide(root, side)
+);
+
+const findFootBoneForSide = (root, side = 'left') => (
+  findFirstRigObject(root, (child) => child?.isBone && isFootRigName(child.name, side))
+  || findLowerLegBoneForSide(root, side)
+);
+
 const findLowerBellyBone = (root) => (
   findFirstRigObject(root, (child) => child?.isBone && isLowerBellyRigName(child.name))
   || findFirstRigObject(root, (child) => {
@@ -1255,10 +1401,65 @@ const findHeadBone = (root) => {
   return findFirstRigObject(root, (child) => child?.isBone && isNeckRigName(child.name));
 };
 
-const findHelmetSocket = (root) => (
-  findFirstRigObject(root, (child) => HELMET_SOCKET_NAME_KEYS.includes(normalizeRigObjectName(child.name)))
-  || findHeadBone(root)
-);
+const isHelmetMouthGripEnabled = (item = {}) => Boolean(item?.armorGripMouthEnabled);
+
+const findHelmetSocket = (root, item = {}, actor = {}) => {
+  if (isHelmetMouthGripEnabled(item)) {
+    const mouthSocket = createCharacterRigPointSocket(root, actor, 'mouth');
+    if (mouthSocket) return mouthSocket;
+  }
+  return findFirstRigObject(root, (child) => HELMET_SOCKET_NAME_KEYS.includes(normalizeRigObjectName(child.name)))
+    || findHeadBone(root);
+};
+
+const getFingerRankForRigPoint = (point = {}) => {
+  if (point.finger === 'thumb') return 0;
+  if (point.finger === 'index') return 1;
+  if (point.finger === 'middle') return 2;
+  if (point.finger === 'ring') return 3;
+  if (point.finger === 'pinky') return 4;
+  return -1;
+};
+
+const findFingerBoneForRigPoint = (root = null, point = {}) => {
+  const hand = point.hand === 'left' ? 'left' : 'right';
+  const handBone = findHandBoneForArm(root, hand);
+  const targetRank = getFingerRankForRigPoint(point);
+  if (!handBone || targetRank < 0) return null;
+  const fingerRoot = getFingerRootBonesForHand(handBone, hand)
+    .find((rootBone) => getFingerFamilyRank(rootBone) === targetRank);
+  if (!fingerRoot) return handBone;
+  const joint = Number(point.joint);
+  if (joint <= 1) return getFingerBasePhalanxBoneFromRoot(fingerRoot, hand) || fingerRoot;
+  if (joint >= 4) return getFingerTipBoneFromRoot(fingerRoot, hand) || fingerRoot;
+  let match = null;
+  fingerRoot.traverse?.((child) => {
+    if (!match && child?.isBone && getFingerSegmentIndex(child) === joint) match = child;
+  });
+  return match || getFingerTipBoneFromRoot(fingerRoot, hand) || fingerRoot;
+};
+
+const findArmorRigPointBone = (root = null, rigPointId = '') => {
+  const point = getCharacterRigPointDefinition(rigPointId);
+  if (!point) return null;
+  if (point.group === 'phalanges') return findFingerBoneForRigPoint(root, point);
+  if (rigPointId === 'right-hand') return findHandBoneForArm(root, 'right');
+  if (rigPointId === 'left-hand') return findHandBoneForArm(root, 'left');
+  if (rigPointId === 'right-elbow') return findForearmBoneForArm(root, 'right');
+  if (rigPointId === 'left-elbow') return findForearmBoneForArm(root, 'left');
+  if (rigPointId === 'right-shoulder') return findShoulderBoneForArm(root, 'right');
+  if (rigPointId === 'left-shoulder') return findShoulderBoneForArm(root, 'left');
+  if (rigPointId === 'neck') return findFirstRigObject(root, (child) => child?.isBone && isNeckRigName(child.name));
+  if (rigPointId === 'mouth') return findHeadBone(root);
+  if (rigPointId === 'lower-belly') return findLowerBellyBone(root);
+  if (rigPointId === 'right-groin-fold') return findUpperLegBoneForSide(root, 'right') || findLowerBellyBone(root);
+  if (rigPointId === 'left-groin-fold') return findUpperLegBoneForSide(root, 'left') || findLowerBellyBone(root);
+  if (rigPointId === 'right-knee') return findLowerLegBoneForSide(root, 'right');
+  if (rigPointId === 'left-knee') return findLowerLegBoneForSide(root, 'left');
+  if (rigPointId === 'right-ankle' || rigPointId === 'right-foot') return findFootBoneForSide(root, 'right');
+  if (rigPointId === 'left-ankle' || rigPointId === 'left-foot') return findFootBoneForSide(root, 'left');
+  return null;
+};
 
 const getLocalPointFromWorld = (parent = null, worldPoint = null) => {
   if (!parent || !worldPoint) return null;
@@ -1359,39 +1560,64 @@ const findShieldSocketForArm = (root, item = {}, actor = {}) => {
   return arm === 'right' ? findRightForearmShieldSocket(root) : findLeftForearmShieldSocket(root);
 };
 
-const hasAnyExplicitArmorGripPoint = (item = {}) => (
-  ARMOR_GRIP_POINTS.some((point) => item[`armorGrip${point.suffix}Enabled`] === true)
+const resolveArmorGripPoint = (pointOrSuffix = '') => (
+  typeof pointOrSuffix === 'string'
+    ? ARMOR_GRIP_POINTS.find((point) => point.suffix === pointOrSuffix)
+    : pointOrSuffix
 );
 
-const getArmorGripPointEnabled = (item = {}, suffix = '') => {
+const getArmorGripPointEnabled = (item = {}, pointOrSuffix = '') => {
+  const point = resolveArmorGripPoint(pointOrSuffix);
+  const suffix = point?.suffix || String(pointOrSuffix || '');
   const value = item[`armorGrip${suffix}Enabled`];
-  if (value === undefined || value === null || value === '') return Boolean(item.armorCanvasCutEnabled);
-  if (item.armorCanvasCutEnabled && value === false && !hasAnyExplicitArmorGripPoint(item)) return true;
+  const isCorePoint = CORE_ARMOR_GRIP_SUFFIXES.has(suffix);
+  if (value === undefined || value === null || value === '') {
+    return isCorePoint ? Boolean(item.armorFullCharacterRigEnabled) : false;
+  }
   return Boolean(value);
 };
 
 const getEnabledArmorGripPoints = (item = {}) => (
-  ARMOR_GRIP_POINTS.filter((point) => getArmorGripPointEnabled(item, point.suffix))
+  ARMOR_GRIP_POINTS.filter((point) => getArmorGripPointEnabled(item, point))
+);
+
+const getEnabledLeggingsGripPoints = (item = {}) => (
+  LEGGINGS_GRIP_POINTS.filter((point) => getArmorGripPointEnabled(item, point))
 );
 
 const getEnabledArmorBodyGripPoints = (item = {}) => {
+  if (item.armorFullCharacterRigEnabled) return getEnabledArmorGripPoints(item);
   const bodyPoints = ARMOR_GRIP_POINTS.filter((point) => (
     ARMOR_BODY_POINT_SUFFIXES.has(point.suffix)
-    && getArmorGripPointEnabled(item, point.suffix)
+    && getArmorGripPointEnabled(item, point)
   ));
   return bodyPoints.length >= 2 ? bodyPoints : getEnabledArmorGripPoints(item);
 };
 
 const getArmorGripTargetBone = (root = null, point = {}) => {
+  const rigPointBone = findArmorRigPointBone(root, point.rigPointId);
+  if (rigPointBone) return rigPointBone;
   if (point.role === 'shoulder') return findShoulderBoneForArm(root, point.arm);
   if (point.role === 'elbow') return findForearmBoneForArm(root, point.arm);
   if (point.role === 'lower-belly') return findLowerBellyBone(root);
+  if (point.rigPointId === 'right-hand') return findHandBoneForArm(root, 'right');
+  if (point.rigPointId === 'left-hand') return findHandBoneForArm(root, 'left');
+  if (point.rigPointId === 'neck') return findFirstRigObject(root, (child) => child?.isBone && isNeckRigName(child.name));
+  if (point.rigPointId === 'mouth') return findHeadBone(root);
   return null;
 };
 
 const getFallbackArmorGripLocalPoint = (root = null, point = {}) => {
   if (!root) return null;
   const bounds = getActorModelBodyBounds(root);
+  const rigPointDefinition = getCharacterRigPointDefinition(point.rigPointId);
+  if (rigPointDefinition) {
+    const worldRigPoint = getCharacterRigBoundsWorldPoint(bounds, rigPointDefinition);
+    if (worldRigPoint) {
+      root.updateMatrixWorld?.(true);
+      return root.worldToLocal(worldRigPoint);
+    }
+  }
   const size = bounds.getSize(new THREE.Vector3());
   const center = bounds.getCenter(new THREE.Vector3());
   if (!Number.isFinite(size.x) || !Number.isFinite(size.y) || size.y <= 0.0001) return null;
@@ -1474,18 +1700,23 @@ const updateArmorArmLineSockets = (root = null) => {
   return didUpdate;
 };
 
-const createArmorBodySocket = (root = null, item = {}, actor = {}) => {
+const createArmorBodySocket = (root = null, item = {}, actor = {}, options = {}) => {
   if (!root?.traverse) return null;
-  const enabledPoints = getEnabledArmorBodyGripPoints(item);
+  const enabledPoints = Array.isArray(options.enabledPoints)
+    ? options.enabledPoints
+    : getEnabledArmorBodyGripPoints(item);
   if (!enabledPoints.length) return null;
-  const socketKey = 'armor-body-frame';
+  const socketKey = options.socketKey || 'armor-body-frame';
+  const socketName = options.socketName || 'Rpg3DArmorBodySocket';
+  const socketUserDataField = options.socketUserDataField || 'rpg3dArmorBodySocket';
   let existingSocket = null;
   root.traverse((child) => {
-    if (!existingSocket && child.userData?.rpg3dArmorBodySocket === socketKey) existingSocket = child;
+    if (!existingSocket && child.userData?.[socketUserDataField] === socketKey) existingSocket = child;
   });
   const socket = existingSocket || new THREE.Group();
-  socket.name = 'Rpg3DArmorBodySocket';
+  socket.name = socketName;
   socket.userData.rpg3dArmorBodySocket = socketKey;
+  socket.userData[socketUserDataField] = socketKey;
   socket.rpg3dArmorGripEntries = enabledPoints.map((point) => ({
     suffix: point.suffix,
     source: getArmorGripTargetBone(root, point),
@@ -1540,10 +1771,33 @@ const findArmorSocket = (root, item = {}, actor = {}) => {
   return findLowerBellyBone(root);
 };
 
+const findLeggingsSocket = (root, item = {}, actor = {}) => {
+  const enabledPoints = getEnabledLeggingsGripPoints(item);
+  if (enabledPoints.length) {
+    const frameSocket = createArmorBodySocket(root, item, actor, {
+      enabledPoints,
+      socketKey: 'leggings-body-frame',
+      socketName: 'Rpg3DLeggingsBodySocket',
+      socketUserDataField: 'rpg3dLeggingsBodySocket',
+    });
+    if (frameSocket) return frameSocket;
+  }
+  const rigSocket = createCharacterRigPointSocket(root, actor, 'lower-belly');
+  if (rigSocket) return rigSocket;
+  return findLowerBellyBone(root);
+};
+
 const findArmorArmSocket = (root, item = {}, arm = 'left', actor = {}) => {
   const suffixes = arm === 'right' ? ARMOR_RIGHT_ARM_POINT_SUFFIXES : ARMOR_LEFT_ARM_POINT_SUFFIXES;
   const hasArmLine = [...suffixes].every((suffix) => getArmorGripPointEnabled(item, suffix));
   return hasArmLine ? createArmorArmLineSocket(root, arm, actor) : null;
+};
+
+const findArmorPieceSocket = (root, item = {}, piece = {}, actor = {}) => {
+  const rigPointId = normalizeArmorPieceRigPointId(piece.rigPointId, piece.segment);
+  return findArmorRigPointBone(root, rigPointId)
+    || createCharacterRigPointSocket(root, actor, rigPointId)
+    || findArmorSocket(root, item, actor);
 };
 
 const getEquipmentGripNameKeys = (role = 'weapon') => (
@@ -1604,6 +1858,15 @@ const getEquippedHelmetItem = (actor = {}) => {
   )) || null;
 };
 
+const getEquippedLeggingsItem = (actor = {}) => {
+  const inventory = Array.isArray(actor.inventory) ? actor.inventory : [];
+  return inventory.find((item) => (
+    item?.type === 'leggings'
+    && item.equipped
+    && (item.weaponModelUrl || item.modelUrl)
+  )) || null;
+};
+
 const getWeaponModelSource = (item = {}) => item?.weaponModelUrl || item?.modelUrl || '';
 
 const getWeaponModelPayload = (item = {}) => ({
@@ -1628,6 +1891,12 @@ const getEquipmentItemModelSignature = (item = null) => {
     getModelResourcesSignature(payload),
     Number(item.weaponModelScale) || 1,
     Number(item.weaponModelSourceScale) || 0,
+    Number(item.weaponModelWidth) || 0,
+    Number(item.weaponModelHeight) || 0,
+    Number(item.weaponModelDepth) || 0,
+    Number(item.weaponModelSourceWidth) || 0,
+    Number(item.weaponModelSourceHeight) || 0,
+    Number(item.weaponModelSourceDepth) || 0,
     getEquipmentModelRotationValue(item, 'X'),
     getEquipmentModelRotationValue(item, 'Y'),
     getEquipmentModelRotationValue(item, 'Z'),
@@ -1670,6 +1939,8 @@ const getEquipmentItemModelSignature = (item = null) => {
       Number(item[`armorGrip${point.suffix}Z`]) || point.defaultZ,
     ]),
     item.armorCanvasCutEnabled ? 1 : 0,
+    item.armorFullCharacterRigEnabled ? 1 : 0,
+    JSON.stringify(Array.isArray(item.armorCustomPieces) ? item.armorCustomPieces : []),
     JSON.stringify(getArmorSegmentAssignments(item)),
     JSON.stringify(Array.isArray(item.armorCutContours) ? item.armorCutContours : []),
     JSON.stringify(Array.isArray(item.armorCutPaintStrokes) ? item.armorCutPaintStrokes : []),
@@ -1683,6 +1954,7 @@ const getEquipmentModelSignature = (actor = {}) => [
   getEquipmentItemModelSignature(getEquippedShieldItem(actor)),
   getEquipmentItemModelSignature(getEquippedArmorItem(actor)),
   getEquipmentItemModelSignature(getEquippedHelmetItem(actor)),
+  getEquipmentItemModelSignature(getEquippedLeggingsItem(actor)),
 ].join('|');
 
 const DEFAULT_ENEMY_CHARACTER_BY_ROLE = {
@@ -1784,6 +2056,11 @@ const addGltfActorModel = (actorGroup, template, actor, height, radius3d, select
       equipmentSignatures.helmet = getActorEquipmentRoleSignature(actor, 'helmet');
     }
   }
+  if (fitted && animationOptions.leggingsTemplate && animationOptions.leggingsItem) {
+    if (addEquippedLeggingsToActorModel(instance, animationOptions.leggingsTemplate, animationOptions.leggingsItem, actor)) {
+      equipmentSignatures.leggings = getActorEquipmentRoleSignature(actor, 'leggings');
+    }
+  }
   if (selected) actorGroup.add(createSelectionRing(radius3d * 1.9 * Math.max(axisScale.x, axisScale.z), '#f8fbff'));
   return {
     mixer: animationController?.mixer || null,
@@ -1802,13 +2079,111 @@ const fitWeaponModelToLargestDimension = (object, targetSize = 1.15) => {
   object.scale.multiplyScalar(targetSize / largest);
 };
 
+const getPositiveEquipmentNumber = (value, fallback = 1) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0.0001 ? numeric : fallback;
+};
+
+const getEquipmentTargetDimensions = (item = {}) => {
+  const scale = getPositiveEquipmentNumber(item.weaponModelScale, 1);
+  return {
+    width: getPositiveEquipmentNumber(item.weaponModelWidth, scale),
+    height: getPositiveEquipmentNumber(item.weaponModelHeight, scale),
+    depth: getPositiveEquipmentNumber(item.weaponModelDepth, scale),
+  };
+};
+
+const hasExplicitEquipmentDimensions = (item = {}) => {
+  const scale = getPositiveEquipmentNumber(item.weaponModelScale, 1);
+  const dimensions = ['weaponModelWidth', 'weaponModelHeight', 'weaponModelDepth']
+    .map((field) => Number(item[field]))
+    .filter((value) => Number.isFinite(value) && value > 0.0001);
+  if (dimensions.length < 3) return false;
+  return dimensions.some((value) => Math.abs(value - scale) > 0.0001)
+    || Math.abs(dimensions[0] - dimensions[1]) > 0.0001
+    || Math.abs(dimensions[0] - dimensions[2]) > 0.0001;
+};
+
+const isArmorEquipmentRole = (role = '') => (
+  String(role || '').startsWith('armor') || role === 'leggings'
+);
+
+const applyArmorSurfaceMaterialBias = (material = null) => {
+  if (!material) return;
+  const currentFactor = Number(material.polygonOffsetFactor);
+  const currentUnits = Number(material.polygonOffsetUnits);
+  material.polygonOffset = true;
+  material.polygonOffsetFactor = Number.isFinite(currentFactor)
+    ? Math.min(currentFactor, ARMOR_SURFACE_POLYGON_OFFSET_FACTOR)
+    : ARMOR_SURFACE_POLYGON_OFFSET_FACTOR;
+  material.polygonOffsetUnits = Number.isFinite(currentUnits)
+    ? Math.min(currentUnits, ARMOR_SURFACE_POLYGON_OFFSET_UNITS)
+    : ARMOR_SURFACE_POLYGON_OFFSET_UNITS;
+  if (!material.transparent || Number(material.opacity) >= 0.999 || Number(material.alphaTest) > 0) {
+    material.depthWrite = true;
+  }
+  material.needsUpdate = true;
+};
+
+const applyArmorSurfaceClearance = (equipment = null, role = 'equipment') => {
+  if (!equipment?.traverse || !isArmorEquipmentRole(role)) return false;
+  let applied = false;
+  equipment.traverse((child) => {
+    if (!child || (!child.isMesh && !child.isSkinnedMesh)) return;
+    if (!child.userData?.rpg3dArmorSurfaceClearanceApplied) {
+      child.scale.multiplyScalar(ARMOR_SURFACE_CLEARANCE_SCALE);
+      child.userData = {
+        ...(child.userData || {}),
+        rpg3dArmorSurfaceClearanceApplied: true,
+      };
+    }
+    child.renderOrder = Math.max(Number(child.renderOrder) || 0, ARMOR_SURFACE_RENDER_ORDER);
+    const materials = Array.isArray(child.material) ? child.material : [child.material];
+    materials.filter(Boolean).forEach(applyArmorSurfaceMaterialBias);
+    applied = true;
+  });
+  if (applied) {
+    equipment.userData = {
+      ...(equipment.userData || {}),
+      rpg3dArmorSurfaceClearanceApplied: true,
+    };
+  }
+  return applied;
+};
+
+const fitEquipmentModelToItemDimensions = (object, item = {}) => {
+  if (!object) return false;
+  if (!hasExplicitEquipmentDimensions(item)) {
+    fitWeaponModelToLargestDimension(object, Math.max(0.001, Number(item.weaponModelScale) || 1));
+    return true;
+  }
+  object.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(object);
+  const size = box.getSize(new THREE.Vector3());
+  if (
+    !Number.isFinite(size.x) || size.x <= 0.0001
+    || !Number.isFinite(size.y) || size.y <= 0.0001
+    || !Number.isFinite(size.z) || size.z <= 0.0001
+  ) return false;
+  const dimensions = getEquipmentTargetDimensions(item);
+  object.scale.set(
+    object.scale.x * Math.max(0.000001, dimensions.width / size.x),
+    object.scale.y * Math.max(0.000001, dimensions.height / size.y),
+    object.scale.z * Math.max(0.000001, dimensions.depth / size.z),
+  );
+  object.updateMatrixWorld(true);
+  return true;
+};
+
 const getEquipmentAttachmentName = (role = 'equipment') => {
   if (role === 'weapon') return 'Rpg3DWeaponAttachment';
   if (role === 'shield') return 'Rpg3DShieldAttachment';
   if (role === 'armor') return 'Rpg3DArmorAttachment';
   if (role === 'armor-left-arm') return 'Rpg3DArmorLeftArmAttachment';
   if (role === 'armor-right-arm') return 'Rpg3DArmorRightArmAttachment';
+  if (String(role).startsWith('armor-piece')) return 'Rpg3DArmorPieceAttachment';
   if (role === 'helmet') return 'Rpg3DHelmetAttachment';
+  if (role === 'leggings') return 'Rpg3DLeggingsAttachment';
   return 'Rpg3DEquipmentAttachment';
 };
 
@@ -1833,6 +2208,10 @@ const markEquipmentAttachment = (target, role = 'equipment', socket = null, grip
   if (role === 'helmet') {
     target.userData.rpg3dEquippedHelmet = true;
     target.userData.rpg3dHelmetSocket = socket?.name || '';
+  }
+  if (role === 'leggings') {
+    target.userData.rpg3dEquippedLeggings = true;
+    target.userData.rpg3dLeggingsSocket = socket?.name || '';
   }
 };
 
@@ -1928,6 +2307,33 @@ const getArmorGripPointOffset = (item = {}, point = {}, equipmentScale = 1) => (
   ).multiplyScalar(getArmorGripOffsetScale(item, equipmentScale))
 );
 
+const getManualHelmetGrip = (item = {}, equipmentScale = 1) => {
+  if (!HELMET_MOUTH_GRIP_POINT || !isHelmetMouthGripEnabled(item)) return null;
+  return {
+    name: 'manual-helmet-mouth',
+    mode: 'point',
+    offset: getArmorGripPointOffset(item, HELMET_MOUTH_GRIP_POINT, equipmentScale),
+  };
+};
+
+const getManualLeggingsGrip = (item = {}, equipmentScale = 1) => {
+  const entries = getEnabledLeggingsGripPoints(item)
+    .map((point) => ({
+      suffix: point.suffix,
+      point: getArmorGripPointOffset(item, point, equipmentScale),
+    }));
+  if (!entries.length) return null;
+  const frame = getArmorGripFrame(entries);
+  if (!frame) return null;
+  return {
+    name: 'manual-leggings-frame',
+    mode: 'frame',
+    oriented: true,
+    center: frame.center,
+    quaternion: frame.quaternion,
+  };
+};
+
 const getManualArmorGrip = (item = {}, equipmentScale = 1, segment = 'body') => {
   const enabledPoints = segment === 'body' ? getEnabledArmorBodyGripPoints(item) : getEnabledArmorGripPoints(item);
   const entries = enabledPoints
@@ -1968,6 +2374,20 @@ const getManualArmorArmGrip = (item = {}, equipmentScale = 1, arm = 'left') => {
   };
 };
 
+const getObjectLocalBoundsCenter = (object = null) => {
+  if (!object) return new THREE.Vector3();
+  object.updateMatrixWorld?.(true);
+  const box = new THREE.Box3().setFromObject(object);
+  if (!Number.isFinite(box.min.x) || !Number.isFinite(box.max.x)) return new THREE.Vector3();
+  return object.worldToLocal(box.getCenter(new THREE.Vector3()));
+};
+
+const getManualArmorPieceGrip = (pieceObject = null, piece = {}) => ({
+  name: `manual-armor-piece-${piece.id || 'piece'}`,
+  mode: 'point',
+  offset: getObjectLocalBoundsCenter(pieceObject),
+});
+
 const getFallbackWeaponGripOffset = (equipment) => {
   if (!equipment) return null;
   equipment.updateMatrixWorld(true);
@@ -2004,7 +2424,7 @@ const getEquipmentParentScaleFactor = (socket = null) => {
 const attachPreparedEquipmentToSocket = (socket, equipment, item = {}, role = 'equipment', options = {}) => {
   if (!socket || !equipment) return null;
   const scale = Math.max(0.001, Number(item.weaponModelScale) || 1);
-  if (options.fit !== false) fitWeaponModelToLargestDimension(equipment, scale);
+  if (options.fit !== false) fitEquipmentModelToItemDimensions(equipment, item);
   const hasBaseRotation = options.applyBaseRotation !== false && hasEquipmentModelBaseRotation(item);
   if (hasBaseRotation) {
     equipment.quaternion.premultiply(getEquipmentModelBaseQuaternion(item));
@@ -2013,7 +2433,9 @@ const attachPreparedEquipmentToSocket = (socket, equipment, item = {}, role = 'e
     ? getManualEquipmentGrip(item, scale)
     : (role === 'shield'
       ? getManualShieldGrip(item, scale)
-      : (String(role).startsWith('armor') ? getManualArmorGrip(item, scale) : null)));
+      : (role === 'helmet'
+        ? getManualHelmetGrip(item, scale)
+        : (String(role).startsWith('armor') ? getManualArmorGrip(item, scale) : null))));
   const grip = manualGrip ? null : findEquipmentGripSocket(equipment, role);
   const fallbackGripOffset = (manualGrip || grip || role !== 'weapon') ? null : getFallbackWeaponGripOffset(equipment);
   const attachment = manualGrip || grip || fallbackGripOffset || hasBaseRotation ? new THREE.Group() : equipment;
@@ -2081,6 +2503,7 @@ const attachPreparedEquipmentToSocket = (socket, equipment, item = {}, role = 'e
     attachment.rotation.y += manualGrip.rotation.y;
     attachment.rotation.z += manualGrip.rotation.z;
   }
+  applyArmorSurfaceClearance(equipment, role);
   markEquipmentAttachment(attachment, role, socket, manualGrip?.name || grip || (fallbackGripOffset ? 'auto-blade-base' : null));
   socket.add(attachment);
   return attachment;
@@ -2126,26 +2549,29 @@ const createFallbackEquipmentSocket = (actorModel, role = 'weapon', hand = 'righ
   const center = bounds.getCenter(new THREE.Vector3());
   if (!Number.isFinite(size.x) || !Number.isFinite(size.y) || size.y <= 0.0001) return null;
   const side = role === 'shield' || (role === 'weapon' && hand === 'left') ? -1 : 1;
+  const centeredRole = role === 'armor' || role === 'helmet' || role === 'leggings';
   const worldPoint = new THREE.Vector3(
-    role === 'armor' || role === 'helmet' ? center.x : center.x + side * Math.max(size.x * 0.42, 0.28),
-    bounds.min.y + size.y * (role === 'helmet' ? 0.88 : (role === 'armor' ? 0.48 : (role === 'shield' ? 0.5 : 0.48))),
-    center.z + size.z * (role === 'helmet' ? 0.02 : (role === 'armor' ? 0.08 : (role === 'shield' ? 0.08 : 0.22))),
+    centeredRole ? center.x : center.x + side * Math.max(size.x * 0.42, 0.28),
+    bounds.min.y + size.y * (role === 'helmet' ? 0.88 : (role === 'leggings' ? 0.25 : (role === 'armor' ? 0.48 : (role === 'shield' ? 0.5 : 0.48)))),
+    center.z + size.z * (role === 'helmet' ? 0.02 : (role === 'leggings' ? 0.1 : (role === 'armor' ? 0.08 : (role === 'shield' ? 0.08 : 0.22)))),
   );
   const socket = new THREE.Group();
   socket.name = role === 'armor'
     ? 'Rpg3DFallbackArmorSocket'
     : (role === 'helmet'
       ? 'Rpg3DFallbackHelmetSocket'
-      : (role === 'shield'
-      ? 'Rpg3DFallbackShieldSocket'
-      : (hand === 'left' ? 'Rpg3DFallbackLeftWeaponSocket' : 'Rpg3DFallbackWeaponSocket')));
+      : (role === 'leggings'
+        ? 'Rpg3DFallbackLeggingsSocket'
+        : (role === 'shield'
+        ? 'Rpg3DFallbackShieldSocket'
+        : (hand === 'left' ? 'Rpg3DFallbackLeftWeaponSocket' : 'Rpg3DFallbackWeaponSocket'))));
   socket.userData.rpg3dFallbackEquipmentSocket = fallbackRole;
   socket.position.copy(actorModel.worldToLocal(worldPoint));
   actorModel.add(socket);
   return socket;
 };
 
-const addEquippedModelToActorSocket = (actorModel, modelTemplate, item = {}, findSocket, role = 'equipment') => {
+const addEquippedModelToActorSocket = (actorModel, modelTemplate, item = {}, findSocket, role = 'equipment', options = {}) => {
   const socket = findSocket?.(actorModel) || createFallbackEquipmentSocket(
     actorModel,
     role,
@@ -2166,7 +2592,7 @@ const addEquippedModelToActorSocket = (actorModel, modelTemplate, item = {}, fin
     forceVisibleMeshes: true,
   }));
   enableObjectShadows(equipment);
-  return Boolean(attachPreparedEquipmentToSocket(socket, equipment, item, role));
+  return Boolean(attachPreparedEquipmentToSocket(socket, equipment, item, role, options));
 };
 
 const addEquippedWeaponToActorModel = (actorModel, weaponTemplate, weaponItem = {}, actor = {}) => (
@@ -2189,15 +2615,29 @@ const addEquippedShieldToActorModel = (actorModel, shieldTemplate, shieldItem = 
   )
 );
 
-const addEquippedHelmetToActorModel = (actorModel, helmetTemplate, helmetItem = {}) => (
+const addEquippedHelmetToActorModel = (actorModel, helmetTemplate, helmetItem = {}, actor = {}) => (
   addEquippedModelToActorSocket(
     actorModel,
     helmetTemplate,
     helmetItem,
-    (root) => findHelmetSocket(root),
+    (root) => findHelmetSocket(root, helmetItem, actor),
     'helmet',
   )
 );
+
+const addEquippedLeggingsToActorModel = (actorModel, leggingsTemplate, leggingsItem = {}, actor = {}) => {
+  const scale = Math.max(0.001, Number(leggingsItem.weaponModelScale) || 1);
+  return addEquippedModelToActorSocket(
+    actorModel,
+    leggingsTemplate,
+    leggingsItem,
+    (root) => findLeggingsSocket(root, leggingsItem, actor),
+    'leggings',
+    {
+      manualGrip: getManualLeggingsGrip(leggingsItem, scale),
+    },
+  );
+};
 
 const getObjectLargestDimension = (object = null) => {
   if (!object) return 0;
@@ -2206,6 +2646,19 @@ const getObjectLargestDimension = (object = null) => {
   const size = box.getSize(new THREE.Vector3());
   const largest = Math.max(size.x, size.y, size.z);
   return Number.isFinite(largest) && largest > 0.0001 ? largest : 0;
+};
+
+const getObjectBoundingDimensions = (object = null) => {
+  if (!object) return null;
+  object.updateMatrixWorld?.(true);
+  const box = new THREE.Box3().setFromObject(object);
+  const size = box.getSize(new THREE.Vector3());
+  if (
+    !Number.isFinite(size.x) || size.x <= 0.0001
+    || !Number.isFinite(size.y) || size.y <= 0.0001
+    || !Number.isFinite(size.z) || size.z <= 0.0001
+  ) return null;
+  return size;
 };
 
 const getArmorGripReferenceScale = (item = {}, fallback = 1) => {
@@ -2564,34 +3017,85 @@ const createSegmentedArmorEquipment = (equipment = null, item = {}) => {
   const largest = getObjectLargestDimension(equipment);
   const referenceScale = getArmorGripReferenceScale(item, largest || 1);
   const targetSize = Math.max(0.001, Number(item.weaponModelScale) || 1);
-  const fitScale = largest > 0.0001 ? targetSize / largest : 1;
+  const targetDimensions = getEquipmentTargetDimensions({ ...item, weaponModelScale: targetSize });
+  const sourceDimensions = getObjectBoundingDimensions(equipment);
+  const fitScale = sourceDimensions && hasExplicitEquipmentDimensions(item)
+    ? new THREE.Vector3(
+      targetDimensions.width / sourceDimensions.x,
+      targetDimensions.height / sourceDimensions.y,
+      targetDimensions.depth / sourceDimensions.z,
+    )
+    : new THREE.Vector3(
+      largest > 0.0001 ? targetSize / largest : 1,
+      largest > 0.0001 ? targetSize / largest : 1,
+      largest > 0.0001 ? targetSize / largest : 1,
+    );
   const body = new THREE.Group();
   const left = new THREE.Group();
   const right = new THREE.Group();
   body.name = 'Rpg3DArmorBodyModel';
   left.name = 'Rpg3DArmorLeftArmModel';
   right.name = 'Rpg3DArmorRightArmModel';
-  body.scale.setScalar(fitScale);
-  left.scale.setScalar(fitScale);
-  right.scale.setScalar(fitScale);
   const segments = { body, left, right };
   const counts = { body: 0, left: 0, right: 0 };
+  const pieceGroups = [];
+  const applySegmentFitScale = () => {
+    [body, left, right, ...pieceGroups.map((entry) => entry.object)]
+      .filter(Boolean)
+      .forEach((group) => group.scale.copy(fitScale));
+  };
   if (meshes.length === 1) {
     if (!item.armorCanvasCutEnabled) return null;
     const splitCounts = splitSingleArmorMeshIntoSegments(meshes[0], equipment, item, referenceScale, segments);
     if (!splitCounts) return null;
-    return { body, left, right, counts: splitCounts, referenceScale: splitCounts.referenceScale || referenceScale };
+    applySegmentFitScale();
+    return { body, left, right, pieces: pieceGroups, counts: splitCounts, referenceScale: splitCounts.referenceScale || referenceScale };
   }
-  const classifiedMeshes = meshes.map((mesh) => ({
+  const assignments = getArmorSegmentAssignments(item);
+  const assignmentByPath = new Map(assignments.map((assignment) => [assignment.path, assignment]));
+  const customPiecesById = new Map(getArmorCustomPieces(item).map((piece) => [piece.id, piece]));
+  const meshEntries = meshes.map((mesh) => ({
     mesh,
-    segment: classifyArmorMeshSegment(mesh, equipment, item, referenceScale),
+    nodePath: getRigNodePath(mesh, equipment),
   }));
-  classifiedMeshes.forEach(({ mesh, segment }) => {
+  const pieceGroupById = new Map();
+  const getPieceGroup = (piece) => {
+    if (pieceGroupById.has(piece.id)) return pieceGroupById.get(piece.id);
+    const group = new THREE.Group();
+    group.name = `Rpg3DArmorPieceModel_${piece.name || piece.id}`;
+    group.userData.rpg3dArmorPieceId = piece.id;
+    group.userData.rpg3dArmorPieceName = piece.name || '';
+    group.userData.rpg3dArmorPieceRigPointId = piece.rigPointId || '';
+    const entry = { piece, object: group };
+    pieceGroupById.set(piece.id, entry);
+    pieceGroups.push(entry);
+    return entry;
+  };
+  meshEntries.forEach(({ mesh, nodePath }) => {
+    const assignment = assignmentByPath.get(nodePath);
+    const assignmentSegment = normalizeStoredArmorSegment(assignment?.segment);
+    const piece = assignment?.pieceId
+      ? (customPiecesById.get(assignment.pieceId) || {
+        id: assignment.pieceId,
+        name: assignment.pieceName || assignment.name || assignment.pieceId,
+        segment: assignmentSegment,
+        rigPointId: normalizeArmorPieceRigPointId(assignment.rigPointId, assignmentSegment),
+      })
+      : null;
+    if (piece?.id) {
+      const pieceEntry = getPieceGroup(piece);
+      pieceEntry.object.attach(mesh);
+      return;
+    }
+    const segment = assignment
+      ? normalizeArmorSegment(assignmentSegment)
+      : classifyArmorMeshSegment(mesh, equipment, item, referenceScale);
     segments[segment].attach(mesh);
     counts[segment] += 1;
   });
-  if (!counts.left && !counts.right) return null;
-  return { body, left, right, counts, referenceScale };
+  if (!pieceGroups.length && !counts.left && !counts.right) return null;
+  applySegmentFitScale();
+  return { body, left, right, pieces: pieceGroups, counts, referenceScale };
 };
 
 const clonePreparedEquipmentModel = (modelTemplate = null) => {
@@ -2621,6 +3125,24 @@ const attachArmorSegment = (actorModel, segmentObject, item = {}, role = 'armor'
   }));
 };
 
+const attachArmorPiece = (actorModel, pieceEntry = null, item = {}, actor = {}) => {
+  const pieceObject = pieceEntry?.object;
+  const piece = pieceEntry?.piece;
+  if (!pieceObject?.children?.length || !piece?.id) return false;
+  const socket = findArmorPieceSocket(actorModel, item, piece, actor);
+  if (!socket) return false;
+  return Boolean(attachPreparedEquipmentToSocket(
+    socket,
+    pieceObject,
+    item,
+    `armor-piece-${piece.id}`,
+    {
+      fit: false,
+      manualGrip: getManualArmorPieceGrip(pieceObject, piece),
+    },
+  ));
+};
+
 const addSegmentedArmorToActorModel = (actorModel, armorTemplate, armorItem = {}, actor = {}) => {
   const equipment = clonePreparedEquipmentModel(armorTemplate);
   const segments = createSegmentedArmorEquipment(equipment, armorItem);
@@ -2630,6 +3152,9 @@ const addSegmentedArmorToActorModel = (actorModel, armorTemplate, armorItem = {}
     : armorItem;
   const scale = Math.max(0.001, Number(attachmentItem.weaponModelScale) || 1);
   let attached = false;
+  (segments.pieces || []).forEach((pieceEntry) => {
+    attached = attachArmorPiece(actorModel, pieceEntry, attachmentItem, actor) || attached;
+  });
   const bodySocket = findArmorSocket(actorModel, attachmentItem, actor) || createFallbackEquipmentSocket(actorModel, 'armor');
   attached = attachArmorSegment(
     actorModel,
@@ -2671,12 +3196,13 @@ const addEquippedArmorToActorModel = (actorModel, armorTemplate, armorItem = {},
   )
 );
 
-const ACTOR_EQUIPMENT_ROLES = ['weapon', 'shield', 'armor', 'helmet'];
+const ACTOR_EQUIPMENT_ROLES = ['weapon', 'shield', 'armor', 'helmet', 'leggings'];
 
 const getEquippedEquipmentItemForRole = (actor = {}, role = 'weapon') => {
   if (role === 'shield') return getEquippedShieldItem(actor);
   if (role === 'armor') return getEquippedArmorItem(actor);
   if (role === 'helmet') return getEquippedHelmetItem(actor);
+  if (role === 'leggings') return getEquippedLeggingsItem(actor);
   return getEquippedWeaponItem(actor);
 };
 
@@ -2729,6 +3255,7 @@ const addEquipmentRoleToActorModel = (actorModel, role = 'weapon', template = nu
   if (role === 'shield') return addEquippedShieldToActorModel(actorModel, template, item, actor);
   if (role === 'armor') return addEquippedArmorToActorModel(actorModel, template, item, actor);
   if (role === 'helmet') return addEquippedHelmetToActorModel(actorModel, template, item, actor);
+  if (role === 'leggings') return addEquippedLeggingsToActorModel(actorModel, template, item, actor);
   return addEquippedWeaponToActorModel(actorModel, template, item, actor);
 };
 
@@ -2910,6 +3437,9 @@ const addActor = (group, config, actor, options) => {
   const equippedHelmet = renderMode === 'glb' ? getEquippedHelmetItem(actor) : null;
   const equippedHelmetSource = getWeaponModelSource(equippedHelmet);
   const helmetTemplate = equippedHelmetSource ? getModel?.(equippedHelmetSource, getWeaponModelPayload(equippedHelmet)) : null;
+  const equippedLeggings = renderMode === 'glb' ? getEquippedLeggingsItem(actor) : null;
+  const equippedLeggingsSource = getWeaponModelSource(equippedLeggings);
+  const leggingsTemplate = equippedLeggingsSource ? getModel?.(equippedLeggingsSource, getWeaponModelPayload(equippedLeggings)) : null;
   const animationState = getActorAnimationState(actor);
   const skinnedBodyColor = selected ? '#f8fbff' : texture ? '#d8e5f5' : bodyColor;
   const actorAnimationMixers = [];
@@ -3041,6 +3571,8 @@ const addActor = (group, config, actor, options) => {
             armorItem: equippedArmor,
             helmetTemplate,
             helmetItem: equippedHelmet,
+            leggingsTemplate,
+            leggingsItem: equippedLeggings,
           },
         );
         actorAxisScaleApplied = Boolean(animation?.axisScaleApplied);
@@ -3541,6 +4073,7 @@ export {
   findLowerBellyBone,
   findArmorSocket,
   findArmorArmSocket,
+  findLeggingsSocket,
   findEquipmentGripSocket,
   getFingerTipBonesForHand,
   getFingerBasePhalanxBonesForHand,
@@ -3553,6 +4086,7 @@ export {
   getEquippedShieldItem,
   getEquippedArmorItem,
   getEquippedHelmetItem,
+  getEquippedLeggingsItem,
   classifyArmorPaintSegment,
   getWeaponModelSource,
   getWeaponModelPayload,
@@ -3574,6 +4108,7 @@ export {
   addEquippedShieldToActorModel,
   addEquippedArmorToActorModel,
   addEquippedHelmetToActorModel,
+  addEquippedLeggingsToActorModel,
   getActorVisualSignature,
   getActorStructureSignature,
   getActorSceneDimensions,

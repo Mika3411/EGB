@@ -10,18 +10,16 @@ import {
   centerObjectHorizontallyOnOrigin,
   createPreviewFloorCanvas,
   disposeThreeObject,
-  fitObjectToLargestDimension,
+  fitDecorModelObjectToDimensions,
   getDecorMaterialBrightness,
   getDecorModelDimensions,
   getDecorModelSources,
-  isInventoryDecorKind,
   isFloorTileKind,
   loadThreeDecor,
   makePreviewStandardMaterial,
   numberValue,
 } from '../../utils/rpg3dModelImport';
 import {
-  fitObjectToDimensions,
   resetObjectBaseTransform,
   snapObjectToGround,
   updateGltfModelMaterialAppearance,
@@ -105,17 +103,69 @@ const ARMOR_MANIPULATION_ARM_LINES = [
     elbowKey: 'rightElbow',
   },
 ];
+const LEGGINGS_MANIPULATION_LEG_LINES = [
+  {
+    arm: 'left',
+    segment: 'left-arm',
+    shoulderId: 'left-groin-fold',
+    elbowId: 'left-foot',
+    shoulderKey: 'leftGroinFold',
+    elbowKey: 'leftFoot',
+  },
+  {
+    arm: 'right',
+    segment: 'right-arm',
+    shoulderId: 'right-groin-fold',
+    elbowId: 'right-foot',
+    shoulderKey: 'rightGroinFold',
+    elbowKey: 'rightFoot',
+  },
+];
+const LEGGINGS_MARKER_IDS = new Set([
+  'left-groin-fold',
+  'right-groin-fold',
+  'left-knee',
+  'right-knee',
+  'left-foot',
+  'right-foot',
+]);
+const hasLeggingsRigMarkers = (markers = []) => (
+  Array.isArray(markers) && markers.some((marker) => LEGGINGS_MARKER_IDS.has(marker?.id))
+);
+const getArmorManipulationLines = (markers = []) => (
+  hasLeggingsRigMarkers(markers) ? LEGGINGS_MANIPULATION_LEG_LINES : ARMOR_MANIPULATION_ARM_LINES
+);
 const ARMOR_CONTOUR_SEGMENT_PRIORITY = ['left-arm', 'right-arm', 'body'];
 const ARMOR_CONTOUR_POINT_LIMIT = 80;
 const ARMOR_PAINT_POINT_LIMIT = 240;
 const ARMOR_PAINT_RADIUS = 0.14;
 const ARMOR_PAINT_RADIUS_MIN = 0.04;
 const ARMOR_PAINT_RADIUS_MAX = 0.5;
+const ARMOR_PAINT_SURFACE_OFFSET_RATIO = 0.08;
+const ARMOR_PAINT_SURFACE_OFFSET_MIN = 0.008;
+const ARMOR_PAINT_SURFACE_OFFSET_MAX = 0.04;
+const ARMOR_PAINT_ACTIVE_OPACITY = 0.68;
+const ARMOR_PAINT_IDLE_OPACITY = 0.52;
+const ARMOR_PAINT_HOLD_INTERVAL_MS = 110;
+const ARMOR_PAINT_SPATIAL_CELL_SIZE = 0.12;
+const ARMOR_PAINT_STAMP_SPACING_RATIO = 0.42;
+const ARMOR_PAINT_STAMP_SEGMENTS = 36;
+const ARMOR_PAINT_STAMP_DEDUP_RATIO = 0.22;
+const ARMOR_CUT_PAINT_GUIDE_ACTIVE_OPACITY = 0.18;
+const ARMOR_CUT_PAINT_GUIDE_IDLE_OPACITY = 0.07;
+const ARMOR_PAINT_STENCIL_REF = 7;
+const ARMOR_PAINT_STENCIL_MASK = 0xff;
 const DECOR_CAMERA_ZOOM_DRAG_SENSITIVITY = 0.018;
 const DECOR_CAMERA_ZOOM_MIN_DISTANCE = 0.02;
 const DECOR_CAMERA_ZOOM_MAX_DISTANCE = 100000;
 const WEAPON_GRIP_POSITION_MIN = -2;
 const WEAPON_GRIP_POSITION_MAX = 2;
+const GRIP_TRAY_SCREEN_BOUNDS = {
+  left: 0.825,
+  right: 0.975,
+  top: 0.18,
+  bottom: 0.82,
+};
 
 const clampGripValue = (value) => THREE.MathUtils.clamp(
   Number.isFinite(Number(value)) ? Number(value) : 0,
@@ -143,11 +193,28 @@ const normalizeArmorPaintSurfaceNormal = (point = {}) => {
   };
 };
 
+const normalizeArmorPaintSectionPlane = (point = {}) => {
+  const cx = Number(point.cx);
+  const cy = Number(point.cy);
+  const cz = Number(point.cz);
+  const cw = Number(point.cw);
+  if (!Number.isFinite(cx) || !Number.isFinite(cy) || !Number.isFinite(cz) || !Number.isFinite(cw)) return {};
+  const length = Math.hypot(cx, cy, cz);
+  if (length <= 0.001) return {};
+  return {
+    cx: Math.round((cx / length) * 1000) / 1000,
+    cy: Math.round((cy / length) * 1000) / 1000,
+    cz: Math.round((cz / length) * 1000) / 1000,
+    cw: Math.round((cw / length) * 1000) / 1000,
+  };
+};
+
 const normalizeArmorContourPoint = (point = {}) => ({
   x: roundGripValue(point.x),
   y: roundGripValue(point.y),
   z: roundGripValue(point.z),
   ...normalizeArmorPaintSurfaceNormal(point),
+  ...normalizeArmorPaintSectionPlane(point),
 });
 
 const normalizeArmorPaintRadius = (value = ARMOR_PAINT_RADIUS) => (
@@ -181,36 +248,52 @@ const normalizeArmorCutPaintStrokes = (strokes = []) => {
       segment: normalizeArmorContourSegment(entry?.segment),
       radius: normalizeArmorPaintRadius(entry?.radius),
       points: (Array.isArray(entry?.points) ? entry.points : [])
-        .slice(0, ARMOR_PAINT_POINT_LIMIT)
+        .slice(-ARMOR_PAINT_POINT_LIMIT)
         .map(normalizeArmorContourPoint),
     }))
     .filter((entry) => entry.points.length);
 };
 
-const getArmorCutContoursSignature = (contours = [], activeSegment = 'body', modelObject = null) => (
+const mergeArmorPaintStroke = (baseStrokes = [], segment = 'body', points = [], radius = ARMOR_PAINT_RADIUS) => {
+  const normalizedSegment = normalizeArmorContourSegment(segment);
+  const strokeMap = new Map(normalizeArmorCutPaintStrokes(baseStrokes).map((entry) => [entry.segment, entry]));
+  const previousStroke = strokeMap.get(normalizedSegment);
+  const nextPoints = [
+    ...(previousStroke?.points || []),
+    ...(Array.isArray(points) ? points : []),
+  ].slice(-ARMOR_PAINT_POINT_LIMIT).map(normalizeArmorContourPoint);
+  if (nextPoints.length) {
+    strokeMap.set(normalizedSegment, {
+      segment: normalizedSegment,
+      radius: normalizeArmorPaintRadius(radius),
+      points: nextPoints,
+    });
+  }
+  return [...strokeMap.values()];
+};
+
+const getArmorCutContoursSignature = (contours = [], modelObject = null) => (
   [
     modelObject?.uuid || '',
     modelObject?.position ? modelObject.position.toArray().map((value) => Number(value).toFixed(3)).join(',') : '',
-    activeSegment,
     JSON.stringify(normalizeArmorCutContours(contours)),
   ].join('|')
 );
 
-const getArmorCutPaintSignature = (strokes = [], activeSegment = 'body', modelObject = null) => (
+const getArmorCutPaintSignature = (strokes = [], modelObject = null) => (
   [
     modelObject?.uuid || '',
     modelObject?.position ? modelObject.position.toArray().map((value) => Number(value).toFixed(3)).join(',') : '',
-    activeSegment,
     JSON.stringify(normalizeArmorCutPaintStrokes(strokes)),
   ].join('|')
 );
 
 const getArmorPaintDepthTolerance = (radius = ARMOR_PAINT_RADIUS) => (
-  THREE.MathUtils.clamp(normalizeArmorPaintRadius(radius) * 0.28, 0.025, 0.08)
+  THREE.MathUtils.clamp(normalizeArmorPaintRadius(radius) * 0.36, 0.035, 0.11)
 );
 
 const getArmorPaintPlaneTolerance = (radius = ARMOR_PAINT_RADIUS) => (
-  THREE.MathUtils.clamp(normalizeArmorPaintRadius(radius) * 0.12, 0.012, 0.035)
+  THREE.MathUtils.clamp(normalizeArmorPaintRadius(radius) * 0.18, 0.02, 0.038)
 );
 
 const getArmorPaintSurfaceNormal = (point = {}) => {
@@ -222,11 +305,31 @@ const getArmorPaintSurfaceNormal = (point = {}) => {
   return normal.lengthSq() > 0.000001 ? normal.normalize() : null;
 };
 
+const getArmorPaintSectionPlane = (point = {}) => {
+  const cx = Number(point?.cx);
+  const cy = Number(point?.cy);
+  const cz = Number(point?.cz);
+  const cw = Number(point?.cw);
+  if (!Number.isFinite(cx) || !Number.isFinite(cy) || !Number.isFinite(cz) || !Number.isFinite(cw)) return null;
+  const normal = new THREE.Vector3(cx, cy, cz);
+  const length = normal.length();
+  if (length <= 0.000001) return null;
+  normal.multiplyScalar(1 / length);
+  return new THREE.Plane(normal, cw / length);
+};
+
+const isPointOnArmorPaintVisibleSide = (point, paintPoint, radius = ARMOR_PAINT_RADIUS) => {
+  const plane = getArmorPaintSectionPlane(paintPoint);
+  if (!plane) return true;
+  return plane.distanceToPoint(point) >= -getArmorPaintPlaneTolerance(radius);
+};
+
 const isPointOnPaintSurface = (point, paintPoint, radius = ARMOR_PAINT_RADIUS) => (
   Math.abs((Number(point?.z) || 0) - (Number(paintPoint?.z) || 0)) <= getArmorPaintDepthTolerance(radius)
 );
 
 const isPointInsidePaintStamp = (point, paintPoint, radius = ARMOR_PAINT_RADIUS) => {
+  if (!isPointOnArmorPaintVisibleSide(point, paintPoint, radius)) return false;
   const normal = getArmorPaintSurfaceNormal(paintPoint);
   if (normal) {
     const dx = point.x - paintPoint.x;
@@ -274,6 +377,7 @@ const getPointToPaintSegmentHit = (point, start, end, radius = ARMOR_PAINT_RADIU
     y: start.y + dy * t,
     z: (Number(start.z) || 0) + (((Number(end.z) || 0) - (Number(start.z) || 0)) * t),
     ...(normal ? { nx: normal.x, ny: normal.y, nz: normal.z } : {}),
+    ...normalizeArmorPaintSectionPlane(start.cx !== undefined ? start : end),
   };
   return isPointInsidePaintStamp(point, projectedPoint, radius);
 };
@@ -301,6 +405,45 @@ const getArmorPaintStrokeBounds = (stroke = {}) => {
   return bounds;
 };
 
+const getArmorPaintBoundsForRange = (start = {}, end = start, radius = ARMOR_PAINT_RADIUS) => {
+  const normalizedRadius = normalizeArmorPaintRadius(radius);
+  const padding = normalizedRadius + getArmorPaintDepthTolerance(normalizedRadius);
+  const startX = Number(start?.x) || 0;
+  const startY = Number(start?.y) || 0;
+  const startZ = Number(start?.z) || 0;
+  const endX = Number(end?.x) || 0;
+  const endY = Number(end?.y) || 0;
+  const endZ = Number(end?.z) || 0;
+  return {
+    minX: Math.min(startX, endX) - padding,
+    maxX: Math.max(startX, endX) + padding,
+    minY: Math.min(startY, endY) - padding,
+    maxY: Math.max(startY, endY) + padding,
+    minZ: Math.min(startZ, endZ) - padding,
+    maxZ: Math.max(startZ, endZ) + padding,
+  };
+};
+
+const getArmorPaintStrokeHits = (stroke = {}) => {
+  const points = Array.isArray(stroke.points) ? stroke.points : [];
+  const radius = normalizeArmorPaintRadius(stroke.radius);
+  if (!points.length) return [];
+  const hits = [{
+    type: 'point',
+    start: points[0],
+    bounds: getArmorPaintBoundsForRange(points[0], points[0], radius),
+  }];
+  for (let index = 1; index < points.length; index += 1) {
+    hits.push({
+      type: 'segment',
+      start: points[index - 1],
+      end: points[index],
+      bounds: getArmorPaintBoundsForRange(points[index - 1], points[index], radius),
+    });
+  }
+  return hits;
+};
+
 const isPointInsideArmorPaintBounds = (point = new THREE.Vector3(), bounds = null) => (
   !bounds
   || (
@@ -312,6 +455,12 @@ const isPointInsideArmorPaintBounds = (point = new THREE.Vector3(), bounds = nul
     && point.z <= bounds.maxZ
   )
 );
+
+const isPointInsideArmorPaintHit = (point = new THREE.Vector3(), hit = null, radius = ARMOR_PAINT_RADIUS) => {
+  if (!hit || !isPointInsideArmorPaintBounds(point, hit.bounds)) return false;
+  if (hit.type === 'segment') return getPointToPaintSegmentHit(point, hit.start, hit.end, radius);
+  return isPointInsidePaintStamp(point, hit.start, radius);
+};
 
 const prepareArmorPaintStrokes = (strokes = []) => {
   if (Array.isArray(strokes) && strokes.every((stroke) => stroke?.paintBounds)) return strokes;
@@ -328,14 +477,16 @@ const prepareArmorPaintStrokes = (strokes = []) => {
 const classifyArmorPaintPoint = (point = new THREE.Vector3(), strokes = []) => {
   const preparedStrokes = prepareArmorPaintStrokes(strokes);
   if (!preparedStrokes.length) return '';
-  return preparedStrokes.find((stroke) => {
-    if (!isPointInsideArmorPaintBounds(point, stroke.paintBounds)) return false;
-    if (stroke.points.some((paintPoint) => isPointInsidePaintStamp(point, paintPoint, stroke.radius))) return true;
-    for (let index = 1; index < stroke.points.length; index += 1) {
-      if (getPointToPaintSegmentHit(point, stroke.points[index - 1], stroke.points[index], stroke.radius)) return true;
-    }
-    return false;
-  })?.segment || '';
+  return preparedStrokes.find((stroke) => isPointInsidePreparedPaintStroke(point, stroke))?.segment || '';
+};
+
+const isPointInsidePreparedPaintStroke = (point = new THREE.Vector3(), stroke = null) => {
+  if (!stroke || !isPointInsideArmorPaintBounds(point, stroke.paintBounds)) return false;
+  if (stroke.points.some((paintPoint) => isPointInsidePaintStamp(point, paintPoint, stroke.radius))) return true;
+  for (let index = 1; index < stroke.points.length; index += 1) {
+    if (getPointToPaintSegmentHit(point, stroke.points[index - 1], stroke.points[index], stroke.radius)) return true;
+  }
+  return false;
 };
 
 const isPointInsideArmorContour = (point = new THREE.Vector3(), points = []) => {
@@ -366,9 +517,88 @@ const getGripMarkerKey = (marker = {}) => (
     : (marker.type === 'shield' ? `shield-${marker.id || 'hand'}` : (marker.hand === 'left' ? 'left' : 'right'))
 );
 
+const getGripTraySlotRatio = (index = 0, count = 1) => {
+  const safeCount = Math.max(1, count);
+  const columns = safeCount > 18 ? 3 : (safeCount > 3 ? 2 : 1);
+  const rows = Math.max(1, Math.ceil(safeCount / columns));
+  const column = index % columns;
+  const row = Math.floor(index / columns);
+  const xRatio = GRIP_TRAY_SCREEN_BOUNDS.left
+    + ((column + 0.5) / columns) * (GRIP_TRAY_SCREEN_BOUNDS.right - GRIP_TRAY_SCREEN_BOUNDS.left);
+  const yRatio = GRIP_TRAY_SCREEN_BOUNDS.top
+    + ((row + 0.5) / rows) * (GRIP_TRAY_SCREEN_BOUNDS.bottom - GRIP_TRAY_SCREEN_BOUNDS.top);
+  return { xRatio, yRatio, columns, rows };
+};
+
+const getGripTraySlotNdc = (index = 0, count = 1) => {
+  const slot = getGripTraySlotRatio(index, count);
+  return {
+    x: slot.xRatio * 2 - 1,
+    y: -(slot.yRatio * 2 - 1),
+    columns: slot.columns,
+    rows: slot.rows,
+  };
+};
+
+const isCanvasPointInGripTray = (canvasPoint = {}) => {
+  const width = Math.max(1, Number(canvasPoint.width) || 1);
+  const height = Math.max(1, Number(canvasPoint.height) || 1);
+  const x = Number(canvasPoint.x);
+  const y = Number(canvasPoint.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+  return x >= width * GRIP_TRAY_SCREEN_BOUNDS.left
+    && x <= width * GRIP_TRAY_SCREEN_BOUNDS.right
+    && y >= height * GRIP_TRAY_SCREEN_BOUNDS.top
+    && y <= height * GRIP_TRAY_SCREEN_BOUNDS.bottom;
+};
+
+const getGripTrayReferencePoint = (decorObject = null) => {
+  const gripSpace = getDecorGripSpace(decorObject);
+  const target = gripSpace?.modelObject || decorObject?.userData?.decorModelObject || decorObject;
+  if (!target?.getWorldPosition) return new THREE.Vector3();
+  target.updateMatrixWorld?.(true);
+  return target.getWorldPosition(new THREE.Vector3());
+};
+
+const getGripTrayWorldPosition = (camera = null, index = 0, count = 1, referencePoint = new THREE.Vector3()) => {
+  if (!camera) return null;
+  camera.updateMatrixWorld?.(true);
+  const slot = getGripTraySlotNdc(index, count);
+  const ndcPoint = new THREE.Vector3(slot.x, slot.y, 0.5);
+  if (camera.isOrthographicCamera) return ndcPoint.unproject(camera);
+  const distance = Math.max(0.5, camera.position.distanceTo(referencePoint || new THREE.Vector3()));
+  const direction = ndcPoint.unproject(camera).sub(camera.position).normalize();
+  return camera.position.clone().add(direction.multiplyScalar(distance));
+};
+
+const getGripMarkerFallbackLabel = (marker = {}) => {
+  const label = String(marker.shortLabel || marker.label || marker.id || '').trim();
+  if (!label) return '?';
+  if (/phalange/i.test(marker.id || '')) {
+    const joint = String(marker.joint || '').trim();
+    if (joint) return `${String(marker.finger || label).slice(0, 1).toUpperCase()}${joint}`;
+  }
+  return label.replace(/\s+/g, '').slice(0, 4).toUpperCase();
+};
+
+const getGripMarkerFallbackConfig = (marker = {}) => {
+  if (marker.type !== 'armor') return WEAPON_GRIP_MARKER_COLORS.right;
+  if (marker.group === 'phalanges') {
+    return { fill: '#d946ef', stroke: '#fae8ff', text: '#2e1036', label: getGripMarkerFallbackLabel(marker) };
+  }
+  if (String(marker.id || '').startsWith('left-')) {
+    return { fill: '#14b8a6', stroke: '#ccfbf1', text: '#042f2e', label: getGripMarkerFallbackLabel(marker) };
+  }
+  if (String(marker.id || '').startsWith('right-')) {
+    return { fill: '#60a5fa', stroke: '#dbeafe', text: '#082f49', label: getGripMarkerFallbackLabel(marker) };
+  }
+  return { fill: '#64748b', stroke: '#f8fafc', text: '#ffffff', label: getGripMarkerFallbackLabel(marker) };
+};
+
 const createWeaponGripMarkerTexture = (marker = 'right') => {
   const markerKey = typeof marker === 'string' ? marker : getGripMarkerKey(marker);
-  const config = WEAPON_GRIP_MARKER_COLORS[markerKey] || WEAPON_GRIP_MARKER_COLORS.right;
+  const config = WEAPON_GRIP_MARKER_COLORS[markerKey] || getGripMarkerFallbackConfig(marker);
+  const markerLabel = String(config.label || '?').slice(0, 4);
   const canvas = document.createElement('canvas');
   canvas.width = 96;
   canvas.height = 96;
@@ -385,11 +615,12 @@ const createWeaponGripMarkerTexture = (marker = 'right') => {
   context.lineWidth = 7;
   context.strokeStyle = config.stroke;
   context.stroke();
-  context.font = '900 38px system-ui, sans-serif';
+  const fontSize = markerLabel.length >= 4 ? 23 : (markerLabel.length === 3 ? 29 : 38);
+  context.font = `900 ${fontSize}px system-ui, sans-serif`;
   context.textAlign = 'center';
   context.textBaseline = 'middle';
   context.fillStyle = config.text;
-  context.fillText(config.label, 48, 50);
+  context.fillText(markerLabel, 48, 50);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.needsUpdate = true;
@@ -479,6 +710,35 @@ const disposeArmorManipulationGuides = (objects) => {
   objects?.clear?.();
 };
 
+const applyArmorPaintStencilToMaterial = (material = null) => {
+  if (!material) return;
+  material.stencilWrite = true;
+  material.stencilRef = ARMOR_PAINT_STENCIL_REF;
+  material.stencilFunc = THREE.AlwaysStencilFunc;
+  material.stencilFail = THREE.KeepStencilOp;
+  material.stencilZFail = THREE.KeepStencilOp;
+  material.stencilZPass = THREE.ReplaceStencilOp;
+  material.stencilFuncMask = ARMOR_PAINT_STENCIL_MASK;
+  material.stencilWriteMask = ARMOR_PAINT_STENCIL_MASK;
+  material.needsUpdate = true;
+};
+
+const applyArmorPaintStencilMask = (decorObject = null) => {
+  const modelObject = decorObject?.userData?.decorModelObject || decorObject;
+  modelObject?.traverse?.((child) => {
+    if (
+      (!child.isMesh && !child.isSkinnedMesh)
+      || child.userData?.rigCutPaint
+      || child.userData?.rigCutContour
+      || child.userData?.weaponGripMarker
+    ) {
+      return;
+    }
+    const materials = Array.isArray(child.material) ? child.material : [child.material];
+    materials.filter(Boolean).forEach(applyArmorPaintStencilToMaterial);
+  });
+};
+
 const createRigCutPreviewMaterial = (segment = 'body') => {
   const config = ARMOR_CUT_PREVIEW_COLORS[segment] || ARMOR_CUT_PREVIEW_COLORS.body;
   return new THREE.MeshBasicMaterial({
@@ -522,7 +782,10 @@ const updateRigCutPreviewMaterial = (object, segment = 'body', activeSegment = '
   if (mode === 'object') return;
   const config = ARMOR_CUT_PREVIEW_COLORS[segment] || ARMOR_CUT_PREVIEW_COLORS.body;
   object.material.color.set(config.color);
-  object.material.opacity = activeSegment === segment ? config.activeOpacity : config.opacity;
+  const paintGuide = mode === 'paint-guide';
+  object.material.opacity = activeSegment === segment
+    ? (paintGuide ? ARMOR_CUT_PAINT_GUIDE_ACTIVE_OPACITY : config.activeOpacity)
+    : (paintGuide ? ARMOR_CUT_PAINT_GUIDE_IDLE_OPACITY : config.opacity);
 };
 
 const getBufferAttributeComponent = (attribute, vertexIndex, component) => {
@@ -592,6 +855,175 @@ const buildRigCutGeometry = (sourceGeometry = null, builder = null) => {
   return geometry;
 };
 
+const getArmorPaintTriangleSetKey = (mesh = null, segment = 'body') => (
+  `${mesh?.uuid || 'mesh'}:${normalizeArmorContourSegment(segment)}`
+);
+
+const getArmorPaintTriangleSet = (paintedTriangleKeys = null, mesh = null, segment = 'body') => {
+  if (!paintedTriangleKeys) return null;
+  const key = getArmorPaintTriangleSetKey(mesh, segment);
+  if (!paintedTriangleKeys.has(key)) paintedTriangleKeys.set(key, new Set());
+  return paintedTriangleKeys.get(key);
+};
+
+const createArmorCutPaintSurfaceMesh = ({
+  geometry,
+  segment = 'body',
+  activeSegment = 'body',
+  sectionPlane = null,
+  name = 'ArmorCutPaintSurface',
+}) => {
+  if (!geometry) return null;
+  const normalizedSegment = normalizeArmorContourSegment(segment);
+  const config = ARMOR_CUT_PREVIEW_COLORS[normalizedSegment] || ARMOR_CUT_PREVIEW_COLORS.body;
+  const material = new THREE.MeshBasicMaterial({
+    color: config.color,
+    depthTest: true,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -10,
+    polygonOffsetUnits: -10,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: activeSegment === normalizedSegment ? ARMOR_PAINT_ACTIVE_OPACITY : ARMOR_PAINT_IDLE_OPACITY,
+  });
+  const paintSurface = new THREE.Mesh(geometry, material);
+  paintSurface.name = name;
+  paintSurface.frustumCulled = false;
+  paintSurface.renderOrder = 238;
+  paintSurface.userData.rigCutPaint = true;
+  paintSurface.userData.rigCutSegment = normalizedSegment;
+  applyArmorSectionClipping(paintSurface, sectionPlane);
+  return paintSurface;
+};
+
+const getArmorPaintSurfaceOffset = (radius = ARMOR_PAINT_RADIUS) => (
+  THREE.MathUtils.clamp(
+    normalizeArmorPaintRadius(radius) * ARMOR_PAINT_SURFACE_OFFSET_RATIO,
+    ARMOR_PAINT_SURFACE_OFFSET_MIN,
+    ARMOR_PAINT_SURFACE_OFFSET_MAX,
+  )
+);
+
+const appendArmorPaintStamp = (entriesBySegment, point = {}, segment = 'body', radius = ARMOR_PAINT_RADIUS, normal = null) => {
+  const normalizedSegment = normalizeArmorContourSegment(segment);
+  const stampNormal = normal?.clone?.() || getArmorPaintSurfaceNormal(point) || new THREE.Vector3(0, 0, 1);
+  if (stampNormal.lengthSq() <= 0.000001) stampNormal.set(0, 0, 1);
+  stampNormal.normalize();
+  const normalizedRadius = normalizeArmorPaintRadius(radius);
+  const x = Number(point.x) || 0;
+  const y = Number(point.y) || 0;
+  const z = Number(point.z) || 0;
+  const entries = entriesBySegment[normalizedSegment];
+  const previous = entries?.[entries.length - 1];
+  const minDistance = Math.max(normalizedRadius * ARMOR_PAINT_STAMP_DEDUP_RATIO, 0.014);
+  if (previous && Math.hypot(previous.x - x, previous.y - y, previous.z - z) < minDistance) return;
+  entries?.push({
+    x,
+    y,
+    z,
+    radius: normalizedRadius,
+    normal: stampNormal,
+  });
+};
+
+const collectArmorPaintStamps = (paintStrokes = []) => {
+  const entriesBySegment = { body: [], 'left-arm': [], 'right-arm': [] };
+  prepareArmorPaintStrokes(paintStrokes).forEach((stroke) => {
+    const segment = normalizeArmorContourSegment(stroke.segment);
+    const radius = normalizeArmorPaintRadius(stroke.radius);
+    const points = Array.isArray(stroke.points) ? stroke.points : [];
+    if (!points.length) return;
+    appendArmorPaintStamp(entriesBySegment, points[0], segment, radius);
+    const spacing = Math.max(radius * ARMOR_PAINT_STAMP_SPACING_RATIO, 0.018);
+    for (let index = 1; index < points.length; index += 1) {
+      const start = points[index - 1];
+      const end = points[index];
+      const dx = (Number(end.x) || 0) - (Number(start.x) || 0);
+      const dy = (Number(end.y) || 0) - (Number(start.y) || 0);
+      const dz = (Number(end.z) || 0) - (Number(start.z) || 0);
+      const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy, dz) / spacing));
+      for (let step = 1; step <= steps; step += 1) {
+        const t = step / steps;
+        const normal = getInterpolatedArmorPaintNormal(start, end, t);
+        appendArmorPaintStamp(entriesBySegment, {
+          x: (Number(start.x) || 0) + dx * t,
+          y: (Number(start.y) || 0) + dy * t,
+          z: (Number(start.z) || 0) + dz * t,
+        }, segment, radius, normal);
+      }
+    }
+  });
+  return entriesBySegment;
+};
+
+const createArmorPaintStampMesh = (segment = 'body', stamps = [], activeSegment = 'body', basePosition = new THREE.Vector3()) => {
+  if (!stamps.length) return null;
+  const config = ARMOR_CUT_PREVIEW_COLORS[segment] || ARMOR_CUT_PREVIEW_COLORS.body;
+  const geometry = new THREE.CircleGeometry(1, ARMOR_PAINT_STAMP_SEGMENTS);
+  const material = new THREE.MeshStandardMaterial({
+    color: config.color,
+    depthTest: true,
+    depthWrite: false,
+    metalness: 0.04,
+    polygonOffset: true,
+    polygonOffsetFactor: -8,
+    polygonOffsetUnits: -8,
+    roughness: 0.82,
+    side: THREE.DoubleSide,
+    stencilWrite: true,
+    stencilRef: ARMOR_PAINT_STENCIL_REF,
+    stencilFunc: THREE.EqualStencilFunc,
+    stencilFuncMask: ARMOR_PAINT_STENCIL_MASK,
+    stencilWriteMask: 0x00,
+    stencilFail: THREE.KeepStencilOp,
+    stencilZFail: THREE.KeepStencilOp,
+    stencilZPass: THREE.KeepStencilOp,
+    transparent: true,
+    opacity: activeSegment === segment ? ARMOR_PAINT_ACTIVE_OPACITY : ARMOR_PAINT_IDLE_OPACITY,
+  });
+  const mesh = new THREE.InstancedMesh(geometry, material, stamps.length);
+  const matrix = new THREE.Matrix4();
+  const position = new THREE.Vector3();
+  const quaternion = new THREE.Quaternion();
+  const scale = new THREE.Vector3();
+  const forward = new THREE.Vector3(0, 0, 1);
+  stamps.forEach((stamp, index) => {
+    const normal = stamp.normal?.clone?.() || forward.clone();
+    if (normal.lengthSq() <= 0.000001) normal.copy(forward);
+    normal.normalize();
+    const offset = getArmorPaintSurfaceOffset(stamp.radius);
+    position.set(
+      basePosition.x + stamp.x + normal.x * offset,
+      basePosition.y + stamp.y + normal.y * offset,
+      basePosition.z + stamp.z + normal.z * offset,
+    );
+    quaternion.setFromUnitVectors(forward, normal);
+    scale.set(stamp.radius, stamp.radius, 1);
+    matrix.compose(position, quaternion, scale);
+    mesh.setMatrixAt(index, matrix);
+  });
+  mesh.instanceMatrix.needsUpdate = true;
+  mesh.name = `ArmorCutPaintStamps-${segment}`;
+  mesh.frustumCulled = false;
+  mesh.renderOrder = 238;
+  mesh.userData.rigCutPaint = true;
+  mesh.userData.rigCutSegment = segment;
+  return mesh;
+};
+
+const updateArmorCutPaintObjectsAppearance = (objects, activeSegment = 'body', sectionPlane = null) => {
+  objects?.forEach?.((object) => {
+    const segment = normalizeArmorContourSegment(object.userData?.rigCutSegment);
+    const config = ARMOR_CUT_PREVIEW_COLORS[segment] || ARMOR_CUT_PREVIEW_COLORS.body;
+    object.material?.color?.set?.(config.color);
+    if (object.material) {
+      object.material.opacity = activeSegment === segment ? ARMOR_PAINT_ACTIVE_OPACITY : ARMOR_PAINT_IDLE_OPACITY;
+    }
+    applyArmorSectionClipping(object, sectionPlane);
+  });
+};
+
 const getPointToSegmentDistance = (point, start, end) => {
   const segment = end.clone().sub(start);
   const lengthSq = segment.lengthSq();
@@ -631,11 +1063,56 @@ const getArmorArmCutCandidate = (point, shoulder, elbow, bodyCenter, segment, fa
   return { segment, score: lineDistance - Math.abs((point.x - bodyEdgeX) * 0.15) };
 };
 
+const getLeggingsLegCutCandidate = (point, groin, knee, foot, segment, fallbackSign, referenceScale = 1) => {
+  if (!groin || !knee || !foot) return null;
+  const sideSign = Math.sign(((groin.x + knee.x + foot.x) / 3)) || fallbackSign;
+  const legTop = Math.max(groin.y, knee.y, foot.y);
+  const legBottom = Math.min(groin.y, knee.y, foot.y);
+  const legLength = Math.max(0.0001, groin.distanceTo(foot), groin.distanceTo(knee));
+  const yPadding = Math.max(referenceScale * 0.08, legLength * 0.12);
+  if (point.y > legTop + yPadding || point.y < legBottom - yPadding) return null;
+  const upperDistance = getPointToSegmentDistance(point, groin, knee);
+  const lowerDistance = getPointToSegmentDistance(point, knee, foot);
+  const lineDistance = Math.min(upperDistance, lowerDistance);
+  const maxLineDistance = Math.max(referenceScale * 0.2, legLength * 0.42);
+  if (lineDistance > maxLineDistance) return null;
+  const centerX = (groin.x + knee.x + foot.x) / 3;
+  return { segment, score: lineDistance - Math.abs((point.x - centerX) * sideSign * 0.04) };
+};
+
+const classifyLeggingsCutPoint = (point = new THREE.Vector3(), markerOffsets = {}) => {
+  const leftGroin = markerOffsets.leftGroinFold;
+  const rightGroin = markerOffsets.rightGroinFold;
+  const leftKnee = markerOffsets.leftKnee;
+  const rightKnee = markerOffsets.rightKnee;
+  const leftFoot = markerOffsets.leftFoot;
+  const rightFoot = markerOffsets.rightFoot;
+  const referenceScale = Math.max(
+    0.001,
+    leftGroin.distanceTo(leftFoot),
+    rightGroin.distanceTo(rightFoot),
+    leftGroin.distanceTo(rightGroin),
+  );
+  const candidates = [
+    getLeggingsLegCutCandidate(point, leftGroin, leftKnee, leftFoot, 'left-arm', -1, referenceScale),
+    getLeggingsLegCutCandidate(point, rightGroin, rightKnee, rightFoot, 'right-arm', 1, referenceScale),
+  ].filter(Boolean).sort((a, b) => a.score - b.score);
+  if (candidates[0]) return candidates[0].segment;
+  const midX = (leftGroin.x + rightGroin.x + leftFoot.x + rightFoot.x) / 4;
+  const legTop = Math.max(leftGroin.y, rightGroin.y);
+  const legBottom = Math.min(leftFoot.y, rightFoot.y);
+  if (point.y <= legTop + referenceScale * 0.18 && point.y >= legBottom - referenceScale * 0.18) {
+    return point.x <= midX ? 'left-arm' : 'right-arm';
+  }
+  return 'body';
+};
+
 const classifyArmorCutPoint = (point = new THREE.Vector3(), markerOffsets = {}, contours = [], paintStrokes = []) => {
   const paintSegment = classifyArmorPaintPoint(point, paintStrokes);
   if (paintSegment) return paintSegment;
   const contourSegment = classifyArmorContourPoint(point, contours);
   if (contourSegment) return contourSegment;
+  if (markerOffsets.isLeggingsRig) return classifyLeggingsCutPoint(point, markerOffsets);
   const leftShoulder = markerOffsets.leftShoulder || new THREE.Vector3(-0.45, 0.55, 0);
   const rightShoulder = markerOffsets.rightShoulder || new THREE.Vector3(0.45, 0.55, 0);
   const leftElbow = markerOffsets.leftElbow || new THREE.Vector3(-0.65, 0.05, 0);
@@ -665,15 +1142,22 @@ const getArmorCutMarkerOffsets = (markers = []) => {
       : fallback
   );
   return {
+    isLeggingsRig: hasLeggingsRigMarkers(markers),
     leftShoulder: get('left-shoulder', new THREE.Vector3(-0.45, 0.55, 0)),
     rightShoulder: get('right-shoulder', new THREE.Vector3(0.45, 0.55, 0)),
     leftElbow: get('left-elbow', new THREE.Vector3(-0.65, 0.05, 0)),
     rightElbow: get('right-elbow', new THREE.Vector3(0.65, 0.05, 0)),
     lowerBelly: get('lower-belly', new THREE.Vector3(0, -0.55, 0)),
+    leftGroinFold: get('left-groin-fold', new THREE.Vector3(-0.22, -0.38, 0.05)),
+    rightGroinFold: get('right-groin-fold', new THREE.Vector3(0.22, -0.38, 0.05)),
+    leftKnee: get('left-knee', new THREE.Vector3(-0.25, -0.72, 0.05)),
+    rightKnee: get('right-knee', new THREE.Vector3(0.25, -0.72, 0.05)),
+    leftFoot: get('left-foot', new THREE.Vector3(-0.22, -1.05, 0.1)),
+    rightFoot: get('right-foot', new THREE.Vector3(0.22, -1.05, 0.1)),
   };
 };
 
-const getArmorCutSignature = (modelObject = null, markers = [], contours = [], paintStrokes = []) => {
+const getArmorCutSignature = (modelObject = null, markers = [], contours = []) => {
   const meshSignature = [];
   modelObject?.traverse?.((child) => {
     if (child.isMesh && child.geometry?.attributes?.position) {
@@ -683,15 +1167,14 @@ const getArmorCutSignature = (modelObject = null, markers = [], contours = [], p
   const markerSignature = markers
     .map((marker) => `${marker.id}:${Number(marker.x).toFixed(3)}:${Number(marker.y).toFixed(3)}:${Number(marker.z).toFixed(3)}:${marker.enabled !== false ? 1 : 0}`)
     .join('|');
-  return `${meshSignature.join(';')}|${markerSignature}|${JSON.stringify(normalizeArmorCutContours(contours))}|${JSON.stringify(normalizeArmorCutPaintStrokes(paintStrokes))}`;
+  return `${meshSignature.join(';')}|${markerSignature}|${JSON.stringify(normalizeArmorCutContours(contours))}`;
 };
 
-const buildArmorCutPreviewMeshes = ({ root, objects, decorObject, markers, contours, paintStrokes }) => {
+const buildArmorCutPreviewMeshes = ({ root, objects, decorObject, markers, contours }) => {
   const gripSpace = getDecorGripSpace(decorObject);
   const modelObject = gripSpace?.modelObject;
   if (!root || !modelObject?.traverse || !gripSpace?.space) return false;
   const markerOffsets = getArmorCutMarkerOffsets(markers);
-  const preparedPaintStrokes = prepareArmorPaintStrokes(paintStrokes);
   const sourceMeshes = [];
   modelObject.updateMatrixWorld?.(true);
   gripSpace.space.updateMatrixWorld?.(true);
@@ -730,7 +1213,7 @@ const buildArmorCutPreviewMeshes = ({ root, objects, decorObject, markers, conto
       gripPoint.copy(worldCenter);
       gripSpace.space.worldToLocal(gripPoint);
       gripPoint.sub(gripSpace.modelObject.position);
-      const segment = classifyArmorCutPoint(gripPoint, markerOffsets, contours, preparedPaintStrokes);
+      const segment = classifyArmorCutPoint(gripPoint, markerOffsets, contours);
       appendRigCutTriangle(builders[segment], geometry, vertexIndices, getRigCutTriangleMaterialIndex(geometry, triangleStart));
     }
     Object.entries(builders).forEach(([segment, builder]) => {
@@ -780,6 +1263,7 @@ const buildArmorCutContourObjects = ({ objects, decorObject, contours, activeSeg
       line.name = `ArmorCutContour-${entry.segment}`;
       line.renderOrder = 230;
       line.userData.rigCutContour = true;
+      line.userData.rigCutSegment = entry.segment;
       gripSpace.space.add(line);
       objects.set(`${entry.segment}:line`, line);
     }
@@ -797,10 +1281,26 @@ const buildArmorCutContourObjects = ({ objects, decorObject, contours, activeSeg
     pointCloud.name = `ArmorCutContourPoints-${entry.segment}`;
     pointCloud.renderOrder = 231;
     pointCloud.userData.rigCutContour = true;
+    pointCloud.userData.rigCutSegment = entry.segment;
     gripSpace.space.add(pointCloud);
     objects.set(`${entry.segment}:points`, pointCloud);
   });
   return objects.size > 0;
+};
+
+const updateArmorCutContourObjectsAppearance = (objects, activeSegment = 'body') => {
+  objects?.forEach?.((object) => {
+    const segment = normalizeArmorContourSegment(object.userData?.rigCutSegment);
+    const config = ARMOR_CUT_PREVIEW_COLORS[segment] || ARMOR_CUT_PREVIEW_COLORS.body;
+    if (!object.material) return;
+    object.material.color?.set?.(config.color);
+    if (object.isPoints) {
+      object.material.size = activeSegment === segment ? 0.075 : 0.052;
+      object.material.opacity = activeSegment === segment ? 1 : 0.62;
+    } else {
+      object.material.opacity = activeSegment === segment ? 0.95 : 0.52;
+    }
+  });
 };
 
 const createArmorPaintBrushPreview = (segment = 'body') => {
@@ -845,84 +1345,317 @@ const updateArmorPaintBrushPreviewAppearance = (preview = null, radius = ARMOR_P
   preview.userData.previewSegment = previewSegment;
 };
 
-const buildArmorCutPaintObjects = ({ objects, decorObject, paintStrokes, activeSegment }) => {
-  const gripSpace = getDecorGripSpace(decorObject);
-  if (!gripSpace?.space || !gripSpace?.modelObject) return false;
-  const preparedStrokes = prepareArmorPaintStrokes(paintStrokes);
-  if (!preparedStrokes.length) return false;
-  const sourceMeshes = [];
-  gripSpace.modelObject.updateMatrixWorld?.(true);
+const projectWorldPointToCanvas = (worldPoint = null, camera = null, renderer = null) => {
+  const canvas = renderer?.domElement;
+  if (!worldPoint || !camera || !canvas) return null;
+  const width = canvas.clientWidth || canvas.width || 0;
+  const height = canvas.clientHeight || canvas.height || 0;
+  if (width <= 0 || height <= 0) return null;
+  const projected = worldPoint.clone().project(camera);
+  if (
+    !Number.isFinite(projected.x)
+    || !Number.isFinite(projected.y)
+    || !Number.isFinite(projected.z)
+    || projected.z < -1
+    || projected.z > 1
+  ) {
+    return null;
+  }
+  return {
+    x: ((projected.x + 1) / 2) * width,
+    y: ((1 - projected.y) / 2) * height,
+    z: projected.z,
+  };
+};
+
+const getArmorPaintBrushScreenCircle = ({ gripSpace, point, radius, camera, renderer, segment }) => {
+  if (!gripSpace?.space || !gripSpace?.modelObject || !point || !camera || !renderer) return null;
   gripSpace.space.updateMatrixWorld?.(true);
-  gripSpace.modelObject.traverse((child) => {
+  camera.updateMatrixWorld?.();
+  const basePosition = gripSpace.modelObject.position || new THREE.Vector3();
+  const worldCenter = gripSpace.space.localToWorld(new THREE.Vector3(
+    basePosition.x + point.x,
+    basePosition.y + point.y,
+    basePosition.z + point.z,
+  ));
+  const center = projectWorldPointToCanvas(worldCenter, camera, renderer);
+  if (!center) return null;
+
+  const cameraRight = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).normalize();
+  const cameraUp = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize();
+  const rightEdge = projectWorldPointToCanvas(worldCenter.clone().addScaledVector(cameraRight, radius), camera, renderer);
+  const upEdge = projectWorldPointToCanvas(worldCenter.clone().addScaledVector(cameraUp, radius), camera, renderer);
+  const radiusCandidates = [rightEdge, upEdge]
+    .filter(Boolean)
+    .map((edge) => Math.hypot(edge.x - center.x, edge.y - center.y))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  const canvas = renderer.domElement;
+  const canvasWidth = canvas.clientWidth || canvas.width || 0;
+  const canvasHeight = canvas.clientHeight || canvas.height || 0;
+  const maxRadius = Math.max(12, Math.min(canvasWidth, canvasHeight) * 0.38);
+  return {
+    x: center.x,
+    y: center.y,
+    radius: THREE.MathUtils.clamp(Math.max(...radiusCandidates, 10), 10, maxRadius),
+    color: (ARMOR_CUT_PREVIEW_COLORS[segment] || ARMOR_CUT_PREVIEW_COLORS.body).color,
+  };
+};
+
+const getArmorPaintBrushPointerCircle = ({ canvasPoint, radius, renderer, segment }) => {
+  const canvas = renderer?.domElement;
+  if (!canvasPoint || !canvas) return null;
+  const canvasWidth = canvas.clientWidth || canvas.width || 0;
+  const canvasHeight = canvas.clientHeight || canvas.height || 0;
+  if (canvasWidth <= 0 || canvasHeight <= 0) return null;
+  const maxRadius = Math.max(12, Math.min(canvasWidth, canvasHeight) * 0.32);
+  return {
+    x: THREE.MathUtils.clamp(canvasPoint.x, 0, canvasWidth),
+    y: THREE.MathUtils.clamp(canvasPoint.y, 0, canvasHeight),
+    radius: THREE.MathUtils.clamp(normalizeArmorPaintRadius(radius) * 220, 10, maxRadius),
+    color: (ARMOR_CUT_PREVIEW_COLORS[segment] || ARMOR_CUT_PREVIEW_COLORS.body).color,
+  };
+};
+
+const getArmorPaintTriangleCacheSignature = (mesh = null, gripSpace = null) => {
+  const meshMatrix = mesh?.matrixWorld?.elements?.map((value) => Number(value).toFixed(5)).join(',');
+  const gripMatrix = gripSpace?.space?.matrixWorld?.elements?.map((value) => Number(value).toFixed(5)).join(',');
+  const basePosition = gripSpace?.modelObject?.position;
+  return [
+    mesh?.geometry?.uuid || '',
+    mesh?.geometry?.attributes?.position?.count || 0,
+    mesh?.geometry?.index?.count || 0,
+    meshMatrix || '',
+    gripMatrix || '',
+    basePosition ? `${basePosition.x.toFixed(5)},${basePosition.y.toFixed(5)},${basePosition.z.toFixed(5)}` : '',
+  ].join('|');
+};
+
+const getArmorPaintSpatialKey = (x = 0, y = 0, z = 0) => `${x}:${y}:${z}`;
+
+const getArmorPaintSpatialCoord = (value = 0) => Math.floor(value / ARMOR_PAINT_SPATIAL_CELL_SIZE);
+
+const buildArmorPaintTriangleCache = (mesh = null, gripSpace = null) => {
+  const geometry = mesh?.geometry;
+  const position = geometry?.attributes?.position;
+  if (!mesh || !geometry || !position || !gripSpace?.space || !gripSpace?.modelObject) return null;
+  const signature = getArmorPaintTriangleCacheSignature(mesh, gripSpace);
+  const cached = mesh.userData?.armorPaintTriangleCache;
+  if (cached?.signature === signature) return cached;
+
+  const records = [];
+  const grid = new Map();
+  const index = geometry.index;
+  const triangleLimit = index ? index.count : position.count;
+  const localCenter = new THREE.Vector3();
+  const worldCenter = new THREE.Vector3();
+  const gripPoint = new THREE.Vector3();
+  mesh.updateMatrixWorld?.(true);
+  gripSpace.space.updateMatrixWorld?.(true);
+  const basePosition = gripSpace.modelObject.position || new THREE.Vector3();
+
+  for (let triangleStart = 0; triangleStart + 2 < triangleLimit; triangleStart += 3) {
+    const vertexIndices = index
+      ? [index.getX(triangleStart), index.getX(triangleStart + 1), index.getX(triangleStart + 2)]
+      : [triangleStart, triangleStart + 1, triangleStart + 2];
+    localCenter.set(0, 0, 0);
+    vertexIndices.forEach((vertexIndex) => {
+      localCenter.x += position.getX(vertexIndex);
+      localCenter.y += position.getY(vertexIndex);
+      localCenter.z += position.getZ(vertexIndex);
+    });
+    localCenter.multiplyScalar(1 / 3);
+    worldCenter.copy(localCenter);
+    mesh.localToWorld(worldCenter);
+    gripPoint.copy(worldCenter);
+    gripSpace.space.worldToLocal(gripPoint);
+    gripPoint.sub(basePosition);
+    const record = {
+      triangleStart,
+      vertexIndices,
+      materialIndex: getRigCutTriangleMaterialIndex(geometry, triangleStart),
+      point: gripPoint.clone(),
+      worldPoint: worldCenter.clone(),
+    };
+    const recordIndex = records.push(record) - 1;
+    const key = getArmorPaintSpatialKey(
+      getArmorPaintSpatialCoord(record.point.x),
+      getArmorPaintSpatialCoord(record.point.y),
+      getArmorPaintSpatialCoord(record.point.z),
+    );
+    if (!grid.has(key)) grid.set(key, []);
+    grid.get(key).push(recordIndex);
+  }
+
+  const nextCache = { signature, records, grid };
+  mesh.userData.armorPaintTriangleCache = nextCache;
+  return nextCache;
+};
+
+const queryArmorPaintTriangleCache = (cache = null, bounds = null) => {
+  if (!cache?.records?.length) return [];
+  if (!bounds) return cache.records;
+  const minX = getArmorPaintSpatialCoord(bounds.minX);
+  const maxX = getArmorPaintSpatialCoord(bounds.maxX);
+  const minY = getArmorPaintSpatialCoord(bounds.minY);
+  const maxY = getArmorPaintSpatialCoord(bounds.maxY);
+  const minZ = getArmorPaintSpatialCoord(bounds.minZ);
+  const maxZ = getArmorPaintSpatialCoord(bounds.maxZ);
+  const seen = new Set();
+  const records = [];
+  for (let x = minX; x <= maxX; x += 1) {
+    for (let y = minY; y <= maxY; y += 1) {
+      for (let z = minZ; z <= maxZ; z += 1) {
+        const bucket = cache.grid.get(getArmorPaintSpatialKey(x, y, z));
+        if (!bucket) continue;
+        bucket.forEach((recordIndex) => {
+          if (seen.has(recordIndex)) return;
+          seen.add(recordIndex);
+          const record = cache.records[recordIndex];
+          if (record && isPointInsideArmorPaintBounds(record.point, bounds)) records.push(record);
+        });
+      }
+    }
+  }
+  return records;
+};
+
+const getArmorPaintSourceMeshes = (gripSpace = null) => {
+  const sourceMeshes = [];
+  gripSpace?.modelObject?.traverse?.((child) => {
     if (
       (child.isMesh || child.isSkinnedMesh)
       && child.geometry?.attributes?.position
       && !child.userData?.rigCutPaint
       && !child.userData?.rigCutContour
+      && !child.userData?.weaponGripMarker
     ) {
       sourceMeshes.push(child);
     }
   });
+  return sourceMeshes;
+};
+
+const warmArmorPaintTriangleCaches = (decorObject = null) => {
+  const gripSpace = getDecorGripSpace(decorObject);
+  if (!gripSpace?.space || !gripSpace?.modelObject) return;
+  gripSpace.modelObject.updateMatrixWorld?.(true);
+  gripSpace.space.updateMatrixWorld?.(true);
+  getArmorPaintSourceMeshes(gripSpace).forEach((mesh) => {
+    buildArmorPaintTriangleCache(mesh, gripSpace);
+  });
+};
+
+const buildArmorCutPaintObjects = ({
+  objects,
+  paintedTriangleKeys = null,
+  decorObject,
+  paintStrokes,
+  activeSegment,
+  sectionPlane = null,
+}) => {
+  const gripSpace = getDecorGripSpace(decorObject);
+  if (!gripSpace?.space || !gripSpace?.modelObject) return false;
+  const preparedStrokes = prepareArmorPaintStrokes(paintStrokes);
+  if (!preparedStrokes.length) return false;
+  gripSpace.modelObject.updateMatrixWorld?.(true);
+  gripSpace.space.updateMatrixWorld?.(true);
+  const sourceMeshes = getArmorPaintSourceMeshes(gripSpace);
   sourceMeshes.forEach((mesh) => {
     const geometry = mesh.geometry;
-    const position = geometry.attributes.position;
-    const index = geometry.index;
+    const triangleCache = buildArmorPaintTriangleCache(mesh, gripSpace);
+    if (!triangleCache?.records?.length) return;
     const builders = {
       body: createRigCutGeometryBuilder(geometry),
       'left-arm': createRigCutGeometryBuilder(geometry),
       'right-arm': createRigCutGeometryBuilder(geometry),
     };
-    const triangleLimit = index ? index.count : position.count;
-    const localCenter = new THREE.Vector3();
-    const worldCenter = new THREE.Vector3();
-    const gripPoint = new THREE.Vector3();
-    mesh.updateMatrixWorld?.(true);
-    for (let triangleStart = 0; triangleStart + 2 < triangleLimit; triangleStart += 3) {
-      const vertexIndices = index
-        ? [index.getX(triangleStart), index.getX(triangleStart + 1), index.getX(triangleStart + 2)]
-        : [triangleStart, triangleStart + 1, triangleStart + 2];
-      localCenter.set(0, 0, 0);
-      vertexIndices.forEach((vertexIndex) => {
-        localCenter.x += position.getX(vertexIndex);
-        localCenter.y += position.getY(vertexIndex);
-        localCenter.z += position.getZ(vertexIndex);
+    const paintedTriangles = new Set();
+    preparedStrokes.forEach((stroke) => {
+      const segmentTriangleSet = getArmorPaintTriangleSet(paintedTriangleKeys, mesh, stroke.segment);
+      const hits = getArmorPaintStrokeHits(stroke);
+      hits.forEach((hit) => {
+        const candidates = queryArmorPaintTriangleCache(triangleCache, hit.bounds);
+        candidates.forEach((record) => {
+          if (!record || paintedTriangles.has(record.triangleStart)) return;
+          if (sectionPlane && sectionPlane.distanceToPoint(record.worldPoint) < -0.002) return;
+          if (!isPointInsideArmorPaintHit(record.point, hit, stroke.radius)) return;
+          paintedTriangles.add(record.triangleStart);
+          segmentTriangleSet?.add(record.triangleStart);
+          appendRigCutTriangle(
+            builders[stroke.segment],
+            geometry,
+            record.vertexIndices,
+            record.materialIndex,
+          );
+        });
       });
-      localCenter.multiplyScalar(1 / 3);
-      worldCenter.copy(localCenter);
-      mesh.localToWorld(worldCenter);
-      gripPoint.copy(worldCenter);
-      gripSpace.space.worldToLocal(gripPoint);
-      gripPoint.sub(gripSpace.modelObject.position);
-      const segment = classifyArmorPaintPoint(gripPoint, preparedStrokes);
-      if (segment) {
-        appendRigCutTriangle(builders[segment], geometry, vertexIndices, getRigCutTriangleMaterialIndex(geometry, triangleStart));
-      }
-    }
+    });
     Object.entries(builders).forEach(([segment, builder]) => {
       const splitGeometry = buildRigCutGeometry(geometry, builder);
       if (!splitGeometry) return;
-      const config = ARMOR_CUT_PREVIEW_COLORS[segment] || ARMOR_CUT_PREVIEW_COLORS.body;
-      const material = new THREE.MeshBasicMaterial({
-        color: config.color,
-        depthTest: true,
-        depthWrite: false,
-        polygonOffset: true,
-        polygonOffsetFactor: -10,
-        polygonOffsetUnits: -10,
-        side: THREE.DoubleSide,
-        transparent: true,
-        opacity: activeSegment === segment ? 0.5 : 0.28,
+      const paintSurface = createArmorCutPaintSurfaceMesh({
+        geometry: splitGeometry,
+        segment,
+        activeSegment,
+        sectionPlane,
+        name: `ArmorCutPaintSurface-${segment}`,
       });
-      const paintSurface = new THREE.Mesh(splitGeometry, material);
-      paintSurface.name = `ArmorCutPaintSurface-${segment}`;
-      paintSurface.frustumCulled = false;
-      paintSurface.renderOrder = 238;
-      paintSurface.userData.rigCutPaint = true;
+      if (!paintSurface) return;
       mesh.add(paintSurface);
       objects.set(`${mesh.uuid}:${segment}:paint-surface`, paintSurface);
     });
   });
   return objects.size > 0;
+};
+
+const appendArmorCutPaintPatchObjects = ({
+  objects,
+  paintedTriangleKeys,
+  decorObject,
+  stroke,
+  activeSegment,
+  sectionPlane = null,
+  patchId = 0,
+}) => {
+  const gripSpace = getDecorGripSpace(decorObject);
+  if (!gripSpace?.space || !gripSpace?.modelObject || !stroke?.points?.length) return false;
+  const preparedStroke = prepareArmorPaintStrokes([stroke])[0];
+  if (!preparedStroke) return false;
+  gripSpace.modelObject.updateMatrixWorld?.(true);
+  gripSpace.space.updateMatrixWorld?.(true);
+  let didAppend = false;
+  getArmorPaintSourceMeshes(gripSpace).forEach((mesh) => {
+    const geometry = mesh.geometry;
+    const triangleCache = buildArmorPaintTriangleCache(mesh, gripSpace);
+    if (!triangleCache?.records?.length) return;
+    const builder = createRigCutGeometryBuilder(geometry);
+    const segmentTriangleSet = getArmorPaintTriangleSet(paintedTriangleKeys, mesh, preparedStroke.segment);
+    getArmorPaintStrokeHits(preparedStroke).forEach((hit) => {
+      const candidates = queryArmorPaintTriangleCache(triangleCache, hit.bounds);
+      candidates.forEach((record) => {
+        if (!record || segmentTriangleSet?.has(record.triangleStart)) return;
+        if (sectionPlane && sectionPlane.distanceToPoint(record.worldPoint) < -0.002) return;
+        if (!isPointInsideArmorPaintHit(record.point, hit, preparedStroke.radius)) return;
+        segmentTriangleSet?.add(record.triangleStart);
+        appendRigCutTriangle(builder, geometry, record.vertexIndices, record.materialIndex);
+      });
+    });
+    const patchGeometry = buildRigCutGeometry(geometry, builder);
+    if (!patchGeometry) return;
+    const segment = normalizeArmorContourSegment(preparedStroke.segment);
+    const paintSurface = createArmorCutPaintSurfaceMesh({
+      geometry: patchGeometry,
+      segment,
+      activeSegment,
+      sectionPlane,
+      name: `ArmorCutPaintPatch-${segment}-${patchId}`,
+    });
+    if (!paintSurface) return;
+    mesh.add(paintSurface);
+    objects.set(`${mesh.uuid}:${segment}:paint-patch:${patchId}`, paintSurface);
+    didAppend = true;
+  });
+  return didAppend;
 };
 
 const getWeaponGripMarkerPosition = (marker = {}) => {
@@ -944,8 +1677,9 @@ const getWeaponGripMarkerPosition = (marker = {}) => {
   return new THREE.Vector3(x, y, z);
 };
 
-const getArmorManipulationLineForMarker = (markerId = '') => (
-  ARMOR_MANIPULATION_ARM_LINES.find((entry) => entry.shoulderId === markerId || entry.elbowId === markerId) || null
+const getArmorManipulationLineForMarker = (markerId = '', markers = []) => (
+  getArmorManipulationLines(markers)
+    .find((entry) => entry.shoulderId === markerId || entry.elbowId === markerId) || null
 );
 
 const roundGripVector = (vector = new THREE.Vector3()) => ({
@@ -960,7 +1694,7 @@ const constrainArmorManipulationMarkerPosition = (
   currentMarkers = [],
   referenceMarkers = currentMarkers,
 ) => {
-  const line = getArmorManipulationLineForMarker(markerId);
+  const line = getArmorManipulationLineForMarker(markerId, currentMarkers.length ? currentMarkers : referenceMarkers);
   if (!line) return position;
   const currentOffsets = getArmorCutMarkerOffsets(currentMarkers);
   const referenceOffsets = getArmorCutMarkerOffsets(referenceMarkers);
@@ -1043,8 +1777,10 @@ const getArmorCutArmPreviewMatrix = (
   if (!isRightArm && !isLeftArm) return null;
   const sourceOffsets = getArmorCutMarkerOffsets(sourceMarkers);
   const targetOffsets = getArmorCutMarkerOffsets(targetMarkers);
-  const shoulderKey = isRightArm ? 'rightShoulder' : 'leftShoulder';
-  const elbowKey = isRightArm ? 'rightElbow' : 'leftElbow';
+  const line = getArmorManipulationLines(sourceMarkers.length ? sourceMarkers : targetMarkers)
+    .find((entry) => entry.segment === segment);
+  const shoulderKey = line?.shoulderKey || (isRightArm ? 'rightShoulder' : 'leftShoulder');
+  const elbowKey = line?.elbowKey || (isRightArm ? 'rightElbow' : 'leftElbow');
   const toGripSpacePoint = (offset) => gripSpace.modelObject.position.clone().add(offset);
   const sourceShoulder = toGripSpacePoint(sourceOffsets[shoulderKey]);
   const sourceElbow = toGripSpacePoint(sourceOffsets[elbowKey]);
@@ -1099,6 +1835,7 @@ const applyDecorPreviewAppearance = (decorObject, model = {}) => {
     maxEnvMapIntensity: isFloorTileKind(model.kind) ? 0.42 : 1,
     maxEmissiveIntensity: isFloorTileKind(model.kind) ? 0.03 : 0.18,
   });
+  applyArmorPaintStencilMask(modelObject);
 };
 
 const getPreviewFrameBox = (decorObject) => {
@@ -1171,20 +1908,38 @@ const applyDecorCameraZoomDelta = (camera = null, controls = null, deltaY = 0) =
   return getDecorCameraZoomPercent(camera, controls);
 };
 
+const applyArmorSectionClipping = (decorObject = null, plane = null) => {
+  decorObject?.traverse?.((child) => {
+    if (!child?.material || (!child.isMesh && !child.isSkinnedMesh)) return;
+    const materials = Array.isArray(child.material) ? child.material : [child.material];
+    materials.forEach((material) => {
+      if (!material) return;
+      material.clippingPlanes = plane ? [plane] : null;
+      material.clipIntersection = false;
+      material.needsUpdate = true;
+    });
+  });
+};
+
+const getArmorSectionLocalPaintPlane = (decorObject = null, worldPlane = null) => {
+  const gripSpace = getDecorGripSpace(decorObject);
+  if (!worldPlane || !gripSpace?.space || !gripSpace?.modelObject) return null;
+  gripSpace.space.updateMatrixWorld?.(true);
+  const localPlane = worldPlane.clone().applyMatrix4(
+    new THREE.Matrix4().copy(gripSpace.space.matrixWorld).invert(),
+  );
+  const basePosition = gripSpace.modelObject.position || new THREE.Vector3();
+  localPlane.constant += localPlane.normal.dot(basePosition);
+  return localPlane.normalize();
+};
+
 const applyDecorPreviewSize = (decorObject, model = {}) => {
   const modelObject = decorObject?.userData?.decorModelObject;
   if (!modelObject) return;
+  const orientationObject = decorObject?.userData?.decorOrientationObject;
   resetObjectBaseTransform(modelObject);
   const dimensions = getDecorModelDimensions(model);
-  if (isInventoryDecorKind(model.kind)) {
-    fitObjectToLargestDimension(modelObject, Math.max(dimensions.x, dimensions.y, dimensions.z), { groundY: 0 });
-  } else {
-    fitObjectToDimensions(modelObject, {
-      width: dimensions.x,
-      height: dimensions.y,
-      depth: dimensions.z,
-    }, { groundY: 0 });
-  }
+  fitDecorModelObjectToDimensions(modelObject, model, { dimensions, orientationObject });
 
   const collisionRing = decorObject.userData?.decorCollisionRing;
   if (collisionRing?.userData?.baseRadius) {
@@ -1193,6 +1948,14 @@ const applyDecorPreviewSize = (decorObject, model = {}) => {
     collisionRing.scale.setScalar(Math.max(0.001, nextRadius / baseRadius));
   }
   applyDecorPreviewPose(decorObject, model);
+};
+
+export const __decor3dPreviewRigTestUtils = {
+  classifyArmorCutPoint,
+  getArmorCutMarkerOffsets,
+  getArmorManipulationLines,
+  getGripTraySlotNdc,
+  isCanvasPointInGripTray,
 };
 
 export default function Decor3DPreview({
@@ -1205,6 +1968,7 @@ export default function Decor3DPreview({
   armorCanvasCutEnabled = false,
   armorContourDrawEnabled = false,
   armorPaintDrawEnabled = false,
+  armorSectionToolEnabled = false,
   armorPaintBrushRadius = ARMOR_PAINT_RADIUS,
   cameraZoomDragEnabled = false,
   armorCutManipulationEnabled = false,
@@ -1215,6 +1979,7 @@ export default function Decor3DPreview({
   onArmorCutPaintChange,
   onArmorGripMarkerChange,
   onCameraZoomChange,
+  showGrid = true,
   rigMeshPickEnabled = false,
   rigActiveSegment = 'body',
   onRigMeshPick,
@@ -1229,24 +1994,36 @@ export default function Decor3DPreview({
   const armorCutContourObjectsRef = useRef(new Map());
   const armorCutContourSignatureRef = useRef('');
   const armorCutPaintObjectsRef = useRef(new Map());
+  const armorCutPaintTriangleKeysRef = useRef(new Map());
+  const armorCutPaintPatchIdRef = useRef(0);
   const armorCutPaintSignatureRef = useRef('');
+  const skipNextArmorCutPaintSignatureRef = useRef('');
   const armorCutPreviewDirtyRef = useRef(true);
   const armorCutContourDirtyRef = useRef(true);
   const armorCutPaintDirtyRef = useRef(true);
   const armorPaintStrokeActiveRef = useRef(false);
   const armorPaintBrushPreviewRef = useRef(null);
   const armorPaintBrushPointRef = useRef(null);
+  const armorPaintBrushCanvasPointRef = useRef(null);
+  const armorSectionWorldPlaneRef = useRef(null);
+  const armorSectionLocalPlaneRef = useRef(null);
+  const armorSectionDraftPlaneRef = useRef(null);
+  const armorSectionDragRef = useRef(null);
   const armorManipulationGuideObjectsRef = useRef(new Map());
   const gripMarkersRef = useRef(new Map());
   const gripDragRef = useRef(null);
   const cameraRef = useRef(null);
   const controlsRef = useRef(null);
+  const previewFloorRef = useRef(null);
+  const previewGridRef = useRef(null);
+  const showGridRef = useRef(showGrid !== false);
   const latestModelRef = useRef(model);
   const latestWeaponGripMarkersRef = useRef(weaponGripMarkers);
   const latestShieldGripMarkersRef = useRef(shieldGripMarkers);
   const latestArmorCanvasCutEnabledRef = useRef(armorCanvasCutEnabled);
   const latestArmorContourDrawEnabledRef = useRef(armorContourDrawEnabled);
   const latestArmorPaintDrawEnabledRef = useRef(armorPaintDrawEnabled);
+  const latestArmorSectionToolEnabledRef = useRef(armorSectionToolEnabled);
   const latestArmorPaintBrushRadiusRef = useRef(normalizeArmorPaintRadius(armorPaintBrushRadius));
   const latestCameraZoomDragEnabledRef = useRef(cameraZoomDragEnabled);
   const latestArmorCutManipulationEnabledRef = useRef(armorCutManipulationEnabled);
@@ -1272,10 +2049,36 @@ export default function Decor3DPreview({
   const rendererRef = useRef(null);
   const [webglError, setWebglError] = useState('');
   const [previewStatus, setPreviewStatus] = useState('');
+  const [sectionLine, setSectionLine] = useState(null);
+  const [sectionStatus, setSectionStatus] = useState('');
+  const [paintBrushCircle, setPaintBrushCircle] = useState(null);
+  const paintBrushCircleFrameRef = useRef(0);
+  const pendingPaintBrushCircleRef = useRef(null);
   const buildSignature = useMemo(() => getDecorPreviewModelSignature(model), [model]);
   const sizeSignature = useMemo(() => getDecorSizeSignature(model), [model]);
   const poseSignature = useMemo(() => getDecorPoseSignature(model), [model]);
   const appearanceSignature = useMemo(() => getDecorAppearanceSignature(model), [model]);
+
+  const commitPaintBrushCircle = useCallback((nextCircle = null) => {
+    pendingPaintBrushCircleRef.current = nextCircle;
+    if (!nextCircle) {
+      if (paintBrushCircleFrameRef.current) {
+        cancelAnimationFrame(paintBrushCircleFrameRef.current);
+        paintBrushCircleFrameRef.current = 0;
+      }
+      setPaintBrushCircle(null);
+      return;
+    }
+    if (paintBrushCircleFrameRef.current) return;
+    paintBrushCircleFrameRef.current = requestAnimationFrame(() => {
+      paintBrushCircleFrameRef.current = 0;
+      setPaintBrushCircle(pendingPaintBrushCircleRef.current);
+    });
+  }, []);
+
+  useEffect(() => () => {
+    if (paintBrushCircleFrameRef.current) cancelAnimationFrame(paintBrushCircleFrameRef.current);
+  }, []);
 
   useEffect(() => {
     latestModelRef.current = model;
@@ -1302,8 +2105,20 @@ export default function Decor3DPreview({
   }, [armorCutContours]);
 
   useEffect(() => {
-    latestArmorCutPaintStrokesRef.current = normalizeArmorCutPaintStrokes(armorCutPaintStrokes);
-    armorCutPreviewDirtyRef.current = true;
+    const normalizedStrokes = normalizeArmorCutPaintStrokes(armorCutPaintStrokes);
+    latestArmorCutPaintStrokesRef.current = normalizedStrokes;
+    const decorObject = decorObjectRef.current;
+    const modelObject = decorObject?.userData?.decorModelObject || decorObject;
+    const signature = getArmorCutPaintSignature(normalizedStrokes, modelObject);
+    if (
+      signature
+      && signature === skipNextArmorCutPaintSignatureRef.current
+      && signature === armorCutPaintSignatureRef.current
+    ) {
+      skipNextArmorCutPaintSignatureRef.current = '';
+      armorCutPaintDirtyRef.current = false;
+      return;
+    }
     armorCutPaintDirtyRef.current = true;
   }, [armorCutPaintStrokes]);
 
@@ -1312,6 +2127,18 @@ export default function Decor3DPreview({
     armorCutPreviewDirtyRef.current = true;
     armorCutContourDirtyRef.current = true;
     armorCutPaintDirtyRef.current = true;
+    if (!armorCanvasCutEnabled) {
+      armorCutPaintTriangleKeysRef.current.clear();
+      armorCutPaintPatchIdRef.current = 0;
+      skipNextArmorCutPaintSignatureRef.current = '';
+      armorSectionWorldPlaneRef.current = null;
+      armorSectionLocalPlaneRef.current = null;
+      armorSectionDraftPlaneRef.current = null;
+      applyArmorSectionClipping(decorObjectRef.current, null);
+      applyArmorSectionClipping(rigCutPreviewRootRef.current, null);
+      setSectionLine(null);
+      setSectionStatus('');
+    }
   }, [armorCanvasCutEnabled]);
 
   useEffect(() => {
@@ -1321,8 +2148,30 @@ export default function Decor3DPreview({
   useEffect(() => {
     latestArmorPaintDrawEnabledRef.current = armorPaintDrawEnabled;
     syncWeaponGripMarkersRef.current?.(cameraRef.current);
+    syncArmorCutPreviewRef.current?.(cameraRef.current);
     syncArmorPaintBrushPreviewRef.current?.();
+    if (!armorPaintDrawEnabled) return undefined;
+    const warmCacheTimer = window.setTimeout(() => {
+      warmArmorPaintTriangleCaches(decorObjectRef.current);
+    }, 40);
+    return () => window.clearTimeout(warmCacheTimer);
   }, [armorPaintDrawEnabled]);
+
+  useEffect(() => {
+    latestArmorSectionToolEnabledRef.current = armorSectionToolEnabled;
+    if (armorSectionToolEnabled) {
+      setSectionStatus(armorSectionWorldPlaneRef.current
+        ? 'Coupe active: trace une nouvelle ligne ou passe en peinture.'
+        : 'Trace une ligne de coupe, puis clique la face visible.');
+    } else {
+      armorSectionDraftPlaneRef.current = null;
+      armorSectionDragRef.current = null;
+      if (controlsRef.current) controlsRef.current.enabled = true;
+      containerRef.current?.classList?.remove('is-section-drawing');
+      setSectionLine(null);
+      setSectionStatus('');
+    }
+  }, [armorSectionToolEnabled]);
 
   useEffect(() => {
     latestArmorPaintBrushRadiusRef.current = normalizeArmorPaintRadius(armorPaintBrushRadius);
@@ -1374,15 +2223,22 @@ export default function Decor3DPreview({
 
   useEffect(() => {
     latestRigActiveSegmentRef.current = rigActiveSegment;
-    armorCutPreviewDirtyRef.current = true;
     armorCutContourDirtyRef.current = true;
     armorCutPaintDirtyRef.current = true;
+    syncArmorCutPreviewRef.current?.(cameraRef.current);
     syncArmorPaintBrushPreviewRef.current?.();
   }, [rigActiveSegment]);
 
   useEffect(() => {
     latestOnRigMeshPickRef.current = onRigMeshPick;
   }, [onRigMeshPick]);
+
+  useEffect(() => {
+    const visible = showGrid !== false;
+    showGridRef.current = visible;
+    if (previewFloorRef.current) previewFloorRef.current.visible = visible;
+    if (previewGridRef.current) previewGridRef.current.visible = visible;
+  }, [showGrid]);
 
   const syncWeaponGripMarkers = useCallback((camera = cameraRef.current) => {
     const gripRoot = gripRootRef.current;
@@ -1407,6 +2263,11 @@ export default function Decor3DPreview({
     }
 
     const activeMarkers = new Set();
+    const inactiveMarkerKeys = markers
+      .filter((markerConfig) => !markerConfig.enabled)
+      .map((markerConfig) => markerConfig.key);
+    const inactiveMarkerIndexByKey = new Map(inactiveMarkerKeys.map((markerKey, index) => [markerKey, index]));
+    const trayReferencePoint = getGripTrayReferencePoint(decorObject);
     markers.forEach((markerConfig) => {
       const hand = markerConfig.hand === 'left' ? 'left' : 'right';
       const markerKey = markerConfig.key;
@@ -1417,22 +2278,30 @@ export default function Decor3DPreview({
         gripMarkersRef.current.set(markerKey, marker);
         gripRoot.add(marker);
       }
-      const worldPosition = getWeaponGripWorldPosition(decorObject, { ...markerConfig, hand });
+      const isDraggingMarker = gripDragRef.current?.key === markerKey;
+      const isEnabled = Boolean(markerConfig.enabled || (isDraggingMarker && gripDragRef.current?.activated));
+      const trayIndex = inactiveMarkerIndexByKey.get(markerKey);
+      const inTray = !isEnabled && Number.isFinite(trayIndex);
+      const worldPosition = inTray
+        ? getGripTrayWorldPosition(camera, trayIndex, inactiveMarkerKeys.length, trayReferencePoint)
+        : getWeaponGripWorldPosition(decorObject, { ...markerConfig, hand, enabled: isEnabled });
       if (!worldPosition) {
         marker.visible = false;
         return;
       }
       marker.visible = true;
       marker.position.copy(worldPosition);
-      marker.material.opacity = markerConfig.enabled ? 1 : 0.42;
-      marker.userData.weaponGripEnabled = Boolean(markerConfig.enabled);
+      marker.material.opacity = inTray ? 0.72 : 1;
+      marker.userData.weaponGripEnabled = isEnabled;
+      marker.userData.gripMarkerInTray = inTray;
+      marker.userData.gripTrayIndex = inTray ? trayIndex : -1;
       marker.userData.gripMarkerType = markerConfig.type;
       marker.userData.gripMarkerId = markerConfig.type === 'armor'
         ? (markerConfig.id || 'lower-belly')
         : (markerConfig.type === 'shield' ? (markerConfig.id || 'hand') : hand);
       if (camera) {
         const distance = Math.max(0.1, camera.position.distanceTo(marker.position));
-        const markerSize = THREE.MathUtils.clamp(distance * 0.065, 0.08, 0.28);
+        const markerSize = THREE.MathUtils.clamp(distance * (inTray ? 0.056 : 0.065), 0.07, inTray ? 0.22 : 0.28);
         marker.scale.setScalar(markerSize);
       }
     });
@@ -1470,7 +2339,7 @@ export default function Decor3DPreview({
     const toWorldPoint = (offset) => gripSpace.space.localToWorld(
       gripSpace.modelObject.position.clone().add(offset || new THREE.Vector3()),
     );
-    ARMOR_MANIPULATION_ARM_LINES.forEach((line) => {
+    getArmorManipulationLines(markers).forEach((line) => {
       activeKeys.add(line.arm);
       let guide = objects.get(line.arm);
       if (!guide) {
@@ -1500,7 +2369,6 @@ export default function Decor3DPreview({
     const decorObject = decorObjectRef.current;
     const markers = latestArmorGripMarkersRef.current;
     const contours = latestArmorCutContoursRef.current;
-    const paintStrokes = latestArmorCutPaintStrokesRef.current;
     const objects = rigCutPreviewObjectsRef.current;
     if (!root || !decorObject || !latestArmorCanvasCutEnabledRef.current || !Array.isArray(markers) || !markers.length) {
       disposeRigCutPreviewObjects(objects);
@@ -1512,11 +2380,11 @@ export default function Decor3DPreview({
     const deferArmorCutRebuild = gripDragRef.current?.type === 'armor' && objects.size > 0;
     const shouldCheckPreviewBuild = armorCutPreviewDirtyRef.current || !objects.size;
     if (shouldCheckPreviewBuild) {
-      const signature = getArmorCutSignature(modelObject, markers, contours, paintStrokes);
+      const signature = getArmorCutSignature(modelObject, markers, contours);
       if (signature !== rigCutPreviewSignatureRef.current && !deferArmorCutRebuild) {
         disposeRigCutPreviewObjects(objects);
         rigCutPreviewSignatureRef.current = '';
-        if (!buildArmorCutPreviewMeshes({ root, objects, decorObject, markers, contours, paintStrokes })) {
+        if (!buildArmorCutPreviewMeshes({ root, objects, decorObject, markers, contours })) {
           armorCutPreviewDirtyRef.current = false;
           return;
         }
@@ -1555,9 +2423,10 @@ export default function Decor3DPreview({
         object,
         object.userData?.rigCutSegment || 'body',
         activeSegment,
-        manipulationEnabled ? 'object' : 'cut',
+        manipulationEnabled ? 'object' : (latestArmorPaintDrawEnabledRef.current ? 'paint-guide' : 'cut'),
       );
     });
+    applyArmorSectionClipping(root, armorSectionWorldPlaneRef.current);
     if (!objects.size && camera) {
       armorCutPreviewDirtyRef.current = false;
       return;
@@ -1578,8 +2447,10 @@ export default function Decor3DPreview({
       armorCutContourDirtyRef.current = false;
       return;
     }
-    const signature = getArmorCutContoursSignature(contours, latestRigActiveSegmentRef.current, modelObject);
+    const activeSegment = latestRigActiveSegmentRef.current || 'body';
+    const signature = getArmorCutContoursSignature(contours, modelObject);
     if (signature === armorCutContourSignatureRef.current) {
+      updateArmorCutContourObjectsAppearance(objects, activeSegment);
       armorCutContourDirtyRef.current = false;
       return;
     }
@@ -1589,9 +2460,10 @@ export default function Decor3DPreview({
       objects,
       decorObject,
       contours,
-      activeSegment: latestRigActiveSegmentRef.current || 'body',
+      activeSegment,
     })) {
       armorCutContourSignatureRef.current = signature;
+      updateArmorCutContourObjectsAppearance(objects, activeSegment);
     }
     armorCutContourDirtyRef.current = false;
   }, []);
@@ -1605,24 +2477,34 @@ export default function Decor3DPreview({
     const modelObject = decorObject?.userData?.decorModelObject || decorObject;
     if (!decorObject || !latestArmorCanvasCutEnabledRef.current || !Array.isArray(paintStrokes) || !paintStrokes.length) {
       disposeArmorCutContourObjects(objects);
+      armorCutPaintTriangleKeysRef.current.clear();
+      armorCutPaintPatchIdRef.current = 0;
       armorCutPaintSignatureRef.current = '';
       armorCutPaintDirtyRef.current = false;
       return;
     }
-    const signature = getArmorCutPaintSignature(paintStrokes, latestRigActiveSegmentRef.current, modelObject);
+    const activeSegment = latestRigActiveSegmentRef.current || 'body';
+    const sectionPlane = armorSectionWorldPlaneRef.current;
+    const signature = getArmorCutPaintSignature(paintStrokes, modelObject);
     if (signature === armorCutPaintSignatureRef.current) {
+      updateArmorCutPaintObjectsAppearance(objects, activeSegment, sectionPlane);
       armorCutPaintDirtyRef.current = false;
       return;
     }
     disposeArmorCutContourObjects(objects);
+    armorCutPaintTriangleKeysRef.current.clear();
+    armorCutPaintPatchIdRef.current = 0;
     armorCutPaintSignatureRef.current = '';
     if (buildArmorCutPaintObjects({
       objects,
+      paintedTriangleKeys: armorCutPaintTriangleKeysRef.current,
       decorObject,
       paintStrokes,
-      activeSegment: latestRigActiveSegmentRef.current || 'body',
+      activeSegment,
+      sectionPlane,
     })) {
       armorCutPaintSignatureRef.current = signature;
+      updateArmorCutPaintObjectsAppearance(objects, activeSegment, sectionPlane);
     }
     armorCutPaintDirtyRef.current = false;
   }, []);
@@ -1630,39 +2512,31 @@ export default function Decor3DPreview({
   syncArmorCutPaintRef.current = syncArmorCutPaint;
 
   const syncArmorPaintBrushPreview = useCallback(() => {
-    const decorObject = decorObjectRef.current;
-    const point = armorPaintBrushPointRef.current;
-    if (!decorObject || !latestArmorPaintDrawEnabledRef.current || !point) {
-      if (armorPaintBrushPreviewRef.current) armorPaintBrushPreviewRef.current.visible = false;
-      return;
-    }
-    const gripSpace = getDecorGripSpace(decorObject);
-    if (!gripSpace?.space || !gripSpace?.modelObject) {
-      if (armorPaintBrushPreviewRef.current) armorPaintBrushPreviewRef.current.visible = false;
+    const canvasPoint = armorPaintBrushCanvasPointRef.current;
+    if (armorPaintBrushPreviewRef.current) armorPaintBrushPreviewRef.current.visible = false;
+    if (!latestArmorPaintDrawEnabledRef.current || !canvasPoint) {
+      commitPaintBrushCircle(null);
       return;
     }
     const radius = normalizeArmorPaintRadius(latestArmorPaintBrushRadiusRef.current);
     const segment = normalizeArmorContourSegment(latestRigActiveSegmentRef.current || 'body');
-    if (!armorPaintBrushPreviewRef.current) {
-      armorPaintBrushPreviewRef.current = createArmorPaintBrushPreview(segment);
+    const nextCircle = getArmorPaintBrushPointerCircle({
+      canvasPoint,
+      radius,
+      renderer: rendererRef.current,
+      segment,
+    });
+    if (!nextCircle) {
+      commitPaintBrushCircle(null);
+      return;
     }
-    if (armorPaintBrushPreviewRef.current.parent !== gripSpace.space) {
-      armorPaintBrushPreviewRef.current.parent?.remove?.(armorPaintBrushPreviewRef.current);
-      gripSpace.space.add(armorPaintBrushPreviewRef.current);
-    }
-    const nextPreview = armorPaintBrushPreviewRef.current;
-    if (!nextPreview) return;
-    updateArmorPaintBrushPreviewAppearance(nextPreview, radius, segment);
-    const basePosition = gripSpace.modelObject.position;
-    const normal = getArmorPaintSurfaceNormal(point) || new THREE.Vector3(0, 0, 1);
-    nextPreview.position.set(
-      basePosition.x + point.x + (normal.x * 0.006),
-      basePosition.y + point.y + (normal.y * 0.006),
-      basePosition.z + point.z + (normal.z * 0.006),
-    );
-    nextPreview.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
-    nextPreview.visible = true;
-  }, []);
+    commitPaintBrushCircle((paintBrushCircle && paintBrushCircle.color === nextCircle?.color
+      && Math.abs(paintBrushCircle.x - nextCircle.x) < 0.5
+      && Math.abs(paintBrushCircle.y - nextCircle.y) < 0.5
+      && Math.abs(paintBrushCircle.radius - nextCircle.radius) < 0.5)
+      ? paintBrushCircle
+      : nextCircle);
+  }, [commitPaintBrushCircle, paintBrushCircle]);
 
   syncArmorPaintBrushPreviewRef.current = syncArmorPaintBrushPreview;
 
@@ -1672,7 +2546,12 @@ export default function Decor3DPreview({
 
     let renderer;
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'default' });
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true,
+        powerPreference: 'default',
+        stencil: true,
+      });
     } catch {
       setWebglError('Apercu 3D indisponible.');
       return undefined;
@@ -1681,6 +2560,7 @@ export default function Decor3DPreview({
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.08;
+    renderer.localClippingEnabled = true;
     renderer.setPixelRatio(window.devicePixelRatio || 1);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -1706,7 +2586,8 @@ export default function Decor3DPreview({
     controls.dampingFactor = 0.08;
     controls.minDistance = DECOR_CAMERA_ZOOM_MIN_DISTANCE;
     controls.maxDistance = DECOR_CAMERA_ZOOM_MAX_DISTANCE;
-    controls.maxPolarAngle = Math.PI * 0.49;
+    controls.minPolarAngle = 0.01;
+    controls.maxPolarAngle = Math.PI - 0.01;
     controls.target.set(0, 0.75, 0);
     controlsRef.current = controls;
     const detachCameraControls = attachClickTargetCameraControls({
@@ -1748,12 +2629,16 @@ export default function Decor3DPreview({
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), floorMaterial);
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
+    floor.visible = showGridRef.current;
+    previewFloorRef.current = floor;
     scene.add(floor);
 
     const grid = new THREE.GridHelper(8, 16, '#67e8f9', '#263c5c');
     grid.material.transparent = true;
     grid.material.opacity = 0.24;
     grid.position.y = 0.018;
+    grid.visible = showGridRef.current;
+    previewGridRef.current = grid;
     scene.add(grid);
 
     const decorRoot = new THREE.Group();
@@ -1781,9 +2666,6 @@ export default function Decor3DPreview({
     let frameId = 0;
     const render = (time = 0) => {
       resize();
-      if (!gripDragRef.current && decorRoot.children[0]) {
-        decorRoot.children[0].rotation.y = Math.sin(time * 0.00036) * 0.08;
-      }
       controls.update();
       syncWeaponGripMarkersRef.current?.(camera);
       syncArmorManipulationGuidesRef.current?.();
@@ -1813,6 +2695,7 @@ export default function Decor3DPreview({
     let rigPickStart = null;
     let contourPickStart = null;
     let paintStroke = null;
+    let paintHoldTimer = null;
     let cameraZoomDrag = null;
     let reportedZoomPercent = null;
 
@@ -1825,6 +2708,7 @@ export default function Decor3DPreview({
 
     const handleControlsChange = () => {
       reportCameraZoom();
+      syncArmorPaintBrushPreviewRef.current?.();
     };
     controls.addEventListener?.('change', handleControlsChange);
 
@@ -1837,6 +2721,53 @@ export default function Decor3DPreview({
       raycaster.setFromCamera(pointer, camera);
     };
 
+    const getCanvasPoint = (event) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      return {
+        x: THREE.MathUtils.clamp(event.clientX - rect.left, 0, rect.width),
+        y: THREE.MathUtils.clamp(event.clientY - rect.top, 0, rect.height),
+        width: rect.width,
+        height: rect.height,
+      };
+    };
+
+    const getSectionRayDirection = (canvasPoint) => {
+      const ndc = new THREE.Vector3(
+        (canvasPoint.x / Math.max(1, canvasPoint.width)) * 2 - 1,
+        -((canvasPoint.y / Math.max(1, canvasPoint.height)) * 2 - 1),
+        0.5,
+      );
+      return ndc.unproject(camera).sub(camera.position).normalize();
+    };
+
+    const createSectionPlaneFromLine = (start, end) => {
+      if (!start || !end || Math.hypot(end.x - start.x, end.y - start.y) < 8) return null;
+      const startDirection = getSectionRayDirection(start);
+      const endDirection = getSectionRayDirection(end);
+      const normal = startDirection.cross(endDirection);
+      if (normal.lengthSq() <= 0.000001) return null;
+      normal.normalize();
+      return new THREE.Plane().setFromNormalAndCoplanarPoint(normal, camera.position);
+    };
+
+    const isWorldPointVisibleBySection = (point = null) => {
+      const plane = armorSectionWorldPlaneRef.current;
+      if (!plane || !point) return true;
+      return plane.distanceToPoint(point) >= -0.002;
+    };
+
+    const getFirstModelHit = (event, options = {}) => {
+      const decorObject = decorObjectRef.current;
+      const modelObject = decorObject?.userData?.decorModelObject || decorObject;
+      if (!modelObject?.traverse) return null;
+      updatePointer(event);
+      const hits = raycaster.intersectObject(modelObject, true);
+      return hits.find((entry) => (
+        (entry?.object?.isMesh || entry?.object?.isSkinnedMesh)
+        && (options.ignoreSection || isWorldPointVisibleBySection(entry.point))
+      )) || null;
+    };
+
     const findGripMarkerHit = (event) => {
       updatePointer(event);
       const markerObjects = Array.from(gripMarkersRef.current.values()).filter((marker) => marker.visible);
@@ -1847,9 +2778,7 @@ export default function Decor3DPreview({
       const decorObject = decorObjectRef.current;
       const modelObject = decorObject?.userData?.decorModelObject || decorObject;
       if (!modelObject?.traverse) return null;
-      updatePointer(event);
-      const hits = raycaster.intersectObject(modelObject, true);
-      const hit = hits.find((entry) => entry?.object?.isMesh || entry?.object?.isSkinnedMesh);
+      const hit = getFirstModelHit(event);
       if (!hit?.object) return null;
       modelObject.updateMatrixWorld?.(true);
       hit.object.updateMatrixWorld?.(true);
@@ -1869,9 +2798,7 @@ export default function Decor3DPreview({
       const gripSpace = getDecorGripSpace(decorObject);
       const modelObject = gripSpace?.modelObject || decorObject?.userData?.decorModelObject || decorObject;
       if (!modelObject?.traverse || !gripSpace?.space) return null;
-      updatePointer(event);
-      const hits = raycaster.intersectObject(modelObject, true);
-      const hit = hits.find((entry) => entry?.object?.isMesh || entry?.object?.isSkinnedMesh);
+      const hit = getFirstModelHit(event);
       if (!hit?.point) return null;
       const gripPoint = hit.point.clone();
       gripSpace.space.worldToLocal(gripPoint);
@@ -1896,6 +2823,12 @@ export default function Decor3DPreview({
         y: gripPoint.y,
         z: gripPoint.z,
         ...surfaceNormal,
+        ...normalizeArmorPaintSectionPlane(armorSectionLocalPlaneRef.current ? {
+          cx: armorSectionLocalPlaneRef.current.normal.x,
+          cy: armorSectionLocalPlaneRef.current.normal.y,
+          cz: armorSectionLocalPlaneRef.current.normal.z,
+          cw: armorSectionLocalPlaneRef.current.constant,
+        } : {}),
       });
     };
 
@@ -1904,6 +2837,109 @@ export default function Decor3DPreview({
         ? { x: point.x, y: point.y, z: point.z, ...normalizeArmorPaintSurfaceNormal(point) }
         : null;
       syncArmorPaintBrushPreviewRef.current?.();
+    };
+
+    const storeArmorPaintBrushSurfacePoint = (point = null) => {
+      armorPaintBrushPointRef.current = point
+        ? { x: point.x, y: point.y, z: point.z, ...normalizeArmorPaintSurfaceNormal(point) }
+        : null;
+    };
+
+    const setArmorPaintBrushCanvasPoint = (canvasPoint = null) => {
+      armorPaintBrushCanvasPointRef.current = canvasPoint
+        ? { x: canvasPoint.x, y: canvasPoint.y }
+        : null;
+      syncArmorPaintBrushPreviewRef.current?.();
+    };
+
+    const selectArmorSectionVisibleSide = (event) => {
+      const draftPlane = armorSectionDraftPlaneRef.current;
+      if (!draftPlane) return false;
+      const hit = getFirstModelHit(event, { ignoreSection: true });
+      if (!hit?.point) {
+        setSectionStatus('Clique directement sur la face a garder visible.');
+        return true;
+      }
+      const sectionPlane = draftPlane.clone();
+      if (sectionPlane.distanceToPoint(hit.point) < 0) sectionPlane.negate();
+      sectionPlane.normalize();
+      armorSectionWorldPlaneRef.current = sectionPlane;
+      armorSectionLocalPlaneRef.current = getArmorSectionLocalPaintPlane(decorObjectRef.current, sectionPlane);
+      armorSectionDraftPlaneRef.current = null;
+      applyArmorSectionClipping(decorObjectRef.current, sectionPlane);
+      applyArmorSectionClipping(rigCutPreviewRootRef.current, sectionPlane);
+      armorCutPaintDirtyRef.current = true;
+      setSectionLine(null);
+      setSectionStatus('Coupe active: la peinture reste sur la face visible.');
+      return true;
+    };
+
+    const handleArmorSectionPointerDown = (event) => {
+      if (event.button !== 0 || !latestArmorSectionToolEnabledRef.current) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+      if (armorSectionDraftPlaneRef.current) {
+        selectArmorSectionVisibleSide(event);
+        return;
+      }
+      const start = getCanvasPoint(event);
+      armorSectionWorldPlaneRef.current = null;
+      armorSectionLocalPlaneRef.current = null;
+      applyArmorSectionClipping(decorObjectRef.current, null);
+      applyArmorSectionClipping(rigCutPreviewRootRef.current, null);
+      armorCutPaintDirtyRef.current = true;
+      armorSectionDragRef.current = {
+        pointerId: event.pointerId,
+        start,
+        last: start,
+      };
+      setSectionLine({ ...start, x2: start.x, y2: start.y, pending: false });
+      setSectionStatus('Trace la ligne de coupe.');
+      controls.enabled = false;
+      container.classList.add('is-section-drawing');
+      try {
+        renderer.domElement.setPointerCapture?.(event.pointerId);
+      } catch {
+        // Pointer capture may be unavailable in some embedded browsers.
+      }
+    };
+
+    const handleArmorSectionPointerMove = (event) => {
+      const drag = armorSectionDragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+      const end = getCanvasPoint(event);
+      drag.last = end;
+      setSectionLine({ ...drag.start, x2: end.x, y2: end.y, pending: false });
+    };
+
+    const endArmorSectionLine = (event) => {
+      const drag = armorSectionDragRef.current;
+      if (!drag || (event?.pointerId !== undefined && drag.pointerId !== event.pointerId)) return;
+      event?.preventDefault?.();
+      event?.stopPropagation?.();
+      event?.stopImmediatePropagation?.();
+      try {
+        renderer.domElement.releasePointerCapture?.(drag.pointerId || event?.pointerId);
+      } catch {
+        // Pointer capture may already be released.
+      }
+      armorSectionDragRef.current = null;
+      controls.enabled = true;
+      container.classList.remove('is-section-drawing');
+      const end = drag.last || drag.start;
+      const plane = createSectionPlaneFromLine(drag.start, end);
+      if (!plane) {
+        setSectionLine(null);
+        setSectionStatus('Ligne trop courte: recommence la coupe.');
+        return;
+      }
+      armorSectionDraftPlaneRef.current = plane;
+      setSectionLine({ ...drag.start, x2: end.x, y2: end.y, pending: true });
+      setSectionStatus('Clique la face que tu veux garder visible.');
     };
 
     const updateLocalArmorGripMarker = (markerId = 'lower-belly', position = {}) => {
@@ -1924,6 +2960,36 @@ export default function Decor3DPreview({
       ));
       if (isManipulatingArmor) latestArmorManipulationMarkersRef.current = nextMarkers;
       else latestArmorGripMarkersRef.current = nextMarkers;
+    };
+
+    const updateLocalWeaponGripMarker = (hand = 'right', position = {}) => {
+      const gripHand = hand === 'left' ? 'left' : 'right';
+      latestWeaponGripMarkersRef.current = (latestWeaponGripMarkersRef.current || []).map((marker) => (
+        (marker.hand === 'left' ? 'left' : 'right') === gripHand
+          ? {
+            ...marker,
+            enabled: true,
+            x: position.x,
+            y: position.y,
+            z: position.z,
+          }
+          : marker
+      ));
+    };
+
+    const updateLocalShieldGripMarker = (markerId = 'hand', position = {}) => {
+      const pointId = markerId || 'hand';
+      latestShieldGripMarkersRef.current = (latestShieldGripMarkersRef.current || []).map((marker) => (
+        (marker.id || 'hand') === pointId
+          ? {
+            ...marker,
+            enabled: true,
+            x: position.x,
+            y: position.y,
+            z: position.z,
+          }
+          : marker
+      ));
     };
 
     const commitGripWorldPosition = (markerKey, worldPosition, options = {}) => {
@@ -1951,6 +3017,7 @@ export default function Decor3DPreview({
       ) return nextPosition;
       if (drag) drag.lastPosition = nextPosition;
       if (drag?.type === 'shield') {
+        updateLocalShieldGripMarker(drag.id || 'hand', nextPosition);
         latestOnShieldGripMarkerChangeRef.current?.(drag.id || 'hand', nextPosition);
         return nextPosition;
       }
@@ -1961,6 +3028,7 @@ export default function Decor3DPreview({
         }
         return nextPosition;
       }
+      updateLocalWeaponGripMarker(drag?.hand || markerKey, nextPosition);
       latestOnWeaponGripMarkerChangeRef.current?.(drag?.hand || markerKey, nextPosition);
       return nextPosition;
     };
@@ -1968,7 +3036,7 @@ export default function Decor3DPreview({
     const endGripDrag = (event) => {
       const drag = gripDragRef.current;
       if (!drag) return;
-      if (drag.type === 'armor' && drag.lastPosition && !latestArmorCutManipulationEnabledRef.current) {
+      if (drag.type === 'armor' && drag.activated && drag.lastPosition && !latestArmorCutManipulationEnabledRef.current) {
         latestOnArmorGripMarkerChangeRef.current?.(drag.id || 'lower-belly', drag.lastPosition);
       }
       gripDragRef.current = null;
@@ -2004,6 +3072,7 @@ export default function Decor3DPreview({
         ? (marker.userData.gripMarkerId || 'lower-belly')
         : (markerType === 'shield' ? (marker.userData.gripMarkerId || 'hand') : hand);
       const markerKey = `${markerType}-${markerId}`;
+      const fromTray = marker.userData.gripMarkerInTray === true;
       camera.getWorldDirection(planeNormal).normalize();
       dragPlane.setFromNormalAndCoplanarPoint(planeNormal, marker.position);
       updatePointer(event);
@@ -2015,6 +3084,9 @@ export default function Decor3DPreview({
         key: markerKey,
         pointerId: event.pointerId,
         grabOffset: hitPlane ? marker.position.clone().sub(planePoint) : new THREE.Vector3(),
+        fromTray,
+        activated: !fromTray,
+        trayPosition: marker.position.clone(),
         lastPosition: null,
       };
       controls.enabled = false;
@@ -2024,7 +3096,9 @@ export default function Decor3DPreview({
       } catch {
         // Some embedded browsers do not expose pointer capture for canvas.
       }
-      commitGripWorldPosition(markerKey, marker.position, { persist: markerType !== 'armor' });
+      if (!fromTray) {
+        commitGripWorldPosition(markerKey, marker.position, { persist: markerType !== 'armor' });
+      }
     };
 
     const handleGripPointerMove = (event) => {
@@ -2036,8 +3110,19 @@ export default function Decor3DPreview({
       updatePointer(event);
       if (!raycaster.ray.intersectPlane(dragPlane, planePoint)) return;
       const nextWorldPosition = planePoint.clone().add(drag.grabOffset);
-      const resolvedPosition = commitGripWorldPosition(drag.key || drag.hand, nextWorldPosition, { persist: drag.type !== 'armor' });
+      const canvasPoint = getCanvasPoint(event);
       const marker = gripMarkersRef.current.get(drag.key || drag.hand);
+      if (drag.fromTray && !drag.activated && isCanvasPointInGripTray(canvasPoint)) {
+        if (marker) {
+          marker.position.copy(nextWorldPosition);
+          marker.material.opacity = 0.72;
+        }
+        return;
+      }
+      if (drag.fromTray && !drag.activated) {
+        drag.activated = true;
+      }
+      const resolvedPosition = commitGripWorldPosition(drag.key || drag.hand, nextWorldPosition, { persist: drag.type !== 'armor' });
       if (marker) {
         if (drag.type === 'armor' && resolvedPosition) {
           marker.position.copy(getWeaponGripWorldPosition(decorObjectRef.current, {
@@ -2115,23 +3200,73 @@ export default function Decor3DPreview({
       contourPickStart = null;
     };
 
+    const getArmorPaintPointerSnapshot = (event) => ({
+      clientX: event.clientX,
+      clientY: event.clientY,
+      pointerId: event.pointerId,
+    });
+
+    const appendLiveArmorPaintPatch = (points = []) => {
+      if (!paintStroke || !Array.isArray(points) || !points.length) return;
+      appendArmorCutPaintPatchObjects({
+        objects: armorCutPaintObjectsRef.current,
+        paintedTriangleKeys: armorCutPaintTriangleKeysRef.current,
+        decorObject: decorObjectRef.current,
+        stroke: {
+          segment: paintStroke.segment,
+          radius: paintStroke.radius,
+          points,
+        },
+        activeSegment: latestRigActiveSegmentRef.current || paintStroke.segment,
+        sectionPlane: armorSectionWorldPlaneRef.current,
+        patchId: armorCutPaintPatchIdRef.current += 1,
+      });
+      armorCutPaintDirtyRef.current = false;
+    };
+
     const appendArmorPaintPoint = (event, options = {}) => {
+      if (paintStroke) paintStroke.lastEvent = getArmorPaintPointerSnapshot(event);
+      const previousPointCount = paintStroke?.points?.length || 0;
+      if (options.updateCursor !== false) setArmorPaintBrushCanvasPoint(getCanvasPoint(event));
       const point = findArmorContourPoint(event);
-      setArmorPaintBrushPoint(point);
+      storeArmorPaintBrushSurfacePoint(point);
       if (!point) return null;
       const lastPoint = paintStroke?.lastPoint;
       if (
-        !options.force
-        && lastPoint
+        lastPoint
         && Math.hypot(point.x - lastPoint.x, point.y - lastPoint.y, point.z - lastPoint.z) < 0.035
       ) {
         return lastPoint;
       }
       if (paintStroke) {
+        const patchPoints = lastPoint ? [lastPoint, point] : [point];
         paintStroke.lastPoint = point;
         paintStroke.points.push(point);
+        if (paintStroke.points.length > ARMOR_PAINT_POINT_LIMIT) {
+          paintStroke.points = paintStroke.points.slice(-ARMOR_PAINT_POINT_LIMIT);
+        }
+        if (paintStroke.points.length !== previousPointCount) appendLiveArmorPaintPatch(patchPoints);
       }
       return point;
+    };
+
+    const stopArmorPaintHold = () => {
+      if (!paintHoldTimer) return;
+      window.clearInterval(paintHoldTimer);
+      paintHoldTimer = null;
+    };
+
+    const startArmorPaintHold = () => {
+      stopArmorPaintHold();
+      paintHoldTimer = window.setInterval(() => {
+        if (!paintStroke || !latestArmorPaintDrawEnabledRef.current) {
+          stopArmorPaintHold();
+          return;
+        }
+        const event = paintStroke.lastEvent;
+        if (!event) return;
+        appendArmorPaintPoint(event, { force: true, updateCursor: false });
+      }, ARMOR_PAINT_HOLD_INTERVAL_MS);
     };
 
     const handleArmorPaintPointerDown = (event) => {
@@ -2141,19 +3276,24 @@ export default function Decor3DPreview({
         || !latestArmorPaintDrawEnabledRef.current
         || !latestOnArmorCutPaintChangeRef.current
       ) return;
+      setArmorPaintBrushCanvasPoint(getCanvasPoint(event));
       const point = findArmorContourPoint(event);
       if (!point) return;
-      setArmorPaintBrushPoint(point);
+      storeArmorPaintBrushSurfacePoint(point);
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation?.();
       paintStroke = {
+        baseStrokes: normalizeArmorCutPaintStrokes(latestArmorCutPaintStrokesRef.current),
+        lastEvent: getArmorPaintPointerSnapshot(event),
         pointerId: event.pointerId,
         lastPoint: point,
         points: [point],
         radius: normalizeArmorPaintRadius(latestArmorPaintBrushRadiusRef.current),
         segment: latestRigActiveSegmentRef.current || 'body',
       };
+      appendLiveArmorPaintPatch([point]);
+      startArmorPaintHold();
       armorPaintStrokeActiveRef.current = true;
       controls.enabled = false;
       container.classList.add('is-painting');
@@ -2169,37 +3309,52 @@ export default function Decor3DPreview({
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation?.();
-      appendArmorPaintPoint(event);
+      paintStroke.lastEvent = getArmorPaintPointerSnapshot(event);
+      setArmorPaintBrushCanvasPoint(getCanvasPoint(event));
     };
 
     const handleArmorPaintPointerHover = (event) => {
       if (paintStroke) return;
       if (!latestArmorPaintDrawEnabledRef.current) {
-        setArmorPaintBrushPoint(null);
+        setArmorPaintBrushCanvasPoint(null);
         return;
       }
-      setArmorPaintBrushPoint(findArmorContourPoint(event));
+      setArmorPaintBrushCanvasPoint(getCanvasPoint(event));
     };
 
     const handleArmorPaintPointerLeave = () => {
+      setArmorPaintBrushCanvasPoint(null);
       setArmorPaintBrushPoint(null);
     };
 
     const endArmorPaint = (event) => {
       if (!paintStroke) return;
+      stopArmorPaintHold();
       const completedStroke = paintStroke;
       try {
         renderer.domElement.releasePointerCapture?.(completedStroke.pointerId || event?.pointerId);
       } catch {
         // Pointer capture may already be released by the browser.
       }
+      appendArmorPaintPoint(event || completedStroke.lastEvent, { force: true, updateCursor: false });
       paintStroke = null;
       armorPaintStrokeActiveRef.current = false;
-      armorCutPreviewDirtyRef.current = true;
-      armorCutPaintDirtyRef.current = true;
       controls.enabled = true;
       container.classList.remove('is-painting');
       if (completedStroke.points?.length) {
+        const segment = normalizeArmorContourSegment(completedStroke.segment);
+        const nextStrokes = mergeArmorPaintStroke(
+          completedStroke.baseStrokes,
+          segment,
+          completedStroke.points,
+          completedStroke.radius,
+        );
+        latestArmorCutPaintStrokesRef.current = nextStrokes;
+        const modelObject = decorObjectRef.current?.userData?.decorModelObject || decorObjectRef.current;
+        const signature = getArmorCutPaintSignature(nextStrokes, modelObject);
+        armorCutPaintSignatureRef.current = signature;
+        skipNextArmorCutPaintSignatureRef.current = signature;
+        armorCutPaintDirtyRef.current = false;
         latestOnArmorCutPaintChangeRef.current?.(completedStroke.segment, {
           action: 'append',
           points: completedStroke.points,
@@ -2255,6 +3410,7 @@ export default function Decor3DPreview({
       gripDragRef.current
       || cameraZoomDrag
       || paintStroke
+      || armorSectionDragRef.current
       || contourPickStart
       || rigPickStart
     );
@@ -2264,31 +3420,36 @@ export default function Decor3DPreview({
       endGripDrag(event);
       endCameraZoom(event);
       endArmorPaint(event);
+      endArmorSectionLine(event);
       handleArmorContourPointerCancel();
       rigPickStart = null;
       controls.enabled = true;
-      container.classList.remove('is-grip-dragging', 'is-painting', 'is-camera-zooming');
+      container.classList.remove('is-grip-dragging', 'is-painting', 'is-camera-zooming', 'is-section-drawing');
     };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') endCanvasPointerInteractions();
     };
 
+    renderer.domElement.addEventListener('pointerdown', handleArmorSectionPointerDown, true);
     renderer.domElement.addEventListener('pointerdown', handleGripPointerDown, true);
     renderer.domElement.addEventListener('pointerdown', handleCameraZoomPointerDown, true);
     renderer.domElement.addEventListener('pointerdown', handleArmorPaintPointerDown, true);
     renderer.domElement.addEventListener('pointerdown', handleArmorContourPointerDown, true);
     renderer.domElement.addEventListener('pointerdown', handleRigPickPointerDown, true);
+    renderer.domElement.addEventListener('pointermove', handleArmorSectionPointerMove, true);
     renderer.domElement.addEventListener('pointermove', handleArmorPaintPointerHover, true);
     renderer.domElement.addEventListener('pointermove', handleCameraZoomPointerMove, true);
     renderer.domElement.addEventListener('pointermove', handleArmorPaintPointerMove, true);
     renderer.domElement.addEventListener('pointermove', handleGripPointerMove, true);
     renderer.domElement.addEventListener('pointerleave', handleArmorPaintPointerLeave, true);
+    renderer.domElement.addEventListener('pointerup', endArmorSectionLine, true);
     renderer.domElement.addEventListener('pointerup', endGripDrag, true);
     renderer.domElement.addEventListener('pointerup', endCameraZoom, true);
     renderer.domElement.addEventListener('pointerup', endArmorPaint, true);
     renderer.domElement.addEventListener('pointerup', handleArmorContourPointerUp, true);
     renderer.domElement.addEventListener('pointerup', handleRigPickPointerUp, true);
+    renderer.domElement.addEventListener('pointercancel', endArmorSectionLine, true);
     renderer.domElement.addEventListener('pointercancel', endGripDrag, true);
     renderer.domElement.addEventListener('pointercancel', endCameraZoom, true);
     renderer.domElement.addEventListener('pointercancel', endArmorPaint, true);
@@ -2302,21 +3463,25 @@ export default function Decor3DPreview({
     return () => {
       cancelAnimationFrame(frameId);
       controls.removeEventListener?.('change', handleControlsChange);
+      renderer.domElement.removeEventListener('pointerdown', handleArmorSectionPointerDown, true);
       renderer.domElement.removeEventListener('pointerdown', handleGripPointerDown, true);
       renderer.domElement.removeEventListener('pointerdown', handleCameraZoomPointerDown, true);
       renderer.domElement.removeEventListener('pointerdown', handleArmorPaintPointerDown, true);
       renderer.domElement.removeEventListener('pointerdown', handleArmorContourPointerDown, true);
       renderer.domElement.removeEventListener('pointerdown', handleRigPickPointerDown, true);
+      renderer.domElement.removeEventListener('pointermove', handleArmorSectionPointerMove, true);
       renderer.domElement.removeEventListener('pointermove', handleArmorPaintPointerHover, true);
       renderer.domElement.removeEventListener('pointermove', handleCameraZoomPointerMove, true);
       renderer.domElement.removeEventListener('pointermove', handleArmorPaintPointerMove, true);
       renderer.domElement.removeEventListener('pointermove', handleGripPointerMove, true);
       renderer.domElement.removeEventListener('pointerleave', handleArmorPaintPointerLeave, true);
+      renderer.domElement.removeEventListener('pointerup', endArmorSectionLine, true);
       renderer.domElement.removeEventListener('pointerup', endGripDrag, true);
       renderer.domElement.removeEventListener('pointerup', endCameraZoom, true);
       renderer.domElement.removeEventListener('pointerup', endArmorPaint, true);
       renderer.domElement.removeEventListener('pointerup', handleArmorContourPointerUp, true);
       renderer.domElement.removeEventListener('pointerup', handleRigPickPointerUp, true);
+      renderer.domElement.removeEventListener('pointercancel', endArmorSectionLine, true);
       renderer.domElement.removeEventListener('pointercancel', endGripDrag, true);
       renderer.domElement.removeEventListener('pointercancel', endCameraZoom, true);
       renderer.domElement.removeEventListener('pointercancel', endArmorPaint, true);
@@ -2334,12 +3499,14 @@ export default function Decor3DPreview({
       disposeArmorCutContourObjects(armorCutContourObjectsRef.current);
       disposeArmorCutContourObjects(armorCutPaintObjectsRef.current);
       disposeArmorPaintBrushPreview(armorPaintBrushPreviewRef.current);
+      stopArmorPaintHold();
       armorPaintBrushPreviewRef.current = null;
       disposeArmorManipulationGuides(armorManipulationGuideObjectsRef.current);
       rigCutPreviewRootRef.current = null;
       gripRootRef.current = null;
       clearGroup(decorRoot);
       disposeThreeObject(floor);
+      disposeThreeObject(grid);
       scene.environment = null;
       environmentMap.dispose();
       pmremGenerator.dispose();
@@ -2350,23 +3517,36 @@ export default function Decor3DPreview({
       rendererRef.current = null;
       cameraRef.current = null;
       controlsRef.current = null;
+      previewFloorRef.current = null;
+      previewGridRef.current = null;
     };
   }, []);
 
   useEffect(() => {
     applyDecorPreviewSize(decorObjectRef.current, latestModelRef.current);
     frameDecorPreviewObject(decorObjectRef.current, cameraRef.current, controlsRef.current);
+    if (armorSectionWorldPlaneRef.current) {
+      armorSectionLocalPlaneRef.current = getArmorSectionLocalPaintPlane(decorObjectRef.current, armorSectionWorldPlaneRef.current);
+      applyArmorSectionClipping(decorObjectRef.current, armorSectionWorldPlaneRef.current);
+    }
     latestOnCameraZoomChangeRef.current?.(getDecorCameraZoomPercent(cameraRef.current, controlsRef.current));
   }, [sizeSignature]);
 
   useEffect(() => {
     applyDecorPreviewPose(decorObjectRef.current, latestModelRef.current);
     frameDecorPreviewObject(decorObjectRef.current, cameraRef.current, controlsRef.current);
+    if (armorSectionWorldPlaneRef.current) {
+      armorSectionLocalPlaneRef.current = getArmorSectionLocalPaintPlane(decorObjectRef.current, armorSectionWorldPlaneRef.current);
+      applyArmorSectionClipping(decorObjectRef.current, armorSectionWorldPlaneRef.current);
+    }
     latestOnCameraZoomChangeRef.current?.(getDecorCameraZoomPercent(cameraRef.current, controlsRef.current));
   }, [poseSignature]);
 
   useEffect(() => {
     applyDecorPreviewAppearance(decorObjectRef.current, latestModelRef.current);
+    if (armorSectionWorldPlaneRef.current) {
+      applyArmorSectionClipping(decorObjectRef.current, armorSectionWorldPlaneRef.current);
+    }
   }, [appearanceSignature]);
 
   useEffect(() => {
@@ -2377,6 +3557,11 @@ export default function Decor3DPreview({
     disposeArmorPaintBrushPreview(armorPaintBrushPreviewRef.current);
     armorPaintBrushPreviewRef.current = null;
     armorPaintBrushPointRef.current = null;
+    disposeArmorCutContourObjects(armorCutPaintObjectsRef.current);
+    armorCutPaintTriangleKeysRef.current.clear();
+    armorCutPaintPatchIdRef.current = 0;
+    armorCutPaintSignatureRef.current = '';
+    skipNextArmorCutPaintSignatureRef.current = '';
     armorCutPreviewDirtyRef.current = true;
     armorCutContourDirtyRef.current = true;
     armorCutPaintDirtyRef.current = true;
@@ -2397,6 +3582,10 @@ export default function Decor3DPreview({
         applyDecorPreviewSize(object, latestModelRef.current);
         applyDecorPreviewAppearance(object, latestModelRef.current);
         frameDecorPreviewObject(object, cameraRef.current, controlsRef.current);
+        if (armorSectionWorldPlaneRef.current) {
+          armorSectionLocalPlaneRef.current = getArmorSectionLocalPaintPlane(object, armorSectionWorldPlaneRef.current);
+          applyArmorSectionClipping(object, armorSectionWorldPlaneRef.current);
+        }
         armorCutPreviewDirtyRef.current = true;
         armorCutContourDirtyRef.current = true;
         armorCutPaintDirtyRef.current = true;
@@ -2417,12 +3606,43 @@ export default function Decor3DPreview({
     };
   }, [buildSignature]);
 
+  const sectionLineStyle = sectionLine
+    ? {
+      left: `${sectionLine.x}px`,
+      top: `${sectionLine.y}px`,
+      width: `${Math.hypot((sectionLine.x2 || sectionLine.x) - sectionLine.x, (sectionLine.y2 || sectionLine.y) - sectionLine.y)}px`,
+      transform: `rotate(${Math.atan2((sectionLine.y2 || sectionLine.y) - sectionLine.y, (sectionLine.x2 || sectionLine.x) - sectionLine.x)}rad)`,
+    }
+    : null;
+  const hasGripMarkers = Boolean(weaponGripMarkers?.length || shieldGripMarkers?.length || armorGripMarkers?.length);
+
   return (
     <div
       ref={containerRef}
-      className={`decor3d-canvas-shell ${weaponGripMarkers?.length || shieldGripMarkers?.length || armorGripMarkers?.length ? 'decor3d-canvas-shell-grips' : ''} ${armorContourDrawEnabled || armorPaintDrawEnabled ? 'decor3d-canvas-shell-contour' : ''} ${cameraZoomDragEnabled ? 'decor3d-canvas-shell-zoom' : ''}`}
+      className={`decor3d-canvas-shell ${hasGripMarkers ? 'decor3d-canvas-shell-grips' : ''} ${armorContourDrawEnabled || armorPaintDrawEnabled ? 'decor3d-canvas-shell-contour' : ''} ${armorSectionToolEnabled ? 'decor3d-canvas-shell-section' : ''} ${cameraZoomDragEnabled ? 'decor3d-canvas-shell-zoom' : ''}`}
     >
       {children}
+      {hasGripMarkers ? <div className="decor3d-grip-tray-frame" aria-hidden="true" /> : null}
+      {paintBrushCircle ? (
+        <div
+          className="decor3d-paint-brush-circle"
+          style={{
+            borderColor: paintBrushCircle.color,
+            color: paintBrushCircle.color,
+            height: `${paintBrushCircle.radius * 2}px`,
+            left: `${paintBrushCircle.x}px`,
+            top: `${paintBrushCircle.y}px`,
+            width: `${paintBrushCircle.radius * 2}px`,
+          }}
+        />
+      ) : null}
+      {sectionLineStyle ? (
+        <div
+          className={`decor3d-section-line${sectionLine?.pending ? ' is-pending' : ''}`}
+          style={sectionLineStyle}
+        />
+      ) : null}
+      {sectionStatus ? <div className="decor3d-section-status">{sectionStatus}</div> : null}
       {webglError ? <div className="decor3d-webgl-error">{webglError}</div> : null}
       {!webglError && previewStatus ? <div className="decor3d-preview-status">{previewStatus}</div> : null}
     </div>

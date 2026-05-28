@@ -10,18 +10,32 @@ import {
 } from '../components/arcade/ArcadeThreeViewport.jsx';
 
 describe('ArcadeThreeViewport shadow map handling', () => {
-  it('keeps shadow maps updating so tester-mode actor shadows follow movement', () => {
+  it('updates shadow maps on demand so tester-mode actor shadows follow movement', () => {
     const renderer = {
       shadowMap: {
-        autoUpdate: false,
+        autoUpdate: true,
         needsUpdate: false,
       },
     };
 
     syncArcadeShadowMapForFrame(renderer);
 
-    expect(renderer.shadowMap.autoUpdate).toBe(true);
+    expect(renderer.shadowMap.autoUpdate).toBe(false);
     expect(renderer.shadowMap.needsUpdate).toBe(true);
+  });
+
+  it('keeps shadow maps idle when the frame does not need a refresh', () => {
+    const renderer = {
+      shadowMap: {
+        autoUpdate: true,
+        needsUpdate: false,
+      },
+    };
+
+    syncArcadeShadowMapForFrame(renderer, false);
+
+    expect(renderer.shadowMap.autoUpdate).toBe(false);
+    expect(renderer.shadowMap.needsUpdate).toBe(false);
   });
 
   it('maps action zone Z drags to height only', () => {

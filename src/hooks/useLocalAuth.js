@@ -22,25 +22,20 @@ import { getSupabaseClient, hasSupabaseAuthConfig, hasSupabaseStorageConfig } fr
 import { migrateProjectAssetReferences } from '../lib/assetManager';
 import { canUseLocalStorage, readJsonStorage, removeStorageKey } from '../utils/storageHelpers';
 import { deleteProjectLocalDrafts } from '../utils/projectDraftCleanup';
-
 const PROJECTS_KEY_PREFIX = 'escapeGameBuilder.projects';
 const ACTIVE_PROJECT_KEY_PREFIX = 'escapeGameBuilder.activeProject';
 const PROJECTS_DB_NAME = 'escape-game-builder-projects';
 const PROJECTS_DB_STORE = 'project-lists';
 const PROJECT_PUBLICATION_ENDPOINT = import.meta.env.VITE_PROJECT_PUBLICATION_ENDPOINT || '/api/projects/publication';
-
 const nowIso = () => new Date().toISOString();
-
 const createId = () => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
   return `project-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 };
-
 const getProjectsKey = (userId) => `${PROJECTS_KEY_PREFIX}.${userId}`;
 const getActiveProjectKey = (userId) => `${ACTIVE_PROJECT_KEY_PREFIX}.${userId}`;
 const getProjectRecordKeyPrefix = (userId) => `project:${userId}:`;
 const getProjectRecordKey = (userId, projectId) => `${getProjectRecordKeyPrefix(userId)}${projectId}`;
-
 const openProjectsDb = () => new Promise((resolve, reject) => {
   if (typeof indexedDB === 'undefined') {
     reject(new Error('IndexedDB indisponible'));
@@ -56,7 +51,6 @@ const openProjectsDb = () => new Promise((resolve, reject) => {
   request.onsuccess = () => resolve(request.result);
   request.onerror = () => reject(request.error || new Error('Ouverture IndexedDB impossible'));
 });
-
 // Cursor reads avoid materializing every user's project records and media blobs at once.
 const readUserProjectRecordsFromIndexedDb = (db, userId) => new Promise((resolve, reject) => {
   const records = [];
@@ -67,7 +61,6 @@ const readUserProjectRecordsFromIndexedDb = (db, userId) => new Promise((resolve
     ? IDBKeyRange.bound(prefix, `${prefix}\uffff`)
     : null;
   const request = range ? store.openCursor(range) : store.openCursor();
-
   request.onsuccess = () => {
     const cursor = request.result;
     if (!cursor) return;
@@ -80,12 +73,10 @@ const readUserProjectRecordsFromIndexedDb = (db, userId) => new Promise((resolve
   transaction.oncomplete = () => resolve(records);
   transaction.onerror = () => reject(transaction.error || new Error('Transaction IndexedDB impossible'));
 });
-
 const readProjectListFromIndexedDb = (db, userId) => new Promise((resolve, reject) => {
   const transaction = db.transaction(PROJECTS_DB_STORE, 'readonly');
   const store = transaction.objectStore(PROJECTS_DB_STORE);
   const request = store.get(userId);
-
   request.onsuccess = () => {
     const projects = Array.isArray(request.result)
       ? request.result.map(normalizeProjectRecord)
@@ -95,7 +86,6 @@ const readProjectListFromIndexedDb = (db, userId) => new Promise((resolve, rejec
   request.onerror = () => reject(request.error || new Error('Lecture IndexedDB impossible'));
   transaction.onerror = () => reject(transaction.error || new Error('Transaction IndexedDB impossible'));
 });
-
 const readProjectsFromIndexedDb = async (userId) => {
   if (!userId) return [];
   let db = null;
@@ -112,13 +102,11 @@ const readProjectsFromIndexedDb = async (userId) => {
     if (db) db.close();
   }
 };
-
 const getProjectRecordFreshness = (project) => {
   const revision = Number(project?.uiState?.autosaveRevision || 0);
   const updatedAt = Date.parse(project?.updatedAt || '') || 0;
   return { revision, updatedAt };
 };
-
 const isProjectRecordFresher = (candidate, current) => {
   if (!current) return true;
   const candidateFreshness = getProjectRecordFreshness(candidate);

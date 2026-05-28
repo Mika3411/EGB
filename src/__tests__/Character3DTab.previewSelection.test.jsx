@@ -9,6 +9,7 @@ vi.mock('../components/rpg3d/Character3DPreview.jsx', () => ({
     const weapon = inventory.find((item) => item?.type === 'weapon');
     const helmet = inventory.find((item) => item?.type === 'helmet');
     const shield = inventory.find((item) => item?.type === 'shield');
+    const leggings = inventory.find((item) => item?.type === 'leggings');
     return (
       <div
         data-testid="character-preview"
@@ -17,7 +18,12 @@ vi.mock('../components/rpg3d/Character3DPreview.jsx', () => ({
         data-inventory-count={String(inventory.length)}
         data-weapon-source={weapon?.weaponModelUrl || ''}
         data-helmet-source={helmet?.weaponModelUrl || ''}
+        data-helmet-mouth-enabled={helmet?.armorGripMouthEnabled ? 'true' : 'false'}
+        data-helmet-mouth-y={String(helmet?.armorGripMouthY ?? '')}
         data-shield-source={shield?.weaponModelUrl || ''}
+        data-leggings-source={leggings?.weaponModelUrl || ''}
+        data-leggings-left-knee-enabled={leggings?.armorGripLeftKneeEnabled ? 'true' : 'false'}
+        data-leggings-left-knee-y={String(leggings?.armorGripLeftKneeY ?? '')}
       >
         {children}
       </div>
@@ -302,6 +308,10 @@ describe('Character3DTab preview selection', () => {
         height: 0.55,
         depth: 0.8,
         modelRotationY: 25,
+        armorGripMouthEnabled: true,
+        armorGripMouthX: 0,
+        armorGripMouthY: -0.32,
+        armorGripMouthZ: 0.18,
       },
     ];
     project.characterModels3d[0].inventory = [
@@ -325,7 +335,54 @@ describe('Character3DTab preview selection', () => {
 
     expect(preview.getAttribute('data-inventory-count')).toBe('1');
     expect(preview.getAttribute('data-helmet-source')).toBe('blob:helmet-model');
+    expect(preview.getAttribute('data-helmet-mouth-enabled')).toBe('true');
+    expect(preview.getAttribute('data-helmet-mouth-y')).toBe('-0.32');
     expect(screen.getByText('Casque')).toBeTruthy();
+  });
+
+  it('adds leggings as character equipment from 3D inventory objects', async () => {
+    const project = makeProject();
+    project.decorModels3d = [
+      {
+        id: 'leggings',
+        kind: 'inventory-leggings',
+        name: 'Steel leggings',
+        modelUrl: 'blob:leggings-model',
+        modelName: 'leggings.glb',
+        modelFormat: 'glb',
+        width: 0.8,
+        height: 1.1,
+        depth: 0.6,
+        armorGripLeftKneeEnabled: true,
+        armorGripLeftKneeX: -0.22,
+        armorGripLeftKneeY: -0.7,
+        armorGripLeftKneeZ: 0.05,
+      },
+    ];
+    project.characterModels3d[0].inventory = [
+      {
+        id: 'character-equipment-leggings',
+        type: 'leggings',
+        name: 'Jambieres',
+        equipped: true,
+        weaponModel3dId: 'leggings',
+      },
+    ];
+
+    render(
+      <Character3DTab
+        project={project}
+        patchProject={vi.fn()}
+      />,
+    );
+
+    const preview = await screen.findByTestId('character-preview');
+
+    expect(preview.getAttribute('data-inventory-count')).toBe('1');
+    expect(preview.getAttribute('data-leggings-source')).toBe('blob:leggings-model');
+    expect(preview.getAttribute('data-leggings-left-knee-enabled')).toBe('true');
+    expect(preview.getAttribute('data-leggings-left-knee-y')).toBe('-0.7');
+    expect(screen.getByText('Jambieres')).toBeTruthy();
   });
 
   it('previews selected shield models without per-character tuning controls', async () => {

@@ -409,7 +409,10 @@
   .adventure-checklist{grid-template-columns:1fr}
   .adventure-journal-grid{grid-template-columns:1fr}
   .conversation-response-media-grid{grid-template-columns:1fr}
-.conversation-advanced-condition-head,.conversation-advanced-condition-row,.logic-story-variable-grid{grid-template-columns:1fr}
+.conversation-advanced-condition-head,.conversation-advanced-condition-row,.logic-story-variable-grid,.logic-flow-grid,.logic-flow-options{grid-template-columns:1fr}
+  .logic-flow-field-wide{grid-column:auto}
+  .logic-flow-step-head{grid-template-columns:1fr}
+  .logic-flow-keyword{justify-self:start}
 }
 
 .scene-media-link-placeholder{cursor:pointer;transition:border-color .16s ease,color .16s ease,background .16s ease}
@@ -930,9 +933,47 @@
 
 .logic-incomplete-note{margin:0 0 10px;padding:8px 10px;border:1px solid rgba(250,204,21,.3);border-radius:8px;background:rgba(202,138,4,.13);color:#fde68a;font-size:12px;line-height:1.35}
 
-.logic-rule-body{border-top:1px solid var(--line);padding:10px 12px 12px}
+.logic-rule-body{display:grid;gap:8px;border-top:1px solid var(--line);padding:8px 10px 10px}
 
-.logic-sound-field{min-width:0;display:grid;gap:8px;align-content:start}
+.logic-rule-name-field{display:grid;gap:4px}
+
+.logic-flow-step{display:grid;gap:7px;padding:8px;border:1px solid rgba(148,163,184,.14);border-radius:10px;background:#07101fcc}
+
+.logic-flow-step>summary{cursor:pointer;list-style:none}
+
+.logic-flow-step>summary::-webkit-details-marker{display:none}
+
+.logic-flow-step-condition{border-color:rgba(96,165,250,.22);background:#091428d6}
+
+.logic-flow-step-action{border-color:rgba(34,197,94,.22);background:#071e20d6}
+
+.logic-flow-step-failure{border-color:rgba(245,158,11,.2);background:#101826d6}
+
+.logic-flow-step-options{border-color:rgba(148,163,184,.18);background:#091426b8}
+
+.logic-flow-step-head{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:center}
+
+.logic-flow-keyword{display:inline-flex;align-items:center;justify-content:center;min-width:58px;height:24px;padding:0 8px;border-radius:999px;border:1px solid rgba(147,197,253,.28);background:#0f1b31;color:#dbeafe;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:0}
+
+.logic-flow-step-action .logic-flow-keyword{border-color:rgba(74,222,128,.3);color:#bbf7d0}
+
+.logic-flow-step-failure .logic-flow-keyword{border-color:rgba(251,191,36,.3);color:#fde68a}
+
+.logic-flow-step-options .logic-flow-keyword{border-color:rgba(203,213,225,.2);color:#e2e8f0}
+
+.logic-flow-title{margin:0;color:#f8fafc;font-size:12.5px;font-weight:900}
+
+.logic-flow-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px;align-items:end}
+
+.logic-flow-field{display:grid;gap:4px;min-width:0;align-content:start}
+
+.logic-flow-field-wide{grid-column:1 / -1}
+
+.logic-flow-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:6px;align-items:start}
+
+.logic-flow-step textarea{min-height:46px;padding-block:8px}
+
+.logic-sound-field{min-width:0;display:grid;gap:6px;align-content:start}
 
 .logic-sound-preview{min-width:0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
 

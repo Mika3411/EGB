@@ -21,12 +21,18 @@ export const DASH_DURATION = 0.16;
 export const ARCADE_MAX_PARTICLES = 90;
 export const ARCADE_SNAPSHOT_INTERVAL_MS = 320;
 const ARCADE_FALLBACK_FRAME_DT = 1 / 60;
+const MAP_COLLISION_MAX_PASSES = 4;
 const PLAYER_PATH_CLEARANCE = 6;
+const PLAYER_PATH_NODE_MARGIN = 4;
 const PLAYER_PATH_SAMPLE_STEP = 8;
 const PLAYER_PATH_CORRIDOR_MARGIN = 180;
 const PLAYER_PATH_MAX_OBSTACLES = 96;
 const PLAYER_PATH_REACHED_DISTANCE = PLAYER_RADIUS + 4;
 const PLAYER_CONTINUOUS_MOVE_DISTANCE = PLAYER_RADIUS + 180;
+const ACTION_ZONE_TRIGGER_COOLDOWN_MS = 950;
+const ENEMY_UNSTUCK_TIMER_SECONDS = 0.45;
+const ENEMY_OBSTACLE_LOOKAHEAD = 34;
+const RUNTIME_SNAPSHOT_POSITION_PRECISION = 1;
 
 export const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -136,6 +142,19 @@ export const rectCircleOverlap = (rect, circle) => {
 
 export const pushCircleOutOfRect = (circle, rect) => {
   if (!rectCircleOverlap(rect, circle)) return circle;
+  const closestX = clamp(circle.x, rect.x, rect.x + rect.w);
+  const closestY = clamp(circle.y, rect.y, rect.y + rect.h);
+  const dx = circle.x - closestX;
+  const dy = circle.y - closestY;
+  const distanceToClosest = Math.hypot(dx, dy);
+  if (distanceToClosest > 0.0001) {
+    const pushDistance = Math.max(0, circle.r - distanceToClosest);
+    return {
+      ...circle,
+      x: circle.x + (dx / distanceToClosest) * pushDistance,
+      y: circle.y + (dy / distanceToClosest) * pushDistance,
+    };
+  }
   const left = Math.abs(circle.x - rect.x);
   const right = Math.abs(rect.x + rect.w - circle.x);
   const top = Math.abs(circle.y - rect.y);
@@ -199,17 +218,17 @@ const isPointInsideRuntimeRect = (point = {}, rect = {}, tolerance = 0.001) => (
 
 const isPathPointBlocked = (point, obstacles) => obstacles.some((obstacle) => isPointInsideRuntimeRect(point, obstacle));
 
-const pushPathPointOutOfRect = (point = {}, rect = {}) => {
+const pushPathPointOutOfRect = (point = {}, rect = {}, margin = 0) => {
   if (!isPointInsideRuntimeRect(point, rect, 0)) return point;
   const left = Math.abs(point.x - rect.x);
   const right = Math.abs(rect.x + rect.w - point.x);
   const top = Math.abs(point.y - rect.y);
   const bottom = Math.abs(rect.y + rect.h - point.y);
   const min = Math.min(left, right, top, bottom);
-  if (min === left) return { ...point, x: rect.x };
-  if (min === right) return { ...point, x: rect.x + rect.w };
-  if (min === top) return { ...point, y: rect.y };
-  return { ...point, y: rect.y + rect.h };
+  if (min === left) return { ...point, x: rect.x - margin };
+  if (min === right) return { ...point, x: rect.x + rect.w + margin };
+  if (min === top) return { ...point, y: rect.y - margin };
+  return { ...point, y: rect.y + rect.h + margin };
 };
 
 const getRectCenter = (rect = {}) => ({
@@ -270,7 +289,7 @@ const normalizePathTarget = (target, obstacles, bounds) => {
   for (let pass = 0; pass < 8; pass += 1) {
     const blocker = obstacles.find((obstacle) => isPointInsideRuntimeRect(point, obstacle, 0));
     if (!blocker) break;
-    point = clampRuntimePoint(pushPathPointOutOfRect(point, blocker), bounds);
+    point = clampRuntimePoint(pushPathPointOutOfRect(point, blocker, PLAYER_PATH_NODE_MARGIN), bounds);
   }
   return point;
 };
@@ -282,10 +301,10 @@ const buildPathNodes = (start, target, obstacles, bounds) => {
   const seen = new Set(nodes.map(getPathNodeKey));
   obstacles.forEach((obstacle) => {
     [
-      { x: obstacle.x, y: obstacle.y },
-      { x: obstacle.x + obstacle.w, y: obstacle.y },
-      { x: obstacle.x, y: obstacle.y + obstacle.h },
-      { x: obstacle.x + obstacle.w, y: obstacle.y + obstacle.h },
+      { x: obstacle.x - PLAYER_PATH_NODE_MARGIN, y: obstacle.y - PLAYER_PATH_NODE_MARGIN },
+      { x: obstacle.x + obstacle.w + PLAYER_PATH_NODE_MARGIN, y: obstacle.y - PLAYER_PATH_NODE_MARGIN },
+      { x: obstacle.x - PLAYER_PATH_NODE_MARGIN, y: obstacle.y + obstacle.h + PLAYER_PATH_NODE_MARGIN },
+      { x: obstacle.x + obstacle.w + PLAYER_PATH_NODE_MARGIN, y: obstacle.y + obstacle.h + PLAYER_PATH_NODE_MARGIN },
     ].forEach((corner) => {
       const point = clampRuntimePoint(corner, bounds);
       const key = getPathNodeKey(point);
@@ -376,21 +395,26 @@ export const findPlayerPath = (from, target, config = DEFAULT_ARCADE_CONFIG, rad
 };
 
 export const resolveMapCollision = (entity, radius, config = DEFAULT_ARCADE_CONFIG, blockingObstacles = null) => {
-  const world = config.world || DEFAULT_ARCADE_CONFIG.world;
-  const worldWidth = getFiniteRuntimeNumber(world.width, DEFAULT_ARCADE_CONFIG.world.width);
-  const worldHeight = getFiniteRuntimeNumber(world.height, DEFAULT_ARCADE_CONFIG.world.height);
-  const currentX = getFiniteRuntimeNumber(entity.x, worldWidth / 2);
-  const currentY = getFiniteRuntimeNumber(entity.y, worldHeight / 2);
+  const bounds = getRuntimeWorldBounds(config, radius);
+  const currentX = getFiniteRuntimeNumber(entity.x, bounds.width / 2);
+  const currentY = getFiniteRuntimeNumber(entity.y, bounds.height / 2);
   let next = {
     ...entity,
-    x: clamp(currentX, radius, worldWidth - radius),
-    y: clamp(currentY, radius, worldHeight - radius),
+    x: clamp(currentX, bounds.minX, bounds.maxX),
+    y: clamp(currentY, bounds.minY, bounds.maxY),
     r: radius,
   };
   const obstacles = blockingObstacles || getBlockingObstacles(config);
-  obstacles.forEach((obstacle) => {
-    next = pushCircleOutOfRect(next, obstacle);
-  });
+  for (let pass = 0; pass < MAP_COLLISION_MAX_PASSES; pass += 1) {
+    const beforeX = next.x;
+    const beforeY = next.y;
+    obstacles.forEach((obstacle) => {
+      next = pushCircleOutOfRect(next, obstacle);
+      next.x = clamp(next.x, bounds.minX, bounds.maxX);
+      next.y = clamp(next.y, bounds.minY, bounds.maxY);
+    });
+    if (Math.hypot(next.x - beforeX, next.y - beforeY) < 0.001) break;
+  }
   return { ...entity, x: next.x, y: next.y };
 };
 
@@ -454,6 +478,139 @@ export const fireBullet = (state, owner, from, target, speed, damage, color, spr
   const bullet = createBullet(owner, from, target, speed, damage, color, spread, options);
   state.bullets.push(bullet);
   return bullet;
+};
+
+const roundSnapshotNumber = (value = 0, precision = RUNTIME_SNAPSHOT_POSITION_PRECISION) => {
+  const factor = 10 ** precision;
+  return Math.round((Number(value) || 0) * factor) / factor;
+};
+
+const cloneRuntimeArray = (entries = []) => (
+  Array.isArray(entries) ? entries.map((entry) => ({ ...entry })) : []
+);
+
+export const createRuntimeUiSnapshot = (state = {}) => {
+  const actionMessageTimer = Math.max(0, Number(state.actionMessageTimer) || 0);
+  const actionMessage = actionMessageTimer > 0 ? String(state.actionMessage || '') : '';
+  return {
+    ...state,
+    actionMessage,
+    actionMessageTimer: actionMessage ? actionMessageTimer : 0,
+    player: { ...(state.player || {}) },
+    enemies: cloneRuntimeArray(state.enemies),
+    pickups: cloneRuntimeArray(state.pickups),
+    bullets: cloneRuntimeArray(state.bullets),
+    particles: cloneRuntimeArray(state.particles),
+  };
+};
+
+export const getRuntimeUiSnapshotSignature = (state = {}) => {
+  const player = state.player || {};
+  const actionMessage = Number(state.actionMessageTimer) > 0 ? String(state.actionMessage || '') : '';
+  return [
+    roundSnapshotNumber(player.x),
+    roundSnapshotNumber(player.y),
+    Math.round(Number(player.hp) || 0),
+    Math.round(Number(player.mana) || 0),
+    Number(player.dashCooldown) <= 0 ? 1 : 0,
+    Number(player.shootCooldown) <= 0 ? 1 : 0,
+    Number(player.powerCooldown) <= 0 ? 1 : 0,
+    Math.round(Number(state.score) || 0),
+    actionMessage,
+    state.gameOver ? 1 : 0,
+    state.victory ? 1 : 0,
+    (state.enemies || []).map((enemy) => `${enemy.id || ''}:${Math.round(Number(enemy.hp) || 0)}:${roundSnapshotNumber(enemy.x)}:${roundSnapshotNumber(enemy.y)}`).join(';'),
+    (state.pickups || []).map((pickup) => pickup.id || `${roundSnapshotNumber(pickup.x)}:${roundSnapshotNumber(pickup.y)}:${pickup.type || ''}`).join(';'),
+  ].join('|');
+};
+
+export const getActionZoneTriggerKey = (zone = {}) => {
+  if (!zone) return '';
+  const actionType = getActionZoneType(zone);
+  return `${actionType}:${zone.id || ''}:${zone.targetCanvasId || ''}:${zone.targetNpcId || ''}`;
+};
+
+export const resolveActionZoneEntryTrigger = (activeActionZone, triggerState = {}, now = performance.now()) => {
+  const previous = triggerState || {};
+  const cooldownUntil = Number(previous.cooldownUntil) || 0;
+  if (!activeActionZone) {
+    return {
+      shouldTrigger: false,
+      actionType: '',
+      triggerKey: '',
+      nextTriggerState: previous.key ? { key: '', cooldownUntil } : previous,
+    };
+  }
+  const actionType = getActionZoneType(activeActionZone);
+  const triggerKey = getActionZoneTriggerKey(activeActionZone);
+  if (!triggerKey || previous.key === triggerKey) {
+    return {
+      shouldTrigger: false,
+      actionType,
+      triggerKey,
+      nextTriggerState: previous.key === triggerKey ? previous : { key: triggerKey, cooldownUntil },
+    };
+  }
+  if (now < cooldownUntil) {
+    return {
+      shouldTrigger: false,
+      actionType,
+      triggerKey,
+      nextTriggerState: { key: triggerKey, cooldownUntil },
+    };
+  }
+  return {
+    shouldTrigger: true,
+    actionType,
+    triggerKey,
+    nextTriggerState: { key: triggerKey, cooldownUntil: now + ACTION_ZONE_TRIGGER_COOLDOWN_MS },
+  };
+};
+
+export const getActiveRuntimeActionZone = (config = {}, point = null) => {
+  if (!point || !Array.isArray(config.actionZones)) return null;
+  for (let index = config.actionZones.length - 1; index >= 0; index -= 1) {
+    const zone = config.actionZones[index];
+    if (zone && isPointInActionZone(zone, point)) return zone;
+  }
+  return null;
+};
+
+export const getEnemyObstacleAvoidanceVector = (
+  enemy = {},
+  move = { x: 0, y: 0 },
+  obstacles = [],
+  ai = {},
+  radius = ENEMY_RADIUS,
+) => {
+  const avoidance = Math.max(0, Number(ai.obstacleAvoidance) || DEFAULT_ARCADE_CONFIG.ai.obstacleAvoidance || 0);
+  if (!obstacles.length || avoidance <= 0) return { x: 0, y: 0 };
+  const moveDirection = normalizeVector(move.x, move.y);
+  const lookAhead = Math.max(radius, Number(ai.obstacleLookAhead) || ENEMY_OBSTACLE_LOOKAHEAD);
+  const probe = {
+    x: getFiniteRuntimeNumber(enemy.x, 0) + moveDirection.x * lookAhead,
+    y: getFiniteRuntimeNumber(enemy.y, 0) + moveDirection.y * lookAhead,
+    r: radius,
+  };
+  const strafeDir = Number(enemy.strafeDir) < 0 ? -1 : 1;
+  return obstacles.reduce((steering, obstacle) => {
+    const expanded = {
+      x: obstacle.x - avoidance,
+      y: obstacle.y - avoidance,
+      w: obstacle.w + avoidance * 2,
+      h: obstacle.h + avoidance * 2,
+    };
+    if (!rectCircleOverlap(expanded, probe) && !rectCircleOverlap(expanded, { x: enemy.x, y: enemy.y, r: radius * 0.6 })) {
+      return steering;
+    }
+    const center = { x: obstacle.x + obstacle.w / 2, y: obstacle.y + obstacle.h / 2 };
+    const away = normalizeVector(probe.x - center.x, probe.y - center.y);
+    const tangent = { x: -away.y * strafeDir, y: away.x * strafeDir };
+    return {
+      x: steering.x + away.x * 1.15 + tangent.x * 0.45,
+      y: steering.y + away.y * 1.15 + tangent.y * 0.45,
+    };
+  }, { x: 0, y: 0 });
 };
 
 const getContinuousMoveTarget = (player = {}, config = DEFAULT_ARCADE_CONFIG, direction = { x: 0, y: 0 }) => {
@@ -594,6 +751,7 @@ export function useRpg3DGameLoop({
     const keys = keysRef.current;
     const aim = pointerRef.current;
     const world = liveConfig.world || DEFAULT_ARCADE_CONFIG.world;
+    const aiConfig = { ...DEFAULT_ARCADE_CONFIG.ai, ...(liveConfig.ai || {}) };
     player.x = getFiniteRuntimeNumber(player.x, (Number(world.width) || DEFAULT_ARCADE_CONFIG.world.width) / 2);
     player.y = getFiniteRuntimeNumber(player.y, (Number(world.height) || DEFAULT_ARCADE_CONFIG.world.height) / 2);
 
@@ -695,76 +853,75 @@ export function useRpg3DGameLoop({
       return false;
     });
 
-    const activeActionZone = (liveConfig.actionZones || []).find((zone) => isPointInActionZone(zone, player));
-    if (activeActionZone) {
-      const now = performance.now();
-      const actionType = getActionZoneType(activeActionZone);
-      const triggerKey = `${actionType}:${activeActionZone.id || ''}:${activeActionZone.targetCanvasId || ''}:${activeActionZone.targetNpcId || ''}`;
-      if (now >= (actionZoneTriggerRef.current.cooldownUntil || 0) && actionZoneTriggerRef.current.key !== triggerKey) {
-        actionZoneTriggerRef.current = { key: triggerKey, cooldownUntil: now + 950 };
-        onActionZoneTriggered?.(activeActionZone, { actionType });
-        if (actionType === 'portal' && activeActionZone.targetCanvasId) {
-          emitRuntimeParticles(player.x, player.y, '#38bdf8', 18);
-          if (activateRpg3DCanvasPortal(activeActionZone.targetCanvasId)) return;
-        } else if (actionType === 'npcAction') {
-          if (getNpcInteractionMode(activeActionZone) === 'multipleChoice') {
-            setActiveNpcChoice({
-              zoneId: activeActionZone.id,
-              speaker: getActionZoneNpcLabel(liveConfig, activeActionZone.targetNpcId),
-              question: getNpcQuestionText(activeActionZone),
-              choices: getNpcChoiceItems(activeActionZone).filter((choice) => String(choice.label || '').trim()),
-            });
-            setIsPaused(true);
-            emitRuntimeParticles(player.x, player.y, '#facc15', 12);
-          } else {
-            state.actionMessage = activeActionZone.message || activeActionZone.npcAction || 'Action PNJ';
-            state.actionMessageTimer = 2.4;
-            emitRuntimeParticles(player.x, player.y, '#facc15', 12);
-          }
+    const activeActionZone = getActiveRuntimeActionZone(liveConfig, player);
+    const actionZoneEntry = resolveActionZoneEntryTrigger(activeActionZone, actionZoneTriggerRef.current, performance.now());
+    if (actionZoneTriggerRef.current !== actionZoneEntry.nextTriggerState) {
+      actionZoneTriggerRef.current = actionZoneEntry.nextTriggerState;
+    }
+    if (activeActionZone && actionZoneEntry.shouldTrigger) {
+      const actionType = actionZoneEntry.actionType;
+      onActionZoneTriggered?.(activeActionZone, { actionType });
+      if (actionType === 'portal' && activeActionZone.targetCanvasId) {
+        emitRuntimeParticles(player.x, player.y, '#38bdf8', 18);
+        if (activateRpg3DCanvasPortal(activeActionZone.targetCanvasId)) return;
+      } else if (actionType === 'npcAction') {
+        if (getNpcInteractionMode(activeActionZone) === 'multipleChoice') {
+          setActiveNpcChoice({
+            zoneId: activeActionZone.id,
+            speaker: getActionZoneNpcLabel(liveConfig, activeActionZone.targetNpcId),
+            question: getNpcQuestionText(activeActionZone),
+            choices: getNpcChoiceItems(activeActionZone).filter((choice) => String(choice.label || '').trim()),
+          });
+          setIsPaused(true);
+          emitRuntimeParticles(player.x, player.y, '#facc15', 12);
+        } else {
+          state.actionMessage = activeActionZone.message || activeActionZone.npcAction || 'Action PNJ';
+          state.actionMessageTimer = 2.4;
+          emitRuntimeParticles(player.x, player.y, '#facc15', 12);
         }
       }
-    } else if (actionZoneTriggerRef.current.key) {
-      actionZoneTriggerRef.current = { key: '', cooldownUntil: actionZoneTriggerRef.current.cooldownUntil || 0 };
     }
 
     state.enemies.forEach((enemy) => {
       const stats = getEnemyStats(enemy);
       const toPlayer = normalizeVector(player.x - enemy.x, player.y - enemy.y);
       const playerDistance = distance(enemy, player);
-      const canSee = playerDistance < liveConfig.ai.visionRange && hasLineOfSight(enemy, player, blockingObstacles);
-      enemy.alert = canSee && playerDistance < liveConfig.ai.visionRange ? 1 : Math.max(0, enemy.alert - dt * 0.35);
+      const canSee = playerDistance < aiConfig.visionRange && hasLineOfSight(enemy, player, blockingObstacles);
+      enemy.alert = canSee && playerDistance < aiConfig.visionRange ? 1 : Math.max(0, enemy.alert - dt * 0.35);
       enemy.strafeTimer -= dt;
       if (enemy.strafeTimer <= 0) {
         enemy.strafeTimer = 0.8 + Math.random() * 1.2;
         enemy.strafeDir *= -1;
       }
+      enemy.unstuckTimer = Math.max(0, (Number(enemy.unstuckTimer) || 0) - dt);
       const rangeMove = playerDistance > stats.range ? 1 : playerDistance < stats.range - 110 ? -0.8 : 0.1;
       const strafe = enemy.alert ? enemy.strafeDir * 0.68 : 0;
       let moveX = toPlayer.x * rangeMove + -toPlayer.y * strafe;
       let moveY = toPlayer.y * rangeMove + toPlayer.x * strafe;
-
-      blockingObstacles.forEach((obstacle) => {
-        const expanded = {
-          x: obstacle.x - liveConfig.ai.obstacleAvoidance,
-          y: obstacle.y - liveConfig.ai.obstacleAvoidance,
-          w: obstacle.w + liveConfig.ai.obstacleAvoidance * 2,
-          h: obstacle.h + liveConfig.ai.obstacleAvoidance * 2,
-        };
-        if (rectCircleOverlap(expanded, { x: enemy.x, y: enemy.y, r: 1 })) {
-          const center = { x: obstacle.x + obstacle.w / 2, y: obstacle.y + obstacle.h / 2 };
-          const away = normalizeVector(enemy.x - center.x, enemy.y - center.y);
-          moveX += away.x * 1.1;
-          moveY += away.y * 1.1;
-        }
-      });
+      if (enemy.unstuckTimer > 0) {
+        moveX += -toPlayer.y * enemy.strafeDir * 0.95;
+        moveY += toPlayer.x * enemy.strafeDir * 0.95;
+      }
+      const avoidance = getEnemyObstacleAvoidanceVector(enemy, { x: moveX, y: moveY }, blockingObstacles, aiConfig, ENEMY_RADIUS);
+      moveX += avoidance.x;
+      moveY += avoidance.y;
 
       const move = normalizeVector(moveX, moveY);
-      enemy.vx = move.x * stats.speed * liveConfig.ai.aggression;
-      enemy.vy = move.y * stats.speed * liveConfig.ai.aggression;
+      enemy.vx = move.x * stats.speed * aiConfig.aggression;
+      enemy.vy = move.y * stats.speed * aiConfig.aggression;
       const enemyMoveObstacles = getBlockingObstaclesForEntityMove(blockingObstacles, enemy, ENEMY_RADIUS);
+      const previousEnemyX = enemy.x;
+      const previousEnemyY = enemy.y;
+      const intendedEnemyMove = Math.hypot(enemy.vx * dt, enemy.vy * dt);
       enemy.x += enemy.vx * dt;
       enemy.y += enemy.vy * dt;
       Object.assign(enemy, resolveRuntimeMapCollision(enemy, ENEMY_RADIUS, enemyMoveObstacles));
+      const actualEnemyMove = Math.hypot(enemy.x - previousEnemyX, enemy.y - previousEnemyY);
+      if (intendedEnemyMove > 0.25 && actualEnemyMove < intendedEnemyMove * 0.35) {
+        enemy.strafeDir = Number(enemy.strafeDir) < 0 ? 1 : -1;
+        enemy.strafeTimer = Math.max(Number(enemy.strafeTimer) || 0, ENEMY_UNSTUCK_TIMER_SECONDS);
+        enemy.unstuckTimer = ENEMY_UNSTUCK_TIMER_SECONDS;
+      }
 
       enemy.shootTimer -= dt;
       enemy.attackTimer = Math.max(0, (Number(enemy.attackTimer) || 0) - dt);
@@ -872,18 +1029,11 @@ export function useRpg3DGameLoop({
       if (!isPaused) updateGame(dt);
       if (timestamp - snapshotFrameRef.current > ARCADE_SNAPSHOT_INTERVAL_MS) {
         snapshotFrameRef.current = timestamp;
-        const nextState = stateRef.current;
-        const nextActionMessage = nextState.actionMessageTimer > 0 ? nextState.actionMessage : '';
-        const nextDashReady = nextState.player.dashCooldown <= 0;
+        const nextSnapshot = createRuntimeUiSnapshot(stateRef.current);
+        const nextSignature = getRuntimeUiSnapshotSignature(nextSnapshot);
         setSnapshot((current) => {
-          const currentActionMessage = current.actionMessageTimer > 0 ? current.actionMessage : '';
-          const currentDashReady = current.player.dashCooldown <= 0;
-          if (currentActionMessage === nextActionMessage && currentDashReady === nextDashReady) return current;
-          return {
-            ...nextState,
-            actionMessage: nextActionMessage,
-            player: { ...nextState.player },
-          };
+          if (getRuntimeUiSnapshotSignature(current) === nextSignature) return current;
+          return nextSnapshot;
         });
       }
       animationRef.current = requestAnimationFrame(loop);
@@ -929,7 +1079,7 @@ export function useRpg3DGameLoop({
   const setPlayerMoveTarget = useCallback((point, options = {}) => {
     if (applyPlayerMoveTarget(stateRef.current, configRef.current || DEFAULT_ARCADE_CONFIG, point, options)) {
       setIsPaused(false);
-      setSnapshot({ ...stateRef.current, player: { ...stateRef.current.player } });
+      setSnapshot(createRuntimeUiSnapshot(stateRef.current));
     }
   }, [configRef, setIsPaused, setSnapshot, stateRef]);
 

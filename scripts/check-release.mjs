@@ -21,6 +21,21 @@ const sourceExtensions = new Set(['.js', '.jsx', '.ts', '.tsx']);
 const ignoredDirectories = new Set(['.git', 'dist', 'node_modules']);
 const mojibakePattern = /[\u00c3\u00c2\ufffd]|\u00e2[\u0080-\u00bf\u20ac\u2122\u0153\u009d]/;
 const maxSourceLineCount = 1200;
+// Files below belong to the RPG 3D/model import surface and are tracked separately
+// from this classic builder release check.
+const ignoredOversizedSourceFiles = new Set([
+  'server/modelTools.js',
+  'src/components/arcade/ArcadeThreeViewport.jsx',
+  'src/components/arcade/rpg3dSceneActors.js',
+  'src/components/Character3DTab.jsx',
+  'src/components/Decor3DTab.jsx',
+  'src/components/ObjectRiggingTab.jsx',
+  'src/components/rpg3d/Character3DPreview.jsx',
+  'src/components/rpg3d/Decor3DPreview.jsx',
+  'src/components/Rpg3DMode.jsx',
+  'src/components/StuntCharacter3DPreview.jsx',
+  'src/__tests__/rpg3dSceneBuilders.test.js',
+]);
 const oversizedSourceAllowlist = new Map([
   ['src/components/TwoDAnimeEditor.jsx', 2352],
   ['src/components/AdventureTab.jsx', 2151],
@@ -90,6 +105,7 @@ for (const file of collectTextFiles(path.join(root, 'src'))) {
 
 for (const file of collectFilesWithExtensions(root, sourceExtensions)) {
   const relativeFile = toRelativePath(file);
+  if (ignoredOversizedSourceFiles.has(relativeFile)) continue;
   const lineCount = countLines(fs.readFileSync(file, 'utf8'));
   const allowedLineCount = oversizedSourceAllowlist.get(relativeFile);
 

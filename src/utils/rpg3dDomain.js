@@ -640,7 +640,11 @@ export const getActionZoneHeight = (zone = {}) => (
 export const getActionZoneModelHeight = (zone = {}) => getActionZoneBaseModelHeight(zone);
 export const getActionZoneOpacity = (zone = {}) => clamp(Number(zone.opacity) || ACTION_ZONE_DEFAULT_OPACITY, 0.05, 0.95);
 
-export const getActionZoneType = (zone = {}) => zone.actionType || 'portal';
+const ACTION_ZONE_TYPES = new Set(['portal', 'npcAction']);
+
+export const getActionZoneType = (zone = {}) => (
+  ACTION_ZONE_TYPES.has(zone.actionType) ? zone.actionType : 'portal'
+);
 
 export const getActionZoneColor = (zone = {}) => (
   getHexColor(zone.color, getActionZoneType(zone) === 'portal' ? '#38bdf8' : '#facc15')

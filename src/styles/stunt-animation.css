@@ -266,7 +266,7 @@
   width: 100%;
   height: 100%;
   touch-action: none;
-  cursor: default;
+  cursor: grab;
 }
 
 .stunt-3d-canvas.can-grab {
@@ -348,60 +348,6 @@
   stroke: #0f172a;
   stroke-width: .9;
   filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .35));
-}
-
-.stunt-joint {
-  fill: #22c55e;
-  stroke: #082f49;
-  stroke-width: .55;
-}
-
-.stunt-joint.main {
-  fill: #38bdf8;
-}
-
-.stunt-handle {
-  cursor: grab;
-  outline: none;
-  pointer-events: auto;
-}
-
-.stunt-handle:active {
-  cursor: grabbing;
-}
-
-.stunt-handle-hit {
-  fill: transparent;
-  stroke: transparent;
-  pointer-events: all;
-}
-
-.stunt-handle-ring {
-  fill: none;
-  stroke: rgba(255, 255, 255, 0);
-  stroke-width: .65;
-  transition: stroke .14s ease, r .14s ease;
-  pointer-events: none;
-}
-
-.stunt-handle:hover .stunt-handle-ring,
-.stunt-handle:focus-visible .stunt-handle-ring,
-.stunt-handle.active .stunt-handle-ring {
-  stroke: rgba(251, 191, 36, .95);
-}
-
-.stunt-handle:hover .stunt-joint,
-.stunt-handle:focus-visible .stunt-joint,
-.stunt-handle.active .stunt-joint {
-  fill: #fbbf24;
-  stroke: #0f172a;
-}
-
-.stunt-handle:hover .stunt-head,
-.stunt-handle:focus-visible .stunt-head,
-.stunt-handle.active .stunt-head {
-  fill: #fef3c7;
-  stroke: #fbbf24;
 }
 
 .stunt-tone-heavy .stunt-ground-glow {
@@ -640,6 +586,92 @@
   white-space: nowrap;
 }
 
+.stunt-body-tool-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.stunt-body-rotation-panel {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid rgba(56, 189, 248, .18);
+  border-radius: 8px;
+  background: rgba(8, 47, 73, .2);
+}
+
+.stunt-body-rotation-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #dbeafe;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.stunt-body-rotation-head strong {
+  color: #93c5fd;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stunt-body-rotation-pad {
+  display: grid;
+  grid-template-areas:
+    ". forward ."
+    "left . right"
+    ". back .";
+  grid-template-columns: repeat(3, 36px);
+  grid-template-rows: repeat(3, 32px);
+  place-content: center;
+  gap: 5px;
+}
+
+.stunt-body-rotate-button {
+  display: inline-grid !important;
+  place-items: center;
+  width: 36px;
+  min-width: 36px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 !important;
+  border-radius: 8px !important;
+}
+
+.stunt-body-rotate-button.body-forward {
+  grid-area: forward;
+}
+
+.stunt-body-rotate-button.body-back {
+  grid-area: back;
+}
+
+.stunt-body-rotate-button.body-left {
+  grid-area: left;
+}
+
+.stunt-body-rotate-button.body-right {
+  grid-area: right;
+}
+
+.stunt-body-move-button.body-move-up {
+  grid-area: forward;
+}
+
+.stunt-body-move-button.body-move-down {
+  grid-area: back;
+}
+
+.stunt-body-move-button.body-move-left {
+  grid-area: left;
+}
+
+.stunt-body-move-button.body-move-right {
+  grid-area: right;
+}
+
 .stunt-two-ranges,
 .stunt-pose-controls {
   display: grid;
@@ -657,11 +689,6 @@
   border: 1px solid transparent;
   border-radius: 8px;
   color: #dbeafe;
-}
-
-.stunt-range.active {
-  border-color: rgba(251, 191, 36, .5);
-  background: rgba(251, 191, 36, .08);
 }
 
 .stunt-range span {
@@ -800,6 +827,7 @@
 
   .stunt-form-grid,
   .stunt-two-ranges,
+  .stunt-body-tool-grid,
   .stunt-movement-count-row,
   .stunt-playbar {
     grid-template-columns: minmax(0, 1fr);

@@ -28,7 +28,6 @@ import {
   getFloorZeroZ,
   getModelImportFileInfo,
   getPreviewAnimationOptions,
-  isInventoryDecorKind,
   isFloorTileKind,
   isHeavyLocalFbxAnimationAsset,
   isHeavyLocalFbxAsset,
@@ -446,6 +445,22 @@ export const prepareRpg3DGltfModel = (object, options = {}) => {
   prepareGltfModel(object, options);
 };
 
+export const fitDecorModelObjectToDimensions = (object, model = {}, options = {}) => {
+  const dimensions = options.dimensions || getDecorModelDimensions(model);
+  const orientationObject = options.orientationObject || null;
+  if (orientationObject && orientationObject !== object) {
+    orientationObject.position.set(0, 0, 0);
+    orientationObject.rotation.set(0, 0, 0);
+    orientationObject.scale.set(1, 1, 1);
+    orientationObject.updateMatrixWorld?.(true);
+  }
+  return fitObjectToDimensions(object, {
+    width: dimensions.x,
+    height: dimensions.y,
+    depth: dimensions.z,
+  }, { groundY: 0 });
+};
+
 export const buildDecorGltfObject = (object, model) => {
   const root = new THREE.Group();
   const group = new THREE.Group();
@@ -469,15 +484,7 @@ export const buildDecorGltfObject = (object, model) => {
   });
   applyTextureToGltfModel(object, texture, { disposeTextureWithMaterial: true });
   rememberObjectBaseTransform(object);
-  if (isInventoryDecorKind(model.kind)) {
-    fitObjectToLargestDimension(object, Math.max(dimensions.x, dimensions.y, dimensions.z), { groundY: 0 });
-  } else {
-    fitObjectToDimensions(object, {
-      width: dimensions.x,
-      height: dimensions.y,
-      depth: dimensions.z,
-    }, { groundY: 0 });
-  }
+  fitDecorModelObjectToDimensions(object, model, { dimensions });
   group.add(object);
   root.add(group);
   root.userData.decorModelObject = object;

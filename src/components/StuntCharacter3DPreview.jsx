@@ -1,69 +1,172 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import {
   fitObjectToHeight,
   getImportedModelPrepareOptions,
+  loadThreeModelFromSource,
   prepareGltfModel,
 } from '../utils/threeGltfUtils';
 import {
   CHARACTER_RIG_POINT_DEFINITIONS,
   CHARACTER_RIG_POINT_GROUPS,
+  normalizeCharacterRigPoints,
 } from '../utils/rpg3dCharacterRig.js';
 
 const STUNT_CHARACTER_BASE_URL = '/assets/3d/characters/exemple/';
-const STUNT_CHARACTER_MODEL_URL = `${STUNT_CHARACTER_BASE_URL}exemple.fbx`;
+const STUNT_CHARACTER_MODEL_URL = `${STUNT_CHARACTER_BASE_URL}exemple.glb`;
 const STUNT_CHARACTER_DIFFUSE_URL = `${STUNT_CHARACTER_BASE_URL}exemple.fbm/Material_001_Diffuse.jpg`;
 const STUNT_CHARACTER_NORMAL_URL = `${STUNT_CHARACTER_BASE_URL}exemple.fbm/Material_001_Normal.jpg`;
-const STUNT_CHARACTER_TEXTURES = {
-  'material_001_diffuse.jpg': STUNT_CHARACTER_DIFFUSE_URL,
-  'material_001_normal.jpg': STUNT_CHARACTER_NORMAL_URL,
+const STUNT_GROUND_Y = 0;
+const STUNT_GROUND_CLEARANCE = 0.012;
+const STUNT_RIG_MARKERS = normalizeCharacterRigPoints(CHARACTER_RIG_POINT_DEFINITIONS)
+  .map((point) => ({
+    ...point,
+    enabled: true,
+    selected: false,
+    size: point.group === CHARACTER_RIG_POINT_GROUPS.phalanges ? 0.54 : point.size,
+  }));
+const STUNT_RIG_BODY_MARKER_COUNT = STUNT_RIG_MARKERS
+  .filter((point) => point.group === CHARACTER_RIG_POINT_GROUPS.body).length;
+const STUNT_RIG_FINGER_MARKER_COUNT = STUNT_RIG_MARKERS.length - STUNT_RIG_BODY_MARKER_COUNT;
+const STUNT_RIG_MARKER_COLORS = {
+  weapon: { fill: '#38bdf8', stroke: '#e0f2fe', text: '#061728' },
+  shield: { fill: '#fbbf24', stroke: '#fff7ed', text: '#1f1300' },
+  armor: { fill: '#34d399', stroke: '#ecfdf5', text: '#052e1b' },
+  finger: { fill: '#f8fafc', stroke: '#bae6fd', text: '#061728', line: '#cbd5e1' },
+  selected: { fill: '#fb7185', stroke: '#fff1f2', text: '#2a0610', glow: 'rgba(251,113,133,.95)' },
 };
-
-const JOINT_DEFINITIONS = CHARACTER_RIG_POINT_DEFINITIONS
-  .filter((point) => point.group === CHARACTER_RIG_POINT_GROUPS.body);
-const JOINT_IDS = JOINT_DEFINITIONS.map((point) => point.id);
-const JOINT_CONFIG_BY_ID = new Map(JOINT_DEFINITIONS.map((point) => [point.id, point]));
-const JOINT_LABELS = Object.fromEntries(JOINT_DEFINITIONS.map((point) => [point.id, point.label]));
-
-const JOINT_BONE_SLOTS = {
-  'right-hand': 'rightHand',
-  'left-hand': 'leftHand',
-  'right-elbow': 'rightLowerArm',
-  'left-elbow': 'leftLowerArm',
-  'right-shoulder': 'rightUpperArm',
-  'left-shoulder': 'leftUpperArm',
-  neck: 'neck',
-  mouth: 'head',
-  'lower-belly': 'pelvis',
-  'right-groin-fold': 'rightUpperLeg',
-  'left-groin-fold': 'leftUpperLeg',
-  'right-knee': 'rightLowerLeg',
-  'left-knee': 'leftLowerLeg',
-  'right-ankle': 'rightFoot',
-  'left-ankle': 'leftFoot',
-  'right-foot': 'rightToe',
-  'left-foot': 'leftToe',
+const STUNT_RIG_HAND_CENTERS = {
+  right: 0.76,
+  left: 0.24,
 };
-
-const JOINT_FALLBACK_KEYS = {
+const STUNT_RIG_MARKER_BY_ID = new Map(STUNT_RIG_MARKERS.map((point) => [point.id, point]));
+const STUNT_RIG_BODY_MARKER_BONE_SLOTS = {
   mouth: 'mouth',
   neck: 'neck',
-  'right-hand': 'rightHand',
+  'left-shoulder': 'leftUpperArm',
+  'right-shoulder': 'rightUpperArm',
+  'left-elbow': 'leftLowerArm',
+  'right-elbow': 'rightLowerArm',
   'left-hand': 'leftHand',
-  'right-elbow': 'rightElbow',
-  'left-elbow': 'leftElbow',
-  'right-shoulder': 'rightShoulder',
-  'left-shoulder': 'leftShoulder',
-  'lower-belly': 'lowerBelly',
-  'right-groin-fold': 'rightGroinFold',
-  'left-groin-fold': 'leftGroinFold',
-  'right-knee': 'rightKnee',
-  'left-knee': 'leftKnee',
-  'right-ankle': 'rightAnkle',
-  'left-ankle': 'leftAnkle',
-  'right-foot': 'rightFoot',
-  'left-foot': 'leftFoot',
+  'right-hand': 'rightHand',
+  'lower-belly': 'pelvis',
+  'left-groin-fold': 'leftUpperLeg',
+  'right-groin-fold': 'rightUpperLeg',
+  'left-knee': 'leftLowerLeg',
+  'right-knee': 'rightLowerLeg',
+  'left-ankle': 'leftFoot',
+  'right-ankle': 'rightFoot',
+  'left-foot': 'leftToe',
+  'right-foot': 'rightToe',
+};
+const STUNT_RIG_FIELD_LIMITS = {
+  rootX: [8, 92],
+  rootY: [24, 86],
+  bodyTilt: [-420, 420],
+  bodyYaw: [-180, 180],
+  bodyCurl: [-35, 95],
+  bodyTwist: [-55, 55],
+  bodyRoll: [-70, 70],
+  lowerBodyTwist: [-70, 70],
+  lowerBodyRoll: [-70, 70],
+  shoulderRoll: [-45, 45],
+  headTilt: [-55, 55],
+  headYaw: [-60, 60],
+  leftArm: [-96, 96],
+  leftForearm: [-118, 0],
+  leftArmSide: [-56, 56],
+  leftForearmSide: [-64, 64],
+  rightArm: [-96, 96],
+  rightForearm: [0, 118],
+  rightArmSide: [-56, 56],
+  rightForearmSide: [-64, 64],
+  leftLeg: [-76, 76],
+  leftShin: [-96, 0],
+  leftLegSide: [-32, 32],
+  leftShinSide: [-24, 24],
+  rightLeg: [-76, 76],
+  rightShin: [0, 96],
+  rightLegSide: [-32, 32],
+  rightShinSide: [-24, 24],
+};
+const STUNT_RIG_DRAG_FIELD_STEPS = {
+  rootX: 2,
+  rootY: 2,
+  bodyTilt: 6,
+  bodyYaw: 6,
+  bodyCurl: 4,
+  bodyTwist: 4,
+  bodyRoll: 4,
+  lowerBodyTwist: 5,
+  lowerBodyRoll: 5,
+  shoulderRoll: 5,
+  headTilt: 5,
+  headYaw: 5,
+  leftArm: 6,
+  leftForearm: 6,
+  leftArmSide: 5,
+  leftForearmSide: 5,
+  rightArm: 6,
+  rightForearm: 6,
+  rightArmSide: 5,
+  rightForearmSide: 5,
+  leftLeg: 6,
+  leftShin: 6,
+  leftLegSide: 5,
+  leftShinSide: 5,
+  rightLeg: 6,
+  rightShin: 6,
+  rightLegSide: 5,
+  rightShinSide: 5,
+};
+const STUNT_RIG_DRAG_FIELD_GROUPS = {
+  mouth: ['headTilt', 'headYaw'],
+  neck: ['bodyTilt', 'bodyCurl', 'bodyTwist', 'bodyRoll', 'headTilt'],
+  'left-shoulder': ['bodyTilt', 'bodyCurl', 'bodyTwist', 'bodyRoll', 'shoulderRoll'],
+  'right-shoulder': ['bodyTilt', 'bodyCurl', 'bodyTwist', 'bodyRoll', 'shoulderRoll'],
+  'left-elbow': ['leftArm', 'leftArmSide', 'shoulderRoll'],
+  'left-hand': ['leftArm', 'leftForearm', 'leftArmSide', 'leftForearmSide'],
+  'right-elbow': ['rightArm', 'rightArmSide', 'shoulderRoll'],
+  'right-hand': ['rightArm', 'rightForearm', 'rightArmSide', 'rightForearmSide'],
+  'lower-belly': ['rootX', 'rootY', 'bodyTilt', 'bodyYaw'],
+  'left-groin-fold': ['leftLegSide', 'lowerBodyTwist', 'lowerBodyRoll'],
+  'right-groin-fold': ['rightLegSide', 'lowerBodyTwist', 'lowerBodyRoll'],
+  'left-knee': ['leftLeg', 'leftLegSide'],
+  'right-knee': ['rightLeg', 'rightLegSide'],
+  'left-ankle': ['leftLeg', 'leftShin', 'leftLegSide', 'leftShinSide'],
+  'left-foot': ['leftLeg', 'leftShin', 'leftLegSide', 'leftShinSide'],
+  'right-ankle': ['rightLeg', 'rightShin', 'rightLegSide', 'rightShinSide'],
+  'right-foot': ['rightLeg', 'rightShin', 'rightLegSide', 'rightShinSide'],
+};
+const STUNT_RIG_DRAG_MAX_DELTA = {
+  rootX: 55,
+  rootY: 55,
+  bodyTilt: 220,
+  bodyYaw: 140,
+  bodyCurl: 80,
+  bodyTwist: 70,
+  bodyRoll: 80,
+  lowerBodyTwist: 24,
+  lowerBodyRoll: 24,
+  shoulderRoll: 42,
+  headTilt: 80,
+  headYaw: 80,
+  leftArm: 112,
+  leftForearm: 140,
+  leftArmSide: 68,
+  leftForearmSide: 76,
+  rightArm: 112,
+  rightForearm: 140,
+  rightArmSide: 68,
+  rightForearmSide: 76,
+  leftLeg: 96,
+  leftShin: 96,
+  leftLegSide: 38,
+  leftShinSide: 30,
+  rightLeg: 96,
+  rightShin: 96,
+  rightLegSide: 38,
+  rightShinSide: 30,
 };
 
 const posePoint = (origin, length, angleDeg, zOffset = 0) => {
@@ -75,32 +178,195 @@ const posePoint = (origin, length, angleDeg, zOffset = 0) => {
   );
 };
 
+const poseNumber = (pose, field, fallback = 0) => Number(pose[field] ?? fallback) || 0;
+const LEG_KNEE_MAX_BEND = 96;
+const LEG_HIP_STRAIGHT_LIMIT = 24;
+const LEG_HIP_EXTREME_MIN_BEND = 58;
+const LEG_SHIN_SIDE_LIMIT = 8;
+const ARM_ELBOW_MAX_BEND = 118;
+const ARM_SHOULDER_STRAIGHT_LIMIT = 62;
+const ARM_SHOULDER_EXTREME_MIN_BEND = 22;
+const ARM_FOREARM_SIDE_LIMIT = 18;
+const getRequiredArmElbowBend = (upperArmValue = 0) => {
+  const upperMagnitude = Math.abs(Number(upperArmValue) || 0);
+  const excess = upperMagnitude - ARM_SHOULDER_STRAIGHT_LIMIT;
+  if (excess <= 0) return 0;
+  const maxArmSwing = STUNT_RIG_FIELD_LIMITS.leftArm?.[1] || 96;
+  const denominator = Math.max(1, maxArmSwing - ARM_SHOULDER_STRAIGHT_LIMIT);
+  return THREE.MathUtils.clamp((excess / denominator) * ARM_SHOULDER_EXTREME_MIN_BEND, 0, ARM_SHOULDER_EXTREME_MIN_BEND);
+};
+const clampElbowBend = (side, value, upperArmValue = 0) => {
+  const next = Number(value) || 0;
+  const minBend = getRequiredArmElbowBend(upperArmValue);
+  const magnitude = THREE.MathUtils.clamp(Math.abs(next), minBend, ARM_ELBOW_MAX_BEND);
+  return side === 'left'
+    ? -magnitude
+    : magnitude;
+};
+const getRequiredLegKneeBend = (upperLegValue = 0) => {
+  const upperMagnitude = Math.abs(Number(upperLegValue) || 0);
+  const excess = upperMagnitude - LEG_HIP_STRAIGHT_LIMIT;
+  if (excess <= 0) return 0;
+  const maxLegSwing = STUNT_RIG_FIELD_LIMITS.leftLeg?.[1] || 76;
+  const denominator = Math.max(1, maxLegSwing - LEG_HIP_STRAIGHT_LIMIT);
+  return THREE.MathUtils.clamp((excess / denominator) * LEG_HIP_EXTREME_MIN_BEND, 0, LEG_HIP_EXTREME_MIN_BEND);
+};
+
+const clampKneeBend = (side, value, upperLegValue = 0) => {
+  const next = Number(value) || 0;
+  const minBend = getRequiredLegKneeBend(upperLegValue);
+  const magnitude = THREE.MathUtils.clamp(Math.abs(next), minBend, LEG_KNEE_MAX_BEND);
+  return side === 'left'
+    ? -magnitude
+    : magnitude;
+};
+const xOffset = (value, scale = 0.007) => (Number(value) || 0) * scale;
+const addPoseOffset = (point, x = 0, y = 0, z = 0) => (
+  point.clone().add(new THREE.Vector3(x, y, z))
+);
+
+const rotatePosePointAroundZ = (point, pivot, angleDeg = 0) => {
+  if (!point || !pivot || !angleDeg) return point;
+  const rad = THREE.MathUtils.degToRad(angleDeg);
+  const sin = Math.sin(rad);
+  const cos = Math.cos(rad);
+  const dx = point.x - pivot.x;
+  const dy = point.y - pivot.y;
+  return new THREE.Vector3(
+    pivot.x + (dx * cos) - (dy * sin),
+    pivot.y + (dx * sin) + (dy * cos),
+    point.z
+  );
+};
+
+const getPoseAngleToPoint = (from, to) => (
+  THREE.MathUtils.radToDeg(Math.atan2(to.x - from.x, -(to.y - from.y)))
+);
+
+const normalizePoseAngle = (value = 0) => {
+  let next = Number(value) || 0;
+  while (next > 180) next -= 360;
+  while (next < -180) next += 360;
+  return next;
+};
+
+const solveTwoBonePoseAngles = (origin, target, upperLength, lowerLength, bendSign = 1) => {
+  if (!origin || !target) return null;
+  const dx = target.x - origin.x;
+  const dy = target.y - origin.y;
+  const distance = THREE.MathUtils.clamp(
+    Math.hypot(dx, dy),
+    Math.max(0.001, Math.abs(upperLength - lowerLength) + 0.001),
+    Math.max(0.001, upperLength + lowerLength - 0.001)
+  );
+  const targetAngle = THREE.MathUtils.degToRad(getPoseAngleToPoint(origin, target));
+  const cosDelta = THREE.MathUtils.clamp(
+    ((distance * distance) - (upperLength * upperLength) - (lowerLength * lowerLength)) / (2 * upperLength * lowerLength),
+    -1,
+    1
+  );
+  const lowerDelta = (bendSign >= 0 ? 1 : -1) * Math.acos(cosDelta);
+  const shoulderOffset = Math.atan2(
+    lowerLength * Math.sin(lowerDelta),
+    upperLength + (lowerLength * Math.cos(lowerDelta))
+  );
+  return {
+    upper: normalizePoseAngle(THREE.MathUtils.radToDeg(targetAngle - shoulderOffset)),
+    lower: normalizePoseAngle(THREE.MathUtils.radToDeg(lowerDelta)),
+  };
+};
+
 const poseToRig = (pose = {}) => {
-  const rootX = Number(pose.rootX ?? 50);
-  const rootY = Number(pose.rootY ?? 76);
-  const bodyTilt = Number(pose.bodyTilt ?? 0);
-  const bodyCurl = Number(pose.bodyCurl ?? 0);
-  const headTilt = Number(pose.headTilt ?? 0);
+  const rootX = poseNumber(pose, 'rootX', 50);
+  const rootY = poseNumber(pose, 'rootY', 76);
+  const bodyTilt = poseNumber(pose, 'bodyTilt');
+  const bodyCurl = poseNumber(pose, 'bodyCurl');
+  const bodyYaw = poseNumber(pose, 'bodyYaw');
+  const bodyTwist = poseNumber(pose, 'bodyTwist');
+  const bodyRoll = poseNumber(pose, 'bodyRoll');
+  const lowerBodyTwist = poseNumber(pose, 'lowerBodyTwist');
+  const lowerBodyRoll = poseNumber(pose, 'lowerBodyRoll');
+  const shoulderRoll = poseNumber(pose, 'shoulderRoll');
+  const headTilt = poseNumber(pose, 'headTilt');
+  const headYaw = poseNumber(pose, 'headYaw');
+  const leftArm = poseNumber(pose, 'leftArm');
+  const leftForearm = clampElbowBend('left', poseNumber(pose, 'leftForearm'), leftArm);
+  const leftArmSide = poseNumber(pose, 'leftArmSide');
+  const leftForearmSide = poseNumber(pose, 'leftForearmSide');
+  const rightArm = poseNumber(pose, 'rightArm');
+  const rightForearm = clampElbowBend('right', poseNumber(pose, 'rightForearm'), rightArm);
+  const rightArmSide = poseNumber(pose, 'rightArmSide');
+  const rightForearmSide = poseNumber(pose, 'rightForearmSide');
+  const leftLeg = poseNumber(pose, 'leftLeg');
+  const leftShin = clampKneeBend('left', poseNumber(pose, 'leftShin'), leftLeg);
+  const leftLegSide = poseNumber(pose, 'leftLegSide');
+  const leftShinSide = poseNumber(pose, 'leftShinSide');
+  const rightLeg = poseNumber(pose, 'rightLeg');
+  const rightShin = clampKneeBend('right', poseNumber(pose, 'rightShin'), rightLeg);
+  const rightLegSide = poseNumber(pose, 'rightLegSide');
+  const rightShinSide = poseNumber(pose, 'rightShinSide');
+  const forwardCurl = Math.max(0, bodyCurl);
+  const backwardCurl = Math.max(0, -bodyCurl);
+  const curlYOffset = (backwardCurl * 0.001) - (forwardCurl * 0.0032);
+  const curlDepthOffset = bodyCurl * 0.005;
   const hip = new THREE.Vector3((rootX - 50) / 23, ((86 - rootY) / 23) + 0.38, 0);
-  const chest = posePoint(hip, 0.42, 180 + bodyTilt + bodyCurl * 0.25);
-  const shoulder = posePoint(hip, 0.82, 180 + bodyTilt + bodyCurl * 0.18);
-  const neck = posePoint(shoulder, 0.18, 180 + bodyTilt + headTilt * 0.16);
-  const head = posePoint(neck, 0.28, 180 + bodyTilt + headTilt * 0.42);
-  const mouth = neck.clone().lerp(head, 0.72).add(new THREE.Vector3(0.02, -0.015, 0));
-  const leftShoulder = shoulder.clone().add(new THREE.Vector3(0, -0.03, -0.17));
-  const rightShoulder = shoulder.clone().add(new THREE.Vector3(0, -0.03, 0.17));
-  const leftHip = hip.clone().add(new THREE.Vector3(0, -0.02, -0.12));
-  const rightHip = hip.clone().add(new THREE.Vector3(0, -0.02, 0.12));
-  const leftElbow = posePoint(leftShoulder, 0.5, Number(pose.leftArm ?? 0), -0.08);
-  const leftHand = posePoint(leftElbow, 0.43, Number(pose.leftArm ?? 0) + Number(pose.leftForearm ?? 0), -0.06);
-  const rightElbow = posePoint(rightShoulder, 0.5, Number(pose.rightArm ?? 0), 0.08);
-  const rightHand = posePoint(rightElbow, 0.43, Number(pose.rightArm ?? 0) + Number(pose.rightForearm ?? 0), 0.06);
-  const leftKnee = posePoint(leftHip, 0.58, Number(pose.leftLeg ?? 0), -0.04);
-  const leftAnkle = posePoint(leftKnee, 0.48, Number(pose.leftLeg ?? 0) + Number(pose.leftShin ?? 0), -0.05);
-  const leftFoot = posePoint(leftKnee, 0.62, Number(pose.leftLeg ?? 0) + Number(pose.leftShin ?? 0), -0.075);
-  const rightKnee = posePoint(rightHip, 0.58, Number(pose.rightLeg ?? 0), 0.04);
-  const rightAnkle = posePoint(rightKnee, 0.48, Number(pose.rightLeg ?? 0) + Number(pose.rightShin ?? 0), 0.05);
-  const rightFoot = posePoint(rightKnee, 0.62, Number(pose.rightLeg ?? 0) + Number(pose.rightShin ?? 0), 0.075);
+  const upperBodyX = xOffset(bodyTwist, 0.006) + xOffset(bodyYaw, 0.003);
+  const chest = addPoseOffset(
+    posePoint(hip, 0.42, 180 + bodyTilt + (bodyRoll * 0.75) + bodyCurl * 0.05),
+    upperBodyX * 0.52,
+    curlYOffset * 0.5,
+    curlDepthOffset * 0.48
+  );
+  const shoulder = addPoseOffset(
+    posePoint(hip, 0.82, 180 + bodyTilt + bodyRoll + bodyCurl * 0.04),
+    upperBodyX,
+    curlYOffset,
+    curlDepthOffset
+  );
+  const neck = addPoseOffset(
+    posePoint(shoulder, 0.18, 180 + bodyTilt + bodyRoll + headTilt * 0.16 + bodyCurl * 0.03),
+    0,
+    curlYOffset * 0.35,
+    curlDepthOffset * 0.24
+  );
+  const head = addPoseOffset(
+    posePoint(neck, 0.28, 180 + bodyTilt + bodyRoll + headTilt * 0.42 + bodyCurl * 0.04),
+    0,
+    curlYOffset * 0.28,
+    curlDepthOffset * 0.18
+  );
+  const mouth = neck.clone().lerp(head, 0.72).add(new THREE.Vector3(0.02 + xOffset(headYaw, 0.006), -0.015, 0));
+  const shoulderYaw = ((bodyYaw * 0.32) + (bodyTwist * 0.82)) * (Math.PI / 180);
+  const shoulderSpread = 0.17;
+  const getShoulderOffset = (side) => new THREE.Vector3(
+    Math.cos(shoulderYaw) * shoulderSpread * side,
+    -0.03,
+    -Math.sin(shoulderYaw) * shoulderSpread * side
+  );
+  const leftShoulderBase = shoulder.clone().add(getShoulderOffset(-1));
+  const rightShoulderBase = shoulder.clone().add(getShoulderOffset(1));
+  const leftShoulder = rotatePosePointAroundZ(leftShoulderBase, neck, shoulderRoll);
+  const rightShoulder = rotatePosePointAroundZ(rightShoulderBase, neck, shoulderRoll);
+  const lowerBodyYaw = lowerBodyTwist * (Math.PI / 180);
+  const getHipOffset = (side) => new THREE.Vector3(
+    Math.cos(lowerBodyYaw) * 0.12 * side,
+    -0.02,
+    -Math.sin(lowerBodyYaw) * 0.12 * side
+  );
+  const leftHip = rotatePosePointAroundZ(hip.clone().add(getHipOffset(-1)), hip, lowerBodyRoll);
+  const rightHip = rotatePosePointAroundZ(hip.clone().add(getHipOffset(1)), hip, lowerBodyRoll);
+  const leftGroinFold = addPoseOffset(leftHip, xOffset(leftLegSide, 0.0065));
+  const rightGroinFold = addPoseOffset(rightHip, xOffset(rightLegSide, 0.0065));
+  const leftElbow = addPoseOffset(posePoint(leftShoulder, 0.5, leftArm), xOffset(leftArmSide));
+  const leftHand = addPoseOffset(posePoint(leftElbow, 0.43, leftArm + leftForearm), xOffset(leftForearmSide, 0.008));
+  const rightElbow = addPoseOffset(posePoint(rightShoulder, 0.5, rightArm), xOffset(rightArmSide));
+  const rightHand = addPoseOffset(posePoint(rightElbow, 0.43, rightArm + rightForearm), xOffset(rightForearmSide, 0.008));
+  const leftKnee = addPoseOffset(posePoint(leftHip, 0.58, leftLeg + lowerBodyRoll), xOffset(leftLegSide, 0.0065));
+  const leftAnkle = addPoseOffset(posePoint(leftKnee, 0.48, leftLeg + lowerBodyRoll + leftShin), xOffset(leftShinSide, 0.0065));
+  const leftFoot = addPoseOffset(posePoint(leftKnee, 0.62, leftLeg + lowerBodyRoll + leftShin), xOffset(leftShinSide, 0.007));
+  const rightKnee = addPoseOffset(posePoint(rightHip, 0.58, rightLeg + lowerBodyRoll), xOffset(rightLegSide, 0.0065));
+  const rightAnkle = addPoseOffset(posePoint(rightKnee, 0.48, rightLeg + lowerBodyRoll + rightShin), xOffset(rightShinSide, 0.0065));
+  const rightFoot = addPoseOffset(posePoint(rightKnee, 0.62, rightLeg + lowerBodyRoll + rightShin), xOffset(rightShinSide, 0.007));
 
   return {
     hip,
@@ -114,8 +380,8 @@ const poseToRig = (pose = {}) => {
     rightShoulder,
     leftHip,
     rightHip,
-    leftGroinFold: leftHip,
-    rightGroinFold: rightHip,
+    leftGroinFold,
+    rightGroinFold,
     leftElbow,
     leftHand,
     rightElbow,
@@ -144,12 +410,561 @@ const poseToRig = (pose = {}) => {
   };
 };
 
-const createMaterial = (color, options = {}) => new THREE.MeshStandardMaterial({
-  color,
-  roughness: 0.45,
-  metalness: 0.06,
-  ...options,
-});
+const createStuntRigMarkerTexture = (marker = {}) => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const context = canvas.getContext('2d');
+  const colors = marker.selected
+    ? STUNT_RIG_MARKER_COLORS.selected
+    : (STUNT_RIG_MARKER_COLORS[marker.socket] || STUNT_RIG_MARKER_COLORS.armor);
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.shadowColor = marker.selected ? colors.glow : 'rgba(0,0,0,.42)';
+  context.shadowBlur = marker.selected ? 26 : (marker.socket === 'finger' ? 12 : 16);
+  context.beginPath();
+  context.arc(64, 64, marker.socket === 'finger' ? 38 : 46, 0, Math.PI * 2);
+  context.fillStyle = colors.fill;
+  context.fill();
+  context.lineWidth = marker.socket === 'finger' ? 7 : 8;
+  context.strokeStyle = colors.stroke;
+  context.stroke();
+  context.shadowBlur = 0;
+  if (!marker.hideLabel) {
+    context.fillStyle = colors.text;
+    context.font = '800 34px system-ui, sans-serif';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText(marker.shortLabel || '?', 64, 66);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  return texture;
+};
+
+const getStuntRigMarkerTextureSignature = (marker = {}) => [
+  marker.socket || '',
+  marker.shortLabel || '',
+  marker.hideLabel ? 1 : 0,
+  marker.selected ? 1 : 0,
+].join(':');
+
+const updateStuntRigMarkerTexture = (markerObject = null, markerConfig = {}) => {
+  if (!markerObject?.material) return;
+  const signature = getStuntRigMarkerTextureSignature(markerConfig);
+  if (markerObject.userData.stuntRigMarkerTextureSignature === signature) return;
+  markerObject.material.map?.dispose?.();
+  markerObject.material.map = createStuntRigMarkerTexture(markerConfig);
+  markerObject.material.needsUpdate = true;
+  markerObject.userData.stuntRigMarkerTextureSignature = signature;
+};
+
+const createStuntRigMarker = (marker = {}) => {
+  const texture = createStuntRigMarkerTexture(marker);
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const sprite = new THREE.Sprite(material);
+  sprite.name = `StuntRigMarker-${marker.id || 'point'}`;
+  sprite.renderOrder = 65;
+  sprite.userData.stuntRigMarker = true;
+  sprite.userData.stuntRigPointId = marker.id || '';
+  sprite.userData.stuntRigMarkerTextureSignature = getStuntRigMarkerTextureSignature(marker);
+  return sprite;
+};
+
+const createStuntRigMarkerLine = (marker = {}) => {
+  const colors = STUNT_RIG_MARKER_COLORS[marker.socket] || STUNT_RIG_MARKER_COLORS.armor;
+  const geometry = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(),
+    new THREE.Vector3(),
+  ]);
+  const material = new THREE.LineBasicMaterial({
+    color: colors.line || colors.fill,
+    transparent: true,
+    opacity: 0.56,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const line = new THREE.Line(geometry, material);
+  line.name = `StuntRigLine-${marker.id || 'point'}`;
+  line.renderOrder = 60;
+  line.userData.stuntRigLine = true;
+  return line;
+};
+
+const disposeStuntRigMarkers = (markers) => {
+  markers?.forEach?.((marker) => {
+    marker.parent?.remove(marker);
+    marker.material?.map?.dispose?.();
+    marker.material?.dispose?.();
+  });
+  markers?.clear?.();
+};
+
+const disposeStuntRigMarkerLines = (lines) => {
+  lines?.forEach?.((line) => {
+    line.parent?.remove(line);
+    line.geometry?.dispose?.();
+    line.material?.dispose?.();
+  });
+  lines?.clear?.();
+};
+
+const getStuntRigBodyMarkerPosition = (rig = {}, marker = {}) => (
+  rig[marker.id] || null
+);
+
+const getStuntRigHandBasis = (rig = {}, hand = 'right') => {
+  const wrist = rig[`${hand}-hand`];
+  const elbow = rig[`${hand}-elbow`];
+  if (!wrist || !elbow) return null;
+  const forward = wrist.clone().sub(elbow);
+  if (forward.lengthSq() < 0.0001) forward.set(0, -1, 0);
+  forward.normalize();
+  const across = new THREE.Vector3(-forward.y, forward.x, 0);
+  if (across.lengthSq() < 0.0001) across.set(hand === 'right' ? 1 : -1, 0, 0);
+  across.normalize();
+  return { wrist, forward, across };
+};
+
+const getStuntRigPhalangeMarkerPosition = (rig = {}, marker = {}) => {
+  const hand = marker.hand === 'left' ? 'left' : 'right';
+  const basis = getStuntRigHandBasis(rig, hand);
+  if (!basis) return null;
+  const centerX = STUNT_RIG_HAND_CENTERS[hand] ?? 0.5;
+  const lateralOffset = ((Number(marker.x) || centerX) - centerX) * 0.82;
+  const forwardOffset = Math.max(0.01, (0.53 - (Number(marker.y) || 0.5)) * 1.14);
+  const depthOffset = (((Number(marker.z) || 0.68) - 0.68) * 0.9) + (hand === 'right' ? 0.016 : -0.016);
+  return basis.wrist.clone()
+    .addScaledVector(basis.forward, forwardOffset)
+    .addScaledVector(basis.across, lateralOffset)
+    .add(new THREE.Vector3(0, 0, depthOffset));
+};
+
+const getStuntRigMarkerPosition = (rig = {}, marker = {}, groundLift = 0) => {
+  const basePosition = marker.group === CHARACTER_RIG_POINT_GROUPS.phalanges
+    ? getStuntRigPhalangeMarkerPosition(rig, marker)
+    : getStuntRigBodyMarkerPosition(rig, marker);
+  if (!basePosition) return null;
+  return basePosition.clone().add(new THREE.Vector3(0, Number(groundLift) || 0, 0));
+};
+
+const getStuntRigBoneWorldPosition = (ctx, boneSlot = '') => {
+  const bone = ctx?.characterBones?.[boneSlot];
+  if (!bone) return null;
+  bone.updateMatrixWorld?.(true);
+  return bone.getWorldPosition(new THREE.Vector3());
+};
+
+const stuntRigWorldToMarkerLocal = (ctx, worldPosition = null) => {
+  if (!ctx?.rigMarkerRoot || !worldPosition) return null;
+  ctx.rigMarkerRoot.updateMatrixWorld?.(true);
+  return ctx.rigMarkerRoot.worldToLocal(worldPosition.clone());
+};
+
+const getStuntRigBodyBoneMarkerPosition = (ctx, marker = {}) => {
+  const boneSlot = STUNT_RIG_BODY_MARKER_BONE_SLOTS[marker.id];
+  const worldPosition = getStuntRigBoneWorldPosition(ctx, boneSlot);
+  return stuntRigWorldToMarkerLocal(ctx, worldPosition);
+};
+
+const getStuntRigFingerBoneSlot = (marker = {}, jointOverride = null) => {
+  const hand = marker.hand === 'left' ? 'left' : 'right';
+  const finger = marker.finger || 'middle';
+  const joint = THREE.MathUtils.clamp(
+    Number(jointOverride ?? marker.joint) || 1,
+    1,
+    3
+  );
+  return `${hand}${capitalizeStuntRigSegment(finger)}${Math.round(joint)}`;
+};
+
+const getStuntRigPhalangeBoneMarkerPosition = (ctx, marker = {}) => {
+  const joint = Number(marker.joint) || 1;
+  if (joint >= 4) {
+    const previousWorldPosition = getStuntRigBoneWorldPosition(ctx, getStuntRigFingerBoneSlot(marker, 2));
+    const endWorldPosition = getStuntRigBoneWorldPosition(ctx, getStuntRigFingerBoneSlot(marker, 3));
+    if (previousWorldPosition && endWorldPosition) {
+      const direction = endWorldPosition.clone().sub(previousWorldPosition);
+      const length = direction.length();
+      if (length > 0.001) {
+        direction.normalize();
+        return stuntRigWorldToMarkerLocal(
+          ctx,
+          endWorldPosition.addScaledVector(direction, THREE.MathUtils.clamp(length * 0.72, 0.018, 0.055))
+        );
+      }
+    }
+  }
+  return stuntRigWorldToMarkerLocal(
+    ctx,
+    getStuntRigBoneWorldPosition(ctx, getStuntRigFingerBoneSlot(marker))
+  );
+};
+
+const getStuntRigDisplayMarkerPosition = (ctx, marker = {}) => {
+  const bonePosition = marker.group === CHARACTER_RIG_POINT_GROUPS.phalanges
+    ? getStuntRigPhalangeBoneMarkerPosition(ctx, marker)
+    : getStuntRigBodyBoneMarkerPosition(ctx, marker);
+  if (bonePosition) return bonePosition;
+  return getStuntRigMarkerPosition(ctx?.currentRig, marker, ctx?.groundLift);
+};
+
+const clampStuntRigPoseField = (field, value) => {
+  const limits = STUNT_RIG_FIELD_LIMITS[field];
+  if (!limits) return Number(value) || 0;
+  return THREE.MathUtils.clamp(Number(value) || 0, limits[0], limits[1]);
+};
+
+const normalizeStuntRigPose = (pose = {}) => {
+  const next = { ...pose };
+  next.leftArm = clampStuntRigPoseField('leftArm', next.leftArm);
+  next.rightArm = clampStuntRigPoseField('rightArm', next.rightArm);
+  next.leftForearm = clampElbowBend('left', next.leftForearm, next.leftArm);
+  next.rightForearm = clampElbowBend('right', next.rightForearm, next.rightArm);
+  next.leftArmSide = clampStuntRigPoseField('leftArmSide', next.leftArmSide);
+  next.rightArmSide = clampStuntRigPoseField('rightArmSide', next.rightArmSide);
+  const leftForearmSide = clampStuntRigPoseField('leftForearmSide', next.leftForearmSide);
+  const rightForearmSide = clampStuntRigPoseField('rightForearmSide', next.rightForearmSide);
+  next.leftForearmSide = THREE.MathUtils.clamp(
+    leftForearmSide,
+    next.leftArmSide - ARM_FOREARM_SIDE_LIMIT,
+    next.leftArmSide + ARM_FOREARM_SIDE_LIMIT
+  );
+  next.rightForearmSide = THREE.MathUtils.clamp(
+    rightForearmSide,
+    next.rightArmSide - ARM_FOREARM_SIDE_LIMIT,
+    next.rightArmSide + ARM_FOREARM_SIDE_LIMIT
+  );
+  next.leftLeg = clampStuntRigPoseField('leftLeg', next.leftLeg);
+  next.rightLeg = clampStuntRigPoseField('rightLeg', next.rightLeg);
+  next.leftShin = clampKneeBend('left', next.leftShin, next.leftLeg);
+  next.rightShin = clampKneeBend('right', next.rightShin, next.rightLeg);
+  next.leftLegSide = clampStuntRigPoseField('leftLegSide', next.leftLegSide);
+  next.rightLegSide = clampStuntRigPoseField('rightLegSide', next.rightLegSide);
+  const leftShinSide = clampStuntRigPoseField('leftShinSide', next.leftShinSide);
+  const rightShinSide = clampStuntRigPoseField('rightShinSide', next.rightShinSide);
+  next.leftShinSide = THREE.MathUtils.clamp(
+    leftShinSide,
+    next.leftLegSide - LEG_SHIN_SIDE_LIMIT,
+    next.leftLegSide + LEG_SHIN_SIDE_LIMIT
+  );
+  next.rightShinSide = THREE.MathUtils.clamp(
+    rightShinSide,
+    next.rightLegSide - LEG_SHIN_SIDE_LIMIT,
+    next.rightLegSide + LEG_SHIN_SIDE_LIMIT
+  );
+  return next;
+};
+
+const getStuntRigDragFields = (pointId = '') => {
+  const marker = STUNT_RIG_MARKER_BY_ID.get(pointId);
+  const targetId = marker?.group === CHARACTER_RIG_POINT_GROUPS.phalanges
+    ? `${marker.hand === 'left' ? 'left' : 'right'}-hand`
+    : pointId;
+  return STUNT_RIG_DRAG_FIELD_GROUPS[targetId] || [];
+};
+
+const clampStuntRigDragFieldFromStart = (field, value, startPose = {}) => {
+  const maxDelta = STUNT_RIG_DRAG_MAX_DELTA[field] || 115;
+  const startValue = Number(startPose[field]) || 0;
+  return THREE.MathUtils.clamp(
+    clampStuntRigPoseField(field, value),
+    startValue - maxDelta,
+    startValue + maxDelta
+  );
+};
+
+const applyStuntRigPoseToContext = (ctx, pose = {}) => {
+  if (!ctx) return null;
+  const rig = poseToRig(pose);
+  ctx.currentRig = rig;
+  applyPoseToCharacter(ctx, pose, rig);
+  return rig;
+};
+
+const projectStuntRigLocalPosition = (ctx, localPosition = null) => {
+  if (!ctx?.renderer?.domElement || !ctx?.camera || !localPosition) return null;
+  ctx.rigMarkerRoot?.updateMatrixWorld?.(true);
+  ctx.model?.updateMatrixWorld?.(true);
+  ctx.camera.updateMatrixWorld(true);
+  const worldPosition = localPosition.clone();
+  if (ctx.rigMarkerRoot) ctx.rigMarkerRoot.localToWorld(worldPosition);
+  else ctx.model.localToWorld(worldPosition);
+  const projected = worldPosition.clone().project(ctx.camera);
+  const rect = ctx.renderer.domElement.getBoundingClientRect();
+  return {
+    x: ((projected.x + 1) / 2) * rect.width,
+    y: ((1 - projected.y) / 2) * rect.height,
+    z: projected.z,
+    localPosition,
+    worldPosition,
+  };
+};
+
+const getProjectedStuntRigPoint = (ctx, pose = {}, pointId = '', options = {}) => {
+  if (!ctx?.renderer?.domElement || !ctx?.camera || !ctx?.model) return null;
+  const marker = STUNT_RIG_MARKER_BY_ID.get(pointId);
+  if (!marker) return null;
+  const canMeasureDisplayedMarker = options.useDisplay !== false
+    && ctx.characterObject
+    && Object.keys(ctx.characterBones || {}).length > 0;
+  const rig = canMeasureDisplayedMarker ? applyStuntRigPoseToContext(ctx, pose) : poseToRig(pose);
+  const localPosition = canMeasureDisplayedMarker
+    ? getStuntRigDisplayMarkerPosition(ctx, marker)
+    : getStuntRigMarkerPosition(rig, marker, ctx.groundLift);
+  return projectStuntRigLocalPosition(ctx, localPosition);
+};
+
+const getStuntRigPointerTargetLocalPosition = (ctx, pointId = '', startPose = {}, movement = {}) => {
+  const pointerPosition = movement.targetLocalPosition;
+  if (!pointerPosition) return null;
+  const marker = STUNT_RIG_MARKER_BY_ID.get(pointId);
+  if (!marker) return pointerPosition.clone?.() || null;
+  const targetPosition = pointerPosition.clone();
+  if (marker.group !== CHARACTER_RIG_POINT_GROUPS.phalanges) return targetPosition;
+  const handId = `${marker.hand === 'left' ? 'left' : 'right'}-hand`;
+  const handMarker = STUNT_RIG_MARKER_BY_ID.get(handId);
+  if (!handMarker) return targetPosition;
+  applyStuntRigPoseToContext(ctx, startPose);
+  const markerPosition = getStuntRigDisplayMarkerPosition(ctx, marker);
+  const handPosition = getStuntRigDisplayMarkerPosition(ctx, handMarker);
+  if (!markerPosition || !handPosition) return targetPosition;
+  return targetPosition.sub(markerPosition.clone().sub(handPosition));
+};
+
+const getDirectStuntRigDragPose = (ctx, pointId = '', startPose = {}, movement = {}) => {
+  const target = getStuntRigPointerTargetLocalPosition(ctx, pointId, startPose, movement);
+  if (!target) return {};
+  const rig = poseToRig(startPose);
+  const marker = STUNT_RIG_MARKER_BY_ID.get(pointId);
+  const targetId = marker?.group === CHARACTER_RIG_POINT_GROUPS.phalanges
+    ? `${marker.hand === 'left' ? 'left' : 'right'}-hand`
+    : pointId;
+  const updates = {};
+
+  if (targetId === 'left-hand' || targetId === 'right-hand') {
+    const side = targetId.startsWith('left') ? 'left' : 'right';
+    const solution = solveTwoBonePoseAngles(
+      rig[`${side}-shoulder`],
+      target,
+      0.5,
+      0.43,
+      side === 'left' ? -1 : 1
+    );
+    if (solution) {
+      updates[`${side}Arm`] = clampStuntRigDragFieldFromStart(`${side}Arm`, solution.upper, startPose);
+      updates[`${side}Forearm`] = clampStuntRigDragFieldFromStart(`${side}Forearm`, solution.lower, startPose);
+    }
+    const depthDelta = Number(target.z - (rig[`${side}-shoulder`]?.z || 0)) || 0;
+    if (Math.abs(depthDelta) > 0.005) {
+      const sideField = `${side}ForearmSide`;
+      updates[sideField] = clampStuntRigDragFieldFromStart(sideField, (Number(startPose[sideField]) || 0) + (depthDelta * 160), startPose);
+    }
+  }
+
+  if (['left-ankle', 'left-foot', 'right-ankle', 'right-foot'].includes(targetId)) {
+    const side = targetId.startsWith('left') ? 'left' : 'right';
+    const lowerLength = targetId.endsWith('foot') ? 0.62 : 0.48;
+    const solution = solveTwoBonePoseAngles(
+      rig[`${side}Hip`],
+      target,
+      0.58,
+      lowerLength,
+      side === 'left' ? -1 : 1
+    );
+    if (solution) {
+      updates[`${side}Leg`] = clampStuntRigDragFieldFromStart(`${side}Leg`, solution.upper, startPose);
+      updates[`${side}Shin`] = clampStuntRigDragFieldFromStart(`${side}Shin`, solution.lower, startPose);
+    }
+    const depthDelta = Number(target.z - (rig[`${side}Hip`]?.z || 0)) || 0;
+    if (Math.abs(depthDelta) > 0.005) {
+      const sideField = `${side}ShinSide`;
+      updates[sideField] = clampStuntRigDragFieldFromStart(sideField, (Number(startPose[sideField]) || 0) + (depthDelta * 82), startPose);
+    }
+  }
+
+  return updates;
+};
+
+const solveStuntRigDragUpdates = (ctx, pointId = '', startPose = {}, movement = {}) => {
+  const fields = getStuntRigDragFields(pointId);
+  if (!fields.length) return {};
+  const safeStartPose = normalizeStuntRigPose(startPose);
+  const startProjection = getProjectedStuntRigPoint(ctx, safeStartPose, pointId);
+  if (!startProjection) return {};
+
+  const targetX = Number.isFinite(Number(movement.targetX))
+    ? Number(movement.targetX)
+    : startProjection.x + (Number(movement.dx) || 0);
+  const targetY = Number.isFinite(Number(movement.targetY))
+    ? Number(movement.targetY)
+    : startProjection.y + (Number(movement.dy) || 0);
+  const workingPose = {
+    ...safeStartPose,
+    ...getDirectStuntRigDragPose(ctx, pointId, safeStartPose, movement),
+  };
+  Object.assign(workingPose, normalizeStuntRigPose(workingPose));
+
+  try {
+    for (let pass = 0; pass < 6; pass += 1) {
+      const currentProjection = getProjectedStuntRigPoint(ctx, workingPose, pointId);
+      if (!currentProjection) break;
+      let residualX = targetX - currentProjection.x;
+      let residualY = targetY - currentProjection.y;
+      if (Math.hypot(residualX, residualY) < 1.2) break;
+
+      const derivatives = fields
+        .map((field) => {
+          const baseValue = Number(workingPose[field]) || 0;
+          const requestedStep = STUNT_RIG_DRAG_FIELD_STEPS[field] || 4;
+          let steppedValue = clampStuntRigPoseField(field, baseValue + requestedStep);
+          let effectiveStep = steppedValue - baseValue;
+          if (Math.abs(effectiveStep) < 0.001) {
+            steppedValue = clampStuntRigPoseField(field, baseValue - requestedStep);
+            effectiveStep = steppedValue - baseValue;
+          }
+          if (Math.abs(effectiveStep) < 0.001) return null;
+          const projection = getProjectedStuntRigPoint(ctx, { ...workingPose, [field]: steppedValue }, pointId);
+          if (!projection) return null;
+          const x = (projection.x - currentProjection.x) / effectiveStep;
+          const y = (projection.y - currentProjection.y) / effectiveStep;
+          const lengthSq = (x * x) + (y * y);
+          if (lengthSq < 0.0004) return null;
+          return { field, x, y, lengthSq };
+        })
+        .filter(Boolean)
+        .sort((left, right) => right.lengthSq - left.lengthSq);
+
+      if (!derivatives.length) break;
+      let moved = false;
+      derivatives.forEach((derivative) => {
+        const amount = ((residualX * derivative.x) + (residualY * derivative.y)) / derivative.lengthSq;
+        if (!Number.isFinite(amount) || Math.abs(amount) < 0.001) return;
+        const currentValue = Number(workingPose[derivative.field]) || 0;
+        const nextValue = clampStuntRigDragFieldFromStart(derivative.field, currentValue + amount, startPose);
+        const applied = nextValue - currentValue;
+        if (Math.abs(applied) < 0.001) return;
+        workingPose[derivative.field] = nextValue;
+        Object.assign(workingPose, normalizeStuntRigPose(workingPose));
+        residualX -= derivative.x * applied;
+        residualY -= derivative.y * applied;
+        moved = true;
+      });
+      if (!moved) break;
+    }
+  } finally {
+    applyStuntRigPoseToContext(ctx, safeStartPose);
+  }
+
+  const normalizedPose = normalizeStuntRigPose(workingPose);
+  const outputFields = new Set(fields);
+  if (fields.includes('leftArm') || fields.includes('leftForearm')) outputFields.add('leftForearm');
+  if (fields.includes('rightArm') || fields.includes('rightForearm')) outputFields.add('rightForearm');
+  if (fields.includes('leftArmSide') || fields.includes('leftForearmSide')) outputFields.add('leftForearmSide');
+  if (fields.includes('rightArmSide') || fields.includes('rightForearmSide')) outputFields.add('rightForearmSide');
+  if (fields.includes('leftLeg') || fields.includes('leftShin')) outputFields.add('leftShin');
+  if (fields.includes('rightLeg') || fields.includes('rightShin')) outputFields.add('rightShin');
+  if (fields.includes('leftLegSide') || fields.includes('leftShinSide')) outputFields.add('leftShinSide');
+  if (fields.includes('rightLegSide') || fields.includes('rightShinSide')) outputFields.add('rightShinSide');
+  return Array.from(outputFields).reduce((updates, field) => {
+    const value = clampStuntRigPoseField(field, Number(normalizedPose[field]) || 0);
+    if (Math.abs(value - (Number(safeStartPose[field]) || 0)) > 0.01) updates[field] = value;
+    return updates;
+  }, {});
+};
+
+const syncStuntRigMarkers = (ctx) => {
+  const markerRoot = ctx?.rigMarkerRoot;
+  const rig = ctx?.currentRig;
+  if (!markerRoot || !rig) return;
+  const activeMarkers = new Set();
+  const activeLines = new Set();
+  const projectedMarkers = {};
+
+  STUNT_RIG_MARKERS.forEach((markerConfig) => {
+    activeMarkers.add(markerConfig.id);
+    const effectiveMarkerConfig = {
+      ...markerConfig,
+      selected: ctx.activeRigMarkerId === markerConfig.id,
+    };
+    let marker = ctx.rigMarkers.get(markerConfig.id);
+    if (!marker) {
+      marker = createStuntRigMarker(effectiveMarkerConfig);
+      ctx.rigMarkers.set(markerConfig.id, marker);
+      markerRoot.add(marker);
+    }
+    updateStuntRigMarkerTexture(marker, effectiveMarkerConfig);
+    const dragPosition = ctx.activeRigMarkerId === markerConfig.id
+      ? ctx.activeRigMarkerPointerPosition
+      : null;
+    const position = dragPosition || getStuntRigDisplayMarkerPosition(ctx, markerConfig);
+    if (!position) {
+      marker.visible = false;
+      return;
+    }
+    marker.visible = true;
+    marker.position.copy(position);
+    marker.material.opacity = effectiveMarkerConfig.selected ? 1 : (markerConfig.socket === 'finger' ? 0.88 : 0.95);
+    marker.userData.stuntRigPointId = markerConfig.id;
+    if (ctx.camera && ctx.model) {
+      const worldPosition = position.clone();
+      markerRoot.localToWorld(worldPosition);
+      const distance = Math.max(0.1, ctx.camera.position.distanceTo(worldPosition));
+      const markerSize = Number.isFinite(Number(markerConfig.size)) ? Number(markerConfig.size) : 1;
+      marker.scale.setScalar(THREE.MathUtils.clamp(distance * 0.043 * markerSize, 0.024 * markerSize, 0.13 * markerSize));
+      const projected = worldPosition.clone().project(ctx.camera);
+      const rect = ctx.renderer?.domElement?.getBoundingClientRect?.();
+      if (rect) {
+        const radius = THREE.MathUtils.clamp(18 * markerSize, 11, 30);
+        projectedMarkers[markerConfig.id] = {
+          x: Math.round(((projected.x + 1) / 2) * rect.width),
+          y: Math.round(((1 - projected.y) / 2) * rect.height),
+          z: Number(projected.z.toFixed(4)),
+          radius,
+        };
+      }
+    }
+  });
+
+  STUNT_RIG_MARKERS.forEach((markerConfig) => {
+    if (!markerConfig.connectTo) return;
+    const marker = ctx.rigMarkers.get(markerConfig.id);
+    const connectedMarker = ctx.rigMarkers.get(markerConfig.connectTo);
+    if (!marker?.visible || !connectedMarker?.visible) return;
+    activeLines.add(markerConfig.id);
+    let line = ctx.rigMarkerLines.get(markerConfig.id);
+    if (!line) {
+      line = createStuntRigMarkerLine(markerConfig);
+      ctx.rigMarkerLines.set(markerConfig.id, line);
+      markerRoot.add(line);
+    }
+    const positionAttribute = line.geometry.getAttribute('position');
+    positionAttribute.setXYZ(0, connectedMarker.position.x, connectedMarker.position.y, connectedMarker.position.z);
+    positionAttribute.setXYZ(1, marker.position.x, marker.position.y, marker.position.z);
+    positionAttribute.needsUpdate = true;
+    line.visible = true;
+  });
+
+  ctx.rigMarkers.forEach((marker, key) => {
+    if (!activeMarkers.has(key)) marker.visible = false;
+  });
+  ctx.rigMarkerLines.forEach((line, key) => {
+    if (!activeLines.has(key)) line.visible = false;
+  });
+
+  if (ctx.renderer?.domElement) {
+    ctx.projectedRigMarkers = projectedMarkers;
+    ctx.renderer.domElement.dataset.rigMarkers = String(activeMarkers.size);
+    ctx.renderer.domElement.dataset.rigBodyMarkers = String(STUNT_RIG_BODY_MARKER_COUNT);
+    ctx.renderer.domElement.dataset.rigFingerMarkers = String(STUNT_RIG_FINGER_MARKER_COUNT);
+    ctx.renderer.domElement.dataset.rigMarkerPoints = JSON.stringify(projectedMarkers);
+  }
+};
 
 const degToRad = (value = 0) => THREE.MathUtils.degToRad(Number(value) || 0);
 
@@ -160,6 +975,26 @@ const normalizeBoneName = (value = '') => String(value || '')
   .replace(/[^a-z0-9]/gi, '')
   .toLowerCase();
 
+const capitalizeStuntRigSegment = (value = '') => (
+  String(value || '').slice(0, 1).toUpperCase() + String(value || '').slice(1)
+);
+
+const makeFingerBoneCandidates = () => (
+  ['left', 'right'].reduce((slots, hand) => {
+    const suffix = hand === 'left' ? 'l' : 'r';
+    ['thumb', 'index', 'middle', 'ring', 'pinky'].forEach((finger) => {
+      [1, 2, 3].forEach((joint) => {
+        const paddedJoint = String(joint).padStart(2, '0');
+        slots[`${hand}${capitalizeStuntRigSegment(finger)}${joint}`] = [
+          `${finger}_${paddedJoint}_${suffix}`,
+          `${finger}${paddedJoint}${suffix}`,
+        ];
+      });
+    });
+    return slots;
+  }, {})
+);
+
 const BONE_CANDIDATES = {
   pelvis: ['pelvis', 'ccbasepelvis', 'hips', 'mixamorighips'],
   spine01: ['spine01', 'spine1', 'spine'],
@@ -167,34 +1002,24 @@ const BONE_CANDIDATES = {
   spine05: ['spine05', 'spine5', 'spine04', 'spine4', 'upperchest'],
   neck: ['neck01', 'neck1', 'neck02', 'neck2', 'neck'],
   head: ['head'],
+  mouth: ['ccbasejawroot', 'ccbaseupperjaw', 'head'],
+  leftClavicle: ['claviclel', 'leftclavicle', 'leftshoulder', 'mixamorigleftshoulder'],
   leftUpperArm: ['upperarml', 'leftupperarm', 'mixamorigleftarm'],
   leftLowerArm: ['lowerarml', 'leftlowerarm', 'mixamorigleftforearm'],
   leftHand: ['handl', 'lefthand', 'mixamoriglefthand'],
+  rightClavicle: ['clavicler', 'rightclavicle', 'rightshoulder', 'mixamorigrightshoulder'],
   rightUpperArm: ['upperarmr', 'rightupperarm', 'mixamorigrightarm'],
   rightLowerArm: ['lowerarmr', 'rightlowerarm', 'mixamorigrightforearm'],
   rightHand: ['handr', 'righthand', 'mixamorigrighthand'],
   leftUpperLeg: ['thighl', 'leftupleg', 'leftupperleg', 'mixamorigleftupleg'],
   leftLowerLeg: ['calfl', 'leftleg', 'leftlowerleg', 'mixamorigleftleg'],
   leftFoot: ['footl', 'leftfoot', 'mixamorigleftfoot'],
-  leftToe: ['toebasel', 'lefttoebase', 'lefttoe', 'mixamoriglefttoe', 'mixamoriglefttoebase'],
+  leftToe: ['balll', 'ccbaseltoebasesharebone', 'toebasel', 'lefttoebase', 'lefttoe', 'mixamoriglefttoe', 'mixamoriglefttoebase'],
   rightUpperLeg: ['thighr', 'rightupleg', 'rightupperleg', 'mixamorigrightupleg'],
   rightLowerLeg: ['calfr', 'rightleg', 'rightlowerleg', 'mixamorigrightleg'],
   rightFoot: ['footr', 'rightfoot', 'mixamorigrightfoot'],
-  rightToe: ['toebaser', 'righttoebase', 'righttoe', 'mixamorigrighttoe', 'mixamorigrighttoebase'],
-};
-
-const createCharacterLoadingManager = () => {
-  const manager = new THREE.LoadingManager();
-  manager.setURLModifier((url = '') => {
-    const normalized = String(url || '').replace(/\\/g, '/').toLowerCase();
-    const fileName = normalized.split('/').filter(Boolean).pop() || '';
-    if (STUNT_CHARACTER_TEXTURES[fileName]) return STUNT_CHARACTER_TEXTURES[fileName];
-    if (normalized.includes('exemple.fbm/') && fileName) {
-      return `${STUNT_CHARACTER_BASE_URL}exemple.fbm/${fileName}`;
-    }
-    return url;
-  });
-  return manager;
+  rightToe: ['ballr', 'ccbasertoebasesharebone', 'toebaser', 'righttoebase', 'righttoe', 'mixamorigrighttoe', 'mixamorigrighttoebase'],
+  ...makeFingerBoneCandidates(),
 };
 
 const collectCharacterBones = (object) => {
@@ -218,6 +1043,7 @@ const createCharacterTextureSet = (onUpdate = () => {}) => {
     const texture = textureLoader.load(url, () => onUpdate());
     if (colorSpace) texture.colorSpace = colorSpace;
     texture.anisotropy = 4;
+    texture.flipY = false;
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
     texture.needsUpdate = true;
@@ -278,12 +1104,77 @@ const rotateBone = (bone, x = 0, y = 0, z = 0) => {
   )));
 };
 
+const getRigPointWorldPosition = (ctx, point = null) => {
+  if (!ctx?.model || !point) return null;
+  ctx.model.updateMatrixWorld(true);
+  const worldPosition = point.clone();
+  ctx.model.localToWorld(worldPosition);
+  return worldPosition;
+};
+
+const alignBoneTowardWorldPoint = (bone, childBone, targetWorldPosition = null) => {
+  if (!bone || !childBone || !targetWorldPosition) return;
+  bone.parent?.updateMatrixWorld?.(true);
+  bone.updateMatrixWorld?.(true);
+  childBone.updateMatrixWorld?.(true);
+  const boneWorldPosition = bone.getWorldPosition(new THREE.Vector3());
+  const childWorldPosition = childBone.getWorldPosition(new THREE.Vector3());
+  const currentDirection = childWorldPosition.sub(boneWorldPosition).normalize();
+  const desiredDirection = targetWorldPosition.clone().sub(boneWorldPosition).normalize();
+  if (currentDirection.lengthSq() < 0.0001 || desiredDirection.lengthSq() < 0.0001) return;
+  const currentWorldQuaternion = bone.getWorldQuaternion(new THREE.Quaternion());
+  const parentWorldQuaternion = bone.parent
+    ? bone.parent.getWorldQuaternion(new THREE.Quaternion())
+    : new THREE.Quaternion();
+  const alignQuaternion = new THREE.Quaternion().setFromUnitVectors(currentDirection, desiredDirection);
+  const nextWorldQuaternion = alignQuaternion.multiply(currentWorldQuaternion);
+  bone.quaternion.copy(parentWorldQuaternion.invert().multiply(nextWorldQuaternion));
+  bone.updateMatrixWorld(true);
+};
+
 const getCharacterPelvisOffset = (object, pelvisBone) => {
   if (!object || !pelvisBone) return new THREE.Vector3();
   object.updateMatrixWorld(true);
   const rootPosition = object.getWorldPosition(new THREE.Vector3());
   const pelvisPosition = pelvisBone.getWorldPosition(new THREE.Vector3());
   return pelvisPosition.sub(rootPosition);
+};
+
+const getCharacterGroundMinY = (ctx) => {
+  if (!ctx?.characterAnchor || !ctx?.model) return Infinity;
+  ctx.model.updateMatrixWorld(true);
+  ctx.characterAnchor.updateMatrixWorld(true);
+  let minY = Infinity;
+
+  if (ctx.characterObject) {
+    ctx.characterObject.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(ctx.characterObject);
+    if (Number.isFinite(box.min.y)) minY = Math.min(minY, box.min.y);
+  }
+
+  Object.values(ctx.characterBones || {}).forEach((bone) => {
+    if (!bone) return;
+    bone.updateMatrixWorld?.(true);
+    minY = Math.min(minY, bone.getWorldPosition(new THREE.Vector3()).y);
+  });
+
+  return minY;
+};
+
+const keepCharacterAboveGround = (ctx) => {
+  if (!ctx?.characterAnchor) return;
+  const minY = getCharacterGroundMinY(ctx);
+  if (!Number.isFinite(minY)) return;
+  const lift = STUNT_GROUND_Y + STUNT_GROUND_CLEARANCE - minY;
+  if (lift > 0) {
+    ctx.characterAnchor.position.y += lift;
+    ctx.characterAnchor.updateMatrixWorld(true);
+  }
+  ctx.groundLift = Math.max(0, lift);
+  if (ctx.renderer?.domElement) {
+    ctx.renderer.domElement.dataset.groundLift = String(Number(ctx.groundLift.toFixed(3)));
+    ctx.renderer.domElement.dataset.groundMinY = String(Number((minY + ctx.groundLift).toFixed(3)));
+  }
 };
 
 const applyPoseToCharacter = (ctx, currentPose, rig) => {
@@ -293,87 +1184,58 @@ const applyPoseToCharacter = (ctx, currentPose, rig) => {
   const bodyYaw = Number(pose.bodyYaw) || 0;
   const bodyCurl = Number(pose.bodyCurl) || 0;
   const bodyTwist = Number(pose.bodyTwist) || 0;
+  const bodyRoll = Number(pose.bodyRoll) || 0;
+  const lowerBodyTwist = Number(pose.lowerBodyTwist) || 0;
+  const lowerBodyRoll = Number(pose.lowerBodyRoll) || 0;
+  const shoulderRoll = Number(pose.shoulderRoll) || 0;
   const headYaw = Number(pose.headYaw) || 0;
+  const leftForearm = clampElbowBend('left', pose.leftForearm, pose.leftArm);
+  const rightForearm = clampElbowBend('right', pose.rightForearm, pose.rightArm);
+  const leftShin = clampKneeBend('left', pose.leftShin, pose.leftLeg);
+  const rightShin = clampKneeBend('right', pose.rightShin, pose.rightLeg);
+  const forwardCurl = Math.max(0, bodyCurl);
+  const backwardCurl = Math.max(0, -bodyCurl);
+  const meshCurl = -(forwardCurl * 0.95) + (backwardCurl * 0.42);
   ctx.characterAnchor.position.copy(rig.hip).add(new THREE.Vector3(0, -0.02, 0));
-  ctx.characterAnchor.rotation.set(0, degToRad(bodyYaw), degToRad(-bodyTilt), 'XYZ');
+  ctx.characterAnchor.rotation.set(degToRad(meshCurl * 0.08), degToRad(bodyYaw), degToRad(-bodyTilt), 'XYZ');
 
   resetCharacterBones(ctx.characterBones);
   const bones = ctx.characterBones || {};
-  rotateBone(bones.pelvis, 0, bodyTwist * 0.16, bodyCurl * 0.18);
-  rotateBone(bones.spine01, bodyCurl * 0.22, bodyTwist * 0.28, bodyCurl * 0.08);
-  rotateBone(bones.spine03, bodyCurl * 0.18, bodyTwist * 0.34, bodyCurl * 0.06);
-  rotateBone(bones.spine05, bodyCurl * 0.12, bodyTwist * 0.38, bodyCurl * 0.04);
+  rotateBone(bones.pelvis, 0, 0, 0);
+  rotateBone(bones.spine01, meshCurl * 0.3, bodyTwist * 0.28, (bodyRoll * 0.5) + (meshCurl * 0.04));
+  rotateBone(bones.spine03, meshCurl * 0.24, bodyTwist * 0.34, (bodyRoll * 0.34) + (meshCurl * 0.035));
+  rotateBone(bones.spine05, meshCurl * 0.17, bodyTwist * 0.38, (bodyRoll * 0.18) + (meshCurl * 0.03));
   rotateBone(bones.neck, Number(pose.headTilt) * 0.25, headYaw * 0.2, 0);
   rotateBone(bones.head, Number(pose.headTilt) * 0.52, headYaw * 0.58, 0);
 
-  rotateBone(bones.leftUpperArm, 0, -12 + (Number(pose.leftArmSide) || 0) * 0.42, -Number(pose.leftArm) * 0.62);
-  rotateBone(bones.leftLowerArm, 0, (Number(pose.leftForearmSide) || 0) * 0.34, -Number(pose.leftForearm) * 0.58);
-  rotateBone(bones.leftHand, 0, (Number(pose.leftForearmSide) || 0) * 0.12, -Number(pose.leftForearm) * 0.14);
-  rotateBone(bones.rightUpperArm, 0, 12 + (Number(pose.rightArmSide) || 0) * 0.42, -Number(pose.rightArm) * 0.62);
-  rotateBone(bones.rightLowerArm, 0, (Number(pose.rightForearmSide) || 0) * 0.34, -Number(pose.rightForearm) * 0.58);
-  rotateBone(bones.rightHand, 0, (Number(pose.rightForearmSide) || 0) * 0.12, -Number(pose.rightForearm) * 0.14);
+  rotateBone(bones.leftClavicle, 0, shoulderRoll * 1.65, 0);
+  rotateBone(bones.rightClavicle, 0, -shoulderRoll * 1.65, 0);
+  rotateBone(bones.leftUpperArm, 0, -12 - (Number(pose.leftArmSide) || 0) * 0.85, -Number(pose.leftArm) * 0.62);
+  rotateBone(bones.leftLowerArm, 0, -(Number(pose.leftForearmSide) || 0) * 1.1, -leftForearm * 0.58);
+  rotateBone(bones.leftHand, 0, -(Number(pose.leftForearmSide) || 0) * 0.28, -leftForearm * 0.14);
+  rotateBone(bones.rightUpperArm, 0, 12 + (Number(pose.rightArmSide) || 0) * 0.85, -Number(pose.rightArm) * 0.62);
+  rotateBone(bones.rightLowerArm, 0, (Number(pose.rightForearmSide) || 0) * 1.1, -rightForearm * 0.58);
+  rotateBone(bones.rightHand, 0, (Number(pose.rightForearmSide) || 0) * 0.28, -rightForearm * 0.14);
 
-  rotateBone(bones.leftUpperLeg, Number(pose.leftLeg) * 0.14, (Number(pose.leftLegSide) || 0) * 0.32, -Number(pose.leftLeg) * 0.48);
-  rotateBone(bones.leftLowerLeg, Number(pose.leftShin) * 0.09, (Number(pose.leftShinSide) || 0) * 0.28, -Number(pose.leftShin) * 0.46);
-  rotateBone(bones.leftFoot, -Number(pose.leftShin) * 0.1, (Number(pose.leftShinSide) || 0) * 0.1, 0);
-  rotateBone(bones.rightUpperLeg, Number(pose.rightLeg) * 0.14, (Number(pose.rightLegSide) || 0) * 0.32, -Number(pose.rightLeg) * 0.48);
-  rotateBone(bones.rightLowerLeg, Number(pose.rightShin) * 0.09, (Number(pose.rightShinSide) || 0) * 0.28, -Number(pose.rightShin) * 0.46);
-  rotateBone(bones.rightFoot, -Number(pose.rightShin) * 0.1, (Number(pose.rightShinSide) || 0) * 0.1, 0);
+  rotateBone(bones.leftUpperLeg, Number(pose.leftLeg) * 0.14, (lowerBodyTwist * 0.75) - ((Number(pose.leftLegSide) || 0) * 0.75), -(Number(pose.leftLeg) + lowerBodyRoll) * 0.85);
+  rotateBone(bones.leftLowerLeg, leftShin * 0.09, -(Number(pose.leftShinSide) || 0) * 0.65, -leftShin * 0.82);
+  rotateBone(bones.leftFoot, -leftShin * 0.14, -(Number(pose.leftShinSide) || 0) * 0.22, 0);
+  rotateBone(bones.rightUpperLeg, Number(pose.rightLeg) * 0.14, (lowerBodyTwist * 0.75) + ((Number(pose.rightLegSide) || 0) * 0.75), -(Number(pose.rightLeg) + lowerBodyRoll) * 0.85);
+  rotateBone(bones.rightLowerLeg, rightShin * 0.09, (Number(pose.rightShinSide) || 0) * 0.65, -rightShin * 0.82);
+  rotateBone(bones.rightFoot, -rightShin * 0.14, (Number(pose.rightShinSide) || 0) * 0.22, 0);
 
   ctx.characterAnchor.updateMatrixWorld(true);
-};
+  alignBoneTowardWorldPoint(bones.leftUpperArm, bones.leftLowerArm, getRigPointWorldPosition(ctx, rig.leftElbow));
+  alignBoneTowardWorldPoint(bones.leftLowerArm, bones.leftHand, getRigPointWorldPosition(ctx, rig.leftHand));
+  alignBoneTowardWorldPoint(bones.rightUpperArm, bones.rightLowerArm, getRigPointWorldPosition(ctx, rig.rightElbow));
+  alignBoneTowardWorldPoint(bones.rightLowerArm, bones.rightHand, getRigPointWorldPosition(ctx, rig.rightHand));
+  alignBoneTowardWorldPoint(bones.leftUpperLeg, bones.leftLowerLeg, getRigPointWorldPosition(ctx, rig.leftKnee));
+  alignBoneTowardWorldPoint(bones.leftLowerLeg, bones.leftFoot, getRigPointWorldPosition(ctx, rig.leftAnkle));
+  alignBoneTowardWorldPoint(bones.rightUpperLeg, bones.rightLowerLeg, getRigPointWorldPosition(ctx, rig.rightKnee));
+  alignBoneTowardWorldPoint(bones.rightLowerLeg, bones.rightFoot, getRigPointWorldPosition(ctx, rig.rightAnkle));
 
-const getSkeletonJointPoint = (ctx, jointId, fallbackRig = {}) => {
-  const boneSlot = JOINT_BONE_SLOTS[jointId];
-  const bone = ctx?.characterBones?.[boneSlot];
-  const fallbackKey = JOINT_FALLBACK_KEYS[jointId] || jointId;
-  if (!bone || !ctx?.model) return fallbackRig[fallbackKey] || fallbackRig[jointId] || null;
-  ctx.model.updateMatrixWorld(true);
-  ctx.characterAnchor?.updateMatrixWorld(true);
-  bone.updateMatrixWorld?.(true);
-  const localPoint = bone.getWorldPosition(new THREE.Vector3());
-  ctx.model.worldToLocal(localPoint);
-  return localPoint;
-};
-
-const updateJointHandles = (ctx, rig = {}, activeJointId = '') => {
-  if (!ctx?.joints) return {};
-  const jointPoints = {};
-  JOINT_IDS.forEach((jointId) => {
-    const joint = ctx.joints[jointId];
-    const point = getSkeletonJointPoint(ctx, jointId, rig);
-    if (!joint || !point) return;
-    jointPoints[jointId] = point.clone();
-    joint.sphere.position.copy(point);
-    joint.hit.position.copy(point);
-    const isActive = jointId === activeJointId;
-    const config = JOINT_CONFIG_BY_ID.get(jointId);
-    joint.sphere.material = isActive
-      ? ctx.materials.active
-      : ctx.materials[config?.socket || 'armor'];
-    joint.sphere.scale.setScalar(isActive ? 1.22 : 1);
-  });
-  ctx.currentJointPoints = jointPoints;
-  return jointPoints;
-};
-
-const projectJointPoints = (ctx, jointPoints = ctx?.currentJointPoints || {}) => {
-  if (!ctx?.renderer || !ctx?.model || !ctx?.camera) return;
-  const rect = ctx.renderer.domElement.getBoundingClientRect();
-  const projected = {};
-  ctx.model.updateMatrixWorld(true);
-  ctx.camera.updateMatrixWorld(true);
-  Object.entries(jointPoints).forEach(([jointId, point]) => {
-    if (!point) return;
-    const worldPoint = point.clone();
-    ctx.model.localToWorld(worldPoint);
-    worldPoint.project(ctx.camera);
-    projected[jointId] = {
-      x: Math.round(((worldPoint.x + 1) / 2) * rect.width),
-      y: Math.round(((1 - worldPoint.y) / 2) * rect.height),
-    };
-  });
-  ctx.renderer.domElement.dataset.jointPoints = JSON.stringify(projected);
+  ctx.characterAnchor.updateMatrixWorld(true);
+  keepCharacterAboveGround(ctx);
 };
 
 const createCameraControls = () => ({
@@ -402,7 +1264,7 @@ const orbitCamera = (ctx, dx = 0, dy = 0) => {
   ctx.cameraControls.yaw -= dx * 0.008;
   ctx.cameraControls.pitch += dy * 0.006;
   updateCameraFromControls(ctx.camera, ctx.cameraControls);
-  projectJointPoints(ctx);
+  syncStuntRigMarkers(ctx);
 };
 
 const panCamera = (ctx, dx = 0, dy = 0) => {
@@ -416,22 +1278,20 @@ const panCamera = (ctx, dx = 0, dy = 0) => {
     .addScaledVector(right, -dx * distanceScale)
     .addScaledVector(up, dy * distanceScale);
   updateCameraFromControls(ctx.camera, ctx.cameraControls);
-  projectJointPoints(ctx);
+  syncStuntRigMarkers(ctx);
 };
 
 export default function StuntCharacter3DPreview({
   pose,
   keyframes = [],
-  activeJointId = '',
-  onJointSelect = () => {},
-  onJointDrag = () => {},
-  onJointDragEnd = () => {},
+  onRigMarkerSelect = () => {},
+  onRigMarkerDrag = () => {},
+  onRigMarkerDragEnd = () => {},
 }) {
   const containerRef = useRef(null);
   const ctxRef = useRef(null);
-  const callbacksRef = useRef({ onJointSelect, onJointDrag, onJointDragEnd });
   const poseRef = useRef(pose);
-  const activeJointRef = useRef(activeJointId);
+  const callbacksRef = useRef({ onRigMarkerSelect, onRigMarkerDrag, onRigMarkerDragEnd });
   const [loadStatus, setLoadStatus] = useState('Chargement personnage...');
   const keyframeSignature = useMemo(
     () => keyframes.map((keyframe) => `${keyframe.rootX}:${keyframe.rootY}:${keyframe.time}`).join('|'),
@@ -443,12 +1303,8 @@ export default function StuntCharacter3DPreview({
   }, [pose]);
 
   useEffect(() => {
-    activeJointRef.current = activeJointId;
-  }, [activeJointId]);
-
-  useEffect(() => {
-    callbacksRef.current = { onJointSelect, onJointDrag, onJointDragEnd };
-  }, [onJointSelect, onJointDrag, onJointDragEnd]);
+    callbacksRef.current = { onRigMarkerSelect, onRigMarkerDrag, onRigMarkerDragEnd };
+  }, [onRigMarkerDrag, onRigMarkerDragEnd, onRigMarkerSelect]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -478,57 +1334,46 @@ export default function StuntCharacter3DPreview({
     scene.add(rimLight);
 
     const grid = new THREE.GridHelper(4.8, 16, 0x38bdf8, 0x1e293b);
-    grid.position.y = 0;
+    grid.position.y = STUNT_GROUND_Y;
     scene.add(grid);
     const ground = new THREE.Mesh(
       new THREE.CircleGeometry(2.35, 48),
       new THREE.MeshBasicMaterial({ color: 0x0f172a, transparent: true, opacity: 0.64 })
     );
     ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -0.006;
+    ground.position.y = STUNT_GROUND_Y - 0.006;
     scene.add(ground);
 
     const model = new THREE.Group();
     model.rotation.y = -0.38;
     scene.add(model);
 
-    const materials = {
-      weapon: createMaterial(0x38bdf8, { emissive: 0x075985, emissiveIntensity: 0.22, transparent: true, opacity: 0.96, depthTest: false, depthWrite: false }),
-      shield: createMaterial(0xfbbf24, { emissive: 0x92400e, emissiveIntensity: 0.28, transparent: true, opacity: 0.96, depthTest: false, depthWrite: false }),
-      armor: createMaterial(0x34d399, { emissive: 0x052e1b, emissiveIntensity: 0.2, transparent: true, opacity: 0.94, depthTest: false, depthWrite: false }),
-      active: createMaterial(0xfb7185, { emissive: 0x9f1239, emissiveIntensity: 0.38, transparent: true, opacity: 0.98, depthTest: false, depthWrite: false }),
-      hit: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.002, depthWrite: false }),
-      path: new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.72 }),
-    };
-
     const characterAnchor = new THREE.Group();
     characterAnchor.name = 'stunt-fbx-character-anchor';
     model.add(characterAnchor);
 
-    const joints = {};
-    const hitTargets = [];
-    JOINT_IDS.forEach((jointId) => {
-      const config = JOINT_CONFIG_BY_ID.get(jointId);
-      const radius = Math.max(0.035, Math.min(0.056, 0.043 * (Number(config?.size) || 1)));
-      const sphere = new THREE.Mesh(new THREE.SphereGeometry(radius, 24, 18), materials[config?.socket || 'armor']);
-      sphere.castShadow = true;
-      sphere.renderOrder = 10;
-      model.add(sphere);
+    const rigMarkerRoot = new THREE.Group();
+    rigMarkerRoot.name = 'StuntCharacterRigMarkers';
+    model.add(rigMarkerRoot);
 
-      const hit = new THREE.Mesh(new THREE.SphereGeometry(radius * 4.2, 16, 12), materials.hit);
-      hit.userData.jointId = jointId;
-      model.add(hit);
-      hitTargets.push(hit);
-      joints[jointId] = { sphere, hit, baseRadius: radius };
-    });
-
-    const pathLine = new THREE.Line(new THREE.BufferGeometry(), materials.path);
+    const pathLine = new THREE.Line(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.72 })
+    );
     pathLine.position.z = -0.5;
     scene.add(pathLine);
 
-    const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
-    const dragState = { mode: '', jointId: '', lastX: 0, lastY: 0 };
+    const dragState = {
+      mode: '',
+      pointId: '',
+      startX: 0,
+      startY: 0,
+      lastX: 0,
+      lastY: 0,
+      screenDepth: 0,
+      startPose: null,
+    };
 
     const resize = () => {
       const width = Math.max(1, container.clientWidth);
@@ -537,63 +1382,127 @@ export default function StuntCharacter3DPreview({
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       updateCameraFromControls(camera, cameraControls);
-      projectJointPoints(ctxRef.current);
+      syncStuntRigMarkers(ctxRef.current);
     };
 
-    const pickJoint = (event) => {
+    const pickRigMarker = (event) => {
+      const ctx = ctxRef.current;
+      if (!ctx?.renderer?.domElement || !ctx.camera) return null;
+      syncStuntRigMarkers(ctx);
+      const rect = ctx.renderer.domElement.getBoundingClientRect();
+      const pointerX = event.clientX - rect.left;
+      const pointerY = event.clientY - rect.top;
+      const projected = ctx.projectedRigMarkers || {};
+      const bestHit = Object.entries(projected).reduce((best, [pointId, point]) => {
+        const markerObject = ctx.rigMarkers.get(pointId);
+        if (!markerObject?.visible) return best;
+        const radius = Math.max(14, Number(point.radius) || 18);
+        const distance = Math.hypot(pointerX - point.x, pointerY - point.y);
+        if (distance > radius) return best;
+        const markerConfig = STUNT_RIG_MARKER_BY_ID.get(pointId);
+        const isBodyMarker = markerConfig?.group === CHARACTER_RIG_POINT_GROUPS.body;
+        const isEndLimbMarker = pointId.endsWith('-hand') || pointId.endsWith('-foot');
+        const priority = (isBodyMarker ? 8 : 0) + (isEndLimbMarker ? 6 : 0);
+        const score = distance - priority;
+        if (!best || score < best.score || (Math.abs(score - best.score) < 2 && point.z < best.z)) {
+          return { pointId, distance, score, z: Number(point.z) || 0 };
+        }
+        return best;
+      }, null);
+      return bestHit
+        ? {
+          pointId: bestHit.pointId,
+          marker: STUNT_RIG_MARKER_BY_ID.get(bestHit.pointId) || null,
+        }
+        : null;
+    };
+
+    const getPointerCanvasPosition = (event) => {
       const rect = renderer.domElement.getBoundingClientRect();
+      return {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+        rect,
+      };
+    };
+
+    const getPointerWorldPositionAtDepth = (event, screenDepth) => {
+      const ctx = ctxRef.current;
+      if (!ctx?.camera || !Number.isFinite(screenDepth)) return null;
+      const { rect } = getPointerCanvasPosition(event);
       pointer.x = ((event.clientX - rect.left) / Math.max(1, rect.width)) * 2 - 1;
       pointer.y = -(((event.clientY - rect.top) / Math.max(1, rect.height)) * 2 - 1);
-      model.updateMatrixWorld(true);
-      camera.updateMatrixWorld(true);
-      raycaster.setFromCamera(pointer, camera);
-      const hit = raycaster.intersectObjects(hitTargets, false)[0];
-      return hit?.object?.userData?.jointId || '';
+      return new THREE.Vector3(pointer.x, pointer.y, screenDepth).unproject(ctx.camera);
+    };
+
+    const setActiveMarkerPointerPosition = (event) => {
+      const ctx = ctxRef.current;
+      if (!ctx?.rigMarkerRoot || !dragState.pointId) return null;
+      const worldPosition = getPointerWorldPositionAtDepth(event, dragState.screenDepth);
+      if (!worldPosition) return null;
+      ctx.rigMarkerRoot.updateMatrixWorld(true);
+      ctx.activeRigMarkerPointerPosition = ctx.rigMarkerRoot.worldToLocal(worldPosition.clone());
+      return ctx.activeRigMarkerPointerPosition;
+    };
+
+    const previewRigMarkerDrag = (pointId, updates) => {
+      const ctx = ctxRef.current;
+      if (!ctx || !dragState.startPose) return;
+      const nextPose = { ...dragState.startPose, ...updates };
+      const nextRig = poseToRig(nextPose);
+      ctx.currentRig = nextRig;
+      applyPoseToCharacter(ctx, nextPose, nextRig);
+      syncStuntRigMarkers(ctx);
+      ctx.renderer.render(ctx.scene, ctx.camera);
+      if (updates && Object.keys(updates).length) {
+        callbacksRef.current.onRigMarkerDrag(pointId, updates, STUNT_RIG_MARKER_BY_ID.get(pointId) || null);
+      }
     };
 
     const handlePointerDown = (event) => {
       if (dragState.mode) return;
       const button = Number(event.button ?? 0);
-      if (button === 2) {
-        event.preventDefault();
-        if (event.pointerId !== undefined) renderer.domElement.setPointerCapture?.(event.pointerId);
-        dragState.mode = 'pan';
-        dragState.lastX = event.clientX;
-        dragState.lastY = event.clientY;
-        renderer.domElement.classList.add('panning');
-        renderer.domElement.dataset.cameraMode = 'pan';
-        return;
-      }
-
-      const jointId = pickJoint(event);
-      renderer.domElement.dataset.lastPointerEvent = jointId ? `down:${jointId}` : 'down:none';
-      if (!jointId) {
-        if (button !== 0) return;
-        event.preventDefault();
-        if (event.pointerId !== undefined) renderer.domElement.setPointerCapture?.(event.pointerId);
-        dragState.mode = 'orbit';
-        dragState.lastX = event.clientX;
-        dragState.lastY = event.clientY;
-        renderer.domElement.classList.add('rotating');
-        renderer.domElement.dataset.cameraMode = 'orbit';
-        return;
-      }
-      if (button !== 0) return;
+      if (button !== 0 && button !== 2) return;
       event.preventDefault();
       if (event.pointerId !== undefined) renderer.domElement.setPointerCapture?.(event.pointerId);
-      dragState.mode = 'joint';
-      dragState.jointId = jointId;
+      if (button === 2) {
+        dragState.mode = 'pan';
+        renderer.domElement.classList.add('panning');
+        renderer.domElement.dataset.cameraMode = 'pan';
+      } else {
+        const hit = pickRigMarker(event);
+        if (hit?.pointId) {
+          dragState.mode = 'marker';
+          dragState.pointId = hit.pointId;
+          dragState.startPose = { ...poseRef.current };
+          ctxRef.current.activeRigMarkerId = hit.pointId;
+          const hitObject = ctxRef.current.rigMarkers.get(hit.pointId);
+          const hitWorldPosition = hitObject?.getWorldPosition?.(new THREE.Vector3());
+          dragState.screenDepth = hitWorldPosition ? hitWorldPosition.project(ctxRef.current.camera).z : 0;
+          setActiveMarkerPointerPosition(event);
+          renderer.domElement.classList.add('dragging');
+          renderer.domElement.dataset.cameraMode = 'marker';
+          renderer.domElement.dataset.activeRigMarker = hit.pointId;
+          callbacksRef.current.onRigMarkerSelect(hit.pointId, hit.marker);
+          syncStuntRigMarkers(ctxRef.current);
+        } else {
+          dragState.mode = 'orbit';
+          renderer.domElement.classList.add('rotating');
+          renderer.domElement.dataset.cameraMode = 'orbit';
+        }
+      }
+      dragState.startX = event.clientX;
+      dragState.startY = event.clientY;
       dragState.lastX = event.clientX;
       dragState.lastY = event.clientY;
-      renderer.domElement.classList.add('dragging');
-      callbacksRef.current.onJointSelect(jointId);
     };
 
     const handlePointerMove = (event) => {
       if (!dragState.mode) {
-        const overJoint = Boolean(pickJoint(event));
-        renderer.domElement.classList.toggle('can-grab', overJoint);
-        renderer.domElement.classList.toggle('can-rotate', !overJoint);
+        const overMarker = Boolean(pickRigMarker(event));
+        renderer.domElement.classList.toggle('can-grab', overMarker);
+        renderer.domElement.classList.toggle('can-rotate', !overMarker);
+        renderer.domElement.dataset.hoverRigMarker = overMarker ? '1' : '';
         return;
       }
       event.preventDefault();
@@ -602,28 +1511,49 @@ export default function StuntCharacter3DPreview({
       dragState.lastX = event.clientX;
       dragState.lastY = event.clientY;
       if (Math.abs(dx) + Math.abs(dy) <= 0) return;
+      if (dragState.mode === 'marker') {
+        setActiveMarkerPointerPosition(event);
+        const target = getPointerCanvasPosition(event);
+        const updates = solveStuntRigDragUpdates(ctxRef.current, dragState.pointId, dragState.startPose, {
+          dx: event.clientX - dragState.startX,
+          dy: event.clientY - dragState.startY,
+          targetX: target.x,
+          targetY: target.y,
+          targetLocalPosition: ctxRef.current?.activeRigMarkerPointerPosition?.clone?.() || null,
+        });
+        renderer.domElement.dataset.lastRigDrag = dragState.pointId;
+        previewRigMarkerDrag(dragState.pointId, updates);
+        return;
+      }
       if (dragState.mode === 'orbit') {
         orbitCamera(ctxRef.current, dx, dy);
         return;
       }
       if (dragState.mode === 'pan') {
         panCamera(ctxRef.current, dx, dy);
-        return;
       }
-      callbacksRef.current.onJointDrag(dragState.jointId, { dx, dy });
     };
 
     const finishDrag = (event) => {
       if (!dragState.mode) return;
       if (event.pointerId !== undefined) renderer.domElement.releasePointerCapture?.(event.pointerId);
-      if (dragState.mode === 'joint') callbacksRef.current.onJointDragEnd(dragState.jointId);
       const finishedMode = dragState.mode;
+      const finishedPointId = dragState.pointId;
       dragState.mode = '';
-      dragState.jointId = '';
-      renderer.domElement.classList.remove('dragging');
+      dragState.pointId = '';
+      dragState.startPose = null;
+      dragState.screenDepth = 0;
+      if (finishedMode === 'marker') callbacksRef.current.onRigMarkerDragEnd(finishedPointId, STUNT_RIG_MARKER_BY_ID.get(finishedPointId) || null);
       renderer.domElement.classList.remove('rotating');
       renderer.domElement.classList.remove('panning');
+      renderer.domElement.classList.remove('dragging');
+      if (ctxRef.current) {
+        ctxRef.current.activeRigMarkerId = '';
+        ctxRef.current.activeRigMarkerPointerPosition = null;
+        syncStuntRigMarkers(ctxRef.current);
+      }
       renderer.domElement.dataset.cameraMode = finishedMode ? `done:${finishedMode}` : '';
+      renderer.domElement.dataset.activeRigMarker = '';
     };
 
     const preventContextMenu = (event) => event.preventDefault();
@@ -650,27 +1580,28 @@ export default function StuntCharacter3DPreview({
       characterTextures,
       camera,
       cameraControls,
-      joints,
       pathLine,
-      materials,
       currentRig: null,
-      currentJointPoints: {},
+      groundLift: 0,
+      rigMarkerRoot,
+      rigMarkers: new Map(),
+      rigMarkerLines: new Map(),
     };
     ctxRef.current = context;
     const initialRig = poseToRig(pose);
     context.currentRig = initialRig;
     applyPoseToCharacter(context, pose, initialRig);
-    updateJointHandles(context, initialRig, activeJointId);
+    syncStuntRigMarkers(context);
 
     let loadCancelled = false;
     setLoadStatus('Chargement personnage...');
-    const loader = new FBXLoader(createCharacterLoadingManager());
-    loader.load(
+    loadThreeModelFromSource(
       STUNT_CHARACTER_MODEL_URL,
-      (object) => {
+      { modelFormat: 'glb', modelUrl: STUNT_CHARACTER_MODEL_URL },
+      ({ object, format = 'glb' } = {}) => {
         if (loadCancelled || !ctxRef.current) return;
         try {
-          prepareGltfModel(object, getImportedModelPrepareOptions('fbx', {
+          prepareGltfModel(object, getImportedModelPrepareOptions(format || 'glb', {
             restoreTextureColor: true,
             forceLitMaterials: true,
             forceVisibleMeshes: true,
@@ -697,9 +1628,9 @@ export default function StuntCharacter3DPreview({
           context.characterBones = characterBones;
           const loadedRig = poseToRig(poseRef.current);
           applyPoseToCharacter(context, poseRef.current, loadedRig);
-          updateJointHandles(context, loadedRig, activeJointRef.current);
-          projectJointPoints(context);
-          renderer.domElement.dataset.characterModel = 'exemple.fbx';
+          context.currentRig = loadedRig;
+          syncStuntRigMarkers(context);
+          renderer.domElement.dataset.characterModel = 'exemple.glb';
           renderer.domElement.dataset.characterBones = String(Object.keys(characterBones).length);
           renderer.domElement.dataset.characterTexture = 'Material_001_Diffuse.jpg';
           setLoadStatus('');
@@ -707,7 +1638,6 @@ export default function StuntCharacter3DPreview({
           setLoadStatus(error?.message ? `Personnage non charge: ${error.message}` : 'Personnage non charge');
         }
       },
-      undefined,
       (error) => {
         if (!loadCancelled) setLoadStatus(error?.message ? `Personnage non charge: ${error.message}` : 'Personnage non charge');
       }
@@ -718,7 +1648,7 @@ export default function StuntCharacter3DPreview({
     const render = () => {
       projectionFrame += 1;
       if (context.currentRig && (projectionFrame === 1 || projectionFrame % 8 === 0)) {
-        projectJointPoints(context);
+        syncStuntRigMarkers(context);
         renderer.domElement.dataset.renderFrame = String(projectionFrame);
       }
       renderer.render(scene, camera);
@@ -737,6 +1667,8 @@ export default function StuntCharacter3DPreview({
       renderer.domElement.removeEventListener('lostpointercapture', finishDrag);
       renderer.domElement.removeEventListener('contextmenu', preventContextMenu);
       renderer.dispose();
+      disposeStuntRigMarkers(context.rigMarkers);
+      disposeStuntRigMarkerLines(context.rigMarkerLines);
       const disposedTextures = new Set();
       scene.traverse((object) => {
         if (object.geometry) object.geometry.dispose();
@@ -764,15 +1696,14 @@ export default function StuntCharacter3DPreview({
     const rig = poseToRig(pose);
     ctx.currentRig = rig;
     applyPoseToCharacter(ctx, pose, rig);
-    updateJointHandles(ctx, rig, activeJointId);
+    syncStuntRigMarkers(ctx);
 
     const points = keyframes
       .map((keyframe) => poseToRig(keyframe).hip.clone().add(new THREE.Vector3(0, 0.02, -0.48)));
     ctx.pathLine.geometry.dispose();
     ctx.pathLine.geometry = new THREE.BufferGeometry().setFromPoints(points.length > 1 ? points : []);
-    projectJointPoints(ctx);
     ctx.renderer.render(ctx.scene, ctx.camera);
-  }, [pose, activeJointId, keyframeSignature, keyframes]);
+  }, [pose, keyframeSignature, keyframes]);
 
   return (
     <div
@@ -780,8 +1711,7 @@ export default function StuntCharacter3DPreview({
       className="stunt-3d-stage"
       role="img"
       aria-label="Personnage cascadeur 3D"
-      data-active-joint={activeJointId ? JOINT_LABELS[activeJointId] : ''}
-      data-character-model="exemple.fbx"
+      data-character-model="exemple.glb"
     >
       {loadStatus ? <span className="stunt-3d-status">{loadStatus}</span> : null}
     </div>

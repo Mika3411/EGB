@@ -1,20 +1,17 @@
 import { useEffect, useRef } from 'react';
 import { TABS, getTabValue } from './TabRegistry.jsx';
 import {
-  Activity,
   Bot,
   Brush,
   ChevronDown,
   CircleHelp,
   Clapperboard,
   ClipboardCheck,
-  Cuboid,
   GitBranch,
   Image,
   LayoutGrid,
   Link2,
   Map,
-  Mountain,
   Package,
   Play,
   Puzzle,
@@ -26,17 +23,18 @@ import {
 } from 'lucide-react';
 
 const primaryTabKeys = ['scenes', 'media', 'plan', 'adventure', 'hero', 'combat', 'preview'];
-const creationTabKeys = ['objects', 'characters3d', 'decors3d', 'cinematics', 'enigmas', 'combinations', 'logic', 'animation', 'stunts'];
+const creationTabKeys = ['objects', 'cinematics', 'enigmas', 'combinations', 'logic', 'animation'];
 const assistantTabKeys = ['ai'];
 const mainTabKeys = [...primaryTabKeys, ...creationTabKeys, ...assistantTabKeys];
 
 const utilityTabKeys = ['shop', 'help', 'score'];
-const beginnerTabs = new Set(['scenes', 'media', 'objects', 'characters3d', 'decors3d', 'enigmas', 'stunts', 'ai', 'preview']);
+const beginnerTabs = new Set(['scenes', 'media', 'objects', 'enigmas', 'ai', 'preview']);
 const beginnerUtilityTabs = new Set(['shop', 'help']);
-const intermediateTabs = new Set(['scenes', 'media', 'map', 'objects', 'characters3d', 'decors3d', 'cinematics', 'enigmas', 'stunts', 'ai', 'preview']);
+const intermediateTabs = new Set(['scenes', 'media', 'map', 'objects', 'cinematics', 'enigmas', 'ai', 'preview']);
 const intermediateUtilityTabs = new Set(['shop', 'help']);
-const adventureTabs = new Set(['scenes', 'media', 'map', 'adventure', 'objects', 'characters3d', 'decors3d', 'cinematics', 'enigmas', 'logic', 'preview', 'animation', 'stunts']);
-const heroAdventureTabs = new Set(['scenes', 'media', 'map', 'adventure', 'hero', 'combat', 'objects', 'characters3d', 'decors3d', 'cinematics', 'enigmas', 'logic', 'preview', 'animation', 'stunts', 'ai']);
+const expertTabs = new Set(['scenes', 'media', 'map', 'preview', 'objects', 'cinematics', 'enigmas', 'combinations', 'logic', 'animation', 'ai']);
+const adventureTabs = new Set(['scenes', 'media', 'map', 'adventure', 'objects', 'cinematics', 'enigmas', 'logic', 'preview', 'animation']);
+const heroAdventureTabs = new Set(['scenes', 'media', 'map', 'adventure', 'hero', 'combat', 'objects', 'cinematics', 'enigmas', 'logic', 'preview', 'animation', 'ai']);
 const adventureUtilityTabs = new Set(['shop', 'help', 'score']);
 
 const getTabEntries = (tabKeys) => tabKeys.map((tabKey) => [getTabValue(tabKey), TABS[tabKey]]);
@@ -53,12 +51,9 @@ const tabIcons = {
   logic: Workflow,
   hero: Shield,
   combat: Swords,
-  characters3d: Cuboid,
-  decors3d: Mountain,
   ai: Bot,
   preview: Play,
   animation: Brush,
-  stunts: Activity,
   shop: ShoppingBag,
   help: CircleHelp,
   score: ClipboardCheck,
@@ -126,7 +121,7 @@ export default function Tabs({ value, onChange, onProfile, projectScore, project
       ? tabs.filter(([tabValue]) => intermediateTabs.has(tabValue))
       : isHeroAdventureMode
         ? tabs.filter(([tabValue]) => heroAdventureTabs.has(tabValue))
-        : isAdventureMode ? tabs.filter(([tabValue]) => adventureTabs.has(tabValue)) : tabs;
+        : isAdventureMode ? tabs.filter(([tabValue]) => adventureTabs.has(tabValue)) : tabs.filter(([tabValue]) => expertTabs.has(tabValue));
   const visiblePrimaryTabs = primaryTabs.filter(([tabValue]) => visibleTabs.some(([visibleTabValue]) => visibleTabValue === tabValue));
   const visibleCreationTabs = creationTabs.filter(([tabValue]) => visibleTabs.some(([visibleTabValue]) => visibleTabValue === tabValue));
   const visibleAssistantTabs = assistantTabs.filter(([tabValue]) => visibleTabs.some(([visibleTabValue]) => visibleTabValue === tabValue));

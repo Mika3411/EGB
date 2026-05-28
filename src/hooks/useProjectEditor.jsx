@@ -181,9 +181,11 @@ export function useProjectEditor() {
   const patchProject = useCallback((updater, options = {}) => {
     if (options.rememberHistory !== false) rememberProjectState();
     setProject((prev) => {
-      const next = structuredClone(prev);
+      const next = typeof options.createDraft === 'function'
+        ? options.createDraft(prev)
+        : structuredClone(prev);
       updater(next);
-      migrateProjectAssetReferences(next);
+      if (options.migrate !== false) migrateProjectAssetReferences(next);
       projectRef.current = next;
       return next;
     });

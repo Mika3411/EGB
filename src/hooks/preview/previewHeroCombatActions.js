@@ -21,7 +21,6 @@ import {
   clampNumber,
   normalizeHeroAdventure,
 } from './previewPlayerDefaults.js';
-
 export function createPreviewHeroCombatActions({
   project,
   heroAdventure,
@@ -58,7 +57,6 @@ export function createPreviewHeroCombatActions({
     setActiveEnigma,
     setDialogue,
   } = setters;
-
   const setHeroCombatState = (combatId, nextCombatState) => {
     if (!combatId) return {};
     const currentStates = engineRef.current.getState().heroCombatStates || heroCombatStates || {};
@@ -73,7 +71,6 @@ export function createPreviewHeroCombatActions({
     setHeroCombatStates(nextStates);
     return nextStates[combatId];
   };
-
   const buildHeroCombatHistory = (current = {}, nextMessage = '') => {
     const cleanMessage = String(nextMessage || '').replace(/\s+/g, ' ').trim();
     const existingHistory = Array.isArray(current.history)
@@ -87,7 +84,6 @@ export function createPreviewHeroCombatActions({
     if (cleanMessage && history[history.length - 1] !== cleanMessage) history.push(cleanMessage);
     return history.slice(-8);
   };
-
   const runSkillCheckAction = (entry = {}, options = {}) => {
     if (blockDefeatedHeroAction()) return false;
     if (!heroAdventure.enabled) {
@@ -101,7 +97,6 @@ export function createPreviewHeroCombatActions({
       manaCost: Math.max(0, Number(entry.skillCheckManaCost) || 0),
     });
     if (!roll) return false;
-
     const sides = Math.max(2, Number(roll.sides) || Number(heroAdventure.dice?.sides) || 20);
     const activeRules = (engineRef.current.getState().heroState || heroState)?.rules || heroAdventure.rules || {};
     const outcomeRoll = {
@@ -124,16 +119,13 @@ export function createPreviewHeroCombatActions({
     const targetSceneId = entry[`skillCheck${outcome}TargetSceneId`] || '';
     const nextNodeId = entry[`skillCheck${outcome}NextNodeId`] || '';
     const resultMessage = `${roll.skillName ? `${roll.skillName}: ` : ''}${roll.die} = ${roll.raw}${roll.modifier ? ` + ${roll.modifier}` : ''} => ${roll.total}. ${outcomeLabel} contre ${difficulty}. ${outcomeDialogue}`.trim();
-
     if (!success) applyHeroHealthLoss(entry.skillCheckFailureHealthLoss);
     if (success && entry.skillCheckSuccessRewardItemId) addInventoryItem(entry.skillCheckSuccessRewardItemId);
     if (options.sourceHotspotId) markHotspotCompleted(options.sourceHotspotId);
-
     if (targetSceneId) {
       if (options.closeConversation) closeConversation();
       return goToScene(targetSceneId, resultMessage);
     }
-
     if (options.conversation && nextNodeId) {
       const nextNode = (options.conversation.nodes || []).find((node) => node.id === nextNodeId);
       if (nextNode) {
@@ -148,12 +140,10 @@ export function createPreviewHeroCombatActions({
         return true;
       }
     }
-
     setDialogue(resultMessage);
     if (options.closeConversation && !nextNodeId) closeConversation();
     return true;
   };
-
   const getPreviewCombatStats = (entry = {}) => (
     getCombatSimulationStats({
       ...project,
@@ -165,13 +155,10 @@ export function createPreviewHeroCombatActions({
       },
     }, entry, heroAdventure.combat || DEFAULT_COMBAT_SETTINGS)
   );
-
   const getPowerTypeLabel = (type) => getCombatPowerTypeLabel(type).toLowerCase();
-
   const getHeroPowerById = (powerId = '') => (
     ((engineRef.current.getState().heroState || heroState).powers || []).find((power) => power.id === powerId) || null
   );
-
   const getHeroSkillByKey = (key = '') => {
     const normalizedKey = String(key || '')
       .normalize('NFD')
@@ -193,7 +180,6 @@ export function createPreviewHeroCombatActions({
       return id === normalizedKey || name === normalizedKey;
     }) || null;
   };
-
   const createHeroCombatSurvivalRoll = (enemyStats = {}, rawRoll) => {
     const survivalSkill = getHeroSkillByKey('survie') || getHeroSkillByKey('survival');
     const modifier = Math.max(0, Number(survivalSkill?.value) || 0);
@@ -212,7 +198,6 @@ export function createPreviewHeroCombatActions({
       actionType: 'hero_combat_survival',
     };
   };
-
   const resolveHeroCombatSurvival = (entry = {}, options = {}) => {
     const runtime = getHeroCombatRuntime(entry, options);
     const combatState = (engineRef.current.getState().heroCombatStates || heroCombatStates || {})[runtime.combatId] || {};
@@ -280,7 +265,6 @@ export function createPreviewHeroCombatActions({
       roll,
     };
   };
-
   const buildHeroCombatSurvivalPending = (entry = {}, runtime = {}, reasonMessage = '') => {
     const combatState = (engineRef.current.getState().heroCombatStates || heroCombatStates || {})[runtime.combatId] || {};
     if (combatState.survivalUsed) return null;
@@ -298,7 +282,6 @@ export function createPreviewHeroCombatActions({
       message,
     };
   };
-
   const getCombatEffectMedia = (target, outcome) => {
     const combatSettings = heroAdventure.combat || {};
     const base = getCombatEffectFieldBase(target, outcome);
@@ -341,7 +324,6 @@ export function createPreviewHeroCombatActions({
     if (audioData) return { mediaType: 'none', audioData, audioName };
     return null;
   };
-
   const makeCombatVisualEffect = (target, type, text, media = null) => ({
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     target,
@@ -349,7 +331,6 @@ export function createPreviewHeroCombatActions({
     text,
     media,
   });
-
   const makeCombatOutcomeEffect = (target, outcome, text) => (
     makeCombatVisualEffect(
       target,
@@ -358,7 +339,6 @@ export function createPreviewHeroCombatActions({
       getCombatEffectMedia(target, outcome)
     )
   );
-
   const rollEnemyCombatDie = (enemyName = 'Ennemi', rawRoll) => {
     const sides = Math.max(2, Number(heroAdventure.dice?.sides) || 20);
     const forcedRaw = Number(rawRoll);
@@ -376,7 +356,6 @@ export function createPreviewHeroCombatActions({
       enemyName,
     };
   };
-
   const buildEnemyCombatAction = (stats, currentEnemyMana, enemyName, options = {}) => {
     const enemyStats = stats.enemyStats;
     const enemyRoll = rollEnemyCombatDie(enemyName, options.rawRoll);
@@ -418,7 +397,6 @@ export function createPreviewHeroCombatActions({
       enemyAttack.usesPower && enemyStats.powerManaCost > 0 ? makeCombatVisualEffect('enemy', 'mana', `-${enemyStats.powerManaCost} Mana`) : null,
       enemyAttack.critical ? makeCombatVisualEffect('hero', 'critical', `CRITIQUE x${enemyAttack.criticalMultiplier}`) : null,
     ].filter(Boolean);
-
     return {
       enemyRoll,
       nextEnemyMana: enemyAttack.enemyMana,
@@ -428,7 +406,6 @@ export function createPreviewHeroCombatActions({
       visualEffects,
     };
   };
-
   const getHeroCombatRuntime = (entry = {}, options = {}) => {
     const combatId = entry.id || options.sourceHotspotId || `${playSceneId}-combat`;
     const stats = getPreviewCombatStats(entry);
@@ -455,7 +432,6 @@ export function createPreviewHeroCombatActions({
       currentEnemyStatusEffects,
     };
   };
-
   const resolveEnemyCombatTurn = (entry = {}, options = {}) => {
     const {
       combatId,
@@ -468,7 +444,6 @@ export function createPreviewHeroCombatActions({
       currentHeroStatusEffects,
       currentEnemyStatusEffects,
     } = getHeroCombatRuntime(entry, options);
-
     if (currentEnemyHealth <= 0) {
       const message = `${enemyName} est déjà vaincu.`;
       setDialogue(message);
@@ -483,7 +458,6 @@ export function createPreviewHeroCombatActions({
         message,
       };
     }
-
     const enemyTick = tickStatusEffects(currentEnemyStatusEffects, currentEnemyHealth);
     if (enemyTick.health <= 0) {
       setHeroCombatState(combatId, {
@@ -513,7 +487,6 @@ export function createPreviewHeroCombatActions({
       setDialogue(message);
       return { ok: true, ended: false, enemyHealth: enemyTick.health, enemyMaxHealth, enemyMana: currentEnemyMana, enemyMaxMana: enemyStats.maxMana, message };
     }
-
     const enemyAction = buildEnemyCombatAction(stats, currentEnemyMana, enemyName, {
       ...options,
       heroStatusEffects: currentHeroStatusEffects,
@@ -531,7 +504,6 @@ export function createPreviewHeroCombatActions({
       enemyStatusEffects: enemyTick.effects,
       defeated: false,
     });
-
     const nextHero = applyHeroHealthLoss(enemyAction.enemyDamage, { triggerDefeatScene: false });
     const defeat = Number(nextHero.health || 0) <= 0;
     const visualEffects = [
@@ -565,7 +537,6 @@ export function createPreviewHeroCombatActions({
     const defeatText = defeat ? ` ${entry.combatDefeatDialogue || 'Défaite.'}` : '';
     const statusPrefix = enemyTick.damage > 0 ? `${enemyName} subit ${enemyTick.damage} PV d'altération. ` : '';
     const message = `${statusPrefix}${enemyAction.retaliationText}${endText}${defeatText}`.trim();
-
     if (defeat && entry.combatDefeatTargetSceneId) {
       const finalMessage = `${statusPrefix}${enemyAction.retaliationText}${endText}${defeatText}`.trim();
       setDialogue(finalMessage);
@@ -585,7 +556,6 @@ export function createPreviewHeroCombatActions({
         visualEffects,
       };
     }
-
     setDialogue(message);
     return {
       ok: true,
@@ -601,7 +571,6 @@ export function createPreviewHeroCombatActions({
       visualEffects,
     };
   };
-
   const resolveHeroCombatTurn = (entry = {}, options = {}) => {
     const {
       combatId,
@@ -615,7 +584,6 @@ export function createPreviewHeroCombatActions({
       currentHeroStatusEffects,
       currentEnemyStatusEffects,
     } = getHeroCombatRuntime(entry, options);
-
     if (currentEnemyHealth <= 0) {
       const message = `${enemyName} est déjà vaincu.`;
       setDialogue(message);
@@ -631,7 +599,6 @@ export function createPreviewHeroCombatActions({
         message,
       };
     }
-
     const heroPower = getHeroPowerById(options.heroPowerId);
     const skillId = entry.combatSkillId || heroState.skills?.[0]?.id || '';
     const currentHero = engineRef.current.getState().heroState || heroState;

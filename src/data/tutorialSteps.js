@@ -1,7 +1,7 @@
 import { makeCinematic, makeCombination, makeEnigma, makeLogicRule, makeRouteMap } from './projectData';
 import { applyCreationTemplate } from '../lib/projectTemplates';
 
-export const BUILDER_TUTORIAL_TABS = ['profile', 'guided_creation', 'scenes', 'media', 'objects', 'characters3d', 'decors3d', 'editor', 'map', 'adventure', 'hero', 'combat', 'cinematics', 'animation', 'combinations', 'enigmas', 'logic', 'ai', 'preview', 'score'];
+export const BUILDER_TUTORIAL_TABS = ['profile', 'guided_creation', 'scenes', 'media', 'objects', 'editor', 'map', 'adventure', 'hero', 'combat', 'cinematics', 'animation', 'combinations', 'enigmas', 'logic', 'ai', 'preview', 'score'];
 
 const getProjectRecordName = (project) =>
   project?.name || project?.data?.title || project?.data?.name || '';
@@ -40,9 +40,27 @@ const getSelectedTutorialScene = (project) => (project?.scenes || [])[0] || null
 const getGuidedCreationHotspot = (project) => {
   const scene = getSelectedTutorialScene(project);
   if (!scene) return null;
-  return (scene.hotspots || []).find((hotspot) => hotspot.tutorialCreated)
-    || (scene.hotspots || []).find((hotspot) => hotspot.actionType === 'scene' || hotspot.targetSceneId)
+  const hotspot = (scene.hotspots || []).find((entry) => entry.tutorialCreated)
+    || (scene.hotspots || []).find((entry) => entry.actionType === 'scene' || entry.targetSceneId)
     || null;
+  return hotspot ? { ...hotspot, sceneId: scene.id } : null;
+};
+
+export const prepareProjectForGuidedCreation = (project) => {
+  if (!project) return project;
+  const nextProject = structuredClone(project);
+  (nextProject.scenes || []).forEach((scene) => {
+    (scene.hotspots || []).forEach((hotspot) => {
+      delete hotspot.tutorialCreated;
+    });
+    (scene.sceneObjects || []).forEach((object) => {
+      delete object.tutorialCreated;
+    });
+    (scene.visualEffectZones || []).forEach((zone) => {
+      delete zone.tutorialCreated;
+    });
+  });
+  return nextProject;
 };
 
 export const isTutorialStepComplete = (step, interactedSteps, project) => {
@@ -67,7 +85,11 @@ export const isTutorialStepComplete = (step, interactedSteps, project) => {
   if (rule.type === 'project-guided-hotspot-target-scene') {
     const hotspot = getGuidedCreationHotspot(project);
     const sceneIds = new Set((project?.scenes || []).map((scene) => scene.id));
-    return Boolean(hotspot?.targetSceneId && sceneIds.has(hotspot.targetSceneId));
+    return Boolean(
+      hotspot?.targetSceneId
+      && sceneIds.has(hotspot.targetSceneId)
+      && hotspot.targetSceneId !== hotspot.sceneId,
+    );
   }
   if (rule.type === 'project-scene-field-not') {
     const scene = getSelectedTutorialScene(project);

@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
   Copy,
   Download,
   Pause,
@@ -12,10 +16,6 @@ import {
   Trash2,
 } from 'lucide-react';
 import { uid } from '../data/projectData';
-import {
-  CHARACTER_RIG_POINT_DEFINITIONS,
-  CHARACTER_RIG_POINT_GROUPS,
-} from '../utils/rpg3dCharacterRig.js';
 import StuntCharacter3DPreview from './StuntCharacter3DPreview';
 import '../styles/stunt-animation.css';
 
@@ -31,145 +31,170 @@ const clampMovementCount = (value) => Math.round(clamp(value, MIN_MOVEMENT_COUNT
 const MOTION_POSE_FIELDS = [
   { id: 'rootX', label: 'X', min: 8, max: 92, step: 1 },
   { id: 'rootY', label: 'Y', min: 24, max: 86, step: 1 },
-  { id: 'bodyTilt', label: 'Corps', min: -140, max: 420, step: 1 },
+  { id: 'bodyTilt', label: 'Corps', min: -420, max: 420, step: 1 },
   { id: 'bodyYaw', label: 'Tour Y', min: -180, max: 180, step: 1 },
-  { id: 'bodyCurl', label: 'Courbe', min: -55, max: 82, step: 1 },
+  { id: 'bodyCurl', label: 'Courbe', min: -35, max: 95, step: 1 },
   { id: 'headTilt', label: 'Tete', min: -55, max: 55, step: 1 },
-  { id: 'leftArm', label: 'Bras G', min: -125, max: 125, step: 1 },
-  { id: 'leftForearm', label: 'Avant G', min: -105, max: 105, step: 1 },
-  { id: 'rightArm', label: 'Bras D', min: -125, max: 125, step: 1 },
-  { id: 'rightForearm', label: 'Avant D', min: -105, max: 105, step: 1 },
-  { id: 'leftLeg', label: 'Jambe G', min: -98, max: 98, step: 1 },
-  { id: 'leftShin', label: 'Tibia G', min: -105, max: 105, step: 1 },
-  { id: 'rightLeg', label: 'Jambe D', min: -98, max: 98, step: 1 },
-  { id: 'rightShin', label: 'Tibia D', min: -105, max: 105, step: 1 },
+  { id: 'leftArm', label: 'Bras G', min: -96, max: 96, step: 1 },
+  { id: 'leftForearm', label: 'Avant G', min: -118, max: 0, step: 1 },
+  { id: 'rightArm', label: 'Bras D', min: -96, max: 96, step: 1 },
+  { id: 'rightForearm', label: 'Avant D', min: 0, max: 118, step: 1 },
+  { id: 'leftLeg', label: 'Jambe G', min: -76, max: 76, step: 1 },
+  { id: 'leftShin', label: 'Tibia G', min: -96, max: 0, step: 1 },
+  { id: 'rightLeg', label: 'Jambe D', min: -76, max: 76, step: 1 },
+  { id: 'rightShin', label: 'Tibia D', min: 0, max: 96, step: 1 },
 ];
 
 const ROTATION_POSE_FIELDS = [
   { id: 'bodyTwist', label: 'Torse Y', min: -55, max: 55, step: 1 },
+  { id: 'bodyRoll', label: 'Torse Z', min: -70, max: 70, step: 1 },
+  { id: 'lowerBodyTwist', label: 'Bas Y', min: -70, max: 70, step: 1 },
+  { id: 'lowerBodyRoll', label: 'Bas Z', min: -70, max: 70, step: 1 },
+  { id: 'shoulderRoll', label: 'Epaules Z', min: -45, max: 45, step: 1 },
   { id: 'headYaw', label: 'Tete Y', min: -60, max: 60, step: 1 },
-  { id: 'leftArmSide', label: 'Bras G Y', min: -70, max: 70, step: 1 },
-  { id: 'leftForearmSide', label: 'Avant G Y', min: -75, max: 75, step: 1 },
-  { id: 'rightArmSide', label: 'Bras D Y', min: -70, max: 70, step: 1 },
-  { id: 'rightForearmSide', label: 'Avant D Y', min: -75, max: 75, step: 1 },
-  { id: 'leftLegSide', label: 'Jambe G Y', min: -42, max: 42, step: 1 },
-  { id: 'leftShinSide', label: 'Tibia G Y', min: -36, max: 36, step: 1 },
-  { id: 'rightLegSide', label: 'Jambe D Y', min: -42, max: 42, step: 1 },
-  { id: 'rightShinSide', label: 'Tibia D Y', min: -36, max: 36, step: 1 },
+  { id: 'leftArmSide', label: 'Bras G Y', min: -56, max: 56, step: 1 },
+  { id: 'leftForearmSide', label: 'Avant G Y', min: -64, max: 64, step: 1 },
+  { id: 'rightArmSide', label: 'Bras D Y', min: -56, max: 56, step: 1 },
+  { id: 'rightForearmSide', label: 'Avant D Y', min: -64, max: 64, step: 1 },
+  { id: 'leftLegSide', label: 'Jambe G Y', min: -32, max: 32, step: 1 },
+  { id: 'leftShinSide', label: 'Tibia G Y', min: -24, max: 24, step: 1 },
+  { id: 'rightLegSide', label: 'Jambe D Y', min: -32, max: 32, step: 1 },
+  { id: 'rightShinSide', label: 'Tibia D Y', min: -24, max: 24, step: 1 },
 ];
 
 const POSE_FIELDS = [...MOTION_POSE_FIELDS, ...ROTATION_POSE_FIELDS];
 const POSE_FIELD_CONFIG_BY_ID = new Map(POSE_FIELDS.map((field) => [field.id, field]));
-const BODY_RIG_POINTS = CHARACTER_RIG_POINT_DEFINITIONS
-  .filter((point) => point.group === CHARACTER_RIG_POINT_GROUPS.body);
+const WHOLE_BODY_ROTATION_STEP = 15;
+const WHOLE_BODY_TRANSLATION_STEP = 4;
 
-const JOINT_FIELD_MAP = {
-  mouth: ['headTilt', 'headYaw'],
-  neck: ['bodyTilt', 'bodyCurl', 'bodyYaw', 'bodyTwist'],
-  'left-shoulder': ['bodyTilt', 'bodyCurl', 'bodyYaw', 'bodyTwist'],
-  'right-shoulder': ['bodyTilt', 'bodyCurl', 'bodyYaw', 'bodyTwist'],
-  'left-elbow': ['leftArm', 'leftArmSide'],
-  'left-hand': ['leftForearm', 'leftForearmSide'],
-  'right-elbow': ['rightArm', 'rightArmSide'],
-  'right-hand': ['rightForearm', 'rightForearmSide'],
-  'lower-belly': ['rootX', 'rootY', 'bodyYaw'],
-  'left-groin-fold': ['leftLeg', 'leftLegSide'],
-  'right-groin-fold': ['rightLeg', 'rightLegSide'],
-  'left-knee': ['leftLeg', 'leftLegSide'],
-  'left-ankle': ['leftShin', 'leftShinSide'],
-  'left-foot': ['leftShin', 'leftShinSide'],
-  'right-knee': ['rightLeg', 'rightLegSide'],
-  'right-ankle': ['rightShin', 'rightShinSide'],
-  'right-foot': ['rightShin', 'rightShinSide'],
+const WHOLE_BODY_ROTATION_BUTTONS = [
+  {
+    id: 'body-forward',
+    label: 'Avant',
+    title: 'Pivoter tout le corps en avant',
+    field: 'bodyTilt',
+    delta: WHOLE_BODY_ROTATION_STEP,
+    Icon: ArrowUp,
+  },
+  {
+    id: 'body-back',
+    label: 'Arriere',
+    title: 'Pivoter tout le corps en arriere',
+    field: 'bodyTilt',
+    delta: -WHOLE_BODY_ROTATION_STEP,
+    Icon: ArrowDown,
+  },
+  {
+    id: 'body-left',
+    label: 'Gauche',
+    title: 'Tourner tout le corps a gauche',
+    field: 'bodyYaw',
+    delta: -WHOLE_BODY_ROTATION_STEP,
+    Icon: ArrowLeft,
+  },
+  {
+    id: 'body-right',
+    label: 'Droite',
+    title: 'Tourner tout le corps a droite',
+    field: 'bodyYaw',
+    delta: WHOLE_BODY_ROTATION_STEP,
+    Icon: ArrowRight,
+  },
+];
+
+const WHOLE_BODY_TRANSLATION_BUTTONS = [
+  {
+    id: 'body-move-up',
+    label: 'Monter',
+    title: 'Faire monter le personnage',
+    field: 'rootY',
+    delta: -WHOLE_BODY_TRANSLATION_STEP,
+    Icon: ArrowUp,
+  },
+  {
+    id: 'body-move-down',
+    label: 'Descendre',
+    title: 'Faire descendre le personnage',
+    field: 'rootY',
+    delta: WHOLE_BODY_TRANSLATION_STEP,
+    Icon: ArrowDown,
+  },
+  {
+    id: 'body-move-left',
+    label: 'Gauche',
+    title: 'Decaler le personnage a gauche',
+    field: 'rootX',
+    delta: -WHOLE_BODY_TRANSLATION_STEP,
+    Icon: ArrowLeft,
+  },
+  {
+    id: 'body-move-right',
+    label: 'Droite',
+    title: 'Decaler le personnage a droite',
+    field: 'rootX',
+    delta: WHOLE_BODY_TRANSLATION_STEP,
+    Icon: ArrowRight,
+  },
+];
+
+const LEG_KNEE_MAX_BEND = 96;
+const LEG_HIP_STRAIGHT_LIMIT = 24;
+const LEG_HIP_EXTREME_MIN_BEND = 58;
+const LEG_SHIN_SIDE_LIMIT = 8;
+const ARM_ELBOW_MAX_BEND = 118;
+const ARM_SHOULDER_STRAIGHT_LIMIT = 62;
+const ARM_SHOULDER_EXTREME_MIN_BEND = 22;
+const ARM_FOREARM_SIDE_LIMIT = 18;
+
+const hasOwn = (source, field) => Object.prototype.hasOwnProperty.call(source, field);
+const isArmLowerField = (field) => field === 'leftForearm' || field === 'rightForearm';
+const isLegLowerField = (field) => field === 'leftShin' || field === 'rightShin';
+
+const getArmBendSign = (field, fallback = 1) => {
+  if (field === 'leftForearm') return -1;
+  if (field === 'rightForearm') return 1;
+  return fallback >= 0 ? 1 : -1;
 };
 
-const BONE_ROTATION_FIELD_MAP = {
-  mouth: ['headYaw'],
-  neck: ['bodyYaw', 'bodyTwist'],
-  'left-shoulder': ['bodyYaw', 'bodyTwist'],
-  'right-shoulder': ['bodyYaw', 'bodyTwist'],
-  'left-elbow': ['leftArmSide'],
-  'left-hand': ['leftForearmSide'],
-  'right-elbow': ['rightArmSide'],
-  'right-hand': ['rightForearmSide'],
-  'lower-belly': ['bodyYaw'],
-  'left-groin-fold': ['leftLegSide'],
-  'right-groin-fold': ['rightLegSide'],
-  'left-knee': ['leftLegSide'],
-  'left-ankle': ['leftShinSide'],
-  'left-foot': ['leftShinSide'],
-  'right-knee': ['rightLegSide'],
-  'right-ankle': ['rightShinSide'],
-  'right-foot': ['rightShinSide'],
+const getLegBendSign = (field, fallback = 1) => {
+  if (field === 'leftShin') return -1;
+  if (field === 'rightShin') return 1;
+  return fallback >= 0 ? 1 : -1;
 };
 
-const PROFILE_JOINT_DRAG_FIELDS = {
-  mouth: { headTilt: { x: 0.7, y: -0.32 } },
-  neck: { bodyTilt: { x: 0.62, y: -0.28 } },
-  'left-shoulder': { bodyTilt: { x: 0.62, y: -0.28 } },
-  'right-shoulder': { bodyTilt: { x: 0.62, y: -0.28 } },
-  'left-elbow': { leftArm: { x: 0.72, y: -0.32 } },
-  'left-hand': { leftForearm: { x: 0.72, y: -0.32 } },
-  'right-elbow': { rightArm: { x: 0.72, y: -0.32 } },
-  'right-hand': { rightForearm: { x: 0.72, y: -0.32 } },
-  'lower-belly': { rootX: { x: 0.12 }, rootY: { y: 0.12 } },
-  'left-groin-fold': { leftLeg: { x: 0.64, y: -0.28 } },
-  'right-groin-fold': { rightLeg: { x: 0.64, y: -0.28 } },
-  'left-knee': { leftLeg: { x: 0.64, y: -0.28 } },
-  'left-ankle': { leftShin: { x: 0.64, y: -0.28 } },
-  'left-foot': { leftShin: { x: 0.64, y: -0.28 } },
-  'right-knee': { rightLeg: { x: 0.64, y: -0.28 } },
-  'right-ankle': { rightShin: { x: 0.64, y: -0.28 } },
-  'right-foot': { rightShin: { x: 0.64, y: -0.28 } },
+const getRequiredArmElbowBend = (upperArmValue = 0) => {
+  const upperMagnitude = Math.abs(Number(upperArmValue) || 0);
+  const excess = upperMagnitude - ARM_SHOULDER_STRAIGHT_LIMIT;
+  if (excess <= 0) return 0;
+  const maxArmSwing = POSE_FIELD_CONFIG_BY_ID.get('leftArm')?.max || 96;
+  const denominator = Math.max(1, maxArmSwing - ARM_SHOULDER_STRAIGHT_LIMIT);
+  return clamp((excess / denominator) * ARM_SHOULDER_EXTREME_MIN_BEND, 0, ARM_SHOULDER_EXTREME_MIN_BEND);
 };
 
-const FRONT_JOINT_DRAG_FIELDS = {
-  mouth: { headYaw: { x: 0.68 }, headTilt: { y: -0.34 } },
-  neck: { bodyTwist: { x: 0.52 }, bodyCurl: { y: -0.22 } },
-  'left-shoulder': { bodyTwist: { x: 0.52 }, bodyCurl: { y: -0.22 } },
-  'right-shoulder': { bodyTwist: { x: 0.52 }, bodyCurl: { y: -0.22 } },
-  'left-elbow': { leftArmSide: { x: 0.72 }, leftArm: { y: -0.34 } },
-  'left-hand': { leftForearmSide: { x: 0.72 }, leftForearm: { y: -0.34 } },
-  'right-elbow': { rightArmSide: { x: 0.72 }, rightArm: { y: -0.34 } },
-  'right-hand': { rightForearmSide: { x: 0.72 }, rightForearm: { y: -0.34 } },
-  'lower-belly': { rootX: { x: 0.12 }, rootY: { y: 0.12 }, bodyYaw: { x: 0.24 } },
-  'left-groin-fold': { leftLegSide: { x: 0.62 }, leftLeg: { y: -0.28 } },
-  'right-groin-fold': { rightLegSide: { x: 0.62 }, rightLeg: { y: -0.28 } },
-  'left-knee': { leftLegSide: { x: 0.62 }, leftLeg: { y: -0.28 } },
-  'left-ankle': { leftShinSide: { x: 0.62 }, leftShin: { y: -0.28 } },
-  'left-foot': { leftShinSide: { x: 0.62 }, leftShin: { y: -0.28 } },
-  'right-knee': { rightLegSide: { x: 0.62 }, rightLeg: { y: -0.28 } },
-  'right-ankle': { rightShinSide: { x: 0.62 }, rightShin: { y: -0.28 } },
-  'right-foot': { rightShinSide: { x: 0.62 }, rightShin: { y: -0.28 } },
+const clampArmElbowBend = (field, value, upperArmValue = 0) => {
+  if (!isArmLowerField(field)) return value;
+  const sign = getArmBendSign(field);
+  const minBend = getRequiredArmElbowBend(upperArmValue);
+  const magnitude = clamp(Math.abs(Number(value) || 0), minBend, ARM_ELBOW_MAX_BEND);
+  return sign * magnitude;
 };
 
-const BACK_VIEW_ROTATION_FIELDS = new Set([
-  'bodyYaw',
-  'bodyTwist',
-  'headYaw',
-  'leftArmSide',
-  'leftForearmSide',
-  'rightArmSide',
-  'rightForearmSide',
-  'leftLegSide',
-  'leftShinSide',
-  'rightLegSide',
-  'rightShinSide',
-]);
-
-const getJointDragFields = (jointId, editView) => {
-  const fields = (editView === 'profile' ? PROFILE_JOINT_DRAG_FIELDS : FRONT_JOINT_DRAG_FIELDS)[jointId];
-  if (!fields || editView !== 'back') return fields;
-  return Object.entries(fields).reduce((next, [field, config]) => {
-    next[field] = {
-      ...config,
-      x: BACK_VIEW_ROTATION_FIELDS.has(field) ? -(Number(config.x) || 0) : config.x,
-    };
-    return next;
-  }, {});
+const getRequiredLegKneeBend = (upperLegValue = 0) => {
+  const upperMagnitude = Math.abs(Number(upperLegValue) || 0);
+  const excess = upperMagnitude - LEG_HIP_STRAIGHT_LIMIT;
+  if (excess <= 0) return 0;
+  const maxLegSwing = POSE_FIELD_CONFIG_BY_ID.get('leftLeg')?.max || 76;
+  const denominator = Math.max(1, maxLegSwing - LEG_HIP_STRAIGHT_LIMIT);
+  return clamp((excess / denominator) * LEG_HIP_EXTREME_MIN_BEND, 0, LEG_HIP_EXTREME_MIN_BEND);
 };
 
-const JOINT_LABELS = Object.fromEntries(BODY_RIG_POINTS.map((point) => [point.id, point.label]));
+const clampLegKneeBend = (field, value, upperLegValue = 0) => {
+  if (!isLegLowerField(field)) return value;
+  const sign = getLegBendSign(field);
+  const minBend = getRequiredLegKneeBend(upperLegValue);
+  const magnitude = clamp(Math.abs(Number(value) || 0), minBend, LEG_KNEE_MAX_BEND);
+  return sign * magnitude;
+};
 
 const BASE_POSE = {
   rootX: 22,
@@ -178,6 +203,10 @@ const BASE_POSE = {
   bodyYaw: 0,
   bodyCurl: 0,
   bodyTwist: 0,
+  bodyRoll: 0,
+  lowerBodyTwist: 0,
+  lowerBodyRoll: 0,
+  shoulderRoll: 0,
   headTilt: 0,
   headYaw: 0,
   leftArm: 24,
@@ -204,10 +233,75 @@ const clampPoseFieldValue = (field, value) => {
   return clamp(value, config.min, config.max);
 };
 
-const clampPoseFields = (source = {}) => POSE_FIELDS.reduce((next, field) => ({
-  ...next,
-  [field.id]: clampPoseFieldValue(field.id, source[field.id] ?? BASE_POSE[field.id] ?? 0),
-}), {});
+const normalizeAnatomicalPoseUpdates = (updates = {}, keyframe = {}) => {
+  const next = { ...updates };
+  const leftArmValue = Number(hasOwn(next, 'leftArm') ? next.leftArm : keyframe.leftArm) || 0;
+  const rightArmValue = Number(hasOwn(next, 'rightArm') ? next.rightArm : keyframe.rightArm) || 0;
+  if (hasOwn(next, 'leftArm') || hasOwn(next, 'leftForearm')) {
+    next.leftForearm = clampArmElbowBend(
+      'leftForearm',
+      hasOwn(next, 'leftForearm') ? next.leftForearm : keyframe.leftForearm,
+      leftArmValue
+    );
+  }
+  if (hasOwn(next, 'rightArm') || hasOwn(next, 'rightForearm')) {
+    next.rightForearm = clampArmElbowBend(
+      'rightForearm',
+      hasOwn(next, 'rightForearm') ? next.rightForearm : keyframe.rightForearm,
+      rightArmValue
+    );
+  }
+  const leftLegValue = Number(hasOwn(next, 'leftLeg') ? next.leftLeg : keyframe.leftLeg) || 0;
+  const rightLegValue = Number(hasOwn(next, 'rightLeg') ? next.rightLeg : keyframe.rightLeg) || 0;
+  if (hasOwn(next, 'leftLeg') || hasOwn(next, 'leftShin')) {
+    next.leftShin = clampLegKneeBend(
+      'leftShin',
+      hasOwn(next, 'leftShin') ? next.leftShin : keyframe.leftShin,
+      leftLegValue
+    );
+  }
+  if (hasOwn(next, 'rightLeg') || hasOwn(next, 'rightShin')) {
+    next.rightShin = clampLegKneeBend(
+      'rightShin',
+      hasOwn(next, 'rightShin') ? next.rightShin : keyframe.rightShin,
+      rightLegValue
+    );
+  }
+
+  [
+    ['leftArmSide', 'leftForearmSide'],
+    ['rightArmSide', 'rightForearmSide'],
+  ].forEach(([upperField, lowerField]) => {
+    if (!hasOwn(next, upperField) && !hasOwn(next, lowerField)) return;
+    const upperSide = Number(hasOwn(next, upperField) ? next[upperField] : keyframe[upperField]) || 0;
+    const lowerSide = Number(hasOwn(next, lowerField) ? next[lowerField] : keyframe[lowerField]) || 0;
+    next[lowerField] = clamp(lowerSide, upperSide - ARM_FOREARM_SIDE_LIMIT, upperSide + ARM_FOREARM_SIDE_LIMIT);
+  });
+
+  [
+    ['leftLegSide', 'leftShinSide'],
+    ['rightLegSide', 'rightShinSide'],
+  ].forEach(([upperField, lowerField]) => {
+    if (!hasOwn(next, upperField) && !hasOwn(next, lowerField)) return;
+    const upperSide = Number(hasOwn(next, upperField) ? next[upperField] : keyframe[upperField]) || 0;
+    const lowerSide = Number(hasOwn(next, lowerField) ? next[lowerField] : keyframe[lowerField]) || 0;
+    next[lowerField] = clamp(lowerSide, upperSide - LEG_SHIN_SIDE_LIMIT, upperSide + LEG_SHIN_SIDE_LIMIT);
+  });
+
+  return next;
+};
+
+const clampPoseFields = (source = {}) => {
+  const preliminary = POSE_FIELDS.reduce((next, field) => ({
+    ...next,
+    [field.id]: clampPoseFieldValue(field.id, source[field.id] ?? BASE_POSE[field.id] ?? 0),
+  }), {});
+  const anatomical = normalizeAnatomicalPoseUpdates(preliminary, BASE_POSE);
+  return POSE_FIELDS.reduce((next, field) => ({
+    ...next,
+    [field.id]: clampPoseFieldValue(field.id, anatomical[field.id] ?? BASE_POSE[field.id] ?? 0),
+  }), {});
+};
 
 const pose = (time, label, overrides = {}) => ({
   id: makeLocalId('pose'),
@@ -384,98 +478,6 @@ const createKeyframesForMovementCount = (keyframes = [], requestedCount = 1) => 
   });
 };
 
-const pointFrom = (origin, length, angleDeg, scale = 1) => {
-  const rad = (angleDeg * Math.PI) / 180;
-  return {
-    x: origin.x + (Math.sin(rad) * length * scale),
-    y: origin.y + (Math.cos(rad) * length * scale),
-  };
-};
-
-const angleBetweenPoints = (from, to) => {
-  if (!from || !to) return 0;
-  return (Math.atan2(to.x - from.x, to.y - from.y) * 180) / Math.PI;
-};
-
-const normalizeSignedAngle = (value) => {
-  let next = Number(value) || 0;
-  while (next > 180) next -= 360;
-  while (next < -180) next += 360;
-  return next;
-};
-
-const nearestAngle = (value, current = 0) => {
-  let next = Number(value) || 0;
-  const base = Number(current) || 0;
-  while (next - base > 180) next -= 360;
-  while (next - base < -180) next += 360;
-  return next;
-};
-
-const buildFigure = (currentPose) => {
-  const scale = 1;
-  const hip = { x: currentPose.rootX, y: currentPose.rootY };
-  const shoulder = pointFrom(hip, 17, 180 + currentPose.bodyTilt + (currentPose.bodyCurl * 0.18), scale);
-  const chest = pointFrom(hip, 9, 180 + currentPose.bodyTilt + (currentPose.bodyCurl * 0.25), scale);
-  const neck = pointFrom(shoulder, 4, 180 + currentPose.bodyTilt + (currentPose.headTilt * 0.16), scale);
-  const head = pointFrom(neck, 5, 180 + currentPose.bodyTilt + (currentPose.headTilt * 0.42), scale);
-  const leftElbow = pointFrom(shoulder, 10, currentPose.leftArm, scale);
-  const leftHand = pointFrom(leftElbow, 9, currentPose.leftArm + currentPose.leftForearm, scale);
-  const rightElbow = pointFrom(shoulder, 10, currentPose.rightArm, scale);
-  const rightHand = pointFrom(rightElbow, 9, currentPose.rightArm + currentPose.rightForearm, scale);
-  const leftKnee = pointFrom(hip, 12, currentPose.leftLeg, scale);
-  const leftFoot = pointFrom(leftKnee, 12, currentPose.leftLeg + currentPose.leftShin, scale);
-  const rightKnee = pointFrom(hip, 12, currentPose.rightLeg, scale);
-  const rightFoot = pointFrom(rightKnee, 12, currentPose.rightLeg + currentPose.rightShin, scale);
-
-  return {
-    hip,
-    chest,
-    shoulder,
-    neck,
-    head,
-    leftElbow,
-    leftHand,
-    rightElbow,
-    rightHand,
-    leftKnee,
-    leftFoot,
-    rightKnee,
-    rightFoot,
-  };
-};
-
-const line = (from, to, className, width = 3.2) => (
-  <line
-    className={className}
-    x1={from.x}
-    y1={from.y}
-    x2={to.x}
-    y2={to.y}
-    strokeWidth={width}
-    strokeLinecap="round"
-  />
-);
-
-const buildMotionPath = (keyframes) => {
-  const points = sortKeyframes(keyframes).map((keyframe) => `${rounded(keyframe.rootX, 1)},${rounded(keyframe.rootY, 1)}`);
-  return points.length ? `M ${points.join(' L ')}` : '';
-};
-
-const buildJointHandles = (figure) => [
-  { id: 'hip', point: figure.hip, main: true },
-  { id: 'shoulder', point: figure.shoulder, main: true },
-  { id: 'head', point: figure.head, head: true },
-  { id: 'leftElbow', point: figure.leftElbow },
-  { id: 'rightElbow', point: figure.rightElbow },
-  { id: 'leftKnee', point: figure.leftKnee },
-  { id: 'rightKnee', point: figure.rightKnee },
-  { id: 'leftHand', point: figure.leftHand, end: true },
-  { id: 'rightHand', point: figure.rightHand, end: true },
-  { id: 'leftFoot', point: figure.leftFoot, end: true },
-  { id: 'rightFoot', point: figure.rightFoot, end: true },
-];
-
 const makeRigFrame = (keyframe, durationMs) => ({
   timeMs: Math.round((keyframe.time / 100) * durationMs),
   root: {
@@ -486,15 +488,17 @@ const makeRigFrame = (keyframe, durationMs) => ({
   },
   bones: {
     Hips: { rotateY: rounded(keyframe.bodyYaw * 0.25, 2), rotateZ: rounded(keyframe.bodyTilt * 0.55, 2) },
-    Spine: { rotateX: rounded(keyframe.bodyCurl, 2), rotateY: rounded(keyframe.bodyTwist, 2), rotateZ: rounded(keyframe.bodyTilt * 0.3, 2) },
+    Spine: { rotateX: rounded(keyframe.bodyCurl, 2), rotateY: rounded(keyframe.bodyTwist, 2), rotateZ: rounded(keyframe.bodyRoll, 2) },
+    Shoulders: { rotateZ: rounded(keyframe.shoulderRoll || 0, 2) },
     Head: { rotateX: rounded(keyframe.headTilt, 2), rotateY: rounded(keyframe.headYaw, 2) },
     LeftUpperArm: { rotateX: rounded(keyframe.leftArm, 2), rotateY: rounded(keyframe.leftArmSide, 2) },
     LeftLowerArm: { rotateX: rounded(keyframe.leftForearm, 2), rotateY: rounded(keyframe.leftForearmSide, 2) },
     RightUpperArm: { rotateX: rounded(keyframe.rightArm, 2), rotateY: rounded(keyframe.rightArmSide, 2) },
     RightLowerArm: { rotateX: rounded(keyframe.rightForearm, 2), rotateY: rounded(keyframe.rightForearmSide, 2) },
-    LeftUpperLeg: { rotateX: rounded(keyframe.leftLeg, 2), rotateY: rounded(keyframe.leftLegSide, 2) },
+    LowerBody: { rotateY: rounded(keyframe.lowerBodyTwist || 0, 2), rotateZ: rounded(keyframe.lowerBodyRoll || 0, 2) },
+    LeftUpperLeg: { rotateX: rounded(keyframe.leftLeg, 2), rotateY: rounded((keyframe.lowerBodyTwist || 0) + keyframe.leftLegSide, 2), rotateZ: rounded(keyframe.lowerBodyRoll || 0, 2) },
     LeftLowerLeg: { rotateX: rounded(keyframe.leftShin, 2), rotateY: rounded(keyframe.leftShinSide, 2) },
-    RightUpperLeg: { rotateX: rounded(keyframe.rightLeg, 2), rotateY: rounded(keyframe.rightLegSide, 2) },
+    RightUpperLeg: { rotateX: rounded(keyframe.rightLeg, 2), rotateY: rounded((keyframe.lowerBodyTwist || 0) + keyframe.rightLegSide, 2), rotateZ: rounded(keyframe.lowerBodyRoll || 0, 2) },
     RightLowerLeg: { rotateX: rounded(keyframe.rightShin, 2), rotateY: rounded(keyframe.rightShinSide, 2) },
   },
 });
@@ -517,8 +521,8 @@ const buildExportPayload = (clip, characters = []) => {
   };
 };
 
-const FieldRange = ({ field, value, onChange, active = false }) => (
-  <label className={`stunt-range ${active ? 'active' : ''}`}>
+const FieldRange = ({ field, value, onChange }) => (
+  <label className="stunt-range">
     <span>
       {field.label}
       <strong>{Math.round(Number(value) || 0)}</strong>
@@ -547,7 +551,6 @@ export default function StuntAnimationTab({ project, patchProject }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('');
-  const [activeJointId, setActiveJointId] = useState('');
   const [movementCountDraft, setMovementCountDraft] = useState('');
   const playbackRef = useRef({ start: 0, progress: 0, frame: 0 });
 
@@ -576,10 +579,6 @@ export default function StuntAnimationTab({ project, patchProject }) {
     () => selectedClip ? interpolatePose(selectedClip.keyframes, progress) : BASE_POSE,
     [progress, selectedClip]
   );
-  const activeRotationFields = useMemo(() => {
-    const ids = activeJointId ? BONE_ROTATION_FIELD_MAP[activeJointId] || [] : [];
-    return ROTATION_POSE_FIELDS.filter((field) => ids.includes(field.id));
-  }, [activeJointId]);
   const exportPayload = useMemo(
     () => selectedClip ? buildExportPayload(selectedClip, characters) : null,
     [characters, selectedClip]
@@ -740,7 +739,8 @@ export default function StuntAnimationTab({ project, patchProject }) {
     patchSelectedClip((clip) => {
       const keyframe = (clip.keyframes || []).find((entry) => entry.id === selectedKeyframe.id);
       if (!keyframe) return;
-      Object.entries(updates).forEach(([field, value]) => {
+      const safeUpdates = normalizeAnatomicalPoseUpdates(updates, keyframe);
+      Object.entries(safeUpdates).forEach(([field, value]) => {
         if (field === 'label') {
           keyframe.label = value;
           normalizedUpdates.label = value;
@@ -757,6 +757,7 @@ export default function StuntAnimationTab({ project, patchProject }) {
         keyframe[field] = nextValue;
         normalizedUpdates[field] = nextValue;
       });
+      Object.assign(keyframe, clampPoseFields(keyframe));
       clip.keyframes = sortKeyframes(clip.keyframes);
     }, { rememberHistory: false });
     if (Object.prototype.hasOwnProperty.call(normalizedUpdates, 'time')) {
@@ -769,32 +770,43 @@ export default function StuntAnimationTab({ project, patchProject }) {
     patchKeyframeFields({ [field]: value });
   }, [patchKeyframeFields]);
 
-  const activateJoint = useCallback((jointId) => {
-    if (!selectedKeyframe) return;
+  const rotateWholeBody = useCallback((button) => {
+    if (!selectedKeyframe || !button?.field) return;
+    const currentValue = Number(selectedKeyframe[button.field]) || 0;
     setIsPlaying(false);
-    setActiveJointId(jointId);
-    setProgress(Number(selectedKeyframe.time) || 0);
-    playbackRef.current.progress = Number(selectedKeyframe.time) || 0;
-    setStatus(`${JOINT_LABELS[jointId] || 'Os'} selectionne`);
+    patchKeyframeFields({
+      [button.field]: currentValue + button.delta,
+    });
+    setStatus(button.label ? `Corps entier ${button.label.toLowerCase()}` : 'Corps entier ajuste');
+  }, [patchKeyframeFields, selectedKeyframe]);
+
+  const moveWholeBody = useCallback((button) => {
+    if (!selectedKeyframe || !button?.field) return;
+    const currentValue = Number(selectedKeyframe[button.field]) || 0;
+    setIsPlaying(false);
+    patchKeyframeFields({
+      [button.field]: currentValue + button.delta,
+    });
+    setStatus(button.label ? `Personnage ${button.label.toLowerCase()}` : 'Personnage deplace');
+  }, [patchKeyframeFields, selectedKeyframe]);
+
+  const selectRigMarker = useCallback((pointId, marker = null) => {
+    if (!selectedKeyframe) return;
+    const keyframeTime = Number(selectedKeyframe.time) || 0;
+    setIsPlaying(false);
+    setProgress(keyframeTime);
+    playbackRef.current.progress = keyframeTime;
+    setStatus(`${marker?.label || pointId || 'Pastille'} selectionnee`);
   }, [selectedKeyframe]);
 
-  const patchJointFromDrag = useCallback((jointId, movement = {}) => {
-    if (!selectedKeyframe) return;
-    const dragFields = getJointDragFields(jointId, 'front');
-    if (!dragFields) return;
-    const dx = Number(movement.dx) || 0;
-    const dy = Number(movement.dy) || 0;
-    const updates = {};
-    Object.entries(dragFields).forEach(([field, config]) => {
-      const scaleX = Number(config?.x) || 0;
-      const scaleY = Number(config?.y) || 0;
-      updates[field] = (Number(selectedKeyframe[field]) || 0) + (dx * scaleX) + (dy * scaleY);
-    });
+  const patchRigMarkerFromDrag = useCallback((pointId, updates = {}) => {
+    if (!selectedKeyframe || !updates || !Object.keys(updates).length) return;
+    setIsPlaying(false);
     patchKeyframeFields(updates);
   }, [patchKeyframeFields, selectedKeyframe]);
 
-  const finishJointDrag = useCallback((jointId) => {
-    setStatus(`${JOINT_LABELS[jointId] || 'Mouvement'} ajuste`);
+  const finishRigMarkerDrag = useCallback((pointId, marker = null) => {
+    setStatus(`${marker?.label || pointId || 'Pastille'} ajustee`);
   }, []);
 
   const addKeyframe = useCallback(() => {
@@ -967,10 +979,9 @@ export default function StuntAnimationTab({ project, patchProject }) {
           <StuntCharacter3DPreview
             pose={currentPose}
             keyframes={selectedClip.keyframes}
-            activeJointId={activeJointId}
-            onJointSelect={activateJoint}
-            onJointDrag={patchJointFromDrag}
-            onJointDragEnd={finishJointDrag}
+            onRigMarkerSelect={selectRigMarker}
+            onRigMarkerDrag={patchRigMarkerFromDrag}
+            onRigMarkerDragEnd={finishRigMarkerDrag}
           />
         </div>
 
@@ -1096,6 +1107,48 @@ export default function StuntAnimationTab({ project, patchProject }) {
                 <input type="number" min="0" max="100" step="1" value={Math.round(selectedKeyframe.time)} onChange={(event) => patchKeyframeField('time', event.target.value)} />
               </label>
             </div>
+            <div className="stunt-body-tool-grid">
+              <div className="stunt-body-rotation-panel" aria-label="Deplacement personnage">
+                <div className="stunt-body-rotation-head">
+                  <span>Position</span>
+                  <strong>X {Math.round(selectedKeyframe.rootX)} / Y {Math.round(selectedKeyframe.rootY)}</strong>
+                </div>
+                <div className="stunt-body-rotation-pad">
+                  {WHOLE_BODY_TRANSLATION_BUTTONS.map(({ Icon, ...button }) => (
+                    <button
+                      key={button.id}
+                      type="button"
+                      className={`secondary-action stunt-body-rotate-button stunt-body-move-button ${button.id}`}
+                      title={button.title}
+                      aria-label={button.title}
+                      onClick={() => moveWholeBody(button)}
+                    >
+                      <Icon aria-hidden="true" size={16} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="stunt-body-rotation-panel" aria-label="Rotation corps entier">
+                <div className="stunt-body-rotation-head">
+                  <span>Corps entier</span>
+                  <strong>{Math.round(selectedKeyframe.bodyTilt)}deg / {Math.round(selectedKeyframe.bodyYaw)}deg</strong>
+                </div>
+                <div className="stunt-body-rotation-pad">
+                  {WHOLE_BODY_ROTATION_BUTTONS.map(({ Icon, ...button }) => (
+                    <button
+                      key={button.id}
+                      type="button"
+                      className={`secondary-action stunt-body-rotate-button ${button.id}`}
+                      title={button.title}
+                      aria-label={button.title}
+                      onClick={() => rotateWholeBody(button)}
+                    >
+                      <Icon aria-hidden="true" size={16} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
             <div className="stunt-pose-controls">
               {MOTION_POSE_FIELDS.map((field) => (
                 <FieldRange
@@ -1103,29 +1156,25 @@ export default function StuntAnimationTab({ project, patchProject }) {
                   field={field}
                   value={selectedKeyframe[field.id]}
                   onChange={patchKeyframeField}
-                  active={(JOINT_FIELD_MAP[activeJointId] || []).includes(field.id)}
                 />
               ))}
             </div>
-            {activeRotationFields.length ? (
-              <div className="stunt-bone-rotation-panel">
-                <div className="stunt-bone-rotation-head">
-                  <span>Rotation os</span>
-                  <strong>{JOINT_LABELS[activeJointId]}</strong>
-                </div>
-                <div className="stunt-pose-controls">
-                  {activeRotationFields.map((field) => (
-                    <FieldRange
-                      key={field.id}
-                      field={field}
-                      value={selectedKeyframe[field.id]}
-                      onChange={patchKeyframeField}
-                      active={(JOINT_FIELD_MAP[activeJointId] || []).includes(field.id)}
-                    />
-                  ))}
-                </div>
+            <div className="stunt-bone-rotation-panel">
+              <div className="stunt-bone-rotation-head">
+                <span>Rotations</span>
+                <strong>Pose</strong>
               </div>
-            ) : null}
+              <div className="stunt-pose-controls">
+                {ROTATION_POSE_FIELDS.map((field) => (
+                  <FieldRange
+                    key={field.id}
+                    field={field}
+                    value={selectedKeyframe[field.id]}
+                    onChange={patchKeyframeField}
+                  />
+                ))}
+              </div>
+            </div>
           </>
         ) : null}
 

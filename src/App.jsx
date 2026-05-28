@@ -119,7 +119,11 @@ function ShellApp() {
     setShowAuthPanel(false);
   }, []);
 
-  const openProfileScreen = useCallback(() => {
+  const openProfileScreen = useCallback((options = {}) => {
+    const statusMessage = options && typeof options === 'object' && typeof options.statusMessage === 'string'
+      ? options.statusMessage
+      : '';
+    if (statusMessage) setSaveStatus(statusMessage);
     writeAppUiState({ screen: 'profile' });
     setScreen('profile');
   }, []);

@@ -1,3 +1,14 @@
+import {
+  CHARACTER_ANIMATION_SLOT_ORDER,
+  CHARACTER_ANIMATION_SLOTS,
+  getAnimationBaseSlotId,
+} from '../data/projectData3dAnimationSchema.js';
+
+export {
+  CHARACTER_ANIMATION_SLOTS,
+  getAnimationBaseSlotId,
+};
+
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 export const numberValue = (value, fallback, min, max) => {
   const normalized = typeof value === 'string' ? value.replace(',', '.') : value;
@@ -40,14 +51,6 @@ export const DECOR_FLOOR_MATERIAL_BRIGHTNESS = 0.55;
 export const INLINE_MODEL_DATA_MAX_BYTES = 24 * 1024 * 1024;
 export const LOCAL_FBX_ANIMATION_PREVIEW_MAX_BYTES = 192 * 1024 * 1024;
 export const LOCAL_FBX_AUTO_PREVIEW_MAX_BYTES = INLINE_MODEL_DATA_MAX_BYTES;
-
-export const CHARACTER_ANIMATION_SLOTS = [
-  { id: 'idle', label: 'Stand-by', importedLabel: 'Animation stand-by' },
-  { id: 'walk', label: 'Marche', importedLabel: 'Animation marche' },
-  { id: 'attack', label: 'Attaque', importedLabel: 'Animation attaque' },
-];
-const CHARACTER_ANIMATION_SLOT_ORDER = CHARACTER_ANIMATION_SLOTS.map(({ id }) => id);
-const CHARACTER_ANIMATION_SLOT_IDS = new Set(CHARACTER_ANIMATION_SLOT_ORDER);
 
 export const getCharacterMaterialBrightness = (model = {}) => numberValue(
   model.materialBrightness,
@@ -144,20 +147,6 @@ export const isHeavyLocalFbxAnimationAsset = (asset = {}) => (
 export const getAnimationSource = (animation = {}) => {
   if (String(animation.modelData || '').startsWith('data:')) return animation.modelData;
   return animation.modelUrl || animation.modelData || '';
-};
-
-const getAnimationSlotFromText = (value = '') => {
-  const text = String(value || '');
-  if (CHARACTER_ANIMATION_SLOT_IDS.has(text)) return text;
-  return CHARACTER_ANIMATION_SLOT_ORDER.find((slot) => text.startsWith(`${slot}__`)) || '';
-};
-
-export const getAnimationBaseSlotId = (animationKey = '', animation = {}) => {
-  const metadataSlot = getAnimationSlotFromText(animation?.animationSlot)
-    || getAnimationSlotFromText(animation?.slot)
-    || getAnimationSlotFromText(animation?.state);
-  if (metadataSlot) return metadataSlot;
-  return getAnimationSlotFromText(animationKey);
 };
 
 const compareAnimationEntries = (left, right) => {
@@ -257,7 +246,13 @@ export const getPreviewAnimationOptions = (slot = '') => {
 
 const getEquipmentSignature = (items = []) => (
   (Array.isArray(items) ? items : [])
-    .filter((item) => item?.type === 'weapon' || item?.type === 'shield' || item?.type === 'armor')
+    .filter((item) => (
+      item?.type === 'weapon'
+      || item?.type === 'shield'
+      || item?.type === 'armor'
+      || item?.type === 'helmet'
+      || item?.type === 'leggings'
+    ))
     .map((item) => [
       item.id || '',
       item.type || '',
@@ -267,6 +262,12 @@ const getEquipmentSignature = (items = []) => (
       item.weaponModelName || item.modelName || '',
       item.weaponModelScale || '',
       item.weaponModelSourceScale || '',
+      item.weaponModelWidth || '',
+      item.weaponModelHeight || '',
+      item.weaponModelDepth || '',
+      item.weaponModelSourceWidth || '',
+      item.weaponModelSourceHeight || '',
+      item.weaponModelSourceDepth || '',
       item.weaponModelRotationX || '',
       item.weaponModelRotationY || '',
       item.weaponModelRotationZ || '',

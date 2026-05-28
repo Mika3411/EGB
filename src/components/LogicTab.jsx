@@ -427,6 +427,235 @@ export default function LogicTab({
     );
   };
 
+  const renderConditionDetailFields = (rule, target, type) => {
+    const conditionType = rule.conditionType || 'has_item';
+
+    return (
+      <>
+        {['has_item', 'missing_item'].includes(conditionType) ? (
+          <div className="logic-flow-field">
+            <HelpLabel help="Objet vérifié dans l’inventaire du joueur pour savoir si la règle doit s’activer.">Objet testé</HelpLabel>
+            <select value={rule.itemId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+              draftRule.itemId = event.target.value;
+            })}>
+              <option value="">Choisir un objet</option>
+              {(project.items || []).map((item) => <option key={item.id} value={item.id}>{item.icon} {item.name}</option>)}
+            </select>
+          </div>
+        ) : null}
+
+        {conditionType === 'visited_scene' ? (
+          <div className="logic-flow-field">
+            <HelpLabel help="Scène qui doit avoir déjà été visitée pendant la partie.">Scène visitée</HelpLabel>
+            <select value={rule.conditionSceneId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+              draftRule.conditionSceneId = event.target.value;
+            })}>
+              <option value="">Choisir une scène</option>
+              {scenes.map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
+            </select>
+          </div>
+        ) : null}
+
+        {conditionType === 'completed_hotspot' ? (
+          <div className="logic-flow-field">
+            <HelpLabel help="Zone qui doit avoir déjà terminé son action au moins une fois.">Zone d’action franchie</HelpLabel>
+            <select value={rule.hotspotId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+              draftRule.hotspotId = event.target.value;
+            })}>
+              <option value="">Choisir une zone</option>
+              {allActionTargets.map(({ scene, target: candidate, type: candidateType }) => (
+                <option key={`${candidateType}-${candidate.id}`} value={candidate.id}>{getSceneLabel(scene.id)} - {candidateType === 'sceneObject' ? 'Image-zone: ' : ''}{candidate.name}</option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+
+        {conditionType === 'solved_enigma' ? (
+          <div className="logic-flow-field">
+            <HelpLabel help="Énigme qui doit avoir été réussie pendant la partie.">Énigme réussie</HelpLabel>
+            <select value={rule.conditionEnigmaId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+              draftRule.conditionEnigmaId = event.target.value;
+            })}>
+              <option value="">Choisir une énigme</option>
+              {(project.enigmas || []).map((enigma) => <option key={enigma.id} value={enigma.id}>{enigma.name}</option>)}
+            </select>
+          </div>
+        ) : null}
+
+        {conditionType === 'launched_cinematic' ? (
+          <div className="logic-flow-field">
+            <HelpLabel help="Cinématique qui doit avoir été lancée au moins une fois pendant la partie.">Cinématique lancée</HelpLabel>
+            <select value={rule.cinematicId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+              draftRule.cinematicId = event.target.value;
+            })}>
+              <option value="">N’importe quelle cinematic lancée</option>
+              {(project.cinematics || []).map((cinematic) => <option key={cinematic.id} value={cinematic.id}>{cinematic.name}</option>)}
+            </select>
+          </div>
+        ) : null}
+
+        {conditionType === 'completed_combination' ? (
+          <div className="logic-flow-field">
+            <HelpLabel help="Combinaison d’objets qui doit avoir été réalisée dans l’inventaire.">Combinaison réalisée</HelpLabel>
+            <select value={rule.combinationId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+              draftRule.combinationId = event.target.value;
+            })}>
+              <option value="">Choisir une combinaison</option>
+              {(project.combinations || []).map((combo) => {
+                const itemA = project.items.find((item) => item.id === combo.itemAId);
+                const itemB = project.items.find((item) => item.id === combo.itemBId);
+                const result = project.items.find((item) => item.id === combo.resultItemId);
+                return <option key={combo.id} value={combo.id}>{itemA?.name || 'Objet 1'} + {itemB?.name || 'Objet 2'} → {result?.name || 'Result'}</option>;
+              })}
+            </select>
+          </div>
+        ) : null}
+
+        {conditionType === 'chose_reply' ? (
+          <div className="logic-flow-field">
+            <HelpLabel help="Réponse de conversation qui doit avoir déjà été choisie pendant la partie.">Réponse choisie</HelpLabel>
+            <select value={rule.conditionReplyId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+              draftRule.conditionReplyId = event.target.value;
+            })}>
+              <option value="">Choisir une réponse</option>
+              {conversationReplies.map(({ scene, hotspot, node, reply }) => (
+                <option key={reply.id} value={reply.id}>{getSceneLabel(scene.id)} - {hotspot.name || 'Dialogue'} - {reply.label || node.text || 'Réponse'}</option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+
+        {conditionType === 'story_variable' ? (
+          <div className="logic-flow-field logic-flow-field-wide">
+            {renderStoryVariableFields({
+              variableKey: rule.conditionVariableKey,
+              operator: rule.conditionVariableOperator,
+              value: rule.conditionVariableValue,
+              onChange: (patch) => updateRule(target.id, type, rule.id, (draftRule) => {
+                if (Object.prototype.hasOwnProperty.call(patch, 'variableKey')) draftRule.conditionVariableKey = patch.variableKey;
+                if (Object.prototype.hasOwnProperty.call(patch, 'operator')) draftRule.conditionVariableOperator = patch.operator;
+                if (Object.prototype.hasOwnProperty.call(patch, 'value')) draftRule.conditionVariableValue = patch.value;
+              }),
+            })}
+          </div>
+        ) : null}
+
+        {conditionType === 'advanced' ? (
+          <div className="logic-flow-field logic-flow-field-wide">
+            <div className="conversation-advanced-condition-list">
+              <div className="conversation-advanced-condition-head">
+                <HelpLabel help="Choisis ET pour exiger toutes les conditions, ou OU pour accepter au moins une condition. Exemple: variable narrative >= 3 ET réponse choisie.">Combinaison</HelpLabel>
+                <select value={rule.advancedConditionMode || 'all'} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+                  draftRule.advancedConditionMode = event.target.value;
+                })}>
+                  <option value="all">Toutes les conditions (ET)</option>
+                  <option value="any">Au moins une condition (OU)</option>
+                </select>
+              </div>
+              {(rule.advancedConditions || []).map((condition, conditionIndex) => renderAdvancedConditionFields(condition, conditionIndex, rule, target, type))}
+              <button type="button" className="secondary-action compact" onClick={() => updateRule(target.id, type, rule.id, (draftRule) => {
+                if (!Array.isArray(draftRule.advancedConditions)) draftRule.advancedConditions = [];
+                draftRule.advancedConditions.push(makeAdvancedCondition());
+              })}>+ Condition</button>
+            </div>
+          </div>
+        ) : null}
+
+        {conditionType === 'hero_health_below' ? (
+          <div className="logic-flow-field">
+            <HelpLabel help="La règle s’active si les PV actuels du héros sont strictement inférieurs à ce seuil.">Seuil de PV</HelpLabel>
+            <input type="number" min="0" value={rule.heroHealthThreshold ?? 5} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+              draftRule.heroHealthThreshold = Number(event.target.value);
+            })} />
+          </div>
+        ) : null}
+
+        {conditionType === 'hero_mana_at_least' ? (
+          <div className="logic-flow-field">
+            <HelpLabel help="La règle s’active si la mana actuelle du héros atteint au moins ce seuil.">Mana requise</HelpLabel>
+            <input type="number" min="0" value={rule.heroManaThreshold ?? 1} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+              draftRule.heroManaThreshold = Number(event.target.value);
+            })} />
+          </div>
+        ) : null}
+
+        {conditionType === 'hero_skill_used' ? (
+          <div className="logic-flow-field">
+            <HelpLabel help="La règle s’active si le dernier jet héros utilisait cette compétence.">Compétence du dernier jet</HelpLabel>
+            <select value={rule.heroSkillId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+              draftRule.heroSkillId = event.target.value;
+            })}>
+              <option value="">Choisir une compétence</option>
+              {heroSkills.map((skill) => <option key={skill.id} value={skill.id}>{skill.name}</option>)}
+            </select>
+          </div>
+        ) : null}
+      </>
+    );
+  };
+
+  const renderActionTargetFields = (rule, target, type) => (
+      <>
+        {rule.actionType === 'scene' ? (
+        <div className="logic-flow-field">
+          <HelpLabel help="Scène ouverte si l’action déclenchée est un changement de scène.">Scène cible</HelpLabel>
+          <select data-tour="logic-target-scene" value={rule.targetSceneId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+            draftRule.targetSceneId = event.target.value;
+          })}>
+            <option value="">Choisir une scène</option>
+            {scenes.map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
+          </select>
+        </div>
+      ) : null}
+
+      {rule.actionType === 'cinematic' ? (
+        <div className="logic-flow-field">
+          <HelpLabel help="Cinématique lancée si l’action déclenchée est une cinématique.">Cinématique cible</HelpLabel>
+          <select data-tour="logic-target-cinematic" value={rule.targetCinematicId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+            draftRule.targetCinematicId = event.target.value;
+          })}>
+            <option value="">Choisir une cinématique</option>
+            {(project.cinematics || []).map((cinematic) => <option key={cinematic.id} value={cinematic.id}>{cinematic.name}</option>)}
+          </select>
+        </div>
+      ) : null}
+
+      {rule.actionType === 'block' ? (
+        <>
+          <div className="logic-flow-field">
+            <HelpLabel help="Bloc affiché, masque ou modifié quand cette règle réussit.">Bloc cible</HelpLabel>
+            <select value={rule.targetBlockId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+              draftRule.targetBlockId = event.target.value;
+            })}>
+              <option value="">Choisir un bloc</option>
+              {allBlockTargets.map(({ scene, target: block }) => (
+                <option key={block.id} value={block.id}>{getSceneLabel(scene.id)} - {block.name || block.blockLabel || 'Bloc'}</option>
+              ))}
+            </select>
+          </div>
+          <div className="logic-flow-field">
+            <HelpLabel help="Action appliquée au bloc cible.">Action bloc</HelpLabel>
+            <select value={rule.blockActionType || 'show'} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+              draftRule.blockActionType = event.target.value;
+            })}>
+              <option value="show">Afficher le bloc</option>
+              <option value="hide">Masquer le bloc</option>
+              <option value="update_text">Modifier le texte visible</option>
+            </select>
+          </div>
+          {rule.blockActionType === 'update_text' ? (
+            <div className="logic-flow-field logic-flow-field-wide">
+              <HelpLabel help="Nouveau texte visible du bloc cible. Selon le type, cela met à jour le texte, le bouton, le placeholder ou le titre du code.">Texte visible du bloc</HelpLabel>
+              <textarea value={rule.targetBlockText || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+                draftRule.targetBlockText = event.target.value;
+              })} />
+            </div>
+          ) : null}
+        </>
+      ) : null}
+    </>
+  );
+
   const updateSceneObject = (objectId, updater) => {
     updateScene((scene) => {
       const object = (scene.sceneObjects || []).find((entry) => entry.id === objectId);
@@ -662,334 +891,145 @@ export default function LogicTab({
                         </button>
                       </summary>
                       <div className="logic-rule-body">
-
-                      <div className="grid-two">
-                        <div>
+                        <div className="logic-rule-name-field">
                           <HelpLabel help="Nom interne pour reconnaître rapidement cette règle dans la liste compacte.">Nom de la règle</HelpLabel>
                           <input value={rule.name || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                             draftRule.name = event.target.value;
                           })} />
                         </div>
-                        <div>
-                          <HelpLabel help="Détermine quand cette règle remplace l’action normale dé la zone. La première règle qui correspond est utilisée.">Condition</HelpLabel>
-                          <select data-tour="logic-condition" value={rule.conditionType || 'has_item'} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
-                            draftRule.conditionType = event.target.value;
-                          })}>
-                            {getConditionOptions(rule).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                          </select>
-                        </div>
-                      </div>
 
-                      {['has_item', 'missing_item'].includes(rule.conditionType || 'has_item') ? (
-                        <>
-                          <HelpLabel help="Objet vérifié dans l’inventaire du joueur pour savoir si la règle doit s’activer.">Objet testé</HelpLabel>
-                          <select value={rule.itemId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
-                            draftRule.itemId = event.target.value;
-                          })}>
-                            <option value="">Choisir un objet</option>
-                            {(project.items || []).map((item) => <option key={item.id} value={item.id}>{item.icon} {item.name}</option>)}
-                          </select>
-                        </>
-                      ) : null}
-
-                      {rule.conditionType === 'visited_scene' ? (
-                        <>
-                          <HelpLabel help="Scène qui doit avoir déjà été visitée pendant la partie.">Scène visitée</HelpLabel>
-                          <select value={rule.conditionSceneId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
-                            draftRule.conditionSceneId = event.target.value;
-                          })}>
-                            <option value="">Choisir une scène</option>
-                            {scenes.map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
-                          </select>
-                        </>
-                      ) : null}
-
-                      {rule.conditionType === 'completed_hotspot' ? (
-                        <>
-                          <HelpLabel help="Zone qui doit avoir déjà terminé son action au moins une fois.">Zone d’action franchie</HelpLabel>
-                          <select value={rule.hotspotId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
-                            draftRule.hotspotId = event.target.value;
-                          })}>
-                            <option value="">Choisir une zone</option>
-                            {allActionTargets.map(({ scene, target: candidate, type: candidateType }) => (
-                              <option key={`${candidateType}-${candidate.id}`} value={candidate.id}>{getSceneLabel(scene.id)} - {candidateType === 'sceneObject' ? 'Image-zone: ' : ''}{candidate.name}</option>
-                            ))}
-                          </select>
-                        </>
-                      ) : null}
-
-                      {rule.conditionType === 'solved_enigma' ? (
-                        <>
-                          <HelpLabel help="Énigme qui doit avoir été réussie pendant la partie.">Énigme réussie</HelpLabel>
-                          <select value={rule.conditionEnigmaId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
-                            draftRule.conditionEnigmaId = event.target.value;
-                          })}>
-                            <option value="">Choisir une énigme</option>
-                            {(project.enigmas || []).map((enigma) => <option key={enigma.id} value={enigma.id}>{enigma.name}</option>)}
-                          </select>
-                        </>
-                      ) : null}
-
-                      {rule.conditionType === 'launched_cinematic' ? (
-                        <>
-                          <HelpLabel help="Cinématique qui doit avoir été lancée au moins une fois pendant la partie.">Cinématique lancée</HelpLabel>
-                          <select value={rule.cinematicId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
-                            draftRule.cinematicId = event.target.value;
-                          })}>
-                            <option value="">N’importe quelle cinematic lancée</option>
-                            {(project.cinematics || []).map((cinematic) => <option key={cinematic.id} value={cinematic.id}>{cinematic.name}</option>)}
-                          </select>
-                        </>
-                      ) : null}
-
-                      {rule.conditionType === 'completed_combination' ? (
-                        <>
-                          <HelpLabel help="Combinaison d’objets qui doit avoir été réalisée dans l’inventaire.">Combinaison réalisée</HelpLabel>
-                          <select value={rule.combinationId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
-                            draftRule.combinationId = event.target.value;
-                          })}>
-                            <option value="">Choisir une combinaison</option>
-                            {(project.combinations || []).map((combo) => {
-                              const itemA = project.items.find((item) => item.id === combo.itemAId);
-                              const itemB = project.items.find((item) => item.id === combo.itemBId);
-                              const result = project.items.find((item) => item.id === combo.resultItemId);
-                              return <option key={combo.id} value={combo.id}>{itemA?.name || 'Objet 1'} + {itemB?.name || 'Objet 2'} → {result?.name || 'Result'}</option>;
-                            })}
-                          </select>
-                        </>
-                      ) : null}
-
-                      {rule.conditionType === 'chose_reply' ? (
-                        <>
-                          <HelpLabel help="Réponse de conversation qui doit avoir déjà été choisie pendant la partie.">Réponse choisie</HelpLabel>
-                          <select value={rule.conditionReplyId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
-                            draftRule.conditionReplyId = event.target.value;
-                          })}>
-                            <option value="">Choisir une réponse</option>
-                            {conversationReplies.map(({ scene, hotspot, node, reply }) => (
-                              <option key={reply.id} value={reply.id}>{getSceneLabel(scene.id)} - {hotspot.name || 'Dialogue'} - {reply.label || node.text || 'Réponse'}</option>
-                            ))}
-                          </select>
-                        </>
-                      ) : null}
-
-                      {rule.conditionType === 'story_variable' ? renderStoryVariableFields({
-                        variableKey: rule.conditionVariableKey,
-                        operator: rule.conditionVariableOperator,
-                        value: rule.conditionVariableValue,
-                        onChange: (patch) => updateRule(target.id, type, rule.id, (draftRule) => {
-                          if (Object.prototype.hasOwnProperty.call(patch, 'variableKey')) draftRule.conditionVariableKey = patch.variableKey;
-                          if (Object.prototype.hasOwnProperty.call(patch, 'operator')) draftRule.conditionVariableOperator = patch.operator;
-                          if (Object.prototype.hasOwnProperty.call(patch, 'value')) draftRule.conditionVariableValue = patch.value;
-                        }),
-                      }) : null}
-
-                      {rule.conditionType === 'advanced' ? (
-                        <div className="conversation-advanced-condition-list">
-                          <div className="conversation-advanced-condition-head">
-                            <HelpLabel help="Choisis ET pour exiger toutes les conditions, ou OU pour accepter au moins une condition. Exemple: variable narrative >= 3 ET réponse choisie.">Combinaison</HelpLabel>
-                            <select value={rule.advancedConditionMode || 'all'} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
-                              draftRule.advancedConditionMode = event.target.value;
-                            })}>
-                              <option value="all">Toutes les conditions (ET)</option>
-                              <option value="any">Au moins une condition (OU)</option>
-                            </select>
+                        <section className="logic-flow-step logic-flow-step-condition">
+                          <div className="logic-flow-step-head">
+                            <span className="logic-flow-keyword">Si</span>
+                            <HelpLabel className="logic-flow-title" help="Détermine quand cette règle remplace l’action normale de la zone. La première règle qui correspond est utilisée.">cette condition est respectée</HelpLabel>
                           </div>
-                          {(rule.advancedConditions || []).map((condition, conditionIndex) => renderAdvancedConditionFields(condition, conditionIndex, rule, target, type))}
-                          <button type="button" className="secondary-action compact" onClick={() => updateRule(target.id, type, rule.id, (draftRule) => {
-                            if (!Array.isArray(draftRule.advancedConditions)) draftRule.advancedConditions = [];
-                            draftRule.advancedConditions.push(makeAdvancedCondition());
-                          })}>+ Condition</button>
-                        </div>
-                      ) : null}
+                          <div className="logic-flow-grid">
+                            <div className="logic-flow-field">
+                              <HelpLabel help="Type de condition à vérifier pendant la partie.">Condition à vérifier</HelpLabel>
+                              <select data-tour="logic-condition" value={rule.conditionType || 'has_item'} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+                                draftRule.conditionType = event.target.value;
+                              })}>
+                                {getConditionOptions(rule).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                              </select>
+                            </div>
+                            {renderConditionDetailFields(rule, target, type)}
+                          </div>
+                        </section>
 
-                      {rule.conditionType === 'hero_health_below' ? (
-                        <>
-                          <HelpLabel help="La règle s’active si les PV actuels du héros sont strictement inférieurs à ce seuil.">Seuil de PV</HelpLabel>
-                          <input type="number" min="0" value={rule.heroHealthThreshold ?? 5} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
-                            draftRule.heroHealthThreshold = Number(event.target.value);
-                          })} />
-                        </>
-                      ) : null}
+                        <section className="logic-flow-step logic-flow-step-action">
+                          <div className="logic-flow-step-head">
+                            <span className="logic-flow-keyword">Alors</span>
+                            <HelpLabel className="logic-flow-title" help="Action exécutée à la place de l’action normale de la zone quand la condition est vraie.">cette action est déclenchée</HelpLabel>
+                          </div>
+                          <div className="logic-flow-grid">
+                            <div className="logic-flow-field">
+                              <HelpLabel help="Action exécutée à la place de l’action normale de la zone quand la condition est vraie.">Action déclenchée</HelpLabel>
+                              <select data-tour="logic-action" value={rule.actionType || 'dialogue'} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+                                draftRule.actionType = event.target.value;
+                              })}>
+                                {Object.entries(ACTION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                              </select>
+                            </div>
+                            <div className="logic-flow-field">
+                              <HelpLabel help="Objet ajouté à l’inventaire quand cette règle s’active. Laisse Aucun si la règle ne donne rien.">Objet donné</HelpLabel>
+                              <select data-tour="logic-reward-item" value={rule.rewardItemId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+                                draftRule.rewardItemId = event.target.value;
+                              })}>
+                                <option value="">Aucun</option>
+                                {(project.items || []).map((item) => <option key={item.id} value={item.id}>{item.icon} {item.name}</option>)}
+                              </select>
+                            </div>
+                            {renderActionTargetFields(rule, target, type)}
+                            <div className="logic-flow-field">
+                              <HelpLabel help="Message affiché au joueur quand cette règle s’active. Il remplace le dialogue normal de la zone.">Dialogue affiché</HelpLabel>
+                              <textarea data-tour="logic-dialogue" value={rule.dialogue || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+                                draftRule.dialogue = event.target.value;
+                              })} />
+                            </div>
+                            <div className="logic-sound-field">
+                              <HelpLabel help="Son joué quand la condition est remplie et que l’action de cette règle se lance.">Son si condition réussie</HelpLabel>
+                              <MediaSourcePicker
+                                className="button like full secondary-action"
+                                accept="audio/*"
+                                handleUpload={handleUpload}
+                                mediaLibrary={mediaLibrary}
+                                onSelect={(data, name) => updateRule(target.id, type, rule.id, (draftRule) => {
+                                  draftRule.successSoundData = data;
+                                  draftRule.successSoundName = name;
+                                })}
+                              >
+                                {rule.successSoundName || 'Importer un son de réussite'}
+                              </MediaSourcePicker>
+                              {getRuleSoundUrl(rule, 'success') ? (
+                                <div className="logic-sound-preview">
+                                  <audio controls preload="metadata" src={getRuleSoundUrl(rule, 'success')} />
+                                  <button type="button" className="danger-button" onClick={() => clearRuleSound(target.id, type, rule.id, 'success')}>Supprimer</button>
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        </section>
 
-                      {rule.conditionType === 'hero_mana_at_least' ? (
-                        <>
-                          <HelpLabel help="La règle s’active si la mana actuelle du héros atteint au moins ce seuil.">Mana requise</HelpLabel>
-                          <input type="number" min="0" value={rule.heroManaThreshold ?? 1} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
-                            draftRule.heroManaThreshold = Number(event.target.value);
-                          })} />
-                        </>
-                      ) : null}
+                        <details className="logic-flow-step logic-flow-step-failure" open={Boolean(rule.failureDialogue || getRuleSoundUrl(rule, 'failure'))}>
+                          <summary className="logic-flow-step-head">
+                            <span className="logic-flow-keyword">Sinon</span>
+                            <HelpLabel className="logic-flow-title" help="Réponse utilisée quand cette règle est configurée mais que sa condition n’est pas remplie.">si la condition n’est pas remplie</HelpLabel>
+                          </summary>
+                          <div className="logic-flow-grid">
+                            <div className="logic-flow-field">
+                              <HelpLabel help="Message affiché si cette règle ne peut pas s’activer parce que sa condition n’est pas remplie. Exemple : il manque une clé, une énigme n’est pas encore réussie, ou une cinématique n’a pas encore été lancée.">Dialogue si condition non remplie</HelpLabel>
+                              <textarea value={rule.failureDialogue || ''} placeholder="Exemple : La porte reste verrouillée. Il te manque la clé." onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+                                draftRule.failureDialogue = event.target.value;
+                              })} />
+                            </div>
+                            <div className="logic-sound-field">
+                              <HelpLabel help="Son joué quand cette règle est configurée mais que sa condition n’est pas remplie.">Son si condition échouée</HelpLabel>
+                              <MediaSourcePicker
+                                className="button like full secondary-action"
+                                accept="audio/*"
+                                handleUpload={handleUpload}
+                                mediaLibrary={mediaLibrary}
+                                onSelect={(data, name) => updateRule(target.id, type, rule.id, (draftRule) => {
+                                  draftRule.failureSoundData = data;
+                                  draftRule.failureSoundName = name;
+                                })}
+                              >
+                                {rule.failureSoundName || "Importer un son d'échec"}
+                              </MediaSourcePicker>
+                              {getRuleSoundUrl(rule, 'failure') ? (
+                                <div className="logic-sound-preview">
+                                  <audio controls preload="metadata" src={getRuleSoundUrl(rule, 'failure')} />
+                                  <button type="button" className="danger-button" onClick={() => clearRuleSound(target.id, type, rule.id, 'failure')}>Supprimer</button>
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        </details>
 
-                      {rule.conditionType === 'hero_skill_used' ? (
-                        <>
-                          <HelpLabel help="La règle s’active si le dernier jet héros utilisait cette compétence.">Compétence du dernier jet</HelpLabel>
-                          <select value={rule.heroSkillId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
-                            draftRule.heroSkillId = event.target.value;
-                          })}>
-                            <option value="">Choisir une compétence</option>
-                            {heroSkills.map((skill) => <option key={skill.id} value={skill.id}>{skill.name}</option>)}
-                          </select>
-                        </>
-                      ) : null}
-
-                      <div className="grid-two">
-                        <div>
-                          <HelpLabel help="Action exécutée à la place de l’action normale dé la zone quand la condition est vraie.">Action déclenchée</HelpLabel>
-                          <select data-tour="logic-action" value={rule.actionType || 'dialogue'} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
-                            draftRule.actionType = event.target.value;
-                          })}>
-                            {Object.entries(ACTION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <HelpLabel help="Objet ajouté à l’inventaire quand cette règle s’active. Laisse Aucun si la règle ne donné rien.">Objet donné</HelpLabel>
-                          <select data-tour="logic-reward-item" value={rule.rewardItemId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
-                            draftRule.rewardItemId = event.target.value;
-                          })}>
-                            <option value="">Aucun</option>
-                            {(project.items || []).map((item) => <option key={item.id} value={item.id}>{item.icon} {item.name}</option>)}
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="grid-two">
-                        <div>
-                          {rule.conditionType === 'has_item' ? (
+                        <details className="logic-flow-step logic-flow-step-options" open={Boolean(rule.consumeRequiredItemOnUse || rule.disableAfterUse)}>
+                          <summary className="logic-flow-step-head">
+                            <span className="logic-flow-keyword">Options</span>
+                            <HelpLabel className="logic-flow-title" help="Réglages complémentaires appliqués après l’activation de la règle.">réglages de la règle</HelpLabel>
+                          </summary>
+                          <div className="logic-flow-options">
+                            {rule.conditionType === 'has_item' ? (
+                              <label className="checkbox-row">
+                                <input type="checkbox" checked={Boolean(rule.consumeRequiredItemOnUse)} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+                                  draftRule.consumeRequiredItemOnUse = event.target.checked;
+                                })} />
+                                <span>Consommer l’objet testé quand la règle s’active</span>
+                                <span className="help-dot" data-help={FIELD_HELP.consumeRequiredItem} aria-label={FIELD_HELP.consumeRequiredItem} tabIndex={0}>?</span>
+                              </label>
+                            ) : null}
                             <label className="checkbox-row">
-                              <input type="checkbox" checked={Boolean(rule.consumeRequiredItemOnUse)} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
-                                draftRule.consumeRequiredItemOnUse = event.target.checked;
+                              <input type="checkbox" checked={Boolean(rule.disableAfterUse)} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+                                draftRule.disableAfterUse = event.target.checked;
                               })} />
-                              <span>Consommer l’objet testé quand la règle s’active</span>
-                              <span className="help-dot" data-help={FIELD_HELP.consumeRequiredItem} aria-label={FIELD_HELP.consumeRequiredItem} tabIndex={0}>?</span>
+                              <span>Cette règle ne s’applique qu’une fois, puis s’annule</span>
+                              <span className="help-dot" data-help={FIELD_HELP.disableRuleAfterUse} aria-label={FIELD_HELP.disableRuleAfterUse} tabIndex={0}>?</span>
                             </label>
-                          ) : null}
-                        </div>
-                        <label className="checkbox-row">
-                          <input type="checkbox" checked={Boolean(rule.disableAfterUse)} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
-                            draftRule.disableAfterUse = event.target.checked;
-                          })} />
-                          <span>Cette règle ne s’applique qu’une fois, puis s’annule</span>
-                          <span className="help-dot" data-help={FIELD_HELP.disableRuleAfterUse} aria-label={FIELD_HELP.disableRuleAfterUse} tabIndex={0}>?</span>
-                        </label>
-                      </div>
-
-                      <div className="grid-two">
-                        <div>
-                          <HelpLabel help="Message affiché au joueur quand cette règle s’active. Il remplace le dialogue normal de la zone.">Dialogue affiché</HelpLabel>
-                          <textarea data-tour="logic-dialogue" value={rule.dialogue || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
-                            draftRule.dialogue = event.target.value;
-                          })} />
-                        </div>
-                        <div>
-                          <HelpLabel help="Message affiché si cette règle ne peut pas s’activer parce que sa condition n’est pas remplie. Exemple : il manque une clé, une énigme n’est pas encore réussie, ou une cinématique n’a pas encore été lancée.">Dialogue si condition non remplie</HelpLabel>
-                          <textarea value={rule.failureDialogue || ''} placeholder="Exemple : La porte reste verrouillée. Il te manque la clé." onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
-                            draftRule.failureDialogue = event.target.value;
-                          })} />
-                        </div>
-                      </div>
-
-                      <div className="grid-two">
-                        <div className="logic-sound-field">
-                          <HelpLabel help="Son joué quand la condition est remplie et que l’action de cette règle se lance.">Son si condition réussie</HelpLabel>
-                          <MediaSourcePicker
-                            className="button like full secondary-action"
-                            accept="audio/*"
-                            handleUpload={handleUpload}
-                            mediaLibrary={mediaLibrary}
-                            onSelect={(data, name) => updateRule(target.id, type, rule.id, (draftRule) => {
-                              draftRule.successSoundData = data;
-                              draftRule.successSoundName = name;
-                            })}
-                          >
-                            {rule.successSoundName || 'Importer un son de réussite'}
-                          </MediaSourcePicker>
-                          {getRuleSoundUrl(rule, 'success') ? (
-                            <div className="logic-sound-preview">
-                              <audio controls preload="metadata" src={getRuleSoundUrl(rule, 'success')} />
-                              <button type="button" className="danger-button" onClick={() => clearRuleSound(target.id, type, rule.id, 'success')}>Supprimer</button>
-                            </div>
-                          ) : null}
-                        </div>
-                        <div className="logic-sound-field">
-                          <HelpLabel help="Son joué quand cette règle est configurée mais que sa condition n’est pas remplie.">Son si condition échouée</HelpLabel>
-                          <MediaSourcePicker
-                            className="button like full secondary-action"
-                            accept="audio/*"
-                            handleUpload={handleUpload}
-                            mediaLibrary={mediaLibrary}
-                            onSelect={(data, name) => updateRule(target.id, type, rule.id, (draftRule) => {
-                              draftRule.failureSoundData = data;
-                              draftRule.failureSoundName = name;
-                            })}
-                          >
-                            {rule.failureSoundName || "Importer un son d'échec"}
-                          </MediaSourcePicker>
-                          {getRuleSoundUrl(rule, 'failure') ? (
-                            <div className="logic-sound-preview">
-                              <audio controls preload="metadata" src={getRuleSoundUrl(rule, 'failure')} />
-                              <button type="button" className="danger-button" onClick={() => clearRuleSound(target.id, type, rule.id, 'failure')}>Supprimer</button>
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      {rule.actionType === 'scene' ? (
-                        <>
-                          <HelpLabel help="Scène ouverte si l’action déclenchée est un changement de scène.">Scène cible</HelpLabel>
-                          <select data-tour="logic-target-scene" value={rule.targetSceneId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
-                            draftRule.targetSceneId = event.target.value;
-                          })}>
-                            <option value="">Choisir une scène</option>
-                            {scenes.map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
-                          </select>
-                        </>
-                      ) : null}
-
-                      {rule.actionType === 'cinematic' ? (
-                        <>
-                          <HelpLabel help="Cinématique lancée si l’action déclenchée est une cinématique.">Cinématique cible</HelpLabel>
-                          <select data-tour="logic-target-cinematic" value={rule.targetCinematicId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
-                            draftRule.targetCinematicId = event.target.value;
-                          })}>
-                            <option value="">Choisir une cinématique</option>
-                            {(project.cinematics || []).map((cinematic) => <option key={cinematic.id} value={cinematic.id}>{cinematic.name}</option>)}
-                          </select>
-                        </>
-                      ) : null}
-                      {rule.actionType === 'block' ? (
-                        <div className="grid-two">
-                          <div>
-                            <HelpLabel help="Bloc affiché, masque ou modifié quand cette règle réussit.">Bloc cible</HelpLabel>
-                            <select value={rule.targetBlockId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
-                              draftRule.targetBlockId = event.target.value;
-                            })}>
-                              <option value="">Choisir un bloc</option>
-                              {allBlockTargets.map(({ scene, target: block }) => (
-                                <option key={block.id} value={block.id}>{getSceneLabel(scene.id)} - {block.name || block.blockLabel || 'Bloc'}</option>
-                              ))}
-                            </select>
                           </div>
-                          <div>
-                            <HelpLabel help="Action appliquée au bloc cible.">Action bloc</HelpLabel>
-                            <select value={rule.blockActionType || 'show'} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
-                              draftRule.blockActionType = event.target.value;
-                            })}>
-                              <option value="show">Afficher le bloc</option>
-                              <option value="hide">Masquer le bloc</option>
-                              <option value="update_text">Modifier le texte visible</option>
-                            </select>
-                          </div>
-                          {rule.blockActionType === 'update_text' ? (
-                            <div style={{ gridColumn: '1 / -1' }}>
-                              <HelpLabel help="Nouveau texte visible du bloc cible. Selon le type, cela met à jour le texte, le bouton, le placeholder ou le titre du code.">Texte visible du bloc</HelpLabel>
-                              <textarea value={rule.targetBlockText || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
-                                draftRule.targetBlockText = event.target.value;
-                              })} />
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : null}
+                        </details>
                       </div>
                     </details>
                     );

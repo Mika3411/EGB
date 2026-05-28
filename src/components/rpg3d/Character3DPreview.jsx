@@ -35,11 +35,13 @@ import {
 import {
   attachPreparedEquipmentToSocket,
   addEquippedArmorToActorModel,
+  addEquippedLeggingsToActorModel,
   createFallbackEquipmentSocket,
   findHelmetSocket,
   findShieldSocketForArm,
   findWeaponSocketForHand,
   getEquippedHelmetItem,
+  getEquippedLeggingsItem,
   getShieldGripArm,
   getEquippedArmorItem,
   getEquippedShieldItem,
@@ -102,7 +104,7 @@ const getPreviewAnimationStatusLabel = (slot = '') => {
   return slot || 'selectionnee';
 };
 
-const PREVIEW_EQUIPMENT_ROLES = ['weapon', 'armor', 'shield', 'helmet'];
+const PREVIEW_EQUIPMENT_ROLES = ['weapon', 'armor', 'shield', 'helmet', 'leggings'];
 
 const loadPreviewEquipmentObject = (item = {}) => new Promise((resolve) => {
   const source = getWeaponModelSource(item);
@@ -129,8 +131,11 @@ const attachEquipmentObjectToCharacter = (characterObject, equipmentObject, item
   if (role === 'armor') {
     return addEquippedArmorToActorModel(characterObject, equipmentObject, item, actor);
   }
+  if (role === 'leggings') {
+    return addEquippedLeggingsToActorModel(characterObject, equipmentObject, item, actor);
+  }
   if (role === 'helmet') {
-    const socket = findHelmetSocket(characterObject) || createFallbackEquipmentSocket(characterObject, 'helmet');
+    const socket = findHelmetSocket(characterObject, item, actor) || createFallbackEquipmentSocket(characterObject, 'helmet');
     if (!socket || !equipmentObject) return false;
     const payload = getWeaponModelPayload(item);
     prepareGltfModel(equipmentObject, getRuntimeModelPrepareOptions(equipmentObject.userData?.modelFormat || payload.modelFormat, {
@@ -170,6 +175,7 @@ const getPreviewEquipmentItemForRole = (model = {}, role = 'weapon') => {
   if (role === 'armor') return getEquippedArmorItem(model);
   if (role === 'shield') return getEquippedShieldItem(model);
   if (role === 'helmet') return getEquippedHelmetItem(model);
+  if (role === 'leggings') return getEquippedLeggingsItem(model);
   return getEquippedWeaponItem(model);
 };
 
@@ -274,6 +280,12 @@ const getPreviewEquipmentItemSignature = (item = null) => {
     getResourceSignature(item.weaponModelResources || item.modelResources),
     item.weaponModelScale || '',
     item.weaponModelSourceScale || '',
+    item.weaponModelWidth || '',
+    item.weaponModelHeight || '',
+    item.weaponModelDepth || '',
+    item.weaponModelSourceWidth || '',
+    item.weaponModelSourceHeight || '',
+    item.weaponModelSourceDepth || '',
     item.weaponModelRotationX || '',
     item.weaponModelRotationY || '',
     item.weaponModelRotationZ || '',
@@ -564,9 +576,9 @@ const getCharacterRigMarkerWorldPosition = (
     || getCharacterRigBoundsWorldPoint(bodyBounds, marker);
 };
 
-const getCharacterRigPointFromWorld = (characterObject = null, worldPoint = null) => {
+const getCharacterRigPointFromWorld = (characterObject = null, worldPoint = null, boundsOverride = null) => {
   if (!characterObject || !worldPoint) return null;
-  const bounds = getCharacterPreviewBodyBounds(characterObject);
+  const bounds = boundsOverride || getCharacterPreviewBodyBounds(characterObject);
   const size = bounds.getSize(new THREE.Vector3());
   if (
     !Number.isFinite(size.x)
@@ -895,7 +907,10 @@ export default function Character3DPreview({
         markerRoot.add(marker);
       }
       updateCharacterRigMarkerTexture(marker, markerConfig);
-      const worldPosition = getCharacterRigMarkerWorldPosition(characterObject, markerConfig, bodyBounds, autoAnchors);
+      const activeDrag = rigDragRef.current;
+      const worldPosition = activeDrag?.pointId === markerConfig.id && activeDrag.currentWorldPosition
+        ? activeDrag.currentWorldPosition
+        : getCharacterRigMarkerWorldPosition(characterObject, markerConfig, bodyBounds, autoAnchors);
       if (!worldPosition) {
         marker.visible = false;
         return;
@@ -1121,9 +1136,7 @@ export default function Character3DPreview({
 
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
-    const dragPlane = new THREE.Plane();
-    const planeNormal = new THREE.Vector3();
-    const planePoint = new THREE.Vector3();
+    const screenWorldPoint = new THREE.Vector3();
 
     const updatePointer = (event) => {
       const rect = renderer.domElement.getBoundingClientRect();
@@ -1132,6 +1145,12 @@ export default function Character3DPreview({
         -(((event.clientY - rect.top) / Math.max(1, rect.height)) * 2 - 1),
       );
       raycaster.setFromCamera(pointer, camera);
+    };
+
+    const getPointerWorldPositionAtDepth = (event, screenDepth, target = screenWorldPoint) => {
+      updatePointer(event);
+      if (!Number.isFinite(screenDepth)) return null;
+      return target.set(pointer.x, pointer.y, screenDepth).unproject(camera);
     };
 
     const findRigMarkerHit = (event) => {
@@ -1146,8 +1165,8 @@ export default function Character3DPreview({
         : ''
     );
 
-    const commitRigMarkerWorldPosition = (pointId, worldPosition) => {
-      const nextPoint = getCharacterRigPointFromWorld(characterObjectRef.current, worldPosition);
+    const commitRigMarkerWorldPosition = (pointId, worldPosition, boundsOverride = null) => {
+      const nextPoint = getCharacterRigPointFromWorld(characterObjectRef.current, worldPosition, boundsOverride);
       if (!nextPoint) return;
       const drag = rigDragRef.current;
       if (
@@ -1166,6 +1185,9 @@ export default function Character3DPreview({
     const endRigDrag = (event) => {
       const drag = rigDragRef.current;
       if (!drag) return;
+      if (drag.currentWorldPosition) {
+        commitRigMarkerWorldPosition(drag.pointId, drag.currentWorldPosition, drag.bodyBounds);
+      }
       rigDragRef.current = null;
       controls.enabled = true;
       container.classList.remove('is-rig-dragging');
@@ -1191,14 +1213,15 @@ export default function Character3DPreview({
       const pointId = marker.userData.characterRigPointId || '';
       if (!pointId) return;
       latestOnCharacterRigMarkerSelectRef.current?.(pointId);
-      camera.getWorldDirection(planeNormal).normalize();
-      dragPlane.setFromNormalAndCoplanarPoint(planeNormal, marker.position);
-      updatePointer(event);
-      const hitPlane = raycaster.ray.intersectPlane(dragPlane, planePoint);
+      const screenDepth = marker.position.clone().project(camera).z;
+      const startWorldPosition = getPointerWorldPositionAtDepth(event, screenDepth, new THREE.Vector3())?.clone() || marker.position.clone();
+      marker.position.copy(startWorldPosition);
       rigDragRef.current = {
         pointId,
         pointerId: event.pointerId,
-        grabOffset: hitPlane ? marker.position.clone().sub(planePoint) : new THREE.Vector3(),
+        screenDepth,
+        currentWorldPosition: startWorldPosition,
+        bodyBounds: getCharacterPreviewBodyBounds(characterObjectRef.current),
         lastPosition: null,
       };
       controls.enabled = false;
@@ -1209,7 +1232,6 @@ export default function Character3DPreview({
         // Some embedded browsers do not expose pointer capture for canvas.
       }
       setRigMagnifierTarget(pointId, 'drag');
-      commitRigMarkerWorldPosition(pointId, marker.position);
     };
 
     const handleRigPointerMove = (event) => {
@@ -1218,13 +1240,13 @@ export default function Character3DPreview({
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation?.();
-      updatePointer(event);
-      if (!raycaster.ray.intersectPlane(dragPlane, planePoint)) return;
-      const nextWorldPosition = planePoint.clone().add(drag.grabOffset);
+      const nextWorldPosition = getPointerWorldPositionAtDepth(event, drag.screenDepth, new THREE.Vector3())?.clone();
+      if (!nextWorldPosition) return;
+      drag.currentWorldPosition = nextWorldPosition;
       const marker = rigMarkersRef.current.get(drag.pointId);
       if (marker) marker.position.copy(nextWorldPosition);
       setRigMagnifierTarget(drag.pointId, 'drag');
-      commitRigMarkerWorldPosition(drag.pointId, nextWorldPosition);
+      syncCharacterRigMarkersRef.current?.(camera);
     };
 
     const handleRigHoverPointerMove = (event) => {
@@ -1417,6 +1439,7 @@ export default function Character3DPreview({
       armor: equipmentSignatures.armor || '',
       shield: equipmentSignatures.shield || '',
       helmet: equipmentSignatures.helmet || '',
+      leggings: equipmentSignatures.leggings || '',
     };
     const isNewCharacter = previewEquipmentCharacterVersionRef.current !== loadedCharacterVersion;
     const previousSignatures = previewEquipmentSignaturesRef.current || {};
@@ -1454,6 +1477,7 @@ export default function Character3DPreview({
   }, [
     equipmentSignatures.armor,
     equipmentSignatures.helmet,
+    equipmentSignatures.leggings,
     equipmentSignatures.shield,
     equipmentSignatures.weapon,
     loadedCharacterVersion,

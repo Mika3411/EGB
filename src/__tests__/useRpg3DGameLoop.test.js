@@ -9,14 +9,21 @@ import {
   applyPlayerMoveTarget,
   clearPlayerMoveTarget,
   createBullet,
+  createRuntimeUiSnapshot,
   emitParticles,
   fireBullet,
   findPlayerPath,
+  getActiveRuntimeActionZone,
+  getActionZoneTriggerKey,
   getBlockingObstacles,
   getBlockingObstaclesForEntityMove,
+  getEnemyObstacleAvoidanceVector,
   getPlayerKeyboardInput,
+  getRuntimeUiSnapshotSignature,
   hasLineOfSight,
   isEditableKeyboardTarget,
+  rectCircleOverlap,
+  resolveActionZoneEntryTrigger,
   resolveMapCollision,
 } from '../hooks/useRpg3DGameLoop.js';
 
@@ -55,6 +62,18 @@ describe('useRpg3DGameLoop pure helpers', () => {
       x: 62,
       y: 100,
     });
+  });
+
+  it('resolves corner obstacle overlaps with the shortest stable correction', () => {
+    const config = createRuntimeConfig();
+    const wall = { id: 'wall-1', x: 100, y: 100, w: 40, h: 40 };
+    config.obstacles = [wall];
+
+    const resolved = resolveMapCollision({ x: 92, y: 92 }, PLAYER_RADIUS, config);
+
+    expect(resolved.x).toBeLessThan(92);
+    expect(resolved.y).toBeLessThan(92);
+    expect(rectCircleOverlap(wall, { ...resolved, r: PLAYER_RADIUS })).toBe(false);
   });
 
   it('builds blocking obstacles from walls, reliefs and props then checks line of sight', () => {
@@ -224,6 +243,17 @@ describe('useRpg3DGameLoop pure helpers', () => {
     expect(path.every((point) => point.y <= 50)).toBe(true);
   });
 
+  it('normalizes click path targets that land inside expanded obstacles', () => {
+    const config = createRuntimeConfig();
+    config.obstacles = [{ id: 'wall-1', x: 100, y: 60, w: 80, h: 80 }];
+
+    const path = findPlayerPath({ x: 50, y: 100 }, { x: 130, y: 100 }, config);
+
+    expect(path).toHaveLength(1);
+    expect(path[0].x).toBeLessThan(100 - PLAYER_RADIUS);
+    expect(path[0].y).toBe(100);
+  });
+
   it('uses the first waypoint when click movement needs to contour an obstacle', () => {
     const config = createRuntimeConfig();
     config.obstacles = [{ id: 'wall-1', x: 120, y: 60, w: 40, h: 80 }];
@@ -259,6 +289,93 @@ describe('useRpg3DGameLoop pure helpers', () => {
     expect(applyPlayerMoveTarget(state, config, { x: 50, y: 150 })).toBe(true);
     expect(state.player.vx).toBe(0);
     expect(state.player.vy).toBe(DEFAULT_ARCADE_CONFIG.player.dashSpeed);
+  });
+
+  it('marks action zones as entered during cooldown instead of triggering late', () => {
+    const zone = { id: 'portal-1', actionType: 'portal', targetCanvasId: 'canvas-2' };
+    const triggerKey = getActionZoneTriggerKey(zone);
+
+    const duringCooldown = resolveActionZoneEntryTrigger(zone, {
+      key: 'portal-transition',
+      cooldownUntil: 1000,
+    }, 500);
+
+    expect(duringCooldown.shouldTrigger).toBe(false);
+    expect(duringCooldown.nextTriggerState).toEqual({ key: triggerKey, cooldownUntil: 1000 });
+
+    const stillInsideAfterCooldown = resolveActionZoneEntryTrigger(zone, duringCooldown.nextTriggerState, 1200);
+    expect(stillInsideAfterCooldown.shouldTrigger).toBe(false);
+
+    const outside = resolveActionZoneEntryTrigger(null, stillInsideAfterCooldown.nextTriggerState, 1300);
+    expect(outside.nextTriggerState).toEqual({ key: '', cooldownUntil: 1000 });
+
+    const reentered = resolveActionZoneEntryTrigger(zone, outside.nextTriggerState, 1301);
+    expect(reentered.shouldTrigger).toBe(true);
+  });
+
+  it('selects the topmost runtime action zone and preserves portal/PNJ trigger identity', () => {
+    const config = createRuntimeConfig();
+    const portalZone = {
+      id: 'portal-1',
+      x: 120,
+      y: 100,
+      w: 120,
+      h: 100,
+      actionType: 'portal',
+      targetCanvasId: 'canvas-2',
+    };
+    const npcZone = {
+      id: 'npc-1',
+      x: 120,
+      y: 100,
+      w: 120,
+      h: 100,
+      actionType: 'npcAction',
+      targetNpcId: 'enemy-1',
+    };
+    config.actionZones = [portalZone, npcZone];
+
+    const activeZone = getActiveRuntimeActionZone(config, { x: 120, y: 100 });
+    const entry = resolveActionZoneEntryTrigger(activeZone, { key: '', cooldownUntil: 0 }, 100);
+
+    expect(activeZone).toBe(npcZone);
+    expect(entry.shouldTrigger).toBe(true);
+    expect(entry.actionType).toBe('npcAction');
+    expect(entry.triggerKey).toBe(getActionZoneTriggerKey(npcZone));
+    expect(getActionZoneTriggerKey(portalZone)).not.toBe(entry.triggerKey);
+  });
+
+  it('steers enemies away from obstacles before they collide head-on', () => {
+    const steering = getEnemyObstacleAvoidanceVector(
+      { x: 90, y: 100, strafeDir: 1 },
+      { x: 1, y: 0 },
+      [{ id: 'wall-1', x: 120, y: 80, w: 40, h: 40 }],
+      { obstacleAvoidance: 20, obstacleLookAhead: 34 },
+      16,
+    );
+
+    expect(steering.x).toBeLessThan(0);
+    expect(Math.abs(steering.y)).toBeGreaterThan(0);
+  });
+
+  it('creates reliable UI snapshots with cloned runtime arrays and meaningful signatures', () => {
+    const config = createRuntimeConfig();
+    config.enemies = [{ id: 'enemy-1', x: 180, y: 80, role: 'rifle' }];
+    const state = createInitialState(config);
+    state.actionMessage = 'Ancien message';
+    state.actionMessageTimer = 0;
+
+    const snapshot = createRuntimeUiSnapshot(state);
+    const signature = getRuntimeUiSnapshotSignature(snapshot);
+
+    expect(snapshot.actionMessage).toBe('');
+    expect(snapshot.player).not.toBe(state.player);
+    expect(snapshot.enemies).not.toBe(state.enemies);
+    expect(snapshot.enemies[0]).not.toBe(state.enemies[0]);
+
+    state.player.hp -= 3;
+    const nextSignature = getRuntimeUiSnapshotSignature(createRuntimeUiSnapshot(state));
+    expect(nextSignature).not.toBe(signature);
   });
 
   it('accepts both WASD and ZQSD movement keys', () => {

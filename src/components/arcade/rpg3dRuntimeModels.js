@@ -115,11 +115,58 @@ const getModelAnimationsSignature = (model = {}) => (
     .join(';')
 );
 
+const RUNTIME_MODEL_TEXTURE_FIELDS = [
+  'map',
+  'alphaMap',
+  'aoMap',
+  'bumpMap',
+  'clearcoatMap',
+  'clearcoatNormalMap',
+  'clearcoatRoughnessMap',
+  'displacementMap',
+  'emissiveMap',
+  'envMap',
+  'iridescenceMap',
+  'iridescenceThicknessMap',
+  'lightMap',
+  'metalnessMap',
+  'normalMap',
+  'roughnessMap',
+  'sheenColorMap',
+  'sheenRoughnessMap',
+  'specularColorMap',
+  'specularIntensityMap',
+  'specularMap',
+  'thicknessMap',
+  'transmissionMap',
+];
+
+const disposeRuntimeModelMaterial = (material, disposedTextures) => {
+  if (!material) return;
+  RUNTIME_MODEL_TEXTURE_FIELDS.forEach((field) => {
+    const texture = material[field];
+    if (!texture?.isTexture || disposedTextures.has(texture)) return;
+    texture.dispose?.();
+    disposedTextures.add(texture);
+  });
+  material.dispose?.();
+};
+
 const disposeRuntimeModelObject = (object) => {
+  const disposedGeometries = new Set();
+  const disposedMaterials = new Set();
+  const disposedTextures = new Set();
   object?.traverse?.((child) => {
-    child.geometry?.dispose?.();
+    if (child.geometry && !disposedGeometries.has(child.geometry)) {
+      child.geometry.dispose?.();
+      disposedGeometries.add(child.geometry);
+    }
     const materials = Array.isArray(child.material) ? child.material : [child.material];
-    materials.filter(Boolean).forEach((material) => material.dispose?.());
+    materials.filter(Boolean).forEach((material) => {
+      if (disposedMaterials.has(material)) return;
+      disposeRuntimeModelMaterial(material, disposedTextures);
+      disposedMaterials.add(material);
+    });
   });
 };
 
@@ -165,7 +212,10 @@ const loadModelAnimationClipMap = async (model = {}) => {
   }, {});
 };
 
-const createCachedModelGetter = (cache, pending, failed, onLoaded) => {
+const createCachedModelGetter = (cache, pending, failed, onLoaded, options = {}) => {
+  const isActive = typeof options.isActive === 'function' ? options.isActive : () => true;
+  const loadModelFromSource = options.loadModelFromSource || loadThreeModelFromSource;
+  const loadAnimationClipMap = options.loadModelAnimationClipMap || loadModelAnimationClipMap;
   const getStatus = (src, model = {}) => {
     if (!src) return 'empty';
     if (isHeavyLocalFbxAsset(src, model)) return 'unsupported';
@@ -183,18 +233,28 @@ const createCachedModelGetter = (cache, pending, failed, onLoaded) => {
     if (cached) return cached;
     if (failed.has(cacheKey) || pending.has(cacheKey)) return null;
     pending.add(cacheKey);
-    loadThreeModelFromSource(
+    loadModelFromSource(
       src,
       model,
       async ({ object, animations = [], format = '' } = {}) => {
         if (object) {
+          if (!isActive()) {
+            disposeRuntimeModelObject(object);
+            pending.delete(cacheKey);
+            return;
+          }
           prepareGltfModel(object, getRuntimeModelPrepareOptions(format, {
             restoreTextureColor: true,
             forceLitMaterials: true,
             hasResourceTextures: hasThreeModelResources(model),
           }));
           object.userData.gltfAnimationClips = animations;
-          object.userData.gltfAnimationClipMap = await loadModelAnimationClipMap(model);
+          object.userData.gltfAnimationClipMap = await loadAnimationClipMap(model);
+          if (!isActive()) {
+            disposeRuntimeModelObject(object);
+            pending.delete(cacheKey);
+            return;
+          }
           object.userData.hasModelResources = hasThreeModelResources(model);
           cache.set(cacheKey, object);
           failed.delete(cacheKey);
@@ -384,6 +444,7 @@ export {
   createActorAnimationController,
   createCachedModelGetter,
   createCachedTextureGetter,
+  disposeRuntimeModelObject,
   getActorAnimationOptions,
   getActorAnimationState,
   getActorMovementFacingTarget,

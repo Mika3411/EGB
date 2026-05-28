@@ -5,7 +5,7 @@ import { useAccessibleDialog } from '../components/AccessibleDialog';
 import MediaSourceModal from '../components/MediaSourceModal.jsx';
 import { createInitialProject } from '../data/projectData';
 import { useAccountStorage } from '../hooks/useAccountStorage';
-import { useAutosaveProject } from '../hooks/useAutosaveProject';
+import { getProjectSaveStatus, useAutosaveProject } from '../hooks/useAutosaveProject';
 import { useProfileProjectActions } from '../hooks/useProfileProjectActions';
 import { MB } from '../lib/storageQuota';
 import { fileToDataURL, uploadFileToSupabase } from '../utils/fileHelpers';
@@ -165,6 +165,42 @@ describe('media helpers', () => {
 });
 
 describe('extracted hooks', () => {
+  test('statuts de sauvegarde projet cohérents', () => {
+    expect(getProjectSaveStatus({ remoteSaved: true })).toBe('Sauvegardé sur Supabase');
+    expect(getProjectSaveStatus({ remoteAttempted: true, localSaved: true, remoteSaved: false })).toBe('Supabase non synchronisé');
+    expect(getProjectSaveStatus({ localSaved: true, remoteAttempted: false, remoteSaved: false })).toBe('Sauvegardé localement');
+    expect(getProjectSaveStatus({ localCacheSaved: true, localSaved: false, remoteAttempted: false })).toBe('Sauvegarde locale incomplète');
+    expect(getProjectSaveStatus({ localSaved: false, remoteAttempted: false })).toBe('Erreur de sauvegarde');
+  });
+
+  test('autosave peut etre desactive sans lancer de sauvegarde projet', async () => {
+    vi.useFakeTimers();
+    const saveProject = vi.fn(async () => ({ syncStatus: { localSaved: true, remoteAttempted: false, remoteSaved: false } }));
+    const setSaveStatus = vi.fn();
+
+    renderHook(() => useAutosaveProject({
+      activeProjectId: 'project-1',
+      enabled: false,
+      hydratedProjectRef: { current: 'project-1' },
+      project: { title: 'projet lourd' },
+      saveProject,
+      screen: 'editor',
+      selectedSceneId: 'scene-1',
+      setSaveStatus,
+      tab: 'scenes',
+      userId: 'user-1',
+      writeBuilderUiState: vi.fn(),
+    }));
+
+    await act(async () => {
+      vi.advanceTimersByTime(30_000);
+      await flushPromises();
+    });
+
+    expect(saveProject).not.toHaveBeenCalled();
+    expect(setSaveStatus).not.toHaveBeenCalled();
+  });
+
   test('autosave concurrent: seule la sauvegarde la plus récente marque le statut final', async () => {
     vi.useFakeTimers();
     const firstSave = deferred();

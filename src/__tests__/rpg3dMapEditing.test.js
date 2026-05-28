@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_ARCADE_CONFIG, cloneConfig } from '../utils/rpg3dDomain.js';
+import { DEFAULT_ARCADE_CONFIG, cloneConfig, getActionZoneTopVertices } from '../utils/rpg3dDomain.js';
 import {
   clampArcadeEntitiesToWorld,
   duplicateMapEntityIntoConfig,
   findEntityAt,
   getSelectedEntity,
   insertActionZoneVertex,
+  isPointInActionZone,
   moveActionZoneEdge,
   moveActionZoneVertex,
   moveMapEntityByDelta,
@@ -217,6 +218,26 @@ describe('rpg3d map editing helpers', () => {
     });
   });
 
+  it('checks action zone polygon containment directly and treats edges as inside', () => {
+    const zone = {
+      id: 'zone-1',
+      vertices: [
+        { x: 100, y: 100 },
+        { x: 260, y: 100 },
+        { x: 260, y: 160 },
+        { x: 180, y: 160 },
+        { x: 180, y: 260 },
+        { x: 100, y: 260 },
+      ],
+    };
+
+    expect(isPointInActionZone(zone, { x: 130, y: 130 })).toBe(true);
+    expect(isPointInActionZone(zone, { x: 140, y: 220 })).toBe(true);
+    expect(isPointInActionZone(zone, { x: 220, y: 220 })).toBe(false);
+    expect(isPointInActionZone(zone, { x: 180, y: 210 })).toBe(true);
+    expect(isPointInActionZone(zone, null)).toBe(false);
+  });
+
   it('edits action zone vertices and uses the polygon for picking and movement', () => {
     const config = createMapConfig();
     config.actionZones = [{
@@ -239,20 +260,22 @@ describe('rpg3d map editing helpers', () => {
 
     expect(moveActionZoneVertex(config, 'zone-1', 1, { x: 330, y: 160 })).toBe(true);
     expect(config.actionZones[0].vertices[1]).toEqual({ x: 330, y: 160 });
-    expect(config.actionZones[0].topVertices[1]).toEqual({ x: 300, y: 180, z: 240 });
+    expect(config.actionZones[0].topVertices).toBeUndefined();
+    expect(getActionZoneTopVertices(config.actionZones[0])[1]).toEqual({ x: 330, y: 160, z: 240 });
     expect(config.actionZones[0]).toMatchObject({ x: 245, y: 220, w: 170, h: 120 });
 
     expect(moveActionZoneEdge(config, 'zone-1', 1, { x: -40, y: 20 })).toBe(true);
     expect(config.actionZones[0].vertices[1]).toEqual({ x: 290, y: 180 });
     expect(config.actionZones[0].vertices[2]).toEqual({ x: 210, y: 300 });
-    expect(config.actionZones[0].topVertices[1]).toEqual({ x: 300, y: 180, z: 240 });
+    expect(config.actionZones[0].topVertices).toBeUndefined();
+    expect(getActionZoneTopVertices(config.actionZones[0])[1]).toEqual({ x: 290, y: 180, z: 240 });
     expect(config.actionZones[0]).toMatchObject({ x: 225, y: 230, w: 130, h: 140 });
 
     expect(moveActionZoneEdge(config, 'zone-1', 1, { x: 15, y: -10 }, 'top')).toBe(true);
     expect(config.actionZones[0].vertices[1]).toEqual({ x: 290, y: 180 });
     expect(config.actionZones[0].vertices[2]).toEqual({ x: 210, y: 300 });
-    expect(config.actionZones[0].topVertices[1]).toEqual({ x: 315, y: 170, z: 240 });
-    expect(config.actionZones[0].topVertices[2]).toEqual({ x: 265, y: 270, z: 240 });
+    expect(config.actionZones[0].topVertices[1]).toEqual({ x: 305, y: 170, z: 240 });
+    expect(config.actionZones[0].topVertices[2]).toEqual({ x: 225, y: 290, z: 240 });
 
     expect(moveActionZoneVertex(config, 'zone-1', 2, { x: 340, y: 310, z: 315 }, 'top')).toBe(true);
     expect(config.actionZones[0].vertices[2]).toEqual({ x: 210, y: 300 });
@@ -267,10 +290,43 @@ describe('rpg3d map editing helpers', () => {
     expect(config.actionZones[0].vertices).toHaveLength(5);
     expect(config.actionZones[0].topVertices).toHaveLength(5);
     expect(config.actionZones[0].vertices[2]).toEqual({ x: 270, y: 230 });
-    expect(config.actionZones[0].topVertices[2]).toEqual({ x: 348, y: 230, z: 278 });
+    expect(config.actionZones[0].topVertices[2]).toEqual({ x: 343, y: 230, z: 278 });
     expect(moveActionZoneEdge(config, 'zone-1', 1, { x: 0, y: 0, z: -18 }, 'top')).toBe(true);
-    expect(config.actionZones[0].topVertices[1]).toEqual({ x: 335, y: 160, z: 222 });
-    expect(config.actionZones[0].topVertices[2]).toEqual({ x: 348, y: 230, z: 260 });
+    expect(config.actionZones[0].topVertices[1]).toEqual({ x: 325, y: 160, z: 222 });
+    expect(config.actionZones[0].topVertices[2]).toEqual({ x: 343, y: 230, z: 260 });
     expect(findEntityAt(config, { x: 270, y: 230 })).toEqual({ type: 'actionZone', id: 'zone-1' });
+  });
+
+  it('keeps an explicitly edited action zone top layer independent from footprint edits', () => {
+    const config = createMapConfig();
+    config.actionZones = [{
+      id: 'zone-1',
+      x: 200,
+      y: 200,
+      w: 120,
+      h: 120,
+      vertices: [
+        { x: 160, y: 160 },
+        { x: 280, y: 160 },
+        { x: 280, y: 280 },
+        { x: 160, y: 280 },
+      ],
+      topVertices: [
+        { x: 170, y: 150, z: 220 },
+        { x: 290, y: 150, z: 260 },
+        { x: 300, y: 290, z: 300 },
+        { x: 150, y: 290, z: 240 },
+      ],
+    }];
+
+    expect(moveActionZoneVertex(config, 'zone-1', 0, { x: 120, y: 140 })).toBe(true);
+    expect(config.actionZones[0].vertices[0]).toEqual({ x: 120, y: 140 });
+    expect(config.actionZones[0].topVertices[0]).toEqual({ x: 170, y: 150, z: 220 });
+
+    expect(moveActionZoneEdge(config, 'zone-1', 0, { x: 20, y: 10 })).toBe(true);
+    expect(config.actionZones[0].vertices[0]).toEqual({ x: 140, y: 150 });
+    expect(config.actionZones[0].vertices[1]).toEqual({ x: 300, y: 170 });
+    expect(config.actionZones[0].topVertices[0]).toEqual({ x: 170, y: 150, z: 220 });
+    expect(config.actionZones[0].topVertices[1]).toEqual({ x: 290, y: 150, z: 260 });
   });
 });

@@ -1,5 +1,4 @@
 ﻿import { DEFAULT_COMBAT_SETTINGS } from './combatDefaults.js';
-
 const HERO_ATTACK_TYPES = ['physical', 'water', 'earth', 'fire', 'lightning'];
 const POWER_TYPES = ['water', 'earth', 'fire', 'lightning'];
 const STATUS_EFFECT_TYPES = [
@@ -20,7 +19,6 @@ const STATUS_EFFECT_TYPES = [
 const DAMAGING_STATUS_EFFECTS = ['poison', 'burn', 'bleed'];
 const BUFF_STATUS_EFFECTS = ['force_buff', 'difficulty_buff', 'resistance_buff', 'critical_buff'];
 const DEBUFF_STATUS_EFFECTS = ['force_debuff', 'difficulty_debuff', 'resistance_debuff', 'critical_debuff'];
-
 export const COMBAT_OUTCOMES = {
   ACTIVE: 'active',
   BLOCKED: 'blocked',
@@ -28,28 +26,23 @@ export const COMBAT_OUTCOMES = {
   DEFEAT: 'defeat',
   TIMEOUT: 'timeout',
 };
-
 export const numberValue = (value, fallback = 0) => {
   const next = Number(value);
   return Number.isFinite(next) ? next : fallback;
 };
-
 export const clampNumber = (value, fallback = 0, min = 0, max = 999) => {
   const next = Number(value);
   if (!Number.isFinite(next)) return fallback;
   return Math.max(min, Math.min(max, Math.round(next)));
 };
-
 export const clampDecimal = (value, fallback = 1, min = 0, max = 99) => {
   const next = Number(value);
   if (!Number.isFinite(next)) return fallback;
   return Math.max(min, Math.min(max, Math.round(next * 10) / 10));
 };
-
 export const normalizeHeroAttackType = (value) => (
   HERO_ATTACK_TYPES.includes(value) ? value : 'physical'
 );
-
 export const normalizePowerType = (value) => (
   POWER_TYPES.includes(value) ? value : 'fire'
 );

@@ -79,8 +79,25 @@ const getProjectSaveFingerprint = (project) => {
 
 const hasDurableProjectSave = (syncStatus = {}) => Boolean(syncStatus.localSaved || syncStatus.remoteSaved);
 
+export const getProjectSaveStatus = (syncStatus = {}) => (
+  syncStatus.remoteSaved
+    ? 'Sauvegardé sur Supabase'
+    : syncStatus.remoteAttempted
+      ? syncStatus.localSaved
+        ? 'Supabase non synchronisé'
+        : syncStatus.localCacheSaved
+          ? 'Sauvegarde locale incomplète'
+          : 'Erreur de sauvegarde'
+      : syncStatus.localSaved
+        ? 'Sauvegardé localement'
+        : syncStatus.localCacheSaved
+          ? 'Sauvegarde locale incomplète'
+          : 'Erreur de sauvegarde'
+);
+
 export function useAutosaveProject({
   activeProjectId,
+  enabled = true,
   hydratedProjectRef,
   project,
   saveProject,
@@ -122,6 +139,18 @@ export function useAutosaveProject({
   useEffect(() => {
     saveProjectRef.current = saveProject;
   }, [saveProject]);
+
+  useEffect(() => {
+    if (enabled) return;
+    latestRequestRef.current = null;
+    remoteDirtySinceRef.current = 0;
+    failedSaveCountRef.current = 0;
+    nextSaveAllowedAtRef.current = 0;
+    if (retryTimerRef.current) {
+      window.clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+  }, [enabled]);
 
   const matchesProjectSnapshot = useCallback((savedProjectId, savedProjectRef, savedFingerprintRef, nextProjectId, nextProject) => {
     if (!nextProjectId || savedProjectId !== nextProjectId) return false;
@@ -171,6 +200,10 @@ export function useAutosaveProject({
   }, [matchesProjectSnapshot]);
 
   const runLatestSave = useCallback(async () => {
+    if (!enabled) {
+      latestRequestRef.current = null;
+      return;
+    }
     if (isSavingRef.current) return;
 
     const request = latestRequestRef.current;
@@ -218,20 +251,7 @@ export function useAutosaveProject({
         && request.sequence === sequenceRef.current
         && (!latestRequestRef.current || latestRequestRef.current.retryAfterFailure)
       ) {
-        const nextSaveStatus = syncStatus.remoteSaved
-          ? 'Sauvegardé sur Supabase'
-          : syncStatus.remoteAttempted
-            ? syncStatus.localSaved
-              ? 'Supabase non synchronisé'
-              : syncStatus.localCacheSaved
-                ? 'Sauvegarde locale incomplète'
-                : 'Erreur de sauvegarde'
-            : syncStatus.localSaved
-              ? 'Sauvegardé localement'
-              : syncStatus.localCacheSaved
-                ? 'Sauvegarde locale incomplète'
-                : 'Erreur de sauvegarde';
-        setSaveStatus(nextSaveStatus);
+        setSaveStatus(getProjectSaveStatus(syncStatus));
       }
     } catch (error) {
       console.error('Erreur de sauvegarde du projet', error);
@@ -266,9 +286,10 @@ export function useAutosaveProject({
         }
       }
     }
-  }, [setSaveStatus]);
+  }, [enabled, setSaveStatus]);
 
   const queueSaveRequest = useCallback((request) => {
+    if (!enabled) return;
     const pendingRequest = latestRequestRef.current;
     latestRequestRef.current = pendingRequest && pendingRequest.activeProjectId === request.activeProjectId
       ? {
@@ -277,7 +298,7 @@ export function useAutosaveProject({
       }
       : request;
     runLatestSave();
-  }, [runLatestSave]);
+  }, [enabled, runLatestSave]);
 
   const markProjectSaveStarted = useCallback((savedProject, savedProjectId = activeProjectId) => {
     if (!savedProjectId || !savedProject) return;
@@ -293,6 +314,7 @@ export function useAutosaveProject({
 
   const markProjectSaveFailed = useCallback((savedProject, savedProjectId = activeProjectId, uiState = {}) => {
     clearManualSaveSnapshot(savedProjectId, savedProject);
+    if (!enabled) return;
     if (!userId) return;
     if (screen !== 'editor') return;
     if (!savedProjectId || hydratedProjectRef.current !== savedProjectId) return;
@@ -309,6 +331,7 @@ export function useAutosaveProject({
   }, [
     activeProjectId,
     clearManualSaveSnapshot,
+    enabled,
     hydratedProjectRef,
     queueSaveRequest,
     screen,
@@ -328,6 +351,7 @@ export function useAutosaveProject({
   }, [activeProjectId, screen, selectedSceneId, tab, userId, writeBuilderUiState]);
 
   useEffect(() => {
+    if (!enabled) return undefined;
     const saveDelayMs = AUTOSAVE_BASE_DELAY_MS;
     const saveTimer = window.setTimeout(() => {
       if (!userId) return;
@@ -366,6 +390,7 @@ export function useAutosaveProject({
     };
   }, [
     activeProjectId,
+    enabled,
     hydratedProjectRef,
     matchesProjectSnapshot,
     project,
@@ -393,6 +418,7 @@ export function useAutosaveProject({
   }, [activeProjectId, hydratedProjectRef, project, skipInitialProjectSave]);
 
   useEffect(() => {
+    if (!enabled) return undefined;
     if (!userId) return undefined;
     if (screen !== 'editor') return undefined;
     if (!activeProjectId) return undefined;
@@ -460,6 +486,7 @@ export function useAutosaveProject({
     };
   }, [
     activeProjectId,
+    enabled,
     hydratedProjectRef,
     matchesProjectSnapshot,
     project,
