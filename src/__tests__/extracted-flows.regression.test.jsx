@@ -5,8 +5,11 @@ import { useAccessibleDialog } from '../components/AccessibleDialog';
 import MediaSourceModal from '../components/MediaSourceModal.jsx';
 import { createInitialProject } from '../data/projectData';
 import { useAccountStorage } from '../hooks/useAccountStorage';
+import { useBuilderProfileNavigation } from '../hooks/useBuilderProfileNavigation';
+import { useBuilderProjectFileActions } from '../hooks/useBuilderProjectFileActions';
 import { getProjectSaveStatus, useAutosaveProject } from '../hooks/useAutosaveProject';
 import { useProfileProjectActions } from '../hooks/useProfileProjectActions';
+import { useProjectSaveAcknowledger } from '../hooks/useProjectSaveAcknowledger';
 import { MB } from '../lib/storageQuota';
 import { fileToDataURL, uploadFileToSupabase } from '../utils/fileHelpers';
 import { removeMediaAssetsFromProject } from '../utils/mediaProjectHelpers';
@@ -171,6 +174,285 @@ describe('extracted hooks', () => {
     expect(getProjectSaveStatus({ localSaved: true, remoteAttempted: false, remoteSaved: false })).toBe('Sauvegardé localement');
     expect(getProjectSaveStatus({ localCacheSaved: true, localSaved: false, remoteAttempted: false })).toBe('Sauvegarde locale incomplète');
     expect(getProjectSaveStatus({ localSaved: false, remoteAttempted: false })).toBe('Erreur de sauvegarde');
+  });
+
+  test('sauvegarde manuelle ack les marqueurs autosave', async () => {
+    const project = { title: 'Projet manuel' };
+    const saveProject = vi.fn(async () => ({
+      syncStatus: { localSaved: true, remoteAttempted: false, remoteSaved: false },
+    }));
+    const markProjectSaveFailed = vi.fn();
+    const markProjectSaveStarted = vi.fn();
+    const markProjectSaved = vi.fn();
+
+    const { result } = renderHook(() => useProjectSaveAcknowledger({
+      activeProjectId: 'project-1',
+      markProjectSaveFailed,
+      markProjectSaveStarted,
+      markProjectSaved,
+      saveProject,
+    }));
+
+    await act(async () => {
+      await result.current(project, undefined, { tab: 'scenes' }, { localOnly: true });
+    });
+
+    expect(markProjectSaveStarted).toHaveBeenCalledWith(project, 'project-1');
+    expect(saveProject).toHaveBeenCalledWith(project, 'project-1', { tab: 'scenes' }, { localOnly: true });
+    expect(markProjectSaved).toHaveBeenCalledWith(project, 'project-1', {
+      localSaved: true,
+      remoteAttempted: false,
+      remoteSaved: false,
+    });
+    expect(markProjectSaveFailed).not.toHaveBeenCalled();
+  });
+
+  test('sauvegarde manuelle refuse un cache local incomplet comme succes durable', async () => {
+    const project = { title: 'Projet quota' };
+    const syncStatus = {
+      localCacheSaved: true,
+      localPartial: true,
+      localSaved: false,
+      remoteAttempted: false,
+      remoteSaved: false,
+    };
+    const saveProject = vi.fn(async () => ({ syncStatus }));
+    const markProjectSaveFailed = vi.fn();
+    const markProjectSaveStarted = vi.fn();
+    const markProjectSaved = vi.fn();
+
+    const { result } = renderHook(() => useProjectSaveAcknowledger({
+      activeProjectId: 'project-1',
+      markProjectSaveFailed,
+      markProjectSaveStarted,
+      markProjectSaved,
+      saveProject,
+    }));
+
+    await expect(act(async () => {
+      await result.current(project, undefined, { tab: 'scenes' });
+    })).rejects.toMatchObject({
+      code: 'non-durable-project-save',
+      syncStatus,
+    });
+
+    expect(markProjectSaveStarted).toHaveBeenCalledWith(project, 'project-1');
+    expect(markProjectSaved).not.toHaveBeenCalled();
+    expect(markProjectSaveFailed).toHaveBeenCalledWith(project, 'project-1', { tab: 'scenes' });
+  });
+
+  test('importe un JSON projet depuis les actions fichier du builder', async () => {
+    const importedProject = {
+      ...createInitialProject(),
+      title: 'Projet JSON header',
+      scenes: [{ id: 'scene-json', name: 'Scene JSON', hotspots: [] }],
+      start: { type: 'scene', targetSceneId: 'scene-json', targetCinematicId: '' },
+      enigmas: [],
+      cinematics: [],
+      combinations: [],
+    };
+    const editor = {
+      loadProject: vi.fn(),
+      project: createInitialProject(),
+    };
+    const preview = {
+      syncWithProject: vi.fn(),
+    };
+    const saveProjectAndAcknowledge = vi.fn(async () => ({
+      syncStatus: { localSaved: true, remoteAttempted: false, remoteSaved: false },
+    }));
+    const setSaveStatus = vi.fn();
+    const file = new File([JSON.stringify(importedProject)], 'projet.json', {
+      type: 'application/json',
+    });
+    const event = {
+      target: {
+        files: [file],
+        value: 'projet.json',
+      },
+    };
+
+    const { result } = renderHook(() => useBuilderProjectFileActions({
+      activeProjectId: 'project-1',
+      editor,
+      preview,
+      saveProjectAndAcknowledge,
+      setSaveStatus,
+    }));
+
+    await act(async () => {
+      await result.current.importProjectJson(event);
+    });
+
+    expect(editor.loadProject).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Projet JSON header',
+    }));
+    expect(preview.syncWithProject).toHaveBeenCalledWith(expect.objectContaining({
+      scenes: [expect.objectContaining({ id: 'scene-json' })],
+    }));
+    expect(saveProjectAndAcknowledge).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Projet JSON header',
+    }), 'project-1');
+    expect(setSaveStatus).toHaveBeenCalledWith('Projet importé et sauvegardé');
+    expect(event.target.value).toBe('');
+  });
+
+  test('import JSON builder ne signale pas un succes quand la sauvegarde durable echoue', async () => {
+    const importedProject = {
+      ...createInitialProject(),
+      title: 'Projet JSON quota',
+      scenes: [{ id: 'scene-json', name: 'Scene JSON', hotspots: [] }],
+      start: { type: 'scene', targetSceneId: 'scene-json', targetCinematicId: '' },
+      enigmas: [],
+      cinematics: [],
+      combinations: [],
+    };
+    const editor = {
+      loadProject: vi.fn(),
+      project: createInitialProject(),
+    };
+    const preview = {
+      syncWithProject: vi.fn(),
+    };
+    const saveError = Object.assign(new Error('Sauvegarde incomplete'), {
+      code: 'non-durable-project-save',
+    });
+    const saveProjectAndAcknowledge = vi.fn(async () => {
+      throw saveError;
+    });
+    const setSaveStatus = vi.fn();
+    const file = new File([JSON.stringify(importedProject)], 'projet.json', {
+      type: 'application/json',
+    });
+    const event = {
+      target: {
+        files: [file],
+        value: 'projet.json',
+      },
+    };
+
+    const { result } = renderHook(() => useBuilderProjectFileActions({
+      activeProjectId: 'project-1',
+      editor,
+      preview,
+      saveProjectAndAcknowledge,
+      setSaveStatus,
+    }));
+
+    await expect(act(async () => {
+      await result.current.importProjectJson(event);
+    })).rejects.toThrow('Sauvegarde incomplete');
+
+    expect(editor.loadProject).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Projet JSON quota',
+    }));
+    expect(preview.syncWithProject).toHaveBeenCalled();
+    expect(setSaveStatus).toHaveBeenCalledWith('Erreur de sauvegarde');
+    expect(setSaveStatus).not.toHaveBeenCalledWith('Projet importé et sauvegardé');
+    expect(event.target.value).toBe('');
+  });
+
+  test('import JSON builder refuse un fichier corrompu sans charger le projet', async () => {
+    const editor = {
+      loadProject: vi.fn(),
+      project: createInitialProject(),
+    };
+    const preview = {
+      syncWithProject: vi.fn(),
+    };
+    const saveProjectAndAcknowledge = vi.fn();
+    const setSaveStatus = vi.fn();
+    const event = {
+      target: {
+        files: [new File(['{"title":"Cassé",'], 'broken.json', { type: 'application/json' })],
+        value: 'broken.json',
+      },
+    };
+
+    const { result } = renderHook(() => useBuilderProjectFileActions({
+      activeProjectId: 'project-1',
+      editor,
+      preview,
+      saveProjectAndAcknowledge,
+      setSaveStatus,
+    }));
+
+    await expect(act(async () => {
+      await result.current.importProjectJson(event);
+    })).rejects.toMatchObject({
+      code: 'PROJECT_IMPORT_INVALID_JSON',
+    });
+
+    expect(editor.loadProject).not.toHaveBeenCalled();
+    expect(preview.syncWithProject).not.toHaveBeenCalled();
+    expect(saveProjectAndAcknowledge).not.toHaveBeenCalled();
+    expect(setSaveStatus).toHaveBeenCalledWith(expect.stringContaining('JSON illisible'));
+    expect(event.target.value).toBe('');
+  });
+
+  test('retour profil bloque une sauvegarde de sortie non durable', async () => {
+    const project = {
+      title: 'Projet sortie quota',
+      scenes: [{ id: 'scene-1', name: 'Scene 1', hotspots: [] }],
+    };
+    const syncStatus = {
+      localCacheSaved: true,
+      localPartial: true,
+      localSaved: false,
+      remoteAttempted: false,
+      remoteSaved: false,
+    };
+    const saveProject = vi.fn(async () => ({ syncStatus }));
+    const markProjectSaveFailed = vi.fn();
+    const markProjectSaveStarted = vi.fn();
+    const markProjectSaved = vi.fn();
+    const setSaveStatus = vi.fn();
+    const alertDialog = vi.fn(async () => true);
+    const onExitToProfile = vi.fn();
+    const setScreen = vi.fn();
+
+    const { result: saveResult } = renderHook(() => useProjectSaveAcknowledger({
+      activeProjectId: 'project-1',
+      markProjectSaveFailed,
+      markProjectSaveStarted,
+      markProjectSaved,
+      saveProject,
+    }));
+    const { result } = renderHook(() => useBuilderProfileNavigation({
+      alertDialog,
+      auth: {
+        activeProjectId: 'project-1',
+        user: { id: 'user-1' },
+      },
+      editor: {
+        project,
+        selectedSceneId: 'scene-1',
+        tab: 'scenes',
+      },
+      hydratedProjectRef: { current: 'project-1' },
+      onExitToProfile,
+      saveProjectAndAcknowledge: saveResult.current,
+      setSaveStatus,
+      setScreen,
+    }));
+
+    await act(async () => {
+      await result.current.openProfileFromBuilder();
+    });
+
+    expect(setSaveStatus).toHaveBeenCalledWith('Sauvegarde du projet...');
+    expect(setSaveStatus).toHaveBeenCalledWith('Erreur de sauvegarde');
+    expect(alertDialog).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Sauvegarde impossible',
+      variant: 'danger',
+    }));
+    expect(markProjectSaved).not.toHaveBeenCalled();
+    expect(markProjectSaveFailed).toHaveBeenCalledWith(project, 'project-1', {
+      tab: 'scenes',
+      selectedSceneId: 'scene-1',
+    });
+    expect(onExitToProfile).not.toHaveBeenCalled();
+    expect(setScreen).not.toHaveBeenCalledWith('profile');
   });
 
   test('autosave peut etre desactive sans lancer de sauvegarde projet', async () => {
@@ -352,6 +634,10 @@ describe('extracted hooks', () => {
 
     expect(setSaveStatus).toHaveBeenCalledWith('Sauvegarde locale incomplète');
     expect(setSaveStatus).not.toHaveBeenCalledWith('Sauvegardé localement');
+    expect(saveProject.mock.calls[0][3]).toMatchObject({
+      allowPartial: true,
+      localOnly: true,
+    });
   });
 
   test('autosave retry quand aucune ecriture locale ou distante ne reussit', async () => {
@@ -582,6 +868,10 @@ describe('profile project actions', () => {
       ...createInitialProject(),
       title: 'Projet importé',
       scenes: [{ id: 'scene-imported', name: 'Scene importée', hotspots: [] }],
+      start: { type: 'scene', targetSceneId: 'scene-imported', targetCinematicId: '' },
+      enigmas: [],
+      cinematics: [],
+      combinations: [],
     };
     const auth = {
       activeProjectId: 'existing-project',
@@ -647,5 +937,88 @@ describe('profile project actions', () => {
     }));
     expect(setScreen).toHaveBeenCalledWith('editor');
     expect(setSaveStatus).toHaveBeenLastCalledWith('Projet importé');
+  });
+
+  test('refuse depuis le profil un projet avec references cassees', async () => {
+    const invalidProject = {
+      ...createInitialProject(),
+      title: 'Projet cassé',
+      scenes: [{
+        id: 'scene-imported',
+        name: 'Scene importée',
+        hotspots: [{
+          id: 'hotspot-broken',
+          name: 'Porte',
+          x: 50,
+          y: 50,
+          width: 12,
+          height: 12,
+          actionType: 'scene',
+          targetSceneId: 'scene-manquante',
+        }],
+      }],
+      start: { type: 'scene', targetSceneId: 'scene-imported', targetCinematicId: '' },
+      enigmas: [],
+      cinematics: [],
+      combinations: [],
+    };
+    const auth = {
+      activeProjectId: 'existing-project',
+      createProject: vi.fn(),
+      deleteProject: vi.fn(),
+      duplicateProject: vi.fn(),
+      getProjectResumeState: vi.fn(() => ({})),
+      importProject: vi.fn(),
+      loadProject: vi.fn(),
+      markProjectLinkCopied: vi.fn(),
+      projects: [],
+      publishProject: vi.fn(),
+      renameProject: vi.fn(),
+      saveProject: vi.fn(),
+      unpublishProject: vi.fn(),
+      updateProjectMode: vi.fn(),
+      updateProjectShareSettings: vi.fn(),
+      user: { id: 'user-1' },
+    };
+    const editor = {
+      loadProject: vi.fn(),
+      patchProject: vi.fn(),
+      project: createInitialProject(),
+      selectedSceneId: 'scene-1',
+      setSelectedSceneId: vi.fn(),
+      setTab: vi.fn(),
+      tab: 'scenes',
+    };
+    const preview = {
+      syncWithProject: vi.fn(),
+    };
+    const setSaveStatus = vi.fn();
+    const setScreen = vi.fn();
+    const file = new File([JSON.stringify(invalidProject)], 'Projet cassé.json', {
+      type: 'application/json',
+    });
+
+    const { result } = renderHook(() => useProfileProjectActions({
+      auth,
+      confirmDialog: vi.fn(async () => true),
+      editor,
+      hydratedProjectRef: { current: '' },
+      preview,
+      setSaveStatus,
+      setScreen,
+    }));
+
+    await expect(act(async () => {
+      await result.current.importProjectFromProfile(file);
+    })).rejects.toMatchObject({
+      code: 'PROJECT_IMPORT_VALIDATION_FAILED',
+    });
+
+    expect(auth.importProject).not.toHaveBeenCalled();
+    expect(auth.loadProject).not.toHaveBeenCalled();
+    expect(editor.loadProject).not.toHaveBeenCalled();
+    expect(preview.syncWithProject).not.toHaveBeenCalled();
+    expect(setScreen).not.toHaveBeenCalledWith('editor');
+    expect(setSaveStatus).toHaveBeenCalledWith(expect.stringContaining('scene-manquante'));
   });
 });

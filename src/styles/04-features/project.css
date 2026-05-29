@@ -28,6 +28,22 @@
 
 .project-actions{justify-content:flex-end;min-width:0}
 
+.project-actions-body{display:grid;gap:6px;min-width:0;max-width:520px}
+
+.standalone-export-options{display:grid;gap:4px;min-width:0;max-width:390px}
+
+.standalone-export-checkbox{display:flex;align-items:flex-start;gap:7px;color:var(--text-info);font-size:12px;font-weight:750;line-height:1.3}
+
+.standalone-export-checkbox input{flex:0 0 auto;margin-top:2px;accent-color:var(--primary)}
+
+.standalone-export-help{margin:0;font-size:11.5px;line-height:1.35}
+
+.standalone-export-status,.standalone-export-warning{margin:0;font-size:12px;font-weight:800;line-height:1.35}
+
+.standalone-export-status{color:var(--text-success)}
+
+.standalone-export-warning{color:var(--text-warning)}
+
 .tabs{display:flex;gap:5px;margin-bottom:14px;min-width:0}
 
 .tabs-pro{margin:0 0 14px;padding:5px;border-radius:14px;background:linear-gradient(180deg,#101b2fc9,#08111fdb);border:1px solid rgba(147,197,253,.16);box-shadow:inset 0 1px rgba(255,255,255,.04),0 10px 24px rgba(0,0,0,.16);overflow:visible}

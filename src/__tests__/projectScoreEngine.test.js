@@ -58,4 +58,48 @@ describe('calculateProjectScore hero combat analysis', () => {
     expect(withCombat.badges.some((badge) => badge.id === 'hero-combat-ready')).toBe(true);
     expect(withoutCombat.feedback.some((entry) => entry.metric === '0 combat')).toBe(true);
   });
+
+  it('scores large classic route maps without changing connection diagnostics', () => {
+    const sceneCount = 160;
+    const scenes = Array.from({ length: sceneCount }, (_, index) => ({
+      id: `scene-${index}`,
+      name: `Scene ${index}`,
+      introText: `Intro ${index}`,
+      hotspots: index < sceneCount - 1 ? [{
+        id: `hotspot-${index}`,
+        name: 'Suite',
+        actionType: 'scene',
+        targetSceneId: `scene-${index + 1}`,
+      }] : [],
+      sceneObjects: [],
+    }));
+    const rooms = scenes.map((scene, index) => ({
+      id: `room-${index}`,
+      sceneId: scene.id,
+      type: index === 0 ? 'start' : index === sceneCount - 1 ? 'end' : 'room',
+    }));
+    const connections = Array.from({ length: sceneCount - 1 }, (_, index) => ({
+      id: `connection-${index}`,
+      fromRoomId: `room-${index}`,
+      toRoomId: `room-${index + 1}`,
+      allowOneWay: true,
+    }));
+    const score = calculateProjectScore({
+      creationMode: 'beginner',
+      start: { type: 'scene', targetSceneId: 'scene-0' },
+      acts: [{ id: 'act-1', title: 'Acte 1' }],
+      items: [],
+      enigmas: [],
+      cinematics: [],
+      scenes,
+      routeMap: { rooms, connections },
+    });
+
+    expect(score.metrics.transitions).toBe(sceneCount - 1);
+    expect(score.metrics.connectionCounts.accepted).toBe(sceneCount - 1);
+    expect(score.metrics.connectionCounts.missing || 0).toBe(0);
+    expect(score.metrics.deadPaths).toBe(0);
+    expect(score.metrics.blockedProgression).toBe(0);
+    expect(score.advancedAnalysis.route.reachableScenes).toBe(sceneCount);
+  });
 });

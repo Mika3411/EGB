@@ -24,8 +24,16 @@ import {
 } from 'lucide-react';
 import '../styles/2d-anime.css';
 import { getAiAuthHeaders } from '../utils/aiAuthHeaders';
-import { createIndexedDraftStorage } from '../utils/indexedDraftStorage';
-import { getAnime2dDraftStorageKey } from '../utils/storageHelpers';
+import {
+  deleteBestAnimeDraft,
+  getDraftDirtySignature,
+  getAnime2dDraftStorageKey,
+  isDraftSaveVerified,
+  readBestAnimeDraft,
+  readStoredAnimeDraft,
+  saveProjectDraftBestEffort,
+  writeBestAnimeDraft,
+} from '../utils/anime2dDraftPersistence';
 import { showConfirm } from './AccessibleDialog';
 
 const ANIMATION_PRESETS = [
@@ -90,9 +98,6 @@ const FIELD_HELP = {
   cropHeight: "Hauteur de la zone conservee par le recadrage.",
 };
 
-const LEGACY_DRAFT_STORAGE_KEY = 'escapeGameBuilder.2dAnimeDraft.v1';
-const ANIME_DRAFT_DB = 'escape-game-builder-2d-anime-drafts';
-const animeDraftStorage = createIndexedDraftStorage(ANIME_DRAFT_DB);
 const LAYER_SIZE_MIN = 6;
 const LAYER_SIZE_MAX = 180;
 const LAYER_HEIGHT_MIN = 6;
@@ -168,58 +173,6 @@ const makeSafeFilename = (value = 'image') => (
     .replace(/\s+/g, '-')
     .slice(0, 80) || 'image'
 );
-
-const readBestAnimeDraft = async (id) => {
-  const exactDraft = await animeDraftStorage.read(id).catch(() => null);
-  if (exactDraft?.layers?.length) return exactDraft;
-  const localDraft = readStoredDraft(id);
-  if (localDraft?.layers?.length) return localDraft;
-  return null;
-};
-
-const writeBestAnimeDraft = async (id, value) => {
-  let indexedSaved = false;
-  let localSaved = false;
-  try {
-    await animeDraftStorage.write(id, value);
-    indexedSaved = true;
-  } catch {
-    indexedSaved = false;
-  }
-  if (typeof window !== 'undefined') {
-    try {
-      window.localStorage.setItem(id, JSON.stringify(value));
-      localSaved = true;
-    } catch {
-      localSaved = false;
-    }
-  }
-  if (!indexedSaved && !localSaved) {
-    throw new Error('Sauvegarde du brouillon 2D impossible.');
-  }
-};
-
-const deleteBestAnimeDraft = async (id) => {
-  await animeDraftStorage.remove(id).catch(() => {});
-  if (typeof window !== 'undefined') {
-    try {
-      window.localStorage.removeItem(id);
-    } catch {
-      // Ignore browsers that block localStorage.
-    }
-  }
-};
-
-const saveProjectDraftBestEffort = async (onSaveDraft, draft) => {
-  if (!onSaveDraft) return true;
-  try {
-    await onSaveDraft(draft);
-    return true;
-  } catch (error) {
-    console.warn('Copie projet 2D Anime impossible.', error);
-    return false;
-  }
-};
 
 const colorDistance = (a, b) => {
   const dr = a[0] - b[0];
@@ -625,25 +578,6 @@ const serializeDraft = ({
   savedAt: new Date().toISOString(),
 });
 
-const getDraftDirtySignature = (draft = {}) => JSON.stringify({
-  layers: draft.layers || [],
-  selectedBackdrop: draft.selectedBackdrop || 'room',
-  sceneName: draft.sceneName || '',
-  cinematicSteps: draft.cinematicSteps || [],
-});
-
-const readStoredDraft = (storageKey = LEGACY_DRAFT_STORAGE_KEY) => {
-  if (typeof window === 'undefined') return null;
-  try {
-    const stored = window.localStorage.getItem(storageKey);
-    const parsed = JSON.parse(stored || 'null');
-    if (!parsed || !Array.isArray(parsed.layers)) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-};
-
 const normalizeImportedLayer = (entry, index) => {
   const layer = entry?.layer || entry;
   if (!layer || typeof layer !== 'object') return null;
@@ -915,7 +849,7 @@ export default function TwoDAnimeEditor({
   onBackToBuilder = null,
 } = {}) {
   const storageKey = getAnime2dDraftStorageKey(draftStorageKey || projectName || user?.id || 'default');
-  const initialDraftRef = useRef(readStoredDraft(storageKey));
+  const initialDraftRef = useRef(readStoredAnimeDraft(storageKey));
   const initialProjectDraftRef = useRef(projectDraft);
   const savedDraftSignatureRef = useRef(initialProjectDraftRef.current?.layers?.length
     ? getDraftDirtySignature(initialProjectDraftRef.current)
@@ -1174,22 +1108,18 @@ export default function TwoDAnimeEditor({
 
   useEffect(() => {
     let cancelled = false;
-    readBestAnimeDraft(storageKey)
+    readBestAnimeDraft(storageKey, initialProjectDraftRef.current)
       .then((draft) => {
         if (cancelled) return;
         if (draft?.layers?.length) {
           restoreDraft(draft, 'Brouillon restaure.');
-        } else if (initialProjectDraftRef.current?.layers?.length) {
-          restoreDraft(initialProjectDraftRef.current, 'Brouillon restaure depuis le projet.');
-        } else if (initialDraftRef.current?.layers?.length) {
-          restoreDraft(initialDraftRef.current, 'Brouillon local restaure.');
         }
       })
       .catch(() => {
-        if (!cancelled && initialProjectDraftRef.current?.layers?.length) {
-          restoreDraft(initialProjectDraftRef.current, 'Brouillon restaure depuis le projet.');
-        } else if (!cancelled && initialDraftRef.current?.layers?.length) {
+        if (!cancelled && initialDraftRef.current?.layers?.length) {
           restoreDraft(initialDraftRef.current, 'Brouillon local restaure.');
+        } else if (!cancelled && initialProjectDraftRef.current?.layers?.length) {
+          restoreDraft(initialProjectDraftRef.current, 'Brouillon restaure depuis le projet.');
         } else if (!cancelled) {
           setSaveStatus('Sauvegarde du brouillon 2D Anime indisponible sur ce navigateur.');
         }
@@ -1202,8 +1132,8 @@ export default function TwoDAnimeEditor({
   const saveDraftNow = useCallback(async () => {
     const draft = buildDraftPayload();
     await writeBestAnimeDraft(storageKey, draft);
-    const savedDraft = await readBestAnimeDraft(storageKey);
-    if (!savedDraft?.layers?.length) {
+    const savedDraft = await readBestAnimeDraft(storageKey, initialProjectDraftRef.current);
+    if (!isDraftSaveVerified(savedDraft, draft)) {
       throw new Error('Verification du brouillon 2D impossible.');
     }
     const projectSaved = await saveProjectDraftBestEffort(onSaveDraft, draft);

@@ -21,6 +21,40 @@ import {
   getCharacterRigSignature,
   normalizeCharacterRigPoints,
 } from './rpg3dCharacterRig.js';
+import {
+  cleanupOrphanedRpg3DLocalModelFiles,
+  collectReferencedRpg3DLocalModelFileIds,
+  createLocalModelFileId,
+  createLocalModelObjectUrl,
+  deleteRpg3DLocalModelFiles,
+  forgetRpg3DLocalBlobFile,
+  getCachedRpg3DLocalBlobFile,
+  getOrphanedRpg3DLocalModelFileIds,
+  isBlobUrl,
+  isDataUrl,
+  listRpg3DLocalModelFileIds,
+  listRpg3DLocalModelFileRecords,
+  loadLocalModelFile,
+  persistLocalModelFile,
+  rememberRpg3DLocalBlobFile,
+} from './rpg3dLocalModelFiles.js';
+
+export {
+  cleanupOrphanedRpg3DLocalModelFiles,
+  collectReferencedRpg3DLocalModelFileIds,
+  createLocalModelFileId,
+  createLocalModelObjectUrl,
+  deleteRpg3DLocalModelFiles,
+  forgetRpg3DLocalBlobFile,
+  getOrphanedRpg3DLocalModelFileIds,
+  isBlobUrl,
+  isDataUrl,
+  listRpg3DLocalModelFileIds,
+  listRpg3DLocalModelFileRecords,
+  loadLocalModelFile,
+  persistLocalModelFile,
+  rememberRpg3DLocalBlobFile,
+};
 
 export const ARCADE_ASSETS_STORAGE_KEY = 'escape-game-builder:arcade-assets:v1';
 export const ARCADE_ASSETS_BACKUP_STORAGE_KEY = 'escape-game-builder:arcade-assets-backups:v1';
@@ -40,115 +74,6 @@ export const readSavedArcadeAssets = () => {
   } catch {
     return null;
   }
-};
-
-export const isBlobUrl = (value = '') => String(value || '').startsWith('blob:');
-export const isDataUrl = (value = '') => String(value || '').startsWith('data:');
-
-const localBlobFileCache = new Map();
-const localModelObjectUrlCache = new Map();
-const LOCAL_MODEL_DB_NAME = 'escape-game-builder:rpg3d-local-models';
-const LOCAL_MODEL_DB_VERSION = 1;
-const LOCAL_MODEL_STORE_NAME = 'modelFiles';
-
-const canUseIndexedDb = () => typeof window !== 'undefined' && typeof window.indexedDB !== 'undefined';
-
-const openLocalModelDb = () => new Promise((resolve, reject) => {
-  if (!canUseIndexedDb()) {
-    resolve(null);
-    return;
-  }
-  const request = window.indexedDB.open(LOCAL_MODEL_DB_NAME, LOCAL_MODEL_DB_VERSION);
-  request.onupgradeneeded = () => {
-    const db = request.result;
-    if (!db.objectStoreNames.contains(LOCAL_MODEL_STORE_NAME)) db.createObjectStore(LOCAL_MODEL_STORE_NAME, { keyPath: 'id' });
-  };
-  request.onsuccess = () => resolve(request.result);
-  request.onerror = () => reject(request.error || new Error('Stockage local 3D indisponible.'));
-});
-
-const runLocalModelStore = async (mode, runner) => {
-  const db = await openLocalModelDb();
-  if (!db) return null;
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(LOCAL_MODEL_STORE_NAME, mode);
-    const store = transaction.objectStore(LOCAL_MODEL_STORE_NAME);
-    const request = runner(store);
-    request.onsuccess = () => resolve(request.result || null);
-    request.onerror = () => reject(request.error || new Error('Operation de stockage local impossible.'));
-    transaction.oncomplete = () => db.close();
-    transaction.onerror = () => {
-      db.close();
-      reject(transaction.error || new Error('Transaction de stockage local impossible.'));
-    };
-  });
-};
-
-export const createLocalModelFileId = (modelType = 'model', modelId = '', file = null) => (
-  [
-    'rpg3d',
-    modelType || 'model',
-    modelId || 'model',
-    file?.name || 'asset',
-    Number(file?.size) || 0,
-    Number(file?.lastModified) || Date.now(),
-  ]
-    .map((part) => encodeURIComponent(String(part)))
-    .join(':')
-);
-
-export const persistLocalModelFile = async (localModelFileId = '', file = null) => {
-  if (!localModelFileId || !file) return false;
-  try {
-    await runLocalModelStore('readwrite', (store) => store.put({
-      id: localModelFileId,
-      file,
-      name: file.name || '',
-      type: file.type || '',
-      size: Number(file.size) || 0,
-      updatedAt: Date.now(),
-    }));
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-export const loadLocalModelFile = async (localModelFileId = '') => {
-  if (!localModelFileId) return null;
-  try {
-    const record = await runLocalModelStore('readonly', (store) => store.get(localModelFileId));
-    return record?.file || null;
-  } catch {
-    return null;
-  }
-};
-
-export const createLocalModelObjectUrl = async (localModelFileId = '') => {
-  if (!localModelFileId) return '';
-  const cachedUrl = localModelObjectUrlCache.get(localModelFileId);
-  if (cachedUrl) return cachedUrl;
-  const file = await loadLocalModelFile(localModelFileId);
-  if (!file) return '';
-  const objectUrl = URL.createObjectURL(file);
-  localModelObjectUrlCache.set(localModelFileId, objectUrl);
-  localBlobFileCache.set(objectUrl, file);
-  return objectUrl;
-};
-
-export const rememberRpg3DLocalBlobFile = (blobUrl = '', file = null, localModelFileId = '', options = {}) => {
-  if (!isBlobUrl(blobUrl) || !file) return false;
-  localBlobFileCache.set(blobUrl, file);
-  if (localModelFileId) {
-    localModelObjectUrlCache.set(localModelFileId, blobUrl);
-    if (options.persist !== false) persistLocalModelFile(localModelFileId, file);
-  }
-  return true;
-};
-
-export const forgetRpg3DLocalBlobFile = (blobUrl = '') => {
-  if (!isBlobUrl(blobUrl)) return false;
-  return localBlobFileCache.delete(blobUrl);
 };
 
 export const createArcadeAssetsPayload = (config, studioProject) => ({
@@ -425,7 +350,7 @@ export const dataUrlToFile = (dataUrl, fallbackName = 'asset.bin', options = {})
 };
 
 export const blobUrlToFile = async (blobUrl, fallbackName = 'asset.bin', options = {}) => {
-  const cachedFile = localBlobFileCache.get(blobUrl);
+  const cachedFile = getCachedRpg3DLocalBlobFile(blobUrl);
   if (cachedFile) {
     const sourceName = fallbackName || cachedFile.name || options.defaultName || 'asset.bin';
     const mimeType = cachedFile.type || getMimeTypeForFilename(sourceName) || options.mimeType || 'application/octet-stream';

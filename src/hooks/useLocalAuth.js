@@ -22,6 +22,7 @@ import { getSupabaseClient, hasSupabaseAuthConfig, hasSupabaseStorageConfig } fr
 import { migrateProjectAssetReferences } from '../lib/assetManager';
 import { canUseLocalStorage, readJsonStorage, removeStorageKey } from '../utils/storageHelpers';
 import { deleteProjectLocalDrafts } from '../utils/projectDraftCleanup';
+import { assertDurableProjectSave } from '../utils/projectPersistenceStatus';
 const PROJECTS_KEY_PREFIX = 'escapeGameBuilder.projects';
 const ACTIVE_PROJECT_KEY_PREFIX = 'escapeGameBuilder.activeProject';
 const PROJECTS_DB_NAME = 'escape-game-builder-projects';
@@ -92,10 +93,8 @@ const readProjectsFromIndexedDb = async (userId) => {
   try {
     db = await openProjectsDb();
     const projectRecords = await readUserProjectRecordsFromIndexedDb(db, userId);
-    if (projectRecords.length > 0) {
-      return mergeProjectRecordsByFreshness(projectRecords);
-    }
-    return await readProjectListFromIndexedDb(db, userId);
+    const projectList = await readProjectListFromIndexedDb(db, userId);
+    return mergeProjectRecordsByFreshness(projectList, projectRecords);
   } catch {
     return [];
   } finally {
@@ -335,8 +334,8 @@ const readProjects = (userId) => {
 
 const readPersistedProjects = async (userId) => {
   const indexedProjects = await readProjectsFromIndexedDb(userId);
-  if (indexedProjects.length > 0) return indexedProjects;
-  return readProjects(userId);
+  const localProjects = readProjects(userId);
+  return mergeProjectRecordsByFreshness(localProjects, indexedProjects);
 };
 
 const makeLocalWriteStatus = ({
@@ -431,7 +430,7 @@ const persistSingleProject = async (userId, project, projects, options = {}) => 
     return storableProject;
   };
   const indexedSaved = await writeProjectToIndexedDb(userId, project);
-  const localWriteStatus = indexedSaved ? makeLocalWriteStatus() : writeProjects(userId, getStorableProjects());
+  const localWriteStatus = writeProjects(userId, getStorableProjects());
   const localSaved = indexedSaved || localWriteStatus.fullSaved;
   const localCacheSaved = localWriteStatus.cacheSaved;
   const localPartial = !localSaved && localCacheSaved;
@@ -439,16 +438,9 @@ const persistSingleProject = async (userId, project, projects, options = {}) => 
   let remoteSaved = false;
   let remoteError = '';
   if (options.localOnly) {
-    return attachProjectSyncStatus(fullProjects, {
-      indexedSaved,
-      localCacheSaved,
-      localPartial,
-      localSaved,
-      localSlimmed: localWriteStatus.slimmed,
-      remoteError,
-      remoteAttempted,
-      remoteSaved,
-    });
+    const syncStatus = { indexedSaved, localCacheSaved, localPartial, localSaved, localSlimmed: localWriteStatus.slimmed, remoteError, remoteAttempted, remoteSaved };
+    if (!options.allowPartial) assertDurableProjectSave(syncStatus);
+    return attachProjectSyncStatus(fullProjects, syncStatus);
   }
   try {
     const remoteProject = await saveProjectRecordForUser(userId, getStorableProject(), getStorableProjects(), options);
@@ -463,16 +455,9 @@ const persistSingleProject = async (userId, project, projects, options = {}) => 
     }
     console.warn('Sauvegarde distante indisponible, brouillon conserve localement.', error);
   }
-  return attachProjectSyncStatus(fullProjects, {
-    indexedSaved,
-    localCacheSaved,
-    localPartial,
-    localSaved,
-    localSlimmed: localWriteStatus.slimmed,
-    remoteError,
-    remoteAttempted,
-    remoteSaved,
-  });
+  const syncStatus = { indexedSaved, localCacheSaved, localPartial, localSaved, localSlimmed: localWriteStatus.slimmed, remoteError, remoteAttempted, remoteSaved };
+  if (!options.allowPartial) assertDurableProjectSave(syncStatus);
+  return attachProjectSyncStatus(fullProjects, syncStatus);
 };
 
 const persistProjects = async (userId, projects, options = {}) => {
@@ -500,16 +485,9 @@ const persistProjects = async (userId, projects, options = {}) => {
     }
     console.warn('Sauvegarde distante indisponible, brouillon conserve localement.', error);
   }
-  return attachProjectSyncStatus(fullProjects, {
-    indexedSaved,
-    localCacheSaved,
-    localPartial,
-    localSaved,
-    localSlimmed: localWriteStatus.slimmed,
-    remoteError,
-    remoteAttempted,
-    remoteSaved,
-  });
+  const syncStatus = { indexedSaved, localCacheSaved, localPartial, localSaved, localSlimmed: localWriteStatus.slimmed, remoteError, remoteAttempted, remoteSaved };
+  if (!options.allowPartial) assertDurableProjectSave(syncStatus);
+  return attachProjectSyncStatus(fullProjects, syncStatus);
 };
 
 const cacheProjectsLocally = async (userId, projects) => {

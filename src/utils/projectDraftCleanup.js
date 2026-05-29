@@ -1,4 +1,5 @@
 import { deleteIndexedDrafts } from './indexedDraftStorage';
+import { getAiDraftFallbackStorageKey } from './aiDraftStorageKeys';
 import {
   canUseLocalStorage,
   getAnime2dDraftStorageKey,
@@ -25,6 +26,10 @@ export const getProjectAiDraftIds = (projectId, project = {}) => compactUniqueSt
   project?.start?.targetSceneId ? `ai-draft:${project.start.targetSceneId}` : '',
 ]);
 
+export const getProjectAiLocalDraftKeys = (projectId, project = {}) => (
+  compactUniqueStrings(getProjectAiDraftIds(projectId, project).map(getAiDraftFallbackStorageKey))
+);
+
 export const getProjectAnime2dDraftIds = (projectId, project = {}) => compactUniqueStrings([
   getAnime2dDraftStorageKey(getAnime2dStorageId(projectId, project)),
   getAnime2dStorageId(projectId, project),
@@ -42,7 +47,9 @@ const removeLocalDraftKeys = (draftIds) => {
 
 export const deleteProjectLocalDrafts = async (projectId, project = {}) => {
   const aiDraftIds = getProjectAiDraftIds(projectId, project);
+  const aiLocalDraftKeys = getProjectAiLocalDraftKeys(projectId, project);
   const anime2dDraftIds = getProjectAnime2dDraftIds(projectId, project);
+  const aiLocalDraftsDeleted = removeLocalDraftKeys(aiLocalDraftKeys);
   const anime2dLocalDraftsDeleted = removeLocalDraftKeys(anime2dDraftIds);
 
   const [aiDrafts, anime2dDrafts] = canUseIndexedDraftDb()
@@ -57,6 +64,7 @@ export const deleteProjectLocalDrafts = async (projectId, project = {}) => {
 
   return {
     aiDraftsDeleted: aiDrafts.status === 'fulfilled' ? aiDrafts.value : 0,
+    aiLocalDraftsDeleted,
     anime2dDraftsDeleted: anime2dDrafts.status === 'fulfilled' ? anime2dDrafts.value : 0,
     anime2dLocalDraftsDeleted,
     errors: [aiDrafts, anime2dDrafts]

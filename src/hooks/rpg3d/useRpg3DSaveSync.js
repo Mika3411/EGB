@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  cleanupOrphanedRpg3DLocalModelFiles,
   createArcadeAssetsPayload,
   rememberArcadeAssetsLocally,
   readSavedArcadeAssets,
@@ -47,6 +48,7 @@ export function useRpg3DSaveSync({
   configRef,
   lastSavedAutosaveVersionRef,
   project = null,
+  projectId = '',
   resetGame,
   savedArcadeAssets = null,
   setConfig,
@@ -59,6 +61,7 @@ export function useRpg3DSaveSync({
 } = {}) {
   const isSavingAssetsRef = useRef(false);
   const projectRef = useRef(project);
+  const projectIdRef = useRef(projectId);
   const remoteAssetsLoadKeyRef = useRef('');
   const [managementSaveStatus, setManagementSaveStatus] = useState(
     savedArcadeAssets ? 'Sauvegarde locale chargee.' : '',
@@ -72,6 +75,10 @@ export function useRpg3DSaveSync({
   useEffect(() => {
     projectRef.current = project;
   }, [project]);
+
+  useEffect(() => {
+    projectIdRef.current = projectId;
+  }, [projectId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -163,6 +170,22 @@ export function useRpg3DSaveSync({
     });
   }, [configRef, setConfig, studioProject, syncActiveCanvasConfigInRef]);
 
+  const cleanupLocalModelFiles = useCallback((currentConfig, currentStudioProject) => {
+    const currentProject = projectRef.current || {};
+    const currentProjectId = projectIdRef.current || currentProject.id || currentProject.projectId || '';
+    cleanupOrphanedRpg3DLocalModelFiles({
+      config: currentConfig,
+      studioProject: currentStudioProject,
+    }, {
+      scope: {
+        projectId: currentProjectId,
+        userId: user?.id || '',
+      },
+    }).catch(() => {
+      // Local model cleanup is best-effort; saving must remain the durable operation.
+    });
+  }, [user?.id]);
+
   const saveArcadeAssets = useCallback(async (options = {}) => {
     const localOnly = Boolean(options.localOnly);
     const supabaseConfigured = hasRpg3DAssetsSupabaseConfig();
@@ -196,6 +219,7 @@ export function useRpg3DSaveSync({
           setManagementSaveStatus('Sauvegarde impossible: stockage local plein.');
           return;
         }
+        cleanupLocalModelFiles(localSync.config, currentStudioProject);
         if (localSync.changed) {
           configRef.current = localSync.config;
           syncActiveCanvasConfigInRef(localSync.config, { updateState: workspaceTab === 'canvases' });
@@ -220,6 +244,7 @@ export function useRpg3DSaveSync({
         const nextStudioProject = createStudioProjectFromSavedAssets(remotePayload.studioProject, remotePayload.config, project);
         const nextConfig = createConfigFromSavedAssets(getActiveRpg3DCanvas(nextStudioProject)?.config || remotePayload.config);
         lastSavedAutosaveVersionRef.current = Math.max(lastSavedAutosaveVersionRef.current, savingVersion);
+        cleanupLocalModelFiles(nextConfig, nextStudioProject);
         if (autosaveVersionRef.current === savingVersion) {
           configRef.current = nextConfig;
           studioProjectRef.current = syncStudioProjectActiveCanvasConfig(nextStudioProject, nextConfig);
@@ -237,6 +262,7 @@ export function useRpg3DSaveSync({
         setManagementSaveStatus('Sauvegarde impossible: stockage local plein.');
         return;
       }
+      cleanupLocalModelFiles(localSync.config, currentStudioProject);
       if (localSync.changed) {
         configRef.current = localSync.config;
         syncActiveCanvasConfigInRef(localSync.config, { updateState: workspaceTab === 'canvases' });
@@ -252,6 +278,7 @@ export function useRpg3DSaveSync({
           const localSync = syncConfigModelReferences(currentConfig, currentStudioProject, { preferLocalBlob: true });
           const localPayload = createArcadeAssetsPayload(localSync.config, currentStudioProject);
           if (rememberArcadeAssetsLocally(localPayload)) {
+            cleanupLocalModelFiles(localSync.config, currentStudioProject);
             if (localSync.changed) {
               configRef.current = localSync.config;
               syncActiveCanvasConfigInRef(localSync.config, { updateState: workspaceTab === 'canvases' });
@@ -280,6 +307,7 @@ export function useRpg3DSaveSync({
   }, [
     authReady,
     autosaveVersionRef,
+    cleanupLocalModelFiles,
     configRef,
     lastSavedAutosaveVersionRef,
     project,

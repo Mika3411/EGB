@@ -4,7 +4,6 @@ import { buildGlobalSceneLayout, generateAiImage, getConnectedScenes } from '../
 import { getAiAuthHeaders } from '../utils/aiAuthHeaders';
 import { mergeProjectPatch, validateProject } from '../utils/projectValidation';
 import { downloadBlob } from '../utils/fileHelpers';
-import { createIndexedDraftStorage } from '../utils/indexedDraftStorage';
 import { showConfirm } from './AccessibleDialog';
 import AiBriefForm from './ai/AiBriefForm.jsx';
 import AiControlsPanel from './ai/AiControlsPanel.jsx';
@@ -12,6 +11,14 @@ import AiDiffPanel from './ai/AiDiffPanel.jsx';
 import AiDraftPreview from './ai/AiDraftPreview.jsx';
 import AiGenerationStatus from './ai/AiGenerationStatus.jsx';
 import AiImageWorkbench from './ai/AiImageWorkbench.jsx';
+import {
+  AI_DRAFT_AUTOSAVE_DELAY_MS,
+  clearStoredAiDraft,
+  readAiDraft,
+  readLocalAiDraft,
+  saveFullAiDraftLocally,
+  selectPreferredAiDraft,
+} from './ai/aiDraftPersistence.js';
 import {
   HelpLabel,
   formatChronologyEntries,
@@ -35,13 +42,7 @@ import {
 } from './ai/aiTabHelpers.js';
 import { FIELD_HELP, GLOBAL_VISUAL_STYLE_PRESETS, IMAGE_STYLE_PRESETS } from './ai/aiTabData.js';
 
-const AI_DRAFT_DB = 'escape-game-builder-ai-drafts';
-const AI_DRAFT_AUTOSAVE_DELAY_MS = 2_500;
 const AI_CREDITS_ENDPOINT = import.meta.env.VITE_AI_CREDITS_ENDPOINT || '/api/ai-credits';
-const aiDraftStorage = createIndexedDraftStorage(AI_DRAFT_DB);
-const readAiDraft = aiDraftStorage.read;
-const writeAiDraft = aiDraftStorage.write;
-const deleteAiDraft = aiDraftStorage.remove;
 
 export default function AiTab({
   project,
@@ -408,22 +409,28 @@ export default function AiTab({
       setAiWizardStep('result');
     };
 
-    readAiDraft(aiDraftKey)
-      .then((draft) => {
+    Promise.allSettled([
+      readAiDraft(aiDraftKey),
+      Promise.resolve(readLocalAiDraft(aiDraftKey)),
+    ])
+      .then(([indexedResult, localResult]) => {
         if (cancelled) return;
-        if (draft?.generatedProject) {
-          restoreDraft(draft, 'Brouillon IA complet restauré.');
-          return;
-        }
-        if (projectDraft?.generatedProject) {
-          restoreDraft(projectDraft, 'Copie légère du brouillon IA restaurée.');
-        }
-      })
-      .catch(() => {
-        if (!cancelled && projectDraft?.generatedProject) {
-          restoreDraft(projectDraft, 'Copie légère du brouillon IA restaurée.');
-        } else if (!cancelled) {
-          setStatus('Sauvegarde du brouillon IA indisponible sur ce navigateur.');
+        const preferredDraft = selectPreferredAiDraft([
+          {
+            draft: indexedResult.status === 'fulfilled' ? indexedResult.value : null,
+            label: 'Brouillon IA complet restaure.',
+          },
+          {
+            draft: localResult.status === 'fulfilled' ? localResult.value : null,
+            label: 'Brouillon IA local restaure.',
+          },
+          {
+            draft: projectDraft,
+            label: 'Copie legere du brouillon IA restauree.',
+          },
+        ]);
+        if (preferredDraft) {
+          restoreDraft(preferredDraft.draft, preferredDraft.label);
         }
       })
       .finally(() => {
@@ -442,11 +449,15 @@ export default function AiTab({
     setIsPatch(false);
     setImageStatus('');
     setDraftSaveStatus('');
-    setStatus('Brouillon IA effacé. Tu peux relancer une génération.');
+    setStatus('');
     setAiWizardStep('visual');
-    await deleteAiDraft(aiDraftKey).catch(() => null);
-    await onSaveAiDraft?.(null).catch(() => null);
-    setDraftVersion((version) => version + 1);
+    const cleanupFailures = await clearStoredAiDraft(aiDraftKey, onSaveAiDraft);
+    const nextStatus = cleanupFailures.length
+      ? `Brouillon IA efface, mais suppression incomplete: ${cleanupFailures.join(', ')}.`
+      : 'Brouillon IA efface. Tu peux relancer une generation.';
+    setStatus(nextStatus);
+    if (cleanupFailures.length) setDraftSaveStatus(nextStatus);
+    if (!cleanupFailures.length) setDraftVersion((version) => version + 1);
   };
 
   const buildAiDraftPayload = () => ({
@@ -482,15 +493,8 @@ export default function AiTab({
 
     const fullDraft = buildAiDraftPayload();
     const lightDraft = includeProjectCopy ? buildLightAiDraftPayload() : null;
-    let fullSaved = false;
     let projectSaved = false;
-
-    try {
-      await writeAiDraft(aiDraftKey, fullDraft);
-      fullSaved = true;
-    } catch {
-      fullSaved = false;
-    }
+    const localDraftSaved = await saveFullAiDraftLocally(aiDraftKey, fullDraft);
 
     if (includeProjectCopy && onSaveAiDraft) {
       try {
@@ -501,11 +505,11 @@ export default function AiTab({
       }
     }
 
-    if (fullSaved && projectSaved) {
+    if (localDraftSaved && projectSaved) {
       setDraftSaveStatus(manual ? 'Brouillon IA sauvegardé: complet sur cet appareil, copie légère dans le projet.' : 'Brouillon IA sauvegardé.');
       return;
     }
-    if (fullSaved) {
+    if (localDraftSaved) {
       setDraftSaveStatus(manual ? 'Brouillon IA complet sauvegardé sur cet appareil.' : 'Brouillon IA sauvegardé localement.');
       return;
     }
@@ -901,13 +905,7 @@ export default function AiTab({
         || targetSceneId;
       const fullDraft = buildAiDraftPayload();
       const lightDraft = buildLightAiDraftPayload();
-      let fullDraftSaved = false;
-      try {
-        await writeAiDraft(aiDraftKey, fullDraft);
-        fullDraftSaved = true;
-      } catch {
-        fullDraftSaved = false;
-      }
+      const fullDraftSaved = await saveFullAiDraftLocally(aiDraftKey, fullDraft);
       const result = await onApplyProject?.(generatedProject, {
         mode,
         isPatch,
@@ -1340,6 +1338,10 @@ export default function AiTab({
         setWizardStep={setAiWizardStep}
         hasAiResult={Boolean(generatedProject)}
       />
+
+      {!shouldShowAiOutput && (status || draftSaveStatus) ? (
+        <p className="small-note ai-draft-status">{draftSaveStatus || status}</p>
+      ) : null}
 
       {shouldShowAiOutput ? (
       <section className="panel main ai-output-panel" data-tour="ai-output">

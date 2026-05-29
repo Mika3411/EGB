@@ -1011,6 +1011,7 @@ export default function Character3DTab({
   previewEquipmentTest = null,
   onPreviewEquipmentTestClear,
   onSaveAssets,
+  localModelScope = null,
   saveStatus,
   saveInProgress = false,
 }) {
@@ -1247,7 +1248,7 @@ export default function Character3DTab({
     const localModelFileId = createLocalModelFileId('character', selectedModelId, storedFile);
     const modelUrl = URL.createObjectURL(storedFile);
     rememberRpg3DLocalBlobFile(modelUrl, storedFile, localModelFileId, { persist: false });
-    const localModelPersisted = await persistLocalModelFile(localModelFileId, storedFile);
+    const localModelPersisted = await persistLocalModelFile(localModelFileId, storedFile, { scope: localModelScope });
     localModelUrlsRef.current.set(selectedModelId, modelUrl);
     patchSelectedModel((model) => {
       model.shape = 'glb';
@@ -1265,7 +1266,7 @@ export default function Character3DTab({
       return next;
     });
     return { localModelPersisted, storedModelFileSize };
-  }, [patchSelectedModel, selectedModelId]);
+  }, [localModelScope, patchSelectedModel, selectedModelId]);
 
   const applyCachedCharacterModelUrl = useCallback((conversionResult = {}) => {
     const cacheUrl = getLocalModelToolsAssetUrl(conversionResult.cacheUrl || '');
@@ -1309,7 +1310,7 @@ export default function Character3DTab({
     const localModelFileId = createLocalModelFileId(`character-animation-${targetKey}`, selectedModelId, storedFile);
     const animationUrl = URL.createObjectURL(storedFile);
     rememberRpg3DLocalBlobFile(animationUrl, storedFile, localModelFileId, { persist: false });
-    const localModelPersisted = await persistLocalModelFile(localModelFileId, storedFile);
+    const localModelPersisted = await persistLocalModelFile(localModelFileId, storedFile, { scope: localModelScope });
     localAnimationUrlsRef.current.set(localAnimationKey, animationUrl);
     patchSelectedModel((model) => {
       model.modelAnimations = {
@@ -1329,7 +1330,7 @@ export default function Character3DTab({
     });
     setPreviewAnimationSlot(targetKey);
     return { localModelPersisted, storedModelFileSize };
-  }, [patchSelectedModel, selectedModelId]);
+  }, [localModelScope, patchSelectedModel, selectedModelId]);
 
   const applyCachedCharacterAnimationUrl = useCallback((targetKey, slot, conversionResult = {}) => {
     const baseSlot = getCharacterAnimationSlot(slot);
@@ -1483,7 +1484,7 @@ export default function Character3DTab({
       const localModelFileId = createLocalModelFileId('character', selectedModelId, storedFile);
       const modelUrl = URL.createObjectURL(storedFile);
       rememberRpg3DLocalBlobFile(modelUrl, storedFile, localModelFileId, { persist: false });
-      const localModelPersisted = await persistLocalModelFile(localModelFileId, storedFile);
+      const localModelPersisted = await persistLocalModelFile(localModelFileId, storedFile, { scope: localModelScope });
       localModelUrlsRef.current.set(selectedModelId, modelUrl);
       patchSelectedModel((model) => {
         model.shape = 'glb';
@@ -1513,7 +1514,7 @@ export default function Character3DTab({
       setImportInProgress(false);
       setImportProgress(null);
     }
-  }, [applyCachedCharacterModelUrl, applyConvertedCharacterModel, patchSelectedModel, selectedModelId, setImportStatus]);
+  }, [applyCachedCharacterModelUrl, applyConvertedCharacterModel, localModelScope, patchSelectedModel, selectedModelId, setImportStatus]);
 
   const setSelectedAnimationFile = useCallback(async (slot, file, requestedAnimationKey = '') => {
     const baseSlot = getCharacterAnimationSlot(slot);
@@ -1596,7 +1597,7 @@ export default function Character3DTab({
       const localModelFileId = createLocalModelFileId(`character-animation-${targetKey}`, selectedModelId, storedFile);
       const animationUrl = URL.createObjectURL(storedFile);
       rememberRpg3DLocalBlobFile(animationUrl, storedFile, localModelFileId, { persist: false });
-      const localModelPersisted = await persistLocalModelFile(localModelFileId, storedFile);
+      const localModelPersisted = await persistLocalModelFile(localModelFileId, storedFile, { scope: localModelScope });
       localAnimationUrlsRef.current.set(localAnimationKey, animationUrl);
       patchSelectedModel((model) => {
         model.modelAnimations = {
@@ -1624,7 +1625,7 @@ export default function Character3DTab({
       setImportInProgress(false);
       setImportProgress(null);
     }
-  }, [applyCachedCharacterAnimationUrl, applyConvertedCharacterAnimation, patchSelectedModel, selectedModel?.modelAnimations, selectedModelId, setImportStatus]);
+  }, [applyCachedCharacterAnimationUrl, applyConvertedCharacterAnimation, localModelScope, patchSelectedModel, selectedModel?.modelAnimations, selectedModelId, setImportStatus]);
 
   const removeSelectedAnimation = useCallback((animationKey) => {
     if (!selectedModelId || !animationKey) return;

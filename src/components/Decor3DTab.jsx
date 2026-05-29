@@ -249,6 +249,7 @@ export default function Decor3DTab({
   onSelectedModelIdChange,
   onSaveAssets,
   saveStatus,
+  localModelScope = null,
   saveInProgress = false,
 }) {
   const models = project.decorModels3d || [];
@@ -508,7 +509,7 @@ export default function Decor3DTab({
       const localModelFileId = createLocalModelFileId('decor', selectedModelId, optimizedFile);
       const modelUrl = URL.createObjectURL(optimizedFile);
       rememberRpg3DLocalBlobFile(modelUrl, optimizedFile, localModelFileId, { persist: false });
-      const localModelPersisted = await persistLocalModelFile(localModelFileId, optimizedFile);
+      const localModelPersisted = await persistLocalModelFile(localModelFileId, optimizedFile, { scope: localModelScope });
       localModelUrlsRef.current.set(selectedModelId, modelUrl);
       patchSelectedModel((model) => {
         if (activeCardField && getDecorKindId(model.kind) !== activeCardField) {
@@ -547,7 +548,7 @@ export default function Decor3DTab({
     } finally {
       setImportInProgress(false);
     }
-  }, [activeCardField, patchSelectedModel, selectedModelId]);
+  }, [activeCardField, localModelScope, patchSelectedModel, selectedModelId]);
 
   const handleTextureUpload = useCallback(async (event, onSelect) => {
     const file = event?.target?.files?.[0];

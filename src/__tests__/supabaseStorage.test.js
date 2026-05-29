@@ -248,16 +248,27 @@ describe('supabaseStorage', () => {
     });
   });
 
-  test('VITE_SUPABASE_STORAGE_BUCKET reste un fallback retrocompatible', async () => {
-    const { LEGACY_STORAGE_BUCKET_DEPRECATION_MESSAGE, resolveStorageBucket, uploadToStorage } = await setupSupabaseStorage({ useLegacyBucket: true });
+  test('VITE_SUPABASE_STORAGE_BUCKET reste un fallback retrocompatible avec warning unique', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const {
+      LEGACY_STORAGE_BUCKET_DEPRECATION_MESSAGE,
+      resolveStorageBucket,
+      uploadToStorage,
+      usesLegacyStorageBucketFallback,
+    } = await setupSupabaseStorage({ useLegacyBucket: true });
 
     const result = await uploadToStorage('public/file.txt', new Blob(['data'], { type: 'text/plain' }), { visibility: 'public' });
+    await uploadToStorage('users/user-1/file.txt', new Blob(['data'], { type: 'text/plain' }), { visibility: 'private' });
 
     expect(supabaseMock.from).toHaveBeenCalledWith('legacy-bucket');
     expect(result.bucket).toBe('legacy-bucket');
     expect(resolveStorageBucket('public')).toBe('legacy-bucket');
     expect(resolveStorageBucket('private')).toBe('legacy-bucket');
-    expect(LEGACY_STORAGE_BUCKET_DEPRECATION_MESSAGE).toMatch(/dépréciée/i);
+    expect(usesLegacyStorageBucketFallback).toBe(true);
+    expect(LEGACY_STORAGE_BUCKET_DEPRECATION_MESSAGE).toMatch(/deprecated/i);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith('[supabase-storage]', LEGACY_STORAGE_BUCKET_DEPRECATION_MESSAGE);
+    expect(JSON.stringify(warnSpy.mock.calls)).not.toContain('legacy-bucket');
   });
 
   test('logs Supabase Storage desactives par defaut', async () => {

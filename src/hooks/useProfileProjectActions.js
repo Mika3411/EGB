@@ -5,6 +5,10 @@ import { applyCreationTemplate } from '../lib/projectTemplates';
 import { showPrompt } from '../components/AccessibleDialog';
 import { getSafeBuilderTab } from '../utils/tutorialHelpers';
 import { readBuilderUiState } from '../utils/storageHelpers';
+import {
+  formatProjectImportError,
+  importProjectFromJsonText,
+} from '../utils/projectJsonImport';
 
 export function useProfileProjectActions({
   auth,
@@ -222,11 +226,16 @@ export function useProfileProjectActions({
   }, [auth.updateProjectShareSettings, setSaveStatus]);
 
   const importProjectFromProfile = useCallback(async (file) => {
-    const text = await file.text();
-    const parsed = normalizeProject(JSON.parse(text));
-    const record = await auth.importProject(parsed, parsed.title || file.name.replace(/\.json$/i, ''));
-    if (record?.id) await openProjectInEditor(record.id);
-    setSaveStatus('Projet importé');
+    try {
+      const text = await file.text();
+      const parsed = importProjectFromJsonText(text).project;
+      const record = await auth.importProject(parsed, parsed.title || file.name.replace(/\.json$/i, ''));
+      if (record?.id) await openProjectInEditor(record.id);
+      setSaveStatus('Projet importé');
+    } catch (error) {
+      setSaveStatus(formatProjectImportError(error));
+      throw error;
+    }
   }, [auth.importProject, openProjectInEditor, setSaveStatus]);
 
   return {

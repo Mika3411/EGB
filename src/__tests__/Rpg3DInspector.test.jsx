@@ -59,20 +59,17 @@ const renderActionZoneInspector = (overrides = {}) => {
       selectedPropTileSize={0}
       selectedReliefStyle=""
       selectedModelEraserCount={0}
-      showArcadeElementLibrary={false}
       onActionZoneTypeChange={() => {}}
       onAddSelectedNpcChoice={() => {}}
       onClearPropImage={() => {}}
       onDeleteSelected={() => {}}
       onDuplicateSelected={() => {}}
-      onExportConfig={() => {}}
       onClearModelEraser={() => {}}
       onModelEraserRadiusChange={() => {}}
       onNpcInteractionModeChange={() => {}}
       onPropCollisionChange={() => {}}
       onReliefCollisionChange={() => {}}
       onRemoveSelectedNpcChoice={() => {}}
-      onSelectTool={() => {}}
       onSnapSelectedTileToNeighbor={() => {}}
       onToggleActionZoneEdgeInsertMode={overrides.onToggleActionZoneEdgeInsertMode || (() => {})}
       onToggleModelEraser={() => {}}

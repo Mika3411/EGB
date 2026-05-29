@@ -11,19 +11,20 @@ const bucketEnvKeys = [
 
 const loadSharedWithEnv = async (env = {}) => {
   vi.resetModules();
-  bucketEnvKeys.forEach((key) => vi.stubEnv(key, ''));
+  bucketEnvKeys.forEach((key) => vi.stubEnv(key, ' '));
   Object.entries(env).forEach(([key, value]) => vi.stubEnv(key, value));
   return import('../../netlify/functions/_shared.js');
 };
 
 const loadServerStorageWithEnv = async (env = {}) => {
   vi.resetModules();
-  bucketEnvKeys.forEach((key) => vi.stubEnv(key, ''));
+  bucketEnvKeys.forEach((key) => vi.stubEnv(key, ' '));
   Object.entries(env).forEach(([key, value]) => vi.stubEnv(key, value));
   return import('../../server/storage.js');
 };
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllEnvs();
 });
 
@@ -68,6 +69,7 @@ describe('server Supabase storage buckets', () => {
   });
 
   test('conserve le fallback legacy pour les anciens environnements', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const shared = await loadSharedWithEnv({
       VITE_SUPABASE_STORAGE_BUCKET: 'legacy-vite',
     });
@@ -75,11 +77,32 @@ describe('server Supabase storage buckets', () => {
     expect(shared.publicAssetsBucket).toBe('legacy-vite');
     expect(shared.privateDataBucket).toBe('legacy-vite');
     expect(shared.aiJobBucket).toBe('legacy-vite');
+    expect(shared.usesLegacyStorageBucketFallback).toBe(true);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith('[supabase-storage]', shared.LEGACY_STORAGE_BUCKET_DEPRECATION_MESSAGE);
+    expect(JSON.stringify(warnSpy.mock.calls)).not.toContain('legacy-vite');
 
+    warnSpy.mockClear();
     const serverStorage = await loadServerStorageWithEnv({
       VITE_SUPABASE_STORAGE_BUCKET: 'legacy-vite',
     });
     expect(serverStorage.publicAssetsBucket).toBe('legacy-vite');
     expect(serverStorage.privateDataBucket).toBe('legacy-vite');
+    expect(serverStorage.usesLegacyStorageBucketFallback).toBe(true);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith('[supabase-storage]', serverStorage.LEGACY_STORAGE_BUCKET_DEPRECATION_MESSAGE);
+    expect(JSON.stringify(warnSpy.mock.calls)).not.toContain('legacy-vite');
+  });
+
+  test('ne choisit pas de bucket legacy implicite sans variable configuree', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const serverStorage = await loadServerStorageWithEnv();
+
+    expect(serverStorage.legacyStorageBucket).toBe('');
+    expect(serverStorage.publicAssetsBucket).toBe('');
+    expect(serverStorage.privateDataBucket).toBe('');
+    expect(serverStorage.usesLegacyStorageBucketFallback).toBe(false);
+    expect(() => serverStorage.resolveServerStorageBucket('public')).toThrow(/Configuration Supabase Storage manquante/);
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });

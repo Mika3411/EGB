@@ -873,6 +873,10 @@ function ArcadeThreeViewport({
       getConfig: () => configRef.current || latestRef.current.config,
       getMode: () => latestRef.current.mode,
       getSelected: () => latestRef.current.selected || null,
+      getRuntimePlayer: () => {
+        const player = stateRef.current?.player;
+        return player ? { ...player } : null;
+      },
       projectWorldToScreen: ({ x = 0, y = 0, z = 0 } = {}) => {
         const renderer = rendererRef.current;
         const camera = cameraRef.current;
@@ -894,7 +898,7 @@ function ArcadeThreeViewport({
         delete window.__escapeGameBuilderRpg3DSmoke;
       }
     };
-  }, [configRef]);
+  }, [configRef, stateRef]);
 
   useEffect(() => {
     playCameraPanOffsetRef.current.set(0, 0, 0);

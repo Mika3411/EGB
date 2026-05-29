@@ -3,16 +3,52 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import Tabs from '../components/Tabs.jsx';
 import { getSafeBuilderTab, isBuilderTab, isTabAllowedForProject } from '../utils/tutorialHelpers.js';
+import { getClassicBuilderTabValuesForMode } from '../utils/classicBuilderTabs.js';
 
 const hiddenClassicTabs = ['Personnages 3D', 'Objets 3D', 'Cascadeur'];
 const hiddenClassicTabIds = ['characters3d', 'decors3d', 'stunts'];
 const hiddenExpertTabs = ['Narration', 'Héros', 'Combat'];
 const hiddenExpertTabIds = ['adventure', 'hero', 'combat'];
 const projectModes = ['beginner', 'intermediate', 'expert', 'adventure', 'hero_adventure'];
+const expectedTabsByMode = {
+  beginner: ['scenes', 'media', 'preview', 'objects', 'enigmas', 'ai', 'shop', 'help'],
+  intermediate: ['scenes', 'media', 'map', 'preview', 'objects', 'cinematics', 'enigmas', 'ai', 'shop', 'help'],
+  expert: ['scenes', 'media', 'map', 'preview', 'objects', 'cinematics', 'enigmas', 'combinations', 'logic', 'animation', 'ai', 'shop', 'help', 'score'],
+  adventure: ['scenes', 'media', 'map', 'adventure', 'preview', 'objects', 'cinematics', 'enigmas', 'logic', 'animation', 'shop', 'help', 'score'],
+  hero_adventure: ['scenes', 'media', 'map', 'adventure', 'hero', 'combat', 'preview', 'objects', 'cinematics', 'enigmas', 'logic', 'animation', 'ai', 'shop', 'help', 'score'],
+};
+const classicTabIds = [...new Set(Object.values(expectedTabsByMode).flat())];
+
+const getRenderedTabIds = (container) => (
+  Array.from(container.querySelectorAll('[data-tour-tab]')).map((entry) => entry.getAttribute('data-tour-tab'))
+);
 
 describe('classic builder tabs', () => {
   afterEach(() => {
     cleanup();
+  });
+
+  it('shows and allows exactly the expected tabs for every classic creation mode', () => {
+    Object.entries(expectedTabsByMode).forEach(([projectMode, expectedTabs]) => {
+      cleanup();
+      const { container } = render(
+        <Tabs
+          value="scenes"
+          onChange={() => {}}
+          onProfile={() => {}}
+          projectMode={projectMode}
+        />,
+      );
+
+      expect(getRenderedTabIds(container)).toEqual(expectedTabs);
+      expect(getClassicBuilderTabValuesForMode(projectMode)).toEqual(expectedTabs);
+      classicTabIds.forEach((tabId) => {
+        const shouldBeAllowed = expectedTabs.includes(tabId);
+        expect(isBuilderTab(tabId)).toBe(true);
+        expect(isTabAllowedForProject(tabId, { creationMode: projectMode })).toBe(shouldBeAllowed);
+        expect(getSafeBuilderTab(tabId, { creationMode: projectMode })).toBe(shouldBeAllowed ? tabId : 'scenes');
+      });
+    });
   });
 
   it('keeps 3D workshops out of every classic creation mode', () => {

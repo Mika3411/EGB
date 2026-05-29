@@ -510,37 +510,15 @@ export async function loadPublicProjectIndex() {
   }
 }
 
-async function savePublicProjectIndex(projects = []) {
-  if (!hasSupabaseStorageConfig()) return projects;
-  const blob = new Blob([JSON.stringify(projects, null, 2)], { type: 'application/json' });
-  await uploadToStorage(getPublicProjectsStoragePath(), blob, {
-    contentType: 'application/json',
-    cacheControl: '0',
-    maxFileSize: PROJECT_RECORDS_MAX_UPLOAD_BYTES,
-    visibility: 'public',
-    upsert: true,
-  });
-  return projects;
+async function savePublicProjectIndex() {
+  const error = new Error('La mise a jour de l index public doit passer par l API serveur.');
+  error.code = 'PUBLIC_PROJECT_INDEX_SERVER_REQUIRED';
+  throw error;
 }
 
-async function updatePublicProjectIndexForUser(userId, projects = []) {
+async function updatePublicProjectIndexForUser(userId) {
   if (!userId || !hasSupabaseStorageConfig()) return [];
-
-  const publicRecords = projects
-    .filter((project) => project?.id && project.shareState?.isPublic)
-    .map((project) => {
-      const { publishedData, ...shareState } = project.shareState || {};
-      return {
-        ...project,
-        shareState,
-        userId,
-        publicKey: `${userId}:${project.id}`,
-      };
-    });
-
-  const existingIndex = await loadPublicProjectIndex();
-  const withoutUser = existingIndex.filter((project) => project.userId !== userId);
-  return savePublicProjectIndex([...withoutUser, ...publicRecords]);
+  return savePublicProjectIndex();
 }
 
 export async function loadProjectRecordsForUser(userId) {

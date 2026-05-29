@@ -1,5 +1,9 @@
 import { useEffect, useRef } from 'react';
-import { TABS, getTabValue } from './TabRegistry.jsx';
+import { TABS, getTabKey } from './TabRegistry.jsx';
+import {
+  getClassicBuilderProjectMode,
+  getClassicBuilderTabGroupsForMode,
+} from '../utils/classicBuilderTabs.js';
 import {
   Bot,
   Brush,
@@ -22,22 +26,9 @@ import {
   Workflow,
 } from 'lucide-react';
 
-const primaryTabKeys = ['scenes', 'media', 'plan', 'adventure', 'hero', 'combat', 'preview'];
-const creationTabKeys = ['objects', 'cinematics', 'enigmas', 'combinations', 'logic', 'animation'];
-const assistantTabKeys = ['ai'];
-const mainTabKeys = [...primaryTabKeys, ...creationTabKeys, ...assistantTabKeys];
-
-const utilityTabKeys = ['shop', 'help', 'score'];
-const beginnerTabs = new Set(['scenes', 'media', 'objects', 'enigmas', 'ai', 'preview']);
-const beginnerUtilityTabs = new Set(['shop', 'help']);
-const intermediateTabs = new Set(['scenes', 'media', 'map', 'objects', 'cinematics', 'enigmas', 'ai', 'preview']);
-const intermediateUtilityTabs = new Set(['shop', 'help']);
-const expertTabs = new Set(['scenes', 'media', 'map', 'preview', 'objects', 'cinematics', 'enigmas', 'combinations', 'logic', 'animation', 'ai']);
-const adventureTabs = new Set(['scenes', 'media', 'map', 'adventure', 'objects', 'cinematics', 'enigmas', 'logic', 'preview', 'animation']);
-const heroAdventureTabs = new Set(['scenes', 'media', 'map', 'adventure', 'hero', 'combat', 'objects', 'cinematics', 'enigmas', 'logic', 'preview', 'animation', 'ai']);
-const adventureUtilityTabs = new Set(['shop', 'help', 'score']);
-
-const getTabEntries = (tabKeys) => tabKeys.map((tabKey) => [getTabValue(tabKey), TABS[tabKey]]);
+const getTabEntries = (tabValues) => tabValues
+  .map((tabValue) => [tabValue, TABS[getTabKey(tabValue)]])
+  .filter(([, tabConfig]) => Boolean(tabConfig));
 
 const tabIcons = {
   scenes: LayoutGrid,
@@ -106,30 +97,15 @@ function TabMenu({ label, entries, activeValue, onChange, onToggle }) {
 
 export default function Tabs({ value, onChange, onProfile, projectScore, projectMode = 'expert' }) {
   const navRef = useRef(null);
-  const isBeginnerMode = projectMode === 'beginner';
-  const isIntermediateMode = projectMode === 'intermediate';
-  const isHeroAdventureMode = projectMode === 'hero_adventure';
-  const isAdventureMode = projectMode === 'adventure' || isHeroAdventureMode;
-  const primaryTabs = getTabEntries(primaryTabKeys);
-  const creationTabs = getTabEntries(creationTabKeys);
-  const assistantTabs = getTabEntries(assistantTabKeys);
-  const tabs = getTabEntries(mainTabKeys);
-  const utilityTabs = getTabEntries(utilityTabKeys);
-  const visibleTabs = isBeginnerMode
-    ? tabs.filter(([tabValue]) => beginnerTabs.has(tabValue))
-    : isIntermediateMode
-      ? tabs.filter(([tabValue]) => intermediateTabs.has(tabValue))
-      : isHeroAdventureMode
-        ? tabs.filter(([tabValue]) => heroAdventureTabs.has(tabValue))
-        : isAdventureMode ? tabs.filter(([tabValue]) => adventureTabs.has(tabValue)) : tabs.filter(([tabValue]) => expertTabs.has(tabValue));
-  const visiblePrimaryTabs = primaryTabs.filter(([tabValue]) => visibleTabs.some(([visibleTabValue]) => visibleTabValue === tabValue));
-  const visibleCreationTabs = creationTabs.filter(([tabValue]) => visibleTabs.some(([visibleTabValue]) => visibleTabValue === tabValue));
-  const visibleAssistantTabs = assistantTabs.filter(([tabValue]) => visibleTabs.some(([visibleTabValue]) => visibleTabValue === tabValue));
-  const visibleUtilityTabs = isBeginnerMode
-    ? utilityTabs.filter(([tabValue]) => beginnerUtilityTabs.has(tabValue))
-    : isIntermediateMode
-      ? utilityTabs.filter(([tabValue]) => intermediateUtilityTabs.has(tabValue))
-      : isAdventureMode ? utilityTabs.filter(([tabValue]) => adventureUtilityTabs.has(tabValue)) : utilityTabs;
+  const effectiveProjectMode = getClassicBuilderProjectMode(projectMode);
+  const isBeginnerMode = effectiveProjectMode === 'beginner';
+  const isIntermediateMode = effectiveProjectMode === 'intermediate';
+  const isAdventureMode = effectiveProjectMode === 'adventure' || effectiveProjectMode === 'hero_adventure';
+  const visibleTabGroups = getClassicBuilderTabGroupsForMode(effectiveProjectMode);
+  const visiblePrimaryTabs = getTabEntries(visibleTabGroups.primary);
+  const visibleCreationTabs = getTabEntries(visibleTabGroups.creation);
+  const visibleAssistantTabs = getTabEntries(visibleTabGroups.assistant);
+  const visibleUtilityTabs = getTabEntries(visibleTabGroups.utility);
 
   const handleMenuToggle = (event) => {
     if (!event.currentTarget.open) return;

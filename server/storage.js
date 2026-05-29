@@ -1,12 +1,24 @@
 import './config.js';
 import { getSupabaseAdminClient } from './supabase.js';
+import {
+  createMissingStorageBucketError,
+  getServerStorageBuckets,
+  LEGACY_STORAGE_BUCKET_DEPRECATION_MESSAGE,
+  warnLegacyStorageBucketFallback,
+} from './storageBuckets.js';
 
-export const legacyStorageBucket = process.env.SUPABASE_STORAGE_BUCKET || process.env.VITE_SUPABASE_STORAGE_BUCKET || 'escape-game-assets';
-export const publicAssetsBucket = process.env.SUPABASE_PUBLIC_ASSETS_BUCKET || process.env.VITE_SUPABASE_PUBLIC_ASSETS_BUCKET || legacyStorageBucket;
-export const privateDataBucket = process.env.SUPABASE_PRIVATE_DATA_BUCKET || process.env.VITE_SUPABASE_PRIVATE_DATA_BUCKET || legacyStorageBucket;
-export const resolveServerStorageBucket = (visibility = 'private') => (
-  visibility === 'public' ? publicAssetsBucket : privateDataBucket
-);
+const storageBuckets = getServerStorageBuckets();
+
+export { LEGACY_STORAGE_BUCKET_DEPRECATION_MESSAGE, warnLegacyStorageBucketFallback };
+export const legacyStorageBucket = storageBuckets.legacyStorageBucket;
+export const publicAssetsBucket = storageBuckets.publicAssetsBucket;
+export const privateDataBucket = storageBuckets.privateDataBucket;
+export const usesLegacyStorageBucketFallback = storageBuckets.usesLegacyStorageBucketFallback;
+export const resolveServerStorageBucket = (visibility = 'private') => {
+  const bucket = visibility === 'public' ? publicAssetsBucket : privateDataBucket;
+  if (!bucket) throw createMissingStorageBucketError();
+  return bucket;
+};
 
 export const sanitizeStorageSegment = (value = '') =>
   String(value)

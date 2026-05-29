@@ -32,6 +32,7 @@ const ignoredOversizedSourceFiles = new Set([
   'src/components/ObjectRiggingTab.jsx',
   'src/components/rpg3d/Character3DPreview.jsx',
   'src/components/rpg3d/Decor3DPreview.jsx',
+  'src/components/rpg3d/rpg3dModeShared.js',
   'src/components/Rpg3DMode.jsx',
   'src/components/StuntCharacter3DPreview.jsx',
   'src/__tests__/rpg3dSceneBuilders.test.js',

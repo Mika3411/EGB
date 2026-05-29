@@ -43,17 +43,28 @@ const getStartSceneId = (project, rooms = []) => {
   return rooms.find((room) => room.type === 'start' && room.sceneId)?.sceneId || asArray(project.scenes)[0]?.id || '';
 };
 
-const getConnectionStatus = (rooms, connection, transitions) => {
-  const fromRoom = rooms.find((room) => room.id === connection.fromRoomId);
-  const toRoom = rooms.find((room) => room.id === connection.toRoomId);
+const makeScenePairKey = (fromSceneId = '', toSceneId = '') => `${fromSceneId}\u0000${toSceneId}`;
+
+const buildTransitionIndexes = (transitions = []) => {
+  const pairs = new Set();
+  const outgoingBySceneId = new Map();
+  transitions.forEach((transition) => {
+    if (!transition?.fromSceneId || !transition?.toSceneId) return;
+    pairs.add(makeScenePairKey(transition.fromSceneId, transition.toSceneId));
+    const outgoing = outgoingBySceneId.get(transition.fromSceneId);
+    if (outgoing) outgoing.push(transition);
+    else outgoingBySceneId.set(transition.fromSceneId, [transition]);
+  });
+  return { outgoingBySceneId, pairs };
+};
+
+const getConnectionStatus = (roomsById, connection, transitionPairs) => {
+  const fromRoom = roomsById.get(connection.fromRoomId);
+  const toRoom = roomsById.get(connection.toRoomId);
   if (!fromRoom?.sceneId || !toRoom?.sceneId) return 'neutral';
 
-  const forward = transitions.some((transition) => (
-    transition.fromSceneId === fromRoom.sceneId && transition.toSceneId === toRoom.sceneId
-  ));
-  const reverse = transitions.some((transition) => (
-    transition.fromSceneId === toRoom.sceneId && transition.toSceneId === fromRoom.sceneId
-  ));
+  const forward = transitionPairs.has(makeScenePairKey(fromRoom.sceneId, toRoom.sceneId));
+  const reverse = transitionPairs.has(makeScenePairKey(toRoom.sceneId, fromRoom.sceneId));
 
   if (forward && reverse) return 'ok';
   if (forward || reverse) return connection.allowOneWay ? 'accepted' : 'partial';
@@ -115,21 +126,22 @@ const collectProjectActions = (scenes) => (
   ))
 );
 
-const getReachableSceneIds = ({ startSceneId, scenes, transitions }) => {
+const getReachableSceneIds = ({ startSceneId, scenes, transitionIndexes }) => {
   const sceneIds = new Set(scenes.map((scene) => scene.id));
   if (!startSceneId || !sceneIds.has(startSceneId)) return new Set();
   const reachable = new Set([startSceneId]);
   const queue = [startSceneId];
+  let queueIndex = 0;
 
-  while (queue.length) {
-    const currentSceneId = queue.shift();
-    transitions
-      .filter((transition) => transition.fromSceneId === currentSceneId)
-      .forEach((transition) => {
-        if (!sceneIds.has(transition.toSceneId) || reachable.has(transition.toSceneId)) return;
-        reachable.add(transition.toSceneId);
-        queue.push(transition.toSceneId);
-      });
+  while (queueIndex < queue.length) {
+    const currentSceneId = queue[queueIndex];
+    queueIndex += 1;
+    const outgoingTransitions = transitionIndexes.outgoingBySceneId.get(currentSceneId) || [];
+    outgoingTransitions.forEach((transition) => {
+      if (!sceneIds.has(transition.toSceneId) || reachable.has(transition.toSceneId)) return;
+      reachable.add(transition.toSceneId);
+      queue.push(transition.toSceneId);
+    });
   }
 
   return reachable;
@@ -313,21 +325,17 @@ const estimateHeroCombatMinutes = (heroCombat = {}) => {
   }, 0);
 };
 
-const buildAdvancedAnalysis = ({ project, scenes, items, enigmas, cinematics, map, content, transitions }) => {
+const buildAdvancedAnalysis = ({ project, scenes, items, enigmas, cinematics, map, content, transitions, transitionIndexes }) => {
   const startSceneId = getStartSceneId(project, map.details.rooms);
-  const reachableSceneIds = getReachableSceneIds({ startSceneId, scenes, transitions });
+  const reachableSceneIds = getReachableSceneIds({ startSceneId, scenes, transitionIndexes });
   const endSceneIds = new Set(map.details.rooms.filter((room) => room.type === 'end' && room.sceneId).map((room) => room.sceneId));
-  const outgoingBySceneId = transitions.reduce((byScene, transition) => ({
-    ...byScene,
-    [transition.fromSceneId]: (byScene[transition.fromSceneId] || 0) + 1,
-  }), {});
 
   const unreachableScenes = scenes.filter((scene) => scenes.length > 1 && !reachableSceneIds.has(scene.id));
   const deadPathScenes = scenes.filter((scene) => (
     scenes.length > 1
     && reachableSceneIds.has(scene.id)
     && !endSceneIds.has(scene.id)
-    && !outgoingBySceneId[scene.id]
+    && !transitionIndexes.outgoingBySceneId.has(scene.id)
   ));
 
   const actions = collectProjectActions(scenes);
@@ -349,10 +357,14 @@ const buildAdvancedAnalysis = ({ project, scenes, items, enigmas, cinematics, ma
   const enigmaTypes = new Set(enigmas.map((enigma) => enigma.type || 'code'));
   const miscModes = new Set(enigmas.filter((enigma) => enigma.type === 'misc').map((enigma) => enigma.miscMode || 'free-answer'));
   const actionTypes = new Set(actions.map(({ action }) => action.actionType || 'dialogue'));
-  const dominantEnigmaTypeCount = Math.max(0, ...Object.values(enigmas.reduce((counts, enigma) => ({
-    ...counts,
-    [enigma.type || 'code']: (counts[enigma.type || 'code'] || 0) + 1,
-  }), {})));
+  let dominantEnigmaTypeCount = 0;
+  const enigmaTypeCounts = new Map();
+  enigmas.forEach((enigma) => {
+    const type = enigma.type || 'code';
+    const nextCount = (enigmaTypeCounts.get(type) || 0) + 1;
+    enigmaTypeCounts.set(type, nextCount);
+    dominantEnigmaTypeCount = Math.max(dominantEnigmaTypeCount, nextCount);
+  });
   const lacksVariety = (
     enigmas.length >= 3 && (enigmaTypes.size < 2 || dominantEnigmaTypeCount / enigmas.length > 0.75)
   ) || (
@@ -452,19 +464,20 @@ const buildStructureSection = ({ acts, scenes, items, enigmas, cinematics }) => 
   };
 };
 
-const buildMapSection = ({ scenes, routeMap, transitions }) => {
+const buildMapSection = ({ scenes, routeMap, transitionIndexes }) => {
   const { rooms, connections } = getRouteMapRoomsAndConnections(routeMap);
+  const roomsById = new Map(rooms.map((room) => [room.id, room]));
   const mappedSceneCount = new Set(rooms.map((room) => room.sceneId).filter(Boolean)).size;
   const mappedRatio = scenes.length ? mappedSceneCount / scenes.length : 0;
   const validConnections = connections.filter((connection) => (
-    rooms.some((room) => room.id === connection.fromRoomId)
-    && rooms.some((room) => room.id === connection.toRoomId)
+    roomsById.has(connection.fromRoomId)
+    && roomsById.has(connection.toRoomId)
   ));
-  const connectionStatuses = validConnections.map((connection) => getConnectionStatus(rooms, connection, transitions));
-  const connectionCounts = connectionStatuses.reduce((counts, status) => ({
-    ...counts,
-    [status]: (counts[status] || 0) + 1,
-  }), {});
+  const connectionStatuses = validConnections.map((connection) => getConnectionStatus(roomsById, connection, transitionIndexes.pairs));
+  const connectionCounts = connectionStatuses.reduce((counts, status) => {
+    counts[status] = (counts[status] || 0) + 1;
+    return counts;
+  }, {});
   const connectionQuality = connectionStatuses.length
     ? connectionStatuses.reduce((total, status) => total + getConnectionScore(status), 0) / connectionStatuses.length
     : 0;
@@ -926,9 +939,10 @@ export function calculateProjectScore(project = {}) {
   const enigmas = asArray(project.enigmas);
   const cinematics = asArray(project.cinematics);
   const transitions = getSceneTransitions(project);
+  const transitionIndexes = buildTransitionIndexes(transitions);
 
   const structure = buildStructureSection({ acts, scenes, items, enigmas, cinematics });
-  const map = buildMapSection({ scenes, routeMap: project.routeMap || {}, transitions });
+  const map = buildMapSection({ scenes, routeMap: project.routeMap || {}, transitionIndexes });
   const content = buildContentSection({ project, scenes, enigmas, cinematics });
   const polish = buildPolishSection({ scenes, cinematics });
   const rawScore = structure.score + map.score + content.score + polish.score;
@@ -942,6 +956,7 @@ export function calculateProjectScore(project = {}) {
     map,
     content,
     transitions,
+    transitionIndexes,
   });
   const { estimatedMinutes, heroCombatMinutes, playtimeRange } = getPlaytimeRange({
     scenes,

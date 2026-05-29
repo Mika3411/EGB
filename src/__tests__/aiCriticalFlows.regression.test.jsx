@@ -114,6 +114,7 @@ const goToDescriptionStep = () => {
 
 describe('AI critical flows', () => {
   beforeEach(() => {
+    window.localStorage.clear();
     draftStorage.read.mockResolvedValue(null);
     draftStorage.write.mockResolvedValue(undefined);
     draftStorage.remove.mockResolvedValue(undefined);
@@ -126,6 +127,7 @@ describe('AI critical flows', () => {
   });
 
   afterEach(() => {
+    window.localStorage.clear();
     vi.restoreAllMocks();
     vi.clearAllMocks();
     document.body.innerHTML = '';

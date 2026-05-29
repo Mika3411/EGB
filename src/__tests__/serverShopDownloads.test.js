@@ -55,4 +55,130 @@ describe('server shop downloads', () => {
       hasDownload: true,
     });
   });
+
+  test('marque les packs vendus depuis shop_pack_sales sans exposer les chemins prives', async () => {
+    const { applySoldShopPackState } = await import('../../server/shop.js');
+
+    const packs = applySoldShopPackState([
+      {
+        id: 'pack-sold',
+        title: 'Pack vendu',
+        downloadStoragePath: 'users/admin/shop/sold.zip',
+      },
+      {
+        id: 'pack-open',
+        title: 'Pack disponible',
+        downloadStoragePath: 'users/admin/shop/open.zip',
+      },
+    ], new Set(['pack-sold']));
+
+    const publicSoldPack = toPublicShopPackDownloadState(packs[0]);
+    expect(publicSoldPack).toEqual(expect.objectContaining({
+      id: 'pack-sold',
+      title: 'Pack vendu',
+      archived: true,
+      archivedReason: 'sold',
+      hasDownload: true,
+    }));
+    expect(publicSoldPack).not.toHaveProperty('downloadStoragePath');
+    expect(publicSoldPack).not.toHaveProperty('downloadStorageBucket');
+    expect(toPublicShopPackDownloadState(packs[1])).toEqual({
+      id: 'pack-open',
+      title: 'Pack disponible',
+      hasDownload: true,
+    });
+  });
+
+  test('charge les ventes depuis shop_pack_sales comme source des packs vendus', async () => {
+    const inFilter = vi.fn().mockResolvedValue({
+      data: [
+        { pack_id: 'pack-sold' },
+        { pack_id: '' },
+        { pack_id: 'pack-pending' },
+      ],
+      error: null,
+    });
+    const select = vi.fn(() => ({ in: inFilter }));
+    const from = vi.fn(() => ({ select }));
+    const { loadSoldShopPackIds } = await import('../../server/shop.js');
+
+    await expect(loadSoldShopPackIds({ from })).resolves.toEqual(new Set(['pack-sold', 'pack-pending']));
+    expect(from).toHaveBeenCalledWith('shop_pack_sales');
+    expect(select).toHaveBeenCalledWith('pack_id');
+    expect(inFilter).toHaveBeenCalledWith('status', ['pending', 'paid']);
+  });
+
+  test('achete via la RPC Supabase attendue', async () => {
+    const rpc = vi.fn(() => ({
+      single: vi.fn().mockResolvedValue({
+        data: {
+          balance: 42,
+          purchased_at: '2026-05-29T10:00:00.000Z',
+        },
+        error: null,
+      }),
+    }));
+    const { purchaseShopPack } = await import('../../server/shop.js');
+
+    await expect(purchaseShopPack({ rpc }, {
+      packId: 'pack-1',
+      userId: 'user-1',
+      title: 'Pack boutique',
+      costCredits: 12,
+      downloadFileName: 'pack.zip',
+    })).resolves.toEqual({
+      balance: 42,
+      purchased_at: '2026-05-29T10:00:00.000Z',
+    });
+
+    expect(rpc).toHaveBeenCalledWith('purchase_shop_pack', {
+      p_pack_id: 'pack-1',
+      p_user_id: 'user-1',
+      p_title: 'Pack boutique',
+      p_cost_credits: 12,
+      p_download_file_name: 'pack.zip',
+    });
+  });
+
+  test('mappe les erreurs de vente concurrente et de credits Supabase', async () => {
+    const { purchaseShopPack } = await import('../../server/shop.js');
+    const soldSupabase = {
+      rpc: vi.fn(() => ({
+        single: vi.fn().mockResolvedValue({
+          data: null,
+          error: { code: '23505', message: 'duplicate key value violates unique constraint' },
+        }),
+      })),
+    };
+    const creditSupabase = {
+      rpc: vi.fn(() => ({
+        single: vi.fn().mockResolvedValue({
+          data: null,
+          error: { code: 'P0001', message: 'Credits IA insuffisants (2/12).' },
+        }),
+      })),
+    };
+
+    await expect(purchaseShopPack(soldSupabase, {
+      packId: 'pack-sold',
+      userId: 'user-1',
+      title: 'Pack vendu',
+      costCredits: 12,
+      downloadFileName: 'sold.zip',
+    })).rejects.toMatchObject({
+      status: 404,
+      message: 'Pack indisponible.',
+    });
+
+    await expect(purchaseShopPack(creditSupabase, {
+      packId: 'pack-1',
+      userId: 'user-1',
+      title: 'Pack boutique',
+      costCredits: 12,
+      downloadFileName: 'pack.zip',
+    })).rejects.toMatchObject({
+      status: 402,
+      message: 'Credits IA insuffisants (2/12).',
+    });
+  });
 });

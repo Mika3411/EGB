@@ -136,7 +136,7 @@ const runTextGeneration = async (body, userId, cost) => {
   let charged = false;
   try {
     await assertServerAiContentAllowed(input, 'input_text');
-    spendCredits(userId, cost, `text:${body.mode || 'generate'}`);
+    await spendCredits(userId, cost, `text:${body.mode || 'generate'}`);
     charged = cost > 0;
 
     const payload = await openaiFetch('responses', {
@@ -164,7 +164,7 @@ const runTextGeneration = async (body, userId, cost) => {
       }
     }
 
-    const account = getCreditAccount(userId);
+    const account = await getCreditAccount(userId);
     return {
       output_text: outputText,
       requestId: payload.id,
@@ -172,7 +172,7 @@ const runTextGeneration = async (body, userId, cost) => {
     };
   } catch (error) {
     if (charged) {
-      refundCredits(userId, cost, `failed_text:${body.mode || 'generate'}`);
+      await refundCredits(userId, cost, `failed_text:${body.mode || 'generate'}`);
     }
     throw error;
   }
@@ -287,7 +287,7 @@ export const handleImage = async (req, res) => {
   const userId = await resolveCreditUserId(req, body);
   assertServerAiRateLimit(req, userId, 'image');
   await assertServerAiContentAllowed(String(body.prompt || ''), 'input_image');
-  const reservation = reserveImageCredits(userId, body);
+  const reservation = await reserveImageCredits(userId, body);
   const cost = reservation.cost;
   let payload;
   try {
@@ -309,7 +309,7 @@ export const handleImage = async (req, res) => {
     }
     payload = await openaiFetch('images/generations', imageRequest);
   } catch (error) {
-    releaseImageCreditReservation(userId, reservation, `failed_image:${body.type || 'image'}`);
+    await releaseImageCreditReservation(userId, reservation, `failed_image:${body.type || 'image'}`);
     throw error;
   }
 
@@ -319,7 +319,7 @@ export const handleImage = async (req, res) => {
     : image.url;
 
   if (!imageData) {
-    releaseImageCreditReservation(userId, reservation, `failed_image:${body.type || 'image'}`);
+    await releaseImageCreditReservation(userId, reservation, `failed_image:${body.type || 'image'}`);
     const error = new Error('OpenAI n\'a pas renvoye d\'image.');
     error.status = 502;
     throw error;
@@ -328,9 +328,9 @@ export const handleImage = async (req, res) => {
   let account;
   try {
     await assertServerAiContentAllowed(makeImageModerationInput(imageData, body.prompt), 'output_image');
-    account = getCreditAccount(userId);
+    account = await getCreditAccount(userId);
   } catch (error) {
-    releaseImageCreditReservation(userId, reservation, `failed_image:${body.type || 'image'}`);
+    await releaseImageCreditReservation(userId, reservation, `failed_image:${body.type || 'image'}`);
     throw error;
   }
   sendJson(res, 200, {
@@ -371,7 +371,7 @@ export const handleRemoveBackground = async (req, res) => {
   formData.append('format', 'png');
 
   try {
-    account = spendCredits(userId, cost, 'remove_background:remove.bg');
+    account = await spendCredits(userId, cost, 'remove_background:remove.bg');
     charged = cost > 0;
 
     const response = await fetchWithTimeout('https://api.remove.bg/v1.0/removebg', {
@@ -400,7 +400,7 @@ export const handleRemoveBackground = async (req, res) => {
       },
     });
   } catch (error) {
-    if (charged) refundCredits(userId, cost, 'failed_remove_background:remove.bg');
+    if (charged) await refundCredits(userId, cost, 'failed_remove_background:remove.bg');
     throw error;
   }
 };

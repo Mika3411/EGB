@@ -438,6 +438,7 @@ function ShellApp() {
           user={auth.user}
           authorProfile={auth.authorProfile}
           authReady={auth.isReady}
+          projectId={auth.activeProjectId || auth.activeProject?.id || ''}
           project={auth.activeProject?.data || null}
         />
       </Suspense>

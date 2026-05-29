@@ -12,12 +12,6 @@ import {
   prepareProjectForTutorial,
 } from './data/tutorialSteps';
 import {
-  IMAGE_UPLOAD_OPTIMIZATION,
-  fileToDataURL,
-  imageFileToOptimizedBlob,
-  uploadFileToSupabase,
-} from './utils/fileHelpers';
-import {
   dataUrlToBlob,
   extensionFromMime,
 } from './utils/mediaProjectHelpers';
@@ -35,20 +29,21 @@ import {
   isBuilderTab,
   isTabAllowedForProject,
 } from './utils/tutorialHelpers';
-import { exportProjectJson } from './utils/exportProjectJson';
-import { exportAuthorSummary } from './utils/exportAuthorSummary';
 import { mergeProjectPatch, validateProject } from './utils/projectValidation';
 import { calculateProjectScore } from './lib/projectScoreEngine';
 import { useProjectEditor } from './hooks/useProjectEditor.jsx';
 import { usePreviewPlayer } from './hooks/usePreviewPlayer';
 import { useSharedPlayableRoute } from './hooks/useSharedPlayableRoute';
-import { getProjectSaveStatus, useAutosaveProject } from './hooks/useAutosaveProject';
+import { useAutosaveProject } from './hooks/useAutosaveProject';
 import { useAccountStorage } from './hooks/useAccountStorage';
+import { useBuilderMediaUpload } from './hooks/useBuilderMediaUpload';
+import { useBuilderProfileNavigation } from './hooks/useBuilderProfileNavigation';
+import { useBuilderProjectFileActions } from './hooks/useBuilderProjectFileActions';
 import { useProfileProjectActions } from './hooks/useProfileProjectActions';
 import { useProfileMediaActions } from './hooks/useProfileMediaActions';
+import { useProjectSaveAcknowledger } from './hooks/useProjectSaveAcknowledger';
 import { collectDescendantSceneIds } from './lib/sceneHelpers';
-import { collectProjectAssetManifest, collectProjectAssets, upsertProjectAsset } from './lib/assetManager';
-import { formatStorageSize } from './lib/storageQuota';
+import { collectProjectAssetManifest, collectProjectAssets } from './lib/assetManager';
 import { isAdminAccount } from './lib/authStorage';
 import {
   buildStoragePath,
@@ -511,24 +506,56 @@ function BuilderApp({
     screen,
   ]);
 
-  const saveProjectAndAcknowledge = useCallback(async (projectToSave, projectId = auth.activeProjectId, uiState = {}, saveOptions = {}) => {
-    const savedProjectId = projectId || auth.activeProjectId;
-    markProjectSaveStarted(projectToSave, savedProjectId);
-    try {
-      const result = await auth.saveProject(projectToSave, projectId, uiState, saveOptions);
-      markProjectSaved(projectToSave, savedProjectId, result?.syncStatus || {});
-      return result;
-    } catch (error) {
-      markProjectSaveFailed(projectToSave, savedProjectId, uiState);
-      throw error;
-    }
-  }, [
-    auth.activeProjectId,
-    auth.saveProject,
+  const saveProjectAndAcknowledge = useProjectSaveAcknowledger({
+    activeProjectId: auth.activeProjectId,
     markProjectSaveFailed,
     markProjectSaveStarted,
     markProjectSaved,
-  ]);
+    saveProject: auth.saveProject,
+  });
+
+  const {
+    handleExportAuthorSummary,
+    handleExportProjectJson,
+    handleExportStandalone,
+    importProjectJson,
+  } = useBuilderProjectFileActions({
+    activeProjectId: auth.activeProjectId,
+    editor,
+    preview,
+    saveProjectAndAcknowledge,
+    setSaveStatus,
+  });
+
+  const {
+    openProfileFromBuilder,
+  } = useBuilderProfileNavigation({
+    alertDialog,
+    auth,
+    editor,
+    hydratedProjectRef,
+    onExitToProfile,
+    saveProjectAndAcknowledge,
+    setSaveStatus,
+    setScreen,
+  });
+
+  const {
+    handleUpload,
+    importProfileMediaFile,
+    uploadGalleryThumbnail,
+  } = useBuilderMediaUpload({
+    accountStorageQuotaBytes,
+    activeProjectId: auth.activeProjectId,
+    alertDialog,
+    editor,
+    getCurrentStorageUsageBytes,
+    invalidateStorageUsage,
+    preview,
+    saveProjectAndAcknowledge,
+    setSaveStatus,
+    userId: auth.user?.id,
+  });
 
   useEffect(() => {
     if (!auth.user?.id) {
@@ -564,231 +591,6 @@ function BuilderApp({
       cancelled = true;
     };
   }, [auth.user?.id, updateStorageQuotaBytes]);
-
-  const getMediaImportInfo = useCallback((file) => {
-    const mimeType = file?.type || '';
-    const isImage = mimeType.startsWith('image/');
-    const isAudio = mimeType.startsWith('audio/');
-    const isVideo = mimeType.startsWith('video/');
-    return {
-      assetType: isImage ? 'image' : isAudio ? 'audio' : isVideo ? 'video' : 'unknown',
-      folder: isImage ? 'images' : isAudio ? 'audio' : isVideo ? 'video' : 'files',
-      isAudio,
-      isImage,
-      isVideo,
-      mediaKind: isVideo ? 'Vidéo' : isAudio ? 'Son' : 'Média',
-      shouldOptimizeImage: isImage && !['image/svg+xml', 'image/gif'].includes(mimeType),
-    };
-  }, []);
-
-  const validateMediaFile = useCallback((file) => {
-    if (!file) return '';
-    if (!Number.isFinite(Number(file.size)) || Number(file.size) <= 0) {
-      return 'Ce fichier est vide ou illisible.';
-    }
-    return '';
-  }, []);
-
-  const prepareMediaFileForUpload = useCallback(async (file, mediaInfo) => {
-    if (!mediaInfo.shouldOptimizeImage) {
-      return {
-        file,
-        optimized: false,
-        originalSize: file.size,
-        size: file.size,
-      };
-    }
-
-    const optimizedBlob = await imageFileToOptimizedBlob(file, IMAGE_UPLOAD_OPTIMIZATION);
-    const extension = extensionFromMime(optimizedBlob.type || IMAGE_UPLOAD_OPTIMIZATION.mimeType);
-    const optimizedName = /\.[^.]+$/.test(file.name)
-      ? file.name.replace(/\.[^.]+$/, `.${extension}`)
-      : `${file.name || 'media'}.${extension}`;
-    const optimizedFile = optimizedBlob instanceof File
-      ? optimizedBlob
-      : new File([optimizedBlob], optimizedName, { type: optimizedBlob.type || IMAGE_UPLOAD_OPTIMIZATION.mimeType });
-    return {
-      file: optimizedFile,
-      optimized: true,
-      originalSize: file.size,
-      size: optimizedFile.size || optimizedBlob.size || file.size,
-    };
-  }, []);
-
-  const uploadMediaFile = useCallback(async (file, mediaInfo, preparedMedia = null) => {
-    const uploadFile = preparedMedia?.file || file;
-    const fallbackName = mediaInfo.shouldOptimizeImage
-      ? (/\.[^.]+$/.test(file.name) ? file.name.replace(/\.[^.]+$/, '.webp') : `${file.name || 'media'}.webp`)
-      : file.name;
-    if (!hasSupabaseStorageConfig()) {
-      return {
-        name: fallbackName,
-        optimized: Boolean(preparedMedia?.optimized),
-        originalSize: preparedMedia?.originalSize || file.size,
-        size: preparedMedia?.size || uploadFile.size || file.size,
-        optimizedSize: preparedMedia?.size || uploadFile.size || file.size,
-        url: await fileToDataURL(uploadFile),
-      };
-    }
-
-    const uploaded = await uploadFileToSupabase(uploadFile, {
-      userId: auth.user?.id,
-      folder: mediaInfo.folder,
-      optimizeImage: false,
-      imageOptions: IMAGE_UPLOAD_OPTIMIZATION,
-    });
-
-    return {
-      name: fallbackName,
-      optimized: Boolean(preparedMedia?.optimized || uploaded.optimized),
-      originalSize: preparedMedia?.originalSize || uploaded.originalSize || file.size,
-      size: uploaded.optimizedSize || preparedMedia?.size || uploadFile.size || file.size,
-      optimizedSize: uploaded.optimizedSize || preparedMedia?.size || uploadFile.size || file.size,
-      url: uploaded.publicUrl,
-    };
-  }, [auth.user?.id]);
-
-  const importMediaAsset = useCallback(async (file, {
-    onImported = null,
-    useActiveProjectReload = false,
-  } = {}) => {
-    const validationMessage = validateMediaFile(file);
-    if (!file) return null;
-    if (validationMessage) {
-      setSaveStatus(validationMessage);
-      await alertDialog({
-        title: 'Import impossible',
-        message: validationMessage,
-      });
-      return null;
-    }
-
-    const mediaInfo = getMediaImportInfo(file);
-
-    try {
-      const preparedMedia = await prepareMediaFileForUpload(file, mediaInfo);
-      const usageBytes = await getCurrentStorageUsageBytes();
-      if (usageBytes + preparedMedia.size > accountStorageQuotaBytes) {
-        const message = `Stockage insuffisant : ${formatStorageSize(usageBytes)} / ${formatStorageSize(accountStorageQuotaBytes)} utilisés. Ce fichier pèse ${formatStorageSize(preparedMedia.size)}.`;
-        setSaveStatus(message);
-        await alertDialog({
-          title: 'Stockage insuffisant',
-          message: `${message}\n\nSupprime des médias inactifs ou augmente le stockage du compte.`,
-          variant: 'danger',
-        });
-        return null;
-      }
-
-      const uploaded = await uploadMediaFile(file, mediaInfo, preparedMedia);
-      const assetInput = {
-        type: mediaInfo.assetType,
-        url: uploaded.url,
-        name: uploaded.name,
-        size: uploaded.size,
-      };
-
-      if (typeof onImported === 'function') {
-        onImported(uploaded.url, uploaded.name);
-      }
-
-      if (useActiveProjectReload) {
-        const nextProject = structuredClone(editor.project || createInitialProject());
-        const asset = upsertProjectAsset(nextProject, assetInput);
-
-        editor.loadProject(nextProject);
-        preview.syncWithProject(nextProject);
-        if (auth.user?.id) await saveProjectAndAcknowledge(nextProject, auth.activeProjectId, {
-          tab: editor.tab,
-          selectedSceneId: editor.selectedSceneId,
-        });
-        invalidateStorageUsage();
-        setSaveStatus(`Média importé : ${uploaded.name}`);
-        return asset;
-      }
-
-      editor.patchProject((draft) => {
-        upsertProjectAsset(draft, assetInput);
-      }, { rememberHistory: false });
-      invalidateStorageUsage();
-
-      if (hasSupabaseStorageConfig()) {
-        const savedPercent = uploaded.optimized && uploaded.originalSize > 0 && uploaded.optimizedSize > 0
-          ? Math.round((1 - uploaded.optimizedSize / uploaded.originalSize) * 100)
-          : 0;
-        const compressionRatio = savedPercent > 0 ? ` (${savedPercent}% plus léger)` : '';
-        setSaveStatus(`${mediaInfo.mediaKind} importé${mediaInfo.isImage ? 'e' : ''} dans Supabase${uploaded.optimized ? ' en WebP optimisé' : ''}${compressionRatio} : ${file.name}`);
-      } else {
-        setSaveStatus(`${mediaInfo.mediaKind} importé${mediaInfo.isImage ? 'e' : ''} localement${mediaInfo.shouldOptimizeImage ? ' en WebP optimisé' : ''} : ${file.name}`);
-      }
-
-      return assetInput;
-    } catch (error) {
-      console.error('Erreur import média', error);
-      setSaveStatus('Import média impossible');
-      await alertDialog({
-        title: 'Import média impossible',
-        message: hasSupabaseStorageConfig() ?
-           "Impossible d'envoyer ce fichier vers Supabase Storage. Vérifie le bucket et les policies."
-          : 'Configuration Supabase manquante. Ajoute VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY (ou VITE_SUPABASE_ANON_KEY), VITE_SUPABASE_PUBLIC_ASSETS_BUCKET et VITE_SUPABASE_PRIVATE_DATA_BUCKET.',
-        variant: 'danger',
-      });
-      return null;
-    }
-  }, [
-    accountStorageQuotaBytes,
-    alertDialog,
-    auth.activeProjectId,
-    auth.user?.id,
-    editor.loadProject,
-    editor.patchProject,
-    editor.project,
-    editor.selectedSceneId,
-    editor.tab,
-    getCurrentStorageUsageBytes,
-    getMediaImportInfo,
-    invalidateStorageUsage,
-    prepareMediaFileForUpload,
-    preview.syncWithProject,
-    saveProjectAndAcknowledge,
-    uploadMediaFile,
-    validateMediaFile,
-  ]);
-
-  const handleUpload = useCallback(async (event, callback) => {
-    try {
-      await importMediaAsset(event.target.files?.[0], {
-        onImported: callback,
-      });
-    } finally {
-      event.target.value = '';
-    }
-  }, [importMediaAsset]);
-
-  const importProfileMediaFile = useCallback((file) => importMediaAsset(file, {
-    useActiveProjectReload: true,
-  }), [importMediaAsset]);
-
-  const uploadGalleryThumbnail = useCallback(async (file) => {
-    if (!file) throw new Error('Aucune miniature à envoyer.');
-
-    if (!hasSupabaseStorageConfig()) {
-      return {
-        publicUrl: await fileToDataURL(file),
-        storageMode: 'local',
-      };
-    }
-
-    const result = await uploadFileToSupabase(file, {
-      userId: auth.user?.id,
-      folder: 'gallery-thumbnails',
-      optimizeImage: false,
-    });
-
-    return {
-      publicUrl: result.publicUrl,
-      storageMode: 'supabase',
-    };
-  }, [auth.user?.id]);
 
   const handleDeleteItem = useCallback(async (itemId) => {
     const item = editor.project.items.find((entry) => entry.id === itemId);
@@ -893,13 +695,6 @@ function BuilderApp({
     loadTutorialSteps,
     preview.syncWithProject,
   ]);
-
-  const handleExportProjectJson = useCallback(() => exportProjectJson(editor.project), [editor.project]);
-  const handleExportAuthorSummary = useCallback(() => exportAuthorSummary(editor.project), [editor.project]);
-  const handleExportStandalone = useCallback(async () => {
-    const { exportStandalone } = await import('./utils/exportStandalone');
-    await exportStandalone(editor.project);
-  }, [editor.project]);
 
   const {
     createProjectFromProfile,
@@ -1089,74 +884,6 @@ function BuilderApp({
     url.searchParams.set('gallery', '1');
     window.open(url.toString(), '_blank', 'noopener,noreferrer');
   }, []);
-
-  const openProfileFromBuilder = useCallback(async () => {
-    const shouldSaveOnExit = Boolean(
-      auth.user?.id
-      && auth.activeProjectId
-      && hydratedProjectRef.current === auth.activeProjectId,
-    );
-    const projectToSave = editor.project;
-    const projectIdToSave = auth.activeProjectId;
-    const uiStateToSave = {
-      tab: editor.tab,
-      selectedSceneId: editor.selectedSceneId,
-    };
-
-    let exitSaveStatus = '';
-    if (shouldSaveOnExit) {
-      try {
-        setSaveStatus('Sauvegarde du projet...');
-        const result = await saveProjectAndAcknowledge(projectToSave, projectIdToSave, uiStateToSave);
-        exitSaveStatus = getProjectSaveStatus(result?.syncStatus || { localSaved: Boolean(result) });
-        setSaveStatus(exitSaveStatus);
-      } catch (error) {
-        console.error('Sauvegarde du projet avant retour profil impossible', error);
-        setSaveStatus('Erreur de sauvegarde');
-        await alertDialog({
-          title: 'Sauvegarde impossible',
-          message: "Le projet n'a pas pu être sauvegardé. Vous restez dans le builder pour éviter de perdre les changements.",
-          variant: 'danger',
-        });
-        return;
-      }
-    }
-
-    if (auth.user?.id && auth.activeProjectId) {
-      writeBuilderUiState(auth.user.id, auth.activeProjectId, {
-        screen: 'profile',
-        ...uiStateToSave,
-      });
-    }
-
-    if (onExitToProfile) {
-      onExitToProfile(exitSaveStatus ? { statusMessage: exitSaveStatus } : undefined);
-    } else {
-      setScreen('profile');
-    }
-  }, [
-    alertDialog,
-    auth.activeProjectId,
-    auth.user?.id,
-    editor.project,
-    editor.selectedSceneId,
-    editor.tab,
-    hydratedProjectRef,
-    onExitToProfile,
-    saveProjectAndAcknowledge,
-  ]);
-
-  const importProjectJson = useCallback(async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const text = await file.text();
-    const parsed = normalizeProject(JSON.parse(text));
-    editor.loadProject(parsed);
-    preview.syncWithProject(parsed);
-    if (auth.activeProjectId) await saveProjectAndAcknowledge(parsed, auth.activeProjectId);
-    setSaveStatus('Projet importé et sauvegardé');
-    event.target.value = '';
-  }, [auth.activeProjectId, editor.loadProject, preview.syncWithProject, saveProjectAndAcknowledge]);
 
   const applyAiProject = useCallback(async (generatedProject, options = {}) => {
     const candidateProject = options.isPatch || options.mode === 'improve' ?

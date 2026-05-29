@@ -1,14 +1,9 @@
 import {
-  Box,
   Copy,
-  Download,
   Eraser,
-  HeartPulse,
   Magnet,
   Mountain,
-  MousePointerClick,
   Plus,
-  Sword,
   Trash2,
 } from 'lucide-react';
 import {
@@ -86,20 +81,17 @@ export default function Rpg3DInspector({
   selectedPropTileSize,
   selectedReliefStyle,
   selectedModelEraserCount,
-  showArcadeElementLibrary,
   onActionZoneTypeChange,
   onAddSelectedNpcChoice,
   onClearPropImage,
   onDeleteSelected,
   onDuplicateSelected,
-  onExportConfig,
   onClearModelEraser,
   onModelEraserRadiusChange,
   onNpcInteractionModeChange,
   onPropCollisionChange,
   onReliefCollisionChange,
   onRemoveSelectedNpcChoice,
-  onSelectTool,
   onSnapSelectedTileToNeighbor,
   onToggleActionZoneEdgeInsertMode,
   onToggleModelEraser,
@@ -640,18 +632,6 @@ export default function Rpg3DInspector({
         )}
       </div>
 
-      {showArcadeElementLibrary ? (
-        <div className="arcade-panel-section arcade-library">
-          <h2>Elements</h2>
-          <button type="button" onClick={() => onSelectTool('obstacle')}><Plus size={15} /> Mur</button>
-          <button type="button" onClick={() => onSelectTool('enemy')}><Sword size={15} /> Ennemi</button>
-          <button type="button" onClick={() => onSelectTool('pickup')}><HeartPulse size={15} /> Bonus</button>
-          <button type="button" onClick={() => onSelectTool('relief')}><Mountain size={15} /> Relief</button>
-          <button type="button" onClick={() => onSelectTool('prop')}><Box size={15} /> Image 3D</button>
-          <button type="button" onClick={() => onSelectTool('actionZone')}><MousePointerClick size={15} /> Zone</button>
-          <button type="button" onClick={onExportConfig}><Download size={15} /> Copier JSON</button>
-        </div>
-      ) : null}
     </aside>
   );
 }

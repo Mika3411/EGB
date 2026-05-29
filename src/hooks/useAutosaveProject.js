@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { isBuilderTab } from '../utils/tutorialHelpers';
+import {
+  getProjectSaveStatus,
+  hasDurableProjectSave,
+} from '../utils/projectPersistenceStatus';
+
+export {
+  getProjectSaveStatus,
+  hasDurableProjectSave,
+} from '../utils/projectPersistenceStatus';
 
 const AUTOSAVE_BASE_DELAY_MS = 900;
 const AUTOSAVE_REMOTE_IDLE_DELAY_MS = 10_000;
@@ -76,24 +85,6 @@ const getProjectSaveFingerprint = (project) => {
     return '';
   }
 };
-
-const hasDurableProjectSave = (syncStatus = {}) => Boolean(syncStatus.localSaved || syncStatus.remoteSaved);
-
-export const getProjectSaveStatus = (syncStatus = {}) => (
-  syncStatus.remoteSaved
-    ? 'Sauvegardé sur Supabase'
-    : syncStatus.remoteAttempted
-      ? syncStatus.localSaved
-        ? 'Supabase non synchronisé'
-        : syncStatus.localCacheSaved
-          ? 'Sauvegarde locale incomplète'
-          : 'Erreur de sauvegarde'
-      : syncStatus.localSaved
-        ? 'Sauvegardé localement'
-        : syncStatus.localCacheSaved
-          ? 'Sauvegarde locale incomplète'
-          : 'Erreur de sauvegarde'
-);
 
 export function useAutosaveProject({
   activeProjectId,
@@ -217,6 +208,7 @@ export function useAutosaveProject({
         selectedSceneId: request.selectedSceneId,
         autosaveRevision: request.autosaveRevision,
       }, {
+        allowPartial: true,
         localOnly: request.localOnly,
       });
       const syncStatus = savedProject?.syncStatus || {};

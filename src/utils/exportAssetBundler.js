@@ -61,6 +61,18 @@ const extensionFromMime = (mimeType = '') => {
 };
 
 const GENERIC_REMOTE_MIME_TYPES = new Set(['', 'application/octet-stream', 'binary/octet-stream']);
+const DEFAULT_REMOTE_ASSET_TIMEOUT_MS = 30000;
+const DEFAULT_MAX_REMOTE_ASSET_BYTES = 100 * 1024 * 1024;
+const SENSITIVE_REPORT_URL_PARAMS = new Set([
+  'token',
+  'signature',
+  'expires',
+  'access_token',
+  'refresh_token',
+  'key',
+  'apikey',
+]);
+const REDACTED_REPORT_URL_VALUE = '[redacted]';
 
 const shortHash = (value = '') => {
   let hash = 0x811c9dc5;
@@ -73,6 +85,92 @@ const shortHash = (value = '') => {
 };
 
 const getCleanContentType = (value = '') => String(value || '').split(';')[0].trim().toLowerCase();
+
+const getNumberOption = (value, defaultValue) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : defaultValue;
+};
+
+const getOfflineAssetFetchTimeoutMs = (options = {}) => (
+  getNumberOption(
+    options.offlineAssetFetchTimeoutMs ?? options.remoteAssetTimeoutMs,
+    DEFAULT_REMOTE_ASSET_TIMEOUT_MS,
+  )
+);
+
+const getOfflineAssetMaxBytes = (options = {}) => {
+  const value = options.offlineAssetMaxBytes ?? options.maxRemoteAssetBytes;
+  if (value === false) return Infinity;
+  return getNumberOption(value, DEFAULT_MAX_REMOTE_ASSET_BYTES);
+};
+
+const getResponseHeader = (headers, name) => (
+  headers?.get?.(name)
+  || headers?.get?.(name.toLowerCase())
+  || ''
+);
+
+const parseContentLength = (value) => {
+  const normalized = String(value || '').trim();
+  if (!/^\d+$/.test(normalized)) return null;
+  const parsed = Number(normalized);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+};
+
+const redactSensitiveReportUrl = (url = '') => {
+  const value = String(url || '');
+  const hashIndex = value.indexOf('#');
+  const beforeHash = hashIndex >= 0 ? value.slice(0, hashIndex) : value;
+  const hash = hashIndex >= 0 ? value.slice(hashIndex) : '';
+  const queryIndex = beforeHash.indexOf('?');
+
+  if (queryIndex < 0) return value;
+
+  const base = beforeHash.slice(0, queryIndex);
+  const query = beforeHash.slice(queryIndex + 1);
+  const redactedQuery = query.split('&').map((part) => {
+    if (!part) return part;
+    const separatorIndex = part.indexOf('=');
+    const rawName = separatorIndex >= 0 ? part.slice(0, separatorIndex) : part;
+    let decodedName = rawName;
+    try {
+      decodedName = decodeURIComponent(rawName.replace(/\+/g, ' '));
+    } catch {
+      decodedName = rawName;
+    }
+    if (!SENSITIVE_REPORT_URL_PARAMS.has(decodedName.toLowerCase())) return part;
+    return `${rawName}=${REDACTED_REPORT_URL_VALUE}`;
+  }).join('&');
+
+  return `${base}?${redactedQuery}${hash}`;
+};
+
+const getRemoteAssetFailureMessage = (error, timeoutMs) => {
+  if (error?.offlineAssetTimedOut) return `Remote asset request timed out after ${timeoutMs} ms.`;
+  if (error?.name === 'AbortError') return 'Remote asset request was aborted.';
+  return error?.message || 'Remote asset request failed.';
+};
+
+const withRemoteAssetTimeout = async (operation, { timeoutMs, controller } = {}) => {
+  if (!timeoutMs || timeoutMs <= 0) return operation();
+
+  let timeoutId = null;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      controller?.abort?.();
+      const error = new Error(`Remote asset request timed out after ${timeoutMs} ms.`);
+      error.name = 'AbortError';
+      error.offlineAssetTimedOut = true;
+      reject(error);
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([operation(), timeoutPromise]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
 
 const getSafeExtensionFromUrl = (url = '') => {
   try {
@@ -283,6 +381,8 @@ export async function buildExportProjectWithAssets(project, zip, options = {}) {
   const remoteAssetCache = new Map();
   const offlineWarnings = [];
   const exportOfflineAssets = options.exportOfflineAssets === true;
+  const offlineAssetFetchTimeoutMs = getOfflineAssetFetchTimeoutMs(options);
+  const offlineAssetMaxBytes = getOfflineAssetMaxBytes(options);
   let bundledCount = 0;
   let onlineCount = 0;
 
@@ -334,7 +434,7 @@ export async function buildExportProjectWithAssets(project, zip, options = {}) {
   const addOfflineWarning = ({ url, references, message, status = null }) => {
     onlineCount += 1;
     offlineWarnings.push({
-      url,
+      url: redactSensitiveReportUrl(url),
       paths: references.map((reference) => reference.path),
       message,
       ...(status === null || status === undefined ? {} : { status }),
@@ -354,28 +454,54 @@ export async function buildExportProjectWithAssets(project, zip, options = {}) {
       return null;
     }
 
+    const controller = typeof AbortController === 'function'
+      ? new AbortController()
+      : null;
+
     try {
-      const response = await fetch(group.url);
-      if (!response?.ok) {
+      const downloadedAsset = await withRemoteAssetTimeout(async () => {
+        const response = await fetch(group.url, controller ? { signal: controller.signal } : undefined);
+        if (!response?.ok) {
+          return {
+            warning: {
+              status: response?.status ?? null,
+              message: response?.statusText || 'Remote asset request failed.',
+            },
+          };
+        }
+
+        const contentLength = parseContentLength(getResponseHeader(response.headers, 'Content-Length'));
+        if (contentLength !== null && contentLength > offlineAssetMaxBytes) {
+          return {
+            warning: {
+              message: `Remote asset is too large (${contentLength} bytes, limit ${offlineAssetMaxBytes} bytes).`,
+            },
+          };
+        }
+
+        return {
+          bytes: new Uint8Array(await response.arrayBuffer()),
+          contentType: getResponseHeader(response.headers, 'Content-Type'),
+        };
+      }, { timeoutMs: offlineAssetFetchTimeoutMs, controller });
+
+      if (downloadedAsset?.warning) {
         addOfflineWarning({
           url: group.url,
           references: group.references,
-          status: response?.status ?? null,
-          message: response?.statusText || 'Remote asset request failed.',
+          ...downloadedAsset.warning,
         });
         remoteAssetCache.set(group.url, null);
         return null;
       }
 
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      const contentType = response.headers?.get?.('Content-Type') || response.headers?.get?.('content-type') || '';
       const assetPath = createStableRemoteAssetPath(
         group.references[0],
         group.url,
-        contentType,
+        downloadedAsset.contentType,
         usedRemotePaths,
       );
-      zip.file(assetPath, bytes);
+      zip.file(assetPath, downloadedAsset.bytes);
       bundledCount += 1;
 
       const result = { assetPath };
@@ -385,7 +511,7 @@ export async function buildExportProjectWithAssets(project, zip, options = {}) {
       addOfflineWarning({
         url: group.url,
         references: group.references,
-        message: error?.message || 'Remote asset request failed.',
+        message: getRemoteAssetFailureMessage(error, offlineAssetFetchTimeoutMs),
       });
       remoteAssetCache.set(group.url, null);
       return null;

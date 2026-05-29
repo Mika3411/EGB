@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useEffect, useMemo, useRef } from 'react';
 import {
   addRewardItemToInventory,
   createGameEngine,
@@ -10,8 +10,6 @@ import {
 } from '../lib/gameEngine';
 import { resolveAssetUrl } from '../lib/assetManager';
 import {
-  DEFAULT_COLOR_SEQUENCE,
-  DEFAULT_PLAYER_LIVES,
   addUnique,
   clampNumber,
   normalizeHeroAdventure,
@@ -22,63 +20,60 @@ import { createPreviewHeroCombatActions } from './preview/previewHeroCombatActio
 import { createPreviewInventoryActions } from './preview/previewInventoryActions.js';
 import {
   createPreviewSaveStateActions,
-  getInitialStoryVariables,
 } from './preview/previewSaveState.js';
+import {
+  usePreviewCinematicState,
+  usePreviewConversationState,
+  usePreviewCoreState,
+  usePreviewEnigmaState,
+  usePreviewHeroCombatState,
+  usePreviewInventoryState,
+  usePreviewTimerState,
+} from './preview/previewPlayerStateHooks.js';
 
 export function usePreviewPlayer(project, { getItemById } = {}) {
   const initialScene = project.scenes.find((scene) => scene.id === project.start?.targetSceneId) || project.scenes[0] || null;
   const initialHeroAdventure = normalizeHeroAdventure(project);
-  const initialStoryVariables = getInitialStoryVariables(project);
   const engineRef = useRef(null);
   if (!engineRef.current || engineRef.current.getState().project !== project) {
     engineRef.current = createGameEngine(project);
   }
-  const [playSceneId, setPlaySceneId] = useState(initialScene?.id || '');
-  const [inventory, setInventory] = useState([]);
-  const [visitedSceneIds, setVisitedSceneIds] = useState(initialScene?.id ? [initialScene.id] : []);
-  const [storyVariables, setStoryVariables] = useState(initialStoryVariables);
-  const [adventureJournalEntries, setAdventureJournalEntries] = useState([]);
-  const [playerLives, setPlayerLives] = useState(DEFAULT_PLAYER_LIVES);
-  const [heroState, setHeroState] = useState(initialHeroAdventure.hero);
-  const [heroSetupComplete, setHeroSetupComplete] = useState(!initialHeroAdventure.enabled);
-  const [lastDiceRoll, setLastDiceRoll] = useState(null);
-  const [heroCombatStates, setHeroCombatStates] = useState({});
-  const [activeHeroCombat, setActiveHeroCombat] = useState(null);
-  const [equippedHeroItemIds, setEquippedHeroItemIds] = useState([]);
-  const [equippedHeroSlotMap, setEquippedHeroSlotMap] = useState({});
-  const [lastChoiceSnapshot, setLastChoiceSnapshot] = useState(null);
-  const [sceneTimerResetKey, setSceneTimerResetKey] = useState(0);
-  const [dialogue, setDialogue] = useState(initialScene?.introText || '');
-  const [completedHotspotIds, setCompletedHotspotIds] = useState([]);
-  const [solvedEnigmaIds, setSolvedEnigmaIds] = useState([]);
-  const [chosenConversationReplyIds, setChosenConversationReplyIds] = useState([]);
-  const [askedConversationNodeIds, setAskedConversationNodeIds] = useState([]);
-  const [hiddenConversationReplyIds, setHiddenConversationReplyIds] = useState([]);
-  const [launchedCinematicIds, setLaunchedCinematicIds] = useState([]);
-  const [completedCombinationIds, setCompletedCombinationIds] = useState([]);
-  const [usedLogicRuleIds, setUsedLogicRuleIds] = useState([]);
-  const [usedSceneObjectIds, setUsedSceneObjectIds] = useState([]);
-  const [revealedSceneObjectIds, setRevealedSceneObjectIds] = useState([]);
-  const [sceneObjectTextOverrides, setSceneObjectTextOverrides] = useState({});
-  const [viewerImage, setViewerImage] = useState(null);
-  const [playingCinematic, setPlayingCinematic] = useState(null);
-  const [playingSlideIndex, setPlayingSlideIndex] = useState(0);
-  const [selectedInventoryIds, setSelectedInventoryIds] = useState([]);
-  const [draggedInventoryId, setDraggedInventoryId] = useState(null);
-  const [activeEnigma, setActiveEnigma] = useState(null);
-  const [activeConversation, setActiveConversation] = useState(null);
-  const [activeEnding, setActiveEnding] = useState(null);
-  const [choiceEffectNotices, setChoiceEffectNotices] = useState([]);
-  const [enigmaCodeInput, setEnigmaCodeInput] = useState('');
-  const [enigmaColorAttempt, setEnigmaColorAttempt] = useState(DEFAULT_COLOR_SEQUENCE);
-  const [enigmaPuzzleOrder, setEnigmaPuzzleOrder] = useState([]);
-  const [enigmaPuzzleSelectedIndex, setEnigmaPuzzleSelectedIndex] = useState(null);
-  const [enigmaDragBank, setEnigmaDragBank] = useState([]);
-  const [enigmaDragSlots, setEnigmaDragSlots] = useState([]);
-  const [enigmaDraggedPiece, setEnigmaDraggedPiece] = useState(null);
-  const [enigmaRotationAngles, setEnigmaRotationAngles] = useState([]);
-  const [simonPlaybackIndex, setSimonPlaybackIndex] = useState(-1);
-  const [simonPlayerTurn, setSimonPlayerTurn] = useState(false);
+  const coreState = usePreviewCoreState(project, initialScene);
+  const inventoryState = usePreviewInventoryState();
+  const cinematicState = usePreviewCinematicState();
+  const conversationState = usePreviewConversationState();
+  const enigmaState = usePreviewEnigmaState();
+  const heroCombatState = usePreviewHeroCombatState(initialHeroAdventure);
+  const timerState = usePreviewTimerState();
+  const {
+    playSceneId, setPlaySceneId, visitedSceneIds, setVisitedSceneIds, storyVariables, setStoryVariables,
+    adventureJournalEntries, setAdventureJournalEntries, dialogue, setDialogue, completedHotspotIds,
+    setCompletedHotspotIds, solvedEnigmaIds, setSolvedEnigmaIds, launchedCinematicIds, setLaunchedCinematicIds,
+    completedCombinationIds, setCompletedCombinationIds, usedLogicRuleIds, setUsedLogicRuleIds,
+    usedSceneObjectIds, setUsedSceneObjectIds, revealedSceneObjectIds, setRevealedSceneObjectIds,
+    sceneObjectTextOverrides, setSceneObjectTextOverrides, viewerImage, setViewerImage,
+    lastChoiceSnapshot, setLastChoiceSnapshot,
+  } = coreState;
+  const { inventory, setInventory, selectedInventoryIds, setSelectedInventoryIds, draggedInventoryId, setDraggedInventoryId } = inventoryState;
+  const { playingCinematic, setPlayingCinematic, playingSlideIndex, setPlayingSlideIndex } = cinematicState;
+  const {
+    chosenConversationReplyIds, setChosenConversationReplyIds, askedConversationNodeIds, setAskedConversationNodeIds,
+    hiddenConversationReplyIds, setHiddenConversationReplyIds, activeConversation, setActiveConversation,
+    activeEnding, setActiveEnding, choiceEffectNotices, setChoiceEffectNotices,
+  } = conversationState;
+  const {
+    activeEnigma, setActiveEnigma, enigmaCodeInput, setEnigmaCodeInput, enigmaColorAttempt, setEnigmaColorAttempt,
+    enigmaPuzzleOrder, setEnigmaPuzzleOrder, enigmaPuzzleSelectedIndex, setEnigmaPuzzleSelectedIndex,
+    enigmaDragBank, setEnigmaDragBank, enigmaDragSlots, setEnigmaDragSlots, enigmaDraggedPiece,
+    setEnigmaDraggedPiece, enigmaRotationAngles, setEnigmaRotationAngles, simonPlaybackIndex,
+    setSimonPlaybackIndex, simonPlayerTurn, setSimonPlayerTurn,
+  } = enigmaState;
+  const {
+    heroState, setHeroState, heroSetupComplete, setHeroSetupComplete, lastDiceRoll, setLastDiceRoll,
+    heroCombatStates, setHeroCombatStates, activeHeroCombat, setActiveHeroCombat, equippedHeroItemIds,
+    setEquippedHeroItemIds, equippedHeroSlotMap, setEquippedHeroSlotMap,
+  } = heroCombatState;
+  const { playerLives, setPlayerLives, sceneTimerResetKey, setSceneTimerResetKey } = timerState;
   const audioRef = useRef(null);
   const hotspotAudioRef = useRef(null);
   const responseAmbienceAudioRef = useRef(null);

@@ -129,15 +129,23 @@ const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY |
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 const SUPABASE_BROWSER_KEY = SUPABASE_PUBLISHABLE_KEY || SUPABASE_ANON_KEY;
 
+const readClientEnv = (key: string): string => String(import.meta.env[key] || '').trim();
+const EXPLICIT_PUBLIC_ASSETS_BUCKET = readClientEnv('VITE_SUPABASE_PUBLIC_ASSETS_BUCKET');
+const EXPLICIT_PRIVATE_DATA_BUCKET = readClientEnv('VITE_SUPABASE_PRIVATE_DATA_BUCKET');
+
 // Deprecated fallback kept temporarily for older deployments. Prefer the
 // explicit public/private bucket env vars below.
-export const STORAGE_BUCKET = import.meta.env.VITE_SUPABASE_STORAGE_BUCKET || '';
-export const PUBLIC_ASSETS_BUCKET = import.meta.env.VITE_SUPABASE_PUBLIC_ASSETS_BUCKET || STORAGE_BUCKET;
-export const PRIVATE_DATA_BUCKET = import.meta.env.VITE_SUPABASE_PRIVATE_DATA_BUCKET || STORAGE_BUCKET;
-export const LEGACY_STORAGE_BUCKET_DEPRECATION_MESSAGE = 'VITE_SUPABASE_STORAGE_BUCKET est dépréciée : configure VITE_SUPABASE_PUBLIC_ASSETS_BUCKET et VITE_SUPABASE_PRIVATE_DATA_BUCKET.';
+export const STORAGE_BUCKET = readClientEnv('VITE_SUPABASE_STORAGE_BUCKET');
+export const PUBLIC_ASSETS_BUCKET = EXPLICIT_PUBLIC_ASSETS_BUCKET || STORAGE_BUCKET;
+export const PRIVATE_DATA_BUCKET = EXPLICIT_PRIVATE_DATA_BUCKET || STORAGE_BUCKET;
+export const LEGACY_STORAGE_BUCKET_DEPRECATION_MESSAGE = 'VITE_SUPABASE_STORAGE_BUCKET is deprecated and only kept as a legacy fallback. Configure VITE_SUPABASE_PUBLIC_ASSETS_BUCKET and VITE_SUPABASE_PRIVATE_DATA_BUCKET.';
+export const usesLegacyStorageBucketFallback = Boolean(
+  STORAGE_BUCKET && (!EXPLICIT_PUBLIC_ASSETS_BUCKET || !EXPLICIT_PRIVATE_DATA_BUCKET),
+);
 
 let supabaseClient: SupabaseClientInstance | null = null;
 let storageDebugEnabled = /^(1|true|yes|debug)$/i.test(String(import.meta.env.VITE_SUPABASE_STORAGE_DEBUG || ''));
+let didWarnLegacyStorageBucketFallback = false;
 
 export function setSupabaseStorageDebug(enabled: boolean): void {
   storageDebugEnabled = Boolean(enabled);
@@ -145,6 +153,16 @@ export function setSupabaseStorageDebug(enabled: boolean): void {
 
 export function isSupabaseStorageDebugEnabled(): boolean {
   return storageDebugEnabled;
+}
+
+export function warnLegacyStorageBucketFallback(): boolean {
+  if (!usesLegacyStorageBucketFallback || didWarnLegacyStorageBucketFallback || typeof console === 'undefined') {
+    return false;
+  }
+
+  didWarnLegacyStorageBucketFallback = true;
+  console.warn('[supabase-storage]', LEGACY_STORAGE_BUCKET_DEPRECATION_MESSAGE);
+  return true;
 }
 
 export function hasSupabaseAuthConfig(): boolean {
@@ -229,7 +247,7 @@ const getStorageErrorCode = (error: unknown, fallback: StorageErrorCode): Storag
   error instanceof StorageError && error.code ? error.code : fallback
 );
 
-const getStorageErrorDetails = ({ action = 'operation', bucket = STORAGE_BUCKET, path, cause }: StorageErrorMessageInput): StorageErrorMessageDetails => {
+const getStorageErrorDetails = ({ action = 'operation', bucket = PRIVATE_DATA_BUCKET, path, cause }: StorageErrorMessageInput): StorageErrorMessageDetails => {
   const causeText = getCauseText(cause);
   const status = getCauseStatus(cause);
   const target = path ? ` "${path}"` : '';
@@ -314,12 +332,16 @@ export function createStorageError({ action, bucket = PRIVATE_DATA_BUCKET, path,
   });
 }
 
-export const resolveStorageBucket = (visibility: StorageVisibility): string => (
-  visibility === 'public' ? PUBLIC_ASSETS_BUCKET : PRIVATE_DATA_BUCKET
-);
+export const resolveStorageBucket = (visibility: StorageVisibility): string => {
+  warnLegacyStorageBucketFallback();
+  return visibility === 'public' ? PUBLIC_ASSETS_BUCKET : PRIVATE_DATA_BUCKET;
+};
 
 const assertSupabaseStorageConfig = (): void => {
-  if (hasSupabaseStorageConfig()) return;
+  if (hasSupabaseStorageConfig()) {
+    warnLegacyStorageBucketFallback();
+    return;
+  }
   throw new Error(
     'Configuration Supabase Storage manquante. Ajoute VITE_SUPABASE_PUBLIC_ASSETS_BUCKET et VITE_SUPABASE_PRIVATE_DATA_BUCKET, ou garde VITE_SUPABASE_STORAGE_BUCKET en fallback.',
   );

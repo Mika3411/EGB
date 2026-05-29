@@ -10,8 +10,10 @@ import {
   ANIME_2D_DRAFT_DB_NAME,
   deleteProjectLocalDrafts,
   getProjectAiDraftIds,
+  getProjectAiLocalDraftKeys,
   getProjectAnime2dDraftIds,
 } from '../utils/projectDraftCleanup';
+import { getAiDraftFallbackStorageKey } from '../utils/aiDraftStorageKeys';
 import { getAnime2dDraftStorageKey } from '../utils/storageHelpers';
 
 beforeEach(() => {
@@ -34,13 +36,19 @@ afterEach(() => {
 
 describe('project draft cleanup', () => {
   it('builds AI draft ids from the project id and legacy project fallbacks', () => {
-    expect(getProjectAiDraftIds('project-1', {
+    const project = {
       title: 'Escape lunaire',
       start: { targetSceneId: 'scene-start' },
-    })).toEqual([
+    };
+    expect(getProjectAiDraftIds('project-1', project)).toEqual([
       'ai-draft:project-1',
       'ai-draft:Escape lunaire',
       'ai-draft:scene-start',
+    ]);
+    expect(getProjectAiLocalDraftKeys('project-1', project)).toEqual([
+      getAiDraftFallbackStorageKey('ai-draft:project-1'),
+      getAiDraftFallbackStorageKey('ai-draft:Escape lunaire'),
+      getAiDraftFallbackStorageKey('ai-draft:scene-start'),
     ]);
   });
 
@@ -76,9 +84,31 @@ describe('project draft cleanup', () => {
     ]);
     expect(result).toEqual({
       aiDraftsDeleted: 3,
+      aiLocalDraftsDeleted: 0,
       anime2dDraftsDeleted: 2,
       anime2dLocalDraftsDeleted: 0,
       errors: [],
+    });
+  });
+
+  it('removes AI localStorage fallback drafts for a removed project', async () => {
+    const project = {
+      title: 'Escape lunaire',
+      start: { targetSceneId: 'scene-start' },
+    };
+    const storageKeys = getProjectAiLocalDraftKeys('project-1', project);
+    storageKeys.forEach((storageKey) => {
+      window.localStorage.setItem(storageKey, JSON.stringify({
+        generatedProject: { title: 'Draft' },
+      }));
+    });
+
+    await expect(deleteProjectLocalDrafts('project-1', project)).resolves.toMatchObject({
+      aiLocalDraftsDeleted: storageKeys.length,
+    });
+
+    storageKeys.forEach((storageKey) => {
+      expect(window.localStorage.getItem(storageKey)).toBeNull();
     });
   });
 
@@ -96,7 +126,9 @@ describe('project draft cleanup', () => {
   });
 
   it('skips IndexedDB cleanup when unavailable but still removes localStorage fallbacks', async () => {
+    const aiStorageKey = getAiDraftFallbackStorageKey('ai-draft:project-1');
     const storageKey = getAnime2dDraftStorageKey('project:project-1');
+    window.localStorage.setItem(aiStorageKey, JSON.stringify({ generatedProject: { title: 'AI' } }));
     window.localStorage.setItem(storageKey, JSON.stringify({ layers: [{ id: 'layer-1' }] }));
     Object.defineProperty(window, 'indexedDB', {
       value: undefined,
@@ -105,11 +137,13 @@ describe('project draft cleanup', () => {
 
     await expect(deleteProjectLocalDrafts('project-1', {})).resolves.toEqual({
       aiDraftsDeleted: 0,
+      aiLocalDraftsDeleted: 1,
       anime2dDraftsDeleted: 0,
       anime2dLocalDraftsDeleted: 1,
       errors: [],
     });
     expect(deleteIndexedDrafts).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(aiStorageKey)).toBeNull();
     expect(window.localStorage.getItem(storageKey)).toBeNull();
   });
 
@@ -121,6 +155,7 @@ describe('project draft cleanup', () => {
 
     await expect(deleteProjectLocalDrafts('project-1', {})).resolves.toEqual({
       aiDraftsDeleted: 0,
+      aiLocalDraftsDeleted: 0,
       anime2dDraftsDeleted: 2,
       anime2dLocalDraftsDeleted: 0,
       errors: [error],

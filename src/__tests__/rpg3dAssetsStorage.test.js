@@ -6,6 +6,8 @@ import {
   ARCADE_ASSETS_REMOTE_VERSION,
   ARCADE_ASSETS_STORAGE_KEY,
   blobUrlToFile,
+  cleanupOrphanedRpg3DLocalModelFiles,
+  collectReferencedRpg3DLocalModelFileIds,
   createLocalArcadeAssetsSnapshot,
   dataUrlToFile,
   forgetRpg3DLocalBlobFile,
@@ -17,6 +19,7 @@ import {
   getArcadeModelResourceRemotePath,
   getArcadeTextureRemotePath,
   getArcadeAssetsContentScore,
+  getOrphanedRpg3DLocalModelFileIds,
   rememberRpg3DLocalBlobFile,
   rememberArcadeAssetsLocally,
   selectPreferredArcadeAssets,
@@ -610,6 +613,213 @@ describe('rpg3d assets storage helpers', () => {
     expect(snapshot.config.props[0]).toMatchObject({
       decorModelUrl: '',
       decorLocalModelFileId: 'local-floor-file',
+    });
+  });
+
+  it('collects live local model file ids from studio assets, canvas configs, animations and equipment', () => {
+    const config = cloneConfig(DEFAULT_ARCADE_CONFIG);
+    config.player.characterLocalModelFileId = 'config-player-model';
+    config.player.inventory = [{
+      id: 'direct-equipped-item',
+      type: 'weapon',
+      localModelFileId: 'config-equipment-model',
+      weaponLocalModelFileId: 'config-weapon-model',
+    }];
+    config.heroes = [{
+      id: 'placed-hero',
+      characterLocalModelFileId: 'placed-hero-model',
+    }];
+    config.props = [{
+      id: 'placed-decor',
+      decorLocalModelFileId: 'placed-decor-model',
+    }];
+
+    const studioProject = {
+      ...createDefaultStudioProject(),
+      characterModels3d: [{
+        id: 'hero-model',
+        localModelFileId: 'studio-hero-model',
+        modelAnimations: {
+          walk: {
+            localModelFileId: 'studio-walk-animation',
+          },
+        },
+        inventory: [{
+          id: 'hero-sword',
+          type: 'weapon',
+          localModelFileId: 'studio-equipment-model',
+        }],
+      }],
+      decorModels3d: [{
+        id: 'decor-model',
+        localModelFileId: 'studio-decor-model',
+      }],
+      rpg3dCanvases: [{
+        id: 'canvas-1',
+        config: {
+          ...cloneConfig(DEFAULT_ARCADE_CONFIG),
+          props: [{
+            id: 'canvas-decor',
+            decorLocalModelFileId: 'canvas-decor-model',
+          }],
+        },
+      }],
+    };
+
+    expect([...collectReferencedRpg3DLocalModelFileIds({ config, studioProject })].sort()).toEqual([
+      'canvas-decor-model',
+      'config-equipment-model',
+      'config-player-model',
+      'config-weapon-model',
+      'placed-decor-model',
+      'placed-hero-model',
+      'studio-decor-model',
+      'studio-equipment-model',
+      'studio-hero-model',
+      'studio-walk-animation',
+    ].sort());
+  });
+
+  it('detects and deletes only orphaned RPG 3D local model files scoped to the current project', async () => {
+    const config = cloneConfig(DEFAULT_ARCADE_CONFIG);
+    config.player.characterLocalModelFileId = 'live-player-model';
+
+    const studioProject = {
+      ...createDefaultStudioProject(),
+      characterModels3d: [{
+        id: 'hero-model',
+        localModelFileId: 'live-studio-model',
+        modelAnimations: {
+          idle: {
+            localModelFileId: 'live-animation-model',
+          },
+        },
+      }],
+      decorModels3d: [{
+        id: 'decor-model',
+        localModelFileId: 'live-decor-model',
+      }],
+    };
+    const deletedIds = [];
+
+    expect(getOrphanedRpg3DLocalModelFileIds([
+      'live-player-model',
+      'orphan-model',
+      'live-animation-model',
+    ], collectReferencedRpg3DLocalModelFileIds({ config, studioProject }))).toEqual(['orphan-model']);
+
+    const result = await cleanupOrphanedRpg3DLocalModelFiles({ config, studioProject }, {
+      scope: { projectId: 'project-a', userId: 'user-a' },
+      storedRecords: [
+        { id: 'live-player-model', projectId: 'project-a', userId: 'user-a' },
+        { id: 'orphan-model', projectId: 'project-a', userId: 'user-a' },
+        { id: 'live-studio-model', projectId: 'project-a', userId: 'user-a' },
+        { id: 'orphan-model-2', projectId: 'project-a', userId: 'user-a' },
+        { id: 'live-animation-model', projectId: 'project-a', userId: 'user-a' },
+        { id: 'live-decor-model', projectId: 'project-a', userId: 'user-a' },
+      ],
+      deleteLocalModelFiles: async (ids) => {
+        deletedIds.push(...ids);
+        return ids.length;
+      },
+    });
+
+    expect(deletedIds).toEqual(['orphan-model', 'orphan-model-2']);
+    expect(result).toMatchObject({
+      skipped: false,
+      orphanedIds: ['orphan-model', 'orphan-model-2'],
+      protectedIds: [],
+      deletedCount: 2,
+      errors: [],
+    });
+  });
+
+  it('does not delete local model files scoped to another RPG 3D project', async () => {
+    const config = cloneConfig(DEFAULT_ARCADE_CONFIG);
+    config.player.characterLocalModelFileId = 'project-a-live';
+    const deletedIds = [];
+
+    const result = await cleanupOrphanedRpg3DLocalModelFiles({ config, studioProject: createDefaultStudioProject() }, {
+      scope: { projectId: 'project-a', userId: 'user-a' },
+      storedRecords: [
+        { id: 'project-a-live', projectId: 'project-a', userId: 'user-a' },
+        { id: 'project-a-orphan', projectId: 'project-a', userId: 'user-a' },
+        { id: 'project-b-model', projectId: 'project-b', userId: 'user-a' },
+      ],
+      deleteLocalModelFiles: async (ids) => {
+        deletedIds.push(...ids);
+        return ids.length;
+      },
+    });
+
+    expect(deletedIds).toEqual(['project-a-orphan']);
+    expect(result).toMatchObject({
+      orphanedIds: ['project-a-orphan', 'project-b-model'],
+      protectedIds: ['project-b-model'],
+      deletedCount: 1,
+    });
+  });
+
+  it('keeps legacy RPG 3D local model files without scope protected from automatic cleanup', async () => {
+    const deletedIds = [];
+
+    const result = await cleanupOrphanedRpg3DLocalModelFiles({ config: cloneConfig(DEFAULT_ARCADE_CONFIG), studioProject: createDefaultStudioProject() }, {
+      scope: { projectId: 'project-a', userId: 'user-a' },
+      storedRecords: [
+        { id: 'legacy-unscoped-model' },
+      ],
+      deleteLocalModelFiles: async (ids) => {
+        deletedIds.push(...ids);
+        return ids.length;
+      },
+    });
+
+    expect(deletedIds).toEqual([]);
+    expect(result).toMatchObject({
+      orphanedIds: ['legacy-unscoped-model'],
+      protectedIds: ['legacy-unscoped-model'],
+      deletedCount: 0,
+    });
+  });
+
+  it('deletes an unreferenced local model file scoped to the current RPG 3D project', async () => {
+    const deletedIds = [];
+
+    const result = await cleanupOrphanedRpg3DLocalModelFiles({ config: cloneConfig(DEFAULT_ARCADE_CONFIG), studioProject: createDefaultStudioProject() }, {
+      scope: { projectId: 'project-a', userId: 'user-a' },
+      storedRecords: [
+        { id: 'project-a-orphan', projectId: 'project-a', userId: 'user-a' },
+      ],
+      deleteLocalModelFiles: async (ids) => {
+        deletedIds.push(...ids);
+        return ids.length;
+      },
+    });
+
+    expect(deletedIds).toEqual(['project-a-orphan']);
+    expect(result).toMatchObject({
+      orphanedIds: ['project-a-orphan'],
+      protectedIds: [],
+      deletedCount: 1,
+    });
+  });
+
+  it('skips RPG 3D local model cleanup when no live reference source is provided', async () => {
+    const result = await cleanupOrphanedRpg3DLocalModelFiles({}, {
+      storedIds: ['orphan-model'],
+      deleteLocalModelFiles: async () => {
+        throw new Error('should not delete without a live project');
+      },
+    });
+
+    expect(result).toEqual({
+      skipped: true,
+      referencedIds: [],
+      storedIds: [],
+      orphanedIds: [],
+      protectedIds: [],
+      deletedCount: 0,
+      errors: [],
     });
   });
 });

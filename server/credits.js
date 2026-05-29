@@ -143,7 +143,7 @@ export const resolveCreditUserId = async (req, body = {}) => {
   return userId;
 };
 
-export const ensureCreditAccount = (store, userId) => {
+const ensureLocalCreditAccount = (store, userId) => {
   if (!store.users[userId]) {
     const now = new Date().toISOString();
     store.users[userId] = {
@@ -162,10 +162,10 @@ export const ensureCreditAccount = (store, userId) => {
   return store.users[userId];
 };
 
-export const getCreditAccount = (userId) => {
+const getLocalCreditAccount = (userId) => {
   return withCreditStoreLock(() => {
     const store = readCreditStore();
-    const account = ensureCreditAccount(store, userId);
+    const account = ensureLocalCreditAccount(store, userId);
     writeCreditStore(store);
     return account;
   });
@@ -175,7 +175,7 @@ export const calculateImageCreditCost = (account, body = {}) => {
   if (body.type !== 'item') return aiCreditCosts.image;
   if (body.variant === 'thumbnail') return aiCreditCosts.objectThumbnail;
   const batchSize = Math.max(1, toCount(aiCreditCosts.objectImageBatchSize) || 1);
-  const usedInBatch = toCount(account.objectImagesInCurrentBatch);
+  const usedInBatch = toCount(account.objectImagesInCurrentBatch ?? account.object_images_in_current_batch);
   return usedInBatch % batchSize === 0 ? aiCreditCosts.objectImageBatchCost : 0;
 };
 
@@ -191,10 +191,10 @@ const getReservationRefundReason = (reason, reservation = {}) => {
   return reservationId ? `${reason}:reservation:${reservationId}` : reason;
 };
 
-export const reserveImageCredits = (userId, body = {}) => {
+const reserveLocalImageCredits = (userId, body = {}) => {
   return withCreditStoreLock(() => {
     const store = readCreditStore();
-    const account = ensureCreditAccount(store, userId);
+    const account = ensureLocalCreditAccount(store, userId);
     const reservationId = makeImageCreditReservationId();
     const batchSize = Math.max(1, toCount(aiCreditCosts.objectImageBatchSize) || 1);
     const advancesBatch = body.type === 'item' && body.variant !== 'thumbnail';
@@ -243,10 +243,10 @@ export const reserveImageCredits = (userId, body = {}) => {
   });
 };
 
-export const releaseImageCreditReservation = (userId, reservation = {}, reason = 'failed_image') => {
+const releaseLocalImageCreditReservation = (userId, reservation = {}, reason = 'failed_image') => {
   return withCreditStoreLock(() => {
     const store = readCreditStore();
-    const account = ensureCreditAccount(store, userId);
+    const account = ensureLocalCreditAccount(store, userId);
     const cost = Math.max(0, Math.round(Number(reservation.cost || 0)));
     const batchSize = Math.max(1, toCount(reservation.batchSize) || 1);
     const currentBatchCount = toCount(account.objectImagesInCurrentBatch);
@@ -292,15 +292,414 @@ export const normalizeCreditAccount = (userId, account = {}) => ({
   transactions: (account.transactions || []).slice(-10).reverse(),
 });
 
+const normalizeSupabaseCreditAccount = (account = {}, transactions = account.transactions || []) => ({
+  userId: account.user_id || account.userId || '',
+  balance: Number(account.balance || 0),
+  objectImagesInCurrentBatch: toCount(account.object_images_in_current_batch ?? account.objectImagesInCurrentBatch),
+  createdAt: account.created_at || account.createdAt || '',
+  updatedAt: account.updated_at || account.updatedAt || '',
+  transactions,
+});
+
+const makeCreditError = (message, status = 500, code = 'AI_CREDITS_ERROR', details = {}) => {
+  const error = new Error(message);
+  error.status = status;
+  error.statusCode = status;
+  error.code = code;
+  Object.assign(error, details);
+  return error;
+};
+
+const getCreditBackend = () => {
+  const supabase = getSupabaseAdminClient();
+  if (supabase) return { type: 'supabase', supabase };
+  if (isLocalCreditAuthAllowed(process.env)) return { type: 'local' };
+  throw makeCreditError(
+    'Supabase est requis pour les credits IA. Active ALLOW_LOCAL_CREDIT_AUTH=true uniquement en developpement local pour utiliser le fichier fallback.',
+    503,
+    'SUPABASE_CREDITS_REQUIRED',
+  );
+};
+
+export const ensureSupabaseCreditAccount = async (supabase, userId) => {
+  const { data, error } = await supabase
+    .from('ai_credits')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (data) {
+    if (data.object_images_in_current_batch == null) {
+      const { data: normalized, error: normalizeError } = await supabase
+        .from('ai_credits')
+        .update({
+          object_images_in_current_batch: 0,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', userId)
+        .select('*')
+        .single();
+      if (normalizeError) throw normalizeError;
+      return normalized;
+    }
+    return data;
+  }
+
+  const now = new Date().toISOString();
+  const initialBalance = Number.isFinite(defaultAiCredits) ? Math.max(0, defaultAiCredits) : 0;
+  const { data: inserted, error: insertError } = await supabase
+    .from('ai_credits')
+    .insert({
+      user_id: userId,
+      balance: initialBalance,
+      object_images_in_current_batch: 0,
+      created_at: now,
+      updated_at: now,
+    })
+    .select('*')
+    .single();
+
+  if (insertError) throw insertError;
+
+  const { error: transactionError } = await supabase.from('ai_credit_transactions').insert({
+    user_id: userId,
+    type: 'grant',
+    amount: initialBalance,
+    reason: 'initial_balance',
+    created_at: now,
+  });
+  if (transactionError) throw transactionError;
+
+  return inserted;
+};
+
+export const getRecentTransactions = async (supabase, userId, limit = 10) => {
+  const { data, error } = await supabase
+    .from('ai_credit_transactions')
+    .select('type, amount, reason, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data || []).map((entry) => ({
+    type: entry.type,
+    amount: Number(entry.amount || 0),
+    reason: entry.reason || '',
+    at: entry.created_at || '',
+  }));
+};
+
+const addSupabaseCreditTransaction = async (supabase, userId, transaction = {}) => {
+  const { error } = await supabase.from('ai_credit_transactions').insert({
+    user_id: userId,
+    type: transaction.type || 'spend',
+    amount: Number(transaction.amount || 0),
+    reason: transaction.reason || '',
+    created_at: transaction.createdAt || new Date().toISOString(),
+  });
+  if (error) throw error;
+};
+
+const updateSupabaseCreditAccount = async (supabase, userId, patch = {}) => {
+  const { data, error } = await supabase
+    .from('ai_credits')
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq('user_id', userId)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+export const spendSupabaseCredits = async (supabase, userId, amount, reason) => {
+  const cost = Math.max(0, Math.round(Number(amount || 0)));
+  if (cost <= 0) return ensureSupabaseCreditAccount(supabase, userId);
+
+  let lastBalance = 0;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const account = await ensureSupabaseCreditAccount(supabase, userId);
+    lastBalance = Number(account.balance || 0);
+    if (lastBalance < cost) break;
+
+    const { data: updated, error } = await supabase
+      .from('ai_credits')
+      .update({
+        balance: lastBalance - cost,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('user_id', userId)
+      .eq('balance', lastBalance)
+      .select('*')
+      .maybeSingle();
+
+    if (error) throw error;
+    if (updated) {
+      await addSupabaseCreditTransaction(supabase, userId, {
+        type: 'spend',
+        amount: -cost,
+        reason,
+      });
+      return updated;
+    }
+  }
+
+  throw makeCreditError('Credits IA insuffisants.', 402, 'AI_CREDITS_EXHAUSTED', {
+    balance: lastBalance,
+    required: cost,
+  });
+};
+
+export const refundSupabaseCredits = async (supabase, userId, amount, reason) => {
+  const cost = Math.max(0, Math.round(Number(amount || 0)));
+  if (cost <= 0) return ensureSupabaseCreditAccount(supabase, userId);
+  const account = await ensureSupabaseCreditAccount(supabase, userId);
+  const updated = await updateSupabaseCreditAccount(supabase, userId, {
+    balance: Number(account.balance || 0) + cost,
+  });
+  await addSupabaseCreditTransaction(supabase, userId, {
+    type: 'refund',
+    amount: cost,
+    reason,
+  });
+  return updated;
+};
+
+const addSupabaseCredits = async (supabase, userId, amount, reason, type = 'grant') => {
+  const safeAmount = Math.max(0, Math.round(Number(amount || 0)));
+  if (!safeAmount) return ensureSupabaseCreditAccount(supabase, userId);
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const account = await ensureSupabaseCreditAccount(supabase, userId);
+    const previousBalance = Number(account.balance || 0);
+    const nextBalance = previousBalance + safeAmount;
+    const { data: updated, error } = await supabase
+      .from('ai_credits')
+      .update({
+        balance: nextBalance,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('user_id', userId)
+      .eq('balance', previousBalance)
+      .select('*')
+      .maybeSingle();
+
+    if (error) throw error;
+    if (updated) {
+      await addSupabaseCreditTransaction(supabase, userId, {
+        type,
+        amount: safeAmount,
+        reason,
+      });
+      return updated;
+    }
+  }
+
+  throw makeCreditError('Mise a jour des credits impossible, reessaie.', 409, 'AI_CREDITS_CONFLICT');
+};
+
+const hasSupabaseCreditTransaction = async (supabase, userId, transaction = {}) => {
+  const { data, error } = await supabase
+    .from('ai_credit_transactions')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('type', transaction.type)
+    .eq('amount', Number(transaction.amount || 0))
+    .eq('reason', transaction.reason || '')
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return Boolean(data);
+};
+
+const refundSupabaseImageCreditReservation = async (supabase, userId, reservation = {}, reason = 'failed_image') => {
+  const cost = Math.max(0, Math.round(Number(reservation.cost || 0)));
+  if (cost <= 0) return ensureSupabaseCreditAccount(supabase, userId);
+
+  const refundReason = getReservationRefundReason(reason, reservation);
+  if (reservation.id && await hasSupabaseCreditTransaction(supabase, userId, {
+    type: 'refund',
+    amount: cost,
+    reason: refundReason,
+  })) {
+    return ensureSupabaseCreditAccount(supabase, userId);
+  }
+
+  return refundSupabaseCredits(supabase, userId, cost, refundReason);
+};
+
+export const reserveSupabaseImageCredits = async (supabase, userId, body = {}) => {
+  const reservationId = makeImageCreditReservationId();
+  const batchSize = Math.max(1, toCount(aiCreditCosts.objectImageBatchSize) || 1);
+  const advancesBatch = body.type === 'item' && body.variant !== 'thumbnail';
+  let lastBalance = 0;
+  let required = 0;
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const account = await ensureSupabaseCreditAccount(supabase, userId);
+    const previousBatchCount = toCount(account.object_images_in_current_batch);
+    const cost = calculateImageCreditCost(account, body);
+    const balance = Number(account.balance || 0);
+    lastBalance = balance;
+    required = cost;
+    if (balance < cost) break;
+
+    const nextBatchCount = advancesBatch ? (previousBatchCount + 1) % batchSize : previousBatchCount;
+    if (cost <= 0 && !advancesBatch) {
+      return {
+        id: reservationId,
+        account: normalizeSupabaseCreditAccount(account),
+        cost: 0,
+        batchSize,
+        advancesBatch,
+        previousBatchCount,
+        nextBatchCount,
+      };
+    }
+
+    const patch = {
+      updated_at: new Date().toISOString(),
+      ...(cost > 0 ? { balance: balance - cost } : {}),
+      ...(advancesBatch ? { object_images_in_current_batch: nextBatchCount } : {}),
+    };
+    const { data: updated, error } = await supabase
+      .from('ai_credits')
+      .update(patch)
+      .eq('user_id', userId)
+      .eq('balance', balance)
+      .eq('object_images_in_current_batch', previousBatchCount)
+      .select('*')
+      .maybeSingle();
+
+    if (error) throw error;
+    if (updated) {
+      if (cost > 0) {
+        await addSupabaseCreditTransaction(supabase, userId, {
+          type: 'spend',
+          amount: -cost,
+          reason: `image:${body.type || 'image'}`,
+        });
+      }
+      return {
+        id: reservationId,
+        account: normalizeSupabaseCreditAccount(updated),
+        cost,
+        batchSize,
+        advancesBatch,
+        previousBatchCount,
+        nextBatchCount,
+      };
+    }
+  }
+
+  throw makeCreditError('Credits IA insuffisants.', 402, 'AI_CREDITS_EXHAUSTED', {
+    balance: lastBalance,
+    required,
+  });
+};
+
+const rollbackSupabaseImageBatchReservation = async (supabase, userId, reservation = {}) => {
+  if (!reservation.advancesBatch) return ensureSupabaseCreditAccount(supabase, userId);
+  const batchSize = Math.max(1, toCount(reservation.batchSize) || 1);
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const account = await ensureSupabaseCreditAccount(supabase, userId);
+    const currentBatchCount = toCount(account.object_images_in_current_batch);
+    const nextBatchCount = (currentBatchCount - 1 + batchSize) % batchSize;
+    const { data: updated, error } = await supabase
+      .from('ai_credits')
+      .update({
+        object_images_in_current_batch: nextBatchCount,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('user_id', userId)
+      .eq('object_images_in_current_batch', currentBatchCount)
+      .select('*')
+      .maybeSingle();
+
+    if (error) throw error;
+    if (updated) return updated;
+  }
+  return ensureSupabaseCreditAccount(supabase, userId);
+};
+
+export const releaseSupabaseImageCreditReservation = async (supabase, userId, reservation = {}, reason = 'failed_image') => {
+  const refundedAccount = await refundSupabaseImageCreditReservation(supabase, userId, reservation, reason);
+  try {
+    return await rollbackSupabaseImageBatchReservation(supabase, userId, reservation);
+  } catch (error) {
+    if (Number(reservation.cost || 0) > 0) return refundedAccount;
+    throw error;
+  }
+};
+
+export const ensureCreditAccount = async (userId) => {
+  const backend = getCreditBackend();
+  if (backend.type === 'supabase') {
+    return normalizeSupabaseCreditAccount(await ensureSupabaseCreditAccount(backend.supabase, userId));
+  }
+  return getLocalCreditAccount(userId);
+};
+
+export const getCreditAccount = async (userId) => {
+  const backend = getCreditBackend();
+  if (backend.type === 'supabase') {
+    const account = await ensureSupabaseCreditAccount(backend.supabase, userId);
+    const transactions = await getRecentTransactions(backend.supabase, userId);
+    return normalizeSupabaseCreditAccount(account, transactions);
+  }
+  return normalizeCreditAccount(userId, getLocalCreditAccount(userId));
+};
+
+export const spendCredits = async (userId, amount, reason) => {
+  const backend = getCreditBackend();
+  if (backend.type === 'supabase') {
+    return normalizeSupabaseCreditAccount(await spendSupabaseCredits(backend.supabase, userId, amount, reason));
+  }
+  return spendLocalCredits(userId, amount, reason);
+};
+
+export const refundCredits = async (userId, amount, reason) => {
+  const backend = getCreditBackend();
+  if (backend.type === 'supabase') {
+    return normalizeSupabaseCreditAccount(await refundSupabaseCredits(backend.supabase, userId, amount, reason));
+  }
+  return refundLocalCredits(userId, amount, reason);
+};
+
+export const grantCredits = async (userId, amount, reason) => {
+  const backend = getCreditBackend();
+  if (backend.type === 'supabase') {
+    return normalizeSupabaseCreditAccount(await addSupabaseCredits(backend.supabase, userId, amount, reason, 'grant'));
+  }
+  return grantLocalCredits(userId, amount, reason);
+};
+
+export const reserveImageCredits = async (userId, body = {}) => {
+  const backend = getCreditBackend();
+  if (backend.type === 'supabase') return reserveSupabaseImageCredits(backend.supabase, userId, body);
+  return reserveLocalImageCredits(userId, body);
+};
+
+export const releaseImageCreditReservation = async (userId, reservation = {}, reason = 'failed_image') => {
+  const backend = getCreditBackend();
+  if (backend.type === 'supabase') {
+    return normalizeSupabaseCreditAccount(await releaseSupabaseImageCreditReservation(backend.supabase, userId, reservation, reason));
+  }
+  return releaseLocalImageCreditReservation(userId, reservation, reason);
+};
+
 const requireCreditAdmin = async (req) => {
   await verifySupabaseAdminRequest(req);
   return true;
 };
 
-export const spendCredits = (userId, amount, reason) => {
+const spendLocalCredits = (userId, amount, reason) => {
   return withCreditStoreLock(() => {
     const store = readCreditStore();
-    const account = ensureCreditAccount(store, userId);
+    const account = ensureLocalCreditAccount(store, userId);
     const safeAmount = Math.max(0, Number(amount || 0));
     if (safeAmount > 0 && Number(account.balance || 0) < safeAmount) {
       const error = new Error(`CrÃ©dits IA insuffisants (${account.balance || 0}/${safeAmount}).`);
@@ -323,12 +722,12 @@ export const spendCredits = (userId, amount, reason) => {
   });
 };
 
-export const refundCredits = (userId, amount, reason) => {
+const refundLocalCredits = (userId, amount, reason) => {
   const safeAmount = Math.max(0, Number(amount || 0));
   if (!safeAmount) return;
   withCreditStoreLock(() => {
     const store = readCreditStore();
-    const account = ensureCreditAccount(store, userId);
+    const account = ensureLocalCreditAccount(store, userId);
     addCreditTransaction(account, {
       type: 'refund',
       amount: safeAmount,
@@ -339,10 +738,10 @@ export const refundCredits = (userId, amount, reason) => {
   });
 };
 
-export const grantCredits = (userId, amount, reason) => {
+const grantLocalCredits = (userId, amount, reason) => {
   return withCreditStoreLock(() => {
     const store = readCreditStore();
-    const account = ensureCreditAccount(store, userId);
+    const account = ensureLocalCreditAccount(store, userId);
     addCreditTransaction(account, {
       type: 'grant',
       amount,
@@ -354,17 +753,35 @@ export const grantCredits = (userId, amount, reason) => {
   });
 };
 
-export const getStorageQuotaFromTransactions = (account = {}) => (
-  (account.transactions || []).reduce((quota, entry) => {
+export const getStorageQuotaFromTransactions = async (accountOrUserId = {}) => {
+  if (typeof accountOrUserId === 'string') {
+    const backend = getCreditBackend();
+    if (backend.type === 'supabase') {
+      const { data, error } = await backend.supabase
+        .from('ai_credit_transactions')
+        .select('reason')
+        .eq('user_id', accountOrUserId)
+        .like('reason', 'storage_upgrade:%');
+
+      if (error) throw error;
+      return (data || []).reduce((quota, entry) => {
+        const [, , bytes] = String(entry.reason || '').split(':');
+        return Math.max(quota, Math.round(Number(bytes) || 0));
+      }, FREE_STORAGE_BYTES);
+    }
+    return getStorageQuotaFromTransactions(getLocalCreditAccount(accountOrUserId));
+  }
+
+  return (accountOrUserId.transactions || []).reduce((quota, entry) => {
     const [, , bytes] = String(entry.reason || '').split(':');
     return Math.max(quota, Math.round(Number(bytes) || 0));
-  }, FREE_STORAGE_BYTES)
-);
+  }, FREE_STORAGE_BYTES);
+};
 
 export const handleCredits = async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const userId = await resolveCreditUserId(req, { userId: url.searchParams.get('userId') });
-  const account = getCreditAccount(userId);
+  const account = await getCreditAccount(userId);
   const objectImageBatchSize = Math.max(1, toCount(aiCreditCosts.objectImageBatchSize) || 1);
   sendJson(res, 200, {
     userId,
@@ -374,8 +791,8 @@ export const handleCredits = async (req, res) => {
     nextObjectThumbnailCost: calculateImageCreditCost(account, { type: 'item', variant: 'thumbnail' }),
     objectImagesInCurrentBatch: toCount(account.objectImagesInCurrentBatch),
     objectImageBatchSize,
-    storageQuotaBytes: getStorageQuotaFromTransactions(account),
-    transactions: (account.transactions || []).slice(-10).reverse(),
+    storageQuotaBytes: await getStorageQuotaFromTransactions(userId),
+    transactions: account.transactions || [],
   });
 };
 
@@ -399,11 +816,11 @@ export const handleStorageUpgrade = async (req, res) => {
   }
 
   const storageQuotaBytes = credits * STORAGE_BYTES_PER_CREDIT;
-  const account = spendCredits(userId, credits, `storage_upgrade:${credits}:${storageQuotaBytes}`);
+  const account = await spendCredits(userId, credits, `storage_upgrade:${credits}:${storageQuotaBytes}`);
   sendJson(res, 200, {
     ok: true,
     balance: Number(account.balance || 0),
-    storageQuotaBytes: getStorageQuotaFromTransactions(account),
+    storageQuotaBytes: await getStorageQuotaFromTransactions(userId),
     storagePackCredits: credits,
   });
 };
@@ -419,12 +836,34 @@ export const handleCreditTopUp = async (req, res) => {
     return;
   }
 
-  const account = grantCredits(userId, amount, body.reason || 'manual_top_up');
+  const account = await grantCredits(userId, amount, body.reason || 'manual_top_up');
   sendJson(res, 200, { userId, balance: account.balance, costs: aiCreditCosts });
 };
 
 export const handleCreditsAdminList = async (req, res) => {
   await requireCreditAdmin(req);
+
+  const supabase = getSupabaseAdminClient();
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('ai_credits')
+      .select('*')
+      .order('updated_at', { ascending: false });
+
+    if (error) throw error;
+
+    const users = await Promise.all((data || []).map(async (account) => ({
+      ...normalizeSupabaseCreditAccount(account),
+      transactions: await getRecentTransactions(supabase, account.user_id),
+    })));
+
+    sendJson(res, 200, {
+      users,
+      costs: aiCreditCosts,
+      defaultCredits: Number.isFinite(defaultAiCredits) ? Math.max(0, defaultAiCredits) : 0,
+    });
+    return;
+  }
 
   const store = readCreditStore();
   const users = Object.entries(store.users || {})
@@ -455,9 +894,49 @@ export const handleCreditsAdminUpdate = async (req, res) => {
     return;
   }
 
+  const supabase = getSupabaseAdminClient();
+  if (supabase) {
+    const account = await ensureSupabaseCreditAccount(supabase, userId);
+    const previousBalance = Number(account.balance || 0);
+    const nextBalance = action === 'set'
+      ? Math.max(0, amount)
+      : Math.max(0, previousBalance + (action === 'subtract' ? -Math.abs(amount) : Math.abs(amount)));
+    const signedAmount = nextBalance - previousBalance;
+    const now = new Date().toISOString();
+
+    const { data: updated, error: updateError } = await supabase
+      .from('ai_credits')
+      .update({
+        balance: nextBalance,
+        updated_at: now,
+      })
+      .eq('user_id', userId)
+      .select('*')
+      .single();
+
+    if (updateError) throw updateError;
+
+    const transactionType = action === 'set' ? 'admin_set' : signedAmount < 0 ? 'admin_debit' : 'admin_grant';
+    await addSupabaseCreditTransaction(supabase, userId, {
+      type: transactionType,
+      amount: signedAmount,
+      reason: body.reason || `admin_${action}`,
+      createdAt: now,
+    });
+
+    sendJson(res, 200, {
+      user: {
+        ...normalizeSupabaseCreditAccount(updated),
+        transactions: await getRecentTransactions(supabase, userId),
+      },
+      costs: aiCreditCosts,
+    });
+    return;
+  }
+
   const account = withCreditStoreLock(() => {
     const store = readCreditStore();
-    const lockedAccount = ensureCreditAccount(store, userId);
+    const lockedAccount = ensureLocalCreditAccount(store, userId);
     const now = new Date().toISOString();
     const reason = body.reason || `admin_${action}`;
 
@@ -599,13 +1078,47 @@ export const handleGumroadWebhook = async (req, res) => {
     return;
   }
 
+  const supabase = getSupabaseAdminClient();
+  if (supabase) {
+    const { data: existingSale, error: existingSaleError } = await supabase
+      .from('ai_credit_transactions')
+      .select('id, user_id, amount')
+      .eq('reason', `gumroad:${saleId}`)
+      .maybeSingle();
+
+    if (existingSaleError) throw existingSaleError;
+    if (existingSale) {
+      sendJson(res, 200, { ok: true, duplicate: true, saleId, userId: existingSale.user_id });
+      return;
+    }
+
+    const account = await addSupabaseCredits(supabase, userId, pack.credits, `gumroad:${saleId}`, 'grant');
+    sendJson(res, 200, {
+      ok: true,
+      saleId,
+      userId,
+      creditsAdded: pack.credits,
+      balance: Number(account.balance || 0),
+    });
+    return;
+  }
+
+  if (!isLocalCreditAuthAllowed(process.env)) {
+    sendJson(res, 503, {
+      ok: false,
+      error: 'Supabase est requis pour les credits IA. Active ALLOW_LOCAL_CREDIT_AUTH=true uniquement en developpement local pour utiliser le fichier fallback.',
+      code: 'SUPABASE_CREDITS_REQUIRED',
+    });
+    return;
+  }
+
   const gumroadResult = withCreditStoreLock(() => {
     const store = readCreditStore();
     if (store.gumroadSales[saleId]) {
       return { duplicate: true };
     }
 
-    const account = ensureCreditAccount(store, userId);
+    const account = ensureLocalCreditAccount(store, userId);
     const processedAt = new Date().toISOString();
     addCreditTransaction(account, {
       type: 'grant',

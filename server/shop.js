@@ -1,10 +1,12 @@
 import { readJsonBody, sendJson } from './http.js';
 import { verifySupabaseAdminRequest } from './auth.js';
 import { downloadStorageJson, uploadStorageJson } from './storage.js';
+import { getSupabaseAdminClient } from './supabase.js';
 import { getCreditAccount, resolveCreditUserId, spendCredits } from './credits.js';
 import { resolveShopPackDownload, toPublicShopPackDownloadState } from './shopDownloads.js';
 
 const shopPacksStoragePath = 'public/shop-packs.json';
+const soldShopPackStatuses = ['pending', 'paid'];
 
 const createEmptyShopPack = () => ({
   id: '',
@@ -103,6 +105,73 @@ const toPublicShopPack = (pack = {}) => {
   return toPublicShopPackDownloadState(normalizeShopPack(pack));
 };
 
+export const loadSoldShopPackIds = async (supabase) => {
+  const { data, error } = await supabase
+    .from('shop_pack_sales')
+    .select('pack_id')
+    .in('status', soldShopPackStatuses);
+  if (error) throw error;
+  return new Set((data || []).map((entry) => entry.pack_id).filter(Boolean));
+};
+
+export const applySoldShopPackState = (packs = [], soldPackIds = new Set()) => packs.map((pack) => (
+  soldPackIds.has(pack.id)
+    ? normalizeShopPack({
+      ...pack,
+      archived: true,
+      archivedReason: pack.archivedReason || 'sold',
+    })
+    : pack
+));
+
+const loadVisibleServerShopPacks = async (supabase = getSupabaseAdminClient()) => {
+  const packs = await loadServerShopPacks();
+  if (!supabase) return packs;
+  return applySoldShopPackState(packs, await loadSoldShopPackIds(supabase));
+};
+
+const deleteShopPackSale = async (supabase, packId) => {
+  if (!supabase) return;
+  const { error } = await supabase
+    .from('shop_pack_sales')
+    .delete()
+    .eq('pack_id', packId);
+  if (error) throw error;
+};
+
+export const purchaseShopPack = async (supabase, {
+  packId,
+  userId,
+  title,
+  costCredits,
+  downloadFileName,
+}) => {
+  const { data, error } = await supabase
+    .rpc('purchase_shop_pack', {
+      p_pack_id: packId,
+      p_user_id: userId,
+      p_title: title,
+      p_cost_credits: costCredits,
+      p_download_file_name: downloadFileName,
+    })
+    .single();
+
+  if (error?.code === '23505') {
+    const soldError = new Error('Pack indisponible.');
+    soldError.status = 404;
+    soldError.statusCode = 404;
+    throw soldError;
+  }
+  if (error?.message?.includes('Credits IA insuffisants')) {
+    const creditError = new Error(error.message);
+    creditError.status = 402;
+    creditError.statusCode = 402;
+    throw creditError;
+  }
+  if (error) throw error;
+  return data;
+};
+
 const preserveExistingShopPackDownload = (incomingPack = {}, existingPack = null) => {
   if (!existingPack) return normalizeShopPack(incomingPack);
   return normalizeShopPack({
@@ -124,11 +193,12 @@ const preserveExistingShopPackDownload = (incomingPack = {}, existingPack = null
 
 export const handleShopPacks = async (req, res) => {
   if (req.method === 'GET') {
-    const packs = await loadServerShopPacks();
+    const packs = await loadVisibleServerShopPacks();
     sendJson(res, 200, { packs: packs.map(toPublicShopPack) });
     return;
   }
 
+  const supabase = getSupabaseAdminClient();
   const adminUser = await verifySupabaseAdminRequest(req);
   const body = await readJsonBody(req);
   const action = String(body.action || '').trim();
@@ -164,11 +234,13 @@ export const handleShopPacks = async (req, res) => {
   }
 
   if (action === 'delete') {
+    await deleteShopPackSale(supabase, packId);
     sendJson(res, 200, { packs: await saveServerShopPacks(packs.filter((entry) => entry.id !== packId)) });
     return;
   }
 
   if (action === 'archive' || action === 'relist') {
+    if (action === 'relist') await deleteShopPackSale(supabase, packId);
     const now = new Date().toISOString();
     const nextPacks = await saveServerShopPacks(packs.map((pack) => {
       if (pack.id !== packId) return pack;
@@ -197,6 +269,49 @@ export const handleShopPacks = async (req, res) => {
   sendJson(res, 400, { error: 'Action boutique inconnue.' });
 };
 
+const handleSupabaseShopPurchase = async ({ supabase, packId, userId, res }) => {
+  const packs = await loadVisibleServerShopPacks(supabase);
+  const pack = packs.find((entry) => entry.id === packId);
+  if (!pack || pack.archived) {
+    sendJson(res, 404, { error: 'Pack indisponible.' });
+    return;
+  }
+  const download = await resolveShopPackDownload(pack);
+  if (!download?.downloadUrl) {
+    sendJson(res, 400, { error: 'Pack sans fichier telechargeable.' });
+    return;
+  }
+
+  const costCredits = Math.max(0, Math.round(Number(pack.costCredits || 0)));
+  const title = String(pack.title || 'Pack boutique').trim().slice(0, 120);
+  const downloadFileName = pack.downloadFileName || `${title || 'pack'}.zip`;
+  if (!costCredits) {
+    sendJson(res, 400, { error: 'Cout en credits invalide.' });
+    return;
+  }
+
+  const purchaseResult = await purchaseShopPack(supabase, {
+    packId,
+    userId,
+    title,
+    costCredits,
+    downloadFileName,
+  });
+
+  sendJson(res, 200, {
+    ok: true,
+    purchase: {
+      packId,
+      title,
+      costCredits,
+      downloadUrl: download.downloadUrl,
+      downloadFileName,
+      purchasedAt: purchaseResult.purchased_at,
+    },
+    balance: Number(purchaseResult.balance || 0),
+  });
+};
+
 export const handleShopPurchase = async (req, res) => {
   const body = await readJsonBody(req);
   const userId = await resolveCreditUserId(req, body);
@@ -208,6 +323,12 @@ export const handleShopPurchase = async (req, res) => {
   }
   if (!userId || userId === 'anonymous') {
     sendJson(res, 400, { error: 'Utilisateur manquant.' });
+    return;
+  }
+
+  const supabase = getSupabaseAdminClient();
+  if (supabase) {
+    await handleSupabaseShopPurchase({ supabase, packId, userId, res });
     return;
   }
 
@@ -231,7 +352,7 @@ export const handleShopPurchase = async (req, res) => {
       return;
     }
 
-    const accountBeforePurchase = getCreditAccount(userId);
+    const accountBeforePurchase = await getCreditAccount(userId);
     if (Number(accountBeforePurchase.balance || 0) < costCredits) {
       sendJson(res, 402, {
         error: `Credits IA insuffisants (${accountBeforePurchase.balance || 0}/${costCredits}).`,
@@ -256,7 +377,7 @@ export const handleShopPurchase = async (req, res) => {
 
     let account;
     try {
-      account = spendCredits(userId, costCredits, `shop_pack:${packId}:${title}`);
+      account = await spendCredits(userId, costCredits, `shop_pack:${packId}:${title}`);
     } catch (error) {
       await saveServerShopPacks(packs);
       throw error;

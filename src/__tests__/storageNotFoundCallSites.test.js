@@ -98,6 +98,29 @@ describe('Storage not-found call sites', () => {
     });
   });
 
+  test('publication: le navigateur ne tente pas d ecrire le manifeste public global', async () => {
+    storageMock.uploadToStorage.mockResolvedValue(true);
+    const { saveProjectRecordsForUser } = await import('../lib/authStorage');
+
+    await expect(saveProjectRecordsForUser('user-1', [{
+      id: 'project-1',
+      name: 'Projet public',
+      data: { title: 'Projet public' },
+      shareState: { isPublic: true },
+    }], { requirePublicIndex: true })).rejects.toMatchObject({
+      code: 'PUBLIC_PROJECT_INDEX_SERVER_REQUIRED',
+    });
+
+    expect(storageMock.uploadToStorage).not.toHaveBeenCalledWith(
+      'public/projects.json',
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(storageMock.downloadTextFile).not.toHaveBeenCalledWith('public/projects.json', {
+      visibility: 'public',
+    });
+  });
+
   test('API boutique absente: loadSharedShopPacks ne lit plus le manifeste Supabase public', async () => {
     const { loadSharedShopPacks } = await import('../lib/shopPacksStorage');
 

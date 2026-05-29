@@ -5,6 +5,12 @@ import { assertAiRateLimit, getAiRateLimitConfig, getClientIpFromHeaders } from 
 import { assertAiContentAllowed, makeImageModerationInput } from '../../src/utils/aiModeration.js';
 import { assertCorsRequestAllowed, makeCorsHeaders } from '../../src/utils/corsConfig.js';
 import { assertProjectSafety, parseProjectJsonPayload } from '../../src/utils/projectSafetyValidation.js';
+import {
+  createMissingStorageBucketError,
+  getServerStorageBuckets,
+  LEGACY_STORAGE_BUCKET_DEPRECATION_MESSAGE,
+  warnLegacyStorageBucketFallback,
+} from '../../server/storageBuckets.js';
 
 export const ADMIN_EMAIL = String(process.env.ADMIN_EMAIL || process.env.VITE_ADMIN_EMAIL || '')
   .trim()
@@ -28,18 +34,17 @@ export const aiCreditCosts = {
 };
 
 export const defaultAiCredits = Number(process.env.AI_DEFAULT_CREDITS || 20);
-export const legacyStorageBucket = process.env.SUPABASE_STORAGE_BUCKET
-  || process.env.VITE_SUPABASE_STORAGE_BUCKET
-  || 'escape-game-assets';
-export const publicAssetsBucket = process.env.SUPABASE_PUBLIC_ASSETS_BUCKET
-  || process.env.VITE_SUPABASE_PUBLIC_ASSETS_BUCKET
-  || legacyStorageBucket;
-export const privateDataBucket = process.env.SUPABASE_PRIVATE_DATA_BUCKET
-  || process.env.VITE_SUPABASE_PRIVATE_DATA_BUCKET
-  || legacyStorageBucket;
-export const resolveServerStorageBucket = (visibility = 'private') => (
-  visibility === 'public' ? publicAssetsBucket : privateDataBucket
-);
+const storageBuckets = getServerStorageBuckets();
+export { LEGACY_STORAGE_BUCKET_DEPRECATION_MESSAGE, warnLegacyStorageBucketFallback };
+export const legacyStorageBucket = storageBuckets.legacyStorageBucket;
+export const publicAssetsBucket = storageBuckets.publicAssetsBucket;
+export const privateDataBucket = storageBuckets.privateDataBucket;
+export const usesLegacyStorageBucketFallback = storageBuckets.usesLegacyStorageBucketFallback;
+export const resolveServerStorageBucket = (visibility = 'private') => {
+  const bucket = visibility === 'public' ? publicAssetsBucket : privateDataBucket;
+  if (!bucket) throw createMissingStorageBucketError();
+  return bucket;
+};
 export const aiJobBucket = privateDataBucket;
 
 export const toCount = (value) => {

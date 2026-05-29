@@ -6,14 +6,26 @@ const remotePngUrl = 'https://project.supabase.co/storage/v1/object/public/game-
 const remoteWebpUrl = 'https://project.supabase.co/storage/v1/object/public/game-media/remote-poster.webp?token=abc';
 const remoteAudioUrl = 'https://project.supabase.co/storage/v1/object/public/game-media/theme';
 
-const makeResponse = (body, { contentType = '', ok = true, status = 200, statusText = 'OK' } = {}) => ({
+const makeResponse = (body, {
+  arrayBuffer = null,
+  contentLength = null,
+  contentType = '',
+  ok = true,
+  status = 200,
+  statusText = 'OK',
+} = {}) => ({
   ok,
   status,
   statusText,
   headers: {
-    get: (name) => (name.toLowerCase() === 'content-type' ? contentType : null),
+    get: (name) => {
+      const headerName = name.toLowerCase();
+      if (headerName === 'content-type') return contentType;
+      if (headerName === 'content-length' && contentLength !== null) return String(contentLength);
+      return null;
+    },
   },
-  arrayBuffer: async () => new TextEncoder().encode(body).buffer,
+  arrayBuffer: arrayBuffer || (async () => new TextEncoder().encode(body).buffer),
 });
 
 const makeRemoteProject = (url = remotePngUrl) => ({
@@ -60,6 +72,27 @@ const buildWithZip = async (project, options) => {
   const exportedProject = await buildExportProjectWithAssets(project, folder, options);
   return { zip, exportedProject };
 };
+
+const makeSingleRemoteProject = (url = remotePngUrl) => ({
+  id: 'offline-assets-single-remote-test',
+  title: 'Offline Assets Single Remote Test',
+  acts: [{ id: 'act-1', name: 'Acte 1' }],
+  assets: [],
+  scenes: [{
+    id: 'scene-start',
+    name: 'Hall',
+    actId: 'act-1',
+    backgroundData: url,
+    backgroundName: 'Hall.png',
+    hotspots: [],
+    sceneObjects: [],
+  }],
+  items: [],
+  cinematics: [],
+  enigmas: [],
+  combinations: [],
+  storyVariables: [],
+});
 
 const zipFiles = (zip) => Object.keys(zip.files);
 
@@ -133,6 +166,109 @@ describe('export asset bundler offline assets', () => {
         message: 'Not Found',
         status: 404,
       }],
+    });
+  });
+
+  it('keeps remote URLs and writes a warning when a remote fetch times out', async () => {
+    let fetchSignal = null;
+    const fetchMock = vi.fn((_url, init) => {
+      fetchSignal = init?.signal || null;
+      return new Promise(() => {});
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { zip, exportedProject } = await buildWithZip(makeSingleRemoteProject(), {
+      exportOfflineAssets: true,
+      offlineAssetFetchTimeoutMs: 1,
+    });
+    const report = JSON.parse(await zip.file('jeu-exporte/offline-assets-report.json').async('string'));
+
+    expect(fetchSignal?.aborted).toBe(true);
+    expect(exportedProject.scenes[0].backgroundData).toBe(remotePngUrl);
+    expect(report.warnings).toHaveLength(1);
+    expect(report.warnings[0]).toMatchObject({
+      url: remotePngUrl,
+      paths: ['scenes[0].backgroundData'],
+      message: 'Remote asset request timed out after 1 ms.',
+    });
+  });
+
+  it('keeps remote URLs and writes a warning when arrayBuffer fails', async () => {
+    const arrayBuffer = vi.fn(async () => {
+      throw new Error('stream failed');
+    });
+    vi.stubGlobal('fetch', vi.fn(async () => makeResponse('broken', { arrayBuffer, contentType: 'image/png' })));
+
+    const { zip, exportedProject } = await buildWithZip(makeSingleRemoteProject(), { exportOfflineAssets: true });
+    const report = JSON.parse(await zip.file('jeu-exporte/offline-assets-report.json').async('string'));
+
+    expect(arrayBuffer).toHaveBeenCalledTimes(1);
+    expect(exportedProject.scenes[0].backgroundData).toBe(remotePngUrl);
+    expect(report.warnings).toEqual([{
+      url: remotePngUrl,
+      paths: ['scenes[0].backgroundData'],
+      message: 'stream failed',
+    }]);
+  });
+
+  it('skips arrayBuffer and keeps the remote URL when Content-Length exceeds the offline limit', async () => {
+    const arrayBuffer = vi.fn(async () => new ArrayBuffer(0));
+    vi.stubGlobal('fetch', vi.fn(async () => makeResponse('too-large', {
+      arrayBuffer,
+      contentLength: 2048,
+      contentType: 'image/png',
+    })));
+
+    const { zip, exportedProject } = await buildWithZip(makeSingleRemoteProject(), {
+      exportOfflineAssets: true,
+      offlineAssetMaxBytes: 1024,
+    });
+    const report = JSON.parse(await zip.file('jeu-exporte/offline-assets-report.json').async('string'));
+
+    expect(arrayBuffer).not.toHaveBeenCalled();
+    expect(exportedProject.scenes[0].backgroundData).toBe(remotePngUrl);
+    expect(report.warnings).toEqual([{
+      url: remotePngUrl,
+      paths: ['scenes[0].backgroundData'],
+      message: 'Remote asset is too large (2048 bytes, limit 1024 bytes).',
+    }]);
+  });
+
+  it('keeps signed URLs in project.json but redacts sensitive query params in the offline report', async () => {
+    const signedUrl = 'https://project.supabase.co/storage/v1/object/sign/game-media/signed.png?token=secret-token&signature=secret-signature&expires=999999&access_token=secret-access&refresh_token=secret-refresh&key=secret-key&apikey=secret-apikey&safe=visible';
+    vi.stubGlobal('fetch', vi.fn(async () => makeResponse('forbidden', {
+      ok: false,
+      status: 403,
+      statusText: 'Forbidden',
+    })));
+
+    const { zip, exportedProject } = await buildWithZip(makeSingleRemoteProject(signedUrl), { exportOfflineAssets: true });
+    const report = JSON.parse(await zip.file('jeu-exporte/offline-assets-report.json').async('string'));
+    const reportText = JSON.stringify(report);
+
+    expect(exportedProject.scenes[0].backgroundData).toBe(signedUrl);
+    expect(report.warnings[0].url).toContain('safe=visible');
+    [
+      'token',
+      'signature',
+      'expires',
+      'access_token',
+      'refresh_token',
+      'key',
+      'apikey',
+    ].forEach((paramName) => {
+      expect(report.warnings[0].url).toContain(`${paramName}=[redacted]`);
+    });
+    [
+      'secret-token',
+      'secret-signature',
+      '999999',
+      'secret-access',
+      'secret-refresh',
+      'secret-key',
+      'secret-apikey',
+    ].forEach((secretValue) => {
+      expect(reportText).not.toContain(secretValue);
     });
   });
 
