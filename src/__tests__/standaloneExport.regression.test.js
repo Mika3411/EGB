@@ -2,12 +2,26 @@ import vm from 'node:vm';
 import JSZip from 'jszip';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { buildStandaloneModuleFiles } from '../utils/standaloneHtml';
+import { buildStandaloneCss } from '../utils/standalone/standaloneCss';
 import { exportStandalone } from '../utils/exportStandalone';
 import { downloadBlob } from '../utils/fileHelpers';
 
 vi.mock('../utils/fileHelpers', () => ({
   downloadBlob: vi.fn(),
 }));
+
+const remoteStandaloneBackgroundUrl = 'https://project.supabase.co/storage/v1/object/public/game-media/offline-background.png';
+const remoteStandaloneMissingAudioUrl = 'https://project.supabase.co/storage/v1/object/public/game-media/missing-theme.mp3';
+
+const makeFetchResponse = (body, { contentType = '', ok = true, status = 200, statusText = 'OK' } = {}) => ({
+  ok,
+  status,
+  statusText,
+  headers: {
+    get: (name) => (name.toLowerCase() === 'content-type' ? contentType : null),
+  },
+  arrayBuffer: async () => new TextEncoder().encode(body).buffer,
+});
 
 const makeStandaloneProject = () => ({
   id: 'standalone-critical',
@@ -176,6 +190,107 @@ const makeStandaloneCombatMediaProject = () => ({
   cinematics: [],
   combinations: [],
   assets: [],
+  storyVariables: [],
+});
+
+const makeStandaloneOnlineCompatibilityProject = () => ({
+  id: 'standalone-online-compatibility',
+  title: 'Standalone Online Compatibility',
+  creationMode: 'hero_adventure',
+  start: { type: 'scene', targetSceneId: 'scene-start', targetCinematicId: '' },
+  acts: [{ id: 'act-1', name: 'Acte 1' }],
+  assets: [{
+    id: 'remote-background',
+    type: 'image',
+    name: 'Remote Background.png',
+    url: 'https://project.supabase.co/storage/v1/object/public/game-media/remote-background.png',
+  }],
+  heroAdventure: {
+    enabled: true,
+    hero: {
+      id: 'hero-1',
+      name: 'Ariane',
+      health: 10,
+      maxHealth: 10,
+      mana: 3,
+      maxMana: 3,
+      skills: [],
+      powers: [],
+      characterImageData: 'data:image/png;base64,aGVyby1ub24tbGVnYWN5',
+      setupMusicData: 'data:audio/mpeg;base64,c2V0dXAtbm9uLWxlZ2FjeQ==',
+      setupMusicName: 'Setup.mp3',
+    },
+    combat: {
+      backgroundImageData: 'data:image/png;base64,Y29tYmF0LWxlZ2FjeQ==',
+      backgroundImageName: 'Legacy Combat.png',
+    },
+  },
+  scenes: [{
+    id: 'scene-start',
+    name: 'Hall',
+    actId: 'act-1',
+    backgroundData: 'https://project.supabase.co/storage/v1/object/public/game-media/remote-background.png',
+    backgroundName: 'Remote Background.png',
+    hotspots: [{
+      id: 'talk',
+      name: 'Oracle',
+      actionType: 'conversation',
+      x: 20,
+      y: 30,
+      width: 18,
+      height: 18,
+      conversation: {
+        startNodeId: 'intro',
+        nodes: [{
+          id: 'intro',
+          speaker: 'Oracle',
+          text: 'Ecoute.',
+          replies: [{
+            id: 'reply-image',
+            label: 'Voir',
+            actionType: 'end',
+            responseImageData: 'data:image/png;base64,cmVzcG9uc2Utbm9uLWxlZ2FjeQ==',
+            responseSoundData: 'data:audio/mpeg;base64,cmVzcG9uc2Utc291bmQ=',
+            npcPortraitData: 'https://cdn.example.com/oracle.webp',
+          }],
+        }],
+      },
+    }],
+    sceneObjects: [],
+  }],
+  items: [],
+  enigmas: [],
+  cinematics: [],
+  combinations: [],
+  storyVariables: [],
+});
+
+const makeStandaloneOfflineOptionProject = () => ({
+  id: 'standalone-offline-option',
+  title: 'Standalone Offline Option',
+  start: { type: 'scene', targetSceneId: 'scene-start', targetCinematicId: '' },
+  acts: [{ id: 'act-1', name: 'Acte 1' }],
+  assets: [{
+    id: 'remote-background',
+    type: 'image',
+    name: 'Offline Background.png',
+    url: remoteStandaloneBackgroundUrl,
+  }],
+  scenes: [{
+    id: 'scene-start',
+    name: 'Hall',
+    actId: 'act-1',
+    backgroundData: remoteStandaloneBackgroundUrl,
+    backgroundName: 'Offline Background.png',
+    musicData: remoteStandaloneMissingAudioUrl,
+    musicName: 'Missing Theme.mp3',
+    hotspots: [],
+    sceneObjects: [],
+  }],
+  items: [],
+  enigmas: [],
+  cinematics: [],
+  combinations: [],
   storyVariables: [],
 });
 
@@ -449,6 +564,7 @@ const runStandalone = (project) => {
 describe('standalone export regression', () => {
   afterEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
   });
 
   test('generates a zip with safe HTML, engine, project and bundled media', async () => {
@@ -460,18 +576,31 @@ describe('standalone export regression', () => {
 
     const zip = await JSZip.loadAsync(blob);
     const files = Object.keys(zip.files);
-    expect(files).toContain('jeu-exporte/index.html');
-    expect(files).toContain('jeu-exporte/engine.js');
-    expect(files).toContain('jeu-exporte/project.json');
+    [
+      'jeu-exporte/index.html',
+      'jeu-exporte/engine.js',
+      'jeu-exporte/style.css',
+      'jeu-exporte/project.json',
+    ].forEach((expectedFile) => {
+      expect(files).toContain(expectedFile);
+    });
 
     const indexHtml = await zip.file('jeu-exporte/index.html').async('string');
     const engineJs = await zip.file('jeu-exporte/engine.js').async('string');
+    const styleCss = await zip.file('jeu-exporte/style.css').async('string');
     const exportedProject = JSON.parse(await zip.file('jeu-exporte/project.json').async('string'));
 
     expect(indexHtml).toContain('<script src="./engine.js"></script>');
+    expect(indexHtml).toContain('<link rel="stylesheet" href="./style.css">');
     expect(indexHtml).not.toContain('<script>const project');
+    expect(indexHtml).not.toContain('<style>');
+    expect(engineJs).toContain('const project =');
+    expect(engineJs).toContain('assets/scenes/hall-final-png.png');
+    expect(engineJs).not.toContain('fetch(');
+    expect(engineJs).not.toContain('project.json');
     expect(engineJs).toContain('function saveGame');
     expect(engineJs).toContain('function safeMediaUrl');
+    expect(styleCss).toBe(buildStandaloneCss());
     expect(exportedProject.scenes[0].backgroundData).toMatch(/^assets\/scenes\/hall-final-png\.png$/);
     expect(exportedProject.scenes[0].musicData).toMatch(/^assets\/audio\/theme-mp3\.mp3$/);
     expect(exportedProject.scenes[0].hotspots[0].objectImageData).toMatch(/^assets\/hotspots\/coffret-png\.png$/);
@@ -513,6 +642,7 @@ describe('standalone export regression', () => {
     expect(hotspot.combatEnemyImageData).toMatch(/^assets\/combat\/hotspot-enemy-png\.png$/);
     expect(reply.combatHeroImageData).toMatch(/^assets\/combat\/reply-hero-png\.png$/);
     expect(JSON.stringify(exportedProject.heroAdventure.combat)).not.toContain('data:');
+    expect(exportedProject.heroAdventure.hero.characterImageData).toBe('data:image/png;base64,aGVybw==');
 
     [
       combat.heroHitEffectVideoData,
@@ -524,6 +654,76 @@ describe('standalone export regression', () => {
       reply.combatHeroImageData,
     ].forEach((assetPath) => {
       expect(files).toContain(`jeu-exporte/${assetPath}`);
+    });
+  });
+
+  test('keeps remote URLs and newly collected non-legacy fields unchanged', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await exportStandalone(makeStandaloneOnlineCompatibilityProject());
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.offlineAssetsSummary).toMatchObject({ enabled: false, onlineCount: 0 });
+    expect(result.offlineAssetsMessage).toBe('');
+    expect(downloadBlob).toHaveBeenCalledTimes(1);
+
+    const [, blob] = downloadBlob.mock.calls[0];
+    const zip = await JSZip.loadAsync(blob);
+    const files = Object.keys(zip.files);
+    const exportedProject = JSON.parse(await zip.file('jeu-exporte/project.json').async('string'));
+    const reply = exportedProject.scenes[0].hotspots[0].conversation.nodes[0].replies[0];
+
+    expect(exportedProject.assets[0].url).toBe('https://project.supabase.co/storage/v1/object/public/game-media/remote-background.png');
+    expect(exportedProject.scenes[0].backgroundData).toBe('https://project.supabase.co/storage/v1/object/public/game-media/remote-background.png');
+    expect(exportedProject.heroAdventure.combat.backgroundImageData).toMatch(/^assets\/combat\/legacy-combat-png\.png$/);
+    expect(exportedProject.heroAdventure.hero.characterImageData).toBe('data:image/png;base64,aGVyby1ub24tbGVnYWN5');
+    expect(exportedProject.heroAdventure.hero.setupMusicData).toBe('data:audio/mpeg;base64,c2V0dXAtbm9uLWxlZ2FjeQ==');
+    expect(reply.responseImageData).toBe('data:image/png;base64,cmVzcG9uc2Utbm9uLWxlZ2FjeQ==');
+    expect(reply.responseSoundData).toBe('data:audio/mpeg;base64,cmVzcG9uc2Utc291bmQ=');
+    expect(reply.npcPortraitData).toBe('https://cdn.example.com/oracle.webp');
+    expect(files).toContain(`jeu-exporte/${exportedProject.heroAdventure.combat.backgroundImageData}`);
+  });
+
+  test('passes exportOfflineAssets to the bundler and returns an offline summary', async () => {
+    const fetchMock = vi.fn(async (url) => {
+      if (url === remoteStandaloneBackgroundUrl) {
+        return makeFetchResponse('background-bytes', { contentType: 'image/png' });
+      }
+      if (url === remoteStandaloneMissingAudioUrl) {
+        return makeFetchResponse('missing', { ok: false, status: 503, statusText: 'Unavailable' });
+      }
+      throw new Error(`unexpected URL ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await exportStandalone(makeStandaloneOfflineOptionProject(), { exportOfflineAssets: true });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.offlineAssetsSummary).toMatchObject({
+      enabled: true,
+      bundledCount: 1,
+      onlineCount: 1,
+      warningCount: 1,
+    });
+    expect(result.offlineAssetsMessage).toBe('Export offline : 1 médias intégrés, 1 médias restés en ligne.');
+
+    const zip = await JSZip.loadAsync(result.blob);
+    const files = Object.keys(zip.files);
+    const exportedProject = JSON.parse(await zip.file('jeu-exporte/project.json').async('string'));
+    const report = JSON.parse(await zip.file('jeu-exporte/offline-assets-report.json').async('string'));
+
+    expect(exportedProject.assets[0].url).toMatch(/^assets\/images\/offline-background-png-[a-f0-9]{8}\.png$/);
+    expect(exportedProject.scenes[0].backgroundData).toBe(exportedProject.assets[0].url);
+    expect(exportedProject.scenes[0].musicData).toBe(remoteStandaloneMissingAudioUrl);
+    expect(files).toContain(`jeu-exporte/${exportedProject.assets[0].url}`);
+    expect(report).toEqual({
+      warnings: [{
+        url: remoteStandaloneMissingAudioUrl,
+        paths: ['scenes[0].musicData'],
+        message: 'Unavailable',
+        status: 503,
+      }],
     });
   });
 

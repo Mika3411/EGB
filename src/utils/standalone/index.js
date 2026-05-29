@@ -1,1 +1,7 @@
-export { buildStandaloneHtml, buildStandaloneModuleFiles } from './standaloneTemplate.js';
+export {
+  buildStandaloneEngineJs,
+  buildStandaloneHtml,
+  buildStandaloneIndexHtml,
+  buildStandaloneModuleFiles,
+  buildStandaloneStyleCss,
+} from './standaloneTemplate.js';
