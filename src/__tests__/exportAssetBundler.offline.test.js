@@ -94,6 +94,48 @@ const makeSingleRemoteProject = (url = remotePngUrl) => ({
   storyVariables: [],
 });
 
+const makeDuplicateDataUrlProject = () => ({
+  id: 'duplicate-data-url-test',
+  title: 'Duplicate Data URL Test',
+  acts: [{ id: 'act-1', name: 'Acte 1' }],
+  assets: [],
+  scenes: [{
+    id: 'scene-a',
+    name: 'Scene A',
+    actId: 'act-1',
+    backgroundData: 'data:image/png;base64,c2hhcmVk',
+    backgroundName: 'Shared.png',
+    hotspots: [],
+    sceneObjects: [],
+  }, {
+    id: 'scene-b',
+    name: 'Scene B',
+    actId: 'act-1',
+    backgroundData: 'data:image/png;base64,c2hhcmVk',
+    backgroundName: 'Other Name.png',
+    hotspots: [],
+    sceneObjects: [],
+  }],
+  items: [],
+  cinematics: [],
+  enigmas: [],
+  combinations: [],
+  storyVariables: [],
+});
+
+const makeDistinctDataUrlProject = () => ({
+  ...makeDuplicateDataUrlProject(),
+  scenes: [{
+    ...makeDuplicateDataUrlProject().scenes[0],
+    backgroundData: 'data:image/png;base64,Zmlyc3Q=',
+    backgroundName: 'Same Name.png',
+  }, {
+    ...makeDuplicateDataUrlProject().scenes[1],
+    backgroundData: 'data:image/png;base64,c2Vjb25k',
+    backgroundName: 'Same Name.png',
+  }],
+});
+
 const zipFiles = (zip) => Object.keys(zip.files);
 
 describe('export asset bundler offline assets', () => {
@@ -145,6 +187,30 @@ describe('export asset bundler offline assets', () => {
 
     expect(exportedProject.items[0].imageData).toBe('assets/items/key-png.png');
     expect(await zip.file('jeu-exporte/assets/items/key-png.png').async('string')).toBe('key');
+  });
+
+  it('exports the same data URL once and rewrites every JSON reference to the first asset path', async () => {
+    const { zip, exportedProject } = await buildWithZip(makeDuplicateDataUrlProject());
+    const files = zipFiles(zip).filter((file) => file.startsWith('jeu-exporte/assets/scenes/') && file.endsWith('.png'));
+
+    expect(files).toEqual(['jeu-exporte/assets/scenes/shared-png.png']);
+    expect(exportedProject.scenes[0].backgroundData).toBe('assets/scenes/shared-png.png');
+    expect(exportedProject.scenes[1].backgroundData).toBe(exportedProject.scenes[0].backgroundData);
+    expect(await zip.file('jeu-exporte/assets/scenes/shared-png.png').async('string')).toBe('shared');
+  });
+
+  it('keeps distinct data URLs with the same preferred name as distinct files', async () => {
+    const { zip, exportedProject } = await buildWithZip(makeDistinctDataUrlProject());
+    const files = zipFiles(zip).filter((file) => file.startsWith('jeu-exporte/assets/scenes/') && file.endsWith('.png'));
+
+    expect(files).toEqual([
+      'jeu-exporte/assets/scenes/same-name-png.png',
+      'jeu-exporte/assets/scenes/same-name-png-2.png',
+    ]);
+    expect(exportedProject.scenes[0].backgroundData).toBe('assets/scenes/same-name-png.png');
+    expect(exportedProject.scenes[1].backgroundData).toBe('assets/scenes/same-name-png-2.png');
+    expect(await zip.file('jeu-exporte/assets/scenes/same-name-png.png').async('string')).toBe('first');
+    expect(await zip.file('jeu-exporte/assets/scenes/same-name-png-2.png').async('string')).toBe('second');
   });
 
   it('keeps failed remote URLs and writes offline-assets-report.json', async () => {

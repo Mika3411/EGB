@@ -377,6 +377,7 @@ export async function buildExportProjectWithAssets(project, zip, options = {}) {
   const nextProject = deepClone(project);
   normalizeRouteMapCanvasesForExport(nextProject.routeMap);
   const usedPaths = new Map();
+  const dataUrlAssetPaths = new Map();
   const usedRemotePaths = new Map();
   const remoteAssetCache = new Map();
   const offlineWarnings = [];
@@ -403,11 +404,18 @@ export async function buildExportProjectWithAssets(project, zip, options = {}) {
     const value = slot?.value;
     if (!value || typeof value !== 'string' || !value.startsWith('data:')) return;
 
+    const existingAssetPath = dataUrlAssetPaths.get(value);
+    if (existingAssetPath) {
+      slot.target[slot.key] = existingAssetPath;
+      return;
+    }
+
     const parsed = dataUrlToBytes(value);
     if (!parsed) return;
 
     const assetPath = uniqueAssetPath(reference.targetFolder, reference.preferredName, parsed.mimeType);
     zip.file(assetPath, parsed.bytes);
+    dataUrlAssetPaths.set(value, assetPath);
     bundledCount += 1;
     slot.target[slot.key] = assetPath;
   };
