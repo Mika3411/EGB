@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { ListChecks } from 'lucide-react';
+import { BookOpen, ListChecks } from 'lucide-react';
 import HelpLabel, { positionHelpBubble } from '../forms/HelpLabel';
 import { CREATION_MODES } from '../../lib/projectAnalysis';
 import { CREATION_TEMPLATES } from './profileUtils';
@@ -65,14 +65,32 @@ export default function CreateProjectPanel({
     <section className="panel" data-tour="profile-create-section">
       <div className="grid-two">
         <form onSubmit={(event) => handleCreate(event)}>
-          <HelpLabel help="Nom visible dans ton profil et dans l'éditeur. Tu peux le modifier plus tard depuis la gestion des projets.">Nouveau projet</HelpLabel>
-          <input
-            id="new-project-name"
-            value={newProjectName}
-            onChange={(event) => setNewProjectName(event.target.value)}
-            placeholder="Nom du jeu"
-            disabled={isBusy}
-          />
+          <div className="profile-create-name-row">
+            <div className="profile-create-name-field">
+              <HelpLabel help="Nom visible dans ton profil et dans l'éditeur. Tu peux le modifier plus tard depuis la gestion des projets.">Nouveau projet</HelpLabel>
+              <input
+                id="new-project-name"
+                value={newProjectName}
+                onChange={(event) => setNewProjectName(event.target.value)}
+                placeholder="Nom du jeu"
+                disabled={isBusy}
+              />
+            </div>
+            <div className="profile-import-block" data-tour="profile-import-section">
+              <HelpLabel help="Recharge un projet exporté en JSON. L'import crée ou remplace le projet selon le flux choisi dans ton profil.">Importer</HelpLabel>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/json,.json"
+                hidden
+                onChange={handleImport}
+              />
+              <button type="button" className="profile-action-button secondary-action" onClick={() => fileInputRef.current?.click()}>
+                Importer un projet JSON
+              </button>
+              {importError ? <p className="auth-error">{importError}</p> : null}
+            </div>
+          </div>
           <div className="profile-create-mode-block">
             <HelpLabel help="Débutant affiche l'essentiel. Intermédiaire ajoute plus d'outils. Expert débloque toute la construction classique. Narration à choix multiples correspond à Expert +. Aventure de héros correspond à Expert ++. Tu peux commencer en Débutant puis améliorer le projet plus tard dans la gestion des projets.">Mode de création</HelpLabel>
             <div className="profile-mode-picker" id="creation-mode">
@@ -144,19 +162,24 @@ export default function CreateProjectPanel({
           </div>
         </form>
 
-        <div data-tour="profile-import-section">
-          <HelpLabel help="Recharge un projet exporté en JSON. L'import crée ou remplace le projet selon le flux choisi dans ton profil.">Importer</HelpLabel>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="application/json,.json"
-            hidden
-            onChange={handleImport}
-          />
-          <button type="button" className="profile-action-button secondary-action" onClick={() => fileInputRef.current?.click()}>
-            Importer un projet JSON
-          </button>
-          {importError ? <p className="auth-error">{importError}</p> : null}
+        <div className="profile-create-side">
+          <aside className="profile-builder-overview-card" aria-labelledby="classic-builder-overview-title">
+            <div className="profile-builder-overview-head">
+              <BookOpen aria-hidden="true" size={18} />
+              <div>
+                <span className="section-kicker">Builder classique</span>
+                <h3 id="classic-builder-overview-title">Créer un escape game en scènes</h3>
+              </div>
+            </div>
+            <p>
+              Construis une aventure 2D avec des lieux illustrés, objets cliquables, inventaire, énigmes, dialogues, cinématiques et règles logiques.
+            </p>
+            <ul>
+              <li>Structure le parcours avec Scènes, Plan et Narration.</li>
+              <li>Ajoute médias, sons, objets, combinaisons et zones d'action.</li>
+              <li>Teste dans Preview, corrige avec Bilan, puis exporte ou publie.</li>
+            </ul>
+          </aside>
         </div>
       </div>
     </section>
