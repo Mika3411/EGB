@@ -294,39 +294,6 @@ export default function CombatTab({
   return (
     <div className="layout two-cols-wide combat-editor-layout">
       <section className="panel side combat-editor-summary" data-tour="combat-summary-panel">
-        <div className="panel-head panel-head-stack">
-          <div>
-            <h2>Combat</h2>
-            <p>Décor, héros, ennemi et rythme des combats Hero aventure.</p>
-          </div>
-        </div>
-
-        <div className="combat-summary-stats">
-          <span><strong>{combatSources.length}</strong> combat(s)</span>
-          <span><strong>{diceLabel}</strong> dé principal</span>
-          <span><strong>{combat.turnMode ? 'Tour par tour' : 'Instantané'}</strong> mode par défaut</span>
-          <span><strong>Dé ennemi manuel</strong> riposte</span>
-          <span><strong>{getEnemyAiModeLabel(combat.enemyAiMode)}</strong> IA ennemie</span>
-        </div>
-
-        <label className="checkbox-row">
-          <input
-            type="checkbox"
-            checked={combat.turnMode}
-            onChange={(event) => updateDefaultCombat({ turnMode: event.target.checked })}
-          />
-          <span>Combats en tour par tour</span>
-        </label>
-
-        <label className="checkbox-row">
-          <input
-            type="checkbox"
-            checked={combat.showDice}
-            onChange={(event) => updateDefaultCombat({ showDice: event.target.checked })}
-          />
-          <span>Dé mis en évidence</span>
-        </label>
-
         <div className="combat-source-list">
           {combatSources.length ? combatSources.map((source) => (
             <button
