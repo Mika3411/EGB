@@ -47,6 +47,7 @@ import useRpg3DTerrainPaint from '../hooks/rpg3d/useRpg3DTerrainPaint.js';
 import {
   getStudioModelSource,
 } from '../utils/rpg3dAssetsCore.js';
+import { lazyWithRetry } from '../utils/lazyImportRetry.js';
 import {
   canResizeSelectionEntity,
   clampArcadeEntitiesToWorld,
@@ -143,12 +144,12 @@ import {
   getSelectionDuplicateOffset,
 } from './rpg3d/rpg3dModeShared.js';
 
-const Character3DTab = React.lazy(() => import('./Character3DTab.jsx'));
-const CharacterRiggingTab = React.lazy(() => import('./CharacterRiggingTab.jsx'));
-const Decor3DTab = React.lazy(() => import('./Decor3DTab.jsx'));
-const ModelToolsTab = React.lazy(() => import('./ModelToolsTab.jsx'));
-const ObjectRiggingTab = React.lazy(() => import('./ObjectRiggingTab.jsx'));
-const StuntAnimationTab = React.lazy(() => import('./StuntAnimationTab.jsx'));
+const Character3DTab = lazyWithRetry(() => import('./Character3DTab.jsx'));
+const CharacterRiggingTab = lazyWithRetry(() => import('./CharacterRiggingTab.jsx'));
+const Decor3DTab = lazyWithRetry(() => import('./Decor3DTab.jsx'));
+const ModelToolsTab = lazyWithRetry(() => import('./ModelToolsTab.jsx'));
+const ObjectRiggingTab = lazyWithRetry(() => import('./ObjectRiggingTab.jsx'));
+const StuntAnimationTab = lazyWithRetry(() => import('./StuntAnimationTab.jsx'));
 
 function Rpg3DMode({ user = null, authorProfile = null, authReady = true, project = null, projectId = '' }) {
   const wrapperRef = useRef(null);

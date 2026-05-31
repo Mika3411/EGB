@@ -37,8 +37,10 @@ import {
   POWER_TYPES,
   RESISTANCE_FIELDS,
   collectCombatSources,
+  formatBalanceNumber,
   formatBalancePercent,
   getActorMedia,
+  getActorEntryPrefix,
   getActorMediaOverrideFields,
   getBalanceTone,
   getBalanceVerdict,
@@ -46,9 +48,14 @@ import {
   getCombatTarget,
   getEffectMedia,
   getEnemyAiModeLabel,
+  getEntryBooleanOverrideValue,
   getEntryActorMedia,
+  hasActorMediaOverride,
   normalizeCombatSettings,
+  normalizeCombatVisualEffect,
+  normalizeEffectMediaType,
   normalizeEnemyAiMode,
+  normalizeMediaType,
 } from './combat/CombatTabSections.jsx';
 
 export default function CombatTab({

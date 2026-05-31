@@ -1,6 +1,7 @@
 import React from 'react';
+import { lazyWithRetry, preloadLazyImport } from '../utils/lazyImportRetry';
 
-const ScenesTab = React.lazy(() => import('./ScenesTab').then(({ default: Component }) => ({
+const ScenesTab = lazyWithRetry(() => import('./ScenesTab').then(({ default: Component }) => ({
   default: ({ project, onUpdateProject, tabContext }) => (
     <Component
       project={project}
@@ -47,7 +48,7 @@ const ScenesTab = React.lazy(() => import('./ScenesTab').then(({ default: Compon
   ),
 })));
 
-const MediaTab = React.lazy(() => import('./MediaTab').then(({ default: Component }) => ({
+const MediaTab = lazyWithRetry(() => import('./MediaTab').then(({ default: Component }) => ({
   default: ({ project, onUpdateProject, tabContext }) => (
     <Component
       project={project}
@@ -63,7 +64,7 @@ const MediaTab = React.lazy(() => import('./MediaTab').then(({ default: Componen
   ),
 })));
 
-const ObjectsTab = React.lazy(() => import('./ObjectsTab.jsx').then(({ default: Component }) => ({
+const ObjectsTab = lazyWithRetry(() => import('./ObjectsTab.jsx').then(({ default: Component }) => ({
   default: ({ project, onUpdateProject, tabContext }) => (
     <Component
       project={project}
@@ -79,7 +80,7 @@ const ObjectsTab = React.lazy(() => import('./ObjectsTab.jsx').then(({ default: 
   ),
 })));
 
-const RouteMapTab = React.lazy(() => import('./RouteMapTab').then(({ default: Component }) => ({
+const RouteMapTab = lazyWithRetry(() => import('./RouteMapTab').then(({ default: Component }) => ({
   default: ({ project, onUpdateProject, tabContext }) => (
     <Component
       project={project}
@@ -92,7 +93,7 @@ const RouteMapTab = React.lazy(() => import('./RouteMapTab').then(({ default: Co
   ),
 })));
 
-const AdventureTab = React.lazy(() => import('./AdventureTab.jsx').then(({ default: Component }) => ({
+const AdventureTab = lazyWithRetry(() => import('./AdventureTab.jsx').then(({ default: Component }) => ({
   default: ({ project, onUpdateProject, tabContext }) => (
     <Component
       project={project}
@@ -104,7 +105,7 @@ const AdventureTab = React.lazy(() => import('./AdventureTab.jsx').then(({ defau
   ),
 })));
 
-const CinematicsTab = React.lazy(() => import('./CinematicsTab').then(({ default: Component }) => ({
+const CinematicsTab = lazyWithRetry(() => import('./CinematicsTab').then(({ default: Component }) => ({
   default: ({ project, onUpdateProject, tabContext }) => (
     <Component
       project={project}
@@ -121,7 +122,7 @@ const CinematicsTab = React.lazy(() => import('./CinematicsTab').then(({ default
   ),
 })));
 
-const CombinationsTab = React.lazy(() => import('./CombinationsTab').then(({ default: Component }) => ({
+const CombinationsTab = lazyWithRetry(() => import('./CombinationsTab').then(({ default: Component }) => ({
   default: ({ project, onUpdateProject, tabContext }) => (
     <Component
       project={project}
@@ -132,7 +133,7 @@ const CombinationsTab = React.lazy(() => import('./CombinationsTab').then(({ def
   ),
 })));
 
-const EnigmasTab = React.lazy(() => import('./EnigmasTab').then(({ default: Component }) => ({
+const EnigmasTab = lazyWithRetry(() => import('./EnigmasTab').then(({ default: Component }) => ({
   default: ({ project, onUpdateProject, tabContext }) => (
     <Component
       project={project}
@@ -150,7 +151,7 @@ const EnigmasTab = React.lazy(() => import('./EnigmasTab').then(({ default: Comp
   ),
 })));
 
-const LogicTab = React.lazy(() => import('./LogicTab').then(({ default: Component }) => ({
+const LogicTab = lazyWithRetry(() => import('./LogicTab').then(({ default: Component }) => ({
   default: ({ project, onUpdateProject, tabContext }) => (
     <Component
       project={project}
@@ -165,7 +166,7 @@ const LogicTab = React.lazy(() => import('./LogicTab').then(({ default: Componen
   ),
 })));
 
-const HeroTab = React.lazy(() => import('./HeroTab.jsx').then(({ default: Component }) => ({
+const HeroTab = lazyWithRetry(() => import('./HeroTab.jsx').then(({ default: Component }) => ({
   default: ({ project, onUpdateProject, tabContext }) => (
     <Component
       project={project}
@@ -176,7 +177,7 @@ const HeroTab = React.lazy(() => import('./HeroTab.jsx').then(({ default: Compon
   ),
 })));
 
-const CombatTab = React.lazy(() => import('./CombatTab.jsx').then(({ default: Component }) => ({
+const CombatTab = lazyWithRetry(() => import('./CombatTab.jsx').then(({ default: Component }) => ({
   default: ({ project, onUpdateProject, tabContext }) => (
     <Component
       project={project}
@@ -192,11 +193,11 @@ const CombatTab = React.lazy(() => import('./CombatTab.jsx').then(({ default: Co
   ),
 })));
 
-const ScoreTab = React.lazy(() => import('./ScoreTab').then(({ default: Component }) => ({
+const ScoreTab = lazyWithRetry(() => import('./ScoreTab').then(({ default: Component }) => ({
   default: ({ project }) => <Component project={project} />,
 })));
 
-const AiTab = React.lazy(() => import('./AiTab').then(({ default: Component }) => ({
+const AiTab = lazyWithRetry(() => import('./AiTab').then(({ default: Component }) => ({
   default: ({ project, tabContext }) => (
     <Component
       project={project}
@@ -210,11 +211,11 @@ const AiTab = React.lazy(() => import('./AiTab').then(({ default: Component }) =
   ),
 })));
 
-const ShopTab = React.lazy(() => import('./ShopTab').then(({ default: Component }) => ({
+const ShopTab = lazyWithRetry(() => import('./ShopTab').then(({ default: Component }) => ({
   default: ({ tabContext }) => <Component user={tabContext.user} />,
 })));
 
-const HelpTab = React.lazy(() => import('./HelpTab').then(({ default: Component }) => ({
+const HelpTab = lazyWithRetry(() => import('./HelpTab').then(({ default: Component }) => ({
   default: ({ project, tabContext }) => (
     <Component
       project={project}
@@ -226,7 +227,7 @@ const HelpTab = React.lazy(() => import('./HelpTab').then(({ default: Component 
   ),
 })));
 
-const PreviewPlayerPanel = React.lazy(() => import('./PreviewPlayerPanel').then(({ default: Component }) => ({
+const PreviewPlayerPanel = lazyWithRetry(() => import('./PreviewPlayerPanel').then(({ default: Component }) => ({
   default: ({ tabContext, sharedPlayerMode = false }) => (
     <Component
       editor={tabContext.editor}
@@ -237,7 +238,7 @@ const PreviewPlayerPanel = React.lazy(() => import('./PreviewPlayerPanel').then(
   ),
 })));
 
-const TwoDAnimeEditor = React.lazy(() => import('./TwoDAnimeEditor.jsx').then(({ default: Component }) => ({
+const TwoDAnimeEditor = lazyWithRetry(() => import('./TwoDAnimeEditor.jsx').then(({ default: Component }) => ({
   default: ({ project, tabContext }) => (
     <Component
       user={tabContext.user}
@@ -251,6 +252,32 @@ const TwoDAnimeEditor = React.lazy(() => import('./TwoDAnimeEditor.jsx').then(({
     />
   ),
 })));
+
+const BUILDER_TAB_IMPORTERS = [
+  () => import('./ScenesTab'),
+  () => import('./MediaTab'),
+  () => import('./ObjectsTab.jsx'),
+  () => import('./RouteMapTab'),
+  () => import('./AdventureTab.jsx'),
+  () => import('./CinematicsTab'),
+  () => import('./CombinationsTab'),
+  () => import('./EnigmasTab'),
+  () => import('./LogicTab'),
+  () => import('./HeroTab.jsx'),
+  () => import('./CombatTab.jsx'),
+  () => import('./ScoreTab'),
+  () => import('./AiTab'),
+  () => import('./ShopTab'),
+  () => import('./HelpTab'),
+  () => import('./PreviewPlayerPanel'),
+  () => import('./TwoDAnimeEditor.jsx'),
+];
+
+export const preloadBuilderTabs = () => {
+  BUILDER_TAB_IMPORTERS.forEach((importer) => {
+    preloadLazyImport(importer, { retries: 1, delayMs: 200 });
+  });
+};
 
 export const TABS = {
   scenes: { component: ScenesTab, label: 'Scènes' },

@@ -59,10 +59,11 @@ import {
 import {
   CHARACTER_RIG_ARMOR_GRIP_POINTS,
 } from '../utils/rpg3dCharacterRig.js';
+import { lazyWithRetry } from '../utils/lazyImportRetry';
 import MediaSourcePicker from './MediaSourcePicker.jsx';
 import HelpLabel from './forms/HelpLabel.jsx';
 
-const Decor3DPreview = React.lazy(() => import('./rpg3d/Decor3DPreview.jsx'));
+const Decor3DPreview = lazyWithRetry(() => import('./rpg3d/Decor3DPreview.jsx'));
 
 const WORLD_KIND_OPTIONS = [
   { id: 'decor', label: 'décors', icon: Mountain, renderKind: 'decor' },

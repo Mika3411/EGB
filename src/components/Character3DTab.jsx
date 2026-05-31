@@ -52,9 +52,10 @@ import {
 } from '../utils/rpg3dCharacterRig.js';
 import { getStudioDecorKindId } from '../utils/rpg3dDomain.js';
 import { formatBytes } from '../utils/glbOptimizer';
+import { lazyWithRetry } from '../utils/lazyImportRetry';
 import HelpLabel from './forms/HelpLabel.jsx';
 
-const Character3DPreview = React.lazy(() => import('./rpg3d/Character3DPreview.jsx'));
+const Character3DPreview = lazyWithRetry(() => import('./rpg3d/Character3DPreview.jsx'));
 
 const ROLE_OPTIONS = [
   { id: 'hero', label: 'Heros', icon: Shield },

@@ -6,16 +6,17 @@ import { upsertProjectAsset } from './lib/assetManager';
 import { isAdminAccount } from './lib/authStorage';
 import { hasSupabaseStorageConfig } from './supabaseStorage';
 import { readAppUiState, writeAppUiState } from './utils/storageHelpers';
+import { lazyWithRetry } from './utils/lazyImportRetry';
 
-const LandingPage = React.lazy(() => import('./components/LandingPage'));
-const AuthPanel = React.lazy(() => import('./components/AuthPanel'));
-const ProfilePage = React.lazy(() => import('./components/ProfilePage'));
-const AdminPage = React.lazy(() => import('./components/AdminPage'));
-const PublicGallery = React.lazy(() => import('./components/PublicGallery'));
-const BuilderApp = React.lazy(() => import('./BuilderApp.jsx'));
-const BuilderTutorial = React.lazy(() => import('./components/BuilderTutorial'));
-const Rpg3DMode = React.lazy(() => import('./components/Rpg3DMode'));
-const StuntAnimationPage = React.lazy(() => import('./components/StuntAnimationPage.jsx'));
+const LandingPage = lazyWithRetry(() => import('./components/LandingPage'));
+const AuthPanel = lazyWithRetry(() => import('./components/AuthPanel'));
+const ProfilePage = lazyWithRetry(() => import('./components/ProfilePage'));
+const AdminPage = lazyWithRetry(() => import('./components/AdminPage'));
+const PublicGallery = lazyWithRetry(() => import('./components/PublicGallery'));
+const BuilderApp = lazyWithRetry(() => import('./BuilderApp.jsx'));
+const BuilderTutorial = lazyWithRetry(() => import('./components/BuilderTutorial'));
+const Rpg3DMode = lazyWithRetry(() => import('./components/Rpg3DMode'));
+const StuntAnimationPage = lazyWithRetry(() => import('./components/StuntAnimationPage.jsx'));
 
 const TabLoadingFallback = () => (
   <section className="panel">

@@ -32,8 +32,9 @@ import { getThreeModelSource } from '../utils/threeModelUtils.js';
 import {
   CHARACTER_RIG_ARMOR_GRIP_POINTS,
 } from '../utils/rpg3dCharacterRig.js';
+import { lazyWithRetry } from '../utils/lazyImportRetry';
 
-const Decor3DPreview = React.lazy(() => import('./rpg3d/Decor3DPreview.jsx'));
+const Decor3DPreview = lazyWithRetry(() => import('./rpg3d/Decor3DPreview.jsx'));
 
 const ARMOR_SEGMENT_OPTIONS = [
   { id: 'body', label: 'Plastron', shortLabel: 'P' },

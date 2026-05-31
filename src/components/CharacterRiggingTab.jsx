@@ -20,8 +20,9 @@ import {
   roundCharacterRigPointValue,
   updateCharacterRigPoint,
 } from '../utils/rpg3dCharacterRig.js';
+import { lazyWithRetry } from '../utils/lazyImportRetry';
 
-const Character3DPreview = React.lazy(() => import('./rpg3d/Character3DPreview.jsx'));
+const Character3DPreview = lazyWithRetry(() => import('./rpg3d/Character3DPreview.jsx'));
 const CHARACTER_RIG_HELP_HUMANOID_IMAGE = '/assets/character-rig-help-humanoid.png';
 const CHARACTER_RIG_HELP_HANDS_IMAGE = '/assets/character-rig-help-hands.png';
 

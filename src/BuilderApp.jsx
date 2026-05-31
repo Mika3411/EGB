@@ -1,7 +1,7 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Header from './components/Header';
 import Tabs from './components/Tabs';
-import { TABS, getTabKey } from './components/TabRegistry.jsx';
+import { TABS, getTabKey, preloadBuilderTabs } from './components/TabRegistry.jsx';
 import { useAccessibleDialog } from './components/AccessibleDialog';
 import { createInitialProject, normalizeProject } from './data/projectData';
 import {
@@ -46,6 +46,7 @@ import { collectDescendantSceneIds } from './lib/sceneHelpers';
 import { collectProjectAssetManifest, collectProjectAssets } from './lib/assetManager';
 import { isAdminAccount } from './lib/authStorage';
 import { getOfflineExportEstimateMessage } from './utils/offlineExportEstimate';
+import { lazyWithRetry } from './utils/lazyImportRetry';
 import {
   buildStoragePath,
   generateStorageFilename,
@@ -58,12 +59,12 @@ import {
 const AI_CREDITS_ENDPOINT = import.meta.env.VITE_AI_CREDITS_ENDPOINT || '/api/ai-credits';
 const PROJECT_AUTOSAVE_ENABLED = true;
 
-const LandingPage = React.lazy(() => import('./components/LandingPage'));
-const BuilderTutorial = React.lazy(() => import('./components/BuilderTutorial'));
-const AuthPanel = React.lazy(() => import('./components/AuthPanel'));
-const ProfilePage = React.lazy(() => import('./components/ProfilePage'));
-const AdminPage = React.lazy(() => import('./components/AdminPage'));
-const PublicGallery = React.lazy(() => import('./components/PublicGallery'));
+const LandingPage = lazyWithRetry(() => import('./components/LandingPage'));
+const BuilderTutorial = lazyWithRetry(() => import('./components/BuilderTutorial'));
+const AuthPanel = lazyWithRetry(() => import('./components/AuthPanel'));
+const ProfilePage = lazyWithRetry(() => import('./components/ProfilePage'));
+const AdminPage = lazyWithRetry(() => import('./components/AdminPage'));
+const PublicGallery = lazyWithRetry(() => import('./components/PublicGallery'));
 
 const isAdminUser = (user) => isAdminAccount(user);
 const TabLoadingFallback = () => (
@@ -189,6 +190,17 @@ function BuilderApp({
   const initialTutorialStartRef = useRef('');
   const restoredScrollKeyRef = useRef('');
   const saveScrollTimerRef = useRef(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const preload = () => preloadBuilderTabs();
+    if (typeof window.requestIdleCallback === 'function') {
+      const idleId = window.requestIdleCallback(preload, { timeout: 2000 });
+      return () => window.cancelIdleCallback?.(idleId);
+    }
+    const timerId = window.setTimeout(preload, 1200);
+    return () => window.clearTimeout(timerId);
+  }, []);
   const activeBuilderProjectId = hydratedProjectRef.current || auth.activeProjectId || initialProjectId || '';
   useEffect(() => {
     if (screen !== 'editor') {
