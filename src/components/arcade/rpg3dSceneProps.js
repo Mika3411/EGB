@@ -1,4 +1,17 @@
-import * as THREE from 'three';
+import {
+  BoxGeometry as ThreeBoxGeometry,
+  ConeGeometry as ThreeConeGeometry,
+  CylinderGeometry as ThreeCylinderGeometry,
+  DodecahedronGeometry as ThreeDodecahedronGeometry,
+  DoubleSide as ThreeDoubleSide,
+  Group as ThreeGroup,
+  Mesh as ThreeMesh,
+  MeshBasicMaterial as ThreeMeshBasicMaterial,
+  MeshStandardMaterial as ThreeMeshStandardMaterial,
+  PlaneGeometry as ThreePlaneGeometry,
+  Vector3 as ThreeVector3,
+  Vector4 as ThreeVector4,
+} from 'three';
 
 import {
   clone as cloneGltfScene,
@@ -87,7 +100,7 @@ const getModelEraserStrokeScenePoint = (prop = {}, stroke = {}, config = {}) => 
     const rotation = degreesToRadians(prop.rotation || 0);
     const cos = Math.cos(rotation);
     const sin = Math.sin(rotation);
-    return new THREE.Vector3(
+    return new ThreeVector3(
       origin.x + localSceneX * cos + localSceneZ * sin,
       origin.y + localSceneY,
       origin.z - localSceneX * sin + localSceneZ * cos,
@@ -97,7 +110,7 @@ const getModelEraserStrokeScenePoint = (prop = {}, stroke = {}, config = {}) => 
   const sceneY = Number(stroke.sceneY);
   const sceneZ = Number(stroke.sceneZ);
   if (Number.isFinite(sceneX) && Number.isFinite(sceneY) && Number.isFinite(sceneZ)) {
-    return new THREE.Vector3(sceneX, sceneY, sceneZ);
+    return new ThreeVector3(sceneX, sceneY, sceneZ);
   }
   return null;
 };
@@ -110,7 +123,7 @@ const getModelEraserSceneStamps = (prop = {}, config = {}) => (
       if (!Number.isFinite(surfaceIndex)) return null;
       const scenePoint = getModelEraserStrokeScenePoint(prop, stroke, config);
       if (!scenePoint) return null;
-      const stamp = new THREE.Vector4(scenePoint.x, scenePoint.y, scenePoint.z, stroke.radius * WORLD_SCALE);
+      const stamp = new ThreeVector4(scenePoint.x, scenePoint.y, scenePoint.z, stroke.radius * WORLD_SCALE);
       stamp.surfaceIndex = Math.round(surfaceIndex);
       return stamp;
     })
@@ -192,8 +205,8 @@ const getMeshModelEraserStamps = (mesh, stamps = []) => {
       const localMeshY = Number(stamp.localMeshY);
       const localMeshZ = Number(stamp.localMeshZ);
       if (![localMeshX, localMeshY, localMeshZ].every(Number.isFinite)) return null;
-      const point = mesh.localToWorld(new THREE.Vector3(localMeshX, localMeshY, localMeshZ));
-      return new THREE.Vector4(point.x, point.y, point.z, getModelEraserStrokeRadius(stamp) * WORLD_SCALE);
+      const point = mesh.localToWorld(new ThreeVector3(localMeshX, localMeshY, localMeshZ));
+      return new ThreeVector4(point.x, point.y, point.z, getModelEraserStrokeRadius(stamp) * WORLD_SCALE);
     })
     .filter(Boolean);
 };
@@ -287,9 +300,9 @@ const getGeometryVertex = (geometry, vertexOffset, target) => {
 
 const getTriangleCentroidDistanceToPoint = (mesh, geometry, triangleIndex, point) => {
   const offset = triangleIndex * 3;
-  const a = getGeometryVertex(geometry, offset, new THREE.Vector3()).applyMatrix4(mesh.matrixWorld);
-  const b = getGeometryVertex(geometry, offset + 1, new THREE.Vector3()).applyMatrix4(mesh.matrixWorld);
-  const c = getGeometryVertex(geometry, offset + 2, new THREE.Vector3()).applyMatrix4(mesh.matrixWorld);
+  const a = getGeometryVertex(geometry, offset, new ThreeVector3()).applyMatrix4(mesh.matrixWorld);
+  const b = getGeometryVertex(geometry, offset + 1, new ThreeVector3()).applyMatrix4(mesh.matrixWorld);
+  const c = getGeometryVertex(geometry, offset + 2, new ThreeVector3()).applyMatrix4(mesh.matrixWorld);
   return a.add(b).add(c).multiplyScalar(1 / 3).distanceTo(point);
 };
 
@@ -310,7 +323,7 @@ const clipGeometryWithModelEraser = (mesh, strokes = []) => {
       if (![localMeshX, localMeshY, localMeshZ, materialIndex].every(Number.isFinite)) return null;
       return {
         materialIndex: Math.round(materialIndex),
-        point: mesh.localToWorld(new THREE.Vector3(localMeshX, localMeshY, localMeshZ)),
+        point: mesh.localToWorld(new ThreeVector3(localMeshX, localMeshY, localMeshZ)),
         radius: getModelEraserStrokeRadius(stroke) * WORLD_SCALE,
       };
     })
@@ -466,7 +479,7 @@ const addGltfPropModel = (propGroup, template, prop, width, propHeight, depth, r
     depth: depth * modelScale,
   }, { groundY: 0 });
   enableObjectShadows(instance);
-  const orientedGroup = new THREE.Group();
+  const orientedGroup = new ThreeGroup();
   orientedGroup.userData.rpg3dPropModelOrientation = true;
   orientedGroup.add(instance);
   applyModelRotation(orientedGroup, prop);
@@ -483,10 +496,10 @@ const addGltfPropModel = (propGroup, template, prop, width, propHeight, depth, r
 };
 
 const createRockGeometry = (seedValue) => {
-  const geometry = new THREE.DodecahedronGeometry(1, 1);
+  const geometry = new ThreeDodecahedronGeometry(1, 1);
   const seed = Math.abs(hashString(seedValue)) + 1;
   const positions = geometry.attributes.position;
-  const vertex = new THREE.Vector3();
+  const vertex = new ThreeVector3();
   for (let i = 0; i < positions.count; i += 1) {
     vertex.fromBufferAttribute(positions, i);
     const jitter = 0.78 + (((Math.sin(seed * (i + 3) * 12.9898) * 43758.5453) % 1 + 1) % 1) * 0.34;
@@ -503,20 +516,20 @@ const addWall = (group, config, obstacle, engine, selected) => {
   const depth = Math.max(0.2, (Number(obstacle.h) || 0) * WORLD_SCALE);
   const height = Math.max(0.4, Number(engine.wallHeight) || DEFAULT_ENGINE.wallHeight);
   const lift = getEntityLiftHeight(obstacle);
-  const geometry = new THREE.BoxGeometry(width, height, depth);
-  const material = new THREE.MeshStandardMaterial({
+  const geometry = new ThreeBoxGeometry(width, height, depth);
+  const material = new ThreeMeshStandardMaterial({
     color: selected ? '#3b5268' : '#263241',
     roughness: 0.74,
     metalness: 0.08,
     emissive: selected ? '#123449' : '#070b10',
     emissiveIntensity: selected ? 0.32 : 0.1,
   });
-  const mesh = new THREE.Mesh(geometry, material);
+  const mesh = new ThreeMesh(geometry, material);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   mesh.position.y = height / 2;
 
-  const wallGroup = new THREE.Group();
+  const wallGroup = new ThreeGroup();
   wallGroup.position.copy(toScenePosition(
     config,
     (Number(obstacle.x) || 0) + (Number(obstacle.w) || 0) / 2,
@@ -540,20 +553,20 @@ const addRelief = (group, config, relief, engine, selected) => {
   const elevation = getReliefElevation(relief);
   const height = Math.max(0.08, Math.abs(elevation) * WORLD_SCALE * (Number(engine.reliefScale) || 1));
   const colors = RELIEF_STYLE_COLORS[relief.style] || RELIEF_STYLE_COLORS.plateau;
-  const geometry = new THREE.BoxGeometry(width, height, depth);
-  const material = new THREE.MeshStandardMaterial({
+  const geometry = new ThreeBoxGeometry(width, height, depth);
+  const material = new ThreeMeshStandardMaterial({
     color: selected ? '#94f2ff' : colors.top,
     roughness: relief.style === 'ridge' ? 0.86 : 0.7,
     metalness: 0.02,
     emissive: colors.emissive,
     emissiveIntensity: selected ? 0.18 : 0.05,
   });
-  const mesh = new THREE.Mesh(geometry, material);
+  const mesh = new ThreeMesh(geometry, material);
   mesh.castShadow = elevation > 0;
   mesh.receiveShadow = true;
   mesh.position.y = elevation >= 0 ? height / 2 : height * 0.1;
 
-  const reliefGroup = new THREE.Group();
+  const reliefGroup = new ThreeGroup();
   reliefGroup.position.copy(toScenePosition(config, relief.x, relief.y, getEntityLiftHeight(relief)));
   setTransformBase(reliefGroup, { width, height, depth });
   reliefGroup.add(mesh);
@@ -563,9 +576,9 @@ const addRelief = (group, config, relief, engine, selected) => {
     reliefGroup.add(edges);
   }
   if (relief.blocksMovement) {
-    const marker = new THREE.Mesh(
-      new THREE.BoxGeometry(Math.min(width * 0.5, 1.4), 0.05, Math.min(depth * 0.14, 0.22)),
-      new THREE.MeshBasicMaterial({ color: '#facc15' }),
+    const marker = new ThreeMesh(
+      new ThreeBoxGeometry(Math.min(width * 0.5, 1.4), 0.05, Math.min(depth * 0.14, 0.22)),
+      new ThreeMeshBasicMaterial({ color: '#facc15' }),
     );
     marker.position.y = height + 0.06;
     reliefGroup.add(marker);
@@ -580,10 +593,10 @@ const addProp = (group, config, prop, engine, selected, getTexture, getModel, op
   const propHeight = Math.max(0.08, getPropModelHeight(prop) * WORLD_SCALE * (Number(engine.propHeight) || 1));
   const lift = getEntityLiftHeight(prop);
   const renderMode = getPropRenderMode(prop);
-  const propGroup = new THREE.Group();
+  const propGroup = new ThreeGroup();
   propGroup.position.copy(toScenePosition(config, prop.x, prop.y, lift));
   propGroup.rotation.y = degreesToRadians(prop.rotation || 0);
-  const visualGroup = new THREE.Group();
+  const visualGroup = new ThreeGroup();
   visualGroup.userData.rpg3dPropModelOrientation = true;
   applyModelRotation(visualGroup, prop);
   const baseModelScale = renderMode === 'glb' ? getPropModelScale(prop) : 1;
@@ -598,7 +611,7 @@ const addProp = (group, config, prop, engine, selected, getTexture, getModel, op
   const modelTemplate = renderMode === 'glb' ? getModel?.(modelSource, prop) : null;
   const modelLoadStatus = renderMode === 'glb' ? getModel?.getStatus?.(modelSource, prop) : '';
   const propAnimationMixers = [];
-  const textureMaterial = (fallbackColor, options = {}) => new THREE.MeshStandardMaterial({
+  const textureMaterial = (fallbackColor, options = {}) => new ThreeMeshStandardMaterial({
     color: fallbackColor,
     map: texture || null,
     roughness: options.roughness ?? 0.72,
@@ -607,10 +620,10 @@ const addProp = (group, config, prop, engine, selected, getTexture, getModel, op
     emissiveIntensity: options.emissiveIntensity ?? 0.1,
   });
   const addLoadingFootprint = () => {
-    const footprintGeometry = new THREE.PlaneGeometry(width, depth);
-    const footprint = new THREE.Mesh(
+    const footprintGeometry = new ThreePlaneGeometry(width, depth);
+    const footprint = new ThreeMesh(
       footprintGeometry,
-      new THREE.MeshStandardMaterial({
+      new ThreeMeshStandardMaterial({
         color: selected ? '#e0f7ff' : '#38bdf8',
         transparent: true,
         opacity: selected ? 0.22 : 0.08,
@@ -624,7 +637,7 @@ const addProp = (group, config, prop, engine, selected, getTexture, getModel, op
     footprint.position.y = 0.045;
     visualGroup.add(footprint);
     if (selected) {
-      const outline = createSelectionEdges(new THREE.BoxGeometry(width, 0.04, depth));
+      const outline = createSelectionEdges(new ThreeBoxGeometry(width, 0.04, depth));
       outline.position.y = 0.07;
       visualGroup.add(outline);
     }
@@ -652,8 +665,8 @@ const addProp = (group, config, prop, engine, selected, getTexture, getModel, op
     } else if (modelSource && modelLoadStatus !== 'failed') {
       addLoadingFootprint();
     } else {
-      const geometry = new THREE.BoxGeometry(width, propHeight, depth);
-      const mesh = new THREE.Mesh(geometry, textureMaterial(selected ? '#e0f7ff' : '#38bdf8', { roughness: 0.62 }));
+      const geometry = new ThreeBoxGeometry(width, propHeight, depth);
+      const mesh = new ThreeMesh(geometry, textureMaterial(selected ? '#e0f7ff' : '#38bdf8', { roughness: 0.62 }));
       mesh.position.y = propHeight / 2;
       mesh.castShadow = true;
       mesh.receiveShadow = true;
@@ -666,21 +679,21 @@ const addProp = (group, config, prop, engine, selected, getTexture, getModel, op
     }
   } else if (renderMode === 'floor') {
     const material = textureMaterial(getFloorBaseColor(prop), { roughness: 0.88, emissiveIntensity: 0.04 });
-    material.side = THREE.DoubleSide;
-    const geometry = applyContinuousFloorUvs(new THREE.PlaneGeometry(width, depth), options.floorUv || null);
-    const mesh = new THREE.Mesh(geometry, material);
+    material.side = ThreeDoubleSide;
+    const geometry = applyContinuousFloorUvs(new ThreePlaneGeometry(width, depth), options.floorUv || null);
+    const mesh = new ThreeMesh(geometry, material);
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.y = 0.045;
     mesh.receiveShadow = true;
     visualGroup.add(mesh);
     if (selected) {
-      const outline = createSelectionEdges(new THREE.BoxGeometry(width, 0.04, depth));
+      const outline = createSelectionEdges(new ThreeBoxGeometry(width, 0.04, depth));
       outline.position.y = 0.07;
       visualGroup.add(outline);
     }
   } else if (renderMode === 'box') {
-    const geometry = new THREE.BoxGeometry(width, propHeight, depth);
-    const mesh = new THREE.Mesh(geometry, textureMaterial(selected ? '#e0f7ff' : '#7dd3fc', { roughness: 0.68 }));
+    const geometry = new ThreeBoxGeometry(width, propHeight, depth);
+    const mesh = new ThreeMesh(geometry, textureMaterial(selected ? '#e0f7ff' : '#7dd3fc', { roughness: 0.68 }));
     mesh.position.y = propHeight / 2;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -693,16 +706,16 @@ const addProp = (group, config, prop, engine, selected, getTexture, getModel, op
   } else if (renderMode === 'house') {
     const bodyHeight = Math.max(0.38, propHeight * 0.68);
     const roofHeight = Math.max(0.24, propHeight * 0.32);
-    const bodyGeometry = new THREE.BoxGeometry(width, bodyHeight, depth);
-    const body = new THREE.Mesh(bodyGeometry, textureMaterial(selected ? '#e0f7ff' : '#d9b889', { roughness: 0.78 }));
+    const bodyGeometry = new ThreeBoxGeometry(width, bodyHeight, depth);
+    const body = new ThreeMesh(bodyGeometry, textureMaterial(selected ? '#e0f7ff' : '#d9b889', { roughness: 0.78 }));
     body.position.y = bodyHeight / 2;
     body.castShadow = true;
     body.receiveShadow = true;
     visualGroup.add(body);
 
-    const roof = new THREE.Mesh(
-      new THREE.ConeGeometry(Math.max(width, depth) * 0.72, roofHeight, 4),
-      new THREE.MeshStandardMaterial({
+    const roof = new ThreeMesh(
+      new ThreeConeGeometry(Math.max(width, depth) * 0.72, roofHeight, 4),
+      new ThreeMeshStandardMaterial({
         color: '#7f1d1d',
         roughness: 0.7,
         emissive: '#2a0b0b',
@@ -714,9 +727,9 @@ const addProp = (group, config, prop, engine, selected, getTexture, getModel, op
     roof.castShadow = true;
     visualGroup.add(roof);
 
-    const door = new THREE.Mesh(
-      new THREE.BoxGeometry(width * 0.18, bodyHeight * 0.42, 0.035),
-      new THREE.MeshStandardMaterial({ color: '#3b2417', roughness: 0.8 }),
+    const door = new ThreeMesh(
+      new ThreeBoxGeometry(width * 0.18, bodyHeight * 0.42, 0.035),
+      new ThreeMeshStandardMaterial({ color: '#3b2417', roughness: 0.8 }),
     );
     door.position.set(0, bodyHeight * 0.22, depth / 2 + 0.025);
     door.castShadow = true;
@@ -724,7 +737,7 @@ const addProp = (group, config, prop, engine, selected, getTexture, getModel, op
     visualGroup.add(door);
 
     if (selected) {
-      const edges = createSelectionEdges(new THREE.BoxGeometry(width, propHeight, depth));
+      const edges = createSelectionEdges(new ThreeBoxGeometry(width, propHeight, depth));
       edges.position.y = propHeight / 2;
       visualGroup.add(edges);
     }
@@ -736,7 +749,7 @@ const addProp = (group, config, prop, engine, selected, getTexture, getModel, op
       emissive: '#111827',
       emissiveIntensity: 0.08,
     });
-    const mesh = new THREE.Mesh(geometry, material);
+    const mesh = new ThreeMesh(geometry, material);
     mesh.scale.set(width * 0.48, propHeight * 0.5, depth * 0.48);
     mesh.position.y = propHeight * 0.48;
     mesh.rotation.y = hashString(prop.id || prop.name || 'rock') * 0.01;
@@ -746,8 +759,8 @@ const addProp = (group, config, prop, engine, selected, getTexture, getModel, op
     if (selected) propGroup.add(createSelectionRing(Math.max(width, depth) * 0.52, '#67e8f9'));
   } else if (texture) {
     const billboardHeight = Math.max(depth, propHeight);
-    const mesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(width, billboardHeight),
+    const mesh = new ThreeMesh(
+      new ThreePlaneGeometry(width, billboardHeight),
       createVisibleImagePlaneMaterial(texture),
     );
     mesh.position.y = billboardHeight / 2;
@@ -755,14 +768,14 @@ const addProp = (group, config, prop, engine, selected, getTexture, getModel, op
     mesh.receiveShadow = true;
     visualGroup.add(mesh);
   } else {
-    const geometry = new THREE.CylinderGeometry(width * 0.38, width * 0.48, propHeight, 10);
-    const material = new THREE.MeshStandardMaterial({
+    const geometry = new ThreeCylinderGeometry(width * 0.38, width * 0.48, propHeight, 10);
+    const material = new ThreeMeshStandardMaterial({
       color: selected ? '#67e8f9' : '#2dd4bf',
       roughness: 0.82,
       emissive: '#06231f',
       emissiveIntensity: 0.16,
     });
-    const mesh = new THREE.Mesh(geometry, material);
+    const mesh = new ThreeMesh(geometry, material);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.position.y = propHeight / 2;

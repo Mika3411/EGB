@@ -40,7 +40,7 @@ import {
   THREE_MODEL_ACCEPT,
   getThreeModelFormatLabel,
   getThreeModelSource,
-} from '../utils/threeGltfUtils';
+} from '../utils/threeModelUtils.js';
 import {
   createLocalModelFileId,
   forgetRpg3DLocalBlobFile,

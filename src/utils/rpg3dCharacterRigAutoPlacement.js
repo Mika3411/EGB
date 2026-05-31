@@ -1,4 +1,6 @@
-import * as THREE from 'three';
+import {
+  Vector3 as ThreeVector3,
+} from 'three';
 import { getCharacterRigPointDefinition } from './rpg3dCharacterRig.js';
 
 const DEFAULT_POINT_EPSILON = 0.001;
@@ -46,7 +48,7 @@ const collectCharacterRigBones = (root = null) => {
 
 const getBoneWorldPosition = (bone = null) => {
   if (!bone?.isObject3D) return null;
-  return bone.getWorldPosition(new THREE.Vector3());
+  return bone.getWorldPosition(new ThreeVector3());
 };
 
 const scoreBoneAlias = (key = '', alias = '') => {
@@ -96,7 +98,7 @@ export const isDefaultCharacterRigPointPlacement = (point = {}) => {
 
 export const getCharacterRigBoundsWorldPoint = (bounds = null, point = {}) => {
   if (!bounds) return null;
-  const size = bounds.getSize(new THREE.Vector3());
+  const size = bounds.getSize(new ThreeVector3());
   if (
     !Number.isFinite(size.x)
     || !Number.isFinite(size.y)
@@ -105,7 +107,7 @@ export const getCharacterRigBoundsWorldPoint = (bounds = null, point = {}) => {
     || size.y <= 0.0001
     || size.z <= 0.0001
   ) return null;
-  return new THREE.Vector3(
+  return new ThreeVector3(
     bounds.min.x + size.x * point.x,
     bounds.min.y + size.y * point.y,
     bounds.min.z + size.z * point.z,
@@ -116,7 +118,7 @@ export const getCharacterRigAutoAnchorMap = (root = null, bounds = null) => {
   const anchors = new Map();
   const bones = collectCharacterRigBones(root);
   if (!bones.length) return anchors;
-  const size = bounds?.getSize?.(new THREE.Vector3()) || new THREE.Vector3(1, 1, 1);
+  const size = bounds?.getSize?.(new ThreeVector3()) || new ThreeVector3(1, 1, 1);
   const fingerRejects = ['thumb', 'index', 'middle', 'ring', 'pinky', 'little'];
   const bonePosition = (aliases, rejects = []) => getBoneWorldPosition(findRigBone(bones, aliases, rejects));
 
@@ -146,9 +148,9 @@ export const getCharacterRigAutoAnchorMap = (root = null, bounds = null) => {
   const head = bonePosition(['head']);
   const neck = bodyAnchors.neck;
   if (head && neck && head.y > neck.y + 0.001) {
-    anchors.set('mouth', neck.clone().lerp(head, 0.72).add(new THREE.Vector3(0, 0, -size.z * 0.035)));
+    anchors.set('mouth', neck.clone().lerp(head, 0.72).add(new ThreeVector3(0, 0, -size.z * 0.035)));
   } else if (head) {
-    anchors.set('mouth', head.clone().add(new THREE.Vector3(0, size.y * 0.035, -size.z * 0.045)));
+    anchors.set('mouth', head.clone().add(new ThreeVector3(0, size.y * 0.035, -size.z * 0.045)));
   }
 
   ['right', 'left'].forEach((hand) => {

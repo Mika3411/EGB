@@ -1,5 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import * as THREE from 'three';
+import {
+  Raycaster as ThreeRaycaster,
+  Vector2 as ThreeVector2,
+  Vector3 as ThreeVector3,
+} from 'three';
 import {
   MODEL_ERASER_DEFAULT_RADIUS,
   TERRAIN_PAINT_DEFAULT_COLOR,
@@ -159,8 +163,8 @@ function ArcadeThreeViewport({
   const transformSessionRef = useRef(null);
   const transformPointerActiveRef = useRef(false);
   const groundRef = useRef(null);
-  const raycasterRef = useRef(new THREE.Raycaster());
-  const pointerRef = useRef(new THREE.Vector2());
+  const raycasterRef = useRef(new ThreeRaycaster());
+  const pointerRef = useRef(new ThreeVector2());
   const aimPointRef = useRef(null);
   const invalidateRenderRef = useRef(() => {});
   const clickStartRef = useRef(null);
@@ -171,9 +175,9 @@ function ArcadeThreeViewport({
   const paintRef = useRef(null);
   const modelEraserRef = useRef(null);
   const cameraZoomDragRef = useRef(null);
-  const playCameraPanOffsetRef = useRef(new THREE.Vector3());
-  const playCameraPanStartOffsetRef = useRef(new THREE.Vector3());
-  const playCameraFollowTargetRef = useRef(new THREE.Vector3());
+  const playCameraPanOffsetRef = useRef(new ThreeVector3());
+  const playCameraPanStartOffsetRef = useRef(new ThreeVector3());
+  const playCameraFollowTargetRef = useRef(new ThreeVector3());
   const playCameraFollowReadyRef = useRef(false);
   const paintPreviewRef = useRef(null);
   const modelEraserPreviewRef = useRef(null);
@@ -537,7 +541,7 @@ function ArcadeThreeViewport({
       x: point.x - drag.anchor.x,
       y: point.y - drag.anchor.y,
     };
-    const sceneDelta = new THREE.Vector3(delta.x * WORLD_SCALE, 0, delta.y * WORLD_SCALE);
+    const sceneDelta = new ThreeVector3(delta.x * WORLD_SCALE, 0, delta.y * WORLD_SCALE);
 
     drag.previewTargets.forEach((target) => {
       const activeRoots = target.roots.filter(({ root }) => root.parent);

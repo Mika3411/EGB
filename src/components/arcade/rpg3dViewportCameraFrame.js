@@ -1,4 +1,6 @@
-import * as THREE from 'three';
+import {
+  Vector3 as ThreeVector3,
+} from 'three';
 import { clamp } from '../../utils/rpg3dDomain.js';
 import {
   getCameraDistance,
@@ -52,7 +54,7 @@ export const syncViewportCameraForFrame = ({
   if (playMode) {
     const distance = cameraDistanceSetting;
     const height = getCameraHeightForDistance(engine, distance);
-    const offset = new THREE.Vector3(-distance * 0.48, height, distance * 0.72);
+    const offset = new ThreeVector3(-distance * 0.48, height, distance * 0.72);
     const cameraFollowTarget = playCameraFollowTargetRef.current;
     if (!playCameraFollowReadyRef.current || cameraFollowTarget.distanceToSquared(playCameraTarget) > 144) {
       cameraFollowTarget.copy(playCameraTarget);
@@ -80,7 +82,7 @@ export const syncViewportCameraForFrame = ({
     const distance = cameraDistanceSetting;
     if (!cameraReadyRef.current) {
       const height = getCameraHeightForDistance(engine, distance);
-      camera.position.copy(target.clone().add(new THREE.Vector3(-distance * 0.65, height, distance * 0.78)));
+      camera.position.copy(target.clone().add(new ThreeVector3(-distance * 0.65, height, distance * 0.78)));
       controls.target.copy(target);
       cameraReadyRef.current = true;
       lastEditCameraDistanceRef.current = distance;

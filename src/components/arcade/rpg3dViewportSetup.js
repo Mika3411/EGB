@@ -1,4 +1,19 @@
-import * as THREE from 'three';
+import {
+  ACESFilmicToneMapping as ThreeACESFilmicToneMapping,
+  AmbientLight as ThreeAmbientLight,
+  Color as ThreeColor,
+  DirectionalLight as ThreeDirectionalLight,
+  FogExp2 as ThreeFogExp2,
+  Group as ThreeGroup,
+  HemisphereLight as ThreeHemisphereLight,
+  Object3D as ThreeObject3D,
+  PCFShadowMap as ThreePCFShadowMap,
+  PMREMGenerator as ThreePMREMGenerator,
+  PerspectiveCamera as ThreePerspectiveCamera,
+  SRGBColorSpace as ThreeSRGBColorSpace,
+  Scene as ThreeScene,
+  WebGLRenderer as ThreeWebGLRenderer,
+} from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { attachClickTargetCameraControls } from '../three/clickTargetCameraControls.js';
@@ -11,20 +26,20 @@ export const createArcadeRenderer = ({
   onContextLost = null,
   preserveDrawingBuffer = false,
 } = {}) => {
-  const renderer = new THREE.WebGLRenderer({
+  const renderer = new ThreeWebGLRenderer({
     antialias: false,
     alpha: false,
     preserveDrawingBuffer,
     powerPreference: 'high-performance',
   });
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.outputColorSpace = ThreeSRGBColorSpace;
+  renderer.toneMapping = ThreeACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.08;
   renderer.setClearColor('#081521', 1);
   renderer.setPixelRatio(window.devicePixelRatio || 1);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.autoUpdate = false;
-  renderer.shadowMap.type = THREE.PCFShadowMap;
+  renderer.shadowMap.type = ThreePCFShadowMap;
   renderer.domElement.className = 'arcade-three-canvas';
   renderer.domElement.setAttribute('data-testid', 'rpg3d-canvas');
   if (onContextLost) {
@@ -34,10 +49,10 @@ export const createArcadeRenderer = ({
 };
 
 export const createArcadeSceneEnvironment = (renderer) => {
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#081521');
-  scene.fog = new THREE.FogExp2('#081521', 0.012);
-  const pmremGenerator = new THREE.PMREMGenerator(renderer);
+  const scene = new ThreeScene();
+  scene.background = new ThreeColor('#081521');
+  scene.fog = new ThreeFogExp2('#081521', 0.012);
+  const pmremGenerator = new ThreePMREMGenerator(renderer);
   const roomEnvironment = new RoomEnvironment();
   const environmentMap = pmremGenerator.fromScene(roomEnvironment, 0.04).texture;
   roomEnvironment.dispose?.();
@@ -46,7 +61,7 @@ export const createArcadeSceneEnvironment = (renderer) => {
 };
 
 export const createArcadeCamera = () => {
-  const camera = new THREE.PerspectiveCamera(58, 1, 0.1, 260);
+  const camera = new ThreePerspectiveCamera(58, 1, 0.1, 260);
   camera.position.set(-18, 16, 18);
   return camera;
 };
@@ -81,10 +96,10 @@ export const attachArcadeCameraControls = ({
 });
 
 export const createArcadeSceneGroups = (scene) => {
-  const staticGroup = new THREE.Group();
-  const terrainPaintGroup = new THREE.Group();
-  const selectionGroup = new THREE.Group();
-  const dynamicGroup = new THREE.Group();
+  const staticGroup = new ThreeGroup();
+  const terrainPaintGroup = new ThreeGroup();
+  const selectionGroup = new ThreeGroup();
+  const dynamicGroup = new ThreeGroup();
   scene.add(staticGroup);
   scene.add(terrainPaintGroup);
   scene.add(selectionGroup);
@@ -98,9 +113,9 @@ export const createArcadeSceneGroups = (scene) => {
 };
 
 export const addArcadeSceneLights = (scene) => {
-  const hemi = new THREE.HemisphereLight('#fff7ea', '#211814', 1.02);
+  const hemi = new ThreeHemisphereLight('#fff7ea', '#211814', 1.02);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight('#fff6e6', 1.95);
+  const sun = new ThreeDirectionalLight('#fff6e6', 1.95);
   sun.position.set(-16, 32, 18);
   sun.castShadow = true;
   sun.shadow.mapSize.set(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
@@ -114,13 +129,13 @@ export const addArcadeSceneLights = (scene) => {
   sun.shadow.normalBias = 0.01;
   scene.add(sun);
   scene.add(sun.target);
-  const frontFill = new THREE.DirectionalLight('#f7f3ec', 0.55);
+  const frontFill = new ThreeDirectionalLight('#f7f3ec', 0.55);
   frontFill.position.set(18, 14, 24);
   scene.add(frontFill);
-  const rim = new THREE.DirectionalLight('#ffe0bd', 0.16);
+  const rim = new ThreeDirectionalLight('#ffe0bd', 0.16);
   rim.position.set(20, 18, -24);
   scene.add(rim);
-  const ambient = new THREE.AmbientLight('#fff3e0', 0.08);
+  const ambient = new ThreeAmbientLight('#fff3e0', 0.08);
   scene.add(ambient);
   scene.userData.hemi = hemi;
   scene.userData.sun = sun;
@@ -131,7 +146,7 @@ export const addArcadeSceneLights = (scene) => {
 };
 
 export const createArcadeTransformProxy = (scene) => {
-  const transformProxy = new THREE.Object3D();
+  const transformProxy = new ThreeObject3D();
   transformProxy.visible = false;
   scene.add(transformProxy);
   return transformProxy;

@@ -1,5 +1,34 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import * as THREE from 'three';
+import {
+  Box3 as ThreeBox3,
+  BufferGeometry as ThreeBufferGeometry,
+  CanvasTexture as ThreeCanvasTexture,
+  CircleGeometry as ThreeCircleGeometry,
+  Color as ThreeColor,
+  DirectionalLight as ThreeDirectionalLight,
+  DoubleSide as ThreeDoubleSide,
+  Euler as ThreeEuler,
+  GridHelper as ThreeGridHelper,
+  Group as ThreeGroup,
+  HemisphereLight as ThreeHemisphereLight,
+  Line as ThreeLine,
+  LineBasicMaterial as ThreeLineBasicMaterial,
+  MathUtils as ThreeMathUtils,
+  Mesh as ThreeMesh,
+  MeshBasicMaterial as ThreeMeshBasicMaterial,
+  MeshStandardMaterial as ThreeMeshStandardMaterial,
+  PerspectiveCamera as ThreePerspectiveCamera,
+  Quaternion as ThreeQuaternion,
+  RepeatWrapping as ThreeRepeatWrapping,
+  SRGBColorSpace as ThreeSRGBColorSpace,
+  Scene as ThreeScene,
+  Sprite as ThreeSprite,
+  SpriteMaterial as ThreeSpriteMaterial,
+  TextureLoader as ThreeTextureLoader,
+  Vector2 as ThreeVector2,
+  Vector3 as ThreeVector3,
+  WebGLRenderer as ThreeWebGLRenderer,
+} from 'three';
 import {
   fitObjectToHeight,
   getImportedModelPrepareOptions,
@@ -171,7 +200,7 @@ const STUNT_RIG_DRAG_MAX_DELTA = {
 
 const posePoint = (origin, length, angleDeg, zOffset = 0) => {
   const radians = (angleDeg * Math.PI) / 180;
-  return new THREE.Vector3(
+  return new ThreeVector3(
     origin.x + Math.sin(radians) * length,
     origin.y - Math.cos(radians) * length,
     origin.z + zOffset
@@ -193,12 +222,12 @@ const getRequiredArmElbowBend = (upperArmValue = 0) => {
   if (excess <= 0) return 0;
   const maxArmSwing = STUNT_RIG_FIELD_LIMITS.leftArm?.[1] || 96;
   const denominator = Math.max(1, maxArmSwing - ARM_SHOULDER_STRAIGHT_LIMIT);
-  return THREE.MathUtils.clamp((excess / denominator) * ARM_SHOULDER_EXTREME_MIN_BEND, 0, ARM_SHOULDER_EXTREME_MIN_BEND);
+  return ThreeMathUtils.clamp((excess / denominator) * ARM_SHOULDER_EXTREME_MIN_BEND, 0, ARM_SHOULDER_EXTREME_MIN_BEND);
 };
 const clampElbowBend = (side, value, upperArmValue = 0) => {
   const next = Number(value) || 0;
   const minBend = getRequiredArmElbowBend(upperArmValue);
-  const magnitude = THREE.MathUtils.clamp(Math.abs(next), minBend, ARM_ELBOW_MAX_BEND);
+  const magnitude = ThreeMathUtils.clamp(Math.abs(next), minBend, ARM_ELBOW_MAX_BEND);
   return side === 'left'
     ? -magnitude
     : magnitude;
@@ -209,30 +238,30 @@ const getRequiredLegKneeBend = (upperLegValue = 0) => {
   if (excess <= 0) return 0;
   const maxLegSwing = STUNT_RIG_FIELD_LIMITS.leftLeg?.[1] || 76;
   const denominator = Math.max(1, maxLegSwing - LEG_HIP_STRAIGHT_LIMIT);
-  return THREE.MathUtils.clamp((excess / denominator) * LEG_HIP_EXTREME_MIN_BEND, 0, LEG_HIP_EXTREME_MIN_BEND);
+  return ThreeMathUtils.clamp((excess / denominator) * LEG_HIP_EXTREME_MIN_BEND, 0, LEG_HIP_EXTREME_MIN_BEND);
 };
 
 const clampKneeBend = (side, value, upperLegValue = 0) => {
   const next = Number(value) || 0;
   const minBend = getRequiredLegKneeBend(upperLegValue);
-  const magnitude = THREE.MathUtils.clamp(Math.abs(next), minBend, LEG_KNEE_MAX_BEND);
+  const magnitude = ThreeMathUtils.clamp(Math.abs(next), minBend, LEG_KNEE_MAX_BEND);
   return side === 'left'
     ? -magnitude
     : magnitude;
 };
 const xOffset = (value, scale = 0.007) => (Number(value) || 0) * scale;
 const addPoseOffset = (point, x = 0, y = 0, z = 0) => (
-  point.clone().add(new THREE.Vector3(x, y, z))
+  point.clone().add(new ThreeVector3(x, y, z))
 );
 
 const rotatePosePointAroundZ = (point, pivot, angleDeg = 0) => {
   if (!point || !pivot || !angleDeg) return point;
-  const rad = THREE.MathUtils.degToRad(angleDeg);
+  const rad = ThreeMathUtils.degToRad(angleDeg);
   const sin = Math.sin(rad);
   const cos = Math.cos(rad);
   const dx = point.x - pivot.x;
   const dy = point.y - pivot.y;
-  return new THREE.Vector3(
+  return new ThreeVector3(
     pivot.x + (dx * cos) - (dy * sin),
     pivot.y + (dx * sin) + (dy * cos),
     point.z
@@ -240,7 +269,7 @@ const rotatePosePointAroundZ = (point, pivot, angleDeg = 0) => {
 };
 
 const getPoseAngleToPoint = (from, to) => (
-  THREE.MathUtils.radToDeg(Math.atan2(to.x - from.x, -(to.y - from.y)))
+  ThreeMathUtils.radToDeg(Math.atan2(to.x - from.x, -(to.y - from.y)))
 );
 
 const normalizePoseAngle = (value = 0) => {
@@ -254,13 +283,13 @@ const solveTwoBonePoseAngles = (origin, target, upperLength, lowerLength, bendSi
   if (!origin || !target) return null;
   const dx = target.x - origin.x;
   const dy = target.y - origin.y;
-  const distance = THREE.MathUtils.clamp(
+  const distance = ThreeMathUtils.clamp(
     Math.hypot(dx, dy),
     Math.max(0.001, Math.abs(upperLength - lowerLength) + 0.001),
     Math.max(0.001, upperLength + lowerLength - 0.001)
   );
-  const targetAngle = THREE.MathUtils.degToRad(getPoseAngleToPoint(origin, target));
-  const cosDelta = THREE.MathUtils.clamp(
+  const targetAngle = ThreeMathUtils.degToRad(getPoseAngleToPoint(origin, target));
+  const cosDelta = ThreeMathUtils.clamp(
     ((distance * distance) - (upperLength * upperLength) - (lowerLength * lowerLength)) / (2 * upperLength * lowerLength),
     -1,
     1
@@ -271,8 +300,8 @@ const solveTwoBonePoseAngles = (origin, target, upperLength, lowerLength, bendSi
     upperLength + (lowerLength * Math.cos(lowerDelta))
   );
   return {
-    upper: normalizePoseAngle(THREE.MathUtils.radToDeg(targetAngle - shoulderOffset)),
-    lower: normalizePoseAngle(THREE.MathUtils.radToDeg(lowerDelta)),
+    upper: normalizePoseAngle(ThreeMathUtils.radToDeg(targetAngle - shoulderOffset)),
+    lower: normalizePoseAngle(ThreeMathUtils.radToDeg(lowerDelta)),
   };
 };
 
@@ -309,7 +338,7 @@ const poseToRig = (pose = {}) => {
   const backwardCurl = Math.max(0, -bodyCurl);
   const curlYOffset = (backwardCurl * 0.001) - (forwardCurl * 0.0032);
   const curlDepthOffset = bodyCurl * 0.005;
-  const hip = new THREE.Vector3((rootX - 50) / 23, ((86 - rootY) / 23) + 0.38, 0);
+  const hip = new ThreeVector3((rootX - 50) / 23, ((86 - rootY) / 23) + 0.38, 0);
   const upperBodyX = xOffset(bodyTwist, 0.006) + xOffset(bodyYaw, 0.003);
   const chest = addPoseOffset(
     posePoint(hip, 0.42, 180 + bodyTilt + (bodyRoll * 0.75) + bodyCurl * 0.05),
@@ -335,10 +364,10 @@ const poseToRig = (pose = {}) => {
     curlYOffset * 0.28,
     curlDepthOffset * 0.18
   );
-  const mouth = neck.clone().lerp(head, 0.72).add(new THREE.Vector3(0.02 + xOffset(headYaw, 0.006), -0.015, 0));
+  const mouth = neck.clone().lerp(head, 0.72).add(new ThreeVector3(0.02 + xOffset(headYaw, 0.006), -0.015, 0));
   const shoulderYaw = ((bodyYaw * 0.32) + (bodyTwist * 0.82)) * (Math.PI / 180);
   const shoulderSpread = 0.17;
-  const getShoulderOffset = (side) => new THREE.Vector3(
+  const getShoulderOffset = (side) => new ThreeVector3(
     Math.cos(shoulderYaw) * shoulderSpread * side,
     -0.03,
     -Math.sin(shoulderYaw) * shoulderSpread * side
@@ -348,7 +377,7 @@ const poseToRig = (pose = {}) => {
   const leftShoulder = rotatePosePointAroundZ(leftShoulderBase, neck, shoulderRoll);
   const rightShoulder = rotatePosePointAroundZ(rightShoulderBase, neck, shoulderRoll);
   const lowerBodyYaw = lowerBodyTwist * (Math.PI / 180);
-  const getHipOffset = (side) => new THREE.Vector3(
+  const getHipOffset = (side) => new ThreeVector3(
     Math.cos(lowerBodyYaw) * 0.12 * side,
     -0.02,
     -Math.sin(lowerBodyYaw) * 0.12 * side
@@ -436,8 +465,8 @@ const createStuntRigMarkerTexture = (marker = {}) => {
     context.textBaseline = 'middle';
     context.fillText(marker.shortLabel || '?', 64, 66);
   }
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
+  const texture = new ThreeCanvasTexture(canvas);
+  texture.colorSpace = ThreeSRGBColorSpace;
   texture.needsUpdate = true;
   return texture;
 };
@@ -461,13 +490,13 @@ const updateStuntRigMarkerTexture = (markerObject = null, markerConfig = {}) => 
 
 const createStuntRigMarker = (marker = {}) => {
   const texture = createStuntRigMarkerTexture(marker);
-  const material = new THREE.SpriteMaterial({
+  const material = new ThreeSpriteMaterial({
     map: texture,
     transparent: true,
     depthTest: false,
     depthWrite: false,
   });
-  const sprite = new THREE.Sprite(material);
+  const sprite = new ThreeSprite(material);
   sprite.name = `StuntRigMarker-${marker.id || 'point'}`;
   sprite.renderOrder = 65;
   sprite.userData.stuntRigMarker = true;
@@ -478,18 +507,18 @@ const createStuntRigMarker = (marker = {}) => {
 
 const createStuntRigMarkerLine = (marker = {}) => {
   const colors = STUNT_RIG_MARKER_COLORS[marker.socket] || STUNT_RIG_MARKER_COLORS.armor;
-  const geometry = new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(),
-    new THREE.Vector3(),
+  const geometry = new ThreeBufferGeometry().setFromPoints([
+    new ThreeVector3(),
+    new ThreeVector3(),
   ]);
-  const material = new THREE.LineBasicMaterial({
+  const material = new ThreeLineBasicMaterial({
     color: colors.line || colors.fill,
     transparent: true,
     opacity: 0.56,
     depthTest: false,
     depthWrite: false,
   });
-  const line = new THREE.Line(geometry, material);
+  const line = new ThreeLine(geometry, material);
   line.name = `StuntRigLine-${marker.id || 'point'}`;
   line.renderOrder = 60;
   line.userData.stuntRigLine = true;
@@ -525,7 +554,7 @@ const getStuntRigHandBasis = (rig = {}, hand = 'right') => {
   const forward = wrist.clone().sub(elbow);
   if (forward.lengthSq() < 0.0001) forward.set(0, -1, 0);
   forward.normalize();
-  const across = new THREE.Vector3(-forward.y, forward.x, 0);
+  const across = new ThreeVector3(-forward.y, forward.x, 0);
   if (across.lengthSq() < 0.0001) across.set(hand === 'right' ? 1 : -1, 0, 0);
   across.normalize();
   return { wrist, forward, across };
@@ -542,7 +571,7 @@ const getStuntRigPhalangeMarkerPosition = (rig = {}, marker = {}) => {
   return basis.wrist.clone()
     .addScaledVector(basis.forward, forwardOffset)
     .addScaledVector(basis.across, lateralOffset)
-    .add(new THREE.Vector3(0, 0, depthOffset));
+    .add(new ThreeVector3(0, 0, depthOffset));
 };
 
 const getStuntRigMarkerPosition = (rig = {}, marker = {}, groundLift = 0) => {
@@ -550,14 +579,14 @@ const getStuntRigMarkerPosition = (rig = {}, marker = {}, groundLift = 0) => {
     ? getStuntRigPhalangeMarkerPosition(rig, marker)
     : getStuntRigBodyMarkerPosition(rig, marker);
   if (!basePosition) return null;
-  return basePosition.clone().add(new THREE.Vector3(0, Number(groundLift) || 0, 0));
+  return basePosition.clone().add(new ThreeVector3(0, Number(groundLift) || 0, 0));
 };
 
 const getStuntRigBoneWorldPosition = (ctx, boneSlot = '') => {
   const bone = ctx?.characterBones?.[boneSlot];
   if (!bone) return null;
   bone.updateMatrixWorld?.(true);
-  return bone.getWorldPosition(new THREE.Vector3());
+  return bone.getWorldPosition(new ThreeVector3());
 };
 
 const stuntRigWorldToMarkerLocal = (ctx, worldPosition = null) => {
@@ -575,7 +604,7 @@ const getStuntRigBodyBoneMarkerPosition = (ctx, marker = {}) => {
 const getStuntRigFingerBoneSlot = (marker = {}, jointOverride = null) => {
   const hand = marker.hand === 'left' ? 'left' : 'right';
   const finger = marker.finger || 'middle';
-  const joint = THREE.MathUtils.clamp(
+  const joint = ThreeMathUtils.clamp(
     Number(jointOverride ?? marker.joint) || 1,
     1,
     3
@@ -595,7 +624,7 @@ const getStuntRigPhalangeBoneMarkerPosition = (ctx, marker = {}) => {
         direction.normalize();
         return stuntRigWorldToMarkerLocal(
           ctx,
-          endWorldPosition.addScaledVector(direction, THREE.MathUtils.clamp(length * 0.72, 0.018, 0.055))
+          endWorldPosition.addScaledVector(direction, ThreeMathUtils.clamp(length * 0.72, 0.018, 0.055))
         );
       }
     }
@@ -617,7 +646,7 @@ const getStuntRigDisplayMarkerPosition = (ctx, marker = {}) => {
 const clampStuntRigPoseField = (field, value) => {
   const limits = STUNT_RIG_FIELD_LIMITS[field];
   if (!limits) return Number(value) || 0;
-  return THREE.MathUtils.clamp(Number(value) || 0, limits[0], limits[1]);
+  return ThreeMathUtils.clamp(Number(value) || 0, limits[0], limits[1]);
 };
 
 const normalizeStuntRigPose = (pose = {}) => {
@@ -630,12 +659,12 @@ const normalizeStuntRigPose = (pose = {}) => {
   next.rightArmSide = clampStuntRigPoseField('rightArmSide', next.rightArmSide);
   const leftForearmSide = clampStuntRigPoseField('leftForearmSide', next.leftForearmSide);
   const rightForearmSide = clampStuntRigPoseField('rightForearmSide', next.rightForearmSide);
-  next.leftForearmSide = THREE.MathUtils.clamp(
+  next.leftForearmSide = ThreeMathUtils.clamp(
     leftForearmSide,
     next.leftArmSide - ARM_FOREARM_SIDE_LIMIT,
     next.leftArmSide + ARM_FOREARM_SIDE_LIMIT
   );
-  next.rightForearmSide = THREE.MathUtils.clamp(
+  next.rightForearmSide = ThreeMathUtils.clamp(
     rightForearmSide,
     next.rightArmSide - ARM_FOREARM_SIDE_LIMIT,
     next.rightArmSide + ARM_FOREARM_SIDE_LIMIT
@@ -648,12 +677,12 @@ const normalizeStuntRigPose = (pose = {}) => {
   next.rightLegSide = clampStuntRigPoseField('rightLegSide', next.rightLegSide);
   const leftShinSide = clampStuntRigPoseField('leftShinSide', next.leftShinSide);
   const rightShinSide = clampStuntRigPoseField('rightShinSide', next.rightShinSide);
-  next.leftShinSide = THREE.MathUtils.clamp(
+  next.leftShinSide = ThreeMathUtils.clamp(
     leftShinSide,
     next.leftLegSide - LEG_SHIN_SIDE_LIMIT,
     next.leftLegSide + LEG_SHIN_SIDE_LIMIT
   );
-  next.rightShinSide = THREE.MathUtils.clamp(
+  next.rightShinSide = ThreeMathUtils.clamp(
     rightShinSide,
     next.rightLegSide - LEG_SHIN_SIDE_LIMIT,
     next.rightLegSide + LEG_SHIN_SIDE_LIMIT
@@ -672,7 +701,7 @@ const getStuntRigDragFields = (pointId = '') => {
 const clampStuntRigDragFieldFromStart = (field, value, startPose = {}) => {
   const maxDelta = STUNT_RIG_DRAG_MAX_DELTA[field] || 115;
   const startValue = Number(startPose[field]) || 0;
-  return THREE.MathUtils.clamp(
+  return ThreeMathUtils.clamp(
     clampStuntRigPoseField(field, value),
     startValue - maxDelta,
     startValue + maxDelta
@@ -916,11 +945,11 @@ const syncStuntRigMarkers = (ctx) => {
       markerRoot.localToWorld(worldPosition);
       const distance = Math.max(0.1, ctx.camera.position.distanceTo(worldPosition));
       const markerSize = Number.isFinite(Number(markerConfig.size)) ? Number(markerConfig.size) : 1;
-      marker.scale.setScalar(THREE.MathUtils.clamp(distance * 0.043 * markerSize, 0.024 * markerSize, 0.13 * markerSize));
+      marker.scale.setScalar(ThreeMathUtils.clamp(distance * 0.043 * markerSize, 0.024 * markerSize, 0.13 * markerSize));
       const projected = worldPosition.clone().project(ctx.camera);
       const rect = ctx.renderer?.domElement?.getBoundingClientRect?.();
       if (rect) {
-        const radius = THREE.MathUtils.clamp(18 * markerSize, 11, 30);
+        const radius = ThreeMathUtils.clamp(18 * markerSize, 11, 30);
         projectedMarkers[markerConfig.id] = {
           x: Math.round(((projected.x + 1) / 2) * rect.width),
           y: Math.round(((1 - projected.y) / 2) * rect.height),
@@ -966,7 +995,7 @@ const syncStuntRigMarkers = (ctx) => {
   }
 };
 
-const degToRad = (value = 0) => THREE.MathUtils.degToRad(Number(value) || 0);
+const degToRad = (value = 0) => ThreeMathUtils.degToRad(Number(value) || 0);
 
 const normalizeBoneName = (value = '') => String(value || '')
   .replace(/\\/g, '/')
@@ -1038,19 +1067,19 @@ const collectCharacterBones = (object) => {
 };
 
 const createCharacterTextureSet = (onUpdate = () => {}) => {
-  const textureLoader = new THREE.TextureLoader();
+  const textureLoader = new ThreeTextureLoader();
   const loadTexture = (url, colorSpace = null) => {
     const texture = textureLoader.load(url, () => onUpdate());
     if (colorSpace) texture.colorSpace = colorSpace;
     texture.anisotropy = 4;
     texture.flipY = false;
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
+    texture.wrapS = ThreeRepeatWrapping;
+    texture.wrapT = ThreeRepeatWrapping;
     texture.needsUpdate = true;
     return texture;
   };
   return {
-    diffuse: loadTexture(STUNT_CHARACTER_DIFFUSE_URL, THREE.SRGBColorSpace),
+    diffuse: loadTexture(STUNT_CHARACTER_DIFFUSE_URL, ThreeSRGBColorSpace),
     normal: loadTexture(STUNT_CHARACTER_NORMAL_URL),
   };
 };
@@ -1062,10 +1091,10 @@ const applyCharacterTextures = (object, textures = {}) => {
     const materials = Array.isArray(child.material) ? child.material : [child.material];
     const nextMaterials = materials.map((material) => {
       if (!material) return material;
-      const nextMaterial = material.isMeshStandardMaterial ? material : new THREE.MeshStandardMaterial();
+      const nextMaterial = material.isMeshStandardMaterial ? material : new ThreeMeshStandardMaterial();
       if (nextMaterial !== material) {
         nextMaterial.name = material.name || '';
-        nextMaterial.side = material.side ?? THREE.DoubleSide;
+        nextMaterial.side = material.side ?? ThreeDoubleSide;
         nextMaterial.skinning = material.skinning;
       }
       nextMaterial.map = nextMaterial.map || textures.diffuse;
@@ -1096,7 +1125,7 @@ const resetCharacterBones = (bones = {}) => {
 
 const rotateBone = (bone, x = 0, y = 0, z = 0) => {
   if (!bone) return;
-  bone.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(
+  bone.quaternion.multiply(new ThreeQuaternion().setFromEuler(new ThreeEuler(
     degToRad(x),
     degToRad(y),
     degToRad(z),
@@ -1117,26 +1146,26 @@ const alignBoneTowardWorldPoint = (bone, childBone, targetWorldPosition = null) 
   bone.parent?.updateMatrixWorld?.(true);
   bone.updateMatrixWorld?.(true);
   childBone.updateMatrixWorld?.(true);
-  const boneWorldPosition = bone.getWorldPosition(new THREE.Vector3());
-  const childWorldPosition = childBone.getWorldPosition(new THREE.Vector3());
+  const boneWorldPosition = bone.getWorldPosition(new ThreeVector3());
+  const childWorldPosition = childBone.getWorldPosition(new ThreeVector3());
   const currentDirection = childWorldPosition.sub(boneWorldPosition).normalize();
   const desiredDirection = targetWorldPosition.clone().sub(boneWorldPosition).normalize();
   if (currentDirection.lengthSq() < 0.0001 || desiredDirection.lengthSq() < 0.0001) return;
-  const currentWorldQuaternion = bone.getWorldQuaternion(new THREE.Quaternion());
+  const currentWorldQuaternion = bone.getWorldQuaternion(new ThreeQuaternion());
   const parentWorldQuaternion = bone.parent
-    ? bone.parent.getWorldQuaternion(new THREE.Quaternion())
-    : new THREE.Quaternion();
-  const alignQuaternion = new THREE.Quaternion().setFromUnitVectors(currentDirection, desiredDirection);
+    ? bone.parent.getWorldQuaternion(new ThreeQuaternion())
+    : new ThreeQuaternion();
+  const alignQuaternion = new ThreeQuaternion().setFromUnitVectors(currentDirection, desiredDirection);
   const nextWorldQuaternion = alignQuaternion.multiply(currentWorldQuaternion);
   bone.quaternion.copy(parentWorldQuaternion.invert().multiply(nextWorldQuaternion));
   bone.updateMatrixWorld(true);
 };
 
 const getCharacterPelvisOffset = (object, pelvisBone) => {
-  if (!object || !pelvisBone) return new THREE.Vector3();
+  if (!object || !pelvisBone) return new ThreeVector3();
   object.updateMatrixWorld(true);
-  const rootPosition = object.getWorldPosition(new THREE.Vector3());
-  const pelvisPosition = pelvisBone.getWorldPosition(new THREE.Vector3());
+  const rootPosition = object.getWorldPosition(new ThreeVector3());
+  const pelvisPosition = pelvisBone.getWorldPosition(new ThreeVector3());
   return pelvisPosition.sub(rootPosition);
 };
 
@@ -1148,14 +1177,14 @@ const getCharacterGroundMinY = (ctx) => {
 
   if (ctx.characterObject) {
     ctx.characterObject.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(ctx.characterObject);
+    const box = new ThreeBox3().setFromObject(ctx.characterObject);
     if (Number.isFinite(box.min.y)) minY = Math.min(minY, box.min.y);
   }
 
   Object.values(ctx.characterBones || {}).forEach((bone) => {
     if (!bone) return;
     bone.updateMatrixWorld?.(true);
-    minY = Math.min(minY, bone.getWorldPosition(new THREE.Vector3()).y);
+    minY = Math.min(minY, bone.getWorldPosition(new ThreeVector3()).y);
   });
 
   return minY;
@@ -1196,7 +1225,7 @@ const applyPoseToCharacter = (ctx, currentPose, rig) => {
   const forwardCurl = Math.max(0, bodyCurl);
   const backwardCurl = Math.max(0, -bodyCurl);
   const meshCurl = -(forwardCurl * 0.95) + (backwardCurl * 0.42);
-  ctx.characterAnchor.position.copy(rig.hip).add(new THREE.Vector3(0, -0.02, 0));
+  ctx.characterAnchor.position.copy(rig.hip).add(new ThreeVector3(0, -0.02, 0));
   ctx.characterAnchor.rotation.set(degToRad(meshCurl * 0.08), degToRad(bodyYaw), degToRad(-bodyTilt), 'XYZ');
 
   resetCharacterBones(ctx.characterBones);
@@ -1239,7 +1268,7 @@ const applyPoseToCharacter = (ctx, currentPose, rig) => {
 };
 
 const createCameraControls = () => ({
-  target: new THREE.Vector3(0, 0.92, 0),
+  target: new ThreeVector3(0, 0.92, 0),
   radius: 4.7,
   yaw: -0.08,
   pitch: 0.1,
@@ -1247,7 +1276,7 @@ const createCameraControls = () => ({
 
 const updateCameraFromControls = (camera, controls) => {
   if (!camera || !controls) return;
-  const pitch = THREE.MathUtils.clamp(controls.pitch, -0.45, 0.78);
+  const pitch = ThreeMathUtils.clamp(controls.pitch, -0.45, 0.78);
   controls.pitch = pitch;
   const horizontalRadius = Math.cos(pitch) * controls.radius;
   camera.position.set(
@@ -1270,10 +1299,10 @@ const orbitCamera = (ctx, dx = 0, dy = 0) => {
 const panCamera = (ctx, dx = 0, dy = 0) => {
   if (!ctx?.cameraControls || !ctx.camera) return;
   const distanceScale = ctx.cameraControls.radius * 0.0019;
-  const direction = new THREE.Vector3();
+  const direction = new ThreeVector3();
   ctx.camera.getWorldDirection(direction);
-  const right = new THREE.Vector3().crossVectors(direction, ctx.camera.up).normalize();
-  const up = new THREE.Vector3().crossVectors(right, direction).normalize();
+  const right = new ThreeVector3().crossVectors(direction, ctx.camera.up).normalize();
+  const up = new ThreeVector3().crossVectors(right, direction).normalize();
   ctx.cameraControls.target
     .addScaledVector(right, -dx * distanceScale)
     .addScaledVector(up, dy * distanceScale);
@@ -1310,60 +1339,60 @@ export default function StuntCharacter3DPreview({
     const container = containerRef.current;
     if (!container) return undefined;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = new ThreeWebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.outputColorSpace = ThreeSRGBColorSpace;
     renderer.shadowMap.enabled = true;
     renderer.domElement.className = 'stunt-3d-canvas';
     container.appendChild(renderer.domElement);
 
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x07111f);
-    const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 20);
+    const scene = new ThreeScene();
+    scene.background = new ThreeColor(0x07111f);
+    const camera = new ThreePerspectiveCamera(38, 1, 0.1, 20);
     const cameraControls = createCameraControls();
     updateCameraFromControls(camera, cameraControls);
 
-    const ambient = new THREE.HemisphereLight(0xffffff, 0x172033, 1.18);
+    const ambient = new ThreeHemisphereLight(0xffffff, 0x172033, 1.18);
     scene.add(ambient);
-    const keyLight = new THREE.DirectionalLight(0xfff7ed, 2.35);
+    const keyLight = new ThreeDirectionalLight(0xfff7ed, 2.35);
     keyLight.position.set(2.3, 4, 3.2);
     keyLight.castShadow = true;
     scene.add(keyLight);
-    const rimLight = new THREE.DirectionalLight(0xbfdbfe, 0.3);
+    const rimLight = new ThreeDirectionalLight(0xbfdbfe, 0.3);
     rimLight.position.set(-3.2, 2.2, -2.6);
     scene.add(rimLight);
 
-    const grid = new THREE.GridHelper(4.8, 16, 0x38bdf8, 0x1e293b);
+    const grid = new ThreeGridHelper(4.8, 16, 0x38bdf8, 0x1e293b);
     grid.position.y = STUNT_GROUND_Y;
     scene.add(grid);
-    const ground = new THREE.Mesh(
-      new THREE.CircleGeometry(2.35, 48),
-      new THREE.MeshBasicMaterial({ color: 0x0f172a, transparent: true, opacity: 0.64 })
+    const ground = new ThreeMesh(
+      new ThreeCircleGeometry(2.35, 48),
+      new ThreeMeshBasicMaterial({ color: 0x0f172a, transparent: true, opacity: 0.64 })
     );
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = STUNT_GROUND_Y - 0.006;
     scene.add(ground);
 
-    const model = new THREE.Group();
+    const model = new ThreeGroup();
     model.rotation.y = -0.38;
     scene.add(model);
 
-    const characterAnchor = new THREE.Group();
+    const characterAnchor = new ThreeGroup();
     characterAnchor.name = 'stunt-fbx-character-anchor';
     model.add(characterAnchor);
 
-    const rigMarkerRoot = new THREE.Group();
+    const rigMarkerRoot = new ThreeGroup();
     rigMarkerRoot.name = 'StuntCharacterRigMarkers';
     model.add(rigMarkerRoot);
 
-    const pathLine = new THREE.Line(
-      new THREE.BufferGeometry(),
-      new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.72 })
+    const pathLine = new ThreeLine(
+      new ThreeBufferGeometry(),
+      new ThreeLineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.72 })
     );
     pathLine.position.z = -0.5;
     scene.add(pathLine);
 
-    const pointer = new THREE.Vector2();
+    const pointer = new ThreeVector2();
     const dragState = {
       mode: '',
       pointId: '',
@@ -1432,7 +1461,7 @@ export default function StuntCharacter3DPreview({
       const { rect } = getPointerCanvasPosition(event);
       pointer.x = ((event.clientX - rect.left) / Math.max(1, rect.width)) * 2 - 1;
       pointer.y = -(((event.clientY - rect.top) / Math.max(1, rect.height)) * 2 - 1);
-      return new THREE.Vector3(pointer.x, pointer.y, screenDepth).unproject(ctx.camera);
+      return new ThreeVector3(pointer.x, pointer.y, screenDepth).unproject(ctx.camera);
     };
 
     const setActiveMarkerPointerPosition = (event) => {
@@ -1477,7 +1506,7 @@ export default function StuntCharacter3DPreview({
           dragState.startPose = { ...poseRef.current };
           ctxRef.current.activeRigMarkerId = hit.pointId;
           const hitObject = ctxRef.current.rigMarkers.get(hit.pointId);
-          const hitWorldPosition = hitObject?.getWorldPosition?.(new THREE.Vector3());
+          const hitWorldPosition = hitObject?.getWorldPosition?.(new ThreeVector3());
           dragState.screenDepth = hitWorldPosition ? hitWorldPosition.project(ctxRef.current.camera).z : 0;
           setActiveMarkerPointerPosition(event);
           renderer.domElement.classList.add('dragging');
@@ -1699,9 +1728,9 @@ export default function StuntCharacter3DPreview({
     syncStuntRigMarkers(ctx);
 
     const points = keyframes
-      .map((keyframe) => poseToRig(keyframe).hip.clone().add(new THREE.Vector3(0, 0.02, -0.48)));
+      .map((keyframe) => poseToRig(keyframe).hip.clone().add(new ThreeVector3(0, 0.02, -0.48)));
     ctx.pathLine.geometry.dispose();
-    ctx.pathLine.geometry = new THREE.BufferGeometry().setFromPoints(points.length > 1 ? points : []);
+    ctx.pathLine.geometry = new ThreeBufferGeometry().setFromPoints(points.length > 1 ? points : []);
     ctx.renderer.render(ctx.scene, ctx.camera);
   }, [pose, keyframeSignature, keyframes]);
 

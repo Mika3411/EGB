@@ -1,5 +1,35 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import * as THREE from 'three';
+import {
+  ACESFilmicToneMapping as ThreeACESFilmicToneMapping,
+  AmbientLight as ThreeAmbientLight,
+  Box3 as ThreeBox3,
+  BufferGeometry as ThreeBufferGeometry,
+  CanvasTexture as ThreeCanvasTexture,
+  CircleGeometry as ThreeCircleGeometry,
+  Color as ThreeColor,
+  DirectionalLight as ThreeDirectionalLight,
+  Fog as ThreeFog,
+  GridHelper as ThreeGridHelper,
+  Group as ThreeGroup,
+  HemisphereLight as ThreeHemisphereLight,
+  Line as ThreeLine,
+  LineBasicMaterial as ThreeLineBasicMaterial,
+  MathUtils as ThreeMathUtils,
+  Mesh as ThreeMesh,
+  MeshStandardMaterial as ThreeMeshStandardMaterial,
+  PCFShadowMap as ThreePCFShadowMap,
+  PMREMGenerator as ThreePMREMGenerator,
+  PerspectiveCamera as ThreePerspectiveCamera,
+  Raycaster as ThreeRaycaster,
+  RepeatWrapping as ThreeRepeatWrapping,
+  SRGBColorSpace as ThreeSRGBColorSpace,
+  Scene as ThreeScene,
+  Sprite as ThreeSprite,
+  SpriteMaterial as ThreeSpriteMaterial,
+  Vector2 as ThreeVector2,
+  Vector3 as ThreeVector3,
+  WebGLRenderer as ThreeWebGLRenderer,
+} from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { attachClickTargetCameraControls } from '../three/clickTargetCameraControls.js';
@@ -25,13 +55,13 @@ import {
   applyObjectAxisScaleRatios,
   fitObjectToHeight,
   getRuntimeModelPrepareOptions,
-  hasThreeModelResources,
   loadThreeModelFromSource,
   playGltfAnimations,
   prepareGltfModel,
   resetObjectBaseTransform,
   updateGltfModelMaterialAppearance,
 } from '../../utils/threeGltfUtils';
+import { hasThreeModelResources } from '../../utils/threeModelUtils.js';
 import {
   attachPreparedEquipmentToSocket,
   addEquippedArmorToActorModel,
@@ -65,7 +95,7 @@ import {
 const applyPreviewLighting = (model, renderer, lights) => {
   if (!renderer || !lights) return;
   const intensity = getPreviewLightIntensity(model);
-  const orientation = THREE.MathUtils.degToRad(getPreviewLightOrientation(model));
+  const orientation = ThreeMathUtils.degToRad(getPreviewLightOrientation(model));
   const keyRadius = 6.2;
   const fillRadius = 6.6;
   const rimRadius = 5.4;
@@ -411,10 +441,10 @@ const CHARACTER_CAMERA_ZOOM_DRAG_SENSITIVITY = 0.018;
 const CHARACTER_CAMERA_ZOOM_MIN_DISTANCE = 0.02;
 const CHARACTER_CAMERA_ZOOM_MAX_DISTANCE = 100000;
 const CHARACTER_CAMERA_VIEW_DIRECTIONS = {
-  north: new THREE.Vector3(0, 0, -1),
-  east: new THREE.Vector3(1, 0, 0),
-  south: new THREE.Vector3(0, 0, 1),
-  west: new THREE.Vector3(-1, 0, 0),
+  north: new ThreeVector3(0, 0, -1),
+  east: new ThreeVector3(1, 0, 0),
+  south: new ThreeVector3(0, 0, 1),
+  west: new ThreeVector3(-1, 0, 0),
 };
 
 const createCharacterRigMarkerTexture = (marker = {}) => {
@@ -451,8 +481,8 @@ const createCharacterRigMarkerTexture = (marker = {}) => {
     context.textBaseline = 'middle';
     context.fillText(marker.shortLabel || '?', 64, 66);
   }
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
+  const texture = new ThreeCanvasTexture(canvas);
+  texture.colorSpace = ThreeSRGBColorSpace;
   texture.needsUpdate = true;
   return texture;
 };
@@ -476,14 +506,14 @@ const updateCharacterRigMarkerTexture = (markerObject = null, markerConfig = {})
 
 const createCharacterRigMarker = (marker = {}) => {
   const texture = createCharacterRigMarkerTexture(marker);
-  const material = new THREE.SpriteMaterial({
+  const material = new ThreeSpriteMaterial({
     map: texture,
     transparent: true,
     depthTest: false,
     depthWrite: false,
   });
   material.userData.disposeTextures = true;
-  const sprite = new THREE.Sprite(material);
+  const sprite = new ThreeSprite(material);
   sprite.name = `CharacterRigMarker-${marker.id || 'point'}`;
   sprite.renderOrder = 55;
   sprite.userData.characterRigMarker = true;
@@ -494,18 +524,18 @@ const createCharacterRigMarker = (marker = {}) => {
 
 const createCharacterRigMarkerLine = (marker = {}) => {
   const colors = CHARACTER_RIG_MARKER_COLORS[marker.socket] || CHARACTER_RIG_MARKER_COLORS.weapon;
-  const geometry = new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(),
-    new THREE.Vector3(),
+  const geometry = new ThreeBufferGeometry().setFromPoints([
+    new ThreeVector3(),
+    new ThreeVector3(),
   ]);
-  const material = new THREE.LineBasicMaterial({
+  const material = new ThreeLineBasicMaterial({
     color: colors.line || colors.fill,
     transparent: true,
     opacity: 0.58,
     depthTest: false,
     depthWrite: false,
   });
-  const line = new THREE.Line(geometry, material);
+  const line = new ThreeLine(geometry, material);
   line.name = `CharacterRigLine-${marker.id || 'point'}`;
   line.renderOrder = 50;
   line.userData.characterRigLine = true;
@@ -540,8 +570,8 @@ const normalizePreviewCharacterRigMarkers = (markers = []) => (
 );
 
 const getCharacterPreviewBodyBounds = (characterObject = null) => {
-  const bounds = new THREE.Box3();
-  const childBounds = new THREE.Box3();
+  const bounds = new ThreeBox3();
+  const childBounds = new ThreeBox3();
   const skipped = new Set();
   let hasBounds = false;
   characterObject?.updateMatrixWorld?.(true);
@@ -561,7 +591,7 @@ const getCharacterPreviewBodyBounds = (characterObject = null) => {
     else bounds.union(childBounds);
     hasBounds = true;
   });
-  return hasBounds ? bounds : new THREE.Box3().setFromObject(characterObject);
+  return hasBounds ? bounds : new ThreeBox3().setFromObject(characterObject);
 };
 
 const getCharacterRigMarkerWorldPosition = (
@@ -579,7 +609,7 @@ const getCharacterRigMarkerWorldPosition = (
 const getCharacterRigPointFromWorld = (characterObject = null, worldPoint = null, boundsOverride = null) => {
   if (!characterObject || !worldPoint) return null;
   const bounds = boundsOverride || getCharacterPreviewBodyBounds(characterObject);
-  const size = bounds.getSize(new THREE.Vector3());
+  const size = bounds.getSize(new ThreeVector3());
   if (
     !Number.isFinite(size.x)
     || !Number.isFinite(size.y)
@@ -610,7 +640,7 @@ const applyCharacterCameraZoomDelta = (camera = null, controls = null, deltaY = 
   if (direction.lengthSq() < 0.000001) direction.set(2.8, 1, 3.5);
   direction.normalize();
   const sensitivity = Math.max(0.008, currentDistance * CHARACTER_CAMERA_ZOOM_DRAG_SENSITIVITY);
-  const nextDistance = THREE.MathUtils.clamp(
+  const nextDistance = ThreeMathUtils.clamp(
     currentDistance + (Number(deltaY) || 0) * sensitivity,
     CHARACTER_CAMERA_ZOOM_MIN_DISTANCE,
     CHARACTER_CAMERA_ZOOM_MAX_DISTANCE,
@@ -628,11 +658,11 @@ const applyCharacterCameraView = (camera = null, controls = null, view = 'north'
     0.001,
     Number(distance) || camera.position.distanceTo(target) || 4.2,
   );
-  const verticalOffset = THREE.MathUtils.clamp(currentDistance * 0.15, 0.28, 0.62);
+  const verticalOffset = ThreeMathUtils.clamp(currentDistance * 0.15, 0.28, 0.62);
   const planarDistance = Math.sqrt(Math.max(0.001, (currentDistance * currentDistance) - (verticalOffset * verticalOffset)));
   camera.position.copy(target)
     .addScaledVector(viewDirection, planarDistance)
-    .add(new THREE.Vector3(0, verticalOffset, 0));
+    .add(new ThreeVector3(0, verticalOffset, 0));
   camera.lookAt(target);
   controls.update();
 };
@@ -645,7 +675,7 @@ const applyInitialCharacterCameraZoom = (camera = null, controls = null, zoom = 
   if (direction.lengthSq() < 0.000001 || normalizedZoom <= 1) return;
   camera.userData.characterPreviewBaseDistance = baseDistance;
   direction.normalize();
-  const nextDistance = THREE.MathUtils.clamp(
+  const nextDistance = ThreeMathUtils.clamp(
     baseDistance / normalizedZoom,
     CHARACTER_CAMERA_ZOOM_MIN_DISTANCE,
     CHARACTER_CAMERA_ZOOM_MAX_DISTANCE,
@@ -924,7 +954,7 @@ export default function Character3DPreview({
         const distance = Math.max(0.1, camera.position.distanceTo(marker.position));
         const markerSize = Number.isFinite(Number(markerConfig.size)) ? Number(markerConfig.size) : 1;
         const selectedScale = markerConfig.selected ? 1.18 : 1;
-        marker.scale.setScalar(THREE.MathUtils.clamp(distance * 0.065 * markerSize * selectedScale, 0.045 * markerSize, 0.28 * markerSize));
+        marker.scale.setScalar(ThreeMathUtils.clamp(distance * 0.065 * markerSize * selectedScale, 0.045 * markerSize, 0.28 * markerSize));
       }
     });
 
@@ -963,35 +993,35 @@ export default function Character3DPreview({
 
     let renderer;
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'default' });
+      renderer = new ThreeWebGLRenderer({ antialias: true, alpha: true, powerPreference: 'default' });
     } catch {
       setWebglError('Apercu 3D indisponible.');
       return undefined;
     }
 
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.outputColorSpace = ThreeSRGBColorSpace;
+    renderer.toneMapping = ThreeACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.08;
     renderer.setPixelRatio(window.devicePixelRatio || 1);
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFShadowMap;
+    renderer.shadowMap.type = ThreePCFShadowMap;
     renderer.domElement.className = 'character3d-canvas';
     renderer.domElement.setAttribute('aria-label', 'Apercu personnage 3D');
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
     setWebglError('');
 
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#07111e');
-    scene.fog = new THREE.Fog('#07111e', 7, 16);
+    const scene = new ThreeScene();
+    scene.background = new ThreeColor('#07111e');
+    scene.fog = new ThreeFog('#07111e', 7, 16);
     sceneRef.current = scene;
-    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    const pmremGenerator = new ThreePMREMGenerator(renderer);
     const roomEnvironment = new RoomEnvironment();
     const environmentMap = pmremGenerator.fromScene(roomEnvironment, 0.04).texture;
     roomEnvironment.dispose?.();
     scene.environment = environmentMap;
 
-    const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 60);
+    const camera = new ThreePerspectiveCamera(48, 1, 0.1, 60);
     camera.position.set(0, 1.72, -4.25);
     cameraRef.current = camera;
 
@@ -1050,9 +1080,9 @@ export default function Character3DPreview({
     controls.addEventListener?.('change', handleControlsChange);
     reportCameraZoom();
 
-    const hemi = new THREE.HemisphereLight('#fff7ea', '#1f1814', 1.02);
+    const hemi = new ThreeHemisphereLight('#fff7ea', '#1f1814', 1.02);
     scene.add(hemi);
-    const key = new THREE.DirectionalLight('#fff6e6', 2.25);
+    const key = new ThreeDirectionalLight('#fff6e6', 2.25);
     key.position.set(-3.8, 5.8, 4.8);
     key.castShadow = true;
     key.shadow.camera.near = 0.5;
@@ -1062,18 +1092,18 @@ export default function Character3DPreview({
     key.shadow.camera.top = 5;
     key.shadow.camera.bottom = -5;
     scene.add(key);
-    const frontFill = new THREE.DirectionalLight('#f7f3ec', 0.58);
+    const frontFill = new ThreeDirectionalLight('#f7f3ec', 0.58);
     frontFill.position.set(3.2, 2.4, 5.4);
     scene.add(frontFill);
-    const rim = new THREE.DirectionalLight('#ffe0bd', 0.18);
+    const rim = new ThreeDirectionalLight('#ffe0bd', 0.18);
     rim.position.set(3.4, 3.8, -4.2);
     scene.add(rim);
-    const ambient = new THREE.AmbientLight('#fff3e0', 0.28);
+    const ambient = new ThreeAmbientLight('#fff3e0', 0.28);
     scene.add(ambient);
     lightsRef.current = { hemi, key, frontFill, rim, ambient };
     applyPreviewLighting(model, renderer, lightsRef.current);
 
-    const floorTexture = new THREE.CanvasTexture(createPreviewFloorCanvas({
+    const floorTexture = new ThreeCanvasTexture(createPreviewFloorCanvas({
       backgroundColor: '#0f1b2d',
       oddColor: '#172741',
       evenColor: '#101d31',
@@ -1083,27 +1113,27 @@ export default function Character3DPreview({
       markerShape: 'circle',
       markerRadius: 132,
     }));
-    floorTexture.wrapS = THREE.RepeatWrapping;
-    floorTexture.wrapT = THREE.RepeatWrapping;
+    floorTexture.wrapS = ThreeRepeatWrapping;
+    floorTexture.wrapT = ThreeRepeatWrapping;
     floorTexture.repeat.set(4, 4);
-    floorTexture.colorSpace = THREE.SRGBColorSpace;
-    const floorMaterial = new THREE.MeshStandardMaterial({ map: floorTexture, roughness: 0.88, metalness: 0 });
+    floorTexture.colorSpace = ThreeSRGBColorSpace;
+    const floorMaterial = new ThreeMeshStandardMaterial({ map: floorTexture, roughness: 0.88, metalness: 0 });
     floorMaterial.userData.disposeTextures = true;
-    const floor = new THREE.Mesh(new THREE.CircleGeometry(2.35, 72), floorMaterial);
+    const floor = new ThreeMesh(new ThreeCircleGeometry(2.35, 72), floorMaterial);
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     scene.add(floor);
 
-    const grid = new THREE.GridHelper(4.8, 16, '#67e8f9', '#263c5c');
+    const grid = new ThreeGridHelper(4.8, 16, '#67e8f9', '#263c5c');
     grid.material.transparent = true;
     grid.material.opacity = 0.28;
     grid.position.y = 0.018;
     scene.add(grid);
 
-    const characterRoot = new THREE.Group();
+    const characterRoot = new ThreeGroup();
     characterRootRef.current = characterRoot;
     scene.add(characterRoot);
-    const rigMarkerRoot = new THREE.Group();
+    const rigMarkerRoot = new ThreeGroup();
     rigMarkerRoot.name = 'CharacterRigMarkers';
     rigMarkerRootRef.current = rigMarkerRoot;
     scene.add(rigMarkerRoot);
@@ -1134,9 +1164,9 @@ export default function Character3DPreview({
     };
     render();
 
-    const raycaster = new THREE.Raycaster();
-    const pointer = new THREE.Vector2();
-    const screenWorldPoint = new THREE.Vector3();
+    const raycaster = new ThreeRaycaster();
+    const pointer = new ThreeVector2();
+    const screenWorldPoint = new ThreeVector3();
 
     const updatePointer = (event) => {
       const rect = renderer.domElement.getBoundingClientRect();
@@ -1214,7 +1244,7 @@ export default function Character3DPreview({
       if (!pointId) return;
       latestOnCharacterRigMarkerSelectRef.current?.(pointId);
       const screenDepth = marker.position.clone().project(camera).z;
-      const startWorldPosition = getPointerWorldPositionAtDepth(event, screenDepth, new THREE.Vector3())?.clone() || marker.position.clone();
+      const startWorldPosition = getPointerWorldPositionAtDepth(event, screenDepth, new ThreeVector3())?.clone() || marker.position.clone();
       marker.position.copy(startWorldPosition);
       rigDragRef.current = {
         pointId,
@@ -1240,7 +1270,7 @@ export default function Character3DPreview({
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation?.();
-      const nextWorldPosition = getPointerWorldPositionAtDepth(event, drag.screenDepth, new THREE.Vector3())?.clone();
+      const nextWorldPosition = getPointerWorldPositionAtDepth(event, drag.screenDepth, new ThreeVector3())?.clone();
       if (!nextWorldPosition) return;
       drag.currentWorldPosition = nextWorldPosition;
       const marker = rigMarkersRef.current.get(drag.pointId);
@@ -1385,7 +1415,7 @@ export default function Character3DPreview({
         return undefined;
       }
       setPreviewStatus('Chargement du modele 3D...');
-      const loadingRoot = new THREE.Group();
+      const loadingRoot = new ThreeGroup();
       characterRoot.add(loadingRoot);
       loadThreeCharacter(sources, model, (object, animationClips) => {
         if (cancelled || characterRoot.userData?.disposed) {

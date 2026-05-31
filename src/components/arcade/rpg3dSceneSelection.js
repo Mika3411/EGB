@@ -1,4 +1,7 @@
-import * as THREE from 'three';
+import {
+  BoxGeometry as ThreeBoxGeometry,
+  Group as ThreeGroup,
+} from 'three';
 
 import {
   getPropHeight,
@@ -73,7 +76,7 @@ const getFlatTileSelectionBounds = (config = {}, props = []) => {
 const addTileSelectionDuplicateHandles = (group, config, props = []) => {
   const bounds = getFlatTileSelectionBounds(config, props);
   if (!bounds) return;
-  const handleGroup = new THREE.Group();
+  const handleGroup = new ThreeGroup();
   handleGroup.position.set((bounds.minX + bounds.maxX) / 2, 0, (bounds.minZ + bounds.maxZ) / 2);
   const width = Math.max(0.24, bounds.maxX - bounds.minX);
   const depth = Math.max(0.24, bounds.maxZ - bounds.minZ);
@@ -85,7 +88,7 @@ const addTileSelectionDuplicateHandles = (group, config, props = []) => {
 
 const addBoxSelectionOverlay = (group, config, entity, centerX, centerY, width, depth, height, lift = 0) => {
   const overlay = createSelectionOverlayGroup(entity);
-  const geometry = new THREE.BoxGeometry(
+  const geometry = new ThreeBoxGeometry(
     Math.max(0.2, width * WORLD_SCALE),
     Math.max(0.05, height),
     Math.max(0.2, depth * WORLD_SCALE),
@@ -107,14 +110,14 @@ const addPropSelectionOverlay = (group, config, prop, options = {}) => {
 
   if (isFlatTileLikeProp(prop)) {
     const tileSize = getFlatTileSceneDimensions(prop, width, depth);
-    const outline = createSelectionEdges(new THREE.BoxGeometry(tileSize.width, 0.05, tileSize.depth));
+    const outline = createSelectionEdges(new ThreeBoxGeometry(tileSize.width, 0.05, tileSize.depth));
     outline.position.y = 0.08;
     overlay.add(outline);
     if (options.showTileDuplicateHandles !== false) {
       addTileDuplicateHandles(overlay, prop, tileSize.width, tileSize.depth);
     }
   } else if (['box', 'house', 'glb'].includes(getPropRenderMode(prop))) {
-    const edges = createSelectionEdges(new THREE.BoxGeometry(width, propHeight, depth));
+    const edges = createSelectionEdges(new ThreeBoxGeometry(width, propHeight, depth));
     edges.position.y = propHeight / 2;
     overlay.add(edges);
   } else {

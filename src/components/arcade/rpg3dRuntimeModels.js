@@ -1,11 +1,18 @@
-import * as THREE from 'three';
+import {
+  AnimationMixer as ThreeAnimationMixer,
+  LoopOnce as ThreeLoopOnce,
+  LoopRepeat as ThreeLoopRepeat,
+  RepeatWrapping as ThreeRepeatWrapping,
+  SRGBColorSpace as ThreeSRGBColorSpace,
+  TextureLoader as ThreeTextureLoader,
+} from 'three';
 import {
   getRuntimeModelPrepareOptions,
-  hasThreeModelResources,
   loadThreeModelFromSource,
   prepareImportedAnimationClipForObject,
   prepareGltfModel,
 } from '../../utils/threeGltfUtils';
+import { hasThreeModelResources } from '../../utils/threeModelUtils.js';
 import { getAnimationBaseSlotId } from '../../utils/rpg3dModelImportCore.js';
 
 const LOCAL_FBX_RUNTIME_ANIMATION_MAX_BYTES = 192 * 1024 * 1024;
@@ -71,12 +78,12 @@ const createCachedTextureGetter = (cache) => (src, repeat = false) => {
   const cacheKey = `${repeat ? 'repeat' : 'single'}:${src}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
-  const texture = new THREE.TextureLoader().load(src);
-  texture.colorSpace = THREE.SRGBColorSpace;
+  const texture = new ThreeTextureLoader().load(src);
+  texture.colorSpace = ThreeSRGBColorSpace;
   texture.anisotropy = 4;
   if (repeat) {
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
+    texture.wrapS = ThreeRepeatWrapping;
+    texture.wrapT = ThreeRepeatWrapping;
     texture.repeat.set(2, 2);
   }
   cache.set(cacheKey, texture);
@@ -344,7 +351,7 @@ const configureActorAnimationAction = (action, options = {}) => {
   const loopOnce = Boolean(options.loopOnce);
   action.enabled = true;
   action.clampWhenFinished = loopOnce;
-  action.setLoop(loopOnce ? THREE.LoopOnce : THREE.LoopRepeat, loopOnce ? 1 : Infinity);
+  action.setLoop(loopOnce ? ThreeLoopOnce : ThreeLoopRepeat, loopOnce ? 1 : Infinity);
 };
 
 const getActorAnimationEntry = (controller, animationState = 'idle') => {
@@ -396,7 +403,7 @@ const setActorAnimationState = (controller, animationState = 'idle', options = {
 
 const createActorAnimationController = (object, template, initialState = 'idle', timeOffset = 0) => {
   if (!object || !template) return null;
-  const mixer = new THREE.AnimationMixer(object);
+  const mixer = new ThreeAnimationMixer(object);
   const actions = {};
 
   ACTOR_ANIMATION_STATES.forEach((state) => {

@@ -1,4 +1,25 @@
-import * as THREE from 'three';
+import {
+  BoxGeometry as ThreeBoxGeometry,
+  BufferGeometry as ThreeBufferGeometry,
+  DataTexture as ThreeDataTexture,
+  DoubleSide as ThreeDoubleSide,
+  EdgesGeometry as ThreeEdgesGeometry,
+  Float32BufferAttribute as ThreeFloat32BufferAttribute,
+  Group as ThreeGroup,
+  LineBasicMaterial as ThreeLineBasicMaterial,
+  LineLoop as ThreeLineLoop,
+  LineSegments as ThreeLineSegments,
+  LinearFilter as ThreeLinearFilter,
+  Mesh as ThreeMesh,
+  MeshBasicMaterial as ThreeMeshBasicMaterial,
+  NearestFilter as ThreeNearestFilter,
+  Points as ThreePoints,
+  PointsMaterial as ThreePointsMaterial,
+  ShapeUtils as ThreeShapeUtils,
+  SphereGeometry as ThreeSphereGeometry,
+  Vector2 as ThreeVector2,
+  Vector3 as ThreeVector3,
+} from 'three';
 
 import {
   clamp,
@@ -22,9 +43,9 @@ import {
   WORLD_SCALE,
 } from './rpg3dSceneShared.js';
 
-const createInvisibleActionZoneHitArea = (geometry) => new THREE.Mesh(
+const createInvisibleActionZoneHitArea = (geometry) => new ThreeMesh(
   geometry,
-  new THREE.MeshBasicMaterial({
+  new ThreeMeshBasicMaterial({
     transparent: true,
     opacity: 0,
     depthWrite: false,
@@ -57,10 +78,10 @@ const getActionZoneVertexHandleTexture = () => {
       data[offset + 3] = color[3];
     }
   }
-  actionZoneVertexHandleTexture = new THREE.DataTexture(data, size, size);
+  actionZoneVertexHandleTexture = new ThreeDataTexture(data, size, size);
   actionZoneVertexHandleTexture.needsUpdate = true;
-  actionZoneVertexHandleTexture.magFilter = THREE.NearestFilter;
-  actionZoneVertexHandleTexture.minFilter = THREE.LinearFilter;
+  actionZoneVertexHandleTexture.magFilter = ThreeNearestFilter;
+  actionZoneVertexHandleTexture.minFilter = ThreeLinearFilter;
   return actionZoneVertexHandleTexture;
 };
 
@@ -75,13 +96,13 @@ const getActionZonePointSceneHeight = (point = {}, fallbackWorldHeight = 0) => (
 );
 
 const createActionZoneVertexHandle = (zoneId, vertexIndex, localPoint, vertexLayer = 'bottom') => {
-  const handle = new THREE.Group();
+  const handle = new ThreeGroup();
   handle.position.set(localPoint.x, localPoint.y, localPoint.z);
-  const pointGeometry = new THREE.BufferGeometry();
-  pointGeometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0], 3));
-  const marker = new THREE.Points(
+  const pointGeometry = new ThreeBufferGeometry();
+  pointGeometry.setAttribute('position', new ThreeFloat32BufferAttribute([0, 0, 0], 3));
+  const marker = new ThreePoints(
     pointGeometry,
-    new THREE.PointsMaterial({
+    new ThreePointsMaterial({
       size: 10,
       sizeAttenuation: false,
       map: getActionZoneVertexHandleTexture(),
@@ -94,7 +115,7 @@ const createActionZoneVertexHandle = (zoneId, vertexIndex, localPoint, vertexLay
   marker.renderOrder = 997;
   marker.userData.rpg3dActionZoneVertexHandle = true;
   handle.add(marker);
-  const hitArea = createInvisibleActionZoneHitArea(new THREE.SphereGeometry(ACTION_ZONE_VERTEX_HIT_RADIUS, 8, 6));
+  const hitArea = createInvisibleActionZoneHitArea(new ThreeSphereGeometry(ACTION_ZONE_VERTEX_HIT_RADIUS, 8, 6));
   handle.add(hitArea);
   assignEntity(handle, { type: 'actionZoneVertex', id: zoneId, vertexIndex, vertexLayer });
   return handle;
@@ -106,14 +127,14 @@ const createActionZoneEdgeInsertHandle = (zoneId, edgeIndex, startPoint, endPoin
   const deltaY = endPoint.y - startPoint.y;
   const length = Math.hypot(deltaX, deltaZ);
   if (length <= 0.001) return null;
-  const handle = new THREE.Group();
+  const handle = new ThreeGroup();
   handle.position.set(
     startPoint.x + deltaX / 2,
     startPoint.y + deltaY / 2 + 0.08,
     startPoint.z + deltaZ / 2,
   );
   handle.rotation.y = -Math.atan2(deltaZ, deltaX);
-  const hitArea = createInvisibleActionZoneHitArea(new THREE.BoxGeometry(length, 0.12, 0.3));
+  const hitArea = createInvisibleActionZoneHitArea(new ThreeBoxGeometry(length, 0.12, 0.3));
   handle.add(hitArea);
   assignEntity(handle, { type: 'actionZoneEdge', id: zoneId, edgeIndex, vertexLayer });
   return handle;
@@ -132,8 +153,8 @@ const createActionZoneVolumeGeometry = (bottomVertices, topVertices, height, fal
   const positions = [];
   bottom.forEach((point) => positions.push(point.x, Number.isFinite(Number(point.y)) ? Number(point.y) : 0, point.z));
   top.forEach((point) => positions.push(point.x, Number.isFinite(Number(point.y)) ? Number(point.y) : height, point.z));
-  const triangles = THREE.ShapeUtils.triangulateShape(
-    bottom.map((point) => new THREE.Vector2(point.x, point.z)),
+  const triangles = ThreeShapeUtils.triangulateShape(
+    bottom.map((point) => new ThreeVector2(point.x, point.z)),
     [],
   );
   const indices = [];
@@ -146,8 +167,8 @@ const createActionZoneVolumeGeometry = (bottomVertices, topVertices, height, fal
     indices.push(index, next, next + bottom.length);
     indices.push(index, next + bottom.length, index + bottom.length);
   }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  const geometry = new ThreeBufferGeometry();
+  geometry.setAttribute('position', new ThreeFloat32BufferAttribute(positions, 3));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
@@ -260,19 +281,19 @@ const addActionZone = (group, config, zone, options = {}) => {
     y: getActionZonePointSceneHeight(point, getActionZoneModelHeight(zone)),
     z: (Number(point.y) - centerY) * WORLD_SCALE,
   }));
-  const zoneGroup = new THREE.Group();
+  const zoneGroup = new ThreeGroup();
   zoneGroup.position.copy(toScenePosition(config, centerX, centerY, 0));
   setTransformBase(zoneGroup, { width, height, depth });
 
   const geometry = createActionZoneVolumeGeometry(localVertices, localTopVertices, height, width, depth);
   geometry.computeVertexNormals();
-  const veil = new THREE.Mesh(
+  const veil = new ThreeMesh(
     geometry,
-    new THREE.MeshBasicMaterial({
+    new ThreeMeshBasicMaterial({
       color,
       transparent: true,
       opacity: playMode ? Math.min(0.34, Math.max(0.18, opacity + 0.08)) : opacity,
-      side: THREE.DoubleSide,
+      side: ThreeDoubleSide,
       depthWrite: false,
       depthTest: !playMode,
     }),
@@ -284,9 +305,9 @@ const addActionZone = (group, config, zone, options = {}) => {
   }
   zoneGroup.add(veil);
 
-  const edges = new THREE.LineSegments(
-    new THREE.EdgesGeometry(geometry),
-    new THREE.LineBasicMaterial({
+  const edges = new ThreeLineSegments(
+    new ThreeEdgesGeometry(geometry),
+    new ThreeLineBasicMaterial({
       color,
       transparent: true,
       opacity: playMode ? 1 : Math.min(1, Math.max(0.48, opacity + 0.34)),
@@ -300,12 +321,12 @@ const addActionZone = (group, config, zone, options = {}) => {
   }
   zoneGroup.add(edges);
 
-  const footprintGeometry = new THREE.BufferGeometry().setFromPoints(
-    localVertices.map((point) => new THREE.Vector3(point.x, 0, point.z)),
+  const footprintGeometry = new ThreeBufferGeometry().setFromPoints(
+    localVertices.map((point) => new ThreeVector3(point.x, 0, point.z)),
   );
-  const footprint = new THREE.LineLoop(
+  const footprint = new ThreeLineLoop(
     footprintGeometry,
-    new THREE.LineBasicMaterial({
+    new ThreeLineBasicMaterial({
       color,
       transparent: true,
       opacity: playMode ? 1 : 0.8,

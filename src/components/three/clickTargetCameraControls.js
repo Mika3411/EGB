@@ -1,7 +1,10 @@
-import * as THREE from 'three';
+import {
+  MathUtils as ThreeMathUtils,
+  Vector3 as ThreeVector3,
+} from 'three';
 
-const panUp = new THREE.Vector3();
-const panOffset = new THREE.Vector3();
+const panUp = new ThreeVector3();
+const panOffset = new ThreeVector3();
 
 const getScreenSpacePanScale = ({ camera, controls, domElement }) => {
   const rect = domElement.getBoundingClientRect();
@@ -11,8 +14,8 @@ const getScreenSpacePanScale = ({ camera, controls, domElement }) => {
   if (camera.isPerspectiveCamera) {
     const targetDistance = Math.max(0.001, camera.position.distanceTo(controls.target));
     return {
-      x: (2 * targetDistance * Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5))) / height,
-      y: (2 * targetDistance * Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5))) / height,
+      x: (2 * targetDistance * Math.tan(ThreeMathUtils.degToRad(camera.fov * 0.5))) / height,
+      y: (2 * targetDistance * Math.tan(ThreeMathUtils.degToRad(camera.fov * 0.5))) / height,
     };
   }
 
@@ -43,10 +46,10 @@ export const attachClickTargetCameraControls = ({
     pointerId: null,
     startX: 0,
     startY: 0,
-    startCamera: new THREE.Vector3(),
-    startTarget: new THREE.Vector3(),
-    right: new THREE.Vector3(),
-    up: new THREE.Vector3(),
+    startCamera: new ThreeVector3(),
+    startTarget: new ThreeVector3(),
+    right: new ThreeVector3(),
+    up: new ThreeVector3(),
     scale: { x: 0.01, y: 0.01 },
   };
 

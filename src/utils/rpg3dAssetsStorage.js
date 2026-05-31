@@ -6,7 +6,7 @@ import {
   isStorageNotFoundError,
   uploadToStorage,
 } from '../supabaseStorage';
-import { getThreeModelFormat, getThreeModelMimeType } from './threeGltfUtils.js';
+import { getThreeModelFormat, getThreeModelMimeType } from './threeModelUtils.js';
 import {
   blobUrlToFile,
   createArcadeAssetsPayload,

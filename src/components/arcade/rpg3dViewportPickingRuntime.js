@@ -1,4 +1,7 @@
-import * as THREE from 'three';
+import {
+  Plane as ThreePlane,
+  Vector3 as ThreeVector3,
+} from 'three';
 import {
   PICKUP_RADIUS,
   PLAYER_RADIUS,
@@ -82,8 +85,8 @@ export const resolveViewportPointer = ({
     : null;
   let point = null;
   if (!point) {
-    const groundPoint = new THREE.Vector3();
-    const hitGround = raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), groundPoint);
+    const groundPoint = new ThreeVector3();
+    const hitGround = raycaster.ray.intersectPlane(new ThreePlane(new ThreeVector3(0, 1, 0), 0), groundPoint);
     if (hitGround) point = fromScenePosition(config, groundPoint);
   }
   if (!point && ['actionZoneVertex', 'actionZoneEdge'].includes(entityHit?.type)) {

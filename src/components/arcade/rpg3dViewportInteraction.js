@@ -1,4 +1,13 @@
-import * as THREE from 'three';
+import {
+  Group as ThreeGroup,
+  LineBasicMaterial as ThreeLineBasicMaterial,
+  LineSegments as ThreeLineSegments,
+  Mesh as ThreeMesh,
+  MeshBasicMaterial as ThreeMeshBasicMaterial,
+  SphereGeometry as ThreeSphereGeometry,
+  Vector3 as ThreeVector3,
+  WireframeGeometry as ThreeWireframeGeometry,
+} from 'three';
 import {
   clamp,
   getActionZoneHeight,
@@ -71,13 +80,13 @@ export const getEntityRootObject = (object, entity) => {
 
 export const createModelEraserSurfacePreview = (radiusWorld, color = MODEL_ERASER_PREVIEW_COLOR) => {
   const radius = Math.max(0.025, Number(radiusWorld) || 0.025);
-  const group = new THREE.Group();
+  const group = new ThreeGroup();
   group.userData.previewRadius = radius;
   group.userData.previewColor = color;
 
-  const fill = new THREE.Mesh(
-    new THREE.SphereGeometry(radius, 24, 12),
-    new THREE.MeshBasicMaterial({
+  const fill = new ThreeMesh(
+    new ThreeSphereGeometry(radius, 24, 12),
+    new ThreeMeshBasicMaterial({
       color,
       transparent: true,
       opacity: 0.14,
@@ -88,9 +97,9 @@ export const createModelEraserSurfacePreview = (radiusWorld, color = MODEL_ERASE
   fill.renderOrder = 97;
   group.add(fill);
 
-  const wire = new THREE.LineSegments(
-    new THREE.WireframeGeometry(new THREE.SphereGeometry(radius, 16, 8)),
-    new THREE.LineBasicMaterial({
+  const wire = new ThreeLineSegments(
+    new ThreeWireframeGeometry(new ThreeSphereGeometry(radius, 16, 8)),
+    new ThreeLineBasicMaterial({
       color,
       transparent: true,
       opacity: 0.82,
@@ -146,10 +155,10 @@ export const resolveActionZoneShapeControl = (config, selected, multiSelected = 
 };
 
 export const ACTION_ZONE_VIEW_MODES = [
-  { id: 'north', label: 'N', title: 'Voir de face', direction: new THREE.Vector3(0, 0, -1) },
-  { id: 'east', label: 'E', title: 'Voir le cote droit', direction: new THREE.Vector3(1, 0, 0) },
-  { id: 'south', label: 'S', title: 'Voir de dos', direction: new THREE.Vector3(0, 0, 1) },
-  { id: 'west', label: 'O', title: 'Voir le cote gauche', direction: new THREE.Vector3(-1, 0, 0) },
+  { id: 'north', label: 'N', title: 'Voir de face', direction: new ThreeVector3(0, 0, -1) },
+  { id: 'east', label: 'E', title: 'Voir le cote droit', direction: new ThreeVector3(1, 0, 0) },
+  { id: 'south', label: 'S', title: 'Voir de dos', direction: new ThreeVector3(0, 0, 1) },
+  { id: 'west', label: 'O', title: 'Voir le cote gauche', direction: new ThreeVector3(-1, 0, 0) },
 ];
 export const ACTION_ZONE_VIEW_BY_ID = ACTION_ZONE_VIEW_MODES.reduce((map, mode) => {
   map[mode.id] = mode;

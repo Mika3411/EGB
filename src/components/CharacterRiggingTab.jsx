@@ -13,7 +13,7 @@ import {
   X,
   ZoomIn,
 } from 'lucide-react';
-import { getThreeModelSource } from '../utils/threeGltfUtils';
+import { getThreeModelSource } from '../utils/threeModelUtils.js';
 import {
   CHARACTER_RIG_POINT_GROUPS,
   normalizeCharacterRigPoints,

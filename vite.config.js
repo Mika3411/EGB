@@ -4,6 +4,11 @@ import { configDefaults } from 'vitest/config'
 
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: [
+      { find: /^three$/, replacement: 'three/src/Three.js' },
+    ],
+  },
   server: {
     proxy: {
       '/api': 'http://localhost:8787',

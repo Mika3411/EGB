@@ -1,5 +1,52 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import * as THREE from 'three';
+import {
+  ACESFilmicToneMapping as ThreeACESFilmicToneMapping,
+  AlwaysStencilFunc as ThreeAlwaysStencilFunc,
+  AmbientLight as ThreeAmbientLight,
+  Box3 as ThreeBox3,
+  BufferAttribute as ThreeBufferAttribute,
+  BufferGeometry as ThreeBufferGeometry,
+  CanvasTexture as ThreeCanvasTexture,
+  CatmullRomCurve3 as ThreeCatmullRomCurve3,
+  CircleGeometry as ThreeCircleGeometry,
+  Color as ThreeColor,
+  CylinderGeometry as ThreeCylinderGeometry,
+  DirectionalLight as ThreeDirectionalLight,
+  DoubleSide as ThreeDoubleSide,
+  EqualStencilFunc as ThreeEqualStencilFunc,
+  Fog as ThreeFog,
+  GridHelper as ThreeGridHelper,
+  Group as ThreeGroup,
+  HemisphereLight as ThreeHemisphereLight,
+  InstancedMesh as ThreeInstancedMesh,
+  KeepStencilOp as ThreeKeepStencilOp,
+  MathUtils as ThreeMathUtils,
+  Matrix3 as ThreeMatrix3,
+  Matrix4 as ThreeMatrix4,
+  Mesh as ThreeMesh,
+  MeshBasicMaterial as ThreeMeshBasicMaterial,
+  MeshStandardMaterial as ThreeMeshStandardMaterial,
+  PCFShadowMap as ThreePCFShadowMap,
+  PMREMGenerator as ThreePMREMGenerator,
+  PerspectiveCamera as ThreePerspectiveCamera,
+  Plane as ThreePlane,
+  PlaneGeometry as ThreePlaneGeometry,
+  Points as ThreePoints,
+  PointsMaterial as ThreePointsMaterial,
+  Quaternion as ThreeQuaternion,
+  Raycaster as ThreeRaycaster,
+  RepeatWrapping as ThreeRepeatWrapping,
+  ReplaceStencilOp as ThreeReplaceStencilOp,
+  RingGeometry as ThreeRingGeometry,
+  SRGBColorSpace as ThreeSRGBColorSpace,
+  Scene as ThreeScene,
+  Sprite as ThreeSprite,
+  SpriteMaterial as ThreeSpriteMaterial,
+  TubeGeometry as ThreeTubeGeometry,
+  Vector2 as ThreeVector2,
+  Vector3 as ThreeVector3,
+  WebGLRenderer as ThreeWebGLRenderer,
+} from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { attachClickTargetCameraControls } from '../three/clickTargetCameraControls.js';
@@ -167,7 +214,7 @@ const GRIP_TRAY_SCREEN_BOUNDS = {
   bottom: 0.82,
 };
 
-const clampGripValue = (value) => THREE.MathUtils.clamp(
+const clampGripValue = (value) => ThreeMathUtils.clamp(
   Number.isFinite(Number(value)) ? Number(value) : 0,
   WEAPON_GRIP_POSITION_MIN,
   WEAPON_GRIP_POSITION_MAX,
@@ -218,7 +265,7 @@ const normalizeArmorContourPoint = (point = {}) => ({
 });
 
 const normalizeArmorPaintRadius = (value = ARMOR_PAINT_RADIUS) => (
-  THREE.MathUtils.clamp(
+  ThreeMathUtils.clamp(
     Number(value) || ARMOR_PAINT_RADIUS,
     ARMOR_PAINT_RADIUS_MIN,
     ARMOR_PAINT_RADIUS_MAX,
@@ -289,11 +336,11 @@ const getArmorCutPaintSignature = (strokes = [], modelObject = null) => (
 );
 
 const getArmorPaintDepthTolerance = (radius = ARMOR_PAINT_RADIUS) => (
-  THREE.MathUtils.clamp(normalizeArmorPaintRadius(radius) * 0.36, 0.035, 0.11)
+  ThreeMathUtils.clamp(normalizeArmorPaintRadius(radius) * 0.36, 0.035, 0.11)
 );
 
 const getArmorPaintPlaneTolerance = (radius = ARMOR_PAINT_RADIUS) => (
-  THREE.MathUtils.clamp(normalizeArmorPaintRadius(radius) * 0.18, 0.02, 0.038)
+  ThreeMathUtils.clamp(normalizeArmorPaintRadius(radius) * 0.18, 0.02, 0.038)
 );
 
 const getArmorPaintSurfaceNormal = (point = {}) => {
@@ -301,7 +348,7 @@ const getArmorPaintSurfaceNormal = (point = {}) => {
   const ny = Number(point?.ny);
   const nz = Number(point?.nz);
   if (!Number.isFinite(nx) || !Number.isFinite(ny) || !Number.isFinite(nz)) return null;
-  const normal = new THREE.Vector3(nx, ny, nz);
+  const normal = new ThreeVector3(nx, ny, nz);
   return normal.lengthSq() > 0.000001 ? normal.normalize() : null;
 };
 
@@ -311,11 +358,11 @@ const getArmorPaintSectionPlane = (point = {}) => {
   const cz = Number(point?.cz);
   const cw = Number(point?.cw);
   if (!Number.isFinite(cx) || !Number.isFinite(cy) || !Number.isFinite(cz) || !Number.isFinite(cw)) return null;
-  const normal = new THREE.Vector3(cx, cy, cz);
+  const normal = new ThreeVector3(cx, cy, cz);
   const length = normal.length();
   if (length <= 0.000001) return null;
   normal.multiplyScalar(1 / length);
-  return new THREE.Plane(normal, cw / length);
+  return new ThreePlane(normal, cw / length);
 };
 
 const isPointOnArmorPaintVisibleSide = (point, paintPoint, radius = ARMOR_PAINT_RADIUS) => {
@@ -349,7 +396,7 @@ const getInterpolatedArmorPaintNormal = (start = {}, end = {}, t = 0) => {
   const endNormal = getArmorPaintSurfaceNormal(end);
   if (startNormal && endNormal) {
     if (startNormal.dot(endNormal) < 0) endNormal.multiplyScalar(-1);
-    const normal = startNormal.lerp(endNormal, THREE.MathUtils.clamp(t, 0, 1));
+    const normal = startNormal.lerp(endNormal, ThreeMathUtils.clamp(t, 0, 1));
     return normal.lengthSq() > 0.000001 ? normal.normalize() : startNormal;
   }
   return startNormal || endNormal;
@@ -366,7 +413,7 @@ const getPointToPaintSegmentHit = (point, start, end, radius = ARMOR_PAINT_RADIU
   if (lengthSq <= 0.000001) {
     return isPointInsidePaintStamp(point, start, radius);
   }
-  const t = THREE.MathUtils.clamp((
+  const t = ThreeMathUtils.clamp((
     ((point.x - start.x) * dx)
     + ((point.y - start.y) * dy)
     + (hasSurfaceNormal ? (((Number(point.z) || 0) - (Number(start.z) || 0)) * dz) : 0)
@@ -444,7 +491,7 @@ const getArmorPaintStrokeHits = (stroke = {}) => {
   return hits;
 };
 
-const isPointInsideArmorPaintBounds = (point = new THREE.Vector3(), bounds = null) => (
+const isPointInsideArmorPaintBounds = (point = new ThreeVector3(), bounds = null) => (
   !bounds
   || (
     point.x >= bounds.minX
@@ -456,7 +503,7 @@ const isPointInsideArmorPaintBounds = (point = new THREE.Vector3(), bounds = nul
   )
 );
 
-const isPointInsideArmorPaintHit = (point = new THREE.Vector3(), hit = null, radius = ARMOR_PAINT_RADIUS) => {
+const isPointInsideArmorPaintHit = (point = new ThreeVector3(), hit = null, radius = ARMOR_PAINT_RADIUS) => {
   if (!hit || !isPointInsideArmorPaintBounds(point, hit.bounds)) return false;
   if (hit.type === 'segment') return getPointToPaintSegmentHit(point, hit.start, hit.end, radius);
   return isPointInsidePaintStamp(point, hit.start, radius);
@@ -474,13 +521,13 @@ const prepareArmorPaintStrokes = (strokes = []) => {
     ));
 };
 
-const classifyArmorPaintPoint = (point = new THREE.Vector3(), strokes = []) => {
+const classifyArmorPaintPoint = (point = new ThreeVector3(), strokes = []) => {
   const preparedStrokes = prepareArmorPaintStrokes(strokes);
   if (!preparedStrokes.length) return '';
   return preparedStrokes.find((stroke) => isPointInsidePreparedPaintStroke(point, stroke))?.segment || '';
 };
 
-const isPointInsidePreparedPaintStroke = (point = new THREE.Vector3(), stroke = null) => {
+const isPointInsidePreparedPaintStroke = (point = new ThreeVector3(), stroke = null) => {
   if (!stroke || !isPointInsideArmorPaintBounds(point, stroke.paintBounds)) return false;
   if (stroke.points.some((paintPoint) => isPointInsidePaintStamp(point, paintPoint, stroke.radius))) return true;
   for (let index = 1; index < stroke.points.length; index += 1) {
@@ -489,7 +536,7 @@ const isPointInsidePreparedPaintStroke = (point = new THREE.Vector3(), stroke = 
   return false;
 };
 
-const isPointInsideArmorContour = (point = new THREE.Vector3(), points = []) => {
+const isPointInsideArmorContour = (point = new ThreeVector3(), points = []) => {
   if (!point || !Array.isArray(points) || points.length < 3) return false;
   let inside = false;
   for (let index = 0, previousIndex = points.length - 1; index < points.length; previousIndex = index, index += 1) {
@@ -502,7 +549,7 @@ const isPointInsideArmorContour = (point = new THREE.Vector3(), points = []) => 
   return inside;
 };
 
-const classifyArmorContourPoint = (point = new THREE.Vector3(), contours = []) => {
+const classifyArmorContourPoint = (point = new ThreeVector3(), contours = []) => {
   const normalizedContours = normalizeArmorCutContours(contours).filter((entry) => entry.points.length >= 3);
   if (!normalizedContours.length) return '';
   const sortedContours = normalizedContours.sort(
@@ -555,18 +602,18 @@ const isCanvasPointInGripTray = (canvasPoint = {}) => {
 const getGripTrayReferencePoint = (decorObject = null) => {
   const gripSpace = getDecorGripSpace(decorObject);
   const target = gripSpace?.modelObject || decorObject?.userData?.decorModelObject || decorObject;
-  if (!target?.getWorldPosition) return new THREE.Vector3();
+  if (!target?.getWorldPosition) return new ThreeVector3();
   target.updateMatrixWorld?.(true);
-  return target.getWorldPosition(new THREE.Vector3());
+  return target.getWorldPosition(new ThreeVector3());
 };
 
-const getGripTrayWorldPosition = (camera = null, index = 0, count = 1, referencePoint = new THREE.Vector3()) => {
+const getGripTrayWorldPosition = (camera = null, index = 0, count = 1, referencePoint = new ThreeVector3()) => {
   if (!camera) return null;
   camera.updateMatrixWorld?.(true);
   const slot = getGripTraySlotNdc(index, count);
-  const ndcPoint = new THREE.Vector3(slot.x, slot.y, 0.5);
+  const ndcPoint = new ThreeVector3(slot.x, slot.y, 0.5);
   if (camera.isOrthographicCamera) return ndcPoint.unproject(camera);
-  const distance = Math.max(0.5, camera.position.distanceTo(referencePoint || new THREE.Vector3()));
+  const distance = Math.max(0.5, camera.position.distanceTo(referencePoint || new ThreeVector3()));
   const direction = ndcPoint.unproject(camera).sub(camera.position).normalize();
   return camera.position.clone().add(direction.multiplyScalar(distance));
 };
@@ -621,22 +668,22 @@ const createWeaponGripMarkerTexture = (marker = 'right') => {
   context.textBaseline = 'middle';
   context.fillStyle = config.text;
   context.fillText(markerLabel, 48, 50);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
+  const texture = new ThreeCanvasTexture(canvas);
+  texture.colorSpace = ThreeSRGBColorSpace;
   texture.needsUpdate = true;
   return texture;
 };
 
 const createWeaponGripMarker = (marker = {}) => {
   const texture = createWeaponGripMarkerTexture(marker);
-  const material = new THREE.SpriteMaterial({
+  const material = new ThreeSpriteMaterial({
     map: texture,
     transparent: true,
     depthTest: false,
     depthWrite: false,
     opacity: marker.enabled ? 1 : 0.42,
   });
-  const sprite = new THREE.Sprite(material);
+  const sprite = new ThreeSprite(material);
   sprite.name = marker.type === 'armor'
     ? `ArmorGripMarker${marker.id || 'Point'}`
     : (marker.type === 'shield'
@@ -714,10 +761,10 @@ const applyArmorPaintStencilToMaterial = (material = null) => {
   if (!material) return;
   material.stencilWrite = true;
   material.stencilRef = ARMOR_PAINT_STENCIL_REF;
-  material.stencilFunc = THREE.AlwaysStencilFunc;
-  material.stencilFail = THREE.KeepStencilOp;
-  material.stencilZFail = THREE.KeepStencilOp;
-  material.stencilZPass = THREE.ReplaceStencilOp;
+  material.stencilFunc = ThreeAlwaysStencilFunc;
+  material.stencilFail = ThreeKeepStencilOp;
+  material.stencilZFail = ThreeKeepStencilOp;
+  material.stencilZPass = ThreeReplaceStencilOp;
   material.stencilFuncMask = ARMOR_PAINT_STENCIL_MASK;
   material.stencilWriteMask = ARMOR_PAINT_STENCIL_MASK;
   material.needsUpdate = true;
@@ -741,7 +788,7 @@ const applyArmorPaintStencilMask = (decorObject = null) => {
 
 const createRigCutPreviewMaterial = (segment = 'body') => {
   const config = ARMOR_CUT_PREVIEW_COLORS[segment] || ARMOR_CUT_PREVIEW_COLORS.body;
-  return new THREE.MeshBasicMaterial({
+  return new ThreeMeshBasicMaterial({
     color: config.color,
     transparent: true,
     opacity: config.opacity,
@@ -750,7 +797,7 @@ const createRigCutPreviewMaterial = (segment = 'body') => {
     polygonOffset: true,
     polygonOffsetFactor: -4,
     polygonOffsetUnits: -4,
-    side: THREE.DoubleSide,
+    side: ThreeDoubleSide,
   });
 };
 
@@ -763,7 +810,7 @@ const cloneRigCutObjectMaterial = (material) => {
   clone.depthWrite = true;
   clone.depthTest = true;
   clone.polygonOffset = false;
-  clone.side = THREE.DoubleSide;
+  clone.side = ThreeDoubleSide;
   return clone;
 };
 
@@ -840,13 +887,13 @@ const appendRigCutTriangle = (builder, geometry, vertexIndices, materialIndex = 
 const buildRigCutGeometry = (sourceGeometry = null, builder = null) => {
   const positionValues = builder?.attributes?.position || [];
   if (!sourceGeometry || !builder || positionValues.length < 9) return null;
-  const geometry = new THREE.BufferGeometry();
+  const geometry = new ThreeBufferGeometry();
   builder.attributeNames.forEach((name) => {
     const attribute = sourceGeometry.attributes[name];
     const values = builder.attributes[name];
     if (!attribute || !values?.length) return;
     const ArrayCtor = attribute.array?.constructor || attribute.data?.array?.constructor || Float32Array;
-    geometry.setAttribute(name, new THREE.BufferAttribute(new ArrayCtor(values), attribute.itemSize, attribute.normalized));
+    geometry.setAttribute(name, new ThreeBufferAttribute(new ArrayCtor(values), attribute.itemSize, attribute.normalized));
   });
   builder.groups.forEach((group) => geometry.addGroup(group.start, group.count, group.materialIndex));
   if (!geometry.attributes.normal) geometry.computeVertexNormals();
@@ -876,18 +923,18 @@ const createArmorCutPaintSurfaceMesh = ({
   if (!geometry) return null;
   const normalizedSegment = normalizeArmorContourSegment(segment);
   const config = ARMOR_CUT_PREVIEW_COLORS[normalizedSegment] || ARMOR_CUT_PREVIEW_COLORS.body;
-  const material = new THREE.MeshBasicMaterial({
+  const material = new ThreeMeshBasicMaterial({
     color: config.color,
     depthTest: true,
     depthWrite: false,
     polygonOffset: true,
     polygonOffsetFactor: -10,
     polygonOffsetUnits: -10,
-    side: THREE.DoubleSide,
+    side: ThreeDoubleSide,
     transparent: true,
     opacity: activeSegment === normalizedSegment ? ARMOR_PAINT_ACTIVE_OPACITY : ARMOR_PAINT_IDLE_OPACITY,
   });
-  const paintSurface = new THREE.Mesh(geometry, material);
+  const paintSurface = new ThreeMesh(geometry, material);
   paintSurface.name = name;
   paintSurface.frustumCulled = false;
   paintSurface.renderOrder = 238;
@@ -898,7 +945,7 @@ const createArmorCutPaintSurfaceMesh = ({
 };
 
 const getArmorPaintSurfaceOffset = (radius = ARMOR_PAINT_RADIUS) => (
-  THREE.MathUtils.clamp(
+  ThreeMathUtils.clamp(
     normalizeArmorPaintRadius(radius) * ARMOR_PAINT_SURFACE_OFFSET_RATIO,
     ARMOR_PAINT_SURFACE_OFFSET_MIN,
     ARMOR_PAINT_SURFACE_OFFSET_MAX,
@@ -907,7 +954,7 @@ const getArmorPaintSurfaceOffset = (radius = ARMOR_PAINT_RADIUS) => (
 
 const appendArmorPaintStamp = (entriesBySegment, point = {}, segment = 'body', radius = ARMOR_PAINT_RADIUS, normal = null) => {
   const normalizedSegment = normalizeArmorContourSegment(segment);
-  const stampNormal = normal?.clone?.() || getArmorPaintSurfaceNormal(point) || new THREE.Vector3(0, 0, 1);
+  const stampNormal = normal?.clone?.() || getArmorPaintSurfaceNormal(point) || new ThreeVector3(0, 0, 1);
   if (stampNormal.lengthSq() <= 0.000001) stampNormal.set(0, 0, 1);
   stampNormal.normalize();
   const normalizedRadius = normalizeArmorPaintRadius(radius);
@@ -957,11 +1004,11 @@ const collectArmorPaintStamps = (paintStrokes = []) => {
   return entriesBySegment;
 };
 
-const createArmorPaintStampMesh = (segment = 'body', stamps = [], activeSegment = 'body', basePosition = new THREE.Vector3()) => {
+const createArmorPaintStampMesh = (segment = 'body', stamps = [], activeSegment = 'body', basePosition = new ThreeVector3()) => {
   if (!stamps.length) return null;
   const config = ARMOR_CUT_PREVIEW_COLORS[segment] || ARMOR_CUT_PREVIEW_COLORS.body;
-  const geometry = new THREE.CircleGeometry(1, ARMOR_PAINT_STAMP_SEGMENTS);
-  const material = new THREE.MeshStandardMaterial({
+  const geometry = new ThreeCircleGeometry(1, ARMOR_PAINT_STAMP_SEGMENTS);
+  const material = new ThreeMeshStandardMaterial({
     color: config.color,
     depthTest: true,
     depthWrite: false,
@@ -970,24 +1017,24 @@ const createArmorPaintStampMesh = (segment = 'body', stamps = [], activeSegment 
     polygonOffsetFactor: -8,
     polygonOffsetUnits: -8,
     roughness: 0.82,
-    side: THREE.DoubleSide,
+    side: ThreeDoubleSide,
     stencilWrite: true,
     stencilRef: ARMOR_PAINT_STENCIL_REF,
-    stencilFunc: THREE.EqualStencilFunc,
+    stencilFunc: ThreeEqualStencilFunc,
     stencilFuncMask: ARMOR_PAINT_STENCIL_MASK,
     stencilWriteMask: 0x00,
-    stencilFail: THREE.KeepStencilOp,
-    stencilZFail: THREE.KeepStencilOp,
-    stencilZPass: THREE.KeepStencilOp,
+    stencilFail: ThreeKeepStencilOp,
+    stencilZFail: ThreeKeepStencilOp,
+    stencilZPass: ThreeKeepStencilOp,
     transparent: true,
     opacity: activeSegment === segment ? ARMOR_PAINT_ACTIVE_OPACITY : ARMOR_PAINT_IDLE_OPACITY,
   });
-  const mesh = new THREE.InstancedMesh(geometry, material, stamps.length);
-  const matrix = new THREE.Matrix4();
-  const position = new THREE.Vector3();
-  const quaternion = new THREE.Quaternion();
-  const scale = new THREE.Vector3();
-  const forward = new THREE.Vector3(0, 0, 1);
+  const mesh = new ThreeInstancedMesh(geometry, material, stamps.length);
+  const matrix = new ThreeMatrix4();
+  const position = new ThreeVector3();
+  const quaternion = new ThreeQuaternion();
+  const scale = new ThreeVector3();
+  const forward = new ThreeVector3(0, 0, 1);
   stamps.forEach((stamp, index) => {
     const normal = stamp.normal?.clone?.() || forward.clone();
     if (normal.lengthSq() <= 0.000001) normal.copy(forward);
@@ -1028,7 +1075,7 @@ const getPointToSegmentDistance = (point, start, end) => {
   const segment = end.clone().sub(start);
   const lengthSq = segment.lengthSq();
   if (lengthSq <= 0.000001) return point.distanceTo(start);
-  const t = THREE.MathUtils.clamp(point.clone().sub(start).dot(segment) / lengthSq, 0, 1);
+  const t = ThreeMathUtils.clamp(point.clone().sub(start).dot(segment) / lengthSq, 0, 1);
   return point.distanceTo(start.clone().add(segment.multiplyScalar(t)));
 };
 
@@ -1037,13 +1084,13 @@ const isPointInsideArmorTorso = (point, leftShoulder, rightShoulder, lowerBelly,
   const maxShoulderX = Math.max(leftShoulder.x, rightShoulder.x);
   const shoulderY = (leftShoulder.y + rightShoulder.y) / 2;
   const torsoHeight = Math.max(0.0001, shoulderY - lowerBelly.y);
-  const t = THREE.MathUtils.clamp((point.y - lowerBelly.y) / torsoHeight, 0, 1);
+  const t = ThreeMathUtils.clamp((point.y - lowerBelly.y) / torsoHeight, 0, 1);
   const shoulderWidth = Math.max(0.0001, maxShoulderX - minShoulderX);
   const shoulderCenterX = (leftShoulder.x + rightShoulder.x) / 2;
   const topHalfWidth = Math.max(referenceScale * 0.16, shoulderWidth * 0.37);
   const bottomHalfWidth = Math.max(referenceScale * 0.22, shoulderWidth * 0.48);
-  const leftEdge = THREE.MathUtils.lerp(lowerBelly.x - bottomHalfWidth, shoulderCenterX - topHalfWidth, t);
-  const rightEdge = THREE.MathUtils.lerp(lowerBelly.x + bottomHalfWidth, shoulderCenterX + topHalfWidth, t);
+  const leftEdge = ThreeMathUtils.lerp(lowerBelly.x - bottomHalfWidth, shoulderCenterX - topHalfWidth, t);
+  const rightEdge = ThreeMathUtils.lerp(lowerBelly.x + bottomHalfWidth, shoulderCenterX + topHalfWidth, t);
   const margin = Math.max(referenceScale * 0.04, shoulderWidth * 0.055);
   return point.x >= leftEdge - margin && point.x <= rightEdge + margin;
 };
@@ -1080,7 +1127,7 @@ const getLeggingsLegCutCandidate = (point, groin, knee, foot, segment, fallbackS
   return { segment, score: lineDistance - Math.abs((point.x - centerX) * sideSign * 0.04) };
 };
 
-const classifyLeggingsCutPoint = (point = new THREE.Vector3(), markerOffsets = {}) => {
+const classifyLeggingsCutPoint = (point = new ThreeVector3(), markerOffsets = {}) => {
   const leftGroin = markerOffsets.leftGroinFold;
   const rightGroin = markerOffsets.rightGroinFold;
   const leftKnee = markerOffsets.leftKnee;
@@ -1107,17 +1154,17 @@ const classifyLeggingsCutPoint = (point = new THREE.Vector3(), markerOffsets = {
   return 'body';
 };
 
-const classifyArmorCutPoint = (point = new THREE.Vector3(), markerOffsets = {}, contours = [], paintStrokes = []) => {
+const classifyArmorCutPoint = (point = new ThreeVector3(), markerOffsets = {}, contours = [], paintStrokes = []) => {
   const paintSegment = classifyArmorPaintPoint(point, paintStrokes);
   if (paintSegment) return paintSegment;
   const contourSegment = classifyArmorContourPoint(point, contours);
   if (contourSegment) return contourSegment;
   if (markerOffsets.isLeggingsRig) return classifyLeggingsCutPoint(point, markerOffsets);
-  const leftShoulder = markerOffsets.leftShoulder || new THREE.Vector3(-0.45, 0.55, 0);
-  const rightShoulder = markerOffsets.rightShoulder || new THREE.Vector3(0.45, 0.55, 0);
-  const leftElbow = markerOffsets.leftElbow || new THREE.Vector3(-0.65, 0.05, 0);
-  const rightElbow = markerOffsets.rightElbow || new THREE.Vector3(0.65, 0.05, 0);
-  const lowerBelly = markerOffsets.lowerBelly || new THREE.Vector3(0, -0.55, 0);
+  const leftShoulder = markerOffsets.leftShoulder || new ThreeVector3(-0.45, 0.55, 0);
+  const rightShoulder = markerOffsets.rightShoulder || new ThreeVector3(0.45, 0.55, 0);
+  const leftElbow = markerOffsets.leftElbow || new ThreeVector3(-0.65, 0.05, 0);
+  const rightElbow = markerOffsets.rightElbow || new ThreeVector3(0.65, 0.05, 0);
+  const lowerBelly = markerOffsets.lowerBelly || new ThreeVector3(0, -0.55, 0);
   const referenceScale = Math.max(
     0.001,
     leftShoulder.distanceTo(rightShoulder),
@@ -1143,17 +1190,17 @@ const getArmorCutMarkerOffsets = (markers = []) => {
   );
   return {
     isLeggingsRig: hasLeggingsRigMarkers(markers),
-    leftShoulder: get('left-shoulder', new THREE.Vector3(-0.45, 0.55, 0)),
-    rightShoulder: get('right-shoulder', new THREE.Vector3(0.45, 0.55, 0)),
-    leftElbow: get('left-elbow', new THREE.Vector3(-0.65, 0.05, 0)),
-    rightElbow: get('right-elbow', new THREE.Vector3(0.65, 0.05, 0)),
-    lowerBelly: get('lower-belly', new THREE.Vector3(0, -0.55, 0)),
-    leftGroinFold: get('left-groin-fold', new THREE.Vector3(-0.22, -0.38, 0.05)),
-    rightGroinFold: get('right-groin-fold', new THREE.Vector3(0.22, -0.38, 0.05)),
-    leftKnee: get('left-knee', new THREE.Vector3(-0.25, -0.72, 0.05)),
-    rightKnee: get('right-knee', new THREE.Vector3(0.25, -0.72, 0.05)),
-    leftFoot: get('left-foot', new THREE.Vector3(-0.22, -1.05, 0.1)),
-    rightFoot: get('right-foot', new THREE.Vector3(0.22, -1.05, 0.1)),
+    leftShoulder: get('left-shoulder', new ThreeVector3(-0.45, 0.55, 0)),
+    rightShoulder: get('right-shoulder', new ThreeVector3(0.45, 0.55, 0)),
+    leftElbow: get('left-elbow', new ThreeVector3(-0.65, 0.05, 0)),
+    rightElbow: get('right-elbow', new ThreeVector3(0.65, 0.05, 0)),
+    lowerBelly: get('lower-belly', new ThreeVector3(0, -0.55, 0)),
+    leftGroinFold: get('left-groin-fold', new ThreeVector3(-0.22, -0.38, 0.05)),
+    rightGroinFold: get('right-groin-fold', new ThreeVector3(0.22, -0.38, 0.05)),
+    leftKnee: get('left-knee', new ThreeVector3(-0.25, -0.72, 0.05)),
+    rightKnee: get('right-knee', new ThreeVector3(0.25, -0.72, 0.05)),
+    leftFoot: get('left-foot', new ThreeVector3(-0.22, -1.05, 0.1)),
+    rightFoot: get('right-foot', new ThreeVector3(0.22, -1.05, 0.1)),
   };
 };
 
@@ -1193,9 +1240,9 @@ const buildArmorCutPreviewMeshes = ({ root, objects, decorObject, markers, conto
       'right-arm': createRigCutGeometryBuilder(geometry),
     };
     const triangleLimit = index ? index.count : position.count;
-    const localCenter = new THREE.Vector3();
-    const worldCenter = new THREE.Vector3();
-    const gripPoint = new THREE.Vector3();
+    const localCenter = new ThreeVector3();
+    const worldCenter = new ThreeVector3();
+    const gripPoint = new ThreeVector3();
     mesh.updateMatrixWorld?.(true);
     for (let triangleStart = 0; triangleStart + 2 < triangleLimit; triangleStart += 3) {
       const vertexIndices = index
@@ -1220,7 +1267,7 @@ const buildArmorCutPreviewMeshes = ({ root, objects, decorObject, markers, conto
       const splitGeometry = buildRigCutGeometry(geometry, builder);
       if (!splitGeometry) return;
       const colorMaterial = createRigCutPreviewMaterial(segment);
-      const overlay = new THREE.Mesh(splitGeometry, colorMaterial);
+      const overlay = new ThreeMesh(splitGeometry, colorMaterial);
       overlay.name = `ArmorCutPreviewSurface-${segment}`;
       overlay.matrixAutoUpdate = false;
       overlay.frustumCulled = false;
@@ -1243,23 +1290,23 @@ const buildArmorCutContourObjects = ({ objects, decorObject, contours, activeSeg
   normalizedContours.forEach((entry) => {
     const config = ARMOR_CUT_PREVIEW_COLORS[entry.segment] || ARMOR_CUT_PREVIEW_COLORS.body;
     const basePosition = gripSpace.modelObject.position;
-    const points = entry.points.map((point) => new THREE.Vector3(
+    const points = entry.points.map((point) => new ThreeVector3(
       basePosition.x + point.x,
       basePosition.y + point.y,
       basePosition.z + point.z,
     ));
     if (points.length >= 2) {
       const closed = points.length >= 3;
-      const curve = new THREE.CatmullRomCurve3(points, closed);
-      const geometry = new THREE.TubeGeometry(curve, Math.max(12, points.length * 4), 0.022, 8, closed);
-      const material = new THREE.MeshBasicMaterial({
+      const curve = new ThreeCatmullRomCurve3(points, closed);
+      const geometry = new ThreeTubeGeometry(curve, Math.max(12, points.length * 4), 0.022, 8, closed);
+      const material = new ThreeMeshBasicMaterial({
         color: config.color,
         depthTest: false,
         depthWrite: false,
         transparent: true,
         opacity: activeSegment === entry.segment ? 0.95 : 0.52,
       });
-      const line = new THREE.Mesh(geometry, material);
+      const line = new ThreeMesh(geometry, material);
       line.name = `ArmorCutContour-${entry.segment}`;
       line.renderOrder = 230;
       line.userData.rigCutContour = true;
@@ -1267,8 +1314,8 @@ const buildArmorCutContourObjects = ({ objects, decorObject, contours, activeSeg
       gripSpace.space.add(line);
       objects.set(`${entry.segment}:line`, line);
     }
-    const pointGeometry = new THREE.BufferGeometry().setFromPoints(points);
-    const pointMaterial = new THREE.PointsMaterial({
+    const pointGeometry = new ThreeBufferGeometry().setFromPoints(points);
+    const pointMaterial = new ThreePointsMaterial({
       color: config.color,
       depthTest: false,
       depthWrite: false,
@@ -1277,7 +1324,7 @@ const buildArmorCutContourObjects = ({ objects, decorObject, contours, activeSeg
       transparent: true,
       opacity: activeSegment === entry.segment ? 1 : 0.62,
     });
-    const pointCloud = new THREE.Points(pointGeometry, pointMaterial);
+    const pointCloud = new ThreePoints(pointGeometry, pointMaterial);
     pointCloud.name = `ArmorCutContourPoints-${entry.segment}`;
     pointCloud.renderOrder = 231;
     pointCloud.userData.rigCutContour = true;
@@ -1305,18 +1352,18 @@ const updateArmorCutContourObjectsAppearance = (objects, activeSegment = 'body')
 
 const createArmorPaintBrushPreview = (segment = 'body') => {
   const config = ARMOR_CUT_PREVIEW_COLORS[normalizeArmorContourSegment(segment)] || ARMOR_CUT_PREVIEW_COLORS.body;
-  const group = new THREE.Group();
+  const group = new ThreeGroup();
   group.name = 'ArmorPaintBrushPreview';
   group.userData.previewSegment = normalizeArmorContourSegment(segment);
   group.visible = false;
 
-  const ring = new THREE.Mesh(
-    new THREE.RingGeometry(0.985, 1.015, 64),
-    new THREE.MeshBasicMaterial({
+  const ring = new ThreeMesh(
+    new ThreeRingGeometry(0.985, 1.015, 64),
+    new ThreeMeshBasicMaterial({
       color: config.color,
       depthTest: true,
       depthWrite: false,
-      side: THREE.DoubleSide,
+      side: ThreeDoubleSide,
       transparent: true,
       opacity: 0.82,
     }),
@@ -1372,8 +1419,8 @@ const getArmorPaintBrushScreenCircle = ({ gripSpace, point, radius, camera, rend
   if (!gripSpace?.space || !gripSpace?.modelObject || !point || !camera || !renderer) return null;
   gripSpace.space.updateMatrixWorld?.(true);
   camera.updateMatrixWorld?.();
-  const basePosition = gripSpace.modelObject.position || new THREE.Vector3();
-  const worldCenter = gripSpace.space.localToWorld(new THREE.Vector3(
+  const basePosition = gripSpace.modelObject.position || new ThreeVector3();
+  const worldCenter = gripSpace.space.localToWorld(new ThreeVector3(
     basePosition.x + point.x,
     basePosition.y + point.y,
     basePosition.z + point.z,
@@ -1381,8 +1428,8 @@ const getArmorPaintBrushScreenCircle = ({ gripSpace, point, radius, camera, rend
   const center = projectWorldPointToCanvas(worldCenter, camera, renderer);
   if (!center) return null;
 
-  const cameraRight = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).normalize();
-  const cameraUp = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize();
+  const cameraRight = new ThreeVector3().setFromMatrixColumn(camera.matrixWorld, 0).normalize();
+  const cameraUp = new ThreeVector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize();
   const rightEdge = projectWorldPointToCanvas(worldCenter.clone().addScaledVector(cameraRight, radius), camera, renderer);
   const upEdge = projectWorldPointToCanvas(worldCenter.clone().addScaledVector(cameraUp, radius), camera, renderer);
   const radiusCandidates = [rightEdge, upEdge]
@@ -1396,7 +1443,7 @@ const getArmorPaintBrushScreenCircle = ({ gripSpace, point, radius, camera, rend
   return {
     x: center.x,
     y: center.y,
-    radius: THREE.MathUtils.clamp(Math.max(...radiusCandidates, 10), 10, maxRadius),
+    radius: ThreeMathUtils.clamp(Math.max(...radiusCandidates, 10), 10, maxRadius),
     color: (ARMOR_CUT_PREVIEW_COLORS[segment] || ARMOR_CUT_PREVIEW_COLORS.body).color,
   };
 };
@@ -1409,9 +1456,9 @@ const getArmorPaintBrushPointerCircle = ({ canvasPoint, radius, renderer, segmen
   if (canvasWidth <= 0 || canvasHeight <= 0) return null;
   const maxRadius = Math.max(12, Math.min(canvasWidth, canvasHeight) * 0.32);
   return {
-    x: THREE.MathUtils.clamp(canvasPoint.x, 0, canvasWidth),
-    y: THREE.MathUtils.clamp(canvasPoint.y, 0, canvasHeight),
-    radius: THREE.MathUtils.clamp(normalizeArmorPaintRadius(radius) * 220, 10, maxRadius),
+    x: ThreeMathUtils.clamp(canvasPoint.x, 0, canvasWidth),
+    y: ThreeMathUtils.clamp(canvasPoint.y, 0, canvasHeight),
+    radius: ThreeMathUtils.clamp(normalizeArmorPaintRadius(radius) * 220, 10, maxRadius),
     color: (ARMOR_CUT_PREVIEW_COLORS[segment] || ARMOR_CUT_PREVIEW_COLORS.body).color,
   };
 };
@@ -1446,12 +1493,12 @@ const buildArmorPaintTriangleCache = (mesh = null, gripSpace = null) => {
   const grid = new Map();
   const index = geometry.index;
   const triangleLimit = index ? index.count : position.count;
-  const localCenter = new THREE.Vector3();
-  const worldCenter = new THREE.Vector3();
-  const gripPoint = new THREE.Vector3();
+  const localCenter = new ThreeVector3();
+  const worldCenter = new ThreeVector3();
+  const gripPoint = new ThreeVector3();
   mesh.updateMatrixWorld?.(true);
   gripSpace.space.updateMatrixWorld?.(true);
-  const basePosition = gripSpace.modelObject.position || new THREE.Vector3();
+  const basePosition = gripSpace.modelObject.position || new ThreeVector3();
 
   for (let triangleStart = 0; triangleStart + 2 < triangleLimit; triangleStart += 3) {
     const vertexIndices = index
@@ -1674,7 +1721,7 @@ const getWeaponGripMarkerPosition = (marker = {}) => {
       y = -0.44;
     }
   }
-  return new THREE.Vector3(x, y, z);
+  return new ThreeVector3(x, y, z);
 };
 
 const getArmorManipulationLineForMarker = (markerId = '', markers = []) => (
@@ -1682,7 +1729,7 @@ const getArmorManipulationLineForMarker = (markerId = '', markers = []) => (
     .find((entry) => entry.shoulderId === markerId || entry.elbowId === markerId) || null
 );
 
-const roundGripVector = (vector = new THREE.Vector3()) => ({
+const roundGripVector = (vector = new ThreeVector3()) => ({
   x: roundGripValue(vector.x),
   y: roundGripValue(vector.y),
   z: roundGripValue(vector.z),
@@ -1705,7 +1752,7 @@ const constrainArmorManipulationMarkerPosition = (
   const referenceDraggedPoint = referenceOffsets[draggedKey];
   const referenceLength = referenceOffsets[line.shoulderKey]?.distanceTo?.(referenceOffsets[line.elbowKey]) || 0;
   if (!fixedPoint || !Number.isFinite(referenceLength) || referenceLength <= 0.000001) return position;
-  const desiredPoint = new THREE.Vector3(
+  const desiredPoint = new ThreeVector3(
     Number(position.x) || 0,
     Number(position.y) || 0,
     Number(position.z) || 0,
@@ -1714,22 +1761,22 @@ const constrainArmorManipulationMarkerPosition = (
   if (direction.lengthSq() <= 0.000001 && referenceDraggedPoint && referenceFixedPoint) {
     direction = referenceDraggedPoint.clone().sub(referenceFixedPoint);
   }
-  if (direction.lengthSq() <= 0.000001) direction = new THREE.Vector3(0, markerId === line.shoulderId ? 1 : -1, 0);
+  if (direction.lengthSq() <= 0.000001) direction = new ThreeVector3(0, markerId === line.shoulderId ? 1 : -1, 0);
   const constrainedPoint = fixedPoint.add(direction.normalize().multiplyScalar(referenceLength));
   return roundGripVector(constrainedPoint);
 };
 
 const createArmorManipulationGuide = (line = {}) => {
   const config = ARMOR_CUT_PREVIEW_COLORS[line.segment] || ARMOR_CUT_PREVIEW_COLORS.body;
-  const geometry = new THREE.CylinderGeometry(0.014, 0.014, 1, 12, 1, true);
-  const material = new THREE.MeshBasicMaterial({
+  const geometry = new ThreeCylinderGeometry(0.014, 0.014, 1, 12, 1, true);
+  const material = new ThreeMeshBasicMaterial({
     color: config.color,
     depthTest: false,
     depthWrite: false,
     transparent: true,
     opacity: 0.94,
   });
-  const guide = new THREE.Mesh(geometry, material);
+  const guide = new ThreeMesh(geometry, material);
   guide.name = `ArmorManipulationGuide-${line.arm || 'arm'}`;
   guide.frustumCulled = false;
   guide.renderOrder = 190;
@@ -1752,7 +1799,7 @@ const updateArmorManipulationGuide = (guide = null, start = null, end = null, re
   }
   guide.visible = true;
   guide.position.copy(start).add(end).multiplyScalar(0.5);
-  guide.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.clone().normalize());
+  guide.quaternion.setFromUnitVectors(new ThreeVector3(0, 1, 0), direction.clone().normalize());
   guide.scale.set(1, length, 1);
 };
 
@@ -1789,11 +1836,11 @@ const getArmorCutArmPreviewMatrix = (
   const sourceLine = sourceShoulder.clone().sub(sourceElbow);
   const targetLine = targetShoulder.clone().sub(targetElbow);
   if (sourceLine.lengthSq() <= 0.000001 || targetLine.lengthSq() <= 0.000001) return null;
-  const lineRotation = new THREE.Quaternion().setFromUnitVectors(sourceLine.normalize(), targetLine.normalize());
-  const localTransform = new THREE.Matrix4()
+  const lineRotation = new ThreeQuaternion().setFromUnitVectors(sourceLine.normalize(), targetLine.normalize());
+  const localTransform = new ThreeMatrix4()
     .makeTranslation(targetShoulder.x, targetShoulder.y, targetShoulder.z)
-    .multiply(new THREE.Matrix4().makeRotationFromQuaternion(lineRotation))
-    .multiply(new THREE.Matrix4().makeTranslation(-sourceShoulder.x, -sourceShoulder.y, -sourceShoulder.z));
+    .multiply(new ThreeMatrix4().makeRotationFromQuaternion(lineRotation))
+    .multiply(new ThreeMatrix4().makeTranslation(-sourceShoulder.x, -sourceShoulder.y, -sourceShoulder.z));
   const worldTransform = gripSpace.space.matrixWorld.clone()
     .multiply(localTransform)
     .multiply(gripSpace.space.matrixWorld.clone().invert());
@@ -1842,7 +1889,7 @@ const getPreviewFrameBox = (decorObject) => {
   const object = decorObject?.userData?.decorOrientationObject || decorObject;
   if (!object) return null;
   object.updateMatrixWorld?.(true);
-  const box = new THREE.Box3().setFromObject(object, true);
+  const box = new ThreeBox3().setFromObject(object, true);
   if (
     !Number.isFinite(box.min.x) || !Number.isFinite(box.max.x)
     || !Number.isFinite(box.min.y) || !Number.isFinite(box.max.y)
@@ -1858,13 +1905,13 @@ const frameDecorPreviewObject = (decorObject, camera, controls) => {
   if (!decorObject || !camera || !controls) return;
   const box = getPreviewFrameBox(decorObject);
   if (!box) return;
-  const size = box.getSize(new THREE.Vector3());
-  const center = box.getCenter(new THREE.Vector3());
-  const verticalFov = THREE.MathUtils.degToRad(camera.fov || 48);
+  const size = box.getSize(new ThreeVector3());
+  const center = box.getCenter(new ThreeVector3());
+  const verticalFov = ThreeMathUtils.degToRad(camera.fov || 48);
   const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * Math.max(0.1, camera.aspect || 1));
   const distanceForHeight = size.y / (2 * Math.tan(verticalFov / 2));
   const distanceForWidth = Math.max(size.x, size.z) / (2 * Math.tan(horizontalFov / 2));
-  const desiredDistance = THREE.MathUtils.clamp(
+  const desiredDistance = ThreeMathUtils.clamp(
     Math.max(distanceForHeight, distanceForWidth, 1) * 1.55,
     2.8,
     18,
@@ -1898,7 +1945,7 @@ const applyDecorCameraZoomDelta = (camera = null, controls = null, deltaY = 0) =
   if (direction.lengthSq() < 0.000001) direction.set(4.2, 2.4, 5.4);
   direction.normalize();
   const sensitivity = Math.max(0.008, currentDistance * DECOR_CAMERA_ZOOM_DRAG_SENSITIVITY);
-  const nextDistance = THREE.MathUtils.clamp(
+  const nextDistance = ThreeMathUtils.clamp(
     currentDistance + (Number(deltaY) || 0) * sensitivity,
     DECOR_CAMERA_ZOOM_MIN_DISTANCE,
     DECOR_CAMERA_ZOOM_MAX_DISTANCE,
@@ -1926,9 +1973,9 @@ const getArmorSectionLocalPaintPlane = (decorObject = null, worldPlane = null) =
   if (!worldPlane || !gripSpace?.space || !gripSpace?.modelObject) return null;
   gripSpace.space.updateMatrixWorld?.(true);
   const localPlane = worldPlane.clone().applyMatrix4(
-    new THREE.Matrix4().copy(gripSpace.space.matrixWorld).invert(),
+    new ThreeMatrix4().copy(gripSpace.space.matrixWorld).invert(),
   );
-  const basePosition = gripSpace.modelObject.position || new THREE.Vector3();
+  const basePosition = gripSpace.modelObject.position || new ThreeVector3();
   localPlane.constant += localPlane.normal.dot(basePosition);
   return localPlane.normalize();
 };
@@ -2301,7 +2348,7 @@ export default function Decor3DPreview({
         : (markerConfig.type === 'shield' ? (markerConfig.id || 'hand') : hand);
       if (camera) {
         const distance = Math.max(0.1, camera.position.distanceTo(marker.position));
-        const markerSize = THREE.MathUtils.clamp(distance * (inTray ? 0.056 : 0.065), 0.07, inTray ? 0.22 : 0.28);
+        const markerSize = ThreeMathUtils.clamp(distance * (inTray ? 0.056 : 0.065), 0.07, inTray ? 0.22 : 0.28);
         marker.scale.setScalar(markerSize);
       }
     });
@@ -2337,7 +2384,7 @@ export default function Decor3DPreview({
     const activeKeys = new Set();
     gripSpace.space.updateMatrixWorld?.(true);
     const toWorldPoint = (offset) => gripSpace.space.localToWorld(
-      gripSpace.modelObject.position.clone().add(offset || new THREE.Vector3()),
+      gripSpace.modelObject.position.clone().add(offset || new ThreeVector3()),
     );
     getArmorManipulationLines(markers).forEach((line) => {
       activeKeys.add(line.arm);
@@ -2546,7 +2593,7 @@ export default function Decor3DPreview({
 
     let renderer;
     try {
-      renderer = new THREE.WebGLRenderer({
+      renderer = new ThreeWebGLRenderer({
         antialias: true,
         alpha: true,
         powerPreference: 'default',
@@ -2557,27 +2604,27 @@ export default function Decor3DPreview({
       return undefined;
     }
 
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.outputColorSpace = ThreeSRGBColorSpace;
+    renderer.toneMapping = ThreeACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.08;
     renderer.localClippingEnabled = true;
     renderer.setPixelRatio(window.devicePixelRatio || 1);
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFShadowMap;
+    renderer.shadowMap.type = ThreePCFShadowMap;
     renderer.domElement.className = 'decor3d-canvas';
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
     setWebglError('');
 
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#07111e');
-    scene.fog = new THREE.Fog('#07111e', 8, 22);
-    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    const scene = new ThreeScene();
+    scene.background = new ThreeColor('#07111e');
+    scene.fog = new ThreeFog('#07111e', 8, 22);
+    const pmremGenerator = new ThreePMREMGenerator(renderer);
     const roomEnvironment = new RoomEnvironment();
     const environmentMap = pmremGenerator.fromScene(roomEnvironment, 0.04).texture;
     roomEnvironment.dispose?.();
     scene.environment = environmentMap;
-    const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 80);
+    const camera = new ThreePerspectiveCamera(48, 1, 0.1, 80);
     camera.position.set(4.2, 3.2, 5.4);
     cameraRef.current = camera;
 
@@ -2598,8 +2645,8 @@ export default function Decor3DPreview({
       groundY: 0,
     });
 
-    scene.add(new THREE.HemisphereLight('#c9f5ff', '#24160c', 1.15));
-    const sun = new THREE.DirectionalLight('#fff0c7', 2.1);
+    scene.add(new ThreeHemisphereLight('#c9f5ff', '#24160c', 1.15));
+    const sun = new ThreeDirectionalLight('#fff0c7', 2.1);
     sun.position.set(-4.5, 6, 5);
     sun.castShadow = true;
     sun.shadow.camera.near = 0.5;
@@ -2609,9 +2656,9 @@ export default function Decor3DPreview({
     sun.shadow.camera.top = 7;
     sun.shadow.camera.bottom = -7;
     scene.add(sun);
-    scene.add(new THREE.AmbientLight('#4f8cff', 0.28));
+    scene.add(new ThreeAmbientLight('#4f8cff', 0.28));
 
-    const floorTexture = new THREE.CanvasTexture(createPreviewFloorCanvas({
+    const floorTexture = new ThreeCanvasTexture(createPreviewFloorCanvas({
       backgroundColor: '#132033',
       oddColor: '#1d2c43',
       evenColor: '#142238',
@@ -2621,19 +2668,19 @@ export default function Decor3DPreview({
       markerShape: 'square',
       markerRect: { x: 96, y: 96, width: 320, height: 320 },
     }));
-    floorTexture.wrapS = THREE.RepeatWrapping;
-    floorTexture.wrapT = THREE.RepeatWrapping;
+    floorTexture.wrapS = ThreeRepeatWrapping;
+    floorTexture.wrapT = ThreeRepeatWrapping;
     floorTexture.repeat.set(5, 5);
-    floorTexture.colorSpace = THREE.SRGBColorSpace;
+    floorTexture.colorSpace = ThreeSRGBColorSpace;
     const floorMaterial = makePreviewStandardMaterial('#172033', { texture: floorTexture, roughness: 0.9 });
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), floorMaterial);
+    const floor = new ThreeMesh(new ThreePlaneGeometry(8, 8), floorMaterial);
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     floor.visible = showGridRef.current;
     previewFloorRef.current = floor;
     scene.add(floor);
 
-    const grid = new THREE.GridHelper(8, 16, '#67e8f9', '#263c5c');
+    const grid = new ThreeGridHelper(8, 16, '#67e8f9', '#263c5c');
     grid.material.transparent = true;
     grid.material.opacity = 0.24;
     grid.position.y = 0.018;
@@ -2641,14 +2688,14 @@ export default function Decor3DPreview({
     previewGridRef.current = grid;
     scene.add(grid);
 
-    const decorRoot = new THREE.Group();
+    const decorRoot = new ThreeGroup();
     decorRootRef.current = decorRoot;
     scene.add(decorRoot);
-    const gripRoot = new THREE.Group();
+    const gripRoot = new ThreeGroup();
     gripRoot.name = 'WeaponGripMarkers';
     gripRootRef.current = gripRoot;
     scene.add(gripRoot);
-    const rigCutPreviewRoot = new THREE.Group();
+    const rigCutPreviewRoot = new ThreeGroup();
     rigCutPreviewRoot.name = 'ArmorCutPreviewZones';
     rigCutPreviewRootRef.current = rigCutPreviewRoot;
     scene.add(rigCutPreviewRoot);
@@ -2687,11 +2734,11 @@ export default function Decor3DPreview({
     };
     render();
 
-    const raycaster = new THREE.Raycaster();
-    const pointer = new THREE.Vector2();
-    const dragPlane = new THREE.Plane();
-    const planeNormal = new THREE.Vector3();
-    const planePoint = new THREE.Vector3();
+    const raycaster = new ThreeRaycaster();
+    const pointer = new ThreeVector2();
+    const dragPlane = new ThreePlane();
+    const planeNormal = new ThreeVector3();
+    const planePoint = new ThreeVector3();
     let rigPickStart = null;
     let contourPickStart = null;
     let paintStroke = null;
@@ -2724,15 +2771,15 @@ export default function Decor3DPreview({
     const getCanvasPoint = (event) => {
       const rect = renderer.domElement.getBoundingClientRect();
       return {
-        x: THREE.MathUtils.clamp(event.clientX - rect.left, 0, rect.width),
-        y: THREE.MathUtils.clamp(event.clientY - rect.top, 0, rect.height),
+        x: ThreeMathUtils.clamp(event.clientX - rect.left, 0, rect.width),
+        y: ThreeMathUtils.clamp(event.clientY - rect.top, 0, rect.height),
         width: rect.width,
         height: rect.height,
       };
     };
 
     const getSectionRayDirection = (canvasPoint) => {
-      const ndc = new THREE.Vector3(
+      const ndc = new ThreeVector3(
         (canvasPoint.x / Math.max(1, canvasPoint.width)) * 2 - 1,
         -((canvasPoint.y / Math.max(1, canvasPoint.height)) * 2 - 1),
         0.5,
@@ -2747,7 +2794,7 @@ export default function Decor3DPreview({
       const normal = startDirection.cross(endDirection);
       if (normal.lengthSq() <= 0.000001) return null;
       normal.normalize();
-      return new THREE.Plane().setFromNormalAndCoplanarPoint(normal, camera.position);
+      return new ThreePlane().setFromNormalAndCoplanarPoint(normal, camera.position);
     };
 
     const isWorldPointVisibleBySection = (point = null) => {
@@ -2782,9 +2829,9 @@ export default function Decor3DPreview({
       if (!hit?.object) return null;
       modelObject.updateMatrixWorld?.(true);
       hit.object.updateMatrixWorld?.(true);
-      const box = new THREE.Box3().setFromObject(hit.object);
-      const size = box.getSize(new THREE.Vector3());
-      const center = modelObject.worldToLocal(box.getCenter(new THREE.Vector3()));
+      const box = new ThreeBox3().setFromObject(hit.object);
+      const size = box.getSize(new ThreeVector3());
+      const center = modelObject.worldToLocal(box.getCenter(new ThreeVector3()));
       return {
         path: getRigNodePath(hit.object, modelObject),
         name: hit.object.name || hit.object.parent?.name || 'Mesh',
@@ -2806,7 +2853,7 @@ export default function Decor3DPreview({
       const surfaceNormal = hit.face?.normal
         ? (() => {
           const worldNormal = hit.face.normal.clone()
-            .applyMatrix3(new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld))
+            .applyMatrix3(new ThreeMatrix3().getNormalMatrix(hit.object.matrixWorld))
             .normalize();
           if (worldNormal.lengthSq() <= 0.000001) return {};
           const normalEnd = hit.point.clone().add(worldNormal);
@@ -3083,7 +3130,7 @@ export default function Decor3DPreview({
         id: markerId,
         key: markerKey,
         pointerId: event.pointerId,
-        grabOffset: hitPlane ? marker.position.clone().sub(planePoint) : new THREE.Vector3(),
+        grabOffset: hitPlane ? marker.position.clone().sub(planePoint) : new ThreeVector3(),
         fromTray,
         activated: !fromTray,
         trayPosition: marker.position.clone(),
@@ -3569,7 +3616,7 @@ export default function Decor3DPreview({
     const sources = getDecorModelSources(model);
     if (sources.length) {
       setPreviewStatus('Chargement du modele 3D...');
-      const loadingRoot = new THREE.Group();
+      const loadingRoot = new ThreeGroup();
       decorRoot.add(loadingRoot);
       loadThreeDecor(sources, model, (object) => {
         if (cancelled || decorRoot.userData?.disposed) {

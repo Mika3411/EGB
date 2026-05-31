@@ -1,4 +1,10 @@
-import * as THREE from 'three';
+import {
+  GridHelper as ThreeGridHelper,
+  LessDepth as ThreeLessDepth,
+  Mesh as ThreeMesh,
+  MeshStandardMaterial as ThreeMeshStandardMaterial,
+  PlaneGeometry as ThreePlaneGeometry,
+} from 'three';
 import {
   FLOOR_VISUAL_PADDING_WORLD,
   WORLD_SCALE,
@@ -49,7 +55,7 @@ export const syncViewportStaticScene = ({
       Math.max(1, floorVisualWidth / Math.max(240, liveConfig.world.grid * 2)),
       Math.max(1, floorVisualHeight / Math.max(240, liveConfig.world.grid * 2)),
     );
-    const floorMaterial = new THREE.MeshStandardMaterial({
+    const floorMaterial = new ThreeMeshStandardMaterial({
       map: floorTexture,
       roughness: 0.92,
       metalness: 0,
@@ -57,8 +63,8 @@ export const syncViewportStaticScene = ({
       emissiveIntensity: 0.08,
     });
     floorMaterial.userData.disposeTextures = true;
-    const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(floorVisualWidth * WORLD_SCALE, floorVisualHeight * WORLD_SCALE),
+    const floor = new ThreeMesh(
+      new ThreePlaneGeometry(floorVisualWidth * WORLD_SCALE, floorVisualHeight * WORLD_SCALE),
       floorMaterial,
     );
     floor.rotation.x = -Math.PI / 2;
@@ -68,7 +74,7 @@ export const syncViewportStaticScene = ({
     staticGroup.add(floor);
 
     const gridSize = Math.max(liveConfig.world.width, liveConfig.world.height) * WORLD_SCALE;
-    const grid = new THREE.GridHelper(
+    const grid = new ThreeGridHelper(
       gridSize,
       Math.max(8, Math.round(Math.max(liveConfig.world.width, liveConfig.world.height) / liveConfig.world.grid)),
       '#67e8f9',
@@ -77,7 +83,7 @@ export const syncViewportStaticScene = ({
     grid.material.transparent = true;
     grid.material.opacity = 0.42;
     grid.material.depthWrite = false;
-    grid.material.depthFunc = THREE.LessDepth;
+    grid.material.depthFunc = ThreeLessDepth;
     grid.position.y = 0.018;
     staticGroup.add(grid);
     staticGroup.userData.staticWorldSignature = staticWorldSignature;

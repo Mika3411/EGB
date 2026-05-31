@@ -1,4 +1,27 @@
-import * as THREE from 'three';
+import {
+  Box3 as ThreeBox3,
+  BoxGeometry as ThreeBoxGeometry,
+  BufferAttribute as ThreeBufferAttribute,
+  BufferGeometry as ThreeBufferGeometry,
+  CapsuleGeometry as ThreeCapsuleGeometry,
+  ConeGeometry as ThreeConeGeometry,
+  DoubleSide as ThreeDoubleSide,
+  Euler as ThreeEuler,
+  Group as ThreeGroup,
+  MathUtils as ThreeMathUtils,
+  Matrix4 as ThreeMatrix4,
+  Mesh as ThreeMesh,
+  MeshBasicMaterial as ThreeMeshBasicMaterial,
+  MeshStandardMaterial as ThreeMeshStandardMaterial,
+  Plane as ThreePlane,
+  PlaneGeometry as ThreePlaneGeometry,
+  Quaternion as ThreeQuaternion,
+  SphereGeometry as ThreeSphereGeometry,
+  Sprite as ThreeSprite,
+  SpriteMaterial as ThreeSpriteMaterial,
+  TorusGeometry as ThreeTorusGeometry,
+  Vector3 as ThreeVector3,
+} from 'three';
 
 import {
   clone as cloneGltfScene,
@@ -370,11 +393,11 @@ const getArmorPaintSectionPlane = (point = {}) => {
   const cz = Number(point?.cz);
   const cw = Number(point?.cw);
   if (!Number.isFinite(cx) || !Number.isFinite(cy) || !Number.isFinite(cz) || !Number.isFinite(cw)) return null;
-  const normal = new THREE.Vector3(cx, cy, cz);
+  const normal = new ThreeVector3(cx, cy, cz);
   const length = normal.length();
   if (length <= 0.000001) return null;
   normal.multiplyScalar(1 / length);
-  return new THREE.Plane(normal, cw / length);
+  return new ThreePlane(normal, cw / length);
 };
 
 const isPointOnArmorPaintVisibleSide = (point, paintPoint, radius = 0.14, depthTolerance = 0.04) => {
@@ -403,7 +426,7 @@ const getArmorCutContours = (item = {}, referenceScale = 1) => {
 };
 
 const getArmorPaintDepthTolerance = (radius = 0.14, referenceScale = 1) => (
-  THREE.MathUtils.clamp(
+  ThreeMathUtils.clamp(
     (Number(radius) || 0.14) * 0.36,
     0.035 * referenceScale,
     0.11 * referenceScale,
@@ -411,7 +434,7 @@ const getArmorPaintDepthTolerance = (radius = 0.14, referenceScale = 1) => (
 );
 
 const getArmorPaintPlaneTolerance = (radius = 0.14, depthTolerance = 0.04) => (
-  THREE.MathUtils.clamp(
+  ThreeMathUtils.clamp(
     (Number(radius) || 0.14) * 0.18,
     depthTolerance * 0.35,
     depthTolerance * 0.9,
@@ -447,7 +470,7 @@ const getArmorCutPaintStrokes = (item = {}, referenceScale = 1) => {
     .filter((entry) => entry.points.length);
 };
 
-const isPointInsideArmorContour = (point = new THREE.Vector3(), points = []) => {
+const isPointInsideArmorContour = (point = new ThreeVector3(), points = []) => {
   if (!point || !Array.isArray(points) || points.length < 3) return false;
   let inside = false;
   for (let index = 0, previousIndex = points.length - 1; index < points.length; previousIndex = index, index += 1) {
@@ -469,7 +492,7 @@ const getArmorPaintSurfaceNormal = (point = {}) => {
   const ny = Number(point?.ny);
   const nz = Number(point?.nz);
   if (!Number.isFinite(nx) || !Number.isFinite(ny) || !Number.isFinite(nz)) return null;
-  const normal = new THREE.Vector3(nx, ny, nz);
+  const normal = new ThreeVector3(nx, ny, nz);
   return normal.lengthSq() > 0.000001 ? normal.normalize() : null;
 };
 
@@ -494,7 +517,7 @@ const getInterpolatedArmorPaintNormal = (start = {}, end = {}, t = 0) => {
   const endNormal = getArmorPaintSurfaceNormal(end);
   if (startNormal && endNormal) {
     if (startNormal.dot(endNormal) < 0) endNormal.multiplyScalar(-1);
-    const normal = startNormal.lerp(endNormal, THREE.MathUtils.clamp(t, 0, 1));
+    const normal = startNormal.lerp(endNormal, ThreeMathUtils.clamp(t, 0, 1));
     return normal.lengthSq() > 0.000001 ? normal.normalize() : startNormal;
   }
   return startNormal || endNormal;
@@ -511,7 +534,7 @@ const isPointInsidePaintSegment = (point, start, end, radius = 0.14, depthTolera
   if (lengthSq <= 0.000001) {
     return isPointInsideArmorPaintStamp(point, start, radius, depthTolerance);
   }
-  const t = THREE.MathUtils.clamp((
+  const t = ThreeMathUtils.clamp((
     ((point.x - start.x) * dx)
     + ((point.y - start.y) * dy)
     + (hasSurfaceNormal ? (((Number(point.z) || 0) - (Number(start.z) || 0)) * dz) : 0)
@@ -550,7 +573,7 @@ const getArmorPaintStrokeBounds = (stroke = {}) => {
   return bounds;
 };
 
-const isPointInsideArmorPaintBounds = (point = new THREE.Vector3(), bounds = null) => (
+const isPointInsideArmorPaintBounds = (point = new ThreeVector3(), bounds = null) => (
   !bounds
   || (
     point.x >= bounds.minX
@@ -571,7 +594,7 @@ const prepareArmorPaintStrokes = (item = {}, referenceScale = 1) => (
     .sort((a, b) => ['left', 'right', 'body'].indexOf(a.segment) - ['left', 'right', 'body'].indexOf(b.segment))
 );
 
-const classifyArmorPaintSegment = (point = new THREE.Vector3(), item = {}, referenceScale = 1, preparedStrokes = null) => {
+const classifyArmorPaintSegment = (point = new ThreeVector3(), item = {}, referenceScale = 1, preparedStrokes = null) => {
   const strokes = Array.isArray(preparedStrokes) ? preparedStrokes : prepareArmorPaintStrokes(item, referenceScale);
   if (!strokes.length) return '';
   return strokes
@@ -593,7 +616,7 @@ const classifyArmorPaintSegment = (point = new THREE.Vector3(), item = {}, refer
     })?.segment || '';
 };
 
-const classifyArmorContourSegment = (point = new THREE.Vector3(), item = {}, referenceScale = 1) => {
+const classifyArmorContourSegment = (point = new ThreeVector3(), item = {}, referenceScale = 1) => {
   const contours = getArmorCutContours(item, referenceScale);
   if (!contours.length) return '';
   const priority = ['left', 'right', 'body'];
@@ -865,8 +888,8 @@ const getFingerPalmOffset = (handBone = null, hand = 'right') => {
   const fingerRoots = getFingerRootBonesForHand(handBone, hand);
   if (fingerRoots.length < 2) return null;
   handBone.updateMatrixWorld?.(true);
-  const offset = new THREE.Vector3();
-  const worldPoint = new THREE.Vector3();
+  const offset = new ThreeVector3();
+  const worldPoint = new ThreeVector3();
   let count = 0;
   fingerRoots.forEach((fingerRoot) => {
     fingerRoot.updateMatrixWorld?.(true);
@@ -1006,13 +1029,13 @@ const getLocalBonePosition = (parent = null, bone = null) => {
   if (!parent || !bone?.isBone) return null;
   parent.updateMatrixWorld?.(true);
   bone.updateMatrixWorld?.(true);
-  const point = bone.getWorldPosition(new THREE.Vector3());
+  const point = bone.getWorldPosition(new ThreeVector3());
   if (!Number.isFinite(point.x) || !Number.isFinite(point.y) || !Number.isFinite(point.z)) return null;
   return parent.worldToLocal(point);
 };
 
 const getAverageVector = (points = []) => {
-  const average = new THREE.Vector3();
+  const average = new ThreeVector3();
   let count = 0;
   points.forEach((point) => {
     if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y) || !Number.isFinite(point.z)) return;
@@ -1023,12 +1046,12 @@ const getAverageVector = (points = []) => {
 };
 
 const getProjectedPerpendicularAxis = (axis, preferred) => {
-  const fallback = Math.abs(axis.y) < 0.85 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1);
+  const fallback = Math.abs(axis.y) < 0.85 ? new ThreeVector3(0, 1, 0) : new ThreeVector3(0, 0, 1);
   const candidate = (preferred?.lengthSq?.() > 0.000001 ? preferred.clone() : fallback)
     .addScaledVector(axis, -axis.dot(preferred || fallback));
   if (candidate.lengthSq() > 0.000001) return candidate.normalize();
   const fallbackCandidate = fallback.addScaledVector(axis, -axis.dot(fallback));
-  return fallbackCandidate.lengthSq() > 0.000001 ? fallbackCandidate.normalize() : new THREE.Vector3(0, 1, 0);
+  return fallbackCandidate.lengthSq() > 0.000001 ? fallbackCandidate.normalize() : new ThreeVector3(0, 1, 0);
 };
 
 const getFingerGripFrame = (parent = null, entries = [], hand = 'right') => {
@@ -1060,7 +1083,7 @@ const getFingerGripFrame = (parent = null, entries = [], hand = 'right') => {
   const yAxis = spreadAxis;
   const closingAxis = fingerBaseCenter.lengthSq() > 0.000001 ? fingerBaseCenter.clone() : tipCenter.clone().sub(fingerBaseCenter);
   let zAxis = getProjectedPerpendicularAxis(yAxis, closingAxis);
-  if (zAxis.lengthSq() <= 0.000001) zAxis = new THREE.Vector3(0, 0, hand === 'left' ? -1 : 1);
+  if (zAxis.lengthSq() <= 0.000001) zAxis = new ThreeVector3(0, 0, hand === 'left' ? -1 : 1);
   zAxis.normalize();
   const xAxis = yAxis.clone().cross(zAxis).normalize();
   const stableZAxis = xAxis.clone().cross(yAxis).normalize();
@@ -1075,10 +1098,10 @@ const getFingerGripFrame = (parent = null, entries = [], hand = 'right') => {
   const spreadWidth = orderedEntries[orderedEntries.length - 1].gripPoint.distanceTo(orderedEntries[0].gripPoint);
   center.addScaledVector(xAxis, spreadWidth * FINGER_BASE_WEAPON_SOCKET_NORMAL_OFFSET * normalSide);
 
-  const matrix = new THREE.Matrix4().makeBasis(xAxis, yAxis, stableZAxis);
+  const matrix = new ThreeMatrix4().makeBasis(xAxis, yAxis, stableZAxis);
   return {
     center,
-    quaternion: new THREE.Quaternion().setFromRotationMatrix(matrix),
+    quaternion: new ThreeQuaternion().setFromRotationMatrix(matrix),
   };
 };
 
@@ -1120,21 +1143,21 @@ const getArmorGripFrame = (entries = []) => {
   if (rightShoulder && rightElbow) yAxes.push(rightShoulder.clone().sub(rightElbow));
   let yAxis = getAverageVector(yAxes.filter((axis) => axis.lengthSq() > 0.000001));
 
-  if (!yAxis || yAxis.lengthSq() <= 0.000001) yAxis = new THREE.Vector3(0, 1, 0);
+  if (!yAxis || yAxis.lengthSq() <= 0.000001) yAxis = new ThreeVector3(0, 1, 0);
   yAxis.normalize();
-  if (!xAxis || xAxis.lengthSq() <= 0.000001) xAxis = getProjectedPerpendicularAxis(yAxis, new THREE.Vector3(1, 0, 0));
+  if (!xAxis || xAxis.lengthSq() <= 0.000001) xAxis = getProjectedPerpendicularAxis(yAxis, new ThreeVector3(1, 0, 0));
   else xAxis.addScaledVector(yAxis, -xAxis.dot(yAxis));
-  if (xAxis.lengthSq() <= 0.000001) xAxis = getProjectedPerpendicularAxis(yAxis, new THREE.Vector3(1, 0, 0));
+  if (xAxis.lengthSq() <= 0.000001) xAxis = getProjectedPerpendicularAxis(yAxis, new ThreeVector3(1, 0, 0));
   xAxis.normalize();
 
   let zAxis = xAxis.clone().cross(yAxis);
-  if (zAxis.lengthSq() <= 0.000001) zAxis = getProjectedPerpendicularAxis(yAxis, new THREE.Vector3(0, 0, 1));
+  if (zAxis.lengthSq() <= 0.000001) zAxis = getProjectedPerpendicularAxis(yAxis, new ThreeVector3(0, 0, 1));
   zAxis.normalize();
   const stableXAxis = yAxis.clone().cross(zAxis).normalize();
-  const matrix = new THREE.Matrix4().makeBasis(stableXAxis, yAxis, zAxis);
+  const matrix = new ThreeMatrix4().makeBasis(stableXAxis, yAxis, zAxis);
   return {
     center,
-    quaternion: new THREE.Quaternion().setFromRotationMatrix(matrix),
+    quaternion: new ThreeQuaternion().setFromRotationMatrix(matrix),
   };
 };
 
@@ -1176,7 +1199,7 @@ const createFingerWeaponSocket = (handBone = null, hand = 'right') => {
       || child.userData?.rpg3dFingerTipsWeaponSocket === socketKey
     ) existingSocket = child;
   });
-  const socket = existingSocket || new THREE.Group();
+  const socket = existingSocket || new ThreeGroup();
   socket.name = hand === 'left' ? 'Rpg3DLeftFingerBaseWeaponSocket' : 'Rpg3DRightFingerBaseWeaponSocket';
   socket.userData.rpg3dFingerBaseWeaponSocket = socketKey;
   socket.userData.rpg3dFingerTipsWeaponSocket = socketKey;
@@ -1203,7 +1226,7 @@ const createPalmWeaponSocket = (handBone = null, hand = 'right') => {
   });
   const palmOffset = getFingerPalmOffset(handBone, hand);
   if (!palmOffset) return existingSocket || null;
-  const socket = existingSocket || new THREE.Group();
+  const socket = existingSocket || new ThreeGroup();
   socket.name = hand === 'left' ? 'Rpg3DLeftPalmWeaponSocket' : 'Rpg3DRightPalmWeaponSocket';
   socket.userData.rpg3dPalmWeaponSocket = socketKey;
   socket.userData.rpg3dEquipmentSocketHand = hand;
@@ -1234,7 +1257,7 @@ const createCharacterRigPointSocket = (root = null, actor = {}, pointId = '') =>
   root.traverse?.((child) => {
     if (!existingSocket && child.userData?.rpg3dCharacterRigSocket === socketKey) existingSocket = child;
   });
-  const socket = existingSocket || new THREE.Group();
+  const socket = existingSocket || new ThreeGroup();
   socket.name = `Rpg3DCharacterRig${pointId.replace(/(^|-)([a-z])/g, (_, __, letter) => letter.toUpperCase())}Socket`;
   socket.userData.rpg3dCharacterRigSocket = socketKey;
   socket.position.copy(localPoint);
@@ -1252,18 +1275,18 @@ const createCharacterRigLineSocket = (root = null, actor = {}, socketKey = '', s
   const yAxis = startPoint.clone().sub(endPoint);
   if (yAxis.lengthSq() <= 0.000001) return null;
   yAxis.normalize();
-  const zAxis = getProjectedPerpendicularAxis(yAxis, new THREE.Vector3(0, 0, 1));
+  const zAxis = getProjectedPerpendicularAxis(yAxis, new ThreeVector3(0, 0, 1));
   const xAxis = yAxis.clone().cross(zAxis).normalize();
   const stableZAxis = xAxis.clone().cross(yAxis).normalize();
   let existingSocket = null;
   root.traverse?.((child) => {
     if (!existingSocket && child.userData?.rpg3dCharacterRigLineSocket === socketKey) existingSocket = child;
   });
-  const socket = existingSocket || new THREE.Group();
+  const socket = existingSocket || new ThreeGroup();
   socket.name = `Rpg3DCharacterRig${socketKey.replace(/(^|-)([a-z])/g, (_, __, letter) => letter.toUpperCase())}Socket`;
   socket.userData.rpg3dCharacterRigLineSocket = socketKey;
   socket.position.copy(startPoint.clone().add(endPoint).multiplyScalar(0.5));
-  socket.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, stableZAxis));
+  socket.quaternion.setFromRotationMatrix(new ThreeMatrix4().makeBasis(xAxis, yAxis, stableZAxis));
   socket.scale.set(1, 1, 1);
   if (!existingSocket) root.add(socket);
   socket.updateMatrixWorld?.(true);
@@ -1308,7 +1331,7 @@ const getEquipmentModelRotationValue = (item = {}, axis = 'X') => {
 };
 
 const getEquipmentModelBaseQuaternion = (item = {}) => (
-  new THREE.Quaternion().setFromEuler(new THREE.Euler(
+  new ThreeQuaternion().setFromEuler(new ThreeEuler(
     degreesToRadians(getEquipmentModelRotationValue(item, 'X')),
     degreesToRadians(getEquipmentModelRotationValue(item, 'Y')),
     degreesToRadians(getEquipmentModelRotationValue(item, 'Z')),
@@ -1474,19 +1497,19 @@ const updateShieldArmLineSocket = (socket = null) => {
   if (!parent || !handBone?.isBone || !elbowBone?.isBone) return false;
   handBone.updateMatrixWorld?.(true);
   elbowBone.updateMatrixWorld?.(true);
-  const handPoint = getLocalPointFromWorld(parent, handBone.getWorldPosition(new THREE.Vector3()));
-  const elbowPoint = getLocalPointFromWorld(parent, elbowBone.getWorldPosition(new THREE.Vector3()));
+  const handPoint = getLocalPointFromWorld(parent, handBone.getWorldPosition(new ThreeVector3()));
+  const elbowPoint = getLocalPointFromWorld(parent, elbowBone.getWorldPosition(new ThreeVector3()));
   if (!handPoint || !elbowPoint) return false;
   const yAxis = handPoint.clone().sub(elbowPoint);
   if (yAxis.lengthSq() <= 0.000001) return false;
   yAxis.normalize();
-  const preferred = handBone.localToWorld(new THREE.Vector3(0, 0, 1));
-  const preferredLocal = getLocalPointFromWorld(parent, preferred)?.sub(handPoint) || new THREE.Vector3(0, 0, 1);
+  const preferred = handBone.localToWorld(new ThreeVector3(0, 0, 1));
+  const preferredLocal = getLocalPointFromWorld(parent, preferred)?.sub(handPoint) || new ThreeVector3(0, 0, 1);
   const zAxis = getProjectedPerpendicularAxis(yAxis, preferredLocal);
   const xAxis = yAxis.clone().cross(zAxis).normalize();
   const stableZAxis = xAxis.clone().cross(yAxis).normalize();
   socket.position.copy(handPoint.clone().add(elbowPoint).multiplyScalar(0.5));
-  socket.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, stableZAxis));
+  socket.quaternion.setFromRotationMatrix(new ThreeMatrix4().makeBasis(xAxis, yAxis, stableZAxis));
   socket.scale.set(1, 1, 1);
   socket.updateMatrixWorld?.(true);
   return true;
@@ -1511,7 +1534,7 @@ const createShieldArmLineSocket = (root = null, arm = 'left') => {
   root.traverse((child) => {
     if (!existingSocket && child.userData?.rpg3dShieldArmLineSocket === socketKey) existingSocket = child;
   });
-  const socket = existingSocket || new THREE.Group();
+  const socket = existingSocket || new ThreeGroup();
   socket.name = arm === 'right' ? 'Rpg3DRightShieldArmLineSocket' : 'Rpg3DLeftShieldArmLineSocket';
   socket.userData.rpg3dShieldArmLineSocket = socketKey;
   socket.userData.rpg3dEquipmentSocketHand = arm;
@@ -1618,8 +1641,8 @@ const getFallbackArmorGripLocalPoint = (root = null, point = {}) => {
       return root.worldToLocal(worldRigPoint);
     }
   }
-  const size = bounds.getSize(new THREE.Vector3());
-  const center = bounds.getCenter(new THREE.Vector3());
+  const size = bounds.getSize(new ThreeVector3());
+  const center = bounds.getCenter(new ThreeVector3());
   if (!Number.isFinite(size.x) || !Number.isFinite(size.y) || size.y <= 0.0001) return null;
   const side = point.arm === 'right' ? 1 : (point.arm === 'left' ? -1 : 0);
   const heightRatio = point.role === 'shoulder'
@@ -1628,7 +1651,7 @@ const getFallbackArmorGripLocalPoint = (root = null, point = {}) => {
   const lateralRatio = point.role === 'shoulder'
     ? 0.34
     : (point.role === 'elbow' ? 0.46 : 0);
-  const worldPoint = new THREE.Vector3(
+  const worldPoint = new ThreeVector3(
     center.x + side * Math.max(size.x * lateralRatio, side ? 0.18 : 0),
     bounds.min.y + size.y * heightRatio,
     center.z + size.z * 0.08,
@@ -1673,19 +1696,19 @@ const updateArmorArmLineSocket = (socket = null) => {
   if (!parent || !shoulderBone?.isBone || !elbowBone?.isBone) return false;
   shoulderBone.updateMatrixWorld?.(true);
   elbowBone.updateMatrixWorld?.(true);
-  const shoulderPoint = getLocalPointFromWorld(parent, shoulderBone.getWorldPosition(new THREE.Vector3()));
-  const elbowPoint = getLocalPointFromWorld(parent, elbowBone.getWorldPosition(new THREE.Vector3()));
+  const shoulderPoint = getLocalPointFromWorld(parent, shoulderBone.getWorldPosition(new ThreeVector3()));
+  const elbowPoint = getLocalPointFromWorld(parent, elbowBone.getWorldPosition(new ThreeVector3()));
   if (!shoulderPoint || !elbowPoint) return false;
   const yAxis = shoulderPoint.clone().sub(elbowPoint);
   if (yAxis.lengthSq() <= 0.000001) return false;
   yAxis.normalize();
-  const preferred = elbowBone.localToWorld(new THREE.Vector3(0, 0, 1));
-  const preferredLocal = getLocalPointFromWorld(parent, preferred)?.sub(elbowPoint) || new THREE.Vector3(0, 0, 1);
+  const preferred = elbowBone.localToWorld(new ThreeVector3(0, 0, 1));
+  const preferredLocal = getLocalPointFromWorld(parent, preferred)?.sub(elbowPoint) || new ThreeVector3(0, 0, 1);
   const zAxis = getProjectedPerpendicularAxis(yAxis, preferredLocal);
   const xAxis = yAxis.clone().cross(zAxis).normalize();
   const stableZAxis = xAxis.clone().cross(yAxis).normalize();
   socket.position.copy(shoulderPoint);
-  socket.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, stableZAxis));
+  socket.quaternion.setFromRotationMatrix(new ThreeMatrix4().makeBasis(xAxis, yAxis, stableZAxis));
   socket.scale.set(1, 1, 1);
   socket.updateMatrixWorld?.(true);
   return true;
@@ -1713,7 +1736,7 @@ const createArmorBodySocket = (root = null, item = {}, actor = {}, options = {})
   root.traverse((child) => {
     if (!existingSocket && child.userData?.[socketUserDataField] === socketKey) existingSocket = child;
   });
-  const socket = existingSocket || new THREE.Group();
+  const socket = existingSocket || new ThreeGroup();
   socket.name = socketName;
   socket.userData.rpg3dArmorBodySocket = socketKey;
   socket.userData[socketUserDataField] = socketKey;
@@ -1740,7 +1763,7 @@ const createArmorArmLineSocket = (root = null, arm = 'left', actor = {}) => {
     root.traverse((child) => {
       if (!existingSocket && child.userData?.rpg3dArmorArmLineSocket === socketKey) existingSocket = child;
     });
-    const socket = existingSocket || new THREE.Group();
+    const socket = existingSocket || new ThreeGroup();
     socket.name = arm === 'right' ? 'Rpg3DRightArmorArmSocket' : 'Rpg3DLeftArmorArmSocket';
     socket.userData.rpg3dArmorArmLineSocket = socketKey;
     socket.rpg3dArmorShoulderBone = shoulderBone;
@@ -2019,9 +2042,9 @@ const addGltfActorModel = (actorGroup, template, actor, height, radius3d, select
   if (fitted) {
     actorGroup.add(instance);
   } else {
-    const fallback = new THREE.Mesh(
-      new THREE.CapsuleGeometry(radius3d * modelScale, Math.max(0.2, height - radius3d * 2 * modelScale), 6, 14),
-      new THREE.MeshStandardMaterial({
+    const fallback = new ThreeMesh(
+      new ThreeCapsuleGeometry(radius3d * modelScale, Math.max(0.2, height - radius3d * 2 * modelScale), 6, 14),
+      new ThreeMeshStandardMaterial({
         color: selected ? '#f8fbff' : '#facc15',
         emissive: '#67e8f9',
         emissiveIntensity: 0.12,
@@ -2072,8 +2095,8 @@ const addGltfActorModel = (actorGroup, template, actor, height, radius3d, select
 
 const fitWeaponModelToLargestDimension = (object, targetSize = 1.15) => {
   object.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(object);
-  const size = box.getSize(new THREE.Vector3());
+  const box = new ThreeBox3().setFromObject(object);
+  const size = box.getSize(new ThreeVector3());
   const largest = Math.max(size.x, size.y, size.z);
   if (!Number.isFinite(largest) || largest <= 0.0001) return;
   object.scale.multiplyScalar(targetSize / largest);
@@ -2158,8 +2181,8 @@ const fitEquipmentModelToItemDimensions = (object, item = {}) => {
     return true;
   }
   object.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(object);
-  const size = box.getSize(new THREE.Vector3());
+  const box = new ThreeBox3().setFromObject(object);
+  const size = box.getSize(new ThreeVector3());
   if (
     !Number.isFinite(size.x) || size.x <= 0.0001
     || !Number.isFinite(size.y) || size.y <= 0.0001
@@ -2219,8 +2242,8 @@ const alignEquipmentGripToOrigin = (equipment, grip = null) => {
   if (!equipment || !grip) return false;
   equipment.updateMatrixWorld(true);
   grip.updateMatrixWorld(true);
-  const objectOrigin = equipment.getWorldPosition(new THREE.Vector3());
-  const gripOrigin = grip.getWorldPosition(new THREE.Vector3());
+  const objectOrigin = equipment.getWorldPosition(new ThreeVector3());
+  const gripOrigin = grip.getWorldPosition(new ThreeVector3());
   const gripOffset = gripOrigin.sub(objectOrigin);
   if (!Number.isFinite(gripOffset.x) || !Number.isFinite(gripOffset.y) || !Number.isFinite(gripOffset.z)) return false;
   equipment.position.sub(gripOffset);
@@ -2235,7 +2258,7 @@ const getManualEquipmentGrip = (item = {}, equipmentScale = 1) => {
   const offsetScale = Number.isFinite(referenceScale) && referenceScale > 0.0001
     ? Math.max(0.001, Number(equipmentScale) || 1) / referenceScale
     : 1;
-  const offset = new THREE.Vector3(
+  const offset = new ThreeVector3(
     Number(item[`weaponGrip${suffix}X`]) || 0,
     Number(item[`weaponGrip${suffix}Y`]) || 0,
     Number(item[`weaponGrip${suffix}Z`]) || 0,
@@ -2243,7 +2266,7 @@ const getManualEquipmentGrip = (item = {}, equipmentScale = 1) => {
   return {
     name: suffix === 'Left' ? 'manual-left-hand' : 'manual-right-hand',
     offset,
-    rotation: new THREE.Euler(
+    rotation: new ThreeEuler(
       degreesToRadians(item[`weaponGrip${suffix}RotationX`] || 0),
       degreesToRadians(item[`weaponGrip${suffix}RotationY`] || 0),
       degreesToRadians(item[`weaponGrip${suffix}RotationZ`] || 0),
@@ -2260,7 +2283,7 @@ const getShieldGripOffsetScale = (item = {}, equipmentScale = 1) => {
 
 const getShieldGripPointOffset = (item = {}, point = 'Hand', equipmentScale = 1) => {
   const fallbackY = point === 'Elbow' ? 0.35 : -0.35;
-  return new THREE.Vector3(
+  return new ThreeVector3(
     Number(item[`shieldGrip${point}X`]) || 0,
     Number(item[`shieldGrip${point}Y`]) || fallbackY,
     Number(item[`shieldGrip${point}Z`]) || 0,
@@ -2281,7 +2304,7 @@ const getManualShieldGrip = (item = {}, equipmentScale = 1) => {
         mode: 'line',
         midpoint: handOffset.clone().add(elbowOffset).multiplyScalar(0.5),
         line,
-        rotation: new THREE.Quaternion().setFromUnitVectors(line.normalize(), new THREE.Vector3(0, 1, 0)),
+        rotation: new ThreeQuaternion().setFromUnitVectors(line.normalize(), new ThreeVector3(0, 1, 0)),
       };
     }
   }
@@ -2300,7 +2323,7 @@ const getArmorGripOffsetScale = (item = {}, equipmentScale = 1) => {
 };
 
 const getArmorGripPointOffset = (item = {}, point = {}, equipmentScale = 1) => (
-  new THREE.Vector3(
+  new ThreeVector3(
     Number.isFinite(Number(item[`armorGrip${point.suffix}X`])) ? Number(item[`armorGrip${point.suffix}X`]) : point.defaultX,
     Number.isFinite(Number(item[`armorGrip${point.suffix}Y`])) ? Number(item[`armorGrip${point.suffix}Y`]) : point.defaultY,
     Number.isFinite(Number(item[`armorGrip${point.suffix}Z`])) ? Number(item[`armorGrip${point.suffix}Z`]) : point.defaultZ,
@@ -2370,16 +2393,16 @@ const getManualArmorArmGrip = (item = {}, equipmentScale = 1, arm = 'left') => {
     anchor: shoulderOffset,
     midpoint: shoulderOffset.clone().add(elbowOffset).multiplyScalar(0.5),
     line,
-    rotation: new THREE.Quaternion().setFromUnitVectors(line.clone().normalize(), new THREE.Vector3(0, 1, 0)),
+    rotation: new ThreeQuaternion().setFromUnitVectors(line.clone().normalize(), new ThreeVector3(0, 1, 0)),
   };
 };
 
 const getObjectLocalBoundsCenter = (object = null) => {
-  if (!object) return new THREE.Vector3();
+  if (!object) return new ThreeVector3();
   object.updateMatrixWorld?.(true);
-  const box = new THREE.Box3().setFromObject(object);
-  if (!Number.isFinite(box.min.x) || !Number.isFinite(box.max.x)) return new THREE.Vector3();
-  return object.worldToLocal(box.getCenter(new THREE.Vector3()));
+  const box = new ThreeBox3().setFromObject(object);
+  if (!Number.isFinite(box.min.x) || !Number.isFinite(box.max.x)) return new ThreeVector3();
+  return object.worldToLocal(box.getCenter(new ThreeVector3()));
 };
 
 const getManualArmorPieceGrip = (pieceObject = null, piece = {}) => ({
@@ -2391,8 +2414,8 @@ const getManualArmorPieceGrip = (pieceObject = null, piece = {}) => ({
 const getFallbackWeaponGripOffset = (equipment) => {
   if (!equipment) return null;
   equipment.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(equipment);
-  const size = box.getSize(new THREE.Vector3());
+  const box = new ThreeBox3().setFromObject(equipment);
+  const size = box.getSize(new ThreeVector3());
   const dimensions = [
     { axis: 'x', size: size.x },
     { axis: 'y', size: size.y },
@@ -2400,8 +2423,8 @@ const getFallbackWeaponGripOffset = (equipment) => {
   ].sort((a, b) => b.size - a.size);
   if (!Number.isFinite(dimensions[0]?.size) || dimensions[0].size <= 0.0001) return null;
   if (dimensions[0].size < Math.max(dimensions[1]?.size || 0, dimensions[2]?.size || 0) * 1.6) return null;
-  const objectOrigin = equipment.getWorldPosition(new THREE.Vector3());
-  const gripPoint = box.getCenter(new THREE.Vector3());
+  const objectOrigin = equipment.getWorldPosition(new ThreeVector3());
+  const gripPoint = box.getCenter(new ThreeVector3());
   const axis = dimensions[0].axis;
   gripPoint[axis] = box.min[axis] + dimensions[0].size * 0.12;
   const offset = gripPoint.sub(objectOrigin);
@@ -2412,7 +2435,7 @@ const getFallbackWeaponGripOffset = (equipment) => {
 const getEquipmentParentScaleFactor = (socket = null) => {
   if (!socket) return 1;
   socket.updateMatrixWorld?.(true);
-  const parentScale = socket.getWorldScale(new THREE.Vector3());
+  const parentScale = socket.getWorldScale(new ThreeVector3());
   const scaleFactor = Math.max(
     Math.abs(parentScale.x),
     Math.abs(parentScale.y),
@@ -2438,36 +2461,36 @@ const attachPreparedEquipmentToSocket = (socket, equipment, item = {}, role = 'e
         : (String(role).startsWith('armor') ? getManualArmorGrip(item, scale) : null))));
   const grip = manualGrip ? null : findEquipmentGripSocket(equipment, role);
   const fallbackGripOffset = (manualGrip || grip || role !== 'weapon') ? null : getFallbackWeaponGripOffset(equipment);
-  const attachment = manualGrip || grip || fallbackGripOffset || hasBaseRotation ? new THREE.Group() : equipment;
+  const attachment = manualGrip || grip || fallbackGripOffset || hasBaseRotation ? new ThreeGroup() : equipment;
   if (manualGrip || grip || fallbackGripOffset || hasBaseRotation) {
     attachment.name = getEquipmentAttachmentName(role);
     if (manualGrip) {
       if (manualGrip.mode === 'frame') {
         const frameQuaternion = manualGrip.quaternion?.isQuaternion
           ? manualGrip.quaternion
-          : new THREE.Quaternion();
+          : new ThreeQuaternion();
         if (manualGrip.oriented) {
           const frameRotation = frameQuaternion.clone().invert();
           equipment.quaternion.premultiply(frameRotation);
-          equipment.position.sub((manualGrip.center || new THREE.Vector3()).clone().applyQuaternion(frameRotation));
+          equipment.position.sub((manualGrip.center || new ThreeVector3()).clone().applyQuaternion(frameRotation));
         } else {
           const orientedFrame = equipment.quaternion.clone().multiply(frameQuaternion).normalize();
           equipment.quaternion.premultiply(orientedFrame.invert());
-          equipment.position.sub((manualGrip.center || new THREE.Vector3()).clone().applyQuaternion(equipment.quaternion));
+          equipment.position.sub((manualGrip.center || new ThreeVector3()).clone().applyQuaternion(equipment.quaternion));
         }
       } else if (manualGrip.mode === 'line') {
-        const line = manualGrip.line?.clone?.() || new THREE.Vector3(0, 1, 0);
-        const lineOrigin = manualGrip.anchor?.clone?.() || manualGrip.midpoint?.clone?.() || new THREE.Vector3();
+        const line = manualGrip.line?.clone?.() || new ThreeVector3(0, 1, 0);
+        const lineOrigin = manualGrip.anchor?.clone?.() || manualGrip.midpoint?.clone?.() || new ThreeVector3();
         if (manualGrip.oriented) {
           if (line.lengthSq() > 0.000001) {
-            const lineRotation = new THREE.Quaternion().setFromUnitVectors(line.normalize(), new THREE.Vector3(0, 1, 0));
+            const lineRotation = new ThreeQuaternion().setFromUnitVectors(line.normalize(), new ThreeVector3(0, 1, 0));
             equipment.quaternion.premultiply(lineRotation);
             equipment.position.sub(lineOrigin.applyQuaternion(lineRotation));
           }
         } else {
           const orientedLine = line.applyQuaternion(equipment.quaternion);
           if (orientedLine.lengthSq() > 0.000001) {
-            const lineRotation = new THREE.Quaternion().setFromUnitVectors(orientedLine.normalize(), new THREE.Vector3(0, 1, 0));
+            const lineRotation = new ThreeQuaternion().setFromUnitVectors(orientedLine.normalize(), new ThreeVector3(0, 1, 0));
             equipment.quaternion.premultiply(lineRotation);
           }
           equipment.position.sub(lineOrigin.applyQuaternion(equipment.quaternion));
@@ -2510,8 +2533,8 @@ const attachPreparedEquipmentToSocket = (socket, equipment, item = {}, role = 'e
 };
 
 const getActorModelBodyBounds = (actorModel) => {
-  const bounds = new THREE.Box3();
-  const childBounds = new THREE.Box3();
+  const bounds = new ThreeBox3();
+  const childBounds = new ThreeBox3();
   const skipped = new Set();
   let hasBounds = false;
   actorModel?.updateMatrixWorld?.(true);
@@ -2531,7 +2554,7 @@ const getActorModelBodyBounds = (actorModel) => {
     else bounds.union(childBounds);
     hasBounds = true;
   });
-  return hasBounds ? bounds : new THREE.Box3().setFromObject(actorModel);
+  return hasBounds ? bounds : new ThreeBox3().setFromObject(actorModel);
 };
 
 const createFallbackEquipmentSocket = (actorModel, role = 'weapon', hand = 'right') => {
@@ -2545,17 +2568,17 @@ const createFallbackEquipmentSocket = (actorModel, role = 'weapon', hand = 'righ
   });
   if (existingSocket) return existingSocket;
   const bounds = getActorModelBodyBounds(actorModel);
-  const size = bounds.getSize(new THREE.Vector3());
-  const center = bounds.getCenter(new THREE.Vector3());
+  const size = bounds.getSize(new ThreeVector3());
+  const center = bounds.getCenter(new ThreeVector3());
   if (!Number.isFinite(size.x) || !Number.isFinite(size.y) || size.y <= 0.0001) return null;
   const side = role === 'shield' || (role === 'weapon' && hand === 'left') ? -1 : 1;
   const centeredRole = role === 'armor' || role === 'helmet' || role === 'leggings';
-  const worldPoint = new THREE.Vector3(
+  const worldPoint = new ThreeVector3(
     centeredRole ? center.x : center.x + side * Math.max(size.x * 0.42, 0.28),
     bounds.min.y + size.y * (role === 'helmet' ? 0.88 : (role === 'leggings' ? 0.25 : (role === 'armor' ? 0.48 : (role === 'shield' ? 0.5 : 0.48)))),
     center.z + size.z * (role === 'helmet' ? 0.02 : (role === 'leggings' ? 0.1 : (role === 'armor' ? 0.08 : (role === 'shield' ? 0.08 : 0.22)))),
   );
-  const socket = new THREE.Group();
+  const socket = new ThreeGroup();
   socket.name = role === 'armor'
     ? 'Rpg3DFallbackArmorSocket'
     : (role === 'helmet'
@@ -2642,8 +2665,8 @@ const addEquippedLeggingsToActorModel = (actorModel, leggingsTemplate, leggingsI
 const getObjectLargestDimension = (object = null) => {
   if (!object) return 0;
   object.updateMatrixWorld?.(true);
-  const box = new THREE.Box3().setFromObject(object);
-  const size = box.getSize(new THREE.Vector3());
+  const box = new ThreeBox3().setFromObject(object);
+  const size = box.getSize(new ThreeVector3());
   const largest = Math.max(size.x, size.y, size.z);
   return Number.isFinite(largest) && largest > 0.0001 ? largest : 0;
 };
@@ -2651,8 +2674,8 @@ const getObjectLargestDimension = (object = null) => {
 const getObjectBoundingDimensions = (object = null) => {
   if (!object) return null;
   object.updateMatrixWorld?.(true);
-  const box = new THREE.Box3().setFromObject(object);
-  const size = box.getSize(new THREE.Vector3());
+  const box = new ThreeBox3().setFromObject(object);
+  const size = box.getSize(new ThreeVector3());
   if (
     !Number.isFinite(size.x) || size.x <= 0.0001
     || !Number.isFinite(size.y) || size.y <= 0.0001
@@ -2668,8 +2691,8 @@ const getArmorGripReferenceScale = (item = {}, fallback = 1) => {
 
 const getArmorPointOriginalSpace = (item = {}, suffix = '', referenceScale = 1) => {
   const point = ARMOR_GRIP_POINTS.find((entry) => entry.suffix === suffix);
-  if (!point) return new THREE.Vector3();
-  return new THREE.Vector3(
+  if (!point) return new ThreeVector3();
+  return new ThreeVector3(
     Number.isFinite(Number(item[`armorGrip${suffix}X`])) ? Number(item[`armorGrip${suffix}X`]) : point.defaultX,
     Number.isFinite(Number(item[`armorGrip${suffix}Y`])) ? Number(item[`armorGrip${suffix}Y`]) : point.defaultY,
     Number.isFinite(Number(item[`armorGrip${suffix}Z`])) ? Number(item[`armorGrip${suffix}Z`]) : point.defaultZ,
@@ -2695,9 +2718,9 @@ const classifyArmorMeshSegment = (mesh = null, equipment = null, item = {}, refe
   if (namedAsArm && (haystack.includes('left') || haystack.includes('larm') || haystack.includes('lshoulder'))) return 'left';
   if (namedAsArm && (haystack.includes('right') || haystack.includes('rarm') || haystack.includes('rshoulder'))) return 'right';
   if (!equipment) return 'body';
-  const box = new THREE.Box3().setFromObject(mesh);
+  const box = new ThreeBox3().setFromObject(mesh);
   if (!Number.isFinite(box.min.x) || !Number.isFinite(box.max.x)) return 'body';
-  const center = equipment.worldToLocal(box.getCenter(new THREE.Vector3()));
+  const center = equipment.worldToLocal(box.getCenter(new ThreeVector3()));
   return classifyArmorPointSegment(center, item, referenceScale);
 };
 
@@ -2705,7 +2728,7 @@ const getPointToSegmentDistance = (point, start, end) => {
   const segment = end.clone().sub(start);
   const lengthSq = segment.lengthSq();
   if (lengthSq <= 0.000001) return point.distanceTo(start);
-  const t = THREE.MathUtils.clamp(point.clone().sub(start).dot(segment) / lengthSq, 0, 1);
+  const t = ThreeMathUtils.clamp(point.clone().sub(start).dot(segment) / lengthSq, 0, 1);
   return point.distanceTo(start.clone().add(segment.multiplyScalar(t)));
 };
 
@@ -2714,13 +2737,13 @@ const isPointInsideArmorTorso = (point, leftShoulder, rightShoulder, lowerBelly,
   const maxShoulderX = Math.max(leftShoulder.x, rightShoulder.x);
   const shoulderY = (leftShoulder.y + rightShoulder.y) / 2;
   const torsoHeight = Math.max(0.0001, shoulderY - lowerBelly.y);
-  const t = THREE.MathUtils.clamp((point.y - lowerBelly.y) / torsoHeight, 0, 1);
+  const t = ThreeMathUtils.clamp((point.y - lowerBelly.y) / torsoHeight, 0, 1);
   const shoulderWidth = Math.max(0.0001, maxShoulderX - minShoulderX);
   const shoulderCenterX = (leftShoulder.x + rightShoulder.x) / 2;
   const topHalfWidth = Math.max(referenceScale * 0.16, shoulderWidth * 0.37);
   const bottomHalfWidth = Math.max(referenceScale * 0.22, shoulderWidth * 0.48);
-  const leftEdge = THREE.MathUtils.lerp(lowerBelly.x - bottomHalfWidth, shoulderCenterX - topHalfWidth, t);
-  const rightEdge = THREE.MathUtils.lerp(lowerBelly.x + bottomHalfWidth, shoulderCenterX + topHalfWidth, t);
+  const leftEdge = ThreeMathUtils.lerp(lowerBelly.x - bottomHalfWidth, shoulderCenterX - topHalfWidth, t);
+  const rightEdge = ThreeMathUtils.lerp(lowerBelly.x + bottomHalfWidth, shoulderCenterX + topHalfWidth, t);
   const margin = Math.max(referenceScale * 0.04, shoulderWidth * 0.055);
   return point.x >= leftEdge - margin && point.x <= rightEdge + margin;
 };
@@ -2740,7 +2763,7 @@ const getArmorArmCutCandidate = (point, shoulder, elbow, bodyCenter, segment, fa
   return { segment, score: lineDistance - Math.abs((point.x - bodyEdgeX) * 0.15) };
 };
 
-const classifyArmorPointSegment = (center = new THREE.Vector3(), item = {}, referenceScale = 1, preparedPaintStrokes = null) => {
+const classifyArmorPointSegment = (center = new ThreeVector3(), item = {}, referenceScale = 1, preparedPaintStrokes = null) => {
   const paintSegment = classifyArmorPaintSegment(center, item, referenceScale, preparedPaintStrokes);
   if (paintSegment) return paintSegment;
   const contourSegment = classifyArmorContourSegment(center, item, referenceScale);
@@ -2820,12 +2843,12 @@ const appendSplitGeometryTriangle = (builder, geometry, vertexIndices, materialI
 const buildSplitBufferGeometry = (sourceGeometry = null, builder = null) => {
   const positionValues = builder?.attributes?.position || [];
   if (!sourceGeometry || !builder || positionValues.length < 9) return null;
-  const geometry = new THREE.BufferGeometry();
+  const geometry = new ThreeBufferGeometry();
   builder.attributeNames.forEach((name) => {
     const attribute = sourceGeometry.attributes[name];
     const values = builder.attributes[name];
     if (!attribute || !values?.length) return;
-    geometry.setAttribute(name, new THREE.BufferAttribute(new attribute.array.constructor(values), attribute.itemSize, attribute.normalized));
+    geometry.setAttribute(name, new ThreeBufferAttribute(new attribute.array.constructor(values), attribute.itemSize, attribute.normalized));
   });
   builder.groups.forEach((group) => geometry.addGroup(group.start, group.count, group.materialIndex));
   if (!geometry.attributes.normal) geometry.computeVertexNormals();
@@ -2837,7 +2860,7 @@ const buildSplitBufferGeometry = (sourceGeometry = null, builder = null) => {
 const createSegmentMeshFromSplitGeometry = (sourceMesh = null, geometry = null, options = {}) => {
   if (!sourceMesh || !geometry) return null;
   const mesh = options.bakedSkinnedMesh
-    ? new THREE.Mesh(geometry, sourceMesh.material)
+    ? new ThreeMesh(geometry, sourceMesh.material)
     : sourceMesh.clone(false);
   if (options.bakedSkinnedMesh) {
     mesh.name = sourceMesh.name || 'Rpg3DArmorSplitSegment';
@@ -2891,8 +2914,8 @@ const classifySingleArmorMeshTriangles = ({
   if (!geometry || !position || !readVertexPosition || !mesh || !equipment) return counts;
   const index = geometry.index;
   const triangleLimit = index ? index.count : position.count;
-  const localCenter = new THREE.Vector3();
-  const worldCenter = new THREE.Vector3();
+  const localCenter = new ThreeVector3();
+  const worldCenter = new ThreeVector3();
   equipment.updateMatrixWorld?.(true);
   mesh.updateMatrixWorld?.(true);
   for (let triangleStart = 0; triangleStart + 2 < triangleLimit; triangleStart += 3) {
@@ -2934,7 +2957,7 @@ const splitSingleArmorMeshIntoSegments = (mesh = null, equipment = null, item = 
   const vertexPositionCache = new Map();
   const readVertexPosition = (vertexIndex) => {
     if (vertexPositionCache.has(vertexIndex)) return vertexPositionCache.get(vertexIndex);
-    const vertex = new THREE.Vector3(
+    const vertex = new ThreeVector3(
       position.getX(vertexIndex),
       position.getY(vertexIndex),
       position.getZ(vertexIndex),
@@ -3020,19 +3043,19 @@ const createSegmentedArmorEquipment = (equipment = null, item = {}) => {
   const targetDimensions = getEquipmentTargetDimensions({ ...item, weaponModelScale: targetSize });
   const sourceDimensions = getObjectBoundingDimensions(equipment);
   const fitScale = sourceDimensions && hasExplicitEquipmentDimensions(item)
-    ? new THREE.Vector3(
+    ? new ThreeVector3(
       targetDimensions.width / sourceDimensions.x,
       targetDimensions.height / sourceDimensions.y,
       targetDimensions.depth / sourceDimensions.z,
     )
-    : new THREE.Vector3(
+    : new ThreeVector3(
       largest > 0.0001 ? targetSize / largest : 1,
       largest > 0.0001 ? targetSize / largest : 1,
       largest > 0.0001 ? targetSize / largest : 1,
     );
-  const body = new THREE.Group();
-  const left = new THREE.Group();
-  const right = new THREE.Group();
+  const body = new ThreeGroup();
+  const left = new ThreeGroup();
+  const right = new ThreeGroup();
   body.name = 'Rpg3DArmorBodyModel';
   left.name = 'Rpg3DArmorLeftArmModel';
   right.name = 'Rpg3DArmorRightArmModel';
@@ -3061,7 +3084,7 @@ const createSegmentedArmorEquipment = (equipment = null, item = {}) => {
   const pieceGroupById = new Map();
   const getPieceGroup = (piece) => {
     if (pieceGroupById.has(piece.id)) return pieceGroupById.get(piece.id);
-    const group = new THREE.Group();
+    const group = new ThreeGroup();
     group.name = `Rpg3DArmorPieceModel_${piece.name || piece.id}`;
     group.userData.rpg3dArmorPieceId = piece.id;
     group.userData.rpg3dArmorPieceName = piece.name || '';
@@ -3374,18 +3397,18 @@ const getActorSceneDimensions = (actor = {}, options = {}) => {
 const addPickup = (group, config, pickup, selected, time) => {
   const position = toScenePosition(config, pickup.x, pickup.y, 0.42 + Math.sin(time * 4) * 0.04 + getEntityLiftHeight(pickup));
   const color = pickup.type === 'health' ? '#ef4444' : pickup.type === 'mana' ? '#38bdf8' : '#facc15';
-  const pickupGroup = new THREE.Group();
+  const pickupGroup = new ThreeGroup();
   pickupGroup.position.copy(position);
-  const ring = new THREE.Mesh(
-    new THREE.TorusGeometry(PICKUP_RADIUS * WORLD_SCALE, 0.055, 10, 32),
-    new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.4, roughness: 0.36 }),
+  const ring = new ThreeMesh(
+    new ThreeTorusGeometry(PICKUP_RADIUS * WORLD_SCALE, 0.055, 10, 32),
+    new ThreeMeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.4, roughness: 0.36 }),
   );
   ring.castShadow = true;
   ring.receiveShadow = true;
   pickupGroup.add(ring);
-  const core = new THREE.Mesh(
-    new THREE.SphereGeometry(PICKUP_RADIUS * WORLD_SCALE * 0.52, 12, 12),
-    new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: color, emissiveIntensity: 0.75 }),
+  const core = new ThreeMesh(
+    new ThreeSphereGeometry(PICKUP_RADIUS * WORLD_SCALE * 0.52, 12, 12),
+    new ThreeMeshStandardMaterial({ color: '#ffffff', emissive: color, emissiveIntensity: 0.75 }),
   );
   core.castShadow = true;
   core.receiveShadow = true;
@@ -3414,7 +3437,7 @@ const addActor = (group, config, actor, options) => {
     editMode = false,
     supportHeight = 0,
   } = options;
-  const actorGroup = new THREE.Group();
+  const actorGroup = new ThreeGroup();
   const lift = getEntityLiftHeight(actor);
   actorGroup.position.copy(toScenePosition(config, actor.x, actor.y, supportHeight + lift));
   const radius3d = Math.max(0.22, radius * WORLD_SCALE);
@@ -3471,7 +3494,7 @@ const addActor = (group, config, actor, options) => {
   };
 
   const actorMaterial = (color, options = {}) => {
-    const material = new THREE.MeshStandardMaterial({
+    const material = new ThreeMeshStandardMaterial({
       color: options.skin && texture ? '#ffffff' : color,
       map: options.skin && texture ? texture : null,
       roughness: options.roughness ?? 0.58,
@@ -3485,29 +3508,29 @@ const addActor = (group, config, actor, options) => {
 
   const addTexturePanel = (width, panelHeight, y, z, opacity = 0.96) => {
     if (!texture) return;
-    const material = new THREE.MeshBasicMaterial({
+    const material = new ThreeMeshBasicMaterial({
       map: texture,
       color: '#ffffff',
       transparent: true,
       opacity,
       alphaTest: 0.06,
-      side: THREE.DoubleSide,
+      side: ThreeDoubleSide,
     });
     applyMaterialBrightnessFromBase(material, actorBrightness, { actorManaged: true });
-    const panel = new THREE.Mesh(
-      new THREE.PlaneGeometry(width, panelHeight),
+    const panel = new ThreeMesh(
+      new ThreePlaneGeometry(width, panelHeight),
       material,
     );
     panel.position.set(0, y, z);
     panel.castShadow = true;
     panel.receiveShadow = true;
-    panel.material.shadowSide = THREE.DoubleSide;
+    panel.material.shadowSide = ThreeDoubleSide;
     actorGroup.add(panel);
   };
 
   const addImageSprite = (width, spriteHeight, y, z = 0) => {
     if (!texture || renderMode === 'sprite') return;
-    const material = new THREE.SpriteMaterial({
+    const material = new ThreeSpriteMaterial({
       map: texture,
       color: '#ffffff',
       transparent: true,
@@ -3517,7 +3540,7 @@ const addActor = (group, config, actor, options) => {
       depthWrite: false,
     });
     applyMaterialBrightnessFromBase(material, actorBrightness, { actorManaged: true });
-    const sprite = new THREE.Sprite(material);
+    const sprite = new ThreeSprite(material);
     sprite.scale.set(width, spriteHeight, 1);
     sprite.position.set(0, y, z);
     sprite.renderOrder = 12;
@@ -3527,8 +3550,8 @@ const addActor = (group, config, actor, options) => {
   };
 
   const addFallbackActorBody = (color = skinnedBodyColor) => {
-    const fallback = new THREE.Mesh(
-      new THREE.CapsuleGeometry(radius3d * 0.88 * modelScale, height * 0.58, 6, 12),
+    const fallback = new ThreeMesh(
+      new ThreeCapsuleGeometry(radius3d * 0.88 * modelScale, height * 0.58, 6, 12),
       actorMaterial(color, { metalness: 0.12, skin: false }),
     );
     fallback.position.y = height * 0.5;
@@ -3594,14 +3617,14 @@ const addActor = (group, config, actor, options) => {
   }
 
   if (renderMode === 'sprite' && texture) {
-    const material = new THREE.SpriteMaterial({
+    const material = new ThreeSpriteMaterial({
       map: texture,
       color: '#ffffff',
       transparent: true,
       alphaTest: 0.08,
     });
     applyMaterialBrightnessFromBase(material, actorBrightness, { actorManaged: true });
-    const sprite = new THREE.Sprite(material);
+    const sprite = new ThreeSprite(material);
     sprite.scale.set(radius3d * 3.4 * modelScale, height * 1.18, 1);
     sprite.position.y = height * 0.58;
     actorGroup.add(sprite);
@@ -3613,8 +3636,8 @@ const addActor = (group, config, actor, options) => {
     );
     if (shadowCaster) actorGroup.add(shadowCaster);
   } else if (renderMode === 'block') {
-    const bodyGeometry = new THREE.BoxGeometry(radius3d * 1.7 * modelScale, height * 0.62, radius3d * 1.15 * modelScale);
-    const body = new THREE.Mesh(bodyGeometry, actorMaterial(skinnedBodyColor, { roughness: 0.5, metalness: 0.12, skin: true }));
+    const bodyGeometry = new ThreeBoxGeometry(radius3d * 1.7 * modelScale, height * 0.62, radius3d * 1.15 * modelScale);
+    const body = new ThreeMesh(bodyGeometry, actorMaterial(skinnedBodyColor, { roughness: 0.5, metalness: 0.12, skin: true }));
     body.position.y = height * 0.42;
     body.castShadow = true;
     body.receiveShadow = true;
@@ -3622,22 +3645,22 @@ const addActor = (group, config, actor, options) => {
     addTexturePanel(radius3d * 1.58 * modelScale, height * 0.5, height * 0.42, radius3d * 0.59 * modelScale + 0.012);
     addImageSprite(radius3d * 2.45 * modelScale, height * 0.82, height * 0.55);
 
-    const head = new THREE.Mesh(
-      new THREE.BoxGeometry(radius3d * 1.15 * modelScale, radius3d * 1.05 * modelScale, radius3d * 1.05 * modelScale),
+    const head = new ThreeMesh(
+      new ThreeBoxGeometry(radius3d * 1.15 * modelScale, radius3d * 1.05 * modelScale, radius3d * 1.05 * modelScale),
       actorMaterial('#f0c9a5', { roughness: 0.64, emissiveIntensity: 0.04 }),
     );
     head.position.y = height * 0.82;
     head.castShadow = true;
     actorGroup.add(head);
 
-    const shoulderGeometry = new THREE.BoxGeometry(radius3d * 2.1 * modelScale, radius3d * 0.3, radius3d * 0.7 * modelScale);
-    const shoulders = new THREE.Mesh(shoulderGeometry, actorMaterial(preset.weapon, { roughness: 0.4, metalness: 0.18 }));
+    const shoulderGeometry = new ThreeBoxGeometry(radius3d * 2.1 * modelScale, radius3d * 0.3, radius3d * 0.7 * modelScale);
+    const shoulders = new ThreeMesh(shoulderGeometry, actorMaterial(preset.weapon, { roughness: 0.4, metalness: 0.18 }));
     shoulders.position.y = height * 0.61;
     shoulders.castShadow = true;
     actorGroup.add(shoulders);
   } else if (renderMode === 'boss') {
-    const core = new THREE.Mesh(
-      new THREE.SphereGeometry(radius3d * 1.42 * modelScale, 18, 14),
+    const core = new ThreeMesh(
+      new ThreeSphereGeometry(radius3d * 1.42 * modelScale, 18, 14),
       actorMaterial(skinnedBodyColor, { roughness: 0.72, metalness: 0.02, emissiveIntensity: active ? 0.34 : 0.12, skin: true }),
     );
     core.scale.y = 1.18;
@@ -3650,7 +3673,7 @@ const addActor = (group, config, actor, options) => {
 
     const hornMaterial = actorMaterial(preset.weapon, { roughness: 0.42, metalness: 0.08, emissiveIntensity: 0.12 });
     [-1, 1].forEach((side) => {
-      const horn = new THREE.Mesh(new THREE.ConeGeometry(radius3d * 0.32 * modelScale, radius3d * 1.1 * modelScale, 8), hornMaterial);
+      const horn = new ThreeMesh(new ThreeConeGeometry(radius3d * 0.32 * modelScale, radius3d * 1.1 * modelScale, 8), hornMaterial);
       horn.position.set(side * radius3d * 0.9 * modelScale, height * 0.98, radius3d * 0.1);
       horn.rotation.z = -side * 0.52;
       horn.castShadow = true;
@@ -3658,8 +3681,8 @@ const addActor = (group, config, actor, options) => {
     });
 
     [-1, 1].forEach((side) => {
-      const arm = new THREE.Mesh(
-        new THREE.CapsuleGeometry(radius3d * 0.3 * modelScale, radius3d * 1.25 * modelScale, 5, 10),
+      const arm = new ThreeMesh(
+        new ThreeCapsuleGeometry(radius3d * 0.3 * modelScale, radius3d * 1.25 * modelScale, 5, 10),
         actorMaterial(preset.accent, { roughness: 0.55, emissiveIntensity: 0.2 }),
       );
       arm.position.set(side * radius3d * 1.42 * modelScale, height * 0.48, radius3d * 0.02);
@@ -3668,8 +3691,8 @@ const addActor = (group, config, actor, options) => {
       actorGroup.add(arm);
     });
   } else {
-    const body = new THREE.Mesh(
-      new THREE.CapsuleGeometry(radius3d * modelScale, Math.max(0.2, height - radius3d * 2 * modelScale), 6, 14),
+    const body = new ThreeMesh(
+      new ThreeCapsuleGeometry(radius3d * modelScale, Math.max(0.2, height - radius3d * 2 * modelScale), 6, 14),
       actorMaterial(skinnedBodyColor, { metalness: type === 'enemy' ? 0.08 : 0.03, skin: true }),
     );
     body.position.y = height / 2;
@@ -3679,8 +3702,8 @@ const addActor = (group, config, actor, options) => {
     addTexturePanel(radius3d * 1.85 * modelScale, height * 0.68, height * 0.48, radius3d * 0.98 * modelScale + 0.012);
     addImageSprite(radius3d * 2.45 * modelScale, height * 0.94, height * 0.58);
 
-    const head = new THREE.Mesh(
-      new THREE.SphereGeometry(radius3d * 0.74 * modelScale, 16, 12),
+    const head = new ThreeMesh(
+      new ThreeSphereGeometry(radius3d * 0.74 * modelScale, 16, 12),
       actorMaterial('#f0c9a5', { roughness: 0.68, emissive: '#000000', emissiveIntensity: 0 }),
     );
     head.position.set(radius3d * 0.32 * modelScale, height * 0.9, radius3d * 0.1);
@@ -3688,8 +3711,8 @@ const addActor = (group, config, actor, options) => {
     actorGroup.add(head);
   }
 
-  const weapon = new THREE.Mesh(
-    new THREE.BoxGeometry(radius3d * 0.36 * modelScale, radius3d * 0.3 * modelScale, radius3d * 2.55 * modelScale),
+  const weapon = new ThreeMesh(
+    new ThreeBoxGeometry(radius3d * 0.36 * modelScale, radius3d * 0.3 * modelScale, radius3d * 2.55 * modelScale),
     actorMaterial(preset.weapon, {
       roughness: 0.28,
       metalness: 0.24,
@@ -3710,9 +3733,9 @@ const addActor = (group, config, actor, options) => {
 };
 
 const addBullet = (group, config, bullet) => {
-  const mesh = new THREE.Mesh(
-    new THREE.SphereGeometry(0.08, 8, 5),
-    new THREE.MeshStandardMaterial({
+  const mesh = new ThreeMesh(
+    new ThreeSphereGeometry(0.08, 8, 5),
+    new ThreeMeshStandardMaterial({
       color: bullet.color,
       emissive: bullet.color,
       emissiveIntensity: 1.2,
@@ -3727,9 +3750,9 @@ const addBullet = (group, config, bullet) => {
 
 const addParticle = (group, config, particle, index = 0) => {
   const alpha = clamp(particle.life / particle.maxLife, 0, 1);
-  const mesh = new THREE.Mesh(
-    new THREE.SphereGeometry(0.045 + alpha * 0.035, 6, 4),
-    new THREE.MeshBasicMaterial({ color: particle.color, transparent: true, opacity: alpha }),
+  const mesh = new ThreeMesh(
+    new ThreeSphereGeometry(0.045 + alpha * 0.035, 6, 4),
+    new ThreeMeshBasicMaterial({ color: particle.color, transparent: true, opacity: alpha }),
   );
   mesh.userData.dynamicKind = 'particle';
   mesh.userData.dynamicIndex = index;

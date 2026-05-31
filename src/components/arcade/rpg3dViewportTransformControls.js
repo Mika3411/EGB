@@ -1,4 +1,6 @@
-import * as THREE from 'three';
+import {
+  MathUtils as ThreeMathUtils,
+} from 'three';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import {
   applyTransformPreview,
@@ -62,9 +64,9 @@ export const createArcadeTransformControls = ({
         entity: session.entity,
         mode: session.mode,
         rotationDelta: {
-          x: THREE.MathUtils.radToDeg(proxy.rotation.x - session.startRotation.x),
-          y: THREE.MathUtils.radToDeg(proxy.rotation.y - session.startRotation.y),
-          z: THREE.MathUtils.radToDeg(proxy.rotation.z - session.startRotation.z),
+          x: ThreeMathUtils.radToDeg(proxy.rotation.x - session.startRotation.x),
+          y: ThreeMathUtils.radToDeg(proxy.rotation.y - session.startRotation.y),
+          z: ThreeMathUtils.radToDeg(proxy.rotation.z - session.startRotation.z),
         },
         scaleDelta: {
           x: scaleRatio('x'),

@@ -1,4 +1,19 @@
-import * as THREE from 'three';
+import {
+  Box3 as ThreeBox3,
+  BoxGeometry as ThreeBoxGeometry,
+  CircleGeometry as ThreeCircleGeometry,
+  DoubleSide as ThreeDoubleSide,
+  EdgesGeometry as ThreeEdgesGeometry,
+  Group as ThreeGroup,
+  LineBasicMaterial as ThreeLineBasicMaterial,
+  LineSegments as ThreeLineSegments,
+  Mesh as ThreeMesh,
+  MeshBasicMaterial as ThreeMeshBasicMaterial,
+  MeshStandardMaterial as ThreeMeshStandardMaterial,
+  PlaneGeometry as ThreePlaneGeometry,
+  TorusGeometry as ThreeTorusGeometry,
+  Vector3 as ThreeVector3,
+} from 'three';
 
 import {
   clamp,
@@ -68,9 +83,9 @@ const applyModelRotation = (object3d, source = {}) => {
 const centerObjectHorizontallyOnOrigin = (object3d) => {
   if (!object3d) return false;
   object3d.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(object3d, true);
+  const box = new ThreeBox3().setFromObject(object3d, true);
   if (!Number.isFinite(box.min.x) || !Number.isFinite(box.max.x) || !Number.isFinite(box.min.z) || !Number.isFinite(box.max.z)) return false;
-  const center = box.getCenter(new THREE.Vector3());
+  const center = box.getCenter(new ThreeVector3());
   object3d.position.x -= center.x;
   object3d.position.z -= center.z;
   object3d.updateMatrixWorld(true);
@@ -80,7 +95,7 @@ const centerObjectHorizontallyOnOrigin = (object3d) => {
 const alignObjectTopToGround = (object3d, groundY = 0.018) => {
   if (!object3d) return false;
   object3d.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(object3d, true);
+  const box = new ThreeBox3().setFromObject(object3d, true);
   if (!Number.isFinite(box.max.y)) return false;
   object3d.position.y += groundY - box.max.y;
   object3d.updateMatrixWorld(true);
@@ -378,7 +393,7 @@ const createSupportSurfaceHeightResolver = (config = {}) => {
   return resolver;
 };
 
-const toScenePosition = (config, x, y, height = 0) => new THREE.Vector3(
+const toScenePosition = (config, x, y, height = 0) => new ThreeVector3(
   (x - config.world.width / 2) * WORLD_SCALE,
   height,
   (y - config.world.height / 2) * WORLD_SCALE,
@@ -472,9 +487,9 @@ const readEntity = (object) => {
 };
 
 const createSelectionRing = (radius = 0.55, color = '#67e8f9') => {
-  const ring = new THREE.Mesh(
-    new THREE.TorusGeometry(radius, 0.035, 8, 48),
-    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.92 }),
+  const ring = new ThreeMesh(
+    new ThreeTorusGeometry(radius, 0.035, 8, 48),
+    new ThreeMeshBasicMaterial({ color, transparent: true, opacity: 0.92 }),
   );
   ring.rotation.x = Math.PI / 2;
   ring.position.y = 0.045;
@@ -482,22 +497,22 @@ const createSelectionRing = (radius = 0.55, color = '#67e8f9') => {
 };
 
 const createImageShadowMaterial = (texture) => {
-  const material = new THREE.MeshBasicMaterial({
+  const material = new ThreeMeshBasicMaterial({
     map: texture,
     transparent: true,
     alphaTest: 0.08,
-    side: THREE.DoubleSide,
+    side: ThreeDoubleSide,
     colorWrite: false,
     depthWrite: false,
   });
-  material.shadowSide = THREE.DoubleSide;
+  material.shadowSide = ThreeDoubleSide;
   return material;
 };
 
 const createImageShadowCasterPlane = (texture, width, height, y, z = 0) => {
   if (!texture) return null;
-  const caster = new THREE.Mesh(
-    new THREE.PlaneGeometry(width, height),
+  const caster = new ThreeMesh(
+    new ThreePlaneGeometry(width, height),
     createImageShadowMaterial(texture),
   );
   caster.name = 'image-shadow-caster';
@@ -509,24 +524,24 @@ const createImageShadowCasterPlane = (texture, width, height, y, z = 0) => {
 };
 
 const createVisibleImagePlaneMaterial = (texture) => {
-  const material = new THREE.MeshStandardMaterial({
+  const material = new ThreeMeshStandardMaterial({
     map: texture,
     color: '#ffffff',
     transparent: true,
     alphaTest: 0.08,
-    side: THREE.DoubleSide,
+    side: ThreeDoubleSide,
     roughness: 0.74,
     metalness: 0.02,
     emissive: '#04070a',
     emissiveIntensity: 0.02,
   });
-  material.shadowSide = THREE.DoubleSide;
+  material.shadowSide = ThreeDoubleSide;
   return material;
 };
 
-const createSelectionEdges = (geometry) => new THREE.LineSegments(
-  new THREE.EdgesGeometry(geometry),
-  new THREE.LineBasicMaterial({ color: '#67e8f9', transparent: true, opacity: 0.95 }),
+const createSelectionEdges = (geometry) => new ThreeLineSegments(
+  new ThreeEdgesGeometry(geometry),
+  new ThreeLineBasicMaterial({ color: '#67e8f9', transparent: true, opacity: 0.95 }),
 );
 
 const createTileDuplicateHandle = (direction, width, depth, propId) => {
@@ -539,28 +554,28 @@ const createTileDuplicateHandle = (direction, width, depth, propId) => {
     down: { x: 0, z: depth / 2 + gap, rotation: Math.PI },
   };
   const placement = positions[direction] || positions.right;
-  const handle = new THREE.Group();
+  const handle = new ThreeGroup();
   handle.position.set(placement.x, 0.34, placement.z);
 
-  const haloMaterial = new THREE.MeshBasicMaterial({
+  const haloMaterial = new ThreeMeshBasicMaterial({
     color: '#0f172a',
     transparent: true,
     opacity: 0.82,
-    side: THREE.DoubleSide,
+    side: ThreeDoubleSide,
     depthTest: false,
   });
-  const halo = new THREE.Mesh(new THREE.CircleGeometry(radius * 1.18, 24), haloMaterial);
+  const halo = new ThreeMesh(new ThreeCircleGeometry(radius * 1.18, 24), haloMaterial);
   halo.rotation.x = -Math.PI / 2;
   halo.renderOrder = 80;
   handle.add(halo);
 
-  const triangle = new THREE.Mesh(
-    new THREE.CircleGeometry(radius, 3),
-    new THREE.MeshBasicMaterial({
+  const triangle = new ThreeMesh(
+    new ThreeCircleGeometry(radius, 3),
+    new ThreeMeshBasicMaterial({
       color: '#fbbf24',
       transparent: true,
       opacity: 1,
-      side: THREE.DoubleSide,
+      side: ThreeDoubleSide,
       depthTest: false,
     }),
   );
@@ -569,9 +584,9 @@ const createTileDuplicateHandle = (direction, width, depth, propId) => {
   triangle.renderOrder = 82;
   handle.add(triangle);
 
-  const hitArea = new THREE.Mesh(
-    new THREE.BoxGeometry(radius * 3.4, 0.18, radius * 3.4),
-    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
+  const hitArea = new ThreeMesh(
+    new ThreeBoxGeometry(radius * 3.4, 0.18, radius * 3.4),
+    new ThreeMeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
   );
   hitArea.position.y = 0.01;
   handle.add(hitArea);
@@ -586,7 +601,7 @@ const addTileDuplicateHandles = (propGroup, prop, width, depth) => {
 };
 
 const createSelectionOverlayGroup = (entity) => {
-  const group = new THREE.Group();
+  const group = new ThreeGroup();
   assignEntity(group, entity);
   return group;
 };

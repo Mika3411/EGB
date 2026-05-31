@@ -1,181 +1,49 @@
-import * as THREE from 'three';
-import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
-import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import {
+  AnimationClip,
+  AnimationMixer,
+  Box3,
+  Color,
+  DoubleSide,
+  Euler,
+  FrontSide,
+  LoadingManager,
+  LoopOnce,
+  LoopRepeat,
+  MeshStandardMaterial,
+  Quaternion,
+  SRGBColorSpace,
+  Vector2,
+  Vector3,
+} from 'three';
+import {
+  getResourceExtension,
+  getResourcePathKeys,
+  getThreeModelFormat,
+  getThreeModelResourceEntries,
+  isBlobUrl,
+} from './threeModelUtils.js';
 
-const isBlobUrl = (value = '') => String(value || '').startsWith('blob:');
-const isDataUrl = (value = '') => String(value || '').startsWith('data:');
-const THREE_MODEL_FORMATS = new Set(['glb', 'fbx', 'obj']);
-const THREE_MODEL_ARCHIVE_FORMATS = new Set(['zip']);
-const THREE_MODEL_MIME_FORMATS = {
-  'model/gltf-binary': 'glb',
-  'model/gltf+json': 'glb',
-  'model/obj': 'obj',
-  'application/vnd.autodesk.fbx': 'fbx',
-  'model/vnd.fbx': 'fbx',
-};
-const THREE_MODEL_MIME_TYPES = {
-  glb: 'model/gltf-binary',
-  fbx: 'application/octet-stream',
-  obj: 'model/obj',
-};
-const THREE_MODEL_FORMAT_LABELS = {
-  glb: 'GLB',
-  fbx: 'FBX',
-  obj: 'OBJ',
-};
-const THREE_MODEL_ARCHIVE_MIME_FORMATS = {
-  'application/zip': 'zip',
-  'application/x-zip-compressed': 'zip',
-};
-
-export const THREE_MODEL_ACCEPT = [
-  '.glb',
-  '.fbx',
-  '.obj',
-  '.zip',
-  'model/gltf-binary',
-  'model/obj',
-  'application/vnd.autodesk.fbx',
-  'model/vnd.fbx',
-  'application/zip',
-  'application/x-zip-compressed',
-  'application/octet-stream',
-].join(',');
-
-const getDataUrlMimeType = (source = '') => (
-  String(source || '').match(/^data:([^;,]+)/i)?.[1]?.toLowerCase() || ''
-);
-
-const getSourceExtension = (source = '') => {
-  const withoutQuery = String(source || '').split(/[?#]/)[0];
-  const extension = withoutQuery.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase() || '';
-  return THREE_MODEL_FORMATS.has(extension) ? extension : '';
-};
-
-export const getThreeModelMimeType = (format = '') => (
-  THREE_MODEL_MIME_TYPES[String(format || '').toLowerCase()] || 'application/octet-stream'
-);
-
-export const getThreeModelFormatLabel = (format = '') => (
-  THREE_MODEL_FORMAT_LABELS[String(format || '').toLowerCase()] || '3D'
-);
-
-export const getThreeModelFormat = (modelOrSource = {}, source = '') => {
-  const candidates = [];
-  if (modelOrSource && typeof modelOrSource === 'object') {
-    candidates.push(
-      modelOrSource.modelFormat,
-      modelOrSource.modelName,
-      modelOrSource.characterModelName,
-      modelOrSource.decorModelName,
-      modelOrSource.modelUrl,
-      modelOrSource.modelData,
-      modelOrSource.characterModelUrl,
-      modelOrSource.decorModelUrl,
-      modelOrSource.decorModelData,
-      modelOrSource.name,
-    );
-  } else {
-    candidates.push(modelOrSource);
-  }
-  candidates.push(source);
-
-  for (const candidate of candidates.filter(Boolean).map(String)) {
-    const explicitFormat = candidate.toLowerCase();
-    if (THREE_MODEL_FORMATS.has(explicitFormat)) return explicitFormat;
-
-    const dataMimeType = getDataUrlMimeType(candidate);
-    if (THREE_MODEL_MIME_FORMATS[dataMimeType]) return THREE_MODEL_MIME_FORMATS[dataMimeType];
-
-    const extension = getSourceExtension(candidate);
-    if (extension) return extension;
-
-    const mimeFormat = THREE_MODEL_MIME_FORMATS[explicitFormat];
-    if (mimeFormat) return mimeFormat;
-  }
-  return '';
-};
-
-export const getThreeModelFileFormat = (file = null) => {
-  if (!file) return '';
-  return getThreeModelFormat(file.name || '') || getThreeModelFormat(file.type || '');
-};
-
-export const isThreeModelFile = (file = null) => Boolean(getThreeModelFileFormat(file));
-
-export const getThreeModelArchiveFileFormat = (file = null) => {
-  if (!file) return '';
-  const extension = String(file.name || '').split(/[?#]/)[0].match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase() || '';
-  if (THREE_MODEL_ARCHIVE_FORMATS.has(extension)) return extension;
-  return THREE_MODEL_ARCHIVE_MIME_FORMATS[String(file.type || '').toLowerCase()] || '';
-};
-
-export const isThreeModelArchiveFile = (file = null) => Boolean(getThreeModelArchiveFileFormat(file));
-
-export const normalizeThreeModelFile = (file = null, format = '') => {
-  if (!file) return file;
-  const modelFormat = format || getThreeModelFileFormat(file);
-  const mimeType = getThreeModelMimeType(modelFormat);
-  if (!modelFormat || file.type === mimeType || typeof File === 'undefined') return file;
-  const fileName = file.name || `modele.${modelFormat}`;
-  return new File([file], fileName, {
-    type: mimeType,
-    lastModified: file.lastModified || Date.now(),
-  });
-};
-
-export const getGltfModelSource = (model = {}) => {
-  if (isBlobUrl(model.modelUrl)) return model.modelUrl;
-  if (isDataUrl(model.modelData) && (isBlobUrl(model.modelUrl) || model.modelUrl)) return model.modelData;
-  return model.modelUrl || model.modelData || '';
-};
-
-export const getGltfModelSources = (model = {}) => {
-  const primarySource = getGltfModelSource(model);
-  const sources = isBlobUrl(model.modelUrl)
-    ? [model.modelUrl, model.modelData]
-    : [primarySource, model.modelUrl, model.modelData];
-  return [...new Set(sources)];
-};
-
-const normalizeResourcePath = (value = '') => {
-  const withoutQuery = String(value || '').split(/[?#]/)[0].replace(/\\/g, '/');
-  try {
-    return decodeURIComponent(withoutQuery);
-  } catch {
-    return withoutQuery;
-  }
-};
-
-const getResourcePathKeys = (value = '') => {
-  const normalized = normalizeResourcePath(value).replace(/^\.\/+/, '').replace(/^\/+/, '');
-  const basename = normalized.split('/').filter(Boolean).pop() || normalized;
-  return [normalized, basename]
-    .filter(Boolean)
-    .map((entry) => entry.toLowerCase());
-};
-
-const getResourceExtension = (value = '') => (
-  normalizeResourcePath(value).match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase() || ''
-);
-
-export const getThreeModelResourceEntries = (model = {}) => (
-  [
-    ...(Array.isArray(model.modelResources) ? model.modelResources : []),
-    ...(Array.isArray(model.characterModelResources) ? model.characterModelResources : []),
-    ...(Array.isArray(model.decorModelResources) ? model.decorModelResources : []),
-  ]
-    .filter((resource) => resource && (resource.data || resource.url) && (resource.path || resource.name))
-);
-
-export const hasThreeModelResources = (model = {}) => getThreeModelResourceEntries(model).length > 0;
+export {
+  THREE_MODEL_ACCEPT,
+  getGltfModelSource,
+  getGltfModelSources,
+  getThreeModelArchiveFileFormat,
+  getThreeModelFileFormat,
+  getThreeModelFormat,
+  getThreeModelFormatLabel,
+  getThreeModelMimeType,
+  getThreeModelResourceEntries,
+  getThreeModelSource,
+  getThreeModelSources,
+  hasThreeModelResources,
+  isThreeModelArchiveFile,
+  isThreeModelFile,
+  normalizeThreeModelFile,
+} from './threeModelUtils.js';
 
 const createModelLoadingManager = (model = {}) => {
   const resources = getThreeModelResourceEntries(model);
-  if (!resources.length) return new THREE.LoadingManager();
+  if (!resources.length) return new LoadingManager();
   const resourceMap = new Map();
   resources.forEach((resource) => {
     const source = resource.url || resource.data || '';
@@ -184,7 +52,7 @@ const createModelLoadingManager = (model = {}) => {
       getResourcePathKeys(candidate).forEach((key) => resourceMap.set(key, source));
     });
   });
-  const manager = new THREE.LoadingManager();
+  const manager = new LoadingManager();
   manager.setURLModifier((url) => {
     for (const key of getResourcePathKeys(url)) {
       const source = resourceMap.get(key);
@@ -261,6 +129,7 @@ const applyObjMaterialLibrary = async (loader, model, manager, objText) => {
   const materialSource = getObjMaterialResourceSource(model, objText);
   if (!materialSource) return;
   const materialText = await loadTextFromSource(materialSource, 'MTL introuvable.');
+  const { MTLLoader } = await import('three/examples/jsm/loaders/MTLLoader.js');
   const materials = new MTLLoader(manager).parse(materialText, '');
   materials.preload();
   loader.setMaterials(materials);
@@ -354,22 +223,29 @@ export const loadThreeModelFromSource = (source, model = {}, onLoad, onError) =>
   const manager = createModelLoadingManager(model);
 
   if (format === 'glb') {
-    const gltfLoader = new GLTFLoader(manager);
-    gltfLoader.setMeshoptDecoder(MeshoptDecoder);
-    loadGltfFromSource(
-      gltfLoader,
-      source,
-      (gltf) => {
-        const object = gltf.scene || gltf.scenes?.[0];
-        if (!object) {
-          onError?.(new Error('Scene GLB introuvable.'));
-          return;
-        }
-        object.userData.modelFormat = format;
-        onLoad?.({ object, animations: getGltfAnimationClips(gltf), format });
-      },
-      onError,
-    );
+    Promise.all([
+      import('three/examples/jsm/loaders/GLTFLoader.js'),
+      import('three/examples/jsm/libs/meshopt_decoder.module.js'),
+    ])
+      .then(([{ GLTFLoader }, { MeshoptDecoder }]) => {
+        const gltfLoader = new GLTFLoader(manager);
+        gltfLoader.setMeshoptDecoder(MeshoptDecoder);
+        loadGltfFromSource(
+          gltfLoader,
+          source,
+          (gltf) => {
+            const object = gltf.scene || gltf.scenes?.[0];
+            if (!object) {
+              onError?.(new Error('Scene GLB introuvable.'));
+              return;
+            }
+            object.userData.modelFormat = format;
+            onLoad?.({ object, animations: getGltfAnimationClips(gltf), format });
+          },
+          onError,
+        );
+      })
+      .catch((error) => onError?.(error));
     return;
   }
 
@@ -383,20 +259,25 @@ export const loadThreeModelFromSource = (source, model = {}, onLoad, onError) =>
   };
 
   if (format === 'fbx') {
-    loadFbxFromSource(new FBXLoader(manager), source, handleObject, onError);
+    import('three/examples/jsm/loaders/FBXLoader.js')
+      .then(({ FBXLoader }) => {
+        loadFbxFromSource(new FBXLoader(manager), source, handleObject, onError);
+      })
+      .catch((error) => onError?.(error));
     return;
   }
 
   if (format === 'obj') {
-    loadObjFromSource(new OBJLoader(manager), source, model, manager, handleObject, onError);
+    import('three/examples/jsm/loaders/OBJLoader.js')
+      .then(({ OBJLoader }) => {
+        loadObjFromSource(new OBJLoader(manager), source, model, manager, handleObject, onError);
+      })
+      .catch((error) => onError?.(error));
     return;
   }
 
   onError?.(new Error('Format 3D non supporte.'));
 };
-
-export const getThreeModelSource = getGltfModelSource;
-export const getThreeModelSources = getGltfModelSources;
 
 const COLOR_TEXTURE_FIELDS = [
   'map',
@@ -521,11 +402,11 @@ const convertToLitMaterial = (material, options = {}) => {
   const shouldConvert = options.forceStandardMaterials || !materialReceivesLighting(material);
   if (!shouldConvert) return material;
   const useNeutralTextureTint = Boolean(options.forceTextureBaseColor && material.map);
-  const nextMaterial = new THREE.MeshStandardMaterial({
+  const nextMaterial = new MeshStandardMaterial({
     name: material.name || '',
     color: useNeutralTextureTint
-      ? new THREE.Color('#ffffff')
-      : material.color?.clone?.() || new THREE.Color('#ffffff'),
+      ? new Color('#ffffff')
+      : material.color?.clone?.() || new Color('#ffffff'),
     map: material.map || null,
     alphaMap: material.alphaMap || null,
     aoMap: material.aoMap || null,
@@ -535,19 +416,19 @@ const convertToLitMaterial = (material, options = {}) => {
     displacementMap: material.displacementMap || null,
     displacementScale: Number.isFinite(Number(material.displacementScale)) ? Number(material.displacementScale) : 1,
     displacementBias: Number.isFinite(Number(material.displacementBias)) ? Number(material.displacementBias) : 0,
-    emissive: material.emissive?.clone?.() || new THREE.Color('#000000'),
+    emissive: material.emissive?.clone?.() || new Color('#000000'),
     emissiveMap: material.emissiveMap || null,
     emissiveIntensity: Number.isFinite(Number(material.emissiveIntensity)) ? Number(material.emissiveIntensity) : 1,
     lightMap: material.lightMap || null,
     lightMapIntensity: Number.isFinite(Number(material.lightMapIntensity)) ? Number(material.lightMapIntensity) : 1,
     normalMap: material.normalMap || null,
-    normalScale: material.normalScale?.clone?.() || new THREE.Vector2(1, 1),
+    normalScale: material.normalScale?.clone?.() || new Vector2(1, 1),
     roughnessMap: material.roughnessMap || null,
     metalnessMap: material.metalnessMap || null,
     transparent: Boolean(material.transparent),
     opacity: Number.isFinite(Number(material.opacity)) ? Number(material.opacity) : 1,
     alphaTest: Number.isFinite(Number(material.alphaTest)) ? Number(material.alphaTest) : 0,
-    side: material.side ?? THREE.FrontSide,
+    side: material.side ?? FrontSide,
     roughness: Number.isFinite(Number(material.roughness)) ? Number(material.roughness) : 0.78,
     metalness: Number.isFinite(Number(material.metalness)) ? Number(material.metalness) : 0.04,
   });
@@ -659,7 +540,7 @@ const tuneImportedMaterialAppearance = (material, options = {}) => {
 const forceMaterialVisibility = (material, options = {}) => {
   if (!material) return;
   if (options.forceVisibleMaterials && 'visible' in material) material.visible = true;
-  if (options.forceDoubleSidedMaterials) material.side = THREE.DoubleSide;
+  if (options.forceDoubleSidedMaterials) material.side = DoubleSide;
   if (options.stripTextureMaps) {
     TEXTURE_MAP_FIELDS.forEach((field) => {
       if (field in material) material[field] = null;
@@ -784,7 +665,7 @@ export const stripImportedAnimationTracks = (clip = null, options = {}) => {
   const tracks = clip.tracks.filter((track) => !shouldStripAnimationTrack(track, options));
   if (tracks.length === clip.tracks.length) return clip;
   if (!tracks.length) return null;
-  const nextClip = new THREE.AnimationClip(clip.name, clip.duration, tracks);
+  const nextClip = new AnimationClip(clip.name, clip.duration, tracks);
   nextClip.blendMode = clip.blendMode;
   return nextClip;
 };
@@ -812,8 +693,8 @@ const convertFbxRootQuaternionTrack = (object, track = {}) => {
   const basisQuaternion = animationTarget?.quaternion;
   if (isIdentityQuaternion(basisQuaternion)) return track;
   const values = track.values.slice();
-  const sourceQuaternion = new THREE.Quaternion();
-  const convertedQuaternion = new THREE.Quaternion();
+  const sourceQuaternion = new Quaternion();
+  const convertedQuaternion = new Quaternion();
   for (let index = 0; index < values.length; index += 4) {
     sourceQuaternion.fromArray(values, index);
     convertedQuaternion.copy(sourceQuaternion).premultiply(basisQuaternion).normalize();
@@ -833,7 +714,7 @@ const convertFbxRootQuaternionTracksForObject = (object, clip = null, options = 
     return nextTrack;
   });
   if (!changed) return clip;
-  const nextClip = new THREE.AnimationClip(clip.name, clip.duration, tracks);
+  const nextClip = new AnimationClip(clip.name, clip.duration, tracks);
   nextClip.blendMode = clip.blendMode;
   nextClip.userData = { ...(clip.userData || {}) };
   return nextClip;
@@ -850,7 +731,7 @@ export const playGltfAnimations = (object, clips = [], options = {}) => {
   const animationClips = clips.filter((clip) => clip && Number(clip.duration) > 0);
   if (!object || !animationClips.length) return null;
 
-  const mixer = new THREE.AnimationMixer(object);
+  const mixer = new AnimationMixer(object);
   const rawSelectedClips = options.playAll
     ? animationClips
     : [selectAnimationClip(animationClips, options.preferredNames, {
@@ -867,7 +748,7 @@ export const playGltfAnimations = (object, clips = [], options = {}) => {
     action.reset();
     action.enabled = true;
     action.clampWhenFinished = Boolean(options.loopOnce);
-    action.setLoop(options.loopOnce ? THREE.LoopOnce : THREE.LoopRepeat, options.loopOnce ? 1 : Infinity);
+    action.setLoop(options.loopOnce ? LoopOnce : LoopRepeat, options.loopOnce ? 1 : Infinity);
     action.play();
     if (clip.duration > 0) {
       const offset = timeOffset + index * 0.137;
@@ -901,7 +782,7 @@ export const prepareGltfModel = (object, options = {}) => {
     const materials = Array.isArray(child.material) ? child.material : [child.material];
     materials.filter(Boolean).forEach((material) => {
       COLOR_TEXTURE_FIELDS.forEach((field) => {
-        if (material[field]) material[field].colorSpace = THREE.SRGBColorSpace;
+        if (material[field]) material[field].colorSpace = SRGBColorSpace;
       });
       restoreGeneratedTextureColor(material, options);
       forceMaterialVisibility(material, options);
@@ -927,7 +808,7 @@ export const snapObjectToGround = (object, groundY = 0) => {
   if (!object) return false;
   const targetGroundY = Number.isFinite(Number(groundY)) ? Number(groundY) : 0;
   object.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(object, true);
+  const box = new Box3().setFromObject(object, true);
   if (!Number.isFinite(box.min.y) || !Number.isFinite(box.max.y)) return false;
   object.position.y += targetGroundY - box.min.y;
   object.updateMatrixWorld(true);
@@ -937,9 +818,9 @@ export const snapObjectToGround = (object, groundY = 0) => {
 export const rememberObjectBaseTransform = (object) => {
   if (!object || object.userData?.rpg3dBaseTransform) return false;
   object.userData.rpg3dBaseTransform = {
-    position: object.position?.clone?.() || new THREE.Vector3(),
-    rotation: object.rotation?.clone?.() || new THREE.Euler(),
-    scale: object.scale?.clone?.() || new THREE.Vector3(1, 1, 1),
+    position: object.position?.clone?.() || new Vector3(),
+    rotation: object.rotation?.clone?.() || new Euler(),
+    scale: object.scale?.clone?.() || new Vector3(1, 1, 1),
   };
   return true;
 };
@@ -958,16 +839,16 @@ const MIN_OBJECT_SCALE_FACTOR = 0.000001;
 
 export const fitObjectToHeight = (object, targetHeight = 2, options = {}) => {
   object.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(object, true);
-  const size = box.getSize(new THREE.Vector3());
+  const box = new Box3().setFromObject(object, true);
+  const size = box.getSize(new Vector3());
   if (!Number.isFinite(size.y) || size.y <= 0.0001) return false;
 
   const scale = Math.max(MIN_OBJECT_SCALE_FACTOR, targetHeight / size.y);
   object.scale.multiplyScalar(scale);
   object.updateMatrixWorld(true);
 
-  const fittedBox = new THREE.Box3().setFromObject(object, true);
-  const center = fittedBox.getCenter(new THREE.Vector3());
+  const fittedBox = new Box3().setFromObject(object, true);
+  const center = fittedBox.getCenter(new Vector3());
   const groundY = Number.isFinite(Number(options.groundY)) ? Number(options.groundY) : 0;
   object.position.x += options.centerX === false ? 0 : -center.x;
   object.position.z += options.centerZ === false ? 0 : -center.z;
@@ -993,8 +874,8 @@ export const applyObjectAxisScaleRatios = (object, axisScale = {}, referenceY = 
   );
   object.updateMatrixWorld(true);
 
-  const fittedBox = new THREE.Box3().setFromObject(object, true);
-  const center = fittedBox.getCenter(new THREE.Vector3());
+  const fittedBox = new Box3().setFromObject(object, true);
+  const center = fittedBox.getCenter(new Vector3());
   const groundY = Number.isFinite(Number(options.groundY)) ? Number(options.groundY) : 0;
   object.position.x += options.centerX === false ? 0 : -center.x;
   object.position.z += options.centerZ === false ? 0 : -center.z;
@@ -1005,8 +886,8 @@ export const applyObjectAxisScaleRatios = (object, axisScale = {}, referenceY = 
 export const fitObjectToDimensions = (object, dimensions = {}, options = {}) => {
   if (!object) return false;
   object.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(object, true);
-  const size = box.getSize(new THREE.Vector3());
+  const box = new Box3().setFromObject(object, true);
+  const size = box.getSize(new Vector3());
   if (
     !Number.isFinite(size.x) || size.x <= 0.0001
     || !Number.isFinite(size.y) || size.y <= 0.0001
@@ -1026,8 +907,8 @@ export const fitObjectToDimensions = (object, dimensions = {}, options = {}) => 
   );
   object.updateMatrixWorld(true);
 
-  const fittedBox = new THREE.Box3().setFromObject(object, true);
-  const center = fittedBox.getCenter(new THREE.Vector3());
+  const fittedBox = new Box3().setFromObject(object, true);
+  const center = fittedBox.getCenter(new Vector3());
   const groundY = Number.isFinite(Number(options.groundY)) ? Number(options.groundY) : 0;
   object.position.x += options.centerX === false ? 0 : -center.x;
   object.position.z += options.centerZ === false ? 0 : -center.z;

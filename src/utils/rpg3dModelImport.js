@@ -1,4 +1,16 @@
-import * as THREE from 'three';
+import {
+  Box3 as ThreeBox3,
+  FrontSide as ThreeFrontSide,
+  Group as ThreeGroup,
+  Mesh as ThreeMesh,
+  MeshBasicMaterial as ThreeMeshBasicMaterial,
+  MeshStandardMaterial as ThreeMeshStandardMaterial,
+  RepeatWrapping as ThreeRepeatWrapping,
+  SRGBColorSpace as ThreeSRGBColorSpace,
+  TextureLoader as ThreeTextureLoader,
+  TorusGeometry as ThreeTorusGeometry,
+  Vector3 as ThreeVector3,
+} from 'three';
 import JSZip from 'jszip';
 import { fileToDataURL } from './fileHelpers';
 import {
@@ -7,15 +19,17 @@ import {
   fitObjectToDimensions,
   fitObjectToHeight,
   getImportedModelPrepareOptions,
-  getThreeModelFileFormat,
-  getThreeModelSources,
-  hasThreeModelResources,
   loadThreeModelFromSource,
-  normalizeThreeModelFile,
   prepareGltfModel,
   rememberObjectBaseTransform,
   snapObjectToGround,
 } from './threeGltfUtils';
+import {
+  getThreeModelFileFormat,
+  getThreeModelSources,
+  hasThreeModelResources,
+  normalizeThreeModelFile,
+} from './threeModelUtils.js';
 import {
   DECOR_MODEL_DIMENSION_MAX,
   DECOR_MODEL_DIMENSION_MIN,
@@ -40,9 +54,9 @@ export * from './rpg3dModelImportCore.js';
 export const centerObjectHorizontallyOnOrigin = (object) => {
   if (!object) return false;
   object.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(object, true);
+  const box = new ThreeBox3().setFromObject(object, true);
   if (!Number.isFinite(box.min.x) || !Number.isFinite(box.max.x) || !Number.isFinite(box.min.z) || !Number.isFinite(box.max.z)) return false;
-  const center = box.getCenter(new THREE.Vector3());
+  const center = box.getCenter(new ThreeVector3());
   object.position.x -= center.x;
   object.position.z -= center.z;
   object.updateMatrixWorld(true);
@@ -52,7 +66,7 @@ export const centerObjectHorizontallyOnOrigin = (object) => {
 export const alignObjectTopToGround = (object, groundY = 0.018) => {
   if (!object) return false;
   object.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(object, true);
+  const box = new ThreeBox3().setFromObject(object, true);
   if (!Number.isFinite(box.max.y)) return false;
   object.position.y += groundY - box.max.y;
   object.updateMatrixWorld(true);
@@ -62,15 +76,15 @@ export const alignObjectTopToGround = (object, groundY = 0.018) => {
 export const fitObjectToLargestDimension = (object, targetSize = 1, options = {}) => {
   if (!object) return false;
   object.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(object, true);
-  const size = box.getSize(new THREE.Vector3());
+  const box = new ThreeBox3().setFromObject(object, true);
+  const size = box.getSize(new ThreeVector3());
   const largest = Math.max(size.x, size.y, size.z);
   if (!Number.isFinite(largest) || largest <= 0.0001) return false;
   const target = Number.isFinite(Number(targetSize)) && Number(targetSize) > 0 ? Number(targetSize) : largest;
   object.scale.multiplyScalar(Math.max(0.000001, target / largest));
   object.updateMatrixWorld(true);
-  const fittedBox = new THREE.Box3().setFromObject(object, true);
-  const center = fittedBox.getCenter(new THREE.Vector3());
+  const fittedBox = new ThreeBox3().setFromObject(object, true);
+  const center = fittedBox.getCenter(new ThreeVector3());
   const groundY = Number.isFinite(Number(options.groundY)) ? Number(options.groundY) : 0;
   object.position.x += options.centerX === false ? 0 : -center.x;
   object.position.z += options.centerZ === false ? 0 : -center.z;
@@ -144,8 +158,8 @@ export const readModelZipBundle = async (file) => {
 const getThreeObjectBoundingDimensions = (object) => {
   if (!object) return null;
   object.updateMatrixWorld?.(true);
-  const box = new THREE.Box3().setFromObject(object, true);
-  const size = box.getSize(new THREE.Vector3());
+  const box = new ThreeBox3().setFromObject(object, true);
+  const size = box.getSize(new ThreeVector3());
   if (
     !Number.isFinite(size.x) || size.x <= 0.0001
     || !Number.isFinite(size.y) || size.y <= 0.0001
@@ -413,12 +427,12 @@ export const createPreviewFloorCanvas = (options = {}) => {
 
 export const createTexture = (src, repeat = false) => {
   if (!src) return null;
-  const texture = new THREE.TextureLoader().load(src);
-  texture.colorSpace = THREE.SRGBColorSpace;
+  const texture = new ThreeTextureLoader().load(src);
+  texture.colorSpace = ThreeSRGBColorSpace;
   texture.anisotropy = 4;
   if (repeat) {
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
+    texture.wrapS = ThreeRepeatWrapping;
+    texture.wrapT = ThreeRepeatWrapping;
     texture.repeat.set(2, 2);
   }
   return texture;
@@ -426,7 +440,7 @@ export const createTexture = (src, repeat = false) => {
 
 export const makePreviewStandardMaterial = (color, options = {}) => {
   const texture = options.texture || null;
-  const created = new THREE.MeshStandardMaterial({
+  const created = new ThreeMeshStandardMaterial({
     color: texture ? '#ffffff' : color,
     map: texture,
     roughness: options.roughness ?? 0.68,
@@ -435,7 +449,7 @@ export const makePreviewStandardMaterial = (color, options = {}) => {
     emissiveIntensity: options.emissiveIntensity ?? 0,
     transparent: options.transparent || false,
     opacity: options.opacity ?? 1,
-    side: options.side || THREE.FrontSide,
+    side: options.side || ThreeFrontSide,
   });
   if (texture) created.userData.disposeTextures = true;
   return created;
@@ -462,8 +476,8 @@ export const fitDecorModelObjectToDimensions = (object, model = {}, options = {}
 };
 
 export const buildDecorGltfObject = (object, model) => {
-  const root = new THREE.Group();
-  const group = new THREE.Group();
+  const root = new ThreeGroup();
+  const group = new ThreeGroup();
   const dimensions = getDecorModelDimensions(model);
   const width = dimensions.x;
   const depth = dimensions.z;
@@ -494,9 +508,9 @@ export const buildDecorGltfObject = (object, model) => {
   if (model.modelFlushToGround) alignObjectTopToGround(group, elevation + 0.018);
 
   if (model.collision) {
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(Math.max(width, depth) * 0.52, 0.018, 8, 52),
-      new THREE.MeshBasicMaterial({ color: '#f8fafc', transparent: true, opacity: 0.42 }),
+    const ring = new ThreeMesh(
+      new ThreeTorusGeometry(Math.max(width, depth) * 0.52, 0.018, 8, 52),
+      new ThreeMeshBasicMaterial({ color: '#f8fafc', transparent: true, opacity: 0.42 }),
     );
     ring.rotation.x = Math.PI / 2;
     ring.position.y = 0.045;

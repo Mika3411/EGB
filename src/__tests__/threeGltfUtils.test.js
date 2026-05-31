@@ -306,7 +306,7 @@ describe('prepareGltfModel', () => {
     });
 
     expect(result.format).toBe('obj');
-    expect(result.object).toBeInstanceOf(THREE.Group);
+    expect(result.object.isGroup).toBe(true);
     expect(result.object.children.length).toBeGreaterThan(0);
   });
 

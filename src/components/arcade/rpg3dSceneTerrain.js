@@ -1,4 +1,25 @@
-import * as THREE from 'three';
+import {
+  BufferGeometry as ThreeBufferGeometry,
+  CanvasTexture as ThreeCanvasTexture,
+  CircleGeometry as ThreeCircleGeometry,
+  ClampToEdgeWrapping as ThreeClampToEdgeWrapping,
+  Color as ThreeColor,
+  DoubleSide as ThreeDoubleSide,
+  Group as ThreeGroup,
+  LineBasicMaterial as ThreeLineBasicMaterial,
+  LineLoop as ThreeLineLoop,
+  LinearFilter as ThreeLinearFilter,
+  Mesh as ThreeMesh,
+  MeshBasicMaterial as ThreeMeshBasicMaterial,
+  MeshStandardMaterial as ThreeMeshStandardMaterial,
+  PlaneGeometry as ThreePlaneGeometry,
+  RepeatWrapping as ThreeRepeatWrapping,
+  RingGeometry as ThreeRingGeometry,
+  SRGBColorSpace as ThreeSRGBColorSpace,
+  Shape as ThreeShape,
+  ShapeGeometry as ThreeShapeGeometry,
+  Vector3 as ThreeVector3,
+} from 'three';
 
 import {
   TERRAIN_PAINT_DEFAULT_COLOR,
@@ -48,10 +69,10 @@ const createFloorTexture = () => {
   ctx.bezierCurveTo(145, 340, 260, 520, 512, 390);
   ctx.stroke();
 
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  texture.colorSpace = THREE.SRGBColorSpace;
+  const texture = new ThreeCanvasTexture(canvas);
+  texture.wrapS = ThreeRepeatWrapping;
+  texture.wrapT = ThreeRepeatWrapping;
+  texture.colorSpace = ThreeSRGBColorSpace;
   return texture;
 };
 
@@ -67,15 +88,15 @@ const createTerrainPaintPolygonGeometry = (radiusWorld, shape) => {
       { x: radiusWorld, y: radiusWorld },
       { x: -radiusWorld, y: radiusWorld },
     ];
-  const path = new THREE.Shape();
+  const path = new ThreeShape();
   points.forEach((point, index) => {
     if (index === 0) path.moveTo(point.x, point.y);
     else path.lineTo(point.x, point.y);
   });
   path.closePath();
   return {
-    fillGeometry: new THREE.ShapeGeometry(path),
-    outlineGeometry: new THREE.BufferGeometry().setFromPoints(points.map((point) => new THREE.Vector3(point.x, point.y, 0))),
+    fillGeometry: new ThreeShapeGeometry(path),
+    outlineGeometry: new ThreeBufferGeometry().setFromPoints(points.map((point) => new ThreeVector3(point.x, point.y, 0))),
   };
 };
 
@@ -87,33 +108,33 @@ const createTerrainPaintPreview = (
   const radiusWorld = Math.max(0.08, getTerrainPaintRadius({ radius }) * WORLD_SCALE);
   const previewColor = getHexColor(color, TERRAIN_PAINT_DEFAULT_COLOR);
   const previewShape = getTerrainPaintShape({ shape });
-  const group = new THREE.Group();
+  const group = new ThreeGroup();
   group.userData.previewRadius = radiusWorld;
   group.userData.previewColor = previewColor;
   group.userData.previewShape = previewShape;
 
-  const fillMaterial = new THREE.MeshBasicMaterial({
+  const fillMaterial = new ThreeMeshBasicMaterial({
     color: previewColor,
     transparent: true,
     opacity: 0.18,
-    side: THREE.DoubleSide,
+    side: ThreeDoubleSide,
     depthWrite: false,
     depthTest: true,
   });
 
   if (previewShape === 'round') {
-    const fill = new THREE.Mesh(new THREE.CircleGeometry(radiusWorld, 64), fillMaterial);
+    const fill = new ThreeMesh(new ThreeCircleGeometry(radiusWorld, 64), fillMaterial);
     fill.rotation.x = -Math.PI / 2;
     fill.renderOrder = 90;
     group.add(fill);
 
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(radiusWorld * 0.96, radiusWorld * 1.02, 64),
-      new THREE.MeshBasicMaterial({
+    const ring = new ThreeMesh(
+      new ThreeRingGeometry(radiusWorld * 0.96, radiusWorld * 1.02, 64),
+      new ThreeMeshBasicMaterial({
         color: previewColor,
         transparent: true,
         opacity: 0.92,
-        side: THREE.DoubleSide,
+        side: ThreeDoubleSide,
         depthWrite: false,
         depthTest: true,
       }),
@@ -124,12 +145,12 @@ const createTerrainPaintPreview = (
     group.add(ring);
   } else {
     const { fillGeometry, outlineGeometry } = createTerrainPaintPolygonGeometry(radiusWorld, previewShape);
-    const fill = new THREE.Mesh(fillGeometry, fillMaterial);
+    const fill = new ThreeMesh(fillGeometry, fillMaterial);
     fill.rotation.x = -Math.PI / 2;
     fill.renderOrder = 90;
     group.add(fill);
 
-    const outline = new THREE.LineLoop(outlineGeometry, new THREE.LineBasicMaterial({
+    const outline = new ThreeLineLoop(outlineGeometry, new ThreeLineBasicMaterial({
       color: previewColor,
       transparent: true,
       opacity: 0.92,
@@ -285,7 +306,7 @@ const getTerrainPaintLayerSignature = (config = {}) => {
 };
 
 const getCanvasRgba = (hexColor, opacity = 1) => {
-  const color = new THREE.Color(getHexColor(hexColor, TERRAIN_PAINT_DEFAULT_COLOR));
+  const color = new ThreeColor(getHexColor(hexColor, TERRAIN_PAINT_DEFAULT_COLOR));
   return `rgba(${Math.round(color.r * 255)}, ${Math.round(color.g * 255)}, ${Math.round(color.b * 255)}, ${clamp(opacity, 0, 1)})`;
 };
 
@@ -390,12 +411,12 @@ const createTerrainPaintTexture = (config = {}) => {
   if (!ctx) return null;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   strokes.forEach((stroke) => drawTerrainPaintStroke(ctx, config, stroke, scale));
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.wrapS = THREE.ClampToEdgeWrapping;
-  texture.wrapT = THREE.ClampToEdgeWrapping;
-  texture.minFilter = THREE.LinearFilter;
-  texture.magFilter = THREE.LinearFilter;
+  const texture = new ThreeCanvasTexture(canvas);
+  texture.colorSpace = ThreeSRGBColorSpace;
+  texture.wrapS = ThreeClampToEdgeWrapping;
+  texture.wrapT = ThreeClampToEdgeWrapping;
+  texture.minFilter = ThreeLinearFilter;
+  texture.magFilter = ThreeLinearFilter;
   texture.needsUpdate = true;
   return texture;
 };
@@ -405,18 +426,18 @@ const addTerrainPaintLayer = (group, config = {}) => {
   if (!texture) return;
   const width = Math.max(1, Number(config.world?.width) || 1) * WORLD_SCALE;
   const depth = Math.max(1, Number(config.world?.height) || 1) * WORLD_SCALE;
-  const material = new THREE.MeshStandardMaterial({
+  const material = new ThreeMeshStandardMaterial({
     map: texture,
     transparent: true,
     opacity: 1,
-    side: THREE.DoubleSide,
+    side: ThreeDoubleSide,
     roughness: 0.95,
     metalness: 0,
     depthWrite: false,
     depthTest: true,
   });
   material.userData.disposeTextures = true;
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), material);
+  const mesh = new ThreeMesh(new ThreePlaneGeometry(width, depth), material);
   mesh.rotation.x = -Math.PI / 2;
   mesh.position.y = 0.065;
   mesh.renderOrder = 18;

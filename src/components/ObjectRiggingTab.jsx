@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import * as THREE from 'three';
+import {
+  Box3 as ThreeBox3,
+  MathUtils as ThreeMathUtils,
+  Vector3 as ThreeVector3,
+} from 'three';
 import {
   Activity,
   Brush,
@@ -22,9 +26,9 @@ import {
   disposeThreeObject,
 } from '../utils/rpg3dModelImport.js';
 import {
-  getThreeModelSource,
   loadThreeModelFromSource,
 } from '../utils/threeGltfUtils';
+import { getThreeModelSource } from '../utils/threeModelUtils.js';
 import {
   CHARACTER_RIG_ARMOR_GRIP_POINTS,
 } from '../utils/rpg3dCharacterRig.js';
@@ -377,9 +381,9 @@ const getRigPointLabel = (rigPointId = '') => (
 );
 
 const normalizeContourPoint = (point = {}) => ({
-  x: Math.round(THREE.MathUtils.clamp(Number(point.x) || 0, -2, 2) * 1000) / 1000,
-  y: Math.round(THREE.MathUtils.clamp(Number(point.y) || 0, -2, 2) * 1000) / 1000,
-  z: Math.round(THREE.MathUtils.clamp(Number(point.z) || 0, -2, 2) * 1000) / 1000,
+  x: Math.round(ThreeMathUtils.clamp(Number(point.x) || 0, -2, 2) * 1000) / 1000,
+  y: Math.round(ThreeMathUtils.clamp(Number(point.y) || 0, -2, 2) * 1000) / 1000,
+  z: Math.round(ThreeMathUtils.clamp(Number(point.z) || 0, -2, 2) * 1000) / 1000,
   ...normalizePaintSurfaceNormal(point),
   ...normalizePaintSectionPlane(point),
 });
@@ -415,7 +419,7 @@ const normalizePaintSectionPlane = (point = {}) => {
 };
 
 const normalizeArmorPaintRadius = (value = ARMOR_PAINT_RADIUS) => (
-  Math.round(THREE.MathUtils.clamp(
+  Math.round(ThreeMathUtils.clamp(
     Number(value) || ARMOR_PAINT_RADIUS,
     ARMOR_PAINT_RADIUS_MIN,
     ARMOR_PAINT_RADIUS_MAX,
@@ -526,7 +530,7 @@ const getGripNumberValue = (value, fallback = 0) => {
 
 const clampGripPositionValue = (value, fallback = 0) => {
   const fallbackNumber = getGripNumberValue(fallback, 0);
-  return Math.round(THREE.MathUtils.clamp(
+  return Math.round(ThreeMathUtils.clamp(
     getGripNumberValue(value, fallbackNumber),
     EQUIPMENT_GRIP_POSITION_MIN,
     EQUIPMENT_GRIP_POSITION_MAX,
@@ -569,7 +573,7 @@ const getModelReferenceScale = (model = {}) => {
   );
 };
 
-const inferSegment = (mesh = {}, center = new THREE.Vector3(), profile = ARMOR_RIG_PROFILE) => {
+const inferSegment = (mesh = {}, center = new ThreeVector3(), profile = ARMOR_RIG_PROFILE) => {
   const name = normalizeRigObjectName(mesh.name || mesh.path || '');
   if (profile?.id === 'leggings') {
     if (/(left|gauche|jambegh|jambegr|jambegauche|genougauche|piedgauche|bottegauche|greaveleft|leftleg|leftknee|leftfoot|leftboot)/.test(name)) return 'left-arm';
@@ -595,9 +599,9 @@ const extractMeshNodes = (object = null) => {
   const nodes = [];
   object.traverse((child) => {
     if (child === object || (!child.isMesh && !child.isSkinnedMesh)) return;
-    const box = new THREE.Box3().setFromObject(child);
-    const size = box.getSize(new THREE.Vector3());
-    const center = object.worldToLocal(box.getCenter(new THREE.Vector3()));
+    const box = new ThreeBox3().setFromObject(child);
+    const size = box.getSize(new ThreeVector3());
+    const center = object.worldToLocal(box.getCenter(new ThreeVector3()));
     const path = getRigNodePath(child, object);
     nodes.push({
       path,
@@ -1168,7 +1172,7 @@ export default function ObjectRiggingTab({
   };
 
   const updateArmorPaintSize = (value) => {
-    const nextSize = THREE.MathUtils.clamp(
+    const nextSize = ThreeMathUtils.clamp(
       Math.round(Number(value) || activePaintSize),
       ARMOR_PAINT_SIZE_MIN,
       ARMOR_PAINT_SIZE_MAX,

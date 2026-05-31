@@ -13,7 +13,7 @@ import {
   getThreeModelArchiveFileFormat,
   getThreeModelFileFormat,
   getThreeModelFormatLabel,
-} from '../utils/threeGltfUtils';
+} from '../utils/threeModelUtils.js';
 
 const QUALITY_OPTIONS = [
   { id: 'web', label: 'Jeu fluide', textureSize: 1024, jpegQuality: 0.82 },

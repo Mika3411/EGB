@@ -1,4 +1,16 @@
-import * as THREE from 'three';
+import {
+  BoxGeometry as ThreeBoxGeometry,
+  DoubleSide as ThreeDoubleSide,
+  EdgesGeometry as ThreeEdgesGeometry,
+  Euler as ThreeEuler,
+  Group as ThreeGroup,
+  LineBasicMaterial as ThreeLineBasicMaterial,
+  LineSegments as ThreeLineSegments,
+  Mesh as ThreeMesh,
+  MeshBasicMaterial as ThreeMeshBasicMaterial,
+  TorusGeometry as ThreeTorusGeometry,
+  Vector3 as ThreeVector3,
+} from 'three';
 import {
   PICKUP_RADIUS,
   PLAYER_RADIUS,
@@ -50,13 +62,13 @@ const getTransformDescriptor = (config = {}, selected, multiSelected = [], trans
   const item = getMapEntityItem(config, entity);
   if (!item) return null;
   const engine = getEngine(config);
-  const baseRotation = new THREE.Euler(0, degreesToRadians(item.rotation || 0), 0);
+  const baseRotation = new ThreeEuler(0, degreesToRadians(item.rotation || 0), 0);
   const minimumSize = 0.42;
   const descriptor = {
     entity,
     rotation: baseRotation,
     center: toScenePosition(config, Number(item.x) || 0, Number(item.y) || 0, 0.65),
-    dimensions: new THREE.Vector3(minimumSize, minimumSize, minimumSize),
+    dimensions: new ThreeVector3(minimumSize, minimumSize, minimumSize),
     radius: 0.72,
   };
 
@@ -124,17 +136,17 @@ const getTransformDescriptor = (config = {}, selected, multiSelected = [], trans
 };
 
 const createTransformGuide = (descriptor, mode) => {
-  const guide = new THREE.Group();
-  const dimensions = descriptor?.dimensions || new THREE.Vector3(0.6, 0.6, 0.6);
+  const guide = new ThreeGroup();
+  const dimensions = descriptor?.dimensions || new ThreeVector3(0.6, 0.6, 0.6);
   if (mode === 'scale') {
-    const geometry = new THREE.BoxGeometry(
+    const geometry = new ThreeBoxGeometry(
       Math.max(0.18, dimensions.x),
       Math.max(0.18, dimensions.y),
       Math.max(0.18, dimensions.z),
     );
-    const edges = new THREE.LineSegments(
-      new THREE.EdgesGeometry(geometry),
-      new THREE.LineBasicMaterial({
+    const edges = new ThreeLineSegments(
+      new ThreeEdgesGeometry(geometry),
+      new ThreeLineBasicMaterial({
         color: '#f8fbff',
         transparent: true,
         opacity: 0.86,
@@ -148,20 +160,20 @@ const createTransformGuide = (descriptor, mode) => {
 
   const radius = clamp(Number(descriptor?.radius) || 0.72, 0.38, 1.45);
   const tube = clamp(radius * 0.018, 0.006, 0.016);
-  const ringMaterial = (color) => new THREE.MeshBasicMaterial({
+  const ringMaterial = (color) => new ThreeMeshBasicMaterial({
     color,
     transparent: true,
     opacity: 0.72,
     depthTest: false,
-    side: THREE.DoubleSide,
+    side: ThreeDoubleSide,
   });
   [
     { color: '#ef4444', rotation: [0, Math.PI / 2, 0] },
     { color: '#22c55e', rotation: [Math.PI / 2, 0, 0] },
     { color: '#3b82f6', rotation: [0, 0, 0] },
   ].forEach((ring) => {
-    const mesh = new THREE.Mesh(
-      new THREE.TorusGeometry(radius, tube, 8, 80),
+    const mesh = new ThreeMesh(
+      new ThreeTorusGeometry(radius, tube, 8, 80),
       ringMaterial(ring.color),
     );
     mesh.rotation.set(ring.rotation[0], ring.rotation[1], ring.rotation[2]);
