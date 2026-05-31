@@ -7,7 +7,7 @@ export default function PreviewEnigmaOverlay({
   if (!enigma) return null;
 
   return (
-    <div className="overlay" onClick={(event) => { if (event.target === event.currentTarget) closeEnigma(); }}>
+    <div id="enigma-overlay" className="overlay" onClick={(event) => { if (event.target === event.currentTarget) closeEnigma(); }}>
       <div className="overlay-card wide" style={overlayStyle}>
         <div className="panel-head">
           <div>

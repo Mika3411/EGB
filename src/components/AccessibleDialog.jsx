@@ -17,6 +17,16 @@ function getFallbackResult(kind) {
   return false;
 }
 
+const hasOwnOption = (options, key) => Object.prototype.hasOwnProperty.call(options || {}, key);
+
+function getRequestCancelResult(request) {
+  return hasOwnOption(request, 'cancelValue') ? request.cancelValue : getFallbackResult(request?.kind);
+}
+
+function getRequestDismissResult(request) {
+  return hasOwnOption(request, 'dismissValue') ? request.dismissValue : getFallbackResult(request?.kind);
+}
+
 const normalizeDialogOptions = (options, fallbackTitle) => (
   typeof options === 'string'
     ? { title: fallbackTitle, message: options }
@@ -67,6 +77,7 @@ function DialogPanel({ request, onResolve }) {
   const isAlert = request.kind === 'alert';
   const confirmLabel = request.confirmLabel || (isAlert ? 'OK' : 'Confirmer');
   const cancelLabel = request.cancelLabel || 'Annuler';
+  const dismissLabel = request.dismissLabel || '';
 
   useEffect(() => {
     restoreFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -94,13 +105,17 @@ function DialogPanel({ request, onResolve }) {
   };
 
   const resolveCancel = () => {
-    onResolve(getFallbackResult(request.kind));
+    onResolve(getRequestCancelResult(request));
+  };
+
+  const resolveDismiss = () => {
+    onResolve(getRequestDismissResult(request));
   };
 
   const handleKeyDown = (event) => {
     if (event.key === 'Escape') {
       event.preventDefault();
-      resolveCancel();
+      resolveDismiss();
       return;
     }
 
@@ -170,6 +185,11 @@ function DialogPanel({ request, onResolve }) {
         ) : null}
 
         <div className="accessible-dialog-actions">
+          {!isAlert && dismissLabel ? (
+            <button type="button" className="secondary-action" onClick={resolveDismiss}>
+              {dismissLabel}
+            </button>
+          ) : null}
           {!isAlert ? (
             <button type="button" className="secondary-action" onClick={resolveCancel}>
               {cancelLabel}
@@ -177,7 +197,7 @@ function DialogPanel({ request, onResolve }) {
           ) : null}
           <button
             type="button"
-            className={request.variant === 'danger' ? 'danger-button' : ''}
+            className={request.variant === 'danger' ? 'danger-button' : 'btn-primary'}
             onClick={resolveConfirm}
           >
             {confirmLabel}
@@ -205,7 +225,7 @@ export function useAccessibleDialog() {
 
   const openDialog = useCallback((nextRequest) => new Promise((resolve) => {
     if (resolverRef.current && requestRef.current) {
-      resolverRef.current(getFallbackResult(requestRef.current.kind));
+      resolverRef.current(getRequestDismissResult(requestRef.current));
     }
     resolverRef.current = resolve;
     setRequest(nextRequest);

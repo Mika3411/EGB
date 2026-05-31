@@ -3505,6 +3505,10 @@
   flex-wrap: wrap;
   margin-top: 18px;
 }
+.player-shell:is(.is-fullscreen, .is-shared-player) #enigma-overlay .inventory-actions,
+.player-shell:is(.is-fullscreen, .is-shared-player) #enigma-overlay .enigma-actions {
+  display: flex;
+}
 .enigma-actions button {
   min-width: 150px;
   min-height: 44px;

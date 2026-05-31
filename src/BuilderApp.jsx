@@ -45,6 +45,7 @@ import { useProjectSaveAcknowledger } from './hooks/useProjectSaveAcknowledger';
 import { collectDescendantSceneIds } from './lib/sceneHelpers';
 import { collectProjectAssetManifest, collectProjectAssets } from './lib/assetManager';
 import { isAdminAccount } from './lib/authStorage';
+import { getOfflineExportEstimateMessage } from './utils/offlineExportEstimate';
 import {
   buildStoragePath,
   generateStorageFilename,
@@ -255,6 +256,8 @@ function BuilderApp({
   }, [editor.project, editor.setTab, editor.tab]);
   const {
     accountStorageQuotaBytes,
+    exactStorageAssetSizesByUrl,
+    getCurrentStorageAssetSizesByUrl,
     getCurrentStorageUsageBytes,
     invalidateStorageUsage,
     storageSummary,
@@ -1196,6 +1199,27 @@ function BuilderApp({
         .map((asset) => [asset.url, asset])).values(),
     ];
   }, [auth.activeProjectId, auth.projects, editor.project, screen]);
+  const offlineExportKnownAssets = useMemo(() => ([
+    ...mediaLibrary,
+    ...[...exactStorageAssetSizesByUrl.entries()].map(([url, storageBytes]) => ({
+      url,
+      storageBytes,
+    })),
+  ]), [exactStorageAssetSizesByUrl, mediaLibrary]);
+  const offlineExportEstimateMessage = useMemo(
+    () => getOfflineExportEstimateMessage(editor.project, { knownAssets: offlineExportKnownAssets }),
+    [editor.project, offlineExportKnownAssets],
+  );
+  const getFreshOfflineExportEstimateMessage = useCallback(async () => {
+    const sizesByUrl = await getCurrentStorageAssetSizesByUrl();
+    const exactAssets = [...sizesByUrl.entries()].map(([url, storageBytes]) => ({
+      url,
+      storageBytes,
+    }));
+    return getOfflineExportEstimateMessage(editor.project, {
+      knownAssets: [...mediaLibrary, ...exactAssets],
+    });
+  }, [editor.project, getCurrentStorageAssetSizesByUrl, mediaLibrary]);
   const registerAnime2dSaveBeforeLeave = useCallback((saveHandler) => {
     anime2dSaveBeforeLeaveRef.current = saveHandler;
   }, []);
@@ -1472,6 +1496,9 @@ function BuilderApp({
         onLogout={auth.logout}
         saveStatus={saveStatus || 'Sauvegarde active'}
         projectMode={getProjectMode(editor.project)}
+        confirmStandaloneOfflineExport={confirmDialog}
+        offlineExportEstimateMessage={offlineExportEstimateMessage}
+        getOfflineExportEstimateMessage={getFreshOfflineExportEstimateMessage}
       />
 
       <Tabs

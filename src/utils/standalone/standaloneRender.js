@@ -107,7 +107,7 @@ function renderSceneObjects(playScene) {
         content = '<span>' + safeHtml(title || 'Objet') + '</span>';
       }
       return '<button type="button" class="player-scene-object' + (obj.isInvisible ? ' player-scene-object-invisible' : '') + (clickMode === 'none' ? ' player-scene-object-not-clickable' : '') + '" data-scene-object-id="' + safeDataAttr(obj.id) + '" '
-        + 'style="left:' + safeStylePercent(obj.x, 0) + ';top:' + safeStylePercent(obj.y, 0) + ';width:' + safeStylePercent(obj.width, 10) + ';height:' + safeStylePercent(obj.height, 10) + ';z-index:18;' + getElementShapeStyle(obj) + '" title="' + escapeAttr(obj.name || 'Objet') + '" aria-label="' + escapeAttr(obj.name || 'Objet invisible') + '">'
+        + 'style="left:' + safeSceneObjectPositionPercent(obj.x, 0) + ';top:' + safeSceneObjectPositionPercent(obj.y, 0) + ';width:' + safeSceneObjectSizePercent(obj.width, 10) + ';height:' + safeSceneObjectSizePercent(obj.height, 10) + ';z-index:' + getLayerZIndex(obj, 'sceneObject') + ';' + getElementShapeStyle(obj) + '" title="' + escapeAttr(obj.name || 'Objet') + '" aria-label="' + escapeAttr(obj.name || 'Objet invisible') + '">'
         + content
         + '</button>';
     })

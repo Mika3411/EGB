@@ -198,6 +198,7 @@ body.game-fullscreen .inventory-drawer__backdrop{position:fixed;inset:0;z-index:
 .scene-inline-viewer__image{width:auto;max-width:min(82vw,720px);height:auto;max-height:68vh;object-fit:contain;border-radius:18px;background:transparent;box-shadow:0 20px 60px rgba(0,0,0,.35);display:block}
 .scene-inline-viewer__name{align-self:stretch;padding:12px 16px;border-radius:16px;background:rgba(15,23,42,.92);border:1px solid rgba(255,255,255,.08);font-weight:700;text-align:left;color:#fff}
 .inventory-actions{margin-top:14px;display:flex;gap:10px;flex-wrap:wrap}
+#enigma-overlay .inventory-actions,#enigma-overlay .enigma-actions{display:flex}
 button,.button-like{border:1px solid transparent;background:linear-gradient(180deg, #4f8cff 0%, #2f6fe4 100%);color:white;padding:11px 16px;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;text-décoration:none;box-shadow:0 10px 24px rgba(47,111,228,.22)}
 .secondary-button{background:rgba(18,31,56,.95)!important;border-color:rgba(148,163,184,.16)!important;box-shadow:none!important}
 .danger-button{background:linear-gradient(180deg, #d14b4b 0%, #a92c2c 100%)!important;color:#fff;border-color:rgba(255,255,255,.06)!important;box-shadow:0 12px 24px rgba(169,44,44,.24)!important}

@@ -66,6 +66,24 @@ const makeProject = (title = 'Projet classique') => ({
   title,
 });
 
+const ONE_MIB = 1024 * 1024;
+const makeProjectWithEstimatedRemoteBackground = () => {
+  const project = makeProject();
+  const remoteBackgroundUrl = 'https://storage.example.test/public/backgrounds/scene.png';
+  return {
+    ...project,
+    creationMode: 'expert',
+    scenes: [{
+      ...(project.scenes?.[0] || {}),
+      backgroundData: remoteBackgroundUrl,
+    }],
+    remoteMediaMetadata: [{
+      url: remoteBackgroundUrl,
+      sizeBytes: 18 * ONE_MIB,
+    }],
+  };
+};
+
 const makeAuth = (overrides = {}) => {
   const project = overrides.project || makeProject();
   const projectId = overrides.activeProjectId || 'project-classic';
@@ -136,6 +154,28 @@ describe('BuilderApp autosave classique', () => {
       userId: 'user-classic',
     });
     expect(screen.getByText('Sauvegarde active')).toBeTruthy();
+  });
+
+  test('ouvre le dialogue d export standalone offline depuis le builder', async () => {
+    render(
+      <BuilderApp
+        auth={makeAuth({ project: makeProjectWithEstimatedRemoteBackground() })}
+        initialProjectId="project-classic"
+        initialScreen="editor"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Mode expert')).toBeTruthy();
+    }, { timeout: 5000 });
+    fireEvent.click(await screen.findByRole('button', { name: 'Exporter jeu' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Exporter le jeu' });
+    expect(dialog.textContent).toContain('Inclure les médias dans le fichier pour jouer hors ligne ?');
+    expect(dialog.textContent).toContain('Export hors ligne estimé : ~18 Mo');
+    expect(screen.getByRole('button', { name: 'Annuler' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Exporter sans inclure' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Inclure les médias' })).toBeTruthy();
   });
 
   test('sauvegarde le projet actif avant de quitter vers le profil', async () => {

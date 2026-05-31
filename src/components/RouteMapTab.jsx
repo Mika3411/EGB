@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Brain, CheckCircle2, Clapperboard, DoorOpen, ExternalLink, EyeOff, Gamepad2, Link, Lock, MapPin, Maximize2, Minimize2, MousePointerClick, Pencil, Play, Plus, RotateCcw, Trash2, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Brain, CheckCircle2, Clapperboard, DoorOpen, ExternalLink, EyeOff, Gamepad2, Link, Lock, MapPin, Maximize2, Minimize2, MousePointerClick, Pencil, Play, Plus, RotateCcw, Trash2, XCircle } from 'lucide-react';
 import { applyProjectStartType } from '../lib/cinematicEngine';
 import {
   getSceneActionSources,
   getSceneTransitions as getProjectSceneTransitions,
 } from '../lib/projectTransitions';
 import { showAlert, showConfirm } from './AccessibleDialog';
+import planBuildPreviewUrl from '../assets/route-construction-preview.svg';
+import planTestPreviewUrl from '../assets/route-test-preview.png';
+import routePlayerCharacterUrl from '../assets/route-player-character.png';
 
 const makeId = (prefix) => `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 const ROUTE_CANVAS_ROOM_LIMIT = 15;
@@ -798,6 +801,7 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel, setS
   const [draggingRoomId, setDraggingRoomId] = useState('');
   const [contextMenu, setContextMenu] = useState(null);
   const [mapMode, setMapMode] = useState('edit');
+  const [routeSection, setRouteSection] = useState('home');
   const [hideSelection, setHideSelection] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [activeCanvasId, setActiveCanvasId] = useState(DEFAULT_ROUTE_CANVAS_ID);
@@ -1279,86 +1283,161 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel, setS
     setSelectedConnectionId('');
   };
 
+  const openBuilderView = () => {
+    setRouteSection('builder');
+    setMapMode('edit');
+    setContextMenu(null);
+    setConnectFromId('');
+  };
+
+  const openTestsView = () => {
+    setRouteSection('tests');
+    setMapMode('gameplay');
+    setContextMenu(null);
+    setConnectFromId('');
+    setSelectedConnectionId('');
+    if (!playerRoomId) resetGameplay();
+  };
+
+  const returnToRouteHome = () => {
+    setRouteSection('home');
+    setContextMenu(null);
+    setConnectFromId('');
+    setSelectedConnectionId('');
+  };
+
+  if (routeSection === 'home') {
+    return (
+      <section className="panel route-map-choice-shell">
+        <div className="route-choice-head">
+          <div>
+            <span className="section-kicker">Plan</span>
+            <h2>Choisir une action</h2>
+          </div>
+          <span className={`status-badge ${diagnostics.ok ? '' : 'soft'}`}>
+            {diagnostics.ok ? 'Plan OK' : `${diagnostics.problems.length} souci(s)`}
+          </span>
+        </div>
+
+        <div className="route-choice-grid">
+          <button type="button" className="route-choice-card build" onClick={openBuilderView}>
+            <span className="route-choice-image">
+              <img src={planBuildPreviewUrl} alt="" loading="lazy" />
+            </span>
+            <span className="route-choice-content">
+              <span className="section-kicker">Construction</span>
+              <strong>Construire le plan</strong>
+              <span>Placer les pièces, relier les scènes et organiser les canvas.</span>
+            </span>
+          </button>
+
+          <button type="button" className="route-choice-card tests" onClick={openTestsView}>
+            <span className="route-choice-image">
+              <img src={planTestPreviewUrl} alt="" loading="lazy" />
+            </span>
+            <span className="route-choice-content">
+              <span className="section-kicker">Tests</span>
+              <strong>Tester les liens</strong>
+              <span>Vérifier les allers-retours, les sens uniques et les blocages.</span>
+            </span>
+          </button>
+        </div>
+
+        <div className="route-choice-summary" aria-label="Résumé du plan">
+          <span><strong>{rooms.length}</strong> pièces</span>
+          <span><strong>{connections.length}</strong> liaisons</span>
+          <span><strong>{diagnostics.warnings.length + diagnostics.problems.length}</strong> alertes</span>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <div className="layout route-map-layout">
       <section className="panel side route-map-tools">
-        <div className="panel-head">
+        <div className="panel-head route-view-panel-head">
           <div>
+            <button type="button" className="secondary-action route-back-button" onClick={returnToRouteHome}>
+              <ArrowLeft size={15} aria-hidden="true" />
+              Retour
+            </button>
             <span className="section-kicker">Plan</span>
-            <h2>Pièces</h2>
+            <h2>{isGameplayMode ? 'Tests des liens' : 'Construire'}</h2>
           </div>
           <span className={`status-badge ${diagnostics.ok ? '' : 'soft'}`}>{diagnostics.ok ? 'OK' : `${diagnostics.problems.length} souci(s)`}</span>
         </div>
 
-        <div className="route-start-settings" data-tour="map-start-settings">
-          <div className="route-start-settings-head">
-            <strong>Demarrage du jeu</strong>
-            <span>{(project.start?.type || 'scene') === 'cinematic' ? 'Intro cinématique' : 'Scène jouable'}</span>
-          </div>
-          <label>
-            <span className="label-with-help">
-              <span>Le jeu commence par</span>
-              <span className="help-dot" data-help={FIELD_HELP.startType} aria-label={FIELD_HELP.startType} tabIndex={0}>?</span>
-            </span>
-            <select
-              value={project.start?.type || 'scene'}
-              onChange={(event) => patchProject((draft) => {
-                applyProjectStartType(draft, event.target.value);
-              })}
-            >
-              <option value="scene">Une scène</option>
-              <option value="cinematic">Une cinematic</option>
-            </select>
-          </label>
-
-          {(project.start?.type || 'scene') === 'scene' ? (
+        {!isGameplayMode ? (
+          <details className="route-start-settings" data-tour="map-start-settings">
+            <summary className="route-start-settings-head">
+              <strong>Demarrage du jeu</strong>
+              <span>{(project.start?.type || 'scene') === 'cinematic' ? 'Intro cinématique' : 'Scène jouable'}</span>
+            </summary>
             <label>
               <span className="label-with-help">
-                <span>Scène de départ</span>
-                <span className="help-dot" data-help={FIELD_HELP.startScene} aria-label={FIELD_HELP.startScene} tabIndex={0}>?</span>
+                <span>Le jeu commence par</span>
+                <span className="help-dot" data-help={FIELD_HELP.startType} aria-label={FIELD_HELP.startType} tabIndex={0}>?</span>
               </span>
               <select
-                value={project.start?.targetSceneId || rootSceneOptions[0]?.id || ''}
+                value={project.start?.type || 'scene'}
                 onChange={(event) => patchProject((draft) => {
-                  if (!draft.start) {
-                    draft.start = { type: 'scene', targetSceneId: '', targetCinematicId: '' };
-                  }
-                  draft.start.targetSceneId = event.target.value;
+                  applyProjectStartType(draft, event.target.value);
                 })}
               >
-                {rootSceneOptions.map((scene) => (
-                  <option key={scene.id} value={scene.id}>{scene.name}</option>
-                ))}
+                <option value="scene">Une scène</option>
+                <option value="cinematic">Une cinematic</option>
               </select>
             </label>
-          ) : (
-            <label>
-              <span className="label-with-help">
-                <span>Cinématique de départ</span>
-                <span className="help-dot" data-help={FIELD_HELP.startCinematic} aria-label={FIELD_HELP.startCinematic} tabIndex={0}>?</span>
-              </span>
-              <select
-                value={project.start?.targetCinematicId || project.cinematics?.[0]?.id || ''}
-                onChange={(event) => patchProject((draft) => {
-                  if (!draft.start) {
-                    draft.start = { type: 'scene', targetSceneId: '', targetCinematicId: '' };
-                  }
-                  draft.start.targetCinematicId = event.target.value;
-                })}
-              >
-                {(project.cinematics || []).length ? (
-                  project.cinematics.map((cine) => (
-                    <option key={cine.id} value={cine.id}>{cine.name}</option>
-                  ))
-                ) : (
-                  <option value="">Aucune cinématique</option>
-                )}
-              </select>
-            </label>
-          )}
-        </div>
 
-        <label>
+            {(project.start?.type || 'scene') === 'scene' ? (
+              <label>
+                <span className="label-with-help">
+                  <span>Scène de départ</span>
+                  <span className="help-dot" data-help={FIELD_HELP.startScene} aria-label={FIELD_HELP.startScene} tabIndex={0}>?</span>
+                </span>
+                <select
+                  value={project.start?.targetSceneId || rootSceneOptions[0]?.id || ''}
+                  onChange={(event) => patchProject((draft) => {
+                    if (!draft.start) {
+                      draft.start = { type: 'scene', targetSceneId: '', targetCinematicId: '' };
+                    }
+                    draft.start.targetSceneId = event.target.value;
+                  })}
+                >
+                  {rootSceneOptions.map((scene) => (
+                    <option key={scene.id} value={scene.id}>{scene.name}</option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <label>
+                <span className="label-with-help">
+                  <span>Cinématique de départ</span>
+                  <span className="help-dot" data-help={FIELD_HELP.startCinematic} aria-label={FIELD_HELP.startCinematic} tabIndex={0}>?</span>
+                </span>
+                <select
+                  value={project.start?.targetCinematicId || project.cinematics?.[0]?.id || ''}
+                  onChange={(event) => patchProject((draft) => {
+                    if (!draft.start) {
+                      draft.start = { type: 'scene', targetSceneId: '', targetCinematicId: '' };
+                    }
+                    draft.start.targetCinematicId = event.target.value;
+                  })}
+                >
+                  {(project.cinematics || []).length ? (
+                    project.cinematics.map((cine) => (
+                      <option key={cine.id} value={cine.id}>{cine.name}</option>
+                    ))
+                  ) : (
+                    <option value="">Aucune cinématique</option>
+                  )}
+                </select>
+              </label>
+            )}
+          </details>
+        ) : null}
+
+        <label className="route-act-picker">
           Acte
           <select value={activeActId} onChange={(event) => {
             setSelectedActId(event.target.value);
@@ -1375,18 +1454,9 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel, setS
           </select>
         </label>
 
-        <div className="route-mode-switch" role="group" aria-label="Mode carte">
-          <button type="button" className={mapMode === 'edit' ? 'active' : ''} onClick={() => setMapMode('edit')}>
-            <Pencil size={15} aria-hidden="true" />
-            Edition
-          </button>
-          <button type="button" className={mapMode === 'gameplay' ? 'active' : ''} onClick={() => {
-            setMapMode('gameplay');
-            if (!playerRoomId) resetGameplay();
-          }}>
-            <Gamepad2 size={15} aria-hidden="true" />
-            Parcours joueur
-          </button>
+        <div className={`route-view-status ${isGameplayMode ? 'tests' : 'build'}`} role="status">
+          {isGameplayMode ? <Gamepad2 size={15} aria-hidden="true" /> : <Pencil size={15} aria-hidden="true" />}
+          <span>{isGameplayMode ? 'Mode test des liaisons' : 'Mode construction du plan'}</span>
         </div>
 
         {isGameplayMode ? (
@@ -1446,54 +1516,32 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel, setS
 
         <p className="small-note">{isGameplayMode ? 'Astuce: les sorties jouables sont des boutons. Clique dessus pour faire avancer le joueur.' : 'Double-clic pour ouvrir une scène, glisse les pièces, clique une liaison pour sa condition, clic droit pour les actions rapides.'}</p>
 
-        <div className="route-room-list">
-          {rooms.map((room) => {
-            const isCurrentPlayerRoom = gameplay.activeRoom?.id === room.id;
-            const isNextPlayerRoom = gameplay.availableMoves.some((move) => move.toRoom.id === room.id);
-            return (
-            <button
-              key={room.id}
-              type="button"
-              className={`list-card ${showSelection && selectedRoomId === room.id ? 'selected' : ''} ${isGameplayMode && isCurrentPlayerRoom ? 'gameplay-current' : ''} ${isGameplayMode && isNextPlayerRoom ? 'gameplay-next' : ''}`}
-              onClick={() => {
-                if (isGameplayMode) {
-                  movePlayerToRoom(room.id);
-                  return;
-                }
-                setSelectedRoomId(room.id);
-              }}
-              title={isGameplayMode ? (isNextPlayerRoom ? 'Aller vers cette pièce' : isCurrentPlayerRoom ? 'Position actuelle' : 'Pièce non voisine') : ''}
-            >
-              <strong>{isGameplayMode && isCurrentPlayerRoom ? 'Position - ' : isGameplayMode && isNextPlayerRoom ? 'Cliquer - ' : ''}{room.name || 'Pièce'}</strong>
-              <span>{room.sceneId ? getSceneLabel(room.sceneId) : 'Aucune scène liée'}</span>
+        {!isGameplayMode ? (
+          <>
+            <label className="route-notes-field">
+              Notes de parcours
+              <textarea
+                value={routeMap.notes || ''}
+                placeholder="Conditions d’accès, ordre prévu, pièges de connexion..."
+                onChange={(event) => patchRouteMap((draftMap) => {
+                  draftMap.notes = event.target.value;
+                })}
+              />
+            </label>
+
+            <button type="button" className="danger-button route-map-clear" onClick={clearMap}>
+              <Trash2 size={16} aria-hidden="true" />
+              Effacer le plan
             </button>
-            );
-          })}
-          {!rooms.length ? <div className="empty-state-inline">Ajoute les pièces du parcours.</div> : null}
-        </div>
-
-        <label>
-          Notes de parcours
-          <textarea
-            value={routeMap.notes || ''}
-            placeholder="Conditions d’accès, ordre prévu, pièges de connexion..."
-            onChange={(event) => patchRouteMap((draftMap) => {
-              draftMap.notes = event.target.value;
-            })}
-          />
-        </label>
-
-        <button type="button" className="danger-button route-map-clear" onClick={clearMap}>
-          <Trash2 size={16} aria-hidden="true" />
-          Effacer le plan
-        </button>
+          </>
+        ) : null}
       </section>
 
       <section className={`panel main route-map-main ${isFullscreen ? 'fullscreen' : ''}`}>
         <div className="panel-head">
           <div>
-            <span className="section-kicker">Connexions</span>
-            <h2>Carte des pièces</h2>
+            <span className="section-kicker">{isGameplayMode ? 'Vérification' : 'Connexions'}</span>
+            <h2>{isGameplayMode ? 'Tests des liens' : 'Carte des pièces'}</h2>
           </div>
           <div className="route-map-head-actions">
             <span className="small-note">{connections.length} liaison{connections.length > 1 ? 's' : ''}</span>
@@ -1513,6 +1561,9 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel, setS
             const crossCanvasConnections = connections.filter((connection) => (
               canvasRoomIds.has(connection.fromRoomId) !== canvasRoomIds.has(connection.toRoomId)
             ));
+            const canvasPlayerRoom = isGameplayMode
+              ? canvasRooms.find((room) => room.id === gameplay.activeRoom?.id)
+              : null;
             const isCanvasFull = canvasRooms.length >= ROUTE_CANVAS_ROOM_LIMIT;
             return (
               <div key={canvas.id} className={`route-canvas-section ${activeCanvas.id === canvas.id ? 'active' : ''}`}>
@@ -1642,6 +1693,21 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel, setS
                 );
               })}
             </div>
+          ) : null}
+
+          {canvasPlayerRoom ? (
+            <img
+              className="route-player-marker"
+              src={routePlayerCharacterUrl}
+              alt=""
+              aria-hidden="true"
+              style={{
+                left: `${canvasPlayerRoom.x}%`,
+                top: `${canvasPlayerRoom.y}%`,
+                '--route-player-offset-x': canvasPlayerRoom.x > 82 ? '-98px' : '46px',
+                '--route-player-offset-y': canvasPlayerRoom.y < 20 ? '10px' : '-86%',
+              }}
+            />
           ) : null}
 
           {canvasRooms.map((room) => {
@@ -1840,21 +1906,31 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel, setS
           })}
         </div>
 
-        <div className="route-map-below-canvas">
-          <label className="checkbox-line route-hide-selection">
-            <input type="checkbox" checked={hideSelection} onChange={(event) => setHideSelection(event.target.checked)} />
-            <EyeOff size={14} aria-hidden="true" />
-            Masquer la sélection
-          </label>
+        {!isGameplayMode ? (
+          <div className="route-map-below-canvas">
+            <label className="checkbox-line route-hide-selection">
+              <input type="checkbox" checked={hideSelection} onChange={(event) => setHideSelection(event.target.checked)} />
+              <EyeOff size={14} aria-hidden="true" />
+              Masquer la sélection
+            </label>
 
-          <div className="route-mechanic-legend">
-            <span><Lock size={13} aria-hidden="true" /> Énigme</span>
-            <span><Clapperboard size={13} aria-hidden="true" /> Cinématique</span>
-            <span><Brain size={13} aria-hidden="true" /> Logique</span>
+            <div className="route-mechanic-legend">
+              <span><Lock size={13} aria-hidden="true" /> Énigme</span>
+              <span><Clapperboard size={13} aria-hidden="true" /> Cinématique</span>
+              <span><Brain size={13} aria-hidden="true" /> Logique</span>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="route-map-below-canvas">
+            <div className="route-test-legend" aria-label="Légende des tests">
+              <span className="path">Chemin joué</span>
+              <span className="available">Sortie possible</span>
+              <span className="blocked">Blocage</span>
+            </div>
+          </div>
+        )}
 
-        {narrativePlan.entries.length ? (
+        {!isGameplayMode && narrativePlan.entries.length ? (
           <div className="route-narrative-strip" aria-label="Résumé narratif">
             <span><strong>{narrativePlan.entries.length}</strong> choix</span>
             <span><strong>{narrativePlan.conditionalEntries.length}</strong> cachés</span>
@@ -1866,7 +1942,7 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel, setS
 
       <section className="panel side route-map-inspector">
         <div className="panel-head">
-          <h2>Détail</h2>
+          <h2>{isGameplayMode ? 'Tests des liens' : 'Détail'}</h2>
         </div>
 
         {isGameplayMode ? (
@@ -2106,29 +2182,33 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel, setS
           <div className="empty-state-inline">Sélectionne une pièce pour la nommer, la lier à une scène ou créer une connexion.</div>
         )}
 
-        <div className="divider-line" />
-        <div className="route-diagnostics" data-tour="map-diagnostics">
-          <div className="panel-head">
-            <h2>Vérification</h2>
-          </div>
-          <div className="route-legend">
-            <span className="status-missing">Aucune zone</span>
-            <span className="status-partial">Un seul sens</span>
-            <span className="status-ok">Aller-retour</span>
-          </div>
-          {diagnostics.problems.length || diagnostics.warnings.length ? (
-            <>
-              {diagnostics.problems.map((message) => (
-                <p key={message} className="route-check danger"><XCircle size={15} aria-hidden="true" />{message}</p>
-              ))}
-              {diagnostics.warnings.map((message) => (
-                <p key={message} className="route-check warn"><AlertTriangle size={15} aria-hidden="true" />{message}</p>
-              ))}
-            </>
-          ) : (
-            <p className="route-check ok"><CheckCircle2 size={15} aria-hidden="true" />Toutes les pièces sont connectées depuis le départ.</p>
-          )}
-        </div>
+        {isGameplayMode ? (
+          <>
+            <div className="divider-line" />
+            <div className="route-diagnostics" data-tour="map-diagnostics">
+              <div className="panel-head">
+                <h2>Vérification</h2>
+              </div>
+              <div className="route-legend">
+                <span className="status-missing">Aucune zone</span>
+                <span className="status-partial">Un seul sens</span>
+                <span className="status-ok">Aller-retour</span>
+              </div>
+              {diagnostics.problems.length || diagnostics.warnings.length ? (
+                <>
+                  {diagnostics.problems.map((message) => (
+                    <p key={message} className="route-check danger"><XCircle size={15} aria-hidden="true" />{message}</p>
+                  ))}
+                  {diagnostics.warnings.map((message) => (
+                    <p key={message} className="route-check warn"><AlertTriangle size={15} aria-hidden="true" />{message}</p>
+                  ))}
+                </>
+              ) : (
+                <p className="route-check ok"><CheckCircle2 size={15} aria-hidden="true" />Toutes les pièces sont connectées depuis le départ.</p>
+              )}
+            </div>
+          </>
+        ) : null}
       </section>
     </div>
   );

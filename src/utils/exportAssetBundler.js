@@ -84,6 +84,27 @@ const shortHash = (value = '') => {
   return (hash >>> 0).toString(16).padStart(8, '0');
 };
 
+const shortByteHash = (bytes = new Uint8Array()) => {
+  let hash = 0x811c9dc5;
+  hash ^= bytes.byteLength;
+  hash = Math.imul(hash, 0x01000193);
+  for (let index = 0; index < bytes.byteLength; index += 1) {
+    hash ^= bytes[index];
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+};
+
+const bytesEqual = (left, right) => {
+  if (!left || !right || left.byteLength !== right.byteLength) return false;
+  for (let index = 0; index < left.byteLength; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
+};
+
+const remoteContentSignature = (bytes = new Uint8Array()) => `${bytes.byteLength}:${shortByteHash(bytes)}`;
+
 const getCleanContentType = (value = '') => String(value || '').split(';')[0].trim().toLowerCase();
 
 const getNumberOption = (value, defaultValue) => {
@@ -145,6 +166,37 @@ const redactSensitiveReportUrl = (url = '') => {
   return `${base}?${redactedQuery}${hash}`;
 };
 
+const sortQueryEntries = (entries) => entries.sort(([leftName, leftValue], [rightName, rightValue]) => (
+  leftName === rightName ? String(leftValue).localeCompare(String(rightValue)) : String(leftName).localeCompare(String(rightName))
+));
+
+const encodeQueryEntry = ([name, value]) => `${encodeURIComponent(name)}=${encodeURIComponent(value)}`;
+
+export const getRemoteAssetDedupeKey = (url = '') => {
+  const value = String(url || '').trim();
+  if (!value) return '';
+
+  try {
+    const parsed = new URL(value, 'https://example.invalid');
+    const supabaseObjectMatch = parsed.pathname.match(/^(.*\/storage\/v1\/object)\/(?:public|sign|authenticated)\/(.+)$/);
+    if (supabaseObjectMatch) {
+      const objectPath = decodeURIComponent(supabaseObjectMatch[2]);
+      return `${parsed.origin}${supabaseObjectMatch[1]}/${objectPath}`;
+    }
+
+    const queryEntries = [];
+    parsed.searchParams.forEach((entryValue, entryName) => {
+      if (!SENSITIVE_REPORT_URL_PARAMS.has(entryName.toLowerCase())) {
+        queryEntries.push([entryName, entryValue]);
+      }
+    });
+    const query = sortQueryEntries(queryEntries).map(encodeQueryEntry).join('&');
+    return `${parsed.origin}${parsed.pathname}${query ? `?${query}` : ''}`;
+  } catch {
+    return value;
+  }
+};
+
 const getRemoteAssetFailureMessage = (error, timeoutMs) => {
   if (error?.offlineAssetTimedOut) return `Remote asset request timed out after ${timeoutMs} ms.`;
   if (error?.name === 'AbortError') return 'Remote asset request was aborted.';
@@ -203,21 +255,31 @@ const extensionFromRemote = ({ contentType = '', url = '' } = {}) => {
   return urlExtension || extensionFromMime(normalizedContentType || 'application/octet-stream');
 };
 
-const createStableRemoteAssetPath = (reference, url, contentType, usedRemotePaths) => {
+const getRemoteAssetNameParts = (reference, url, contentType) => {
   const baseName = slugify(reference.preferredName || preferredNameFromUrl(url) || 'asset');
   const extension = extensionFromRemote({ contentType, url });
   const folder = reference.targetFolder || 'assets';
-  const hash = shortHash(url);
+  return { baseName, extension, folder };
+};
+
+const getRemoteAssetNameDedupeKey = (reference, url, contentType) => {
+  const { baseName, extension, folder } = getRemoteAssetNameParts(reference, url, contentType);
+  return `${folder || 'assets'}/${baseName}.${extension}`;
+};
+
+const createStableRemoteAssetPath = (reference, url, contentType, usedRemotePaths, dedupeKey = url) => {
+  const { baseName, extension, folder } = getRemoteAssetNameParts(reference, url, contentType);
+  const hash = shortHash(dedupeKey);
   const prefix = folder ? `assets/${folder}/${baseName}-${hash}` : `assets/${baseName}-${hash}`;
   let assetPath = `${prefix}.${extension}`;
   let collisionIndex = 2;
 
-  while (usedRemotePaths.has(assetPath) && usedRemotePaths.get(assetPath) !== url) {
+  while (usedRemotePaths.has(assetPath) && usedRemotePaths.get(assetPath) !== dedupeKey) {
     assetPath = `${prefix}-${collisionIndex}.${extension}`;
     collisionIndex += 1;
   }
 
-  usedRemotePaths.set(assetPath, url);
+  usedRemotePaths.set(assetPath, dedupeKey);
   return assetPath;
 };
 
@@ -232,6 +294,8 @@ const makeDefaultCanvas = (index = 0) => ({
 });
 
 const ANIME2D_LAYER_MEDIA_PATH_PATTERN = /\.layers\[\d+\](?:\.(?:src|imageData|originalSrc)|\.layer\.(?:src|imageData|originalSrc))$/;
+const ASSET_LIBRARY_URL_PATH_PATTERN = /^assets\[(\d+)\]\.url$/;
+const MEDIA_ASSET_ID_FIELD_PATTERN = /(?:asset|src|image|background|music|sound|audio|video|model|portrait|popup|ambient|object|hero|enemy|effect).*id$/i;
 
 const LEGACY_STANDALONE_DIRECT_MEDIA_PATTERNS = [
   /^assets\[\d+\]\.url$/,
@@ -259,7 +323,7 @@ const LEGACY_STANDALONE_ANIME2D_SPEC_PATTERNS = [
   /^cinematics\[\d+\]\.steps\[\d+\]\.spec/,
 ];
 
-const isLegacyStandaloneAssetReference = (reference) => {
+export const isLegacyStandaloneAssetReference = (reference) => {
   const path = reference?.path || '';
   if (LEGACY_STANDALONE_DIRECT_MEDIA_PATTERNS.some((pattern) => pattern.test(path))) return true;
   return ANIME2D_LAYER_MEDIA_PATH_PATTERN.test(path)
@@ -317,6 +381,36 @@ const getReferenceSlot = (root, path) => {
   if (!target || typeof target !== 'object') return null;
   const key = parts[parts.length - 1];
   return { target, key, value: target[key] };
+};
+
+const getAssetLibraryIndex = (path = '') => {
+  const match = ASSET_LIBRARY_URL_PATH_PATTERN.exec(path);
+  return match ? Number(match[1]) : null;
+};
+
+const collectReferencedAssetIds = (value, knownAssetIds, usedAssetIds = new Set(), seen = new Set(), isRoot = true) => {
+  if (!value || typeof value !== 'object' || seen.has(value) || !knownAssetIds.size) return usedAssetIds;
+  seen.add(value);
+
+  Object.entries(value).forEach(([key, entry]) => {
+    if (isRoot && key === 'assets' && Array.isArray(entry)) return;
+    if (
+      typeof entry === 'string'
+      && knownAssetIds.has(entry)
+      && MEDIA_ASSET_ID_FIELD_PATTERN.test(key)
+    ) {
+      usedAssetIds.add(entry);
+      return;
+    }
+    collectReferencedAssetIds(entry, knownAssetIds, usedAssetIds, seen, false);
+  });
+
+  return usedAssetIds;
+};
+
+const remoteDedupeKeyForReferenceValue = (value = '') => {
+  const url = String(value || '').trim();
+  return url ? getRemoteAssetDedupeKey(url) || url : '';
 };
 
 export const normalizeRouteMapCanvasesForExport = (routeMap) => {
@@ -380,12 +474,34 @@ export async function buildExportProjectWithAssets(project, zip, options = {}) {
   const dataUrlAssetPaths = new Map();
   const usedRemotePaths = new Map();
   const remoteAssetCache = new Map();
+  const remoteContentAssetCache = new Map();
+  const remoteNameAssetCache = new Map();
   const offlineWarnings = [];
   const exportOfflineAssets = options.exportOfflineAssets === true;
   const offlineAssetFetchTimeoutMs = getOfflineAssetFetchTimeoutMs(options);
   const offlineAssetMaxBytes = getOfflineAssetMaxBytes(options);
   let bundledCount = 0;
   let onlineCount = 0;
+  const references = collectExportAssets(nextProject, { includeEmpty: false, dedupe: false });
+  const knownAssetIds = new Set((Array.isArray(nextProject.assets) ? nextProject.assets : [])
+    .map((asset) => asset?.id)
+    .filter(Boolean));
+  const referencedAssetIds = collectReferencedAssetIds(nextProject, knownAssetIds);
+  const activeRemoteAssetKeys = new Set();
+  const activeDataAssetValues = new Set();
+
+  references.forEach((reference) => {
+    if (!isLegacyStandaloneAssetReference(reference)) return;
+    if (getAssetLibraryIndex(reference.path) !== null) return;
+    if (reference.sourceKind === EXPORT_ASSET_SOURCE_KINDS.REMOTE_URL) {
+      const dedupeKey = remoteDedupeKeyForReferenceValue(reference.value);
+      if (dedupeKey) activeRemoteAssetKeys.add(dedupeKey);
+      return;
+    }
+    if (reference.sourceKind === EXPORT_ASSET_SOURCE_KINDS.DATA_URL) {
+      activeDataAssetValues.add(reference.value);
+    }
+  });
 
   const uniqueAssetPath = (folder, preferredName, mimeType) => {
     const baseName = slugify(preferredName || 'asset');
@@ -396,8 +512,30 @@ export async function buildExportProjectWithAssets(project, zip, options = {}) {
     return count === 0 ? `${prefix}.${extension}` : `${prefix}-${count + 1}.${extension}`;
   };
 
+  const shouldExportReference = (reference) => {
+    if (!isLegacyStandaloneAssetReference(reference)) return false;
+
+    const assetIndex = getAssetLibraryIndex(reference.path);
+    if (assetIndex === null) return true;
+
+    const asset = Array.isArray(nextProject.assets) ? nextProject.assets[assetIndex] : null;
+    if (!asset) return false;
+    if (asset.id && referencedAssetIds.has(asset.id)) return true;
+
+    if (reference.sourceKind === EXPORT_ASSET_SOURCE_KINDS.REMOTE_URL) {
+      const dedupeKey = remoteDedupeKeyForReferenceValue(reference.value);
+      return Boolean(dedupeKey && activeRemoteAssetKeys.has(dedupeKey));
+    }
+
+    if (reference.sourceKind === EXPORT_ASSET_SOURCE_KINDS.DATA_URL) {
+      return activeDataAssetValues.has(reference.value);
+    }
+
+    return false;
+  };
+
   const exportCollectedMediaReference = (reference) => {
-    if (!isLegacyStandaloneAssetReference(reference)) return;
+    if (!shouldExportReference(reference)) return;
     if (reference.sourceKind !== EXPORT_ASSET_SOURCE_KINDS.DATA_URL) return;
 
     const slot = getReferenceSlot(nextProject, reference.path);
@@ -421,22 +559,39 @@ export async function buildExportProjectWithAssets(project, zip, options = {}) {
   };
 
   const collectRemoteReference = (groups, reference) => {
-    if (!isLegacyStandaloneAssetReference(reference)) return;
+    if (!shouldExportReference(reference)) return;
     if (reference.sourceKind !== EXPORT_ASSET_SOURCE_KINDS.REMOTE_URL) return;
     const slot = getReferenceSlot(nextProject, reference.path);
     const url = typeof slot?.value === 'string' ? slot.value.trim() : '';
     if (!url) return;
+    const dedupeKey = remoteDedupeKeyForReferenceValue(url);
 
-    const existing = groups.get(url);
+    const existing = groups.get(dedupeKey);
     if (existing) {
       existing.references.push(reference);
+      if (!existing.urls.includes(url)) existing.urls.push(url);
       return;
     }
 
-    groups.set(url, {
+    groups.set(dedupeKey, {
+      dedupeKey,
       url,
+      urls: [url],
       references: [reference],
     });
+  };
+
+  const getBundledRemoteContentAsset = (bytes) => {
+    const signature = remoteContentSignature(bytes);
+    const candidates = remoteContentAssetCache.get(signature) || [];
+    return candidates.find((candidate) => bytesEqual(candidate.bytes, bytes))?.result || null;
+  };
+
+  const rememberBundledRemoteContentAsset = (bytes, result) => {
+    const signature = remoteContentSignature(bytes);
+    const candidates = remoteContentAssetCache.get(signature) || [];
+    candidates.push({ bytes, result });
+    remoteContentAssetCache.set(signature, candidates);
   };
 
   const addOfflineWarning = ({ url, references, message, status = null }) => {
@@ -450,7 +605,8 @@ export async function buildExportProjectWithAssets(project, zip, options = {}) {
   };
 
   const fetchRemoteAsset = async (group) => {
-    if (remoteAssetCache.has(group.url)) return remoteAssetCache.get(group.url);
+    const cacheKey = group.dedupeKey || group.url;
+    if (remoteAssetCache.has(cacheKey)) return remoteAssetCache.get(cacheKey);
 
     if (typeof fetch !== 'function') {
       addOfflineWarning({
@@ -458,7 +614,7 @@ export async function buildExportProjectWithAssets(project, zip, options = {}) {
         references: group.references,
         message: 'fetch is not available in this environment.',
       });
-      remoteAssetCache.set(group.url, null);
+      remoteAssetCache.set(cacheKey, null);
       return null;
     }
 
@@ -499,8 +655,26 @@ export async function buildExportProjectWithAssets(project, zip, options = {}) {
           references: group.references,
           ...downloadedAsset.warning,
         });
-        remoteAssetCache.set(group.url, null);
+        remoteAssetCache.set(cacheKey, null);
         return null;
+      }
+
+      const nameDedupeKey = getRemoteAssetNameDedupeKey(
+        group.references[0],
+        group.url,
+        downloadedAsset.contentType,
+      );
+      const existingNamedAsset = remoteNameAssetCache.get(nameDedupeKey);
+      if (existingNamedAsset) {
+        remoteAssetCache.set(cacheKey, existingNamedAsset);
+        return existingNamedAsset;
+      }
+
+      const existingContentAsset = getBundledRemoteContentAsset(downloadedAsset.bytes);
+      if (existingContentAsset) {
+        remoteNameAssetCache.set(nameDedupeKey, existingContentAsset);
+        remoteAssetCache.set(cacheKey, existingContentAsset);
+        return existingContentAsset;
       }
 
       const assetPath = createStableRemoteAssetPath(
@@ -508,12 +682,15 @@ export async function buildExportProjectWithAssets(project, zip, options = {}) {
         group.url,
         downloadedAsset.contentType,
         usedRemotePaths,
+        cacheKey,
       );
       zip.file(assetPath, downloadedAsset.bytes);
       bundledCount += 1;
 
       const result = { assetPath };
-      remoteAssetCache.set(group.url, result);
+      remoteNameAssetCache.set(nameDedupeKey, result);
+      rememberBundledRemoteContentAsset(downloadedAsset.bytes, result);
+      remoteAssetCache.set(cacheKey, result);
       return result;
     } catch (error) {
       addOfflineWarning({
@@ -521,7 +698,7 @@ export async function buildExportProjectWithAssets(project, zip, options = {}) {
         references: group.references,
         message: getRemoteAssetFailureMessage(error, offlineAssetFetchTimeoutMs),
       });
-      remoteAssetCache.set(group.url, null);
+      remoteAssetCache.set(cacheKey, null);
       return null;
     }
   };
@@ -542,7 +719,6 @@ export async function buildExportProjectWithAssets(project, zip, options = {}) {
     }
   };
 
-  const references = collectExportAssets(nextProject, { includeEmpty: false, dedupe: false });
   references.forEach(exportCollectedMediaReference);
 
   if (exportOfflineAssets) {

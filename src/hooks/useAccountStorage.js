@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ACCOUNT_FREE_STORAGE_BYTES,
   formatStorageSize,
-  getAccountExactStorageUsageBytes,
+  getAccountExactStorageAssetSizes,
   getAccountStorageUsageBytes,
   getStorageQuotaBytes,
 } from '../lib/storageQuota';
 
 const EXACT_USAGE_DEBOUNCE_MS = 700;
+const EXACT_STORAGE_ASSET_OPTIONS = { includeLegacyFields: true };
 
 export function useAccountStorage({
   activeProject,
@@ -16,6 +17,7 @@ export function useAccountStorage({
   autoExact = false,
 } = {}) {
   const [accountStorageQuotaBytes, setAccountStorageQuotaBytes] = useState(ACCOUNT_FREE_STORAGE_BYTES);
+  const [exactStorageAssetSizesByUrl, setExactStorageAssetSizesByUrl] = useState(new Map());
   const [exactStorageUsageBytes, setExactStorageUsageBytes] = useState(null);
   const [usageInvalidationVersion, setUsageInvalidationVersion] = useState(0);
   const exactUsageRequestRef = useRef(0);
@@ -34,6 +36,7 @@ export function useAccountStorage({
 
   useEffect(() => {
     if (!autoExact) {
+      setExactStorageAssetSizesByUrl(new Map());
       setExactStorageUsageBytes(null);
       return undefined;
     }
@@ -44,9 +47,10 @@ export function useAccountStorage({
     setExactStorageUsageBytes(null);
 
     const timer = window.setTimeout(() => {
-      getAccountExactStorageUsageBytes(projectsForStorageUsage).then((bytes) => {
+      getAccountExactStorageAssetSizes(projectsForStorageUsage, EXACT_STORAGE_ASSET_OPTIONS).then((sizesByUrl) => {
         if (isCurrent && requestId === exactUsageRequestRef.current) {
-          setExactStorageUsageBytes(bytes);
+          setExactStorageAssetSizesByUrl(sizesByUrl);
+          setExactStorageUsageBytes([...sizesByUrl.values()].reduce((total, size) => total + (Number(size) || 0), 0));
         }
       });
     }, EXACT_USAGE_DEBOUNCE_MS);
@@ -61,15 +65,30 @@ export function useAccountStorage({
     if (exactStorageUsageBytes !== null) return exactStorageUsageBytes;
     exactUsageRequestRef.current += 1;
     const requestId = exactUsageRequestRef.current;
-    const bytes = await getAccountExactStorageUsageBytes(projectsForStorageUsage);
+    const sizesByUrl = await getAccountExactStorageAssetSizes(projectsForStorageUsage, EXACT_STORAGE_ASSET_OPTIONS);
+    const bytes = [...sizesByUrl.values()].reduce((total, size) => total + (Number(size) || 0), 0);
     if (requestId === exactUsageRequestRef.current) {
+      setExactStorageAssetSizesByUrl(sizesByUrl);
       setExactStorageUsageBytes(bytes);
     }
     return bytes;
   }, [exactStorageUsageBytes, projectsForStorageUsage]);
 
+  const getCurrentStorageAssetSizesByUrl = useCallback(async () => {
+    if (exactStorageUsageBytes !== null) return exactStorageAssetSizesByUrl;
+    exactUsageRequestRef.current += 1;
+    const requestId = exactUsageRequestRef.current;
+    const sizesByUrl = await getAccountExactStorageAssetSizes(projectsForStorageUsage, EXACT_STORAGE_ASSET_OPTIONS);
+    if (requestId === exactUsageRequestRef.current) {
+      setExactStorageAssetSizesByUrl(sizesByUrl);
+      setExactStorageUsageBytes([...sizesByUrl.values()].reduce((total, size) => total + (Number(size) || 0), 0));
+    }
+    return sizesByUrl;
+  }, [exactStorageAssetSizesByUrl, exactStorageUsageBytes, projectsForStorageUsage]);
+
   const invalidateStorageUsage = useCallback(() => {
     exactUsageRequestRef.current += 1;
+    setExactStorageAssetSizesByUrl(new Map());
     setExactStorageUsageBytes(null);
     setUsageInvalidationVersion((version) => version + 1);
   }, []);
@@ -92,7 +111,9 @@ export function useAccountStorage({
   return {
     accountStorageQuotaBytes,
     estimatedStorageUsageBytes,
+    exactStorageAssetSizesByUrl,
     exactStorageUsageBytes,
+    getCurrentStorageAssetSizesByUrl,
     getCurrentStorageUsageBytes,
     invalidateStorageUsage,
     storageSummary,

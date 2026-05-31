@@ -26,7 +26,7 @@ const getSecurityHelpers = () => {
   const start = engineJs.indexOf('function safeHtml');
   const end = engineJs.indexOf('function clampPercent');
   const helperSource = engineJs.slice(start, end);
-  const loadHelpers = new Function(`${helperSource}; return { safeMediaUrl, escapeMediaAttr, cssMediaUrl, cssNumber, cssPercent, safeStylePercent, safeCssColor, safeClassToken, safeDataAttr };`);
+  const loadHelpers = new Function(`${helperSource}; return { safeMediaUrl, escapeMediaAttr, cssMediaUrl, cssNumber, cssPercent, safeStylePercent, safeSceneObjectPositionPercent, safeSceneObjectSizePercent, getLayerZIndex, safeCssColor, safeClassToken, safeDataAttr };`);
   return loadHelpers();
 };
 
@@ -170,6 +170,15 @@ describe('standalone HTML media URL safety', () => {
     });
   });
 
+  it('keeps enigma action buttons visible when fullscreen hides inventory controls', () => {
+    const styleCss = buildStandaloneCss();
+
+    expect(styleCss).toContain('body.game-fullscreen .inventory-actions{display:none}');
+    expect(styleCss).toContain('#enigma-overlay .inventory-actions,#enigma-overlay .enigma-actions{display:flex}');
+    expect(styleCss.indexOf('body.game-fullscreen .inventory-actions{display:none}'))
+      .toBeLessThan(styleCss.indexOf('#enigma-overlay .inventory-actions,#enigma-overlay .enigma-actions{display:flex}'));
+  });
+
   it('renders the hidden JSON save import file input used by the import button', () => {
     const engineJs = getEngineJs();
 
@@ -241,11 +250,27 @@ describe('standalone HTML media URL safety', () => {
   });
 
   it('normalizes project-controlled inline CSS values before rendering', () => {
-    const { cssNumber, cssPercent, safeStylePercent, safeCssColor, safeClassToken, safeDataAttr } = getSecurityHelpers();
+    const {
+      cssNumber,
+      cssPercent,
+      safeStylePercent,
+      safeSceneObjectPositionPercent,
+      safeSceneObjectSizePercent,
+      getLayerZIndex,
+      safeCssColor,
+      safeClassToken,
+      safeDataAttr,
+    } = getSecurityHelpers();
 
     expect(cssPercent('12;left:999', 0)).toBe('0');
     expect(safeStylePercent('12;left:999', 0)).toBe('0%');
     expect(cssPercent(250, 0)).toBe('100');
+    expect(safeSceneObjectPositionPercent(-25, 0)).toBe('-25%');
+    expect(safeSceneObjectPositionPercent(125, 0)).toBe('125%');
+    expect(safeSceneObjectSizePercent(250, 10)).toBe('250%');
+    expect(safeSceneObjectSizePercent(-5, 10)).toBe('0%');
+    expect(safeSceneObjectSizePercent('12;left:999', 10)).toBe('10%');
+    expect(getLayerZIndex({ zIndex: 42 }, 'sceneObject')).toBe('42');
     expect(cssNumber(-99999, 0, -10, 10)).toBe('-10');
     expect(safeCssColor('rgba(120, 83, 36, .74)', 'fallback')).toBe('rgba(120, 83, 36, .74)');
     expect(safeCssColor('#123abc', 'fallback')).toBe('#123abc');
@@ -264,7 +289,11 @@ describe('standalone HTML media URL safety', () => {
     expect(engineJs).toContain('safeCssColor(project?.ui?.narrationBackground');
     expect(engineJs).toContain('safeStylePercent(zone.x, 0)');
     expect(engineJs).toContain('safeStylePercent(spot.x, 0)');
-    expect(engineJs).toContain('safeStylePercent(obj.x, 0)');
+    expect(engineJs).toContain('safeSceneObjectPositionPercent(obj.x, 0)');
+    expect(engineJs).toContain('safeSceneObjectPositionPercent(obj.y, 0)');
+    expect(engineJs).toContain('safeSceneObjectSizePercent(obj.width, 10)');
+    expect(engineJs).toContain('safeSceneObjectSizePercent(obj.height, 10)');
+    expect(engineJs).toContain("getLayerZIndex(obj, 'sceneObject')");
     expect(engineJs).toContain('cssNumber(sceneAspectRatio, 1.6, 0.1, 10)');
     expect(engineJs).toContain('cssNumber(layer.x, 50, -1000, 1000)');
     expect(engineJs).toContain('safeStylePercent(enigma.popupBackgroundX, 50)');

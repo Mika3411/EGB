@@ -72,6 +72,31 @@ function AccessibleDialogHarness({ onResult }) {
   );
 }
 
+function AccessibleDialogDismissHarness({ onResult }) {
+  const { confirm, dialog } = useAccessibleDialog();
+  return (
+    <>
+      <button
+        type="button"
+        onClick={async () => {
+          onResult(await confirm({
+            title: 'Exporter le jeu',
+            message: 'Inclure les médias ?',
+            confirmLabel: 'Inclure',
+            cancelLabel: 'Exporter sans inclure',
+            cancelValue: false,
+            dismissLabel: 'Annuler',
+            dismissValue: null,
+          }));
+        }}
+      >
+        Ouvrir export
+      </button>
+      {dialog}
+    </>
+  );
+}
+
 describe('media helpers', () => {
   test('supprime un asset référencé dans plusieurs projets sans toucher aux autres médias', () => {
     const deletedUrl = 'https://cdn.test/deleted.png';
@@ -768,13 +793,27 @@ describe('extracted hooks', () => {
 
   test('calcule quota, usage estimé/exact et storageSummary après debounce', async () => {
     vi.useFakeTimers();
+    const signedAudioUrlA = 'https://project.supabase.co/storage/v1/object/sign/game-media/audio/0422.mp3?token=aaa&expires=111';
+    const signedAudioUrlB = 'https://project.supabase.co/storage/v1/object/sign/game-media/audio/0422.mp3?token=bbb&expires=222';
     const activeProject = {
       title: 'Actif',
-      assets: [{ id: 'a', url: 'https://cdn.test/a.png', size: 5 * MB }],
+      assets: [
+        { id: 'a', url: 'https://cdn.test/a.png', size: 5 * MB },
+        { id: 'signed-a', url: signedAudioUrlA, size: 3 * MB },
+      ],
     };
     const projects = [
       { id: 'active', data: { title: 'Ancienne version', assets: [{ id: 'old', url: 'old', size: 100 * MB }] } },
-      { id: 'other', data: { title: 'Autre', assets: [{ id: 'b', url: 'https://cdn.test/b.png', size: 2 * MB }] } },
+      {
+        id: 'other',
+        data: {
+          title: 'Autre',
+          assets: [
+            { id: 'b', url: 'https://cdn.test/b.png', size: 2 * MB },
+            { id: 'signed-b', url: signedAudioUrlB, size: 3 * MB },
+          ],
+        },
+      },
       { id: 'duplicate', data: { title: 'Doublon', assets: [{ id: 'a-copy', url: 'https://cdn.test/a.png', size: 5 * MB }] } },
     ];
 
@@ -785,12 +824,12 @@ describe('extracted hooks', () => {
       projects,
     }));
 
-    expect(result.current.estimatedStorageUsageBytes).toBe(7 * MB);
+    expect(result.current.estimatedStorageUsageBytes).toBe(10 * MB);
     expect(result.current.storageSummary).toMatchObject({
       isExact: false,
       quotaBytes: 250 * MB,
-      usedBytes: 7 * MB,
-      usedLabel: '7,0 Mo env.',
+      usedBytes: 10 * MB,
+      usedLabel: '10 Mo env.',
     });
 
     await act(async () => {
@@ -798,7 +837,16 @@ describe('extracted hooks', () => {
       await flushPromises();
     });
     expect(result.current.storageSummary.isExact).toBe(true);
-    expect(result.current.storageSummary.usedBytes).toBe(7 * MB);
+    expect(result.current.storageSummary.usedBytes).toBe(10 * MB);
+    expect(result.current.exactStorageAssetSizesByUrl.get('https://cdn.test/a.png')).toBe(5 * MB);
+    expect(result.current.exactStorageAssetSizesByUrl.get('https://cdn.test/b.png')).toBe(2 * MB);
+    expect(result.current.exactStorageAssetSizesByUrl.get(signedAudioUrlA)).toBe(3 * MB);
+    expect(result.current.exactStorageAssetSizesByUrl.has(signedAudioUrlB)).toBe(false);
+    await expect(result.current.getCurrentStorageAssetSizesByUrl()).resolves.toEqual(new Map([
+      ['https://cdn.test/a.png', 5 * MB],
+      ['https://cdn.test/b.png', 2 * MB],
+      [signedAudioUrlA, 3 * MB],
+    ]));
 
     act(() => {
       result.current.updateStorageQuotaBytes(512 * MB);
@@ -826,6 +874,28 @@ describe('accessible UI hardening', () => {
     });
     expect(onResult).toHaveBeenCalledWith(false);
     expect(document.activeElement).toBe(opener);
+  });
+
+  test('AccessibleDialog distingue annulation et action secondaire', async () => {
+    const onResult = vi.fn();
+    render(<AccessibleDialogDismissHarness onResult={onResult} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ouvrir export' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Exporter sans inclure' }));
+
+    await act(async () => {
+      await flushPromises();
+    });
+    expect(onResult).toHaveBeenCalledWith(false);
+
+    onResult.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Ouvrir export' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+
+    await act(async () => {
+      await flushPromises();
+    });
+    expect(onResult).toHaveBeenCalledWith(null);
   });
 
   test('MediaSourceModal expose un label accessible, ferme sur Escape et restaure le focus', async () => {

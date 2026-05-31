@@ -534,11 +534,12 @@ function runHeroCombatAction(entry = {}, options = {}) {
       return true;
     }
     if (options.closeConversation) closeConversation();
-    const startMessage = enemyStarts
+    const defaultStartMessage = enemyStarts
       ? runtime.enemyName + ' a l’initiative (' + initiative.enemyInitiative + ' contre ' + initiative.heroInitiative + '). Lance le dé ennemi.'
       : enemyStats.enemyAutoTurn === false
         ? 'Combat contre ' + runtime.enemyName + '. À toi de jouer, puis lance le dé ennemi.'
         : 'Combat contre ' + runtime.enemyName + '. À toi de jouer.';
+    const startMessage = entry.combatStartDialogue || defaultStartMessage;
     state.activeHeroCombat = {
       id: runtime.combatId,
       entry: { ...entry },
@@ -563,7 +564,7 @@ function runHeroCombatAction(entry = {}, options = {}) {
       visualEffects: [],
     };
     state.selectedHeroCombatPowerId = '';
-    state.dialogue = enemyStarts ? runtime.enemyName + ' a l’initiative.' : 'Combat contre ' + runtime.enemyName + '.';
+    state.dialogue = entry.combatStartDialogue || (enemyStarts ? runtime.enemyName + ' a l’initiative.' : 'Combat contre ' + runtime.enemyName + '.');
     return true;
   }
 

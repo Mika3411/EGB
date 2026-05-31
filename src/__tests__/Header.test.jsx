@@ -16,6 +16,7 @@ const renderHeader = (props = {}) => render(
     authorProfile={{ displayName: 'Mika Studio' }}
     onLogout={noop}
     saveStatus="Sauvegarde active"
+    offlineExportEstimateMessage="Export hors ligne estimé : ~7 Mo"
     {...props}
   />,
 );
@@ -33,35 +34,82 @@ describe('Header', () => {
     expect(screen.getByText('mika@example.com')).toBeTruthy();
   });
 
-  test('garde l export standalone offline decoche par defaut', () => {
-    renderHeader();
+  test('affiche les statuts Supabase non synchronises comme avertissement', () => {
+    renderHeader({ saveStatus: 'Supabase non synchronisé' });
 
-    const checkbox = screen.getByRole('checkbox', {
-      name: 'Inclure les médias dans le fichier pour jouer hors ligne',
-    });
-    expect(checkbox.checked).toBe(false);
-    expect(screen.getByText(/Le fichier sera plus lourd/i)).toBeTruthy();
+    expect(screen.getByText('Supabase non synchronisé').classList.contains('warning')).toBe(true);
   });
 
-  test('conserve l export standalone actuel quand l option offline est decochee', async () => {
+  test('n affiche pas l option offline dans le header avant export', () => {
+    renderHeader();
+
+    expect(screen.queryByRole('checkbox', {
+      name: 'Inclure les médias dans le fichier pour jouer hors ligne',
+    })).toBeNull();
+    expect(screen.queryByText(/Le fichier sera plus lourd/i)).toBeNull();
+  });
+
+  test('conserve l export standalone actuel quand l option offline est refusee', async () => {
     const onExportStandalone = vi.fn(async () => ({}));
-    renderHeader({ onExportStandalone });
+    const confirmStandaloneOfflineExport = vi.fn(async () => false);
+    renderHeader({ confirmStandaloneOfflineExport, onExportStandalone });
 
     fireEvent.click(screen.getByRole('button', { name: 'Exporter jeu' }));
 
     await waitFor(() => {
+      expect(confirmStandaloneOfflineExport).toHaveBeenCalledWith(expect.objectContaining({
+        title: 'Exporter le jeu',
+        confirmLabel: 'Inclure les médias',
+        cancelLabel: 'Exporter sans inclure',
+        cancelValue: false,
+        dismissLabel: 'Annuler',
+        dismissValue: null,
+      }));
       expect(onExportStandalone).toHaveBeenCalledTimes(1);
     });
+    expect(confirmStandaloneOfflineExport.mock.calls[0][0].message).toContain('Inclure les médias dans le fichier pour jouer hors ligne ?');
+    expect(confirmStandaloneOfflineExport.mock.calls[0][0].message).toContain('Export hors ligne estimé : ~7 Mo');
     expect(onExportStandalone.mock.calls[0]).toEqual([]);
   });
 
-  test('transmet exportOfflineAssets quand l option offline est cochee', async () => {
+  test('rafraichit l estimation offline au moment du clic export', async () => {
     const onExportStandalone = vi.fn(async () => ({}));
-    renderHeader({ onExportStandalone });
+    const confirmStandaloneOfflineExport = vi.fn(async () => false);
+    const getOfflineExportEstimateMessage = vi.fn(async () => 'Export hors ligne estimé : ~11 Mo');
+    renderHeader({
+      confirmStandaloneOfflineExport,
+      getOfflineExportEstimateMessage,
+      offlineExportEstimateMessage: 'Export hors ligne estimé : taille à confirmer',
+      onExportStandalone,
+    });
 
-    fireEvent.click(screen.getByRole('checkbox', {
-      name: 'Inclure les médias dans le fichier pour jouer hors ligne',
-    }));
+    fireEvent.click(screen.getByRole('button', { name: 'Exporter jeu' }));
+
+    await waitFor(() => {
+      expect(getOfflineExportEstimateMessage).toHaveBeenCalledTimes(1);
+      expect(confirmStandaloneOfflineExport).toHaveBeenCalledTimes(1);
+    });
+    expect(confirmStandaloneOfflineExport.mock.calls[0][0].message).toContain('Export hors ligne estimé : ~11 Mo');
+  });
+
+  test('annule l export standalone sans lancer de fichier', async () => {
+    const onExportStandalone = vi.fn(async () => ({}));
+    const confirmStandaloneOfflineExport = vi.fn(async () => null);
+    renderHeader({ confirmStandaloneOfflineExport, onExportStandalone });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Exporter jeu' }));
+
+    await waitFor(() => {
+      expect(confirmStandaloneOfflineExport).toHaveBeenCalledTimes(1);
+    });
+    expect(onExportStandalone).not.toHaveBeenCalled();
+  });
+
+  test('transmet exportOfflineAssets quand l option offline est acceptee', async () => {
+    const onExportStandalone = vi.fn(async () => ({}));
+    const confirmStandaloneOfflineExport = vi.fn(async () => true);
+    renderHeader({ confirmStandaloneOfflineExport, onExportStandalone });
+
     fireEvent.click(screen.getByRole('button', { name: 'Exporter jeu' }));
 
     await waitFor(() => {
@@ -74,11 +122,9 @@ describe('Header', () => {
       offlineAssetsMessage: 'Export offline : 2 médias intégrés, 0 médias restés en ligne.',
       offlineAssetsSummary: { onlineCount: 0 },
     }));
-    renderHeader({ onExportStandalone });
+    const confirmStandaloneOfflineExport = vi.fn(async () => true);
+    renderHeader({ confirmStandaloneOfflineExport, onExportStandalone });
 
-    fireEvent.click(screen.getByRole('checkbox', {
-      name: 'Inclure les médias dans le fichier pour jouer hors ligne',
-    }));
     fireEvent.click(screen.getByRole('button', { name: 'Exporter jeu' }));
 
     expect((await screen.findByRole('status')).textContent).toBe('Export offline : 2 médias intégrés, 0 médias restés en ligne.');
@@ -90,11 +136,9 @@ describe('Header', () => {
       offlineAssetsMessage: 'Export offline : 1 médias intégrés, 2 médias restés en ligne.',
       offlineAssetsSummary: { onlineCount: 2 },
     }));
-    renderHeader({ onExportStandalone });
+    const confirmStandaloneOfflineExport = vi.fn(async () => true);
+    renderHeader({ confirmStandaloneOfflineExport, onExportStandalone });
 
-    fireEvent.click(screen.getByRole('checkbox', {
-      name: 'Inclure les médias dans le fichier pour jouer hors ligne',
-    }));
     fireEvent.click(screen.getByRole('button', { name: 'Exporter jeu' }));
 
     expect((await screen.findByRole('status')).textContent).toBe('Export offline : 1 médias intégrés, 2 médias restés en ligne.');

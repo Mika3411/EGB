@@ -369,7 +369,7 @@ export default function PreviewEnigmaContent({
           <div className="color-attempt-row panel-head-spaced">
             {enigmaColorAttempt.map((color, index) => <span key={`${color}-${index}`} className="color-chip" style={{ background: color }} />)}
           </div>
-          <div className="inventory-actions">
+          <div className="enigma-actions">
             <button className="secondary-button" onClick={() => startSimonPlayback(enigma)}>Rejouer la séquence</button>
           </div>
         </div>

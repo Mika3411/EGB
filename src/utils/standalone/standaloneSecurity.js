@@ -142,6 +142,18 @@ function safeStylePercent(value, fallback = 0) {
   return cssPercent(value, fallback) + '%';
 }
 
+function safeSceneObjectPositionPercent(value, fallback = 0) {
+  return cssNumber(value, fallback, -1000, 1000) + '%';
+}
+
+function safeSceneObjectSizePercent(value, fallback = 10) {
+  return cssNumber(value, fallback, 0, 1000) + '%';
+}
+
+function getLayerZIndex(entry = {}, type = 'sceneObject') {
+  return cssNumber(entry?.zIndex, type === 'hotspot' ? 20 : 18, -1000, 1000);
+}
+
 function safeCssColor(value = '', fallback = 'rgba(2, 6, 23, .62)') {
   const raw = String(value || '').trim();
   if (!raw || /[\\x00-\\x1f\\x7f;"'{}<>]/.test(raw) || /url\\s*\\(/i.test(raw) || /expression\\s*\\(/i.test(raw)) {

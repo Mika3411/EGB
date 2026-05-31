@@ -136,6 +136,126 @@ const makeDistinctDataUrlProject = () => ({
   }],
 });
 
+const makeSignedRemoteDuplicateProject = () => ({
+  id: 'signed-remote-duplicate-test',
+  title: 'Signed Remote Duplicate Test',
+  acts: [{ id: 'act-1', name: 'Acte 1' }],
+  assets: [],
+  scenes: [{
+    id: 'scene-a',
+    name: 'Scene A',
+    actId: 'act-1',
+    musicData: 'https://project.supabase.co/storage/v1/object/sign/game-media/audio/0422.mp3?token=aaa&expires=111',
+    musicName: '0422.MP3',
+    hotspots: [],
+    sceneObjects: [],
+  }, {
+    id: 'scene-b',
+    name: 'Scene B',
+    actId: 'act-1',
+    musicData: 'https://project.supabase.co/storage/v1/object/sign/game-media/audio/0422.mp3?token=bbb&expires=222',
+    musicName: '0422.MP3',
+    hotspots: [],
+    sceneObjects: [],
+  }],
+  items: [],
+  cinematics: [],
+  enigmas: [],
+  combinations: [],
+  storyVariables: [],
+});
+
+const makeDistinctQueryRemoteProject = () => ({
+  ...makeSignedRemoteDuplicateProject(),
+  scenes: [{
+    ...makeSignedRemoteDuplicateProject().scenes[0],
+    musicData: 'https://cdn.example.test/audio/0422.mp3?variant=short',
+    musicName: '0422-short.MP3',
+  }, {
+    ...makeSignedRemoteDuplicateProject().scenes[1],
+    musicData: 'https://cdn.example.test/audio/0422.mp3?variant=long',
+    musicName: '0422-long.MP3',
+  }],
+});
+
+const makeSameGeneratedNameRemoteProject = () => ({
+  ...makeSignedRemoteDuplicateProject(),
+  scenes: [{
+    ...makeSignedRemoteDuplicateProject().scenes[0],
+    musicData: 'https://project.supabase.co/storage/v1/object/public/game-media/audio/first-copy.mp3',
+    musicName: '0422.MP3',
+  }, {
+    ...makeSignedRemoteDuplicateProject().scenes[1],
+    musicData: 'https://project.supabase.co/storage/v1/object/public/game-media/audio/second-copy.mp3',
+    musicName: '0422.MP3',
+  }],
+});
+
+const makeDifferentRemoteUrlsSameFileProject = () => ({
+  id: 'same-file-different-url-test',
+  title: 'Same File Different URL Test',
+  acts: [{ id: 'act-1', name: 'Acte 1' }],
+  assets: [],
+  scenes: [{
+    id: 'scene-a',
+    name: 'Scene A',
+    actId: 'act-1',
+    musicData: 'https://project.supabase.co/storage/v1/object/public/game-media/audio/0422-a.mp3',
+    musicName: '0422.MP3',
+    hotspots: [],
+    sceneObjects: [],
+  }, {
+    id: 'scene-b',
+    name: 'Scene B',
+    actId: 'act-1',
+    musicData: 'https://project.supabase.co/storage/v1/object/public/game-media/audio/0422-b.mp3',
+    musicName: '0422(1).MP3',
+    hotspots: [],
+    sceneObjects: [],
+  }],
+  items: [],
+  cinematics: [],
+  enigmas: [],
+  combinations: [],
+  storyVariables: [],
+});
+
+const makeProjectWithInactiveLibraryMedia = () => ({
+  id: 'inactive-library-media-test',
+  title: 'Inactive Library Media Test',
+  acts: [{ id: 'act-1', name: 'Acte 1' }],
+  assets: [{
+    id: 'unused-audio-a',
+    type: 'audio',
+    name: '0422.MP3',
+    url: 'https://project.supabase.co/storage/v1/object/public/game-media/audio/0422-a.mp3',
+  }, {
+    id: 'unused-audio-b',
+    type: 'audio',
+    name: '0422(1).MP3',
+    url: 'https://project.supabase.co/storage/v1/object/public/game-media/audio/0422-b.mp3',
+  }, {
+    id: 'used-audio',
+    type: 'audio',
+    name: '0505.MP3',
+    url: 'https://project.supabase.co/storage/v1/object/public/game-media/audio/0505.mp3',
+  }],
+  scenes: [{
+    id: 'scene-start',
+    name: 'Hall',
+    actId: 'act-1',
+    musicId: 'used-audio',
+    musicData: '',
+    hotspots: [],
+    sceneObjects: [],
+  }],
+  items: [],
+  cinematics: [],
+  enigmas: [],
+  combinations: [],
+  storyVariables: [],
+});
+
 const zipFiles = (zip) => Object.keys(zip.files);
 
 describe('export asset bundler offline assets', () => {
@@ -348,6 +468,72 @@ describe('export asset bundler offline assets', () => {
     expect(fetchMock.mock.calls.filter(([url]) => url === remotePngUrl)).toHaveLength(1);
     expect(exportedProject.assets[0].url).toBe(exportedProject.scenes[0].backgroundData);
     expect(files).toHaveLength(1);
+  });
+
+  it('deduplicates signed Supabase URLs that point to the same storage object', async () => {
+    const fetchMock = vi.fn(async () => makeResponse('mp3-bytes', { contentType: 'audio/mpeg' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { zip, exportedProject } = await buildWithZip(makeSignedRemoteDuplicateProject(), { exportOfflineAssets: true });
+    const files = zipFiles(zip).filter((file) => file.startsWith('jeu-exporte/assets/audio/0422-mp3-') && file.endsWith('.mp3'));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(exportedProject.scenes[0].musicData).toBe(exportedProject.scenes[1].musicData);
+    expect(files).toHaveLength(1);
+  });
+
+  it('keeps distinct non-sensitive query variants as separate remote assets', async () => {
+    const fetchMock = vi.fn(async (url) => makeResponse(`mp3-bytes-${url}`, { contentType: 'audio/mpeg' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { zip, exportedProject } = await buildWithZip(makeDistinctQueryRemoteProject(), { exportOfflineAssets: true });
+    const files = zipFiles(zip).filter((file) => file.startsWith('jeu-exporte/assets/audio/') && file.endsWith('.mp3'));
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(exportedProject.scenes[0].musicData).not.toBe(exportedProject.scenes[1].musicData);
+    expect(files).toHaveLength(2);
+  });
+
+  it('stores identical remote file contents once even when URLs differ', async () => {
+    const fetchMock = vi.fn(async () => makeResponse('same-mp3-bytes', { contentType: 'audio/mpeg' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { zip, exportedProject } = await buildWithZip(makeDifferentRemoteUrlsSameFileProject(), { exportOfflineAssets: true });
+    const files = zipFiles(zip).filter((file) => file.startsWith('jeu-exporte/assets/audio/') && file.endsWith('.mp3'));
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(exportedProject.scenes[0].musicData).toBe(exportedProject.scenes[1].musicData);
+    expect(files).toHaveLength(1);
+  });
+
+  it('stores remote files with the same generated name once even when contents differ', async () => {
+    const fetchMock = vi.fn(async (url) => makeResponse(`different-bytes-${url}`, { contentType: 'audio/mpeg' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { zip, exportedProject } = await buildWithZip(makeSameGeneratedNameRemoteProject(), { exportOfflineAssets: true });
+    const files = zipFiles(zip).filter((file) => file.startsWith('jeu-exporte/assets/audio/0422-mp3-') && file.endsWith('.mp3'));
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(exportedProject.scenes[0].musicData).toBe(exportedProject.scenes[1].musicData);
+    expect(files).toHaveLength(1);
+  });
+
+  it('does not bundle inactive media library assets into the offline zip', async () => {
+    const fetchMock = vi.fn(async () => makeResponse('mp3-bytes', { contentType: 'audio/mpeg' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { zip, exportedProject } = await buildWithZip(makeProjectWithInactiveLibraryMedia(), { exportOfflineAssets: true });
+    const files = zipFiles(zip).filter((file) => file.startsWith('jeu-exporte/assets/audio/') && file.endsWith('.mp3'));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://project.supabase.co/storage/v1/object/public/game-media/audio/0505.mp3',
+      expect.anything(),
+    );
+    expect(exportedProject.assets[0].url).toBe('https://project.supabase.co/storage/v1/object/public/game-media/audio/0422-a.mp3');
+    expect(exportedProject.assets[1].url).toBe('https://project.supabase.co/storage/v1/object/public/game-media/audio/0422-b.mp3');
+    expect(exportedProject.assets[2].url).toMatch(/^assets\/audio\/0505-mp3-[a-f0-9]{8}\.mp3$/);
+    expect(files).toEqual([`jeu-exporte/${exportedProject.assets[2].url}`]);
   });
 
   it('uses stable names without timestamps', async () => {

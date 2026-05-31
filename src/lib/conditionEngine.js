@@ -12,20 +12,18 @@ export function getConditionItemIds(context = {}) {
   return context.itemIds || context.inventory || [];
 }
 
-const getConditionCollectionSize = (collection) => {
+export function getConditionCollectionSize(collection) {
   if (collection instanceof Set) return collection.size;
   return getConditionArray(collection).length;
-};
-
-const HERO_LOGIC_CONDITION_TYPES = new Set([
-  'hero_health_below',
-  'hero_mana_at_least',
-  'hero_last_roll_success',
-  'hero_skill_used',
-]);
+}
 
 export function isHeroLogicCondition(conditionType = '') {
-  return HERO_LOGIC_CONDITION_TYPES.has(conditionType);
+  return [
+    'hero_health_below',
+    'hero_mana_at_least',
+    'hero_last_roll_success',
+    'hero_skill_used',
+  ].includes(conditionType);
 }
 
 export function isHeroAdventureEnabled(context = {}) {

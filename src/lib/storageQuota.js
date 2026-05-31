@@ -1,4 +1,5 @@
 import { collectProjectAssetManifest, collectProjectAssets } from './assetManager';
+import { getRemoteAssetDedupeKey } from '../utils/exportAssetBundler';
 
 export const MB = 1024 * 1024;
 export const ACCOUNT_FREE_STORAGE_BYTES = 250 * MB;
@@ -9,6 +10,8 @@ export const STORAGE_PACK_TIERS = [
   { credits: 500, bytes: 2.5 * 1024 * MB, label: '~2.5 Go' },
   { credits: 1000, bytes: 5 * 1024 * MB, label: '~5 Go' },
 ];
+
+const REMOTE_URL_PATTERN = /^(?:https?:)?\/\//i;
 
 export const formatStorageSize = (bytes = 0) => {
   const safeBytes = Math.max(0, Number(bytes) || 0);
@@ -49,6 +52,12 @@ export const getAssetStorageBytes = (asset = {}) => (
   Math.max(0, Number(asset.size) || Number(asset.bytes) || estimateDataUrlBytes(asset.url))
 );
 
+const getStorageAssetDedupeKey = (asset = {}) => {
+  const url = asset.url || asset.src || asset.data || '';
+  if (!url) return '';
+  return REMOTE_URL_PATTERN.test(url) ? getRemoteAssetDedupeKey(url) || url : url;
+};
+
 export const getExactAssetStorageBytes = async (asset = {}) => {
   const knownBytes = getAssetStorageBytes(asset);
   if (knownBytes > 0) return knownBytes;
@@ -80,29 +89,42 @@ const getProjectStorageAssets = (project = {}, { includeLegacyFields = false } =
 };
 
 export const getAccountStorageUsageBytes = (projects = [], options = {}) => {
-  const seenUrls = new Set();
+  const seenAssetKeys = new Set();
   return projects.reduce((total, projectRecordOrData) => {
     const project = projectRecordOrData?.data || projectRecordOrData || {};
     return total + getProjectStorageAssets(project, options).reduce((projectTotal, asset) => {
-      if (!asset?.url || seenUrls.has(asset.url)) return projectTotal;
-      seenUrls.add(asset.url);
+      const assetKey = getStorageAssetDedupeKey(asset);
+      if (!assetKey || seenAssetKeys.has(assetKey)) return projectTotal;
+      seenAssetKeys.add(assetKey);
       return projectTotal + getAssetStorageBytes(asset);
     }, 0);
   }, 0);
 };
 
-export const getAccountExactStorageUsageBytes = async (projects = [], options = {}) => {
+const getUniqueStorageAssets = (projects = [], options = {}) => {
   const assets = [];
-  const seenUrls = new Set();
+  const seenAssetKeys = new Set();
   projects.forEach((projectRecordOrData) => {
     const project = projectRecordOrData?.data || projectRecordOrData || {};
     getProjectStorageAssets(project, options).forEach((asset) => {
-      if (!asset?.url || seenUrls.has(asset.url)) return;
-      seenUrls.add(asset.url);
+      const assetKey = getStorageAssetDedupeKey(asset);
+      if (!assetKey || seenAssetKeys.has(assetKey)) return;
+      seenAssetKeys.add(assetKey);
       assets.push(asset);
     });
   });
+  return assets;
+};
 
-  const sizes = await Promise.all(assets.map((asset) => getExactAssetStorageBytes(asset)));
-  return sizes.reduce((total, size) => total + (Number(size) || 0), 0);
+export const getAccountExactStorageAssetSizes = async (projects = [], options = {}) => {
+  const entries = await Promise.all(getUniqueStorageAssets(projects, options).map(async (asset) => ([
+    asset.url,
+    await getExactAssetStorageBytes(asset),
+  ])));
+  return new Map(entries.filter(([, size]) => Number(size) > 0));
+};
+
+export const getAccountExactStorageUsageBytes = async (projects = [], options = {}) => {
+  const sizesByUrl = await getAccountExactStorageAssetSizes(projects, options);
+  return [...sizesByUrl.values()].reduce((total, size) => total + (Number(size) || 0), 0);
 };

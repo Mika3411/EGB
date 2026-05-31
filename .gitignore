@@ -27,12 +27,14 @@ pnpm-debug.log*
 .parcel-cache/
 __pycache__/
 *.pyc
+.codex/
 
 # OS / editor files
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+~$*.docx
 
 # Local test / coverage output
 coverage/

@@ -449,6 +449,62 @@ const makeHeroItemProject = () => ({
   storyVariables: [],
 });
 
+const makeStandaloneLogicConditionProject = () => ({
+  id: 'standalone-logic-conditions',
+  title: 'Standalone Logic Conditions',
+  creationMode: 'hero_adventure',
+  start: { type: 'scene', targetSceneId: 'scene-start', targetCinematicId: '' },
+  heroAdventure: {
+    enabled: true,
+    hero: {
+      id: 'hero-1',
+      name: 'Ariane',
+      health: 10,
+      maxHealth: 10,
+      mana: 6,
+      maxMana: 6,
+      skills: [],
+      powers: [],
+    },
+  },
+  scenes: [{
+    id: 'scene-start',
+    name: 'Hall',
+    introText: 'Le hall attend.',
+    hotspots: [{
+      id: 'mana-door',
+      name: 'Porte de mana',
+      actionType: 'dialogue',
+      dialogue: 'Default mana',
+      logicRules: [{
+        id: 'rule-mana',
+        conditionType: 'hero_mana_at_least',
+        heroManaThreshold: 5,
+        actionType: 'dialogue',
+        dialogue: 'Mana branch',
+      }],
+    }, {
+      id: 'cinematic-door',
+      name: 'Porte cinema',
+      actionType: 'dialogue',
+      dialogue: 'Default cinematic',
+      logicRules: [{
+        id: 'rule-cinematic',
+        conditionType: 'launched_cinematic',
+        actionType: 'dialogue',
+        dialogue: 'Cinematic branch',
+      }],
+    }],
+    sceneObjects: [],
+  }],
+  items: [],
+  enigmas: [],
+  cinematics: [{ id: 'intro', name: 'Intro', slides: [], steps: [] }],
+  combinations: [],
+  assets: [],
+  storyVariables: [],
+});
+
 const makeCorruptedHeroRuntimeState = () => ({
   playSceneId: 'scene-start',
   inventory: ['sword', 'amulet', 'ring'],
@@ -798,6 +854,18 @@ describe('standalone export regression', () => {
     expect(runtime.state.inventory).toEqual([]);
     expect(runtime.state.selectedInventoryIds).toEqual([]);
     expect(runtime.state.dialogue).toContain('+4 mana (6/6)');
+  });
+
+  test('runs exported hero and cinematic logic conditions in the standalone runtime', () => {
+    const { runtime } = runStandalone(makeStandaloneLogicConditionProject());
+
+    expect(() => runtime.triggerHotspot('mana-door')).not.toThrow();
+    expect(runtime.state.dialogue).toBe('Mana branch');
+
+    runtime.state.launchedCinematicIds = ['intro'];
+
+    expect(() => runtime.triggerHotspot('cinematic-door')).not.toThrow();
+    expect(runtime.state.dialogue).toBe('Cinematic branch');
   });
 
   test('equips and unequips standalone hero equipment bonuses cleanly', () => {
