@@ -56,7 +56,6 @@ export function EditorToolbarMenus({
   multiSelectEnabled,
   setMultiSelectEnabled,
   deleteSelectedEditorItems,
-  alignSelectedEditorItems,
   enterEditorFullscreen,
   setFullscreenZoom,
   clampFullscreenZoom,
@@ -133,11 +132,6 @@ export function EditorToolbarMenus({
           {!isBeginnerMode ? (
             <>
               <MenuItem shortcut="M" active={multiSelectEnabled} onClick={() => setMultiSelectEnabled((value) => !value)}>Sélection multiple</MenuItem>
-              <MenuItem disabled={activeSelectionCount < 2} onClick={() => alignSelectedEditorItems('left')}>Aligner à gauche</MenuItem>
-              <MenuItem disabled={activeSelectionCount < 2} onClick={() => alignSelectedEditorItems('center')}>Aligner au centre</MenuItem>
-              <MenuItem disabled={activeSelectionCount < 2} onClick={() => alignSelectedEditorItems('right')}>Aligner à droite</MenuItem>
-              <MenuItem disabled={activeSelectionCount < 3} onClick={() => alignSelectedEditorItems('distribute-horizontal')}>Répartir horizontalement</MenuItem>
-              <MenuItem disabled={activeSelectionCount < 2} onClick={() => alignSelectedEditorItems('same-size')}>Même taille</MenuItem>
             </>
           ) : null}
         </div>

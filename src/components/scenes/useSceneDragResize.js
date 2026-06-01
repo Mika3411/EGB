@@ -318,6 +318,7 @@ export function useSceneEditorDragResize({
   };
 
   const beginResize = (event, type, id, handle, source = 'main') => {
+    if (event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -377,6 +378,7 @@ export function useSceneEditorDragResize({
   };
 
   const beginObjectDrag = (event, objectId, source = 'main') => {
+    if (event.button !== 0) return;
     const object = selectedScene?.sceneObjects?.find((entry) => entry.id === objectId);
     if (object?.isLocked) {
       event.stopPropagation();
@@ -403,6 +405,7 @@ export function useSceneEditorDragResize({
   };
 
   const beginVisualEffectZoneDrag = (event, zoneId, source = 'main') => {
+    if (event.button !== 0) return;
     const zone = selectedScene?.visualEffectZones?.find((entry) => entry.id === zoneId);
     event.preventDefault();
     event.stopPropagation();
@@ -427,6 +430,7 @@ export function useSceneEditorDragResize({
   };
 
   const beginDrag = (event, spotId, source = 'main') => {
+    if (event.button !== 0) return;
     const spot = selectedScene?.hotspots?.find((entry) => entry.id === spotId);
     if (spot?.isLocked) {
       event.stopPropagation();

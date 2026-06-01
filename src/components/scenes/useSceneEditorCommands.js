@@ -19,7 +19,6 @@ export function useSceneEditorCommands({
   setSelectedSceneObjectIds,
   setSelectedVisualEffectZoneId,
   patchProject,
-  snapValue,
   isEditorFullscreen,
   closeEditorFullscreen,
   setClampedFullscreenZoom,
@@ -169,59 +168,6 @@ export function useSceneEditorCommands({
     });
   };
 
-  const alignSelectedEditorItems = (command) => {
-    if (!selectedSceneId) return;
-    patchProject((draft) => {
-      const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
-      const selection = getActiveEditorSelection(scene);
-      if (selection.items.length < 2) return;
-
-      if (command === 'same-size') {
-        const reference = selection.items[0];
-        selection.items.slice(1).forEach((entry) => {
-          entry.width = reference.width;
-          entry.height = reference.height;
-        });
-        return;
-      }
-
-      if (command === 'distribute-horizontal') {
-        if (selection.items.length < 3) return;
-        const sorted = [...selection.items].sort((a, b) => a.x - b.x);
-        const firstX = sorted[0].x;
-        const lastX = sorted[sorted.length - 1].x;
-        const step = (lastX - firstX) / (sorted.length - 1);
-        sorted.forEach((entry, index) => {
-          entry.x = Number(clampPercent(snapValue(firstX + step * index)).toFixed(2));
-        });
-        return;
-      }
-
-      if (command === 'left') {
-        const left = Math.min(...selection.items.map((entry) => entry.x - entry.width / 2));
-        selection.items.forEach((entry) => {
-          entry.x = Number(clampPercent(snapValue(left + entry.width / 2)).toFixed(2));
-        });
-        return;
-      }
-
-      if (command === 'center') {
-        const center = selection.items.reduce((sum, entry) => sum + entry.x, 0) / selection.items.length;
-        selection.items.forEach((entry) => {
-          entry.x = Number(clampPercent(snapValue(center)).toFixed(2));
-        });
-        return;
-      }
-
-      if (command === 'right') {
-        const right = Math.max(...selection.items.map((entry) => entry.x + entry.width / 2));
-        selection.items.forEach((entry) => {
-          entry.x = Number(clampPercent(snapValue(right - entry.width / 2)).toFixed(2));
-        });
-      }
-    });
-  };
-
   useEffect(() => {
     if (!selectedSceneId) return undefined;
 
@@ -300,7 +246,6 @@ export function useSceneEditorCommands({
   return {
     duplicateSelectedEditorItems,
     deleteSelectedEditorItems,
-    alignSelectedEditorItems,
     patchLayerItem,
     nudgeLayerZIndex,
     sendLayerToEdge,

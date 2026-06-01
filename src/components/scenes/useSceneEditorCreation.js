@@ -11,10 +11,15 @@ export function useSceneEditorCreation({
   setSelectedSceneObjectIds,
   patchProject,
 }) {
-  const addSceneObject = ({ invisible = false, animation = false, blockType = 'object' } = {}) => {
+  const addSceneObject = ({
+    invisible = false,
+    animation = false,
+    blockType = 'object',
+    sourceItem: requestedSourceItem = null,
+  } = {}) => {
     if (!selectedSceneId) return;
     const nextId = `scene-object-${Math.random().toString(36).slice(2, 10)}`;
-    const sourceItem = selectedItem || project.items?.find((item) => item.id === selectedItemId) || project.items?.[0];
+    const sourceItem = requestedSourceItem || selectedItem || project.items?.find((item) => item.id === selectedItemId) || project.items?.[0];
     const isTutorialObject = Boolean(document.body.classList.contains('tutorial-active'));
     const blockDefaults = {
       text: {

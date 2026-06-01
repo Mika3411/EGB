@@ -177,6 +177,30 @@
   display: block !important;
 }
 
+.scene-inline-viewer__fallback {
+  display: grid;
+  place-items: center;
+  min-width: 180px;
+  min-height: 180px;
+  max-width: min(82vw, 720px) !important;
+  max-height: 68vh !important;
+  padding: 28px;
+  border: 1px solid rgba(147, 197, 253, .34);
+  border-radius: 18px;
+  background: radial-gradient(circle at 50% 25%, rgba(96, 165, 250, .26), rgba(15, 23, 42, .92) 66%);
+  color: #fff;
+  text-align: center;
+  box-shadow: 0 14px 40px #00000052;
+}
+
+.scene-inline-viewer__fallback span {
+  max-width: min(260px, 64vw);
+  overflow-wrap: anywhere;
+  font-size: 44px;
+  font-weight: 900;
+  line-height: 1.05;
+}
+
 
 /* The x/y coordinates are the object's center in both editor and preview. */
 .editor-canvas,
@@ -332,6 +356,11 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
   margin-top: 0;
+}
+.hotspot-assets-inspector {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  margin-top: 14px;
 }
 .scene-canvas-column {
   min-width: 0;

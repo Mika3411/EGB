@@ -7,9 +7,12 @@ import Anime2DPreview from './Anime2DPreview.jsx';
 import NumberInput from './forms/NumberInput.jsx';
 import MediaSourcePicker from './MediaSourcePicker.jsx';
 import { showConfirm } from './AccessibleDialog';
+import { makeLogicRule } from '../data/projectData';
 import SceneSidebar from './scenes/SceneSidebar.jsx';
 import SceneFullscreenEditor from './scenes/SceneFullscreenEditor.jsx';
-import HotspotAssetsPanel from './scenes/HotspotAssetsPanel.jsx';
+import SceneCanvasContextMenu from './scenes/SceneCanvasContextMenu.jsx';
+import SceneCanvasQuickToolbar from './scenes/SceneCanvasQuickToolbar.jsx';
+import SceneEditorDrawer, { SceneDrawerTriggers } from './scenes/SceneEditorDrawer.jsx';
 import HotspotInspectorPanel from './scenes/HotspotInspectorPanel.jsx';
 import SceneObjectInspector, { SceneObjectBlockContent, getSceneObjectClickMode } from './scenes/SceneObjectInspector.jsx';
 import QuickLogicModal from './scenes/QuickLogicModal.jsx';
@@ -94,6 +97,9 @@ export default function ScenesTab(props) {
   const [multiSelectEnabled, setMultiSelectEnabled] = useState(false);
   const [isMiniMapCollapsed, setIsMiniMapCollapsed] = useState(false);
   const [conversationEditorOpen, setConversationEditorOpen] = useState(false);
+  const [sceneContextMenu, setSceneContextMenu] = useState(null);
+  const [sceneClipboard, setSceneClipboard] = useState(null);
+  const [sceneDrawerMode, setSceneDrawerMode] = useState(null);
   useEffect(() => {
     const rawFocus = window.sessionStorage.getItem('adventureConversationFocus');
     if (!rawFocus || !selectedHotspotId) return;
@@ -178,6 +184,15 @@ export default function ScenesTab(props) {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
     openMediaTab();
+  };
+  const getCanvasPointFromEvent = (event, source = 'main') => {
+    const activeCanvas = source === 'fullscreen' ? fullscreenCanvasRef.current : canvasRef.current;
+    const rect = activeCanvas?.getBoundingClientRect();
+    if (!rect?.width || !rect?.height) return { x: 50, y: 50 };
+    return {
+      x: Number(clampPercent(snapValue(((event.clientX - rect.left) / rect.width) * 100)).toFixed(2)),
+      y: Number(clampPercent(snapValue(((event.clientY - rect.top) / rect.height) * 100)).toFixed(2)),
+    };
   };
   const {
     quickLogicTarget,
@@ -292,7 +307,6 @@ export default function ScenesTab(props) {
   const {
     duplicateSelectedEditorItems,
     deleteSelectedEditorItems,
-    alignSelectedEditorItems,
     patchLayerItem,
     nudgeLayerZIndex,
     sendLayerToEdge,
@@ -309,7 +323,6 @@ export default function ScenesTab(props) {
     setSelectedSceneObjectIds,
     setSelectedVisualEffectZoneId,
     patchProject,
-    snapValue,
     isEditorFullscreen,
     closeEditorFullscreen,
     setClampedFullscreenZoom,
@@ -318,6 +331,135 @@ export default function ScenesTab(props) {
     undoProjectChange,
     redoProjectChange,
   });
+
+  const selectContextTarget = (type, id) => {
+    if (!id) return;
+    if (type === 'hotspot') {
+      const preserveMultiSelection = activeHotspotIds.includes(id) && activeHotspotIds.length > 1;
+      setSelectedHotspotId(id);
+      setSelectedSceneObjectId('');
+      setSelectedVisualEffectZoneId('');
+      setSelectedItemId('');
+      if (!preserveMultiSelection) setSelectedHotspotIds([id]);
+      setSelectedSceneObjectIds([]);
+      return;
+    }
+    if (type === 'sceneObject') {
+      const preserveMultiSelection = activeSceneObjectIds.includes(id) && activeSceneObjectIds.length > 1;
+      setSelectedSceneObjectId(id);
+      setSelectedHotspotId('');
+      setSelectedVisualEffectZoneId('');
+      setSelectedItemId('');
+      if (!preserveMultiSelection) setSelectedSceneObjectIds([id]);
+      setSelectedHotspotIds([]);
+    }
+  };
+
+  const openSceneCanvasContextMenu = (event, type = 'canvas', id = '', source = 'main') => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (type === 'hotspot' || type === 'sceneObject') selectContextTarget(type, id);
+    const menuWidth = 260;
+    const menuHeight = canUseQuickLogic ? 600 : 520;
+    const clientX = Math.max(8, Math.min(event.clientX, window.innerWidth - menuWidth));
+    const clientY = Math.max(8, Math.min(event.clientY, window.innerHeight - menuHeight));
+    setSceneContextMenu({
+      clientX,
+      clientY,
+      type,
+      id,
+      source,
+      canvasPoint: getCanvasPointFromEvent(event, source),
+    });
+  };
+
+  const copySceneEntry = (type, id) => {
+    if (!selectedScene || !id || !['hotspot', 'sceneObject'].includes(type)) return;
+    const sourceList = type === 'hotspot' ? (selectedScene.hotspots || []) : (selectedScene.sceneObjects || []);
+    const entry = sourceList.find((item) => item.id === id);
+    if (!entry) return;
+    const copy = typeof structuredClone === 'function' ? structuredClone(entry) : JSON.parse(JSON.stringify(entry));
+    setSceneClipboard({ type, entry: copy });
+  };
+
+  const pasteSceneEntry = (canvasPoint = { x: 50, y: 50 }) => {
+    if (!sceneClipboard || !selectedSceneId) return;
+    const nextId = `${sceneClipboard.type === 'hotspot' ? 'hotspot' : 'scene-object'}-${Math.random().toString(36).slice(2, 10)}`;
+    const nextType = sceneClipboard.type;
+    patchProject((draft) => {
+      const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
+      if (!scene) return;
+      if (nextType === 'hotspot' && !Array.isArray(scene.hotspots)) scene.hotspots = [];
+      if (nextType === 'sceneObject' && !Array.isArray(scene.sceneObjects)) scene.sceneObjects = [];
+      const list = nextType === 'hotspot' ? scene.hotspots : scene.sceneObjects;
+      const zValues = [
+        ...(scene.sceneObjects || []).map((entry) => getLayerZIndex(entry, 'sceneObject')),
+        ...(scene.hotspots || []).map((entry) => getLayerZIndex(entry, 'hotspot')),
+      ];
+      const pasted = {
+        ...sceneClipboard.entry,
+        id: nextId,
+        name: `${sceneClipboard.entry.name || (nextType === 'hotspot' ? 'Zone' : 'Objet')} copie`,
+        x: Number(clampPercent(canvasPoint.x ?? 50).toFixed(2)),
+        y: Number(clampPercent(canvasPoint.y ?? 50).toFixed(2)),
+        isHidden: false,
+        isLocked: false,
+        zIndex: Math.max(...zValues, 0) + 1,
+      };
+      delete pasted.tutorialCreated;
+      list.push(pasted);
+    });
+    if (nextType === 'hotspot') {
+      setSelectedHotspotId(nextId);
+      setSelectedHotspotIds([nextId]);
+      setSelectedSceneObjectId('');
+      setSelectedSceneObjectIds([]);
+      setSelectedVisualEffectZoneId('');
+      setSelectedItemId('');
+      return;
+    }
+    setSelectedSceneObjectId(nextId);
+    setSelectedSceneObjectIds([nextId]);
+    setSelectedHotspotId('');
+    setSelectedHotspotIds([]);
+    setSelectedVisualEffectZoneId('');
+    setSelectedItemId('');
+  };
+
+  const createLogicRuleFromTarget = (type, id) => {
+    if (!canUseQuickLogic || !id || !['hotspot', 'sceneObject'].includes(type)) return;
+    patchProject((draft) => {
+      const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
+      const target = type === 'sceneObject'
+        ? scene?.sceneObjects?.find((entry) => entry.id === id)
+        : scene?.hotspots?.find((entry) => entry.id === id);
+      if (!target) return;
+      if (!Array.isArray(target.logicRules)) target.logicRules = [];
+      target.logicRules.push({
+        ...makeLogicRule(),
+        name: 'Règle créée depuis la zone',
+      });
+    });
+    openQuickLogicForTarget(type, id);
+  };
+
+  useEffect(() => {
+    if (!sceneContextMenu) return undefined;
+    const closeMenu = () => setSceneContextMenu(null);
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') closeMenu();
+    };
+    window.addEventListener('pointerdown', closeMenu);
+    window.addEventListener('resize', closeMenu);
+    window.addEventListener('scroll', closeMenu, true);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', closeMenu);
+      window.removeEventListener('resize', closeMenu);
+      window.removeEventListener('scroll', closeMenu, true);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [sceneContextMenu]);
 
   const editorToolbarProps = {
     selectedSceneId,
@@ -333,7 +475,6 @@ export default function ScenesTab(props) {
     multiSelectEnabled,
     setMultiSelectEnabled,
     deleteSelectedEditorItems,
-    alignSelectedEditorItems,
     enterEditorFullscreen,
     setFullscreenZoom: setClampedFullscreenZoom,
     clampFullscreenZoom,
@@ -377,6 +518,8 @@ export default function ScenesTab(props) {
   const sceneContextTitle = selectedSceneObject
     ? ((selectedSceneObject.anime2dSpec || selectedSceneObject.anime2dName || selectedSceneObject.name === 'Animation') ? 'Animation selectionnee' : selectedSceneObject.isInvisible ? 'Objet invisible selectionne' : (getSceneObjectClickMode(selectedSceneObject) === 'action' ? "Zone d'action selectionnee" : 'Objet visible selectionne'))
     : selectedVisualEffectZone ? 'Zone visuelle selectionnee' : 'Zone selectionnee';
+  const isSceneObjectSelectedOnCanvas = (obj) => obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id);
+  const isHotspotSelectedOnCanvas = (spot) => spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id);
   const addConversationQuestion = () => patchProject((draft) => {
     const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId);
     if (!spot) return;
@@ -464,8 +607,11 @@ export default function ScenesTab(props) {
                 <div>
                   <h3>Plan de scène</h3>
                 </div>
-                <div className="editor-toolbar-wrap">
-                  <EditorToolbarMenus {...editorToolbarProps} />
+                <div className="scene-canvas-head-actions">
+                  <SceneDrawerTriggers drawerMode={sceneDrawerMode} setDrawerMode={setSceneDrawerMode} />
+                  <div className="editor-toolbar-wrap">
+                    <EditorToolbarMenus {...editorToolbarProps} />
+                  </div>
                 </div>
               </div>
 
@@ -477,6 +623,7 @@ export default function ScenesTab(props) {
                     style={{ aspectRatio: sceneAspectRatio }}
                     onPointerUp={stopDragging}
                     onPointerCancel={stopDragging}
+                    onContextMenu={(event) => openSceneCanvasContextMenu(event, 'canvas', '', 'main')}
                   >
                   {selectedScene.backgroundData ? <img src={selectedScene.backgroundData} alt="fond" onLoad={(event) => rememberSceneBackgroundAspectRatio(event.currentTarget)} /> : (
                     <div
@@ -490,12 +637,12 @@ export default function ScenesTab(props) {
                     </div>
                   )}
                   <SceneVisualEffect effect={selectedScene.visualEffect} intensity={selectedScene.visualEffectIntensity} />
-                  {(selectedScene.visualEffectZones || []).filter((zone) => !zone.isHidden).map((zone) => (
+                  {(selectedScene.visualEffectZones || []).filter((zone) => !zone.isHidden || zone.id === selectedVisualEffectZoneId).map((zone) => (
                     <button
                       key={zone.id}
                       type="button"
                       data-tour={zone.tutorialCreated ? 'visual-zone-on-canvas' : undefined}
-                      className={`editor-hotspot editor-visual-zone ${getShapeClassName(zone)} ${zone.id === selectedVisualEffectZoneId ? 'selected' : ''} ${zone.id === draggingVisualEffectZoneId ? 'dragging' : ''}`}
+                      className={`editor-hotspot editor-visual-zone ${getShapeClassName(zone)} ${zone.isHidden ? 'editor-hidden-on-canvas' : ''} ${zone.id === selectedVisualEffectZoneId ? 'selected' : ''} ${zone.id === draggingVisualEffectZoneId ? 'dragging' : ''}`}
                       style={{ left: `${zone.x}%`, top: `${zone.y}%`, width: `${zone.width}%`, height: `${zone.height}%`, zIndex: getVisualEffectZoneZIndex(zone.layer), ...getElementShapeStyle(zone) }}
                       onPointerDown={(event) => beginVisualEffectZoneDrag(event, zone.id)}
                       onClick={() => selectVisualEffectZone(zone.id)}
@@ -508,54 +655,61 @@ export default function ScenesTab(props) {
                     </button>
                   ))}
                   {snapGridEnabled ? <div style={gridOverlayStyle} /> : null}
-                  {(selectedScene.sceneObjects || []).filter((obj) => !obj.isHidden).map((obj) => (
+                  {(selectedScene.sceneObjects || []).filter((obj) => !obj.isHidden || isSceneObjectSelectedOnCanvas(obj)).map((obj) => (
                     <button
                       key={obj.id}
                       type="button"
                       data-tour={obj.tutorialCreated ? 'scene-object-on-canvas' : undefined}
-                      className={`editor-hotspot editor-scene-object ${getShapeClassName(obj)} ${obj.isInvisible ? 'editor-scene-object-invisible' : ''} ${(obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id)) ? 'selected' : ''} ${obj.id === draggingSceneObjectId ? 'dragging' : ''}`}
+                      className={`editor-hotspot editor-scene-object ${getShapeClassName(obj)} ${obj.isInvisible ? 'editor-scene-object-invisible' : ''} ${obj.isHidden ? 'editor-hidden-on-canvas' : ''} ${isSceneObjectSelectedOnCanvas(obj) ? 'selected' : ''} ${obj.id === draggingSceneObjectId ? 'dragging' : ''}`}
                       style={getSceneObjectStyle(obj)}
                       onPointerDown={(event) => beginObjectDrag(event, obj.id)}
                       onClick={(event) => selectSceneObject(obj.id, event)}
+                      onContextMenu={(event) => openSceneCanvasContextMenu(event, 'sceneObject', obj.id, 'main')}
                     >
                       {obj.anime2dSpec && !obj.isInvisible ? (
                         <Anime2DPreview spec={obj.anime2dSpec} />
                       ) : !obj.isInvisible ? (
                         <SceneObjectBlockContent object={obj} displayImage={getSceneObjectDisplayImage(obj)} linkedItem={getLinkedItem(obj.linkedItemId)} />
                       ) : <span>{`${obj.name || 'Objet'} (invisible)`}</span>}
-                      {renderShapeOutline(obj, obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id))}
-                      {renderResizeHandles('sceneObject', obj.id, obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id))}
-                      {renderShapePointHandles('sceneObject', obj.id, obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id))}
+                      {renderShapeOutline(obj, isSceneObjectSelectedOnCanvas(obj))}
+                      {renderResizeHandles('sceneObject', obj.id, isSceneObjectSelectedOnCanvas(obj))}
+                      {renderShapePointHandles('sceneObject', obj.id, isSceneObjectSelectedOnCanvas(obj))}
                     </button>
                   ))}
-                  {selectedScene.hotspots.filter((spot) => !spot.isHidden).map((spot) => (
+                  {selectedScene.hotspots.filter((spot) => !spot.isHidden || isHotspotSelectedOnCanvas(spot)).map((spot) => (
                     <button
                       key={spot.id}
                       type="button"
                       data-tour={spot.tutorialCreated ? 'hotspot-on-canvas' : undefined}
-                      className={`editor-hotspot ${getShapeClassName(spot)} ${(spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id)) ? 'selected' : ''} ${spot.id === draggingHotspotId ? 'dragging' : ''}`}
+                      className={`editor-hotspot ${getShapeClassName(spot)} ${spot.isHidden ? 'editor-hidden-on-canvas' : ''} ${isHotspotSelectedOnCanvas(spot) ? 'selected' : ''} ${spot.id === draggingHotspotId ? 'dragging' : ''}`}
                       style={{ left: `${spot.x}%`, top: `${spot.y}%`, width: `${spot.width}%`, height: `${spot.height}%`, zIndex: getLayerZIndex(spot, 'hotspot'), ...getElementShapeStyle(spot) }}
                       onPointerDown={(event) => beginDrag(event, spot.id)}
                       onClick={(event) => selectHotspot(spot.id, event)}
+                      onContextMenu={(event) => openSceneCanvasContextMenu(event, 'hotspot', spot.id, 'main')}
                     >
                       <span>{spot.name}</span>
-                      {renderShapeOutline(spot, spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id))}
-                      {renderResizeHandles('hotspot', spot.id, spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id))}
-                      {renderShapePointHandles('hotspot', spot.id, spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id))}
+                      {renderShapeOutline(spot, isHotspotSelectedOnCanvas(spot))}
+                      {renderResizeHandles('hotspot', spot.id, isHotspotSelectedOnCanvas(spot))}
+                      {renderShapePointHandles('hotspot', spot.id, isHotspotSelectedOnCanvas(spot))}
                     </button>
                   ))}
+                  <SceneCanvasQuickToolbar
+                    selectedScene={selectedScene}
+                    selectedSceneId={selectedSceneId}
+                    selectedHotspotId={selectedHotspotId}
+                    selectedHotspotIds={selectedHotspotIds}
+                    selectedSceneObjectId={selectedSceneObjectId}
+                    selectedSceneObjectIds={selectedSceneObjectIds}
+                    duplicateSelectedEditorItems={duplicateSelectedEditorItems}
+                    deleteSelectedEditorItems={deleteSelectedEditorItems}
+                    patchLayerItem={patchLayerItem}
+                    sendLayerToEdge={sendLayerToEdge}
+                    previewScene={previewScene}
+                    canUseQuickLogic={canUseQuickLogic}
+                    openQuickLogicForTarget={openQuickLogicForTarget}
+                    isBeginnerMode={isBeginnerMode}
+                  />
                   </div>
-                  {selectedHotspot && selectedHotspot.actionType !== 'conversation' ? (
-                    <HotspotAssetsPanel
-                      selectedHotspot={selectedHotspot}
-                      selectedSceneId={selectedSceneId}
-                      selectedHotspotId={selectedHotspotId}
-                      patchProject={patchProject}
-                      handleUpload={handleUpload}
-                      mediaLibrary={mediaLibrary}
-                      className="hotspot-assets-below-canvas"
-                    />
-                  ) : null}
                 </div>
                 <SceneContextPanel title={sceneContextTitle}>
                   {false ? (
@@ -781,8 +935,6 @@ export default function ScenesTab(props) {
                       project={project}
                       patchProject={patchProject}
                       renderShapeControls={renderShapeControls}
-                      canUseQuickLogic={canUseQuickLogic}
-                      openQuickLogicForTarget={openQuickLogicForTarget}
                       isBeginnerMode={isBeginnerMode}
                       conversationEditorOpen={conversationEditorOpen}
                       setConversationEditorOpen={setConversationEditorOpen}
@@ -792,7 +944,6 @@ export default function ScenesTab(props) {
                       handleUpload={handleUpload}
                       isHeroAdventureProject={isHeroAdventureProject}
                       heroSkills={heroSkills}
-                      deleteHotspot={deleteHotspot}
                     />
                   ) : (
                     <div className="placeholder small">Sélectionne une zone, un objet visible ou un objet d’inventaire.</div>
@@ -855,9 +1006,16 @@ export default function ScenesTab(props) {
                   deleteItem={() => {}}
                   setSelectedSceneObjectId={setSelectedSceneObjectId}
                   getSceneLabel={getSceneLabel}
-                  deleteHotspot={deleteHotspot}
                   setTab={setTab}
                   openQuickLogicForTarget={openQuickLogicForTarget}
+                  duplicateSelectedEditorItems={duplicateSelectedEditorItems}
+                  deleteSelectedEditorItems={deleteSelectedEditorItems}
+                  patchLayerItem={patchLayerItem}
+                  sendLayerToEdge={sendLayerToEdge}
+                  previewScene={previewScene}
+                  onCanvasContextMenu={openSceneCanvasContextMenu}
+                  drawerMode={sceneDrawerMode}
+                  setDrawerMode={setSceneDrawerMode}
                 />
               ) : null}
               {canUseQuickLogic ? (
@@ -876,6 +1034,44 @@ export default function ScenesTab(props) {
           </div>
         ) : <div className="empty-state-inline">Sélectionne une scène dans la colonne de gauche pour commencer.</div>}
       </SceneMainLayout>
+
+      <SceneCanvasContextMenu
+        menu={sceneContextMenu}
+        clipboard={sceneClipboard}
+        duplicateSelectedEditorItems={duplicateSelectedEditorItems}
+        deleteSelectedEditorItems={deleteSelectedEditorItems}
+        nudgeLayerZIndex={nudgeLayerZIndex}
+        sendLayerToEdge={sendLayerToEdge}
+        copySceneEntry={copySceneEntry}
+        pasteSceneEntry={pasteSceneEntry}
+        createLogicRuleFromTarget={createLogicRuleFromTarget}
+        canUseQuickLogic={canUseQuickLogic}
+        onClose={() => setSceneContextMenu(null)}
+      />
+
+      <SceneEditorDrawer
+        drawerMode={sceneDrawerMode}
+        onClose={() => setSceneDrawerMode(null)}
+        project={project}
+        selectedScene={selectedScene}
+        selectedItemId={selectedItemId}
+        setSelectedItemId={setSelectedItemId}
+        addItem={addItem}
+        addSceneObject={addSceneObject}
+        setTab={setTab}
+        activeSceneObjectIds={activeSceneObjectIds}
+        activeHotspotIds={activeHotspotIds}
+        selectedVisualEffectZoneId={selectedVisualEffectZoneId}
+        selectSceneObject={selectSceneObject}
+        selectHotspot={selectHotspot}
+        selectVisualEffectZone={selectVisualEffectZone}
+        getLayerZIndex={getLayerZIndex}
+        patchLayerItem={patchLayerItem}
+        patchProject={patchProject}
+        selectedSceneId={selectedSceneId}
+        nudgeLayerZIndex={nudgeLayerZIndex}
+        sendLayerToEdge={sendLayerToEdge}
+      />
 
     </div>
   );

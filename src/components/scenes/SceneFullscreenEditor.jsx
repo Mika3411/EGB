@@ -6,7 +6,8 @@ import {
 import Anime2DPreview from '../Anime2DPreview.jsx';
 import NumberInput from '../forms/NumberInput.jsx';
 import MediaSourcePicker from '../MediaSourcePicker.jsx';
-import { showConfirm } from '../AccessibleDialog';
+import SceneCanvasQuickToolbar from './SceneCanvasQuickToolbar.jsx';
+import { SceneDrawerTriggers } from './SceneEditorDrawer.jsx';
 import SceneObjectInspector, { SceneObjectBlockContent, getSceneObjectClickMode } from './SceneObjectInspector.jsx';
 import SceneVisualEffect, { getVisualEffectZoneZIndex } from '../SceneVisualEffect.jsx';
 import HotspotAssetsPanel from './HotspotAssetsPanel.jsx';
@@ -16,12 +17,6 @@ import {
   getSceneObjectStyle,
   gridOverlayStyle,
 } from './sceneEditorUtils.js';
-
-const FALLBACK_HERO_SKILLS = [
-  { id: 'force', name: 'Force', value: 3, manaCost: 0 },
-  { id: 'ruse', name: 'Ruse', value: 2, manaCost: 0 },
-  { id: 'magie', name: 'Magie', value: 4, manaCost: 2 },
-];
 
 export default function SceneFullscreenEditor({
   selectedScene,
@@ -77,189 +72,23 @@ export default function SceneFullscreenEditor({
   deleteItem,
   setSelectedSceneObjectId,
   getSceneLabel,
-  deleteHotspot,
   setTab,
   openQuickLogicForTarget,
+  duplicateSelectedEditorItems,
+  deleteSelectedEditorItems,
+  patchLayerItem,
+  sendLayerToEdge,
+  previewScene,
+  onCanvasContextMenu,
+  drawerMode,
+  setDrawerMode,
 }) {
   const getLinkedItem = (itemId) => project.items?.find((item) => item.id === itemId) || null;
   const getSceneObjectDisplayImage = (obj) => obj?.imageData || getLinkedItem(obj?.linkedItemId)?.imageData || '';
   const isBeginnerMode = project?.creationMode === 'beginner';
   const canUseQuickLogic = !isBeginnerMode && project?.creationMode !== 'intermediate';
-  const selectedHotspotActionType = selectedHotspot?.actionType || 'dialogue';
-  const displayedHotspotActionType = isBeginnerMode && !['dialogue', 'dialogue_item', 'scene'].includes(selectedHotspotActionType)
-    ? 'dialogue'
-    : selectedHotspotActionType;
-  const heroSkills = project.heroAdventure?.hero?.skills?.length ? project.heroAdventure.hero.skills : FALLBACK_HERO_SKILLS;
-  const updateSelectedHotspot = (updater) => patchProject((draft) => {
-    const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId);
-    if (spot) updater(spot);
-  });
-  const renderSkillCheckFields = (entry, updateEntry) => (
-    <div className="nested-editor-card hero-skill-check-editor">
-      <HelpLabel help="Compétence utilisée par le jet automatique en Preview. Le joueur clique la zone, puis le jeu lance le dé et ajoute ce bonus.">Compétence testée</HelpLabel>
-      <select value={entry.skillCheckSkillId || heroSkills[0]?.id || ''} onChange={(event) => updateEntry((target) => {
-        target.skillCheckSkillId = event.target.value;
-      })}>
-        {heroSkills.map((skill) => (
-          <option key={skill.id} value={skill.id}>
-            {skill.name} {Number(skill.value) >= 0 ? '+' : ''}{Number(skill.value) || 0}
-            {skill.manaCost ? ` - ${skill.manaCost} mana` : ''}
-          </option>
-        ))}
-      </select>
-
-      <HelpLabel help="Seuil à atteindre avec dé + bonus. Exemple : difficulté 12, Force +3, jet 9 donne 12 et réussit.">Difficulté</HelpLabel>
-      <NumberInput min="1" max="99" value={entry.skillCheckDifficulty || 12} onValueChange={(nextValue) => updateEntry((target) => {
-        target.skillCheckDifficulty = nextValue;
-      })} />
-
-      <HelpLabel help="Mana retirée avant le jet. Si le héros n'a pas assez de mana, le test ne se lance pas.">Coût mana du test</HelpLabel>
-      <NumberInput
-        min="0"
-        max="99"
-        value={entry.skillCheckManaCost ?? heroSkills.find((skill) => skill.id === (entry.skillCheckSkillId || heroSkills[0]?.id || ''))?.manaCost ?? 0}
-        onValueChange={(nextValue) => updateEntry((target) => {
-          target.skillCheckManaCost = nextValue;
-        })}
-      />
-
-      <HelpLabel help="Texte ajouté au résultat du jet quand le total atteint ou dépasse la difficulté.">Message de réussite</HelpLabel>
-      <textarea value={entry.skillCheckSuccessDialogue || ''} placeholder="Tu réussis le test." onChange={(event) => updateEntry((target) => {
-        target.skillCheckSuccessDialogue = event.target.value;
-      })} />
-
-      <HelpLabel help="Scène ouverte si le test réussit. Laisse vide pour rester dans la scène actuelle ou seulement afficher le message.">Scène de réussite</HelpLabel>
-      <select value={entry.skillCheckSuccessTargetSceneId || ''} onChange={(event) => updateEntry((target) => {
-        target.skillCheckSuccessTargetSceneId = event.target.value;
-      })}>
-        <option value="">Aucune scène</option>
-        {project.scenes.map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
-      </select>
-
-      <HelpLabel help="Texte ajouté au résultat du jet quand le total est inférieur à la difficulté.">Message d'échec</HelpLabel>
-      <textarea value={entry.skillCheckFailureDialogue || ''} placeholder="Tu rates le test." onChange={(event) => updateEntry((target) => {
-        target.skillCheckFailureDialogue = event.target.value;
-      })} />
-
-      <HelpLabel help="Scène ouverte si le test échoue. Laisse vide si l'échec doit seulement afficher un message ou retirer des PV.">Scène d'échec</HelpLabel>
-      <select value={entry.skillCheckFailureTargetSceneId || ''} onChange={(event) => updateEntry((target) => {
-        target.skillCheckFailureTargetSceneId = event.target.value;
-      })}>
-        <option value="">Aucune scène</option>
-        {project.scenes.map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
-      </select>
-
-      <HelpLabel help="PV retirés au héros en cas d'échec. Évite une valeur égale ou supérieure aux PV max sauf si tu veux une défaite immédiate.">Perte de PV en échec</HelpLabel>
-      <NumberInput min="0" max="99" value={entry.skillCheckFailureHealthLoss || 0} onValueChange={(nextValue) => updateEntry((target) => {
-        target.skillCheckFailureHealthLoss = nextValue;
-      })} />
-
-      <HelpLabel help="Objet ajouté à l'inventaire uniquement si le test réussit.">Objet gagné en réussite</HelpLabel>
-      <select value={entry.skillCheckSuccessRewardItemId || ''} onChange={(event) => updateEntry((target) => {
-        target.skillCheckSuccessRewardItemId = event.target.value;
-      })}>
-        <option value="">Aucun objet</option>
-        {project.items.map((item) => <option key={item.id} value={item.id}>{item.icon} {item.name}</option>)}
-      </select>
-    </div>
-  );
-  const renderHeroCombatFields = (entry, updateEntry) => (
-    <div className="nested-editor-card hero-skill-check-editor">
-      <HelpLabel help="Nom utilise dans les messages du combat et dans l'onglet Combat.">Ennemi</HelpLabel>
-      <input value={entry.combatEnemyName || ''} placeholder="Garde spectral" onChange={(event) => updateEntry((target) => {
-        target.combatEnemyName = event.target.value;
-      })} />
-
-      <div className="grid-two small-gap">
-        <div>
-          <HelpLabel help="PV de depart de cet ennemi.">PV ennemi</HelpLabel>
-          <NumberInput min="1" max="999" value={entry.combatEnemyMaxHealth || 8} onValueChange={(nextValue) => updateEntry((target) => {
-            target.combatEnemyMaxHealth = nextValue;
-          })} />
-        </div>
-        <div>
-          <HelpLabel help="Seuil à atteindre avec dé + compétence pour toucher.">Difficulté</HelpLabel>
-          <NumberInput min="1" max="99" value={entry.combatAttackDifficulty || 10} onValueChange={(nextValue) => updateEntry((target) => {
-            target.combatAttackDifficulty = nextValue;
-          })} />
-        </div>
-        <div>
-          <HelpLabel help="PV retirés au héros si l'ennemi survit.">Dégâts ennemis</HelpLabel>
-          <NumberInput min="0" max="99" value={entry.combatEnemyStrength ?? entry.combatEnemyDamage ?? 2} onValueChange={(nextValue) => updateEntry((target) => {
-            target.combatEnemyStrength = nextValue;
-            target.combatEnemyDamage = nextValue;
-          })} />
-        </div>
-      </div>
-
-      <HelpLabel help="Compétence ajoutée au jet d'attaque.">Compétence d'attaque</HelpLabel>
-      <select value={entry.combatSkillId || heroSkills[0]?.id || ''} onChange={(event) => updateEntry((target) => {
-        target.combatSkillId = event.target.value;
-      })}>
-        {heroSkills.map((skill) => (
-          <option key={skill.id} value={skill.id}>
-            {skill.name} {Number(skill.value) >= 0 ? '+' : ''}{Number(skill.value) || 0}
-          </option>
-        ))}
-      </select>
-
-      <HelpLabel help="Mana retirée à chaque attaque.">Coût mana par attaque</HelpLabel>
-      <NumberInput min="0" max="99" value={entry.combatManaCost || 0} onValueChange={(nextValue) => updateEntry((target) => {
-        target.combatManaCost = nextValue;
-      })} />
-
-      <label className="checkbox-row">
-        <input type="checkbox" checked={entry.combatTurnMode !== false} onChange={(event) => updateEntry((target) => {
-          target.combatTurnMode = event.target.checked;
-        })} />
-        <span>Combat en tour par tour</span>
-      </label>
-      <label className="checkbox-row">
-        <input type="checkbox" checked={entry.combatShowDice !== false} onChange={(event) => updateEntry((target) => {
-          target.combatShowDice = event.target.checked;
-        })} />
-        <span>Afficher le dé central</span>
-      </label>
-
-      <HelpLabel help="Texte ajouté quand l'ennemi tombe à 0 PV.">Message de victoire</HelpLabel>
-      <textarea value={entry.combatVictoryDialogue || ''} placeholder="L'ennemi s'effondre." onChange={(event) => updateEntry((target) => {
-        target.combatVictoryDialogue = event.target.value;
-      })} />
-
-      <HelpLabel help="Texte ajouté si le héros tombe à 0 PV.">Message de défaite</HelpLabel>
-      <textarea value={entry.combatDefeatDialogue || ''} placeholder="Tu n'as plus la force de continuer." onChange={(event) => updateEntry((target) => {
-        target.combatDefeatDialogue = event.target.value;
-      })} />
-
-      <HelpLabel help="Objet donné quand l'ennemi est vaincu.">Récompense</HelpLabel>
-      <select value={entry.combatRewardItemId || ''} onChange={(event) => updateEntry((target) => {
-        target.combatRewardItemId = event.target.value;
-      })}>
-        <option value="">Aucun objet</option>
-        {project.items.map((item) => <option key={item.id} value={item.id}>{item.icon} {item.name}</option>)}
-      </select>
-
-      <HelpLabel help="Scène ouverte après la victoire.">Scène de victoire</HelpLabel>
-      <select value={entry.combatVictoryTargetSceneId || ''} onChange={(event) => updateEntry((target) => {
-        target.combatVictoryTargetSceneId = event.target.value;
-      })}>
-        <option value="">Aucune scène</option>
-        {project.scenes.map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
-      </select>
-
-      <HelpLabel help="Scène ouverte si le héros est vaincu.">Scène de défaite</HelpLabel>
-      <select value={entry.combatDefeatTargetSceneId || ''} onChange={(event) => updateEntry((target) => {
-        target.combatDefeatTargetSceneId = event.target.value;
-      })}>
-        <option value="">Aucune scène</option>
-        {project.scenes.map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
-      </select>
-
-      <button type="button" className="secondary-action full" onClick={() => setTab?.('combat')}>
-        Regler les visuels dans Combat
-      </button>
-    </div>
-  );
+  const isSceneObjectSelectedOnCanvas = (obj) => obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id);
+  const isHotspotSelectedOnCanvas = (spot) => spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id);
 
   return (
                 <div style={{ position: 'fixed', inset: 0, zIndex: 20000, background: '#020617', padding: 12, overflow: 'hidden' }}>
@@ -290,6 +119,7 @@ export default function SceneFullscreenEditor({
                               ))}
                           </select>
                           <EditorToolbarMenus {...editorToolbarProps} fullscreen />
+                          <SceneDrawerTriggers drawerMode={drawerMode} setDrawerMode={setDrawerMode} />
                         </div>
                         <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'nowrap', minWidth: 0 }}>
                           <span className="status-badge soft" style={{ minWidth: 58, justifyContent: 'center', flex: '0 0 auto' }}>{Math.round(fullscreenZoom * 100)}%</span>
@@ -340,6 +170,7 @@ export default function SceneFullscreenEditor({
                           }}
                           onPointerUp={stopDragging}
                           onPointerCancel={stopDragging}
+                          onContextMenu={(event) => onCanvasContextMenu?.(event, 'canvas', '', 'fullscreen')}
                         >
                           {selectedScene.backgroundData ? (
                             <img
@@ -357,11 +188,11 @@ export default function SceneFullscreenEditor({
                             />
                           ) : <div className="placeholder">Ajoute une image de scène</div>}
                           <SceneVisualEffect effect={selectedScene.visualEffect} intensity={selectedScene.visualEffectIntensity} />
-                          {(selectedScene.visualEffectZones || []).filter((zone) => !zone.isHidden).map((zone) => (
+                          {(selectedScene.visualEffectZones || []).filter((zone) => !zone.isHidden || zone.id === selectedVisualEffectZoneId).map((zone) => (
                             <button
                               key={zone.id}
                               type="button"
-                              className={`editor-hotspot editor-visual-zone ${getShapeClassName?.(zone) || ''} ${zone.id === selectedVisualEffectZoneId ? 'selected' : ''} ${zone.id === draggingVisualEffectZoneId ? 'dragging' : ''}`}
+                              className={`editor-hotspot editor-visual-zone ${getShapeClassName?.(zone) || ''} ${zone.isHidden ? 'editor-hidden-on-canvas' : ''} ${zone.id === selectedVisualEffectZoneId ? 'selected' : ''} ${zone.id === draggingVisualEffectZoneId ? 'dragging' : ''}`}
                               style={{ left: `${zone.x}%`, top: `${zone.y}%`, width: `${zone.width}%`, height: `${zone.height}%`, zIndex: getVisualEffectZoneZIndex(zone.layer), ...getElementShapeStyle(zone) }}
                               onPointerDown={(event) => beginVisualEffectZoneDrag(event, zone.id, 'fullscreen')}
                               onClick={() => selectVisualEffectZone(zone.id)}
@@ -374,13 +205,14 @@ export default function SceneFullscreenEditor({
                             </button>
                           ))}
                           {snapGridEnabled ? <div style={gridOverlayStyle} /> : null}
-                        {(selectedScene.sceneObjects || []).filter((obj) => !obj.isHidden).map((obj) => (
+                        {(selectedScene.sceneObjects || []).filter((obj) => !obj.isHidden || isSceneObjectSelectedOnCanvas(obj)).map((obj) => (
                           <button
                             key={obj.id}
                             type="button"
-                            className={`editor-hotspot editor-scene-object ${getShapeClassName?.(obj) || ''} ${obj.isInvisible ? 'editor-scene-object-invisible' : ''} ${(obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id)) ? 'selected' : ''} ${obj.id === draggingSceneObjectId ? 'dragging' : ''}`}
+                            className={`editor-hotspot editor-scene-object ${getShapeClassName?.(obj) || ''} ${obj.isInvisible ? 'editor-scene-object-invisible' : ''} ${obj.isHidden ? 'editor-hidden-on-canvas' : ''} ${isSceneObjectSelectedOnCanvas(obj) ? 'selected' : ''} ${obj.id === draggingSceneObjectId ? 'dragging' : ''}`}
                             style={getSceneObjectStyle(obj)}
                             onPointerDown={(event) => beginObjectDrag(event, obj.id, 'fullscreen')}
+                            onContextMenu={(event) => onCanvasContextMenu?.(event, 'sceneObject', obj.id, 'fullscreen')}
                             onClick={(event) => selectSceneObject(obj.id, event)}
                           >
                             {obj.anime2dSpec && !obj.isInvisible ? (
@@ -390,40 +222,47 @@ export default function SceneFullscreenEditor({
                             ) : !obj.isInvisible ? (
                               <SceneObjectBlockContent object={obj} displayImage="" linkedItem={getLinkedItem(obj.linkedItemId)} />
                             ) : <span>{`${obj.name || 'Objet'} (invisible)`}</span>}
-                            {renderShapeOutline?.(obj, obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id))}
-                            {renderResizeHandles?.('sceneObject', obj.id, obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id), 'fullscreen')}
-                            {renderShapePointHandles?.('sceneObject', obj.id, obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id), 'fullscreen')}
+                            {renderShapeOutline?.(obj, isSceneObjectSelectedOnCanvas(obj))}
+                            {renderResizeHandles?.('sceneObject', obj.id, isSceneObjectSelectedOnCanvas(obj), 'fullscreen')}
+                            {renderShapePointHandles?.('sceneObject', obj.id, isSceneObjectSelectedOnCanvas(obj), 'fullscreen')}
                           </button>
                         ))}
-                        {selectedScene.hotspots.filter((spot) => !spot.isHidden).map((spot) => (
+                        {selectedScene.hotspots.filter((spot) => !spot.isHidden || isHotspotSelectedOnCanvas(spot)).map((spot) => (
                           <button
                             key={spot.id}
                             type="button"
-                            className={`editor-hotspot ${getShapeClassName?.(spot) || ''} ${(spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id)) ? 'selected' : ''} ${spot.id === draggingHotspotId ? 'dragging' : ''}`}
+                            className={`editor-hotspot ${getShapeClassName?.(spot) || ''} ${spot.isHidden ? 'editor-hidden-on-canvas' : ''} ${isHotspotSelectedOnCanvas(spot) ? 'selected' : ''} ${spot.id === draggingHotspotId ? 'dragging' : ''}`}
                             style={{ left: `${spot.x}%`, top: `${spot.y}%`, width: `${spot.width}%`, height: `${spot.height}%`, zIndex: getLayerZIndex(spot, 'hotspot'), ...getElementShapeStyle(spot) }}
                             onPointerDown={(event) => beginDrag(event, spot.id, 'fullscreen')}
+                            onContextMenu={(event) => onCanvasContextMenu?.(event, 'hotspot', spot.id, 'fullscreen')}
                             onClick={(event) => selectHotspot(spot.id, event)}
                           >
                             <span>{spot.name}</span>
-                            {renderShapeOutline?.(spot, spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id))}
-                            {renderResizeHandles?.('hotspot', spot.id, spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id), 'fullscreen')}
-                            {renderShapePointHandles?.('hotspot', spot.id, spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id), 'fullscreen')}
+                            {renderShapeOutline?.(spot, isHotspotSelectedOnCanvas(spot))}
+                            {renderResizeHandles?.('hotspot', spot.id, isHotspotSelectedOnCanvas(spot), 'fullscreen')}
+                            {renderShapePointHandles?.('hotspot', spot.id, isHotspotSelectedOnCanvas(spot), 'fullscreen')}
                           </button>
                         ))}
+                        <SceneCanvasQuickToolbar
+                          selectedScene={selectedScene}
+                          selectedSceneId={selectedSceneId}
+                          selectedHotspotId={selectedHotspotId}
+                          selectedHotspotIds={selectedHotspotIds}
+                          selectedSceneObjectId={selectedSceneObjectId}
+                          selectedSceneObjectIds={selectedSceneObjectIds}
+                          duplicateSelectedEditorItems={duplicateSelectedEditorItems}
+                          deleteSelectedEditorItems={deleteSelectedEditorItems}
+                          patchLayerItem={patchLayerItem}
+                          sendLayerToEdge={sendLayerToEdge}
+                          previewScene={previewScene}
+                          canUseQuickLogic={canUseQuickLogic}
+                          openQuickLogicForTarget={openQuickLogicForTarget}
+                          isBeginnerMode={isBeginnerMode}
+                          onBeforePreview={editorToolbarProps?.closeEditorFullscreen}
+                        />
                         </div>
                         <MiniMap {...miniMapProps} />
                       </div>
-                      {selectedHotspot ? (
-                        <HotspotAssetsPanel
-                          selectedHotspot={selectedHotspot}
-                          selectedSceneId={selectedSceneId}
-                          selectedHotspotId={selectedHotspotId}
-                          patchProject={patchProject}
-                          handleUpload={handleUpload}
-                          mediaLibrary={mediaLibrary}
-                          className="hotspot-assets-below-canvas hotspot-assets-fullscreen"
-                        />
-                      ) : null}
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, minHeight: 0 }}>
@@ -498,67 +337,15 @@ export default function SceneFullscreenEditor({
                             <div><HelpLabel help="Hauteur de la zone cliquable. Une zone trop petite peut être difficile à trouvér sur mobile.">Hauteur</HelpLabel><NumberInput value={selectedHotspot.height} onValueChange={(nextValue) => patchProject((draft) => { const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.height = nextValue; })} /></div>
                           </div>
                           {renderShapeControls?.('hotspot', selectedHotspotId)}
-                          {canUseQuickLogic ? (
-                            <button type="button" className="secondary-action full" onClick={() => openQuickLogicForTarget?.('hotspot', selectedHotspotId)}>
-                              Logique
-                            </button>
-                          ) : null}
-                          <HelpLabel help="Action principale déclenchée par cette zone après validation des prérequis éventuels : dialogue, objet, changement de scène ou cinematic.">Action</HelpLabel>
-                          <select value={displayedHotspotActionType} onChange={(e) => patchProject((draft) => {
-                            const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.actionType = e.target.value;
-                          })}>
-                            <option value="dialogue">Dialogue</option>
-                            {!isBeginnerMode ? <option value="skill_check">Test de compétence</option> : null}
-                            {!isBeginnerMode ? <option value="hero_combat">Combat simple</option> : null}
-                            <option value="dialogue_item">Dialogue + objet</option>
-                            <option value="scene">Changer de scène</option>
-                            {!isBeginnerMode ? <option value="cinematic">Lancer une cinématique</option> : null}
-                          </select>
-                          {!isBeginnerMode && selectedHotspot.actionType === 'skill_check'
-                            ? renderSkillCheckFields(selectedHotspot, updateSelectedHotspot)
-                            : null}
-                          {!isBeginnerMode && selectedHotspot.actionType === 'hero_combat'
-                            ? renderHeroCombatFields(selectedHotspot, updateSelectedHotspot)
-                            : null}
-                          <HelpLabel help="Texte affiché lors de l’interaction principale. Il peut donner une réaction, un indice ou confirmer une action réussie.">Dialogue</HelpLabel>
-                          <textarea value={selectedHotspot.dialogue} onChange={(e) => patchProject((draft) => {
-                            const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.dialogue = e.target.value;
-                          })} />
-                          <HelpLabel help="Destination utilisée si l’action est “Changer de scène”. Laisse vide si la zone doit seulement parler ou donner un objet.">Scène cible</HelpLabel>
-                          <select value={selectedHotspot.targetSceneId} onChange={(e) => patchProject((draft) => {
-                            const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.targetSceneId = e.target.value;
-                          })}>
-                            <option value="">Aucune</option>
-                            {project.scenes.filter((scene) => scene.id !== selectedSceneId).map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
-                          </select>
-                          {!isBeginnerMode ? (
-                            <>
-                              <HelpLabel help="Cinématique lancée après l’interaction réussie. Elle peut servir de transition, révélation ou fin de sequence.">Cinématique cible</HelpLabel>
-                              <select value={selectedHotspot.targetCinematicId} onChange={(e) => patchProject((draft) => {
-                                const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.targetCinematicId = e.target.value;
-                              })}>
-                                <option value="">Aucune</option>
-                                {project.cinematics.map((cinematic) => <option key={cinematic.id} value={cinematic.id}>{cinematic.name}</option>)}
-                              </select>
-                            </>
-                          ) : null}
-                          <HelpLabel help="Énigme à résoudre avant d’exécuter l’action de la zone. Si elle échoue ou reste ouverte, la suite ne se déclénche pas encore.">Énigme liée</HelpLabel>
-                          <select value={selectedHotspot.enigmaId || ''} onChange={(e) => patchProject((draft) => {
-                            const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.enigmaId = e.target.value;
-                          })}>
-                            <option value="">Aucune</option>
-                            {(project.enigmas || []).map((enigma) => <option key={enigma.id} value={enigma.id}>{enigma.name}</option>)}
-                          </select>
-                          <button className="danger-button" style={{ marginTop: 12 }} onClick={async () => {
-                            const confirmed = await showConfirm({
-                              title: 'Supprimer la zone',
-                              message: `Supprimer la zone "${selectedHotspot.name}" ?`,
-                              confirmLabel: 'Supprimer',
-                              variant: 'danger',
-                            });
-                            if (!confirmed) return;
-                            deleteHotspot(selectedSceneId, selectedHotspotId);
-                          }}>Supprimer la zone</button>
+                          <HotspotAssetsPanel
+                            selectedHotspot={selectedHotspot}
+                            selectedSceneId={selectedSceneId}
+                            selectedHotspotId={selectedHotspotId}
+                            patchProject={patchProject}
+                            handleUpload={handleUpload}
+                            mediaLibrary={mediaLibrary}
+                            className="hotspot-assets-inspector"
+                          />
                         </>
                       ) : (
                         <div className="placeholder small">Sélectionne une zone, un objet visible ou un objet d’inventaire.</div>

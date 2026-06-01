@@ -1,10 +1,10 @@
 import NumberInput from '../forms/NumberInput.jsx';
 import MediaSourcePicker from '../MediaSourcePicker.jsx';
-import { showConfirm } from '../AccessibleDialog';
 import { HelpLabel } from './SceneEditorChrome.jsx';
 import ConversationEditorModal from './ConversationEditorModal.jsx';
 import ConversationGraph from './ConversationGraph.jsx';
-import HotspotActionFields, { HeroMalusFields, SkillCheckFields } from './HotspotActionFields.jsx';
+import { HeroMalusFields, SkillCheckFields } from './HotspotActionFields.jsx';
+import HotspotAssetsPanel from './HotspotAssetsPanel.jsx';
 
 const makeAdvancedCondition = () => ({
   id: `advanced_condition_${Math.random().toString(36).slice(2, 10)}`,
@@ -64,8 +64,6 @@ const CONVERSATION_EFFECT_LABELS = {
   ending: 'Fin',
 };
 
-const BEGINNER_HOTSPOT_ACTION_TYPES = new Set(['dialogue', 'dialogue_item', 'scene']);
-
 export default function HotspotInspectorPanel({
   selectedHotspot,
   selectedHotspotId,
@@ -73,8 +71,6 @@ export default function HotspotInspectorPanel({
   project,
   patchProject,
   renderShapeControls,
-  canUseQuickLogic = false,
-  openQuickLogicForTarget,
   isBeginnerMode = false,
   conversationEditorOpen = false,
   setConversationEditorOpen,
@@ -84,14 +80,9 @@ export default function HotspotInspectorPanel({
   handleUpload,
   isHeroAdventureProject = false,
   heroSkills = [],
-  deleteHotspot,
 }) {
-  const selectedHotspotActionType = selectedHotspot?.actionType || 'dialogue';
-  const displayedHotspotActionType = isBeginnerMode && !BEGINNER_HOTSPOT_ACTION_TYPES.has(selectedHotspotActionType)
-    ? 'dialogue'
-    : selectedHotspotActionType;
-
   if (!selectedHotspot) return null;
+  const isConversationHotspot = !isBeginnerMode && selectedHotspot.actionType === 'conversation';
 
   return (
     <>
@@ -106,29 +97,12 @@ export default function HotspotInspectorPanel({
                         <div><HelpLabel help="Hauteur de la zone cliquable. Une zone trop petite peut être difficile à trouvér sur mobile.">Hauteur</HelpLabel><NumberInput value={selectedHotspot.height} onValueChange={(nextValue) => patchProject((draft) => { const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.height = nextValue; })} /></div>
                       </div>
                       {renderShapeControls('hotspot', selectedHotspotId)}
-                      {canUseQuickLogic ? (
-                        <button type="button" className="secondary-action full" onClick={() => openQuickLogicForTarget('hotspot', selectedHotspotId)}>
-                          Logique
-                        </button>
-                      ) : null}
-                      <HelpLabel help="Action principale déclenchée par cette zone après validation des prérequis éventuels : dialogue, objet, changement de scène ou cinematic.">Action</HelpLabel>
-                      <select data-tour="hotspot-action" value={displayedHotspotActionType} onChange={(e) => patchProject((draft) => {
-                        const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.actionType = e.target.value;
-                      })}>
-                        <option value="dialogue">Dialogue</option>
-                        {!isBeginnerMode ? <option value="conversation">Conversation texte</option> : null}
-                        {!isBeginnerMode ? <option value="skill_check">Test de compétence</option> : null}
-                        {!isBeginnerMode ? <option value="hero_combat">Combat simple</option> : null}
-                        <option value="dialogue_item">Dialogue + objet</option>
-                        <option value="scene">Changer de scène</option>
-                        {!isBeginnerMode ? <option value="cinematic">Lancer une cinématique</option> : null}
-                      </select>
-                      {!isBeginnerMode && selectedHotspot.actionType === 'conversation' ? (
+                      {isConversationHotspot ? (
                         <button type="button" className="secondary-action full" data-tour="conversation-editor-button" onClick={() => setConversationEditorOpen(true)}>
                           Modifier la conversation
                         </button>
                       ) : null}
-                      {!isBeginnerMode && selectedHotspot.actionType === 'conversation' && conversationEditorOpen ? (
+                      {isConversationHotspot && conversationEditorOpen ? (
                         <ConversationEditorModal onClose={() => setConversationEditorOpen(false)} onAddQuestion={addConversationQuestion}>
                             <div className="conversation-flow-map" data-tour="conversation-flow-map">
                               <div className="conversation-flow-head">
@@ -968,32 +942,17 @@ export default function HotspotInspectorPanel({
                             ))}
                         </ConversationEditorModal>
                       ) : null}
-                      {displayedHotspotActionType !== 'conversation' ? (
-                        <HotspotActionFields
-                          entry={selectedHotspot}
-                          updateEntry={(updater) => patchProject((draft) => {
-                            const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId);
-                            if (spot) updater(spot);
-                          })}
-                          actionType={selectedHotspot.actionType}
-                          isBeginnerMode={isBeginnerMode}
-                          isHeroAdventureProject={isHeroAdventureProject}
+                      {!isConversationHotspot ? (
+                        <HotspotAssetsPanel
+                          selectedHotspot={selectedHotspot}
                           selectedSceneId={selectedSceneId}
-                          project={project}
-                          heroSkills={heroSkills}
-                          getSceneLabel={getSceneLabel}
+                          selectedHotspotId={selectedHotspotId}
+                          patchProject={patchProject}
+                          handleUpload={handleUpload}
+                          mediaLibrary={mediaLibrary}
+                          className="hotspot-assets-inspector"
                         />
                       ) : null}
-                      <button className="danger-button" style={{ marginTop: 12 }} onClick={async () => {
-                        const confirmed = await showConfirm({
-                          title: 'Supprimer la zone',
-                          message: `Supprimer la zone "${selectedHotspot.name}" ?`,
-                          confirmLabel: 'Supprimer',
-                          variant: 'danger',
-                        });
-                        if (!confirmed) return;
-                        deleteHotspot(selectedSceneId, selectedHotspotId);
-                      }}>Supprimer la zone</button>
 
     </>
   );
