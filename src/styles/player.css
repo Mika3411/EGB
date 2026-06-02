@@ -253,6 +253,17 @@
   max-height: calc(100vh - 56px) !important;
   transform: translate(-50%, -50%) !important;
 }
+.player-inventory-drawer.player-inventory-drawer--objective {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  right: auto !important;
+  bottom: auto !important;
+  z-index: 120 !important;
+  width: min(720px, calc(100vw - 56px)) !important;
+  max-height: calc(100vh - 56px) !important;
+  transform: translate(-50%, -50%) !important;
+}
 .player-inventory-drawer.player-inventory-drawer--hero-panel {
   position: fixed !important;
   top: 14px !important;
@@ -2019,6 +2030,128 @@
   transform: none;
   filter: saturate(.75);
 }
+.hero-combat-end-panel {
+  display: grid;
+  justify-items: center;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid rgba(96, 165, 250, .34);
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(96, 165, 250, .2), transparent 58%),
+    rgba(15, 23, 42, .62);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 16px 32px rgba(0, 0, 0, .24);
+}
+.hero-combat-end-panel > span {
+  color: #bfdbfe;
+  font-size: 12px;
+  font-weight: 950;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.hero-combat-end-button {
+  display: inline-grid;
+  grid-auto-flow: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(147, 197, 253, .74);
+  border-radius: var(--player-button-radius, 8px);
+  background:
+    linear-gradient(180deg, rgba(96, 165, 250, .98), rgba(37, 99, 235, .98) 58%, rgba(30, 64, 175, .98));
+  color: #fff;
+  font-weight: 950;
+  line-height: 1.05;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, .5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .34),
+    0 12px 28px rgba(37, 99, 235, .38),
+    0 0 0 3px rgba(59, 130, 246, .16),
+    0 0 34px rgba(96, 165, 250, .38);
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease, filter .16s ease;
+}
+.hero-combat-end-button span {
+  min-width: 0;
+  color: inherit;
+  font-size: inherit;
+  text-transform: none;
+  overflow-wrap: anywhere;
+}
+.hero-combat-end-button svg {
+  flex: 0 0 auto;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, .4));
+}
+.hero-combat-end-button:hover,
+.hero-combat-end-button:focus-visible {
+  border-color: rgba(219, 234, 254, .92);
+  filter: brightness(1.08);
+  transform: translateY(-1px) scale(1.02);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .38),
+    0 15px 32px rgba(37, 99, 235, .46),
+    0 0 0 4px rgba(59, 130, 246, .22),
+    0 0 42px rgba(96, 165, 250, .48);
+  outline: none;
+}
+.hero-combat-end-button--top {
+  justify-self: end;
+  min-height: 34px;
+  padding: 7px 12px;
+  font-size: 14px;
+}
+.hero-combat-end-button--primary {
+  width: min(360px, 100%);
+  min-height: 50px;
+  padding: 13px 20px;
+  font-size: 18px;
+  animation: heroCombatEndCtaPulse 1.8s ease-in-out infinite;
+}
+.hero-combat-overlay--victory .hero-combat-end-panel {
+  border-color: rgba(74, 222, 128, .38);
+}
+.hero-combat-overlay--victory .hero-combat-end-button {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .34),
+    0 12px 28px rgba(37, 99, 235, .36),
+    0 0 0 3px rgba(74, 222, 128, .12),
+    0 0 34px rgba(96, 165, 250, .34);
+}
+@keyframes heroCombatEndCtaPulse {
+  0%, 100% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, .34),
+      0 12px 28px rgba(37, 99, 235, .38),
+      0 0 0 3px rgba(59, 130, 246, .16),
+      0 0 34px rgba(96, 165, 250, .38);
+  }
+  50% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, .38),
+      0 16px 34px rgba(37, 99, 235, .48),
+      0 0 0 5px rgba(59, 130, 246, .2),
+      0 0 48px rgba(96, 165, 250, .54);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-combat-end-button--primary {
+    animation: none;
+  }
+}
+.hero-combat-action-disabled-reason {
+  margin: 0;
+  padding: 8px 10px;
+  justify-self: center;
+  max-width: min(520px, 100%);
+  color: #fee2e2;
+  border: 1px solid rgba(248, 113, 113, .28);
+  border-radius: 8px;
+  background: rgba(69, 10, 10, .38);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
 .hero-combat-survival-card {
   display: grid;
   gap: 4px;
@@ -3094,30 +3227,132 @@
   box-shadow: none !important;
   transform: none !important;
 }
+.adventure-objective-card {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 12px;
+  color: #f8fbff;
+  border: 1px solid rgba(125, 211, 252, .24);
+  border-radius: 8px;
+  background: rgba(8, 16, 30, .86);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, .22);
+}
+.adventure-objective-card.compact {
+  padding: 10px;
+  box-shadow: none;
+}
+.adventure-objective-card .panel-head {
+  align-items: flex-start;
+}
+.adventure-objective-card h3,
+.adventure-objective-card p {
+  margin: 0;
+}
+.objective-status-pill {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border: 1px solid rgba(148, 163, 184, .28);
+  border-radius: 999px;
+  color: #cbd5e1;
+  background: rgba(15, 23, 42, .76);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.objective-status-pill.ready {
+  color: #dcfce7;
+  border-color: rgba(74, 222, 128, .38);
+  background: rgba(20, 83, 45, .62);
+}
+.adventure-objective-routes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+.adventure-objective-route {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, .2);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, .62);
+}
+.adventure-objective-route.complete {
+  border-color: rgba(74, 222, 128, .34);
+  background: rgba(20, 83, 45, .32);
+}
+.adventure-objective-route-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.adventure-objective-route-head strong,
+.adventure-objective-route-head span,
+.adventure-objective-route small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.adventure-objective-route-head span {
+  color: #bbf7d0;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.adventure-objective-route small {
+  color: #dbeafe;
+  font-weight: 700;
+}
+.adventure-objective-conditions {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.adventure-objective-conditions li {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 6px;
+  color: #cbd5e1;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.adventure-objective-conditions li.complete {
+  color: #dcfce7;
+}
+.adventure-objective-conditions li span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .choice-effect-floating {
   position: absolute;
   left: 18px;
   right: 18px;
-  top: 78px;
+  top: 18px;
   z-index: 42;
   display: flex;
   justify-content: center;
   pointer-events: none;
 }
 .choice-effect-floating .choice-effect-summary {
-  width: min(760px, 100%);
+  width: min(560px, calc(100% - 24px));
   pointer-events: auto;
 }
 .choice-effect-summary {
   display: grid;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid rgba(147, 197, 253, .24);
-  border-radius: 12px;
+  gap: 8px;
+  max-height: min(34vh, 220px);
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 16px;
   color: #f8fbff;
-  background: rgba(8, 16, 30, .9);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, .28);
-  backdrop-filter: blur(10px);
+  background: var(--player-narration-bg, rgba(2, 6, 23, .42));
+  box-shadow: 0 16px 42px rgba(0,0,0,.28);
+  backdrop-filter: blur(8px);
 }
 .choice-effect-summary.compact {
   padding: 10px;
@@ -3141,7 +3376,7 @@
 }
 .choice-effect-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  grid-template-columns: 1fr;
   gap: 8px;
 }
 .choice-effect-pill {
@@ -3149,16 +3384,14 @@
   gap: 3px;
   min-width: 0;
   padding: 9px 10px;
-  border: 1px solid rgba(148, 163, 184, .2);
+  border: 1px solid rgba(255,255,255,.10);
   border-radius: 8px;
-  background: rgba(15, 23, 42, .74);
+  background: rgba(2, 6, 23, .30);
 }
 .choice-effect-pill strong,
 .choice-effect-pill small {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .choice-effect-pill strong {
   color: #eaf2ff;
@@ -3167,6 +3400,7 @@
 .choice-effect-pill small {
   color: #cbd7ea;
   font-size: 12px;
+  line-height: 1.35;
 }
 .choice-effect-item { border-color: rgba(251, 191, 36, .36); }
 .choice-effect-variable { border-color: rgba(34, 197, 94, .34); }
@@ -3433,6 +3667,34 @@
 .player-shell.hide-hints .scene-player .player-hotspot,
 .player-shell.hide-hints .scene-player .player-scene-object {
   cursor: default !important;
+}
+.player-shell.show-hints .scene-player .player-scene-object-invisible,
+.player-shell.show-hints .scene-player .player-scene-object-invisible:hover,
+.player-shell.show-hints .scene-player .player-scene-object-invisible:focus,
+.player-shell.show-hints .scene-player .player-scene-object-invisible:active {
+  outline: 2px dashed rgba(250, 204, 21, .92) !important;
+  outline-offset: 0 !important;
+  background: rgba(250, 204, 21, .16) !important;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, .54), 0 0 18px rgba(250, 204, 21, .28) !important;
+}
+.player-shell.show-hints .scene-player .player-scene-object-invisible::after {
+  content: attr(aria-label) !important;
+  position: absolute;
+  left: 5px;
+  top: 5px;
+  max-width: calc(100% - 10px);
+  padding: 3px 6px;
+  border: 1px solid rgba(250, 204, 21, .54);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, .86);
+  color: #fef3c7;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.15;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  pointer-events: none;
 }
 .player-pause-overlay {
   position: fixed;

@@ -123,6 +123,7 @@ function loadGame(manual = false) {
       activeHeroCombat: null,
       selectedHeroCombatPowerId: savedState.selectedHeroCombatPowerId || '',
       inventoryDrawerOpen: false,
+      objectiveDrawerOpen: false,
       activeEnigma: null,
       activeEnding: savedState.activeEnding && typeof savedState.activeEnding === 'object' ? savedState.activeEnding : null,
       choiceEffectNotices: Array.isArray(savedState.choiceEffectNotices) ? savedState.choiceEffectNotices : [],

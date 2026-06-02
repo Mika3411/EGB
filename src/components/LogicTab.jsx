@@ -951,6 +951,7 @@ export default function LogicTab({
                               <MediaSourcePicker
                                 className="button like full secondary-action"
                                 accept="audio/*"
+                                assetScope="logic-sound"
                                 handleUpload={handleUpload}
                                 mediaLibrary={mediaLibrary}
                                 onSelect={(data, name) => updateRule(target.id, type, rule.id, (draftRule) => {
@@ -987,6 +988,7 @@ export default function LogicTab({
                               <MediaSourcePicker
                                 className="button like full secondary-action"
                                 accept="audio/*"
+                                assetScope="logic-sound"
                                 handleUpload={handleUpload}
                                 mediaLibrary={mediaLibrary}
                                 onSelect={(data, name) => updateRule(target.id, type, rule.id, (draftRule) => {

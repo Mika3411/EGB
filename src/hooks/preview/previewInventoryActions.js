@@ -10,6 +10,7 @@ export function createPreviewInventoryActions({
   viewerImage,
   engineRef,
   getItemById,
+  createInventoryViewerImage,
   patchPreviewState,
   blockDefeatedHeroAction,
   updateHeroState,
@@ -214,13 +215,15 @@ export function createPreviewInventoryActions({
     return true;
   };
 
-  const openInventoryItem = (itemId) => {
+  const openInventoryItem = (itemId, options = {}) => {
     if (blockDefeatedHeroAction()) return;
     const item = getItemById?.(itemId) || project.items.find((entry) => entry.id === itemId);
     if (!item) return;
-    if (applyHeroItem(item)) return;
-    if (item.imageData) {
-      setViewerImage({ id: item.id, src: item.imageData, name: item.name });
+    const shouldUseHeroItem = options.useHeroItem ?? !options.previewOnly;
+    if (shouldUseHeroItem && applyHeroItem(item)) return;
+    const viewer = createInventoryViewerImage?.(item.id);
+    if (viewer) {
+      setViewerImage(viewer);
     }
     setSelectedInventoryIds((prev) => {
       const exists = prev.includes(itemId);

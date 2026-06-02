@@ -152,6 +152,180 @@ const makeHeroAdventureStoryProject = () => ({
   storyVariables: [],
 });
 
+const makeHeroAdventureObjectiveProject = () => ({
+  id: 'hero-objective-e2e',
+  title: 'Valombre Test',
+  creationMode: 'hero_adventure',
+  start: { type: 'scene', targetSceneId: 'approach', targetCinematicId: '' },
+  heroAdventure: {
+    enabled: true,
+    dice: { sides: 20, label: 'd20' },
+    objectiveChecklist: {
+      title: 'Objectif: arreter Morholt',
+      description: 'Prepare au moins une voie finale.',
+      finalSceneId: 'scene_28_salle_des_bannieres',
+      blockFinalSceneUntilRouteReady: true,
+      routes: [
+        {
+          id: 'alliances',
+          label: 'Voie des alliances',
+          successText: 'Les allies peuvent charger Morholt.',
+          conditions: [
+            { type: 'has_item', itemId: 'item_sifflet_gardebois', label: 'Sifflet des garde-bois' },
+            { type: 'has_item', itemId: 'item_corne_des_prisonniers', label: 'Corne des prisonniers' },
+            { type: 'story_variable', variableKey: 'alliances', operator: 'greater_or_equal', value: 4, label: 'alliances >= 4' },
+          ],
+        },
+        {
+          id: 'honneur',
+          label: "Duel d'honneur",
+          successText: 'Morholt ne peut plus refuser le duel.',
+          conditions: [
+            { type: 'story_variable', variableKey: 'honneur', operator: 'greater_or_equal', value: 6, label: 'honneur >= 6' },
+            { type: 'has_item', itemId: 'item_lame_de_cendre', label: 'Lame de cendre' },
+            { type: 'has_item', itemId: 'item_relique_saint_oran', label: 'Relique de Saint-Oran' },
+          ],
+        },
+        {
+          id: 'ombre',
+          label: "Voie de l'ombre",
+          successText: 'Les tentures noires deviennent une ouverture.',
+          conditions: [
+            { type: 'story_variable', variableKey: 'ombre', operator: 'greater_or_equal', value: 5, label: 'ombre >= 5' },
+            { type: 'has_item', itemId: 'item_passe_deserteur', label: 'Passe de deserteur' },
+            { type: 'has_item', itemId: 'item_sceau_de_pierre', label: 'Sceau de pierre' },
+          ],
+        },
+      ],
+    },
+    hero: {
+      id: 'hero-1',
+      name: 'Ariane',
+      health: 10,
+      maxHealth: 10,
+      mana: 5,
+      maxMana: 5,
+      skills: [{ id: 'force', name: 'Force', value: 3, manaCost: 0 }],
+      powers: [],
+    },
+  },
+  scenes: [{
+    id: 'approach',
+    name: 'Approche',
+    introText: 'La salle est proche.',
+    hotspots: [{
+      id: 'route-choice',
+      name: 'Route',
+      actionType: 'conversation',
+      x: 30,
+      y: 30,
+      width: 20,
+      height: 20,
+      conversation: {
+        startNodeId: 'node-route',
+        nodes: [{
+          id: 'node-route',
+          speaker: 'Route',
+          text: 'Choisis une direction.',
+          replies: [{
+            id: 'r_return_village',
+            label: 'Retourner au village',
+            actionType: 'scene',
+            targetSceneId: 'village',
+          }],
+        }],
+      },
+    }],
+    sceneObjects: [],
+  }, {
+    id: 'village',
+    name: 'Village',
+    introText: 'Le village attend.',
+    hotspots: [],
+    sceneObjects: [],
+  }, {
+    id: 'scene_28_salle_des_bannieres',
+    name: 'Salle des bannieres',
+    introText: 'Morholt attend.',
+    hotspots: [{
+      id: 'morholt',
+      name: 'Morholt',
+      actionType: 'conversation',
+      x: 45,
+      y: 45,
+      width: 20,
+      height: 20,
+      conversation: {
+        startNodeId: 'node-final',
+        nodes: [{
+          id: 'node-final',
+          speaker: 'Morholt',
+          text: 'Choisis ta voie.',
+          replies: [
+            {
+              id: 'r_s28_allies',
+              label: 'Appeler les allies',
+              showWhenLocked: true,
+              lockedLabel: 'Voie des alliances incomplete.',
+              conditionType: 'advanced',
+              advancedConditionMode: 'all',
+              advancedConditions: [
+                { type: 'has_item', itemId: 'item_sifflet_gardebois', label: 'Sifflet des garde-bois' },
+                { type: 'has_item', itemId: 'item_corne_des_prisonniers', label: 'Corne des prisonniers' },
+                { type: 'story_variable', variableKey: 'alliances', operator: 'greater_or_equal', value: 4, label: 'alliances >= 4' },
+              ],
+            },
+            {
+              id: 'r_s28_duel',
+              label: "Provoquer Morholt en duel d'honneur",
+              showWhenLocked: true,
+              lockedLabel: "Duel d'honneur incomplet.",
+              conditionType: 'advanced',
+              advancedConditionMode: 'all',
+              advancedConditions: [
+                { type: 'story_variable', variableKey: 'honneur', operator: 'greater_or_equal', value: 6, label: 'honneur >= 6' },
+                { type: 'has_item', itemId: 'item_lame_de_cendre', label: 'Lame de cendre' },
+                { type: 'has_item', itemId: 'item_relique_saint_oran', label: 'Relique de Saint-Oran' },
+              ],
+            },
+            {
+              id: 'r_s28_ombre',
+              label: "Frapper depuis l'ombre",
+              showWhenLocked: true,
+              lockedLabel: "Voie de l'ombre incomplete.",
+              conditionType: 'advanced',
+              advancedConditionMode: 'all',
+              advancedConditions: [
+                { type: 'story_variable', variableKey: 'ombre', operator: 'greater_or_equal', value: 5, label: 'ombre >= 5' },
+                { type: 'has_item', itemId: 'item_passe_deserteur', label: 'Passe de deserteur' },
+                { type: 'has_item', itemId: 'item_sceau_de_pierre', label: 'Sceau de pierre' },
+              ],
+            },
+          ],
+        }],
+      },
+    }],
+    sceneObjects: [],
+  }],
+  items: [
+    { id: 'item_sifflet_gardebois', name: 'Sifflet des garde-bois' },
+    { id: 'item_corne_des_prisonniers', name: 'Corne des prisonniers' },
+    { id: 'item_lame_de_cendre', name: 'Lame de cendre' },
+    { id: 'item_relique_saint_oran', name: 'Relique de Saint-Oran' },
+    { id: 'item_passe_deserteur', name: 'Passe de deserteur' },
+    { id: 'item_sceau_de_pierre', name: 'Sceau de pierre' },
+  ],
+  enigmas: [],
+  cinematics: [],
+  combinations: [],
+  assets: [],
+  storyVariables: [
+    { key: 'alliances', journalLabel: 'alliances' },
+    { key: 'honneur', journalLabel: 'honneur' },
+    { key: 'ombre', journalLabel: 'ombre' },
+  ],
+});
+
 const createElementStub = () => ({
   innerHTML: '',
   textContent: '',
@@ -228,6 +402,8 @@ const runStandalone = (project, random = () => 0) => {
     `${engineJs}
 globalThis.__standaloneTest = {
   state,
+  render,
+  goToScene,
   saveGame,
   loadGame,
   triggerHotspot,
@@ -239,10 +415,74 @@ globalThis.__standaloneTest = {
     context,
   );
 
-  return { runtime: context.__standaloneTest, storage };
+  return { runtime: context.__standaloneTest, storage, root };
 };
 
 describe('standalone hero adventure story e2e', () => {
+  it('uses neutral wording for standalone return buttons that target unvisited scenes', () => {
+    const { runtime, root } = runStandalone(makeHeroAdventureObjectiveProject());
+
+    runtime.triggerHotspot('route-choice');
+
+    expect(root.innerHTML).toContain('Aller au village');
+    expect(root.innerHTML).not.toContain('Retourner au village');
+
+    runtime.state.visitedSceneIds = ['approach', 'village'];
+    runtime.state.activeConversation = null;
+    runtime.triggerHotspot('route-choice');
+
+    expect(root.innerHTML).toContain('Retourner au village');
+  });
+
+  it('shows final objective routes in a drawer and keeps technical locks in conversation details', () => {
+    const { runtime, root } = runStandalone(makeHeroAdventureObjectiveProject());
+
+    runtime.state.objectiveDrawerOpen = true;
+    runtime.render(false);
+
+    expect(root.innerHTML).toContain('Objectif: arreter Morholt');
+    expect(root.innerHTML).toContain('Voie des alliances');
+    expect(root.innerHTML).toContain('Sifflet des garde-bois');
+    expect(root.innerHTML).toContain('Corne des prisonniers');
+    expect(root.innerHTML).toContain('alliances &gt;= 4');
+
+    runtime.state.objectiveDrawerOpen = false;
+    runtime.state.playSceneId = 'scene_28_salle_des_bannieres';
+    runtime.render(false);
+    runtime.triggerHotspot('morholt');
+
+    expect(root.innerHTML).not.toContain('adventure-objective-card');
+    expect(root.innerHTML).toContain('Voie des alliances incomplete.');
+    expect(root.innerHTML).toContain("Duel d'honneur incomplet.");
+    expect(root.innerHTML).toContain("Voie de l'ombre incomplete.");
+    expect(root.innerHTML).toContain('Sifflet des garde-bois');
+    expect(root.innerHTML).toContain('Corne des prisonniers');
+    expect(root.innerHTML).toContain('alliances &gt;= 4');
+    expect(root.innerHTML).toContain('honneur &gt;= 6');
+    expect(root.innerHTML).toContain('Lame de cendre');
+    expect(root.innerHTML).toContain('Relique de Saint-Oran');
+    expect(root.innerHTML).toContain('ombre &gt;= 5');
+    expect(root.innerHTML).toContain('Passe de deserteur');
+    expect(root.innerHTML).toContain('Sceau de pierre');
+  });
+
+  it('blocks standalone entry to the objective final scene until a route is ready', () => {
+    const { runtime } = runStandalone(makeHeroAdventureObjectiveProject());
+
+    expect(runtime.state.playSceneId).toBe('approach');
+    expect(runtime.goToScene('scene_28_salle_des_bannieres', 'La porte de Morholt s ouvre.')).toBe(false);
+    expect(runtime.state.playSceneId).toBe('approach');
+    expect(runtime.state.dialogue).toContain("Tu n'as pas encore de prise suffisante");
+    expect(runtime.state.dialogue).toContain('tiroir Objectif');
+    expect(runtime.state.dialogue).toContain('Relique de Saint-Oran');
+
+    runtime.state.inventory = ['item_lame_de_cendre', 'item_relique_saint_oran'];
+    runtime.state.storyVariables = { honneur: 6 };
+
+    expect(runtime.goToScene('scene_28_salle_des_bannieres', 'La porte de Morholt s ouvre.')).toBe(true);
+    expect(runtime.state.playSceneId).toBe('scene_28_salle_des_bannieres');
+  });
+
   it('plays a full exported story through skill check, items, save/load, victory and defeat', () => {
     const { runtime, storage } = runStandalone(
       makeHeroAdventureStoryProject(),

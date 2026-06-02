@@ -1404,6 +1404,7 @@ export default function Decor3DTab({
                 <MediaSourcePicker
                   className="button like full secondary-action decor3d-file-button"
                   accept="image/*"
+                  assetScope="decor3d-texture"
                   handleUpload={handleTextureUpload}
                   mediaLibrary={mediaLibrary}
                   onSelect={(data, name) => patchSelectedModel((model) => {

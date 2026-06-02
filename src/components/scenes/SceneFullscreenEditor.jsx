@@ -4,19 +4,20 @@ import {
   MiniMap,
 } from './SceneEditorChrome.jsx';
 import Anime2DPreview from '../Anime2DPreview.jsx';
-import NumberInput from '../forms/NumberInput.jsx';
 import MediaSourcePicker from '../MediaSourcePicker.jsx';
 import SceneCanvasQuickToolbar from './SceneCanvasQuickToolbar.jsx';
-import { SceneDrawerTriggers } from './SceneEditorDrawer.jsx';
+import { SceneCanvasDrawerButton } from './SceneEditorDrawer.jsx';
 import SceneObjectInspector, { SceneObjectBlockContent, getSceneObjectClickMode } from './SceneObjectInspector.jsx';
 import SceneVisualEffect, { getVisualEffectZoneZIndex } from '../SceneVisualEffect.jsx';
-import HotspotAssetsPanel from './HotspotAssetsPanel.jsx';
+import HotspotInspectorPanel from './HotspotInspectorPanel.jsx';
 import {
   getElementShapeStyle,
   getLayerZIndex,
   getSceneObjectStyle,
   gridOverlayStyle,
 } from './sceneEditorUtils.js';
+
+const FULLSCREEN_CANVAS_ASPECT_RATIO = 16 / 10;
 
 export default function SceneFullscreenEditor({
   selectedScene,
@@ -30,12 +31,12 @@ export default function SceneFullscreenEditor({
   project,
   fullscreenViewportRef,
   fullscreenCanvasRef,
+  fullscreenContentRef,
   selectActInFullscreen,
   selectSceneInFullscreen,
   getSceneDepth,
   editorToolbarProps,
   fullscreenZoom,
-  sceneAspectRatio = 1.6,
   isPanningFullscreen,
   beginFullscreenPan,
   moveFullscreenPan,
@@ -80,8 +81,14 @@ export default function SceneFullscreenEditor({
   sendLayerToEdge,
   previewScene,
   onCanvasContextMenu,
+  onCanvasBackgroundClick,
   drawerMode,
   setDrawerMode,
+  conversationEditorOpen = false,
+  setConversationEditorOpen,
+  addConversationQuestion,
+  isHeroAdventureProject = false,
+  heroSkills = [],
 }) {
   const getLinkedItem = (itemId) => project.items?.find((item) => item.id === itemId) || null;
   const getSceneObjectDisplayImage = (obj) => obj?.imageData || getLinkedItem(obj?.linkedItemId)?.imageData || '';
@@ -89,11 +96,27 @@ export default function SceneFullscreenEditor({
   const canUseQuickLogic = !isBeginnerMode && project?.creationMode !== 'intermediate';
   const isSceneObjectSelectedOnCanvas = (obj) => obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id);
   const isHotspotSelectedOnCanvas = (spot) => spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id);
+  const sceneImageAspectRatio = Number(selectedScene?.backgroundAspectRatio) > 0
+    ? Number(selectedScene.backgroundAspectRatio)
+    : FULLSCREEN_CANVAS_ASPECT_RATIO;
+  const coverScaleX = sceneImageAspectRatio > FULLSCREEN_CANVAS_ASPECT_RATIO
+    ? sceneImageAspectRatio / FULLSCREEN_CANVAS_ASPECT_RATIO
+    : 1;
+  const coverScaleY = sceneImageAspectRatio < FULLSCREEN_CANVAS_ASPECT_RATIO
+    ? FULLSCREEN_CANVAS_ASPECT_RATIO / sceneImageAspectRatio
+    : 1;
+  const fullscreenContentStyle = {
+    position: 'absolute',
+    left: `${-(coverScaleX - 1) * 50}%`,
+    top: `${-(coverScaleY - 1) * 50}%`,
+    width: `${coverScaleX * 100}%`,
+    height: `${coverScaleY * 100}%`,
+  };
 
   return (
                 <div style={{ position: 'fixed', inset: 0, zIndex: 20000, background: '#020617', padding: 12, overflow: 'hidden' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(320px,360px)', gap: 12, height: '100%', alignItems: 'stretch' }}>
-                    <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(320px,360px)', gap: 12, height: '100%', minHeight: 0, alignItems: 'stretch' }}>
+                    <div style={{ minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                       <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flex: '0 0 auto', minWidth: 0 }}>
                         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', minWidth: 0 }}>
                           <select
@@ -119,7 +142,6 @@ export default function SceneFullscreenEditor({
                               ))}
                           </select>
                           <EditorToolbarMenus {...editorToolbarProps} fullscreen />
-                          <SceneDrawerTriggers drawerMode={drawerMode} setDrawerMode={setDrawerMode} />
                         </div>
                         <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'nowrap', minWidth: 0 }}>
                           <span className="status-badge soft" style={{ minWidth: 58, justifyContent: 'center', flex: '0 0 auto' }}>{Math.round(fullscreenZoom * 100)}%</span>
@@ -130,15 +152,18 @@ export default function SceneFullscreenEditor({
                         className="editor-canvas editor-canvas-pro fullscreen-scene-canvas"
                         style={{
                           width: '100%',
-                          height: selectedHotspot ? 'calc(100vh - 260px)' : 'calc(100vh - 120px)',
+                          height: 'auto',
+                          minHeight: 0,
                           maxWidth: '100%',
                           margin: 0,
                           aspectRatio: 'auto',
-                          flex: '1 1 auto',
+                          flex: '1 1 0',
                           background: '#020617',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
+                          containerType: 'size',
+                          overflow: 'hidden',
                           cursor: isPanningFullscreen ? 'grabbing' : 'grab',
                         }}
                         onMouseDown={beginFullscreenPan}
@@ -146,18 +171,21 @@ export default function SceneFullscreenEditor({
                         onMouseUp={stopFullscreenPan}
                         onMouseLeave={stopFullscreenPan}
                         onWheel={handleFullscreenWheel}
+                        onClick={onCanvasBackgroundClick}
                       >
                         <div
                           ref={fullscreenCanvasRef}
                           className="fullscreen-scene-stage"
                           style={{
                             position: 'relative',
-                            width: `min(100%, calc((100vh - ${selectedHotspot ? 260 : 120}px) * ${sceneAspectRatio}))`,
+                            width: `min(100cqw, calc(100cqh * ${FULLSCREEN_CANVAS_ASPECT_RATIO}))`,
                             height: 'auto',
-                            aspectRatio: sceneAspectRatio,
+                            maxHeight: '100%',
+                            aspectRatio: '16 / 10',
                             flex: '0 0 auto',
                             overflow: 'hidden',
                             borderRadius: 14,
+                            containerType: 'size',
                             transform: `translate(${fullscreenPan.x}px, ${fullscreenPan.y}px) scale(${fullscreenZoom})`,
                             transformOrigin: 'center center',
                             transition: isDragLocked || isPanningFullscreen ? 'none' : 'transform .12s ease',
@@ -172,94 +200,98 @@ export default function SceneFullscreenEditor({
                           onPointerCancel={stopDragging}
                           onContextMenu={(event) => onCanvasContextMenu?.(event, 'canvas', '', 'fullscreen')}
                         >
-                          {selectedScene.backgroundData ? (
-                            <img
-                              src={selectedScene.backgroundData}
-                              alt="fond"
-                              draggable={false}
-                              style={{
-                                width: '100%',
-                                height: '100%',
-                                objectFit: 'cover',
-                                objectPosition: 'center',
-                                background: '#020617',
-                                userSelect: 'none',
-                              }}
-                            />
-                          ) : <div className="placeholder">Ajoute une image de scène</div>}
-                          <SceneVisualEffect effect={selectedScene.visualEffect} intensity={selectedScene.visualEffectIntensity} />
-                          {(selectedScene.visualEffectZones || []).filter((zone) => !zone.isHidden || zone.id === selectedVisualEffectZoneId).map((zone) => (
+                          <SceneCanvasDrawerButton drawerMode={drawerMode} setDrawerMode={setDrawerMode} />
+                          <div ref={fullscreenContentRef} className="fullscreen-scene-content" style={fullscreenContentStyle}>
+                            {selectedScene.backgroundData ? (
+                              <img
+                                src={selectedScene.backgroundData}
+                                alt="fond"
+                                draggable={false}
+                                style={{
+                                  width: '100%',
+                                  height: '100%',
+                                  objectFit: 'fill',
+                                  objectPosition: 'center',
+                                  background: '#020617',
+                                  userSelect: 'none',
+                                }}
+                              />
+                            ) : <div className="placeholder">Ajoute une image de scène</div>}
+                            <SceneVisualEffect effect={selectedScene.visualEffect} intensity={selectedScene.visualEffectIntensity} />
+                            {(selectedScene.visualEffectZones || []).filter((zone) => !zone.isHidden || zone.id === selectedVisualEffectZoneId).map((zone) => (
+                              <button
+                                key={zone.id}
+                                type="button"
+                                className={`editor-hotspot editor-visual-zone ${getShapeClassName?.(zone) || ''} ${zone.isHidden ? 'editor-hidden-on-canvas' : ''} ${zone.id === selectedVisualEffectZoneId ? 'selected' : ''} ${zone.id === draggingVisualEffectZoneId ? 'dragging' : ''}`}
+                                style={{ left: `${zone.x}%`, top: `${zone.y}%`, width: `${zone.width}%`, height: `${zone.height}%`, zIndex: getVisualEffectZoneZIndex(zone.layer), ...getElementShapeStyle(zone) }}
+                                onPointerDown={(event) => beginVisualEffectZoneDrag(event, zone.id, 'fullscreen')}
+                                onClick={() => selectVisualEffectZone(zone.id)}
+                              >
+                                <SceneVisualEffect effect={zone.effect} intensity={zone.intensity} />
+                                <span>{zone.name}</span>
+                                {renderShapeOutline?.(zone, zone.id === selectedVisualEffectZoneId)}
+                                {renderResizeHandles?.('visualEffectZone', zone.id, zone.id === selectedVisualEffectZoneId, 'fullscreen')}
+                                {renderShapePointHandles?.('visualEffectZone', zone.id, zone.id === selectedVisualEffectZoneId, 'fullscreen')}
+                              </button>
+                            ))}
+                            {snapGridEnabled ? <div style={gridOverlayStyle} /> : null}
+                          {(selectedScene.sceneObjects || []).filter((obj) => !obj.isHidden || isSceneObjectSelectedOnCanvas(obj)).map((obj) => (
                             <button
-                              key={zone.id}
+                              key={obj.id}
                               type="button"
-                              className={`editor-hotspot editor-visual-zone ${getShapeClassName?.(zone) || ''} ${zone.isHidden ? 'editor-hidden-on-canvas' : ''} ${zone.id === selectedVisualEffectZoneId ? 'selected' : ''} ${zone.id === draggingVisualEffectZoneId ? 'dragging' : ''}`}
-                              style={{ left: `${zone.x}%`, top: `${zone.y}%`, width: `${zone.width}%`, height: `${zone.height}%`, zIndex: getVisualEffectZoneZIndex(zone.layer), ...getElementShapeStyle(zone) }}
-                              onPointerDown={(event) => beginVisualEffectZoneDrag(event, zone.id, 'fullscreen')}
-                              onClick={() => selectVisualEffectZone(zone.id)}
+                              className={`editor-hotspot editor-scene-object ${getShapeClassName?.(obj) || ''} ${obj.isInvisible ? 'editor-scene-object-invisible' : ''} ${obj.isHidden ? 'editor-hidden-on-canvas' : ''} ${isSceneObjectSelectedOnCanvas(obj) ? 'selected' : ''} ${obj.id === draggingSceneObjectId ? 'dragging' : ''}`}
+                              style={getSceneObjectStyle(obj)}
+                              onPointerDown={(event) => beginObjectDrag(event, obj.id, 'fullscreen')}
+                              onContextMenu={(event) => onCanvasContextMenu?.(event, 'sceneObject', obj.id, 'fullscreen')}
+                              onClick={(event) => selectSceneObject(obj.id, event)}
                             >
-                              <SceneVisualEffect effect={zone.effect} intensity={zone.intensity} />
-                              <span>{zone.name}</span>
-                              {renderShapeOutline?.(zone, zone.id === selectedVisualEffectZoneId)}
-                              {renderResizeHandles?.('visualEffectZone', zone.id, zone.id === selectedVisualEffectZoneId, 'fullscreen')}
-                              {renderShapePointHandles?.('visualEffectZone', zone.id, zone.id === selectedVisualEffectZoneId, 'fullscreen')}
+                              {obj.anime2dSpec && !obj.isInvisible ? (
+                                <Anime2DPreview spec={obj.anime2dSpec} />
+                              ) : getSceneObjectDisplayImage(obj) && !obj.isInvisible ? (
+                                <SceneObjectBlockContent object={obj} displayImage={getSceneObjectDisplayImage(obj)} linkedItem={getLinkedItem(obj.linkedItemId)} />
+                              ) : !obj.isInvisible ? (
+                                <SceneObjectBlockContent object={obj} displayImage="" linkedItem={getLinkedItem(obj.linkedItemId)} />
+                              ) : <span>{`${obj.name || 'Objet'} (invisible)`}</span>}
+                              {renderShapeOutline?.(obj, isSceneObjectSelectedOnCanvas(obj))}
+                              {renderResizeHandles?.('sceneObject', obj.id, isSceneObjectSelectedOnCanvas(obj), 'fullscreen')}
+                              {renderShapePointHandles?.('sceneObject', obj.id, isSceneObjectSelectedOnCanvas(obj), 'fullscreen')}
                             </button>
                           ))}
-                          {snapGridEnabled ? <div style={gridOverlayStyle} /> : null}
-                        {(selectedScene.sceneObjects || []).filter((obj) => !obj.isHidden || isSceneObjectSelectedOnCanvas(obj)).map((obj) => (
-                          <button
-                            key={obj.id}
-                            type="button"
-                            className={`editor-hotspot editor-scene-object ${getShapeClassName?.(obj) || ''} ${obj.isInvisible ? 'editor-scene-object-invisible' : ''} ${obj.isHidden ? 'editor-hidden-on-canvas' : ''} ${isSceneObjectSelectedOnCanvas(obj) ? 'selected' : ''} ${obj.id === draggingSceneObjectId ? 'dragging' : ''}`}
-                            style={getSceneObjectStyle(obj)}
-                            onPointerDown={(event) => beginObjectDrag(event, obj.id, 'fullscreen')}
-                            onContextMenu={(event) => onCanvasContextMenu?.(event, 'sceneObject', obj.id, 'fullscreen')}
-                            onClick={(event) => selectSceneObject(obj.id, event)}
-                          >
-                            {obj.anime2dSpec && !obj.isInvisible ? (
-                              <Anime2DPreview spec={obj.anime2dSpec} />
-                            ) : getSceneObjectDisplayImage(obj) && !obj.isInvisible ? (
-                              <SceneObjectBlockContent object={obj} displayImage={getSceneObjectDisplayImage(obj)} linkedItem={getLinkedItem(obj.linkedItemId)} />
-                            ) : !obj.isInvisible ? (
-                              <SceneObjectBlockContent object={obj} displayImage="" linkedItem={getLinkedItem(obj.linkedItemId)} />
-                            ) : <span>{`${obj.name || 'Objet'} (invisible)`}</span>}
-                            {renderShapeOutline?.(obj, isSceneObjectSelectedOnCanvas(obj))}
-                            {renderResizeHandles?.('sceneObject', obj.id, isSceneObjectSelectedOnCanvas(obj), 'fullscreen')}
-                            {renderShapePointHandles?.('sceneObject', obj.id, isSceneObjectSelectedOnCanvas(obj), 'fullscreen')}
-                          </button>
-                        ))}
-                        {selectedScene.hotspots.filter((spot) => !spot.isHidden || isHotspotSelectedOnCanvas(spot)).map((spot) => (
-                          <button
-                            key={spot.id}
-                            type="button"
-                            className={`editor-hotspot ${getShapeClassName?.(spot) || ''} ${spot.isHidden ? 'editor-hidden-on-canvas' : ''} ${isHotspotSelectedOnCanvas(spot) ? 'selected' : ''} ${spot.id === draggingHotspotId ? 'dragging' : ''}`}
-                            style={{ left: `${spot.x}%`, top: `${spot.y}%`, width: `${spot.width}%`, height: `${spot.height}%`, zIndex: getLayerZIndex(spot, 'hotspot'), ...getElementShapeStyle(spot) }}
-                            onPointerDown={(event) => beginDrag(event, spot.id, 'fullscreen')}
-                            onContextMenu={(event) => onCanvasContextMenu?.(event, 'hotspot', spot.id, 'fullscreen')}
-                            onClick={(event) => selectHotspot(spot.id, event)}
-                          >
-                            <span>{spot.name}</span>
-                            {renderShapeOutline?.(spot, isHotspotSelectedOnCanvas(spot))}
-                            {renderResizeHandles?.('hotspot', spot.id, isHotspotSelectedOnCanvas(spot), 'fullscreen')}
-                            {renderShapePointHandles?.('hotspot', spot.id, isHotspotSelectedOnCanvas(spot), 'fullscreen')}
-                          </button>
-                        ))}
-                        <SceneCanvasQuickToolbar
-                          selectedScene={selectedScene}
-                          selectedSceneId={selectedSceneId}
-                          selectedHotspotId={selectedHotspotId}
-                          selectedHotspotIds={selectedHotspotIds}
-                          selectedSceneObjectId={selectedSceneObjectId}
-                          selectedSceneObjectIds={selectedSceneObjectIds}
-                          duplicateSelectedEditorItems={duplicateSelectedEditorItems}
-                          deleteSelectedEditorItems={deleteSelectedEditorItems}
-                          patchLayerItem={patchLayerItem}
-                          sendLayerToEdge={sendLayerToEdge}
-                          previewScene={previewScene}
-                          canUseQuickLogic={canUseQuickLogic}
-                          openQuickLogicForTarget={openQuickLogicForTarget}
-                          isBeginnerMode={isBeginnerMode}
-                          onBeforePreview={editorToolbarProps?.closeEditorFullscreen}
-                        />
+                          {selectedScene.hotspots.filter((spot) => !spot.isHidden || isHotspotSelectedOnCanvas(spot)).map((spot) => (
+                            <button
+                              key={spot.id}
+                              type="button"
+                              className={`editor-hotspot ${getShapeClassName?.(spot) || ''} ${spot.isHidden ? 'editor-hidden-on-canvas' : ''} ${isHotspotSelectedOnCanvas(spot) ? 'selected' : ''} ${spot.id === draggingHotspotId ? 'dragging' : ''}`}
+                              style={{ left: `${spot.x}%`, top: `${spot.y}%`, width: `${spot.width}%`, height: `${spot.height}%`, zIndex: getLayerZIndex(spot, 'hotspot'), ...getElementShapeStyle(spot) }}
+                              onPointerDown={(event) => beginDrag(event, spot.id, 'fullscreen')}
+                              onContextMenu={(event) => onCanvasContextMenu?.(event, 'hotspot', spot.id, 'fullscreen')}
+                              onClick={(event) => selectHotspot(spot.id, event)}
+                            >
+                              <span>{spot.name}</span>
+                              {renderShapeOutline?.(spot, isHotspotSelectedOnCanvas(spot))}
+                              {renderResizeHandles?.('hotspot', spot.id, isHotspotSelectedOnCanvas(spot), 'fullscreen')}
+                              {renderShapePointHandles?.('hotspot', spot.id, isHotspotSelectedOnCanvas(spot), 'fullscreen')}
+                            </button>
+                          ))}
+                          <SceneCanvasQuickToolbar
+                            selectedScene={selectedScene}
+                            selectedSceneId={selectedSceneId}
+                            selectedHotspotId={selectedHotspotId}
+                            selectedHotspotIds={selectedHotspotIds}
+                            selectedSceneObjectId={selectedSceneObjectId}
+                            selectedSceneObjectIds={selectedSceneObjectIds}
+                            duplicateSelectedEditorItems={duplicateSelectedEditorItems}
+                            deleteSelectedEditorItems={deleteSelectedEditorItems}
+                            patchLayerItem={patchLayerItem}
+                            sendLayerToEdge={sendLayerToEdge}
+                            previewScene={previewScene}
+                            canUseQuickLogic={canUseQuickLogic}
+                            openQuickLogicForTarget={openQuickLogicForTarget}
+                            isBeginnerMode={isBeginnerMode}
+                            projectMode={project?.creationMode}
+                            onBeforePreview={editorToolbarProps?.closeEditorFullscreen}
+                          />
+                          </div>
                         </div>
                         <MiniMap {...miniMapProps} />
                       </div>
@@ -286,6 +318,7 @@ export default function SceneFullscreenEditor({
                           <MediaSourcePicker
                             className="button like full secondary-action"
                             accept="image/*"
+                            assetScope="object-image"
                             handleUpload={handleUpload}
                             mediaLibrary={mediaLibrary}
                             onSelect={(data, name) => patchProject((draft) => {
@@ -325,28 +358,23 @@ export default function SceneFullscreenEditor({
                           onOpenLogic={() => openQuickLogicForTarget?.('sceneObject', selectedSceneObjectId)}
                         />
                       ) : selectedHotspot ? (
-                        <>
-                          <HelpLabel help="Nom de la zone d’action dans l’éditeur. Choisis un nom qui décrit l’intention, par exemple “Porte verrouillée”.">Nom</HelpLabel>
-                          <input value={selectedHotspot.name} onChange={(e) => patchProject((draft) => {
-                            const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.name = e.target.value;
-                          })} />
-                          <div className="grid-two small-gap">
-                            <div><HelpLabel help="Position horizontale du centre de la zone, en pourcentage de la largeur de l’image.">X</HelpLabel><NumberInput value={selectedHotspot.x} onValueChange={(nextValue) => patchProject((draft) => { const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.x = nextValue; })} /></div>
-                            <div><HelpLabel help="Position verticale du centre de la zone, en pourcentage de la hauteur de l’image.">Y</HelpLabel><NumberInput value={selectedHotspot.y} onValueChange={(nextValue) => patchProject((draft) => { const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.y = nextValue; })} /></div>
-                            <div><HelpLabel help="Largeur de la zone cliquable. Augmente-la si le joueur risque de manquer la cible.">Largeur</HelpLabel><NumberInput value={selectedHotspot.width} onValueChange={(nextValue) => patchProject((draft) => { const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.width = nextValue; })} /></div>
-                            <div><HelpLabel help="Hauteur de la zone cliquable. Une zone trop petite peut être difficile à trouvér sur mobile.">Hauteur</HelpLabel><NumberInput value={selectedHotspot.height} onValueChange={(nextValue) => patchProject((draft) => { const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.height = nextValue; })} /></div>
-                          </div>
-                          {renderShapeControls?.('hotspot', selectedHotspotId)}
-                          <HotspotAssetsPanel
-                            selectedHotspot={selectedHotspot}
-                            selectedSceneId={selectedSceneId}
-                            selectedHotspotId={selectedHotspotId}
-                            patchProject={patchProject}
-                            handleUpload={handleUpload}
-                            mediaLibrary={mediaLibrary}
-                            className="hotspot-assets-inspector"
-                          />
-                        </>
+                        <HotspotInspectorPanel
+                          selectedHotspot={selectedHotspot}
+                          selectedHotspotId={selectedHotspotId}
+                          selectedSceneId={selectedSceneId}
+                          project={project}
+                          patchProject={patchProject}
+                          renderShapeControls={renderShapeControls}
+                          isBeginnerMode={isBeginnerMode}
+                          conversationEditorOpen={conversationEditorOpen}
+                          setConversationEditorOpen={setConversationEditorOpen}
+                          addConversationQuestion={addConversationQuestion}
+                          getSceneLabel={getSceneLabel}
+                          mediaLibrary={mediaLibrary}
+                          handleUpload={handleUpload}
+                          isHeroAdventureProject={isHeroAdventureProject}
+                          heroSkills={heroSkills}
+                        />
                       ) : (
                         <div className="placeholder small">Sélectionne une zone, un objet visible ou un objet d’inventaire.</div>
                       )}

@@ -18,6 +18,46 @@
 
 .admin-stat-card strong{font-size:34px;line-height:1;color:#fff}
 
+.admin-overview-stats .admin-stat-card{min-height:126px}
+
+.admin-statistics-panel{display:grid;gap:16px}
+
+.admin-statistics-layout{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(280px,.75fr);gap:16px;align-items:start}
+
+.admin-stat-section{display:grid;gap:12px}
+
+.admin-metric-bars{display:grid;gap:12px}
+
+.admin-metric-row{display:grid;gap:7px}
+
+.admin-metric-row>div{display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--muted);font-size:13px;font-weight:800}
+
+.admin-metric-row strong{color:#fff;font-size:16px;font-variant-numeric:tabular-nums}
+
+.admin-metric-bar{display:block;overflow:hidden;height:9px;border-radius:999px;background:#0b1222;border:1px solid rgba(148,163,184,.16)}
+
+.admin-metric-bar span{display:block;height:100%;width:var(--metric-ratio,0%);border-radius:inherit;background:linear-gradient(90deg,#38bdf8,#22c55e)}
+
+.admin-stat-pill-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+
+.admin-stat-pill-grid.wide{grid-template-columns:repeat(3,minmax(0,1fr))}
+
+.admin-stat-pill-grid span{display:grid;gap:3px;min-width:0;padding:11px;border:1px solid var(--line);border-radius:var(--radius-sm);background:#08101e9e;color:var(--muted);font-size:12px;font-weight:800}
+
+.admin-stat-pill-grid strong{color:#fff;font-size:21px;font-variant-numeric:tabular-nums}
+
+.admin-recent-login-list{display:grid;gap:10px}
+
+.admin-recent-login-row{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(150px,auto);align-items:center;gap:12px;padding:12px;border:1px solid var(--line);border-radius:var(--radius-md);background:#0d1729b8}
+
+.admin-recent-login-row div{display:grid;gap:3px;min-width:0}
+
+.admin-recent-login-row strong,.admin-recent-login-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.admin-recent-login-row div>span{color:var(--muted);font-size:12px}
+
+.admin-recent-login-row time{color:#dbeafe;font-size:13px;font-weight:800;text-align:right}
+
 .admin-table,.admin-public-list{display:grid;gap:10px}
 
 .admin-table-row{display:grid;grid-template-columns:minmax(180px,1.4fr) minmax(90px,.6fr) minmax(150px,.8fr) minmax(90px,auto);align-items:center;gap:12px;padding:12px;border:1px solid var(--line);border-radius:var(--radius-lg);background:#0d1729b8}
@@ -93,3 +133,14 @@
 .admin-pack-download-chip strong{overflow-wrap:anywhere;color:#fff}
 
 .admin-pack-download-chip span{color:#a7f3d0;font-size:12px}
+
+@media (max-width:1100px){
+  .admin-stats-grid{grid-template-columns:repeat(3,minmax(130px,1fr))}
+  .admin-statistics-layout{grid-template-columns:1fr}
+}
+
+@media (max-width:760px){
+  .admin-stats-grid,.admin-stat-pill-grid,.admin-stat-pill-grid.wide{grid-template-columns:1fr}
+  .admin-recent-login-row{grid-template-columns:1fr;align-items:start}
+  .admin-recent-login-row time{text-align:left}
+}

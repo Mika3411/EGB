@@ -278,6 +278,7 @@ export default function CinematicsTab({
                     <MediaSourcePicker
                       className="button like full"
                       accept="image/*"
+                      assetScope="cinematic-image"
                       handleUpload={handleUpload}
                       mediaLibrary={mediaLibrary}
                       onSelect={(data, name) => patchProject((draft) => {
@@ -302,6 +303,7 @@ export default function CinematicsTab({
                     <MediaSourcePicker
                       className="button like full"
                       accept="audio/*"
+                      assetScope="cinematic-audio"
                       handleUpload={handleUpload}
                       mediaLibrary={mediaLibrary}
                       onSelect={(data, name) => patchProject((draft) => {

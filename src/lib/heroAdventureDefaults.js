@@ -358,6 +358,7 @@ export const normalizeHeroAdventure = (project = {}, options = {}) => {
     rules: selectedRules,
     selectedHeroId: selectedHero.id,
     heroes,
+    objectiveChecklist: raw.objectiveChecklist && typeof raw.objectiveChecklist === 'object' ? raw.objectiveChecklist : null,
     combat: normalizeHeroCombatSettings(rawCombat, options),
   };
 };

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { DoorOpen, Dices, Package, Shield, Sparkles, Swords } from 'lucide-react';
+import { ArrowRight, DoorOpen, Dices, Package, Shield, Sparkles, Swords } from 'lucide-react';
 import { getHeroForceValue, getStatusEffectLabel } from '../../lib/combatEngine.js';
 import CombatD20Canvas from './PreviewCombatD20Canvas.jsx';
 
@@ -305,6 +305,7 @@ export default function PreviewCombatOverlay({
   const isEnded = ['victory', 'defeat'].includes(activeHeroCombat.status);
   const isEnemyTurn = activeHeroCombat.phase === 'enemy';
   const isSurvivalTurn = activeHeroCombat.phase === 'survival';
+  const combatEndActionLabel = activeHeroCombat.pendingSceneId ? 'Continuer' : 'Revenir à la scène';
   const enemyCunning = Math.max(1, Number(getCombatEntryValue(entry, 'combatEnemyCunning', combatSettings.enemyCunning || 10)) || 10);
   const attackPowers = heroPowers.filter((power) => power.statusType !== 'shield');
   const defensePowers = heroPowers.filter((power) => power.statusType === 'shield');
@@ -481,6 +482,25 @@ export default function PreviewCombatOverlay({
     || isCombatEffectLocked
     || (isSurvivalTurn ? !attemptSurvivalHeroCombat : isEnemyTurn ? !rollActiveEnemyCombat : !attackActiveHeroCombat)
     || (!isEnemyTurn && !isSurvivalTurn && (selectedHeroCombatPowerMissing || selectedHeroCombatManaUnavailable));
+  const combatActionDisabledReason = !combatActionDisabled
+    ? ''
+    : isEnded
+    ? 'Combat terminé.'
+    : isCombatEffectLocked
+    ? 'Impact en cours.'
+    : (!isSurvivalTurn && isHeroDefeated)
+    ? 'Le héros est à 0 PV.'
+    : isSurvivalTurn && !attemptSurvivalHeroCombat
+    ? 'Action de survie indisponible.'
+    : isEnemyTurn && !rollActiveEnemyCombat
+    ? 'Riposte indisponible.'
+    : !isEnemyTurn && !isSurvivalTurn && !attackActiveHeroCombat
+    ? 'Action indisponible pendant ce tour.'
+    : selectedHeroCombatPowerMissing
+    ? 'Pouvoir indisponible.'
+    : selectedHeroCombatManaUnavailable
+    ? `Mana insuffisante: ${heroMana}/${selectedHeroCombatManaCost}.`
+    : 'Action indisponible.';
   const clearHeroCombatChargeFrame = () => {
     if (heroCombatChargeFrameRef.current) {
       window.cancelAnimationFrame(heroCombatChargeFrameRef.current);
@@ -610,8 +630,9 @@ export default function PreviewCombatOverlay({
         <span>{isSurvivalTurn ? 'Survie' : isEnemyTurn ? 'Tour ennemi' : `Tour ${activeHeroCombat.round || 1}`}</span>
         <strong>{enemyLabel}</strong>
         {isEnded ? (
-          <button type="button" className="secondary-action compact" onClick={handleCombatExit}>
-            {activeHeroCombat.pendingSceneId ? 'Continuer' : 'Revenir a la scene'}
+          <button type="button" className="hero-combat-end-button hero-combat-end-button--top" onClick={handleCombatExit}>
+            <span>{combatEndActionLabel}</span>
+            <ArrowRight size={16} aria-hidden="true" />
           </button>
         ) : null}
       </div>
@@ -641,6 +662,7 @@ export default function PreviewCombatOverlay({
               onKeyUp={handleHeroCombatKeyUp}
               onClick={(event) => event.preventDefault()}
               disabled={combatActionDisabled || heroCombatRolling}
+              title={combatActionDisabledReason || undefined}
             >
               <span className={`hero-combat-die hero-d20 hero-die-face hero-die-face--${heroDiceSkin} ${heroCombatCharging ? 'is-charging' : ''} ${heroCombatRolling ? 'is-rolling' : ''} ${showCombatRollResult ? 'has-result' : ''}`}>
                 <CombatD20Canvas
@@ -738,7 +760,7 @@ export default function PreviewCombatOverlay({
               <button
                 type="button"
                 className="hero-combat-action-button"
-                onClick={() => firstUsableCombatItem && openInventoryItem?.(firstUsableCombatItem.id)}
+                onClick={() => firstUsableCombatItem && openInventoryItem?.(firstUsableCombatItem.id, { useHeroItem: true })}
                 disabled={!canChooseHeroAction || heroCombatRolling || heroCombatCharging || !firstUsableCombatItem}
                 title={!firstUsableCombatItem ? 'Aucun objet utile maintenant' : `Utiliser ${firstUsableCombatItem.name || 'objet'}`}
               >
@@ -793,22 +815,38 @@ export default function PreviewCombatOverlay({
             ) : null}
           </div>
         ) : null}
-        <div className="inline-actions">
-          <button
-            type="button"
-            className={combatPrimaryActionClass}
-            onPointerDown={showDice ? handleHeroCombatPressStart : undefined}
-            onPointerUp={showDice ? handleHeroCombatPressEnd : undefined}
-            onPointerCancel={showDice ? handleHeroCombatPressCancel : undefined}
-            onKeyDown={showDice ? handleHeroCombatKeyDown : undefined}
-            onKeyUp={showDice ? handleHeroCombatKeyUp : undefined}
-            onClick={showDice ? (event) => event.preventDefault() : () => combatActionHandler()}
-            disabled={combatActionDisabled || heroCombatRolling}
-          >
-            <CombatPrimaryIcon size={18} aria-hidden="true" />
-            <span>{combatPrimaryActionLabel}</span>
-          </button>
-        </div>
+        {combatActionDisabledReason && !heroCombatRolling && !isEnded ? (
+          <p className="hero-combat-action-disabled-reason" role="status">
+            {combatActionDisabledReason}
+          </p>
+        ) : null}
+        {isEnded ? (
+          <div className="hero-combat-end-panel">
+            <span>Suite de l'aventure</span>
+            <button type="button" className="hero-combat-end-button hero-combat-end-button--primary" onClick={handleCombatExit}>
+              <span>{combatEndActionLabel}</span>
+              <ArrowRight size={20} aria-hidden="true" />
+            </button>
+          </div>
+        ) : (
+          <div className="inline-actions">
+            <button
+              type="button"
+              className={combatPrimaryActionClass}
+              onPointerDown={showDice ? handleHeroCombatPressStart : undefined}
+              onPointerUp={showDice ? handleHeroCombatPressEnd : undefined}
+              onPointerCancel={showDice ? handleHeroCombatPressCancel : undefined}
+              onKeyDown={showDice ? handleHeroCombatKeyDown : undefined}
+              onKeyUp={showDice ? handleHeroCombatKeyUp : undefined}
+              onClick={showDice ? (event) => event.preventDefault() : () => combatActionHandler()}
+              disabled={combatActionDisabled || heroCombatRolling}
+              title={combatActionDisabledReason || undefined}
+            >
+              <CombatPrimaryIcon size={18} aria-hidden="true" />
+              <span>{combatPrimaryActionLabel}</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import { applyRecovery } from '../../lib/combatEngine.js';
 import {
-  evaluateCondition,
   evaluateReplyCondition,
+  getReplyConditionLockReason,
 } from '../../lib/conditionEngine.js';
 
 export function createPreviewConversationActions({
@@ -113,40 +113,6 @@ export function createPreviewConversationActions({
     });
   };
 
-  const isSingleConversationConditionAvailable = (condition = {}) => {
-    return evaluateCondition(condition, getPreviewConditionContext());
-  };
-
-  const getSingleConversationConditionReason = (condition = {}) => {
-    const conditionType = condition.type || 'none';
-    if (conditionType === 'none' || isSingleConversationConditionAvailable(condition)) return '';
-    if (conditionType === 'has_item') {
-      const item = (getItemById?.(condition.itemId) || project.items.find((entry) => entry.id === condition.itemId));
-      return `Nécessite: ${item?.name || 'objet manquant'}`;
-    }
-    if (conditionType === 'visited_scene') return `Nécessite une scène visitée: ${project.scenes.find((scene) => scene.id === condition.sceneId)?.name || 'scène manquante'}`;
-    if (conditionType === 'completed_hotspot') {
-      const hotspot = project.scenes.flatMap((scene) => scene.hotspots || []).find((entry) => entry.id === condition.hotspotId);
-      return `Nécessite une action faite: ${hotspot?.name || 'zone manquante'}`;
-    }
-    if (conditionType === 'solved_enigma') return `Nécessite une énigme résolue: ${(project.enigmas || []).find((entry) => entry.id === condition.enigmaId)?.name || 'énigme manquante'}`;
-    if (conditionType === 'chose_reply') return 'Nécessite un choix precedent';
-    if (conditionType === 'story_variable') {
-      const operatorLabels = {
-        equals: '=',
-        not_equals: '!=',
-        greater_or_equal: '>=',
-        less_or_equal: '<=',
-        truthy: 'vrai',
-        falsy: 'faux',
-      };
-      const operator = condition.operator || 'equals';
-      const suffix = ['truthy', 'falsy'].includes(operator) ? operatorLabels[operator] : `${operatorLabels[operator] || '='} ${condition.value ?? ''}`;
-      return `Nécessite: ${condition.variableKey || 'variable'} ${suffix}`;
-    }
-    return 'Condition non remplie';
-  };
-
   const isConversationReplyAvailable = (reply = {}) => {
     if (reply.id && hiddenConversationReplyIds.includes(reply.id)) return false;
     if (reply.hideAfterChosen && reply.id && chosenConversationReplyIds.includes(reply.id)) return false;
@@ -157,31 +123,12 @@ export function createPreviewConversationActions({
     if (isConversationReplyAvailable(reply)) return '';
     if (reply.id && hiddenConversationReplyIds.includes(reply.id)) return 'Choix masque par une autre réponse';
     if (reply.hideAfterChosen && reply.id && chosenConversationReplyIds.includes(reply.id)) return 'Choix déjà utilisé';
-    if (reply.lockedLabel) return reply.lockedLabel;
-    const conditionType = reply.conditionType || 'none';
-    if (conditionType === 'has_item') return getSingleConversationConditionReason({ type: 'has_item', itemId: reply.conditionItemId });
-    if (conditionType === 'visited_scene') return getSingleConversationConditionReason({ type: 'visited_scene', sceneId: reply.conditionSceneId });
-    if (conditionType === 'completed_hotspot') return getSingleConversationConditionReason({ type: 'completed_hotspot', hotspotId: reply.conditionHotspotId });
-    if (conditionType === 'solved_enigma') return getSingleConversationConditionReason({ type: 'solved_enigma', enigmaId: reply.conditionEnigmaId });
-    if (conditionType === 'chose_reply') return getSingleConversationConditionReason({ type: 'chose_reply', replyId: reply.conditionReplyId });
-    if (conditionType === 'story_variable') {
-      return getSingleConversationConditionReason({
-        type: 'story_variable',
-        variableKey: reply.conditionVariableKey,
-        operator: reply.conditionVariableOperator,
-        value: reply.conditionVariableValue,
-      });
-    }
-    if (conditionType === 'advanced') {
-      const conditions = Array.isArray(reply.advancedConditions) ? reply.advancedConditions : [];
-      if (!conditions.length) return 'Aucune condition configurée';
-      const missing = conditions
-        .map(getSingleConversationConditionReason)
-        .filter(Boolean);
-      if ((reply.advancedConditionMode || 'all') === 'any') return missing.length === conditions.length ? `Il faut au moins une condition: ${missing.slice(0, 2).join(' ou ')}` : '';
-      return missing.slice(0, 3).join(' + ') || 'Condition non remplie';
-    }
-    return 'Condition non remplie';
+    return getReplyConditionLockReason(reply, {
+      ...getPreviewConditionContext(),
+      project,
+      getItemById,
+      getStoryVariableLabel,
+    });
   };
 
   const applyStoryVariableEffect = (reply = {}) => {
@@ -294,7 +241,6 @@ export function createPreviewConversationActions({
       }
       if (type === 'scene') {
         result.targetSceneId = effect.targetSceneId || result.targetSceneId;
-        result.notices.push({ type: 'route', title: 'Nouvelle scène', detail: getTargetLabel(project.scenes || [], effect.targetSceneId, 'Scène') });
       }
       if (type === 'cinematic') {
         result.targetCinematicId = effect.targetCinematicId || result.targetCinematicId;
@@ -483,9 +429,6 @@ export function createChooseConversationReplyAction({
     }
     const targetSceneId = effectResult.targetSceneId || reply.targetSceneId;
     if (targetSceneId && (actionType === 'scene' || effectResult.targetSceneId)) {
-      if (!effectResult.targetSceneId) {
-        nextChoiceNotices.push({ type: 'route', title: 'Nouvelle scène', detail: getTargetLabel(project.scenes || [], targetSceneId, 'Scène') });
-      }
       setChoiceEffectNotices(nextChoiceNotices);
       closeConversation();
       return goToScene(targetSceneId, combinedMessage || 'Nouvelle scène.');

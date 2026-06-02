@@ -1,4 +1,5 @@
 import { formatTimerSeconds } from '../../lib/gameEngine';
+import { resolveAssetUrl } from '../../lib/assetManager';
 import Anime2DPreview from '../Anime2DPreview.jsx';
 import SceneVisualEffect, { getVisualEffectZoneZIndex } from '../SceneVisualEffect';
 import { getElementShapeStyle, getLayerZIndex } from '../scenes/sceneEditorUtils';
@@ -46,6 +47,7 @@ export default function PreviewStagePanel({
   isChoiceAdventure = false,
   isHeroPanelOpen = false,
   isInventoryOpen = false,
+  isObjectiveOpen = false,
   usesImmersiveAdventurePlayer = false,
   currentGameTitle = '',
   inventory = [],
@@ -55,6 +57,7 @@ export default function PreviewStagePanel({
   draggedInventoryId = null,
   setIsHeroPanelOpen,
   setIsInventoryOpen,
+  setIsObjectiveOpen,
   setDebugInventoryItemId,
   setDialogue,
   setDraggedInventoryId,
@@ -65,6 +68,8 @@ export default function PreviewStagePanel({
   renderHeroAdventurePanel,
   renderHeroCharacterPage,
   renderAdventureInventoryContent,
+  objectiveChecklistContent = null,
+  choiceEffectOverlay = null,
 }) {
   return (
     <section className="panel player-stage-panel">
@@ -89,6 +94,11 @@ export default function PreviewStagePanel({
         {heroSetupOverlay}
         {heroRewardNotice}
         {heroCombatOverlay}
+        {choiceEffectOverlay ? (
+          <div className="choice-effect-floating">
+            {choiceEffectOverlay}
+          </div>
+        ) : null}
 
         {playSceneBackgroundUrl ? (
           <img
@@ -131,7 +141,9 @@ export default function PreviewStagePanel({
           .map((obj) => {
             const objectForRender = applySceneObjectTextOverride(obj, sceneObjectTextOverrides[obj.id]);
             const linkedItem = obj.linkedItemId ? project.items.find((entry) => entry.id === obj.linkedItemId) : null;
-            const displayImage = obj.imageData || linkedItem?.imageData || '';
+            const displayImage = resolveAssetUrl(project, obj.imageId, obj.imageData)
+              || resolveAssetUrl(project, linkedItem?.imageId, linkedItem?.imageData)
+              || '';
             return (
               <button
                 key={obj.id}
@@ -175,7 +187,13 @@ export default function PreviewStagePanel({
           <div className="scene-inline-viewer">
             <div className="scene-inline-viewer__backdrop" />
             <div className="scene-inline-viewer__card">
-              <img className="scene-inline-viewer__image" src={viewerImage.src} alt={viewerImage.name || 'Objet'} />
+              {viewerImage.src ? (
+                <img className="scene-inline-viewer__image" src={viewerImage.src} alt={viewerImage.name || 'Objet'} />
+              ) : (
+                <div className="scene-inline-viewer__fallback" role="img" aria-label={viewerImage.name || 'Objet'}>
+                  <span>{viewerImage.icon || 'Objet'}</span>
+                </div>
+              )}
               <div className="scene-inline-viewer__name">{viewerImage.caption || viewerImage.name || 'Objet'}</div>
             </div>
           </div>
@@ -251,14 +269,26 @@ export default function PreviewStagePanel({
               <button type="button" className="inventory-discreet-button hero-panel-discreet-button" onClick={(event) => {
                 event.stopPropagation();
                 setIsInventoryOpen(false);
+                setIsObjectiveOpen?.(false);
                 setIsHeroPanelOpen((value) => !value);
               }}>
                 Hero Adventure
               </button>
             ) : null}
+            {objectiveChecklistContent ? (
+              <button type="button" className="inventory-discreet-button objective-discreet-button" onClick={(event) => {
+                event.stopPropagation();
+                setIsHeroPanelOpen(false);
+                setIsInventoryOpen(false);
+                setIsObjectiveOpen?.((value) => !value);
+              }}>
+                Objectif
+              </button>
+            ) : null}
             <button type="button" className="inventory-discreet-button" onClick={(event) => {
               event.stopPropagation();
               setIsHeroPanelOpen(false);
+              setIsObjectiveOpen?.(false);
               setIsInventoryOpen((value) => !value);
             }}>
               {isHeroAdventure ? 'Personnage' : isChoiceAdventure ? 'Carnet' : 'Inventaire'} {inventory.length ? `(${inventory.length})` : ''}
@@ -292,6 +322,23 @@ export default function PreviewStagePanel({
           renderHeroCharacterPage={renderHeroCharacterPage}
           renderAdventureInventoryContent={renderAdventureInventoryContent}
         />
+        {isObjectiveOpen && objectiveChecklistContent ? (
+          <>
+            <button
+              type="button"
+              className="player-inventory-backdrop"
+              aria-label="Fermer les objectifs"
+              onClick={() => setIsObjectiveOpen?.(false)}
+            />
+            <div className="player-inventory-drawer player-inventory-drawer--objective" onClick={(event) => event.stopPropagation()}>
+              <div className="panel-head">
+                <h3>Objectif</h3>
+                <button type="button" className="secondary-button" onClick={() => setIsObjectiveOpen?.(false)}>Fermer</button>
+              </div>
+              {objectiveChecklistContent}
+            </div>
+          </>
+        ) : null}
       </div>
     </section>
   );

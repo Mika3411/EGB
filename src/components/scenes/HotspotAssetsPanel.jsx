@@ -1,6 +1,7 @@
 import { HelpLabel } from './SceneEditorChrome.jsx';
 import MediaSourcePicker from '../MediaSourcePicker.jsx';
 import { showConfirm } from '../AccessibleDialog';
+import CompactAudioPreview from './CompactAudioPreview.jsx';
 
 export default function HotspotAssetsPanel({
   selectedHotspot,
@@ -29,6 +30,7 @@ export default function HotspotAssetsPanel({
         <MediaSourcePicker
           className="button like full secondary-action"
           accept="audio/*"
+          assetScope="object-sound"
           handleUpload={handleUpload}
           mediaLibrary={mediaLibrary}
           onSelect={(data, name) => patchSelectedHotspot((spot) => {
@@ -40,28 +42,23 @@ export default function HotspotAssetsPanel({
           {selectedHotspot.soundName || 'Importer un son unique'}
         </MediaSourcePicker>
         {selectedHotspot.soundData && (
-          <div className="hotspot-audio-compact">
-            <audio controls preload="metadata" src={selectedHotspot.soundData} />
-            <button
-              type="button"
-              className="danger-button"
-              onClick={async () => {
-                const confirmed = await showConfirm({
-                  title: 'Supprimer le son',
-                  message: 'Supprimer le son de cette zone ?',
-                  confirmLabel: 'Supprimer',
-                  variant: 'danger',
-                });
-                if (!confirmed) return;
-                patchSelectedHotspot((spot) => {
-                  spot.soundData = '';
-                  spot.soundName = '';
-                });
-              }}
-            >
-              Supprimer
-            </button>
-          </div>
+          <CompactAudioPreview
+            src={selectedHotspot.soundData}
+            name={selectedHotspot.soundName}
+            onRemove={async () => {
+              const confirmed = await showConfirm({
+                title: 'Supprimer le son',
+                message: 'Supprimer le son de cette zone ?',
+                confirmLabel: 'Supprimer',
+                variant: 'danger',
+              });
+              if (!confirmed) return;
+              patchSelectedHotspot((spot) => {
+                spot.soundData = '';
+                spot.soundName = '';
+              });
+            }}
+          />
         )}
       </div>
 
@@ -70,6 +67,7 @@ export default function HotspotAssetsPanel({
         <MediaSourcePicker
           className="button like full secondary-action"
           accept="image/*"
+          assetScope="object-image"
           handleUpload={handleUpload}
           mediaLibrary={mediaLibrary}
           onSelect={(data, name) => patchSelectedHotspot((spot) => {

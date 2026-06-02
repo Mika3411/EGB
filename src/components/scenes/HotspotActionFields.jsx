@@ -278,48 +278,79 @@ export default function HotspotActionFields({
   if (children) return <div className="hotspot-action-fields">{children}</div>;
   if (!entry || !updateEntry) return null;
 
+  const currentActionType = actionType || entry.actionType || 'dialogue';
+  const showDialogue = !['skill_check', 'hero_combat'].includes(currentActionType);
+  const showRewardItem = currentActionType === 'dialogue_item' || Boolean(entry.rewardItemId);
+  const showSceneTarget = currentActionType === 'scene';
+  const showCinematicTarget = currentActionType === 'cinematic';
+  const showEnigmaLink = !['conversation', 'skill_check', 'hero_combat'].includes(currentActionType);
+
   return (
     <div className="hotspot-action-fields">
-      {!isBeginnerMode && actionType === 'skill_check' ? (
+      {!isBeginnerMode && currentActionType === 'skill_check' ? (
         <SkillCheckFields entry={entry} updateEntry={updateEntry} project={project} heroSkills={heroSkills} getSceneLabel={getSceneLabel} />
       ) : null}
-      {!isBeginnerMode && actionType === 'hero_combat' ? (
+      {!isBeginnerMode && currentActionType === 'hero_combat' ? (
         <HeroCombatFields entry={entry} updateEntry={updateEntry} project={project} heroSkills={heroSkills} getSceneLabel={getSceneLabel} />
       ) : null}
       <HeroMalusFields entry={entry} updateEntry={updateEntry} isHeroAdventureProject={isHeroAdventureProject} />
 
-      <HelpLabel help="Texte affiche lors de l'interaction principale. Il peut donner une reaction, un indice ou confirmer une action reussie.">Dialogue</HelpLabel>
-      <textarea data-tour="hotspot-dialogue" value={entry.dialogue} onChange={(event) => updateEntry((target) => {
-        target.dialogue = event.target.value;
-      })} />
-
-      <HelpLabel help="Destination utilisee si l'action est Changer de scene. Laisse vide si la zone doit seulement parler ou donner un objet.">Scene cible</HelpLabel>
-      <select data-tour="hotspot-target-scene" value={entry.targetSceneId} onChange={(event) => updateEntry((target) => {
-        target.targetSceneId = event.target.value;
-      })}>
-        <option value="">Aucune</option>
-        {project.scenes.filter((scene) => scene.id !== selectedSceneId).map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
-      </select>
-
-      {!isBeginnerMode ? (
+      {showDialogue ? (
         <>
-          <HelpLabel help="Cinematique lancee apres l'interaction reussie. Elle peut servir de transition, revelation ou fin de sequence.">Cinematique cible</HelpLabel>
-          <select data-tour="hotspot-target-cinematic" value={entry.targetCinematicId} onChange={(event) => updateEntry((target) => {
-            target.targetCinematicId = event.target.value;
+          <HelpLabel help="Texte affiche lors de l'interaction principale. Il peut donner une reaction, un indice ou confirmer une action reussie.">Dialogue</HelpLabel>
+          <textarea data-tour="hotspot-dialogue" value={entry.dialogue || ''} onChange={(event) => updateEntry((target) => {
+            target.dialogue = event.target.value;
+          })} />
+        </>
+      ) : null}
+
+      {showRewardItem ? (
+        <>
+          <HelpLabel help="Objet ajoute a l'inventaire quand cette zone reussit.">Objet donne</HelpLabel>
+          <select data-tour="hotspot-reward-item" value={entry.rewardItemId || ''} onChange={(event) => updateEntry((target) => {
+            target.rewardItemId = event.target.value;
           })}>
-            <option value="">Aucune</option>
-            {project.cinematics.map((cinematic) => <option key={cinematic.id} value={cinematic.id}>{cinematic.name}</option>)}
+            <option value="">Aucun</option>
+            {(project.items || []).map((item) => <option key={item.id} value={item.id}>{item.icon} {item.name}</option>)}
           </select>
         </>
       ) : null}
 
-      <HelpLabel help="Enigme a resoudre avant d'executer l'action de la zone. Si elle echoue ou reste ouverte, la suite ne se declenche pas encore.">Enigme liee</HelpLabel>
-      <select data-tour="hotspot-linked-enigma" value={entry.enigmaId || ''} onChange={(event) => updateEntry((target) => {
-        target.enigmaId = event.target.value;
-      })}>
-        <option value="">Aucune</option>
-        {(project.enigmas || []).map((enigma) => <option key={enigma.id} value={enigma.id}>{enigma.name}</option>)}
-      </select>
+      {showSceneTarget ? (
+        <>
+          <HelpLabel help="Destination utilisee si l'action est Changer de scene.">Scene cible</HelpLabel>
+          <select data-tour="hotspot-target-scene" value={entry.targetSceneId || ''} onChange={(event) => updateEntry((target) => {
+            target.targetSceneId = event.target.value;
+          })}>
+            <option value="">Aucune</option>
+            {(project.scenes || []).filter((scene) => scene.id !== selectedSceneId).map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
+          </select>
+        </>
+      ) : null}
+
+      {!isBeginnerMode && showCinematicTarget ? (
+        <>
+          <HelpLabel help="Cinematique lancee apres l'interaction reussie. Elle peut servir de transition, revelation ou fin de sequence.">Cinematique cible</HelpLabel>
+          <select data-tour="hotspot-target-cinematic" value={entry.targetCinematicId || ''} onChange={(event) => updateEntry((target) => {
+            target.targetCinematicId = event.target.value;
+          })}>
+            <option value="">Aucune</option>
+            {(project.cinematics || []).map((cinematic) => <option key={cinematic.id} value={cinematic.id}>{cinematic.name}</option>)}
+          </select>
+        </>
+      ) : null}
+
+      {showEnigmaLink ? (
+        <>
+          <HelpLabel help="Enigme a resoudre avant d'executer l'action de la zone. Si elle echoue ou reste ouverte, la suite ne se declenche pas encore.">Enigme liee</HelpLabel>
+          <select data-tour="hotspot-linked-enigma" value={entry.enigmaId || ''} onChange={(event) => updateEntry((target) => {
+            target.enigmaId = event.target.value;
+          })}>
+            <option value="">Aucune</option>
+            {(project.enigmas || []).map((enigma) => <option key={enigma.id} value={enigma.id}>{enigma.name}</option>)}
+          </select>
+        </>
+      ) : null}
     </div>
   );
 }

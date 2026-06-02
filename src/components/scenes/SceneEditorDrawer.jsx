@@ -6,11 +6,10 @@ import {
   ChevronsUp,
   Eye,
   EyeOff,
-  Layers,
   Lock,
   LockOpen,
   MousePointerClick,
-  Package,
+  PanelRight,
   Pencil,
   Plus,
   Sparkles,
@@ -45,30 +44,31 @@ function getLayerZIndexValue(layer, getLayerZIndex) {
   return getLayerZIndex(layer.entry, layer.type);
 }
 
-export function SceneDrawerTriggers({ drawerMode, setDrawerMode }) {
-  const toggleDrawer = (mode) => setDrawerMode?.((currentMode) => (currentMode === mode ? null : mode));
+export function SceneCanvasDrawerButton({ drawerMode, setDrawerMode }) {
+  const isOpen = drawerMode === 'layers';
+  const stopCanvasEvent = (event) => {
+    event.stopPropagation();
+    if (event.type === 'contextmenu') event.preventDefault();
+  };
+  const toggleDrawer = (event) => {
+    event.stopPropagation();
+    setDrawerMode?.((currentMode) => (currentMode === 'layers' ? null : 'layers'));
+  };
 
   return (
-    <div className="scene-drawer-trigger-group" aria-label="Tiroirs de scène">
-      <button
-        type="button"
-        className={`scene-drawer-trigger ${drawerMode === 'objects' ? 'active' : ''}`}
-        aria-pressed={drawerMode === 'objects'}
-        onClick={() => toggleDrawer('objects')}
-      >
-        <Package aria-hidden="true" size={15} />
-        <span>Objets</span>
-      </button>
-      <button
-        type="button"
-        className={`scene-drawer-trigger ${drawerMode === 'layers' ? 'active' : ''}`}
-        aria-pressed={drawerMode === 'layers'}
-        onClick={() => toggleDrawer('layers')}
-      >
-        <Layers aria-hidden="true" size={15} />
-        <span>Zones/calques</span>
-      </button>
-    </div>
+    <button
+      type="button"
+      className={`scene-canvas-drawer-button ${isOpen ? 'active' : ''}`.trim()}
+      title="Zones et objets du canevas"
+      aria-label="Ouvrir les zones et objets du canevas"
+      aria-pressed={isOpen}
+      onPointerDown={stopCanvasEvent}
+      onMouseDown={stopCanvasEvent}
+      onClick={toggleDrawer}
+      onContextMenu={stopCanvasEvent}
+    >
+      <PanelRight aria-hidden="true" size={16} />
+    </button>
   );
 }
 
@@ -132,11 +132,11 @@ export default function SceneEditorDrawer({
   });
 
   return (
-    <aside className="scene-editor-drawer" aria-label={drawerMode === 'objects' ? "Liste d'objets" : 'Liste des zones et calques'}>
+    <aside className="scene-editor-drawer" aria-label={drawerMode === 'objects' ? "Liste d'objets" : 'Liste des zones et objets du canevas'}>
       <div className="scene-editor-drawer-head">
         <div>
-          <span className="section-kicker">{drawerMode === 'objects' ? 'Inventaire projet' : 'Structure scène'}</span>
-          <h3>{drawerMode === 'objects' ? 'Objets' : 'Zones/calques'}</h3>
+          <span className="section-kicker">{drawerMode === 'objects' ? 'Inventaire projet' : 'Canevas'}</span>
+          <h3>{drawerMode === 'objects' ? 'Objets' : 'Zones et objets'}</h3>
           <small>
             {drawerMode === 'objects'
               ? `${items.length} objet${items.length > 1 ? 's' : ''}`

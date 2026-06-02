@@ -76,6 +76,219 @@ export function evaluateCondition(condition = {}, context = {}) {
   return true;
 }
 
+export function getConditionType(condition = {}) {
+  return condition.type || condition.conditionType || 'none';
+}
+
+export function getConditionItemId(condition = {}) {
+  return condition.itemId || condition.conditionItemId || '';
+}
+
+export function getConditionSceneId(condition = {}) {
+  return condition.sceneId || condition.conditionSceneId || '';
+}
+
+export function getConditionHotspotId(condition = {}) {
+  return condition.hotspotId || condition.conditionHotspotId || '';
+}
+
+export function getConditionEnigmaId(condition = {}) {
+  return condition.enigmaId || condition.conditionEnigmaId || '';
+}
+
+export function getConditionReplyId(condition = {}) {
+  return condition.replyId || condition.conditionReplyId || '';
+}
+
+export function getConditionVariableKey(condition = {}) {
+  return condition.variableKey || condition.conditionVariableKey || '';
+}
+
+export function getProjectEntry(collection = [], id = '') {
+  return getConditionArray(collection).find((entry) => entry?.id === id) || null;
+}
+
+export function getConditionItemLabel(condition = {}, context = {}) {
+  const itemId = getConditionItemId(condition);
+  if (!itemId) return 'objet non renseigne';
+  const item = context.getItemById?.(itemId) || getProjectEntry(context.project?.items, itemId);
+  return item?.name || item?.title || itemId;
+}
+
+export function getConditionStoryVariableLabel(condition = {}, context = {}) {
+  const variableKey = getConditionVariableKey(condition);
+  if (!variableKey) return 'variable non renseignee';
+  const variable = getConditionArray(context.project?.storyVariables).find((entry) => entry?.key === variableKey);
+  return context.getStoryVariableLabel?.(variableKey) || variable?.journalLabel || variable?.name || variableKey;
+}
+
+export function getConditionOperatorLabel(operator = 'equals') {
+  const labels = {
+    equals: '=',
+    not_equals: '!=',
+    greater_or_equal: '>=',
+    less_or_equal: '<=',
+    truthy: 'vrai',
+    falsy: 'faux',
+  };
+  return labels[operator] || '=';
+}
+
+export function hasOwn(object = {}, key = '') {
+  return Object.prototype.hasOwnProperty.call(object || {}, key);
+}
+
+export function getConditionRequirementLabel(condition = {}, context = {}, options = {}) {
+  if (condition.label) return condition.label;
+
+  const conditionType = getConditionType(condition);
+  if (conditionType === 'none' || conditionType === 'always') return 'Toujours disponible';
+
+  if (conditionType === 'has_item') {
+    const itemId = getConditionItemId(condition);
+    return itemId ? getConditionItemLabel(condition, context) : "condition d'objet non configuree";
+  }
+
+  if (conditionType === 'missing_item') {
+    const itemId = getConditionItemId(condition);
+    return itemId ? `Ne pas avoir: ${getConditionItemLabel(condition, context)}` : "condition d'objet non configuree";
+  }
+
+  if (conditionType === 'visited_scene') {
+    const sceneId = getConditionSceneId(condition);
+    const scene = getProjectEntry(context.project?.scenes, sceneId);
+    return sceneId ? `Scene visitee: ${scene?.name || scene?.title || sceneId}` : 'scene non renseignee';
+  }
+
+  if (conditionType === 'completed_hotspot') {
+    const hotspotId = getConditionHotspotId(condition);
+    const hotspots = getConditionArray(context.project?.scenes).flatMap((scene) => scene.hotspots || []);
+    const hotspot = getProjectEntry(hotspots, hotspotId);
+    return hotspotId ? `Action faite: ${hotspot?.name || hotspot?.title || hotspotId}` : 'action non renseignee';
+  }
+
+  if (conditionType === 'solved_enigma') {
+    const enigmaId = getConditionEnigmaId(condition);
+    const enigma = getProjectEntry(context.project?.enigmas, enigmaId);
+    return enigmaId ? `Enigme resolue: ${enigma?.name || enigma?.title || enigmaId}` : 'enigme non renseignee';
+  }
+
+  if (conditionType === 'chose_reply') {
+    return getConditionReplyId(condition) ? 'Choix precedent effectue' : 'choix precedent non renseigne';
+  }
+
+  if (conditionType === 'story_variable') {
+    const variableKey = getConditionVariableKey(condition);
+    if (!variableKey) return 'condition de variable non configuree';
+    const operator = condition.operator || condition.conditionVariableOperator || 'equals';
+    const operatorLabel = getConditionOperatorLabel(operator);
+    const expectedValue = condition.value ?? condition.conditionVariableValue;
+    const valueText = ['truthy', 'falsy'].includes(operator) ? operatorLabel : `${operatorLabel} ${expectedValue ?? ''}`.trim();
+    const current = context.storyVariables?.[variableKey];
+    const currentText = options.includeCurrent && hasOwn(context.storyVariables, variableKey)
+      ? ` (actuel ${current})`
+      : '';
+    return `${getConditionStoryVariableLabel(condition, context)} ${valueText}${currentText}`.trim();
+  }
+
+  return 'Condition non remplie';
+}
+
+export function getConditionFailureReasons(condition = {}, context = {}, options = {}) {
+  const conditionType = getConditionType(condition);
+  if (conditionType === 'none' || conditionType === 'always' || evaluateCondition(condition, context)) return [];
+
+  if (conditionType === 'advanced') {
+    const conditions = getConditionArray(condition.advancedConditions || condition.conditions);
+    if (!conditions.length) return ['Aucune condition configuree'];
+    const missing = conditions.flatMap((entry) => getConditionFailureReasons(entry, context, options));
+    if ((condition.advancedConditionMode || condition.mode || 'all') === 'any') {
+      return missing.length === conditions.length
+        ? [`Il faut au moins une condition: ${missing.slice(0, 3).join(' ou ')}`]
+        : [];
+    }
+    return missing;
+  }
+
+  const label = getConditionRequirementLabel(condition, context, options);
+  return options.includePrefix === false ? [label] : [`Necessite: ${label}`];
+}
+
+export function getReplyConditionFailureReasons(reply = {}, context = {}, options = {}) {
+  return getConditionFailureReasons(getReplyCondition(reply), context, options);
+}
+
+export function getReplyConditionFailureSummary(reply = {}, context = {}, options = {}) {
+  return getReplyConditionFailureReasons(reply, context, options).join(' + ');
+}
+
+export function getReplyConditionLockReason(reply = {}, context = {}, options = {}) {
+  const missingSummary = getReplyConditionFailureSummary(reply, context, {
+    ...options,
+    includePrefix: false,
+    includeCurrent: true,
+  });
+  if (reply.lockedLabel) {
+    return missingSummary
+      ? `${reply.lockedLabel} Prerequis manquants: ${missingSummary}.`
+      : reply.lockedLabel;
+  }
+  return getReplyConditionFailureSummary(reply, context, {
+    ...options,
+    includePrefix: true,
+    includeCurrent: true,
+  }) || 'Condition non remplie';
+}
+
+export function getObjectiveChecklist(context = {}) {
+  const checklist = context.objectiveChecklist || context.heroAdventure?.objectiveChecklist || context.project?.heroAdventure?.objectiveChecklist;
+  return checklist && typeof checklist === 'object' ? checklist : null;
+}
+
+export function getObjectiveRouteStatuses(context = {}) {
+  const checklist = getObjectiveChecklist(context);
+  const routes = getConditionArray(checklist?.routes);
+  return routes.map((route, routeIndex) => {
+    const conditions = getConditionArray(route.conditions);
+    const checks = conditions.map((condition, conditionIndex) => ({
+      id: condition.id || `${route.id || routeIndex}-${conditionIndex}`,
+      label: condition.label || getConditionRequirementLabel(condition, context, { includeCurrent: true }),
+      ready: evaluateCondition(condition, context),
+    }));
+    return {
+      id: route.id || `route-${routeIndex}`,
+      label: route.label || `Voie ${routeIndex + 1}`,
+      successText: route.successText || '',
+      checks,
+      ready: checks.length > 0 && checks.every((check) => check.ready),
+      missingLabels: checks.filter((check) => !check.ready).map((check) => check.label),
+    };
+  });
+}
+
+export function hasReadyObjectiveRoute(context = {}) {
+  return getObjectiveRouteStatuses(context).some((route) => route.ready);
+}
+
+export function shouldBlockObjectiveFinalScene(sceneId = '', context = {}) {
+  const checklist = getObjectiveChecklist(context);
+  if (!checklist?.blockFinalSceneUntilRouteReady || !checklist.finalSceneId || sceneId !== checklist.finalSceneId) return false;
+  const routes = getObjectiveRouteStatuses(context);
+  return routes.length > 0 && !routes.some((route) => route.ready);
+}
+
+export function getObjectiveFinalSceneBlockMessage(context = {}, options = {}) {
+  if (!shouldBlockObjectiveFinalScene(options.sceneId || context.sceneId || '', context)) return '';
+  const routes = getObjectiveRouteStatuses(context);
+  const routeDetails = routes
+    .map((route) => `${route.label}: ${route.missingLabels.slice(0, 3).join(', ') || 'a completer'}`)
+    .join(' | ');
+  const prefix = options.prefix || "Tu n'as pas encore de prise suffisante sur Morholt.";
+  return routeDetails
+    ? `${prefix} Ouvre le tiroir Objectif et valide au moins une voie: ${routeDetails}.`
+    : `${prefix} Ouvre le tiroir Objectif et valide au moins une voie.`;
+}
+
 export function getReplyCondition(reply = {}) {
   const conditionType = reply.conditionType || 'none';
   if (conditionType === 'has_item') return { type: 'has_item', itemId: reply.conditionItemId };
@@ -99,6 +312,31 @@ export function getReplyCondition(reply = {}) {
     };
   }
   return { type: conditionType };
+}
+
+export function getReplyTargetSceneId(reply = {}) {
+  if (!reply || typeof reply !== 'object') return '';
+  const effectScene = getConditionArray(reply.effects)
+    .find((effect) => effect?.type === 'scene' && effect.targetSceneId)?.targetSceneId || '';
+  return effectScene
+    || reply.targetSceneId
+    || reply.skillCheckSuccessTargetSceneId
+    || reply.combatVictoryTargetSceneId
+    || '';
+}
+
+export function normalizeUnvisitedReturnLabel(label = '') {
+  const text = String(label || '');
+  return text
+    .replace(/^Revenir\b/i, 'Aller')
+    .replace(/^Retourner\b/i, 'Aller');
+}
+
+export function getVisitedAwareReplyLabel(reply = {}, context = {}) {
+  const label = reply.label || '';
+  const targetSceneId = getReplyTargetSceneId(reply);
+  if (!label || !targetSceneId || hasConditionValue(context.visitedSceneIds, targetSceneId)) return label;
+  return normalizeUnvisitedReturnLabel(label);
 }
 
 export function evaluateReplyCondition(reply = {}, context = {}) {

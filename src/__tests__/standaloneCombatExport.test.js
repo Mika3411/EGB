@@ -181,6 +181,39 @@ const makeConversationSkillCheckProject = () => {
   return project;
 };
 
+const makeConversationCombatProject = () => {
+  const project = makeProject();
+  project.scenes[0].hotspots = [{
+    id: 'ghoul',
+    name: 'Ghoul',
+    actionType: 'conversation',
+    x: 50,
+    y: 50,
+    width: 20,
+    height: 20,
+    conversation: {
+      startNodeId: 'intro',
+      nodes: [{
+        id: 'intro',
+        speaker: 'Book',
+        text: 'The ghoul blocks the marsh.',
+        replies: [{
+          id: 'ghoul-fight',
+          label: 'Face the ghoul',
+          actionType: 'hero_combat',
+          combatEnemyName: 'Ghoul',
+          combatEnemyMaxHealth: 2,
+          combatAttackDifficulty: 5,
+          combatEnemyStrength: 0,
+          combatVictoryDialogue: 'The path opens.',
+          combatVictoryTargetSceneId: 'victory',
+        }],
+      }],
+    },
+  }];
+  return project;
+};
+
 const createElementStub = () => ({
   innerHTML: '',
   style: { setProperty() {} },
@@ -292,6 +325,33 @@ describe('standalone combat export', () => {
     expect(runtime.state.playSceneId).toBe('victory');
     expect(runtime.state.dialogue).toContain('Blob vaincu');
     expect(runtime.state.dialogue).toContain('Amulette solaire');
+  });
+
+  it('routes an already defeated conversation combat instead of reopening the combat overlay', () => {
+    const runtime = runStandalone(makeConversationCombatProject());
+
+    runtime.triggerHotspot('ghoul');
+    const reply = runtime.state.activeConversation.conversation.nodes[0].replies[0];
+    runtime.chooseConversationReply(reply);
+    expect(runtime.state.activeHeroCombat).toMatchObject({
+      id: 'ghoul-fight',
+      status: 'active',
+    });
+
+    runtime.attackActiveHeroCombat('', { rawRoll: 20 });
+    expect(runtime.state.heroCombatStates['ghoul-fight'].defeated).toBe(true);
+    expect(runtime.state.playSceneId).toBe('victory');
+
+    runtime.state.playSceneId = 'start';
+    runtime.triggerHotspot('ghoul');
+    const revisitReply = runtime.state.activeConversation.conversation.nodes[0].replies[0];
+    runtime.chooseConversationReply(revisitReply);
+
+    expect(runtime.state.playSceneId).toBe('victory');
+    expect(runtime.state.activeHeroCombat).toBe(null);
+    expect(runtime.state.activeConversation).toBe(null);
+    expect(runtime.state.dialogue).toContain('Ghoul est déjà vaincu.');
+    expect(runtime.state.dialogue).toContain('The path opens.');
   });
 
   it('runs an exported hotspot skill check with mana, reward and scene routing', () => {

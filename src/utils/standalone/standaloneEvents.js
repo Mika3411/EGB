@@ -31,10 +31,20 @@ export const standaloneEvents = `function bindEvents() {
   });
   root.querySelectorAll('#open-inventory-drawer, [data-player-action="open-inventory-drawer"]').forEach((button) => button.addEventListener('click', () => {
     state.inventoryDrawerOpen = true;
+    state.objectiveDrawerOpen = false;
     render();
   }));
   root.querySelectorAll('#close-inventory-drawer, [data-player-action="close-inventory-drawer"]').forEach((button) => button.addEventListener('click', () => {
     state.inventoryDrawerOpen = false;
+    render();
+  }));
+  root.querySelectorAll('#open-objective-drawer, [data-player-action="open-objective-drawer"]').forEach((button) => button.addEventListener('click', () => {
+    state.objectiveDrawerOpen = true;
+    state.inventoryDrawerOpen = false;
+    render();
+  }));
+  root.querySelectorAll('#close-objective-drawer, [data-player-action="close-objective-drawer"]').forEach((button) => button.addEventListener('click', () => {
+    state.objectiveDrawerOpen = false;
     render();
   }));
   root.querySelector('#collapse-narration')?.addEventListener('click', (event) => {
@@ -77,7 +87,7 @@ export const standaloneEvents = `function bindEvents() {
     render();
   });
   root.querySelector('#restart-ending')?.addEventListener('click', resetPreview);
-  root.querySelectorAll('#close-hero-combat').forEach((button) => button.addEventListener('click', closeHeroCombat));
+  root.querySelectorAll('#close-hero-combat, [data-close-hero-combat]').forEach((button) => button.addEventListener('click', closeHeroCombat));
   root.querySelectorAll('[data-hero-combat-power]').forEach((button) => {
     button.addEventListener('click', () => {
       state.selectedHeroCombatPowerId = button.dataset.heroCombatPower || '';
@@ -86,7 +96,7 @@ export const standaloneEvents = `function bindEvents() {
   });
   root.querySelectorAll('[data-hero-combat-item]').forEach((button) => {
     button.addEventListener('click', () => {
-      openInventoryItem(button.dataset.heroCombatItem || '');
+      openInventoryItem(button.dataset.heroCombatItem || '', { useHeroItem: true });
     });
   });
   root.querySelectorAll('[data-hero-combat-flee]').forEach((button) => {
@@ -130,6 +140,10 @@ export const standaloneEvents = `function bindEvents() {
     state.inventoryDrawerOpen = false;
     render();
   });
+  root.querySelector('#objective-drawer-backdrop')?.addEventListener('click', () => {
+    state.objectiveDrawerOpen = false;
+    render();
+  });
   root.querySelector('#scene-layer')?.addEventListener('click', () => {
     if (state.viewerImage) {
       state.viewerImage = null;
@@ -167,7 +181,7 @@ export const standaloneEvents = `function bindEvents() {
   root.querySelectorAll('[data-item-id]').forEach((button) => {
     button.setAttribute('draggable', 'true');
 
-    button.addEventListener('click', () => openInventoryItem(button.dataset.itemId));
+    button.addEventListener('click', () => openInventoryItem(button.dataset.itemId, { previewOnly: true }));
     button.addEventListener('dragstart', () => {
       state.draggedInventoryId = button.dataset.itemId;
     });

@@ -26,6 +26,41 @@ function getHeroCombatRuntime(entry = {}, options = {}) {
   };
 }
 
+function finishAlreadyDefeatedHeroCombat(entry = {}, options = {}, runtime = getHeroCombatRuntime(entry, options)) {
+  const message = [
+    runtime.enemyName + ' est déjà vaincu.',
+    entry.combatVictoryDialogue,
+  ].filter(Boolean).join(' ');
+  if (options.sourceHotspotId) markHotspotCompleted(options.sourceHotspotId);
+  state.activeHeroCombat = null;
+  if (options.closeConversation) closeConversation();
+  if (entry.combatVictoryTargetSceneId) {
+    const movedScene = goToScene(entry.combatVictoryTargetSceneId, message || 'La route est ouverte.');
+    return {
+      ok: Boolean(movedScene),
+      ended: true,
+      victory: true,
+      movedScene: Boolean(movedScene),
+      enemyHealth: 0,
+      enemyMaxHealth: runtime.enemyMaxHealth,
+      enemyMana: runtime.currentEnemyMana,
+      enemyMaxMana: runtime.enemyMaxMana,
+      message,
+    };
+  }
+  state.dialogue = message;
+  return {
+    ok: true,
+    ended: true,
+    victory: true,
+    enemyHealth: 0,
+    enemyMaxHealth: runtime.enemyMaxHealth,
+    enemyMana: runtime.currentEnemyMana,
+    enemyMaxMana: runtime.enemyMaxMana,
+    message,
+  };
+}
+
 function rollEnemyCombatDie(enemyName = 'Ennemi') {
   const sides = Math.max(2, Number(project?.heroAdventure?.dice?.sides) || 20);
   const raw = Math.floor(Math.random() * sides) + 1;
@@ -107,18 +142,12 @@ function resolveEnemyCombatTurn(entry = {}, options = {}) {
   } = runtime;
 
   if (currentEnemyHealth <= 0) {
-    const message = enemyName + ' est déjà vaincu.';
-    state.dialogue = message;
-    return {
-      ok: true,
-      ended: true,
-      victory: true,
-      enemyHealth: 0,
+    return finishAlreadyDefeatedHeroCombat(entry, options, {
+      enemyName,
       enemyMaxHealth,
-      enemyMana: currentEnemyMana,
+      currentEnemyMana,
       enemyMaxMana: enemyStats.maxMana,
-      message,
-    };
+    });
   }
 
   const enemyTick = tickStatusEffects(currentEnemyStatusEffects, currentEnemyHealth);
@@ -235,19 +264,12 @@ function resolveHeroCombatTurn(entry = {}, options = {}) {
   } = runtime;
 
   if (currentEnemyHealth <= 0) {
-    const message = enemyName + ' est déjà vaincu.';
-    state.dialogue = message;
-    if (options.sourceHotspotId) markHotspotCompleted(options.sourceHotspotId);
-    return {
-      ok: true,
-      ended: true,
-      victory: true,
-      enemyHealth: 0,
+    return finishAlreadyDefeatedHeroCombat(entry, options, {
+      enemyName,
       enemyMaxHealth,
-      enemyMana: currentEnemyMana,
+      currentEnemyMana,
       enemyMaxMana,
-      message,
-    };
+    });
   }
 
   const heroPower = getHeroPowerById(options.heroPowerId);
@@ -529,9 +551,7 @@ function runHeroCombatAction(entry = {}, options = {}) {
   const enemyStarts = initiative.firstActor === 'enemy';
   if (turnMode && !options.resolveTurn) {
     if (runtime.currentEnemyHealth <= 0) {
-      state.dialogue = runtime.enemyName + ' est déjà vaincu.';
-      if (options.sourceHotspotId) markHotspotCompleted(options.sourceHotspotId);
-      return true;
+      return Boolean(finishAlreadyDefeatedHeroCombat(entry, options, runtime).ok);
     }
     if (options.closeConversation) closeConversation();
     const defaultStartMessage = enemyStarts

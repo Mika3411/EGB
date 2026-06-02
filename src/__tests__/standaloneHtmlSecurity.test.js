@@ -353,4 +353,11 @@ describe('standalone HTML media URL safety', () => {
     expect(inlineScript).toContain('<\\/script><img src=x onerror=alert(1)>');
     expect(inlineScript).not.toContain('</script><img src=x onerror=alert(1)>');
   });
+
+  it('shows invisible scene objects when visual hints are enabled', () => {
+    const styleCss = buildStandaloneCss();
+
+    expect(styleCss).toContain('.player-shell.show-hints .player-scene-object-invisible');
+    expect(styleCss).toContain('content:attr(aria-label)!important');
+  });
 });

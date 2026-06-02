@@ -153,40 +153,48 @@ export function useSceneEditorShapes({
       'div',
       { className: 'shape-editor-controls' },
       React.createElement(
-        HelpLabel,
-        {
-          help: 'Forme de la zone interactive. Rectangle est le comportement classique, ronde devient une ellipse et libre permet de tirer chaque point.',
-        },
-        'Forme',
-      ),
-      React.createElement(
-        'select',
-        {
-          value: shapeType,
-          onChange: (event) => setEditorElementShapeType(type, id, event.target.value),
-        },
-        React.createElement('option', { value: 'rectangle' }, 'Rectangle'),
-        React.createElement('option', { value: 'ellipse' }, 'Ronde / ovale'),
-        React.createElement('option', { value: 'free' }, 'Libre'),
-      ),
-      shapeType === 'free' ? React.createElement(
         'div',
-        null,
+        { className: `shape-editor-inline ${shapeType === 'free' ? 'has-point-count' : ''}`.trim() },
         React.createElement(
-          HelpLabel,
-          {
-            help: 'Nombre de points de la forme libre. Minimum 3. Changer ce nombre recrée une forme régulière que tu peux ensuite déformer.',
-          },
-          "Nombre d'angles",
+          'div',
+          { className: 'shape-editor-field' },
+          React.createElement(
+            HelpLabel,
+            {
+              help: 'Forme de la zone interactive. Rectangle est le comportement classique, ronde devient une ellipse et libre permet de tirer chaque point.',
+            },
+            'Forme',
+          ),
+          React.createElement(
+            'select',
+            {
+              value: shapeType,
+              onChange: (event) => setEditorElementShapeType(type, id, event.target.value),
+            },
+            React.createElement('option', { value: 'rectangle' }, 'Rectangle'),
+            React.createElement('option', { value: 'ellipse' }, 'Ronde / ovale'),
+            React.createElement('option', { value: 'free' }, 'Libre'),
+          ),
         ),
-        React.createElement('input', {
-          type: 'number',
-          min: '3',
-          max: '16',
-          value: Number(entry.shapePointCount) || getElementShapePoints(entry).length,
-          onChange: (event) => setEditorElementShapePointCount(type, id, event.target.value),
-        }),
-      ) : null,
+        shapeType === 'free' ? React.createElement(
+          'div',
+          { className: 'shape-editor-field shape-editor-point-count' },
+          React.createElement(
+            HelpLabel,
+            {
+              help: 'Nombre de points de la forme libre. Minimum 3. Changer ce nombre recrée une forme régulière que tu peux ensuite déformer.',
+            },
+            "Nombre d'angles",
+          ),
+          React.createElement('input', {
+            type: 'number',
+            min: '3',
+            max: '16',
+            value: Number(entry.shapePointCount) || getElementShapePoints(entry).length,
+            onChange: (event) => setEditorElementShapePointCount(type, id, event.target.value),
+          }),
+        ) : null,
+      ),
     );
   };
 

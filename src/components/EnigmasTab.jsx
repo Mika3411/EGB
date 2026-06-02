@@ -293,6 +293,7 @@ export default function EnigmasTab({
                   <MediaSourcePicker
                     className="button like"
                     accept="image/*"
+                    assetScope="object-image"
                     handleUpload={handleUpload}
                     mediaLibrary={mediaLibrary}
                     onSelect={(dataUrl, fileName) => updateEnigma(selectedEnigma.id, (enigma) => {
@@ -410,6 +411,7 @@ export default function EnigmasTab({
                     <MediaSourcePicker
                       className="button like"
                       accept="image/*"
+                      assetScope="object-image"
                       handleUpload={handleUpload}
                       mediaLibrary={mediaLibrary}
                       onSelect={(dataUrl, fileName) => updateEnigma(selectedEnigma.id, (enigma) => {

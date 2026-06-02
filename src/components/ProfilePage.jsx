@@ -3,6 +3,7 @@ import CreateProjectPanel from './profile/CreateProjectPanel';
 import OrdersPanel from './profile/OrdersPanel';
 import ProfileHeader from './profile/ProfileHeader';
 import ProfileMediaTab from './profile/ProfileMediaTab';
+import ProfileMessagesPanel from './profile/ProfileMessagesPanel';
 import ProfileSettingsPanel from './profile/ProfileSettingsPanel';
 import PublicationPanel from './profile/PublicationPanel';
 import ProjectList from './profile/ProjectList';
@@ -145,6 +146,13 @@ export default function ProfilePage({
         </button>
         <button
           type="button"
+          className={activeProfileTab === 'messages' ? 'active' : ''}
+          onClick={() => setActiveProfileTab('messages')}
+        >
+          Messagerie
+        </button>
+        <button
+          type="button"
           className={activeProfileTab === 'settings' ? 'active' : ''}
           onClick={() => setActiveProfileTab('settings')}
         >
@@ -197,6 +205,10 @@ export default function ProfilePage({
           onUpdatePublicSettings={onUpdatePublicSettings}
           onUploadGalleryThumbnail={onUploadGalleryThumbnail}
         />
+      ) : null}
+
+      {activeProfileTab === 'messages' ? (
+        <ProfileMessagesPanel user={user} />
       ) : null}
 
       {activeProfileTab === 'settings' ? (

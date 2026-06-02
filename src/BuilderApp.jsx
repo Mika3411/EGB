@@ -43,7 +43,7 @@ import { useProfileProjectActions } from './hooks/useProfileProjectActions';
 import { useProfileMediaActions } from './hooks/useProfileMediaActions';
 import { useProjectSaveAcknowledger } from './hooks/useProjectSaveAcknowledger';
 import { collectDescendantSceneIds } from './lib/sceneHelpers';
-import { collectProjectAssetManifest, collectProjectAssets } from './lib/assetManager';
+import { collectProjectAssets } from './lib/assetManager';
 import { isAdminAccount } from './lib/authStorage';
 import { getOfflineExportEstimateMessage } from './utils/offlineExportEstimate';
 import { lazyWithRetry } from './utils/lazyImportRetry';
@@ -1181,27 +1181,21 @@ function BuilderApp({
   ]);
 
   const anime2dStorageId = getAnime2dStorageId(auth.activeProjectId, editor.project);
+  const activeMediaProjectId = auth.activeProjectId || activeBuilderProjectId || 'active-project';
   const mediaLibrary = useMemo(() => {
     if (screen !== 'editor') return [];
 
-    const sourceProjects = [
-      ...auth.projects.map((projectRecord) => ({
-        id: projectRecord.id,
-        name: projectRecord.name || projectRecord.data?.title,
-        data: projectRecord.id === auth.activeProjectId ? editor.project : projectRecord.data,
-        isActive: projectRecord.id === auth.activeProjectId,
-      })),
-      auth.activeProjectId ? null : {
-        id: 'active-project',
-        name: editor.project?.title,
-        data: editor.project,
-        isActive: true,
-      },
-    ].filter((entry) => entry?.data);
+    const activeProject = auth.projects.find((projectRecord) => projectRecord.id === auth.activeProjectId);
+    const sourceProjects = [{
+      id: activeMediaProjectId,
+      name: activeProject?.name || activeProject?.data?.title || editor.project?.title,
+      data: editor.project,
+      isActive: true,
+    }].filter((entry) => entry?.data);
 
     return [
       ...new Map(sourceProjects.flatMap((entry) => (
-        (entry.isActive ? collectProjectAssets(entry.data) : collectProjectAssetManifest(entry.data)).map((asset) => ({
+        collectProjectAssets(entry.data).map((asset) => ({
           ...asset,
           projectId: entry.id,
           projectName: entry.name || entry.data?.title,
@@ -1210,7 +1204,7 @@ function BuilderApp({
         .filter((asset) => asset.url)
         .map((asset) => [asset.url, asset])).values(),
     ];
-  }, [auth.activeProjectId, auth.projects, editor.project, screen]);
+  }, [activeMediaProjectId, auth.activeProjectId, auth.projects, editor.project, screen]);
   const offlineExportKnownAssets = useMemo(() => ([
     ...mediaLibrary,
     ...[...exactStorageAssetSizesByUrl.entries()].map(([url, storageBytes]) => ({

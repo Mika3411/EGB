@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, FilePlus2, GitBranch, Layers3, RefreshCw, WandSparkles } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowUp, Check, FilePlus2, GitBranch, Layers3, RefreshCw, WandSparkles } from 'lucide-react';
 import {
   AiPrivacyNotice,
   HelpLabel,
@@ -305,105 +305,147 @@ export default function AiControlsPanel({
     </>
   );
 
-  const renderExtendControls = () => (
-    <>
-      {briefForm}
+  const renderExtendControls = () => {
+    const chronologyEntries = parseChronologyEntries(sceneChronology, extensionSourceProject);
 
-      <HelpLabel help={fieldHelp.source}>Source</HelpLabel>
-      <div className="segmented-control compact">
-        <button type="button" className={extendSource === 'current' ? 'active' : ''} onClick={() => setExtendSource('current')}>Projet actuel</button>
-        <button type="button" className={extendSource === 'imported' ? 'active' : ''} onClick={() => setExtendSource('imported')} disabled={!importedProject}>JSON importé</button>
-      </div>
+    return (
+      <>
+        {briefForm}
 
-      <HelpLabel help={fieldHelp.importJson}>Importer un JSON existant</HelpLabel>
-      <label className="button like secondary-action full">
-        Importer un JSON existant
-        <input type="file" accept="application/json,.json" hidden onChange={importExtensionJson} />
-      </label>
-      {importedProject ? <p className="small-note">JSON chargé: {importedProject.title || 'Projet importé'}</p> : null}
-
-      <HelpLabel help={fieldHelp.storySummary}>Résumé de l'histoire</HelpLabel>
-      <textarea
-        value={storySummary}
-        onChange={(event) => setStorySummary(event.target.value)}
-        placeholder="Résume les événements, révélations et objectifs déjà posés."
-      />
-      <button type="button" className="secondary-action full" onClick={() => setStorySummary(makeProjectStorySummary(extensionSourceProject))}>
-        Refaire le résumé depuis le projet
-      </button>
-
-      <HelpLabel help={fieldHelp.sceneChronology}>Chronologie des scènes</HelpLabel>
-      <div className="ai-chronology-list">
-        {parseChronologyEntries(sceneChronology, extensionSourceProject).map((entry, index, entries) => (
-          <div className="ai-chronology-row" key={`${entry.id}:${index}`}>
-            <span>{index + 1}</span>
-            <strong>{entry.name || entry.raw}</strong>
-            <button type="button" className="icon-button" title="Monter" disabled={index === 0} onClick={() => moveChronologyEntry(index, -1)}>↑</button>
-            <button type="button" className="icon-button" title="Descendre" disabled={index === entries.length - 1} onClick={() => moveChronologyEntry(index, 1)}>↓</button>
+        <div className="ai-extend-source-row">
+          <div className="ai-extend-source-field">
+            <HelpLabel help={fieldHelp.source}>Source</HelpLabel>
+            <div className={`segmented-control compact ai-source-toggle ${importedProject ? '' : 'single-option'}`.trim()}>
+              <button type="button" className={!importedProject || extendSource === 'current' ? 'active' : ''} onClick={() => setExtendSource('current')}>Projet actuel</button>
+              {importedProject ? (
+                <button type="button" className={extendSource === 'imported' ? 'active' : ''} onClick={() => setExtendSource('imported')}>JSON importé</button>
+              ) : null}
+            </div>
           </div>
-        ))}
-      </div>
-      <textarea
-        value={sceneChronology}
-        onChange={(event) => {
-          setSceneChronology(event.target.value);
-          setContinuationSceneId(getLastSceneIdFromChronology(event.target.value, extensionSourceProject));
-        }}
-        placeholder={[
-          '1. [id_scene] Première scène',
-          '2. [id_scene] Deuxième scène',
-          '3. [id_scene] Dernière scène actuelle',
-        ].join('\n')}
-      />
-      <button type="button" className="secondary-action full" onClick={() => {
-        const chronology = makeSceneChronology(extensionSourceProject);
-        setSceneChronology(chronology);
-        setContinuationSceneId(getLastSceneIdFromChronology(chronology, extensionSourceProject));
-      }}>
-        Reconstruire la chronologie depuis le projet
-      </button>
-
-      <HelpLabel help={fieldHelp.continuationScene}>Scène de départ détectée</HelpLabel>
-      <select value={continuationScene?.id || ''} onChange={(event) => setContinuationSceneId(event.target.value)}>
-        {extensionScenes.map((scene) => (
-          <option key={scene.id} value={scene.id}>{getSceneLabel?.(scene.id) || scene.name}</option>
-        ))}
-      </select>
-      <button type="button" className="secondary-action full" onClick={() => setContinuationSceneId(getLastSceneIdFromChronology(sceneChronology, extensionSourceProject))}>
-        Utiliser la dernière ligne de la chronologie
-      </button>
-
-      <HelpLabel help={fieldHelp.continuationWish}>Ce que tu aimerais pour la suite</HelpLabel>
-      <textarea
-        value={continuationWish}
-        onChange={(event) => {
-          setContinuationWish(event.target.value);
-          setExtendInstruction(event.target.value);
-        }}
-        placeholder="Vide = suite aléatoire mais cohérente. Ex: révéler une cave secrète avec une énigme mécanique."
-      />
-      <button type="button" className="secondary-action full" onClick={proposeIdeas}>Proposer des idées</button>
-      {ideaSuggestions.length ? (
-        <div className="ai-suggestion-list">
-          {ideaSuggestions.map((suggestion) => (
-            <button type="button" key={suggestion} onClick={() => useSuggestion(suggestion)}>{suggestion}</button>
-          ))}
+          <div className="ai-extend-source-field ai-import-json-field">
+            <HelpLabel help={fieldHelp.importJson}>JSON</HelpLabel>
+            <label className="button like secondary-action ai-import-json-button">
+              Importer un JSON
+              <input type="file" accept="application/json,.json" hidden onChange={importExtensionJson} />
+            </label>
+          </div>
+          {importedProject ? <p className="small-note ai-import-json-status">JSON chargé: {importedProject.title || 'Projet importé'}</p> : null}
         </div>
-      ) : null}
 
-      <div className="ai-progressive-steps">
-        {(() => {
-          const cost = getTextGenerationCreditCost('extend', 'continue_story');
-          return (
-            <button type="button" disabled={isGenerating || aiCredits.isLoading || !hasEnoughAiCredits('text', cost)} onClick={() => extendExistingProject('continue_story')}>
-              <strong>Continuer l'histoire</strong>
-              <span>suite cohérente - {formatCreditCost(cost)}</span>
-            </button>
-          );
-        })()}
-      </div>
-    </>
-  );
+        <div className="ai-extend-layout">
+          <div className="ai-extend-column">
+            <section className="ai-extend-card">
+              <HelpLabel help={fieldHelp.storySummary}>Résumé de l'histoire</HelpLabel>
+              <textarea
+                className="ai-story-summary-textarea"
+                value={storySummary}
+                onChange={(event) => setStorySummary(event.target.value)}
+                placeholder="Résume les événements, révélations et objectifs déjà posés."
+              />
+              <div className="ai-extend-card-actions">
+                <button type="button" className="secondary-action" onClick={() => setStorySummary(makeProjectStorySummary(extensionSourceProject))}>
+                  Refaire le résumé depuis le projet
+                </button>
+              </div>
+            </section>
+
+            <section className="ai-extend-card">
+              <HelpLabel help={fieldHelp.continuationScene}>Scène de départ détectée</HelpLabel>
+              <select value={continuationScene?.id || ''} onChange={(event) => setContinuationSceneId(event.target.value)}>
+                {extensionScenes.map((scene) => (
+                  <option key={scene.id} value={scene.id}>{getSceneLabel?.(scene.id) || scene.name}</option>
+                ))}
+              </select>
+              <div className="ai-extend-card-actions">
+                <button type="button" className="secondary-action" onClick={() => setContinuationSceneId(getLastSceneIdFromChronology(sceneChronology, extensionSourceProject))}>
+                  Utiliser la dernière ligne
+                </button>
+              </div>
+            </section>
+
+            <section className="ai-extend-card">
+              <HelpLabel help={fieldHelp.continuationWish}>Ce que tu aimerais pour la suite</HelpLabel>
+              <textarea
+                className="ai-continuation-wish-textarea"
+                value={continuationWish}
+                onChange={(event) => {
+                  setContinuationWish(event.target.value);
+                  setExtendInstruction(event.target.value);
+                }}
+                placeholder="Vide = suite aléatoire mais cohérente. Ex: révéler une cave secrète avec une énigme mécanique."
+              />
+              <div className="ai-extend-card-actions">
+                <button type="button" className="secondary-action" onClick={proposeIdeas}>Proposer des idées</button>
+              </div>
+              {ideaSuggestions.length ? (
+                <div className="ai-suggestion-list">
+                  {ideaSuggestions.map((suggestion) => (
+                    <button type="button" key={suggestion} onClick={() => useSuggestion(suggestion)}>{suggestion}</button>
+                  ))}
+                </div>
+              ) : null}
+            </section>
+
+            <div className="ai-progressive-steps ai-extend-run-action">
+              {(() => {
+                const cost = getTextGenerationCreditCost('extend', 'continue_story');
+                return (
+                  <button type="button" disabled={isGenerating || aiCredits.isLoading || !hasEnoughAiCredits('text', cost)} onClick={() => extendExistingProject('continue_story')}>
+                    <strong>Continuer l'histoire</strong>
+                    <span>suite cohérente - {formatCreditCost(cost)}</span>
+                  </button>
+                );
+              })()}
+            </div>
+          </div>
+
+          <section className="ai-extend-card ai-chronology-card">
+            <HelpLabel help={fieldHelp.sceneChronology}>Chronologie des scènes</HelpLabel>
+            <div className="ai-chronology-scroll-card">
+              <div className="ai-chronology-list">
+                {chronologyEntries.map((entry, index, entries) => (
+                  <div className="ai-chronology-row" key={`${entry.id}:${index}`}>
+                    <span>{index + 1}</span>
+                    <strong>{entry.name || entry.raw}</strong>
+                    <button type="button" className="icon-button" title="Monter" aria-label="Monter" disabled={index === 0} onClick={() => moveChronologyEntry(index, -1)}>
+                      <ArrowUp size={14} aria-hidden="true" />
+                    </button>
+                    <button type="button" className="icon-button" title="Descendre" aria-label="Descendre" disabled={index === entries.length - 1} onClick={() => moveChronologyEntry(index, 1)}>
+                      <ArrowDown size={14} aria-hidden="true" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <details className="ai-chronology-raw">
+              <summary>Édition texte</summary>
+              <textarea
+                value={sceneChronology}
+                onChange={(event) => {
+                  setSceneChronology(event.target.value);
+                  setContinuationSceneId(getLastSceneIdFromChronology(event.target.value, extensionSourceProject));
+                }}
+                placeholder={[
+                  '1. [id_scene] Première scène',
+                  '2. [id_scene] Deuxième scène',
+                  '3. [id_scene] Dernière scène actuelle',
+                ].join('\n')}
+              />
+            </details>
+            <div className="ai-extend-card-actions">
+              <button type="button" className="secondary-action" onClick={() => {
+                const chronology = makeSceneChronology(extensionSourceProject);
+                setSceneChronology(chronology);
+                setContinuationSceneId(getLastSceneIdFromChronology(chronology, extensionSourceProject));
+              }}>
+                Reconstruire depuis le projet
+              </button>
+            </div>
+          </section>
+        </div>
+      </>
+    );
+  };
 
   const renderDetailsStep = () => (
     <div className="ai-wizard-step">

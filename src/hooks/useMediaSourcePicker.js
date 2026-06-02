@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { getAssetFolderIds } from '../lib/mediaLibraryFolders';
 
 export const acceptToMediaType = (accept = '') => {
   if (accept.includes('image')) return 'image';
@@ -52,7 +53,8 @@ export const dedupeLibraryItems = (items = [], mediaType = '') => {
 export const matchesAssetScope = (asset = {}, scope = '') => {
   if (!scope) return true;
   if (scope === 'scene-background') {
-    return asset.meta?.role === 'background' || /^asset_scene_.*_background$/.test(asset.id || '');
+    return assetMatchesMediaType(asset, 'image')
+      && getAssetFolderIds(asset).includes('scene-images');
   }
   if (scope === 'scene-music') {
     return assetMatchesMediaType(asset, 'audio')
@@ -64,8 +66,47 @@ export const matchesAssetScope = (asset = {}, scope = '') => {
       || asset.meta?.role === 'ambientSound'
       || /^asset_scene_.*_ambient$/.test(asset.id || '');
   }
+  if (scope === 'object-image' || scope === 'enigma-image' || scope === 'decor3d-texture') {
+    return assetMatchesMediaType(asset, 'image')
+      && getAssetFolderIds(asset).includes('object-images');
+  }
+  if (scope === 'cinematic-image') {
+    return assetMatchesMediaType(asset, 'image')
+      && getAssetFolderIds(asset).includes('cinematic-images');
+  }
+  if (scope === 'animation-image') {
+    return assetMatchesMediaType(asset, 'image')
+      && getAssetFolderIds(asset).includes('animation-images');
+  }
+  if (scope === 'object-sound' || scope === 'cinematic-audio' || scope === 'logic-sound') {
+    return assetMatchesMediaType(asset, 'audio');
+  }
+  if (scope === 'cinematic-video') {
+    return assetMatchesMediaType(asset, 'video');
+  }
   return true;
 };
+
+export const assetMatchesProject = (asset = {}, projectId = '') => {
+  if (!projectId) return true;
+  const projectIds = [
+    asset.projectId,
+    asset.projectKey,
+    ...(Array.isArray(asset.projectIds) ? asset.projectIds : []),
+  ].filter(Boolean).map(String);
+  return !projectIds.length || projectIds.includes(String(projectId));
+};
+
+export const filterLibraryItems = (mediaLibrary = [], {
+  assetScope = '',
+  mediaType = '',
+  projectId = '',
+} = {}) => dedupeLibraryItems(mediaLibrary.filter((asset) => (
+  asset.url
+  && assetMatchesMediaType(asset, mediaType)
+  && matchesAssetScope(asset, assetScope)
+  && assetMatchesProject(asset, projectId)
+)), mediaType);
 
 export function useMediaSourcePicker({
   accept = '',
@@ -73,18 +114,15 @@ export function useMediaSourcePicker({
   handleUpload,
   mediaLibrary = [],
   onSelect,
+  projectId = '',
 } = {}) {
   const inputRef = useRef(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const mediaType = acceptToMediaType(accept);
   const libraryItems = useMemo(() => (
-    dedupeLibraryItems(mediaLibrary.filter((asset) => (
-      asset.url
-      && assetMatchesMediaType(asset, mediaType)
-      && matchesAssetScope(asset, assetScope)
-    )), mediaType)
-  ), [assetScope, mediaLibrary, mediaType]);
+    filterLibraryItems(mediaLibrary, { assetScope, mediaType, projectId })
+  ), [assetScope, mediaLibrary, mediaType, projectId]);
 
   const openPicker = useCallback(() => {
     setIsOpen(true);

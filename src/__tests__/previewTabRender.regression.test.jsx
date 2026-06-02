@@ -186,6 +186,257 @@ describe('PreviewTab render regressions', () => {
     expect(screen.getByText('Sortie narrative')).toBeTruthy();
   });
 
+  test('rend une seule synthese de consequences hors conversation', () => {
+    const detail = 'Vous plantez vos pieds dans la boue et levez votre arme. Les loups arrivent ensemble.';
+    render(<PreviewTab
+      {...makeProps({
+        choiceEffectNotices: [
+          { type: 'message', title: 'Message affiche', detail },
+          { type: 'route', title: 'Nouvelle scène', detail: 'Gorge des cerfs' },
+        ],
+      })}
+    />);
+
+    expect(screen.getAllByText('Conséquences du choix')).toHaveLength(1);
+    expect(screen.getByText(detail)).toBeTruthy();
+    expect(screen.queryByText('Nouvelle scène')).toBeNull();
+    expect(screen.queryByText('Gorge des cerfs')).toBeNull();
+  });
+
+  test('met en avant continuer apres un combat termine', () => {
+    const closeHeroCombat = vi.fn();
+    const project = makeProject({
+      scenes: [
+        {
+          id: 'scene-1',
+          name: 'Marais des lanternes',
+          introText: 'La boue retient les pas.',
+          hotspots: [],
+          sceneObjects: [],
+        },
+        {
+          id: 'scene-2',
+          name: 'Tour des guetteurs',
+          introText: 'La suite vous attend.',
+          hotspots: [],
+          sceneObjects: [],
+        },
+      ],
+    });
+
+    render(<PreviewTab
+      {...makeProps({
+        project,
+        playScene: project.scenes[0],
+        heroAdventure: {
+          enabled: true,
+          dice: { sides: 20, label: 'd20' },
+          combat: { showDice: true, enemyName: 'Goule du marais', enemyMaxMana: 4 },
+        },
+        heroState: {
+          name: 'Beren',
+          health: 20,
+          maxHealth: 20,
+          mana: 8,
+          maxMana: 8,
+          force: 9,
+          initiative: 0,
+          skills: [{ id: 'force', name: 'Force', bonus: 9 }],
+          powers: [],
+        },
+        activeHeroCombat: {
+          id: 'combat-1',
+          status: 'victory',
+          phase: 'hero',
+          round: 2,
+          enemyName: 'Goule du marais',
+          enemyHealth: 0,
+          enemyMaxHealth: 13,
+          enemyMana: 0,
+          enemyMaxMana: 4,
+          heroInitiative: 0,
+          enemyInitiative: 0,
+          pendingSceneId: 'scene-2',
+          message: 'Goule vaincue. La tour des guetteurs vous attend.',
+          history: ['Jet du heros 29 total.'],
+          entry: {
+            id: 'combat-entry',
+            combatSkillId: 'force',
+            combatEnemyName: 'Goule du marais',
+            combatShowDice: true,
+          },
+        },
+        closeHeroCombat,
+      })}
+    />);
+
+    const continueButtons = screen.getAllByRole('button', { name: /continuer/i });
+    expect(continueButtons).toHaveLength(2);
+    const primaryContinue = continueButtons.find((button) => button.className.includes('hero-combat-end-button--primary'));
+    expect(primaryContinue).toBeTruthy();
+    expect(screen.getByText("Suite de l'aventure")).toBeTruthy();
+    expect(screen.queryByText('Combat terminé.')).toBeNull();
+
+    fireEvent.click(primaryContinue);
+    expect(closeHeroCombat).toHaveBeenCalledTimes(1);
+  });
+
+  test('affiche un objet sans image dans le visualiseur', () => {
+    render(<PreviewTab
+      {...makeProps({
+        viewerImage: {
+          id: 'note',
+          src: '',
+          name: 'Note froissee',
+          icon: 'NOTE',
+        },
+      })}
+    />);
+
+    expect(screen.getByRole('img', { name: 'Note froissee' }).textContent).toBe('NOTE');
+    expect(screen.getByText('Note froissee')).toBeTruthy();
+  });
+
+  test('affiche un objet de scene depuis son item lie dans la mediatheque', () => {
+    const setViewerImage = vi.fn();
+    const project = makeProject({
+      assets: [{ id: 'asset-note', type: 'image', url: 'data:image/png;base64,bm90ZQ==' }],
+      items: [{ id: 'note', name: 'Note froissee', imageId: 'asset-note', icon: 'NOTE' }],
+      scenes: [{
+        id: 'scene-1',
+        name: 'Salle blanche',
+        introText: 'Le preview est stable.',
+        hotspots: [],
+        sceneObjects: [{
+          id: 'scene-note',
+          name: 'Note sur table',
+          blockType: 'image',
+          interactionMode: 'popup',
+          linkedItemId: 'note',
+          x: 45,
+          y: 45,
+          width: 16,
+          height: 12,
+        }],
+      }],
+    });
+
+    render(<PreviewTab
+      {...makeProps({
+        project,
+        playScene: project.scenes[0],
+        setViewerImage,
+      })}
+    />);
+
+    expect(screen.getByAltText('Note sur table').getAttribute('src')).toBe('data:image/png;base64,bm90ZQ==');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Note sur table' }));
+    expect(setViewerImage).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'note',
+      src: 'data:image/png;base64,bm90ZQ==',
+      name: 'Note sur table',
+    }));
+  });
+
+  test('ouvre la fiche fallback d un objet de scene lie sans image', () => {
+    const setViewerImage = vi.fn();
+    const project = makeProject({
+      items: [{ id: 'note', name: 'Note froissee', icon: 'NOTE' }],
+      scenes: [{
+        id: 'scene-1',
+        name: 'Salle blanche',
+        introText: 'Le preview est stable.',
+        hotspots: [],
+        sceneObjects: [{
+          id: 'scene-note',
+          name: 'Note sur table',
+          interactionMode: 'popup',
+          linkedItemId: 'note',
+          x: 45,
+          y: 45,
+          width: 16,
+          height: 12,
+        }],
+      }],
+    });
+
+    render(<PreviewTab
+      {...makeProps({
+        project,
+        playScene: project.scenes[0],
+        setViewerImage,
+      })}
+    />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Note sur table' }));
+    expect(setViewerImage).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'note',
+      src: '',
+      name: 'Note froissee',
+      icon: 'NOTE',
+      caption: 'Note sur table',
+    }));
+  });
+
+  test('affiche une miniature d inventaire venant de la mediatheque', () => {
+    const openInventoryItem = vi.fn();
+    const project = makeProject({
+      assets: [{ id: 'asset-watch', type: 'image', url: 'data:image/png;base64,d2F0Y2g=' }],
+      items: [{ id: 'watch', name: 'Montre arretee', imageId: 'asset-watch', icon: '⌚' }],
+    });
+
+    render(<PreviewTab
+      {...makeProps({
+        project,
+        inventory: ['watch'],
+        openInventoryItem,
+      })}
+    />);
+
+    fireEvent.click(screen.getByRole('button', { name: /inventaire \(1\)/i }));
+
+    const watchImages = screen.getAllByAltText('Montre arretee');
+    expect(watchImages.length).toBeGreaterThanOrEqual(1);
+    expect(watchImages.every((image) => image.getAttribute('src') === 'data:image/png;base64,d2F0Y2g=')).toBe(true);
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Montre arretee/i })[0]);
+    expect(openInventoryItem).toHaveBeenCalledWith('watch', { previewOnly: true });
+  });
+
+  test('rend les objets invisibles comme zones cliquables de preview', () => {
+    const project = makeProject({
+      scenes: [{
+        id: 'scene-1',
+        name: 'Salle blanche',
+        introText: 'Le preview est stable.',
+        hotspots: [],
+        sceneObjects: [{
+          id: 'hidden-watch',
+          name: 'Montre cachee',
+          isInvisible: true,
+          interactionMode: 'inventory',
+          linkedItemId: 'watch',
+          x: 40,
+          y: 40,
+          width: 14,
+          height: 14,
+        }],
+      }],
+      items: [{ id: 'watch', name: 'Montre arretee', icon: '⌚' }],
+    });
+
+    render(<PreviewTab
+      {...makeProps({
+        project,
+        playScene: project.scenes[0],
+      })}
+    />);
+
+    const invisibleObject = screen.getByRole('button', { name: 'Montre cachee' });
+    expect(invisibleObject.className).toContain('player-scene-object-invisible');
+  });
+
   test('rend le carnet aventure avec inventaire et variables', () => {
     const project = makeProject({
       creationMode: 'adventure_choices',

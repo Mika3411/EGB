@@ -105,6 +105,7 @@ const DEFAULT_STATE = () => {
     selectedInventoryIds: [],
     draggedInventoryId: null,
     inventoryDrawerOpen: false,
+    objectiveDrawerOpen: false,
     narrationCollapsed: false,
     pauseOpen: false,
     showInteractionHints: true,

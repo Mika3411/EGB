@@ -1,3 +1,5 @@
+import { resolveAssetUrl } from '../../lib/assetManager';
+
 export default function PreviewInventoryDrawer({
   isHeroPanelOpen = false,
   isInventoryOpen = false,
@@ -96,13 +98,14 @@ export default function PreviewInventoryDrawer({
                   {inventory.length ? inventory.map((itemId) => {
                     const item = (project.items || []).find((entry) => entry.id === itemId);
                     if (!item) return null;
+                    const itemImageUrl = resolveAssetUrl(project, item.imageId, item.imageData);
                     return (
                       <button
                         key={itemId}
                         type="button"
                         className={`inventory-item inventory-tile ${selectedInventoryIds.includes(itemId) ? 'selected' : ''}`}
                         draggable
-                        onClick={() => openInventoryItem(itemId)}
+                        onClick={() => openInventoryItem(itemId, { previewOnly: true })}
                         onDragStart={() => setDraggedInventoryId(itemId)}
                         onDragEnd={() => setDraggedInventoryId(null)}
                         onDragOver={(event) => event.preventDefault()}
@@ -115,7 +118,7 @@ export default function PreviewInventoryDrawer({
                         }}
                       >
                         <div className="inventory-thumb">
-                          {item.imageData ? <img src={item.imageData} alt={item.name} /> : <span>{item.icon || 'Objet'}</span>}
+                          {itemImageUrl ? <img src={itemImageUrl} alt={item.name} /> : <span>{item.icon || 'Objet'}</span>}
                         </div>
                         <strong>{item.name}</strong>
                       </button>

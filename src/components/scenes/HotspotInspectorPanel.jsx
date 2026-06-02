@@ -3,7 +3,7 @@ import MediaSourcePicker from '../MediaSourcePicker.jsx';
 import { HelpLabel } from './SceneEditorChrome.jsx';
 import ConversationEditorModal from './ConversationEditorModal.jsx';
 import ConversationGraph from './ConversationGraph.jsx';
-import { HeroMalusFields, SkillCheckFields } from './HotspotActionFields.jsx';
+import HotspotActionFields, { HeroMalusFields, SkillCheckFields } from './HotspotActionFields.jsx';
 import HotspotAssetsPanel from './HotspotAssetsPanel.jsx';
 
 const makeAdvancedCondition = () => ({
@@ -83,6 +83,12 @@ export default function HotspotInspectorPanel({
 }) {
   if (!selectedHotspot) return null;
   const isConversationHotspot = !isBeginnerMode && selectedHotspot.actionType === 'conversation';
+  const updateSelectedHotspot = (updater) => patchProject((draft) => {
+    const spot = draft.scenes
+      .find((scene) => scene.id === selectedSceneId)
+      ?.hotspots.find((hotspot) => hotspot.id === selectedHotspotId);
+    if (spot) updater(spot);
+  });
 
   return (
     <>
@@ -97,6 +103,17 @@ export default function HotspotInspectorPanel({
                         <div><HelpLabel help="Hauteur de la zone cliquable. Une zone trop petite peut être difficile à trouvér sur mobile.">Hauteur</HelpLabel><NumberInput value={selectedHotspot.height} onValueChange={(nextValue) => patchProject((draft) => { const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.height = nextValue; })} /></div>
                       </div>
                       {renderShapeControls('hotspot', selectedHotspotId)}
+                      <HotspotActionFields
+                        entry={selectedHotspot}
+                        updateEntry={updateSelectedHotspot}
+                        actionType={selectedHotspot.actionType || 'dialogue'}
+                        isBeginnerMode={isBeginnerMode}
+                        isHeroAdventureProject={isHeroAdventureProject}
+                        selectedSceneId={selectedSceneId}
+                        project={project}
+                        heroSkills={heroSkills}
+                        getSceneLabel={getSceneLabel}
+                      />
                       {isConversationHotspot ? (
                         <button type="button" className="secondary-action full" data-tour="conversation-editor-button" onClick={() => setConversationEditorOpen(true)}>
                           Modifier la conversation
@@ -320,7 +337,7 @@ export default function HotspotInspectorPanel({
                                   <div className="conversation-response-media-grid">
                                     <div>
                                       <HelpLabel help="Image affichée au joueur quand il choisit cette réponse. Utile pour montrer un indice, un lieu, un objet ou une reaction.">Image après réponse</HelpLabel>
-                                      <MediaSourcePicker className="button like full secondary-action" accept="image/*" handleUpload={handleUpload} mediaLibrary={mediaLibrary} onSelect={(data, name) => patchProject((draft) => {
+                                      <MediaSourcePicker className="button like full secondary-action" accept="image/*" assetScope="object-image" handleUpload={handleUpload} mediaLibrary={mediaLibrary} onSelect={(data, name) => patchProject((draft) => {
                                         const targetReply = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId)?.conversation?.nodes?.[nodeIndex]?.replies?.[replyIndex];
                                         if (targetReply) {
                                           targetReply.responseImageData = data;
@@ -330,7 +347,7 @@ export default function HotspotInspectorPanel({
                                     </div>
                                     <div>
                                       <HelpLabel help="Son court joue au moment du choix : bruit, sting musical, voix ou effet de confirmation.">Son après réponse</HelpLabel>
-                                      <MediaSourcePicker className="button like full secondary-action" accept="audio/*" handleUpload={handleUpload} mediaLibrary={mediaLibrary} onSelect={(data, name) => patchProject((draft) => {
+                                      <MediaSourcePicker className="button like full secondary-action" accept="audio/*" assetScope="object-sound" handleUpload={handleUpload} mediaLibrary={mediaLibrary} onSelect={(data, name) => patchProject((draft) => {
                                         const targetReply = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId)?.conversation?.nodes?.[nodeIndex]?.replies?.[replyIndex];
                                         if (targetReply) {
                                           targetReply.responseSoundData = data;
@@ -340,7 +357,7 @@ export default function HotspotInspectorPanel({
                                     </div>
                                     <div>
                                       <HelpLabel help="Portrait affiche dans la conversation après ce choix. Pratique pour montrer que le PNJ change d'expression ou qu'un autre interlocuteur prend la parole.">Portrait PNJ</HelpLabel>
-                                      <MediaSourcePicker className="button like full secondary-action" accept="image/*" handleUpload={handleUpload} mediaLibrary={mediaLibrary} onSelect={(data, name) => patchProject((draft) => {
+                                      <MediaSourcePicker className="button like full secondary-action" accept="image/*" assetScope="object-image" handleUpload={handleUpload} mediaLibrary={mediaLibrary} onSelect={(data, name) => patchProject((draft) => {
                                         const targetReply = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId)?.conversation?.nodes?.[nodeIndex]?.replies?.[replyIndex];
                                         if (targetReply) {
                                           targetReply.npcPortraitData = data;
@@ -350,7 +367,7 @@ export default function HotspotInspectorPanel({
                                     </div>
                                     <div>
                                       <HelpLabel help="Ambiance lancée en fond léger après cette réponse. Elle sert à donner une couleur sonore à la branche choisie.">Ambiance</HelpLabel>
-                                      <MediaSourcePicker className="button like full secondary-action" accept="audio/*" handleUpload={handleUpload} mediaLibrary={mediaLibrary} onSelect={(data, name) => patchProject((draft) => {
+                                      <MediaSourcePicker className="button like full secondary-action" accept="audio/*" assetScope="object-sound" handleUpload={handleUpload} mediaLibrary={mediaLibrary} onSelect={(data, name) => patchProject((draft) => {
                                         const targetReply = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId)?.conversation?.nodes?.[nodeIndex]?.replies?.[replyIndex];
                                         if (targetReply) {
                                           targetReply.ambienceSoundData = data;

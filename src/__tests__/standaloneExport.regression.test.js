@@ -48,6 +48,16 @@ const makeStandaloneProject = () => ({
       rewardItemId: 'key',
       objectImageData: 'data:image/png;base64,aG90c3BvdA==',
       objectImageName: 'Coffret.png',
+    }, {
+      id: 'spot-note',
+      name: 'Papier',
+      x: 60,
+      y: 45,
+      width: 10,
+      height: 10,
+      actionType: 'dialogue_item',
+      dialogue: 'Tu prends une note.',
+      rewardItemId: 'note',
     }],
     sceneObjects: [{
       id: 'visible-note',
@@ -65,6 +75,10 @@ const makeStandaloneProject = () => ({
     name: 'Cle',
     imageData: 'data:image/png;base64,aXRlbQ==',
     imageName: 'Cle.png',
+  }, {
+    id: 'note',
+    name: 'Note',
+    icon: 'NOTE',
   }],
   enigmas: [],
   cinematics: [{
@@ -806,6 +820,39 @@ describe('standalone export regression', () => {
     expect(runtime.state.dialogue).toBe('Tu prends la cle.');
   });
 
+  test('shows standalone inventory items when collected or clicked', () => {
+    const { runtime } = runStandalone(makeStandaloneProject());
+
+    runtime.triggerHotspot('spot-key');
+    expect(runtime.state.inventory).toEqual(['key']);
+    expect(runtime.state.viewerImage).toMatchObject({
+      src: 'data:image/png;base64,aG90c3BvdA==',
+      name: 'Coffret.png',
+    });
+
+    runtime.state.viewerImage = null;
+    expect(runtime.openInventoryItem('key')).toBe(true);
+    expect(runtime.state.viewerImage).toMatchObject({
+      id: 'key',
+      src: 'data:image/png;base64,aXRlbQ==',
+      name: 'Cle',
+    });
+  });
+
+  test('shows standalone reward items without hotspot images', () => {
+    const { runtime } = runStandalone(makeStandaloneProject());
+
+    runtime.triggerHotspot('spot-note');
+
+    expect(runtime.state.inventory).toEqual(['note']);
+    expect(runtime.state.viewerImage).toMatchObject({
+      id: 'note',
+      src: '',
+      name: 'Note',
+      icon: 'NOTE',
+    });
+  });
+
   test('applies configured hero malus from standalone hotspots without dropping existing action effects', () => {
     const { runtime } = runStandalone(makeHeroMalusProject());
 
@@ -841,14 +888,14 @@ describe('standalone export regression', () => {
     runtime.state.inventory = ['health-potion', 'mana-potion'];
     runtime.state.selectedInventoryIds = ['health-potion', 'mana-potion'];
 
-    expect(runtime.openInventoryItem('health-potion')).toBe(true);
+    expect(runtime.openInventoryItem('health-potion', { useHeroItem: true })).toBe(true);
     expect(runtime.state.heroState.health).toBe(9);
     expect(runtime.state.heroState.mana).toBe(2);
     expect(runtime.state.inventory).toEqual(['mana-potion']);
     expect(runtime.state.selectedInventoryIds).toEqual(['mana-potion']);
     expect(runtime.state.dialogue).toContain('+3 PV (9/10)');
 
-    expect(runtime.openInventoryItem('mana-potion')).toBe(true);
+    expect(runtime.openInventoryItem('mana-potion', { useHeroItem: true })).toBe(true);
     expect(runtime.state.heroState.health).toBe(9);
     expect(runtime.state.heroState.mana).toBe(6);
     expect(runtime.state.inventory).toEqual([]);

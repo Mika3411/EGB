@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { POPUP_OVERLAY_GRADIENTS } from '../data/enigmaConfig';
 import {
+  createInventoryViewerImage as createGameInventoryViewerImage,
   getSceneAmbientSoundUrl,
   getSceneBackgroundUrl,
   getSceneMusicUrl,
@@ -21,6 +22,7 @@ import PreviewEnigmaContent from './preview/PreviewEnigmaContent.jsx';
 import PreviewEnigmaOverlay from './preview/PreviewEnigmaOverlay.jsx';
 import PreviewHeroSetupOverlay from './preview/PreviewHeroSetupOverlay.jsx';
 import PreviewHeroPanel from './preview/PreviewHeroPanel.jsx';
+import PreviewObjectiveChecklist from './preview/PreviewObjectiveChecklist.jsx';
 import PreviewPauseOverlay from './preview/PreviewPauseOverlay.jsx';
 import PreviewSidePanel from './preview/PreviewSidePanel.jsx';
 import PreviewStagePanel from './preview/PreviewStagePanel.jsx';
@@ -56,6 +58,7 @@ export default function PreviewTab(props) {
     getSceneLabel,
     dialogue,
     inventory,
+    visitedSceneIds = [],
     storyVariables = {},
     adventureJournalEntries = [],
     chosenConversationReplyIds = [],
@@ -157,6 +160,7 @@ export default function PreviewTab(props) {
   const [loadedSceneAspectRatio, setLoadedSceneAspectRatio] = useState(0);
   const [areControlsVisible, setAreControlsVisible] = useState(true);
   const [isPauseOpen, setIsPauseOpen] = useState(false);
+  const [isObjectiveOpen, setIsObjectiveOpen] = useState(false);
   const [showInteractionHints, setShowInteractionHints] = useState(true);
   const [isNarrationCollapsed, setIsNarrationCollapsed] = useState(false);
   const [sceneTransitionOverlay, setSceneTransitionOverlay] = useState(null);
@@ -362,16 +366,25 @@ export default function PreviewTab(props) {
     const linkedItem = obj.linkedItemId ?
        project.items.find((entry) => entry.id === obj.linkedItemId)
       : null;
-    const popupSrc = obj.popupImageData || obj.popupImage || obj.imageData || linkedItem?.imageData || '';
+    const linkedItemViewer = createGameInventoryViewerImage(project, linkedItem);
+    const popupSrc = resolveAssetUrl(project, obj.popupImageId, obj.popupImageData || obj.popupImage)
+      || resolveAssetUrl(project, obj.imageId, obj.imageData)
+      || linkedItemViewer?.src
+      || '';
+    const fallbackViewer = linkedItemViewer || (obj.linkedItemId ? createGameInventoryViewerImage(project, obj.linkedItemId) : null);
 
     if ((mode === 'inventory' || mode === 'both') && obj.linkedItemId) {
-      if (addInventoryItem) addInventoryItem(obj.linkedItemId);
-      else {
+      let wasAdded = false;
+      if (addInventoryItem) {
+        wasAdded = addInventoryItem(obj.linkedItemId);
+      } else {
         setInventory?.((prev) => (prev.includes(obj.linkedItemId) ? prev : [...prev, obj.linkedItemId]));
         setSelectedInventoryIds?.((prev) => (
           prev.includes(obj.linkedItemId) ? prev : [...prev, obj.linkedItemId].slice(-2)
         ));
+        wasAdded = true;
       }
+      if (!wasAdded && fallbackViewer) setViewerImage(fallbackViewer);
       setDialogue(obj.dialogue || `Tu obtiens ${linkedItem?.name || obj.name || 'un objet'}.`);
     } else if (obj.dialogue) {
       setDialogue(obj.dialogue);
@@ -383,6 +396,11 @@ export default function PreviewTab(props) {
         src: popupSrc,
         name: obj.name || linkedItem?.name || obj.popupImageName || 'Objet',
         caption: obj.dialogue || obj.name || linkedItem?.name || '',
+      });
+    } else if ((mode === 'popup' || mode === 'both') && fallbackViewer) {
+      setViewerImage({
+        ...fallbackViewer,
+        caption: obj.dialogue || obj.name || linkedItem?.name || fallbackViewer.name || '',
       });
     }
 
@@ -406,6 +424,16 @@ export default function PreviewTab(props) {
     const item = (project.items || []).find((entry) => entry.id === itemId);
     return item ? `${item.icon || ''} ${item.name || 'Objet'}`.trim() : 'Objet';
   };
+  const objectiveChecklist = heroAdventure?.objectiveChecklist || project?.heroAdventure?.objectiveChecklist || null;
+  const objectiveConditionContext = {
+    inventory,
+    completedHotspotIds,
+    chosenConversationReplyIds,
+    storyVariables,
+    project,
+    getItemById: (itemId) => (project.items || []).find((entry) => entry.id === itemId),
+    getStoryVariableLabel: getStoryVariableJournalLabel,
+  };
   const conversationReplies = (project.scenes || []).flatMap((scene) => (
     (scene.hotspots || [])
       .filter((spot) => spot.actionType === 'conversation')
@@ -413,7 +441,10 @@ export default function PreviewTab(props) {
   ));
   const endingReplies = conversationReplies.filter((reply) => reply.actionType === 'ending');
   const hiddenReplies = conversationReplies.filter((reply) => (reply.conditionType || 'none') !== 'none');
-  const getItemById = (itemId) => project.items.find((entry) => entry.id === itemId);
+  const getItemById = (itemId) => (project.items || []).find((entry) => entry.id === itemId);
+  const getItemImageUrl = (item = null) => (
+    item ? resolveAssetUrl(project, item.imageId, item.imageData) : ''
+  );
   const equippedHeroItems = isHeroAdventure
     ? equippedHeroItemIds.map((itemId) => getItemById(itemId)).filter(Boolean)
     : [];
@@ -443,7 +474,7 @@ export default function PreviewTab(props) {
       id: `${item.id}-${Date.now()}`,
       name: item.name || 'Objet obtenu',
       icon: item.icon || '+',
-      imageData: item.imageData || '',
+      imageData: getItemImageUrl(item),
       bonus: getHeroRewardBonusLabel(item),
     });
     heroRewardNoticeTimerRef.current = window.setTimeout(() => {
@@ -541,7 +572,7 @@ export default function PreviewTab(props) {
   const visibleConversationReplies = conversationNode
     ? (conversationNode.replies || []).filter((reply) => isConversationReplyAvailable?.(reply) !== false)
     : [];
-  const lockedConversationReplies = isChoiceAdventure && conversationNode
+  const lockedConversationReplies = usesImmersiveAdventurePlayer && conversationNode
     ? (conversationNode.replies || []).filter((reply) => {
       const isConsumed = reply.id && (
         hiddenConversationReplyIds.includes(reply.id)
@@ -551,8 +582,16 @@ export default function PreviewTab(props) {
     })
     : [];
   const displayedConversationReplies = [...visibleConversationReplies, ...lockedConversationReplies];
+  const visibleChoiceEffectNotices = choiceEffectNotices.filter((notice = {}) => {
+    const normalizedTitle = String(notice.title || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toLowerCase();
+    return normalizedTitle !== 'nouvelle scene';
+  });
   const renderChoiceEffectSummary = (compact = false) => {
-    if (!choiceEffectNotices.length) return null;
+    if (!visibleChoiceEffectNotices.length) return null;
     return (
       <div className={`choice-effect-summary ${compact ? 'compact' : ''}`}>
         <div className="choice-effect-summary-head">
@@ -564,7 +603,7 @@ export default function PreviewTab(props) {
           ) : null}
         </div>
         <div className="choice-effect-list">
-          {choiceEffectNotices.map((notice, index) => (
+          {visibleChoiceEffectNotices.map((notice, index) => (
             <span key={`${notice.type || 'effect'}-${index}`} className={`choice-effect-pill choice-effect-${notice.type || 'effect'}`}>
               <strong>{notice.title || 'Effet'}</strong>
               {notice.detail ? <small>{notice.detail}</small> : null}
@@ -584,6 +623,13 @@ export default function PreviewTab(props) {
       endingLabel={endingLabel}
       getJournalItemLabel={getJournalItemLabel}
       getStoryVariableJournalLabel={getStoryVariableJournalLabel}
+    />
+  );
+  const renderObjectiveChecklist = (compact = false) => (
+    <PreviewObjectiveChecklist
+      checklist={objectiveChecklist}
+      conditionContext={objectiveConditionContext}
+      compact={compact}
     />
   );
   const renderAdventureInventoryContent = (compact = false) => (
@@ -747,13 +793,14 @@ export default function PreviewTab(props) {
       {itemIds.length ? itemIds.map((itemId) => {
         const item = project.items.find((entry) => entry.id === itemId);
         if (!item) return null;
+        const itemImageUrl = getItemImageUrl(item);
         return (
           <button
             key={itemId}
             type="button"
             className={`inventory-item inventory-tile ${selectedInventoryIds.includes(itemId) ? 'selected' : ''}`}
             draggable
-            onClick={() => openInventoryItem(itemId)}
+            onClick={() => openInventoryItem(itemId, { previewOnly: true })}
             onDragStart={(event) => setDraggedHeroItem(event, itemId)}
             onDragEnd={clearDraggedHeroItem}
             onDragOver={(event) => event.preventDefault()}
@@ -767,7 +814,7 @@ export default function PreviewTab(props) {
             }}
           >
             <div className="inventory-thumb">
-              {item.imageData ? <img src={item.imageData} alt={item.name} /> : <span>{item.icon || '📦'}</span>}
+              {itemImageUrl ? <img src={itemImageUrl} alt={item.name} /> : <span>{item.icon || '📦'}</span>}
             </div>
             <strong>{item.name}</strong>
             {isHeroAdventure && item.heroItemType === 'equipment' ? <small className="inventory-item-badge">A porter</small> : null}
@@ -815,7 +862,7 @@ export default function PreviewTab(props) {
                 onDrop={(event) => dropHeroEquipment(event, item, index)}
               >
                 <span className="hero-equipment-slot-thumb">
-                  {item?.imageData ? <img src={item.imageData} alt={item.name} /> : <span>{item?.icon || '+'}</span>}
+                  {getItemImageUrl(item) ? <img src={getItemImageUrl(item)} alt={item.name} /> : <span>{item?.icon || '+'}</span>}
                 </span>
                 <small>{getHeroSlotLabel(item, index)}</small>
               </button>
@@ -919,7 +966,7 @@ export default function PreviewTab(props) {
                   onDragStart={(event) => setDraggedHeroItem(event, item.id)}
                   onDragEnd={clearDraggedHeroItem}
                 >
-                  {item.imageData ? <img src={item.imageData} alt={item.name} /> : <span>{item.icon || '◆'}</span>}
+                  {getItemImageUrl(item) ? <img src={getItemImageUrl(item)} alt={item.name} /> : <span>{item.icon || '◆'}</span>}
                   <strong>{item.name}</strong>
                   <small>{getHeroEquipmentBonusLabel(item)}</small>
                 </button>
@@ -1102,6 +1149,7 @@ export default function PreviewTab(props) {
         isChoiceAdventure={isChoiceAdventure}
         isHeroPanelOpen={isHeroPanelOpen}
         isInventoryOpen={isInventoryOpen}
+        isObjectiveOpen={isObjectiveOpen}
         usesImmersiveAdventurePlayer={usesImmersiveAdventurePlayer}
         currentGameTitle={currentGameTitle}
         inventory={inventory}
@@ -1111,6 +1159,7 @@ export default function PreviewTab(props) {
         draggedInventoryId={draggedInventoryId}
         setIsHeroPanelOpen={setIsHeroPanelOpen}
         setIsInventoryOpen={setIsInventoryOpen}
+        setIsObjectiveOpen={setIsObjectiveOpen}
         setDebugInventoryItemId={setDebugInventoryItemId}
         setDialogue={setDialogue}
         setDraggedInventoryId={setDraggedInventoryId}
@@ -1121,6 +1170,8 @@ export default function PreviewTab(props) {
         renderHeroAdventurePanel={renderHeroAdventurePanel}
         renderHeroCharacterPage={renderHeroCharacterPage}
         renderAdventureInventoryContent={renderAdventureInventoryContent}
+        objectiveChecklistContent={objectiveChecklist ? renderObjectiveChecklist(false) : null}
+        choiceEffectOverlay={!conversationNode && !activeEnding && !activeHeroCombat ? renderChoiceEffectSummary(false) : null}
       />
 
       <PreviewSidePanel
@@ -1168,7 +1219,7 @@ export default function PreviewTab(props) {
 
       <PreviewStoryOverlays
         conversationNode={conversationNode}
-        isChoiceAdventure={isChoiceAdventure}
+        isChoiceAdventure={usesImmersiveAdventurePlayer}
         activeConversation={activeConversation}
         closeConversation={closeConversation}
         renderChoiceEffectSummary={renderChoiceEffectSummary}
@@ -1176,7 +1227,6 @@ export default function PreviewTab(props) {
         isConversationReplyAvailable={isConversationReplyAvailable}
         getConversationReplyLockReason={getConversationReplyLockReason}
         handleConversationReplyClick={handleConversationReplyClick}
-        choiceEffectNotices={choiceEffectNotices}
         activeEnding={activeEnding}
         endingLabel={endingLabel}
         closeEnding={closeEnding}
@@ -1187,6 +1237,7 @@ export default function PreviewTab(props) {
         loadGameState={loadGameState}
         restoreLastChoiceSnapshot={restoreLastChoiceSnapshot}
         lastChoiceSnapshot={lastChoiceSnapshot}
+        visitedSceneIds={visitedSceneIds}
       />
 
       {enigma ? (

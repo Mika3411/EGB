@@ -5,6 +5,7 @@ import {
   createGameEngine,
   consumeInventoryItem,
   createHotspotViewerImage,
+  createInventoryViewerImage,
   gameActions,
   getHotspotRewardItemId,
   resolveHotspotInteraction,
@@ -33,6 +34,41 @@ describe('hotspot runtime helpers', () => {
       src: 'data:image/png;base64,AAA',
       name: 'Medallion',
       caption: 'Found',
+    });
+    expect(createInventoryViewerImage({
+      assets: [{ id: 'asset-coin', url: 'data:image/png;base64,Q09JTg==' }],
+      items: [{ id: 'coin', name: 'Coin', imageId: 'asset-coin', icon: 'C' }],
+    }, 'coin')).toEqual({
+      id: 'coin',
+      src: 'data:image/png;base64,Q09JTg==',
+      name: 'Coin',
+      icon: 'C',
+    });
+  });
+
+  it('shows a reward item viewer even when the hotspot has no dedicated image', () => {
+    const project = {
+      scenes: [{
+        id: 'scene-1',
+        hotspots: [{
+          id: 'take-note',
+          actionType: 'dialogue_item',
+          dialogue: 'Une note est ajoutee.',
+          rewardItemId: 'note',
+        }],
+      }],
+      items: [{ id: 'note', name: 'Note froissee', icon: 'NOTE' }],
+    };
+    const engine = createGameEngine(project, { currentSceneId: 'scene-1' });
+
+    const state = engine.dispatch(gameActions.triggerHotspot('take-note'));
+
+    expect(state.inventory).toEqual(['note']);
+    expect(state.viewerImage).toMatchObject({
+      id: 'note',
+      src: '',
+      name: 'Note froissee',
+      icon: 'NOTE',
     });
   });
 

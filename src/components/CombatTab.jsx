@@ -429,6 +429,7 @@ export default function CombatTab({
                 <div className="inline-actions">
                   <MediaSourcePicker
                     accept="image/*"
+                    assetScope="scene-background"
                     handleUpload={handleUpload}
                     mediaLibrary={mediaLibrary}
                     onSelect={(imageData, imageName = '') => updateCombatEntry({
@@ -495,6 +496,7 @@ export default function CombatTab({
               <div className="inline-actions">
                 <MediaSourcePicker
                   accept="image/*"
+                  assetScope="scene-background"
                   handleUpload={handleUpload}
                   mediaLibrary={mediaLibrary}
                   onSelect={(imageData, imageName = '') => updateDefaultCombat({

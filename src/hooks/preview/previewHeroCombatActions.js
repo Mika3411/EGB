@@ -432,6 +432,40 @@ export function createPreviewHeroCombatActions({
       currentEnemyStatusEffects,
     };
   };
+  const finishAlreadyDefeatedHeroCombat = (entry = {}, options = {}, runtime = getHeroCombatRuntime(entry, options)) => {
+    const message = [
+      `${runtime.enemyName} est déjà vaincu.`,
+      entry.combatVictoryDialogue,
+    ].filter(Boolean).join(' ');
+    if (options.sourceHotspotId) markHotspotCompleted(options.sourceHotspotId);
+    setActiveHeroCombat(null);
+    if (options.closeConversation) closeConversation();
+    if (entry.combatVictoryTargetSceneId) {
+      const movedScene = goToScene(entry.combatVictoryTargetSceneId, message || 'La route est ouverte.');
+      return {
+        ok: Boolean(movedScene),
+        ended: true,
+        victory: true,
+        movedScene: Boolean(movedScene),
+        enemyHealth: 0,
+        enemyMaxHealth: runtime.enemyMaxHealth,
+        enemyMana: runtime.currentEnemyMana,
+        enemyMaxMana: runtime.enemyMaxMana,
+        message,
+      };
+    }
+    setDialogue(message);
+    return {
+      ok: true,
+      ended: true,
+      victory: true,
+      enemyHealth: 0,
+      enemyMaxHealth: runtime.enemyMaxHealth,
+      enemyMana: runtime.currentEnemyMana,
+      enemyMaxMana: runtime.enemyMaxMana,
+      message,
+    };
+  };
   const resolveEnemyCombatTurn = (entry = {}, options = {}) => {
     const {
       combatId,
@@ -445,18 +479,12 @@ export function createPreviewHeroCombatActions({
       currentEnemyStatusEffects,
     } = getHeroCombatRuntime(entry, options);
     if (currentEnemyHealth <= 0) {
-      const message = `${enemyName} est déjà vaincu.`;
-      setDialogue(message);
-      return {
-        ok: true,
-        ended: true,
-        victory: true,
-        enemyHealth: 0,
+      return finishAlreadyDefeatedHeroCombat(entry, options, {
+        enemyName,
         enemyMaxHealth,
-        enemyMana: currentEnemyMana,
+        currentEnemyMana,
         enemyMaxMana: enemyStats.maxMana,
-        message,
-      };
+      });
     }
     const enemyTick = tickStatusEffects(currentEnemyStatusEffects, currentEnemyHealth);
     if (enemyTick.health <= 0) {
@@ -585,19 +613,12 @@ export function createPreviewHeroCombatActions({
       currentEnemyStatusEffects,
     } = getHeroCombatRuntime(entry, options);
     if (currentEnemyHealth <= 0) {
-      const message = `${enemyName} est déjà vaincu.`;
-      setDialogue(message);
-      if (options.sourceHotspotId) markHotspotCompleted(options.sourceHotspotId);
-      return {
-        ok: true,
-        ended: true,
-        victory: true,
-        enemyHealth: 0,
+      return finishAlreadyDefeatedHeroCombat(entry, options, {
+        enemyName,
         enemyMaxHealth,
-        enemyMana: currentEnemyMana,
+        currentEnemyMana,
         enemyMaxMana,
-        message,
-      };
+      });
     }
     const heroPower = getHeroPowerById(options.heroPowerId);
     const skillId = entry.combatSkillId || heroState.skills?.[0]?.id || '';
@@ -938,9 +959,7 @@ export function createPreviewHeroCombatActions({
     const enemyStarts = initiative.firstActor === 'enemy';
     if (turnMode && !options.resolveTurn) {
       if (runtime.currentEnemyHealth <= 0) {
-        setDialogue(`${runtime.enemyName} est déjà vaincu.`);
-        if (options.sourceHotspotId) markHotspotCompleted(options.sourceHotspotId);
-        return true;
+        return Boolean(finishAlreadyDefeatedHeroCombat(entry, options, runtime)?.ok);
       }
       if (options.closeConversation) closeConversation();
       const startMessage = entry.combatStartDialogue || (enemyStarts

@@ -30,6 +30,10 @@ import {
   usePreviewInventoryState,
   usePreviewTimerState,
 } from './preview/previewPlayerStateHooks.js';
+import {
+  getObjectiveFinalSceneBlockMessage,
+  shouldBlockObjectiveFinalScene,
+} from '../lib/conditionEngine.js';
 
 export function usePreviewPlayer(project, { getItemById } = {}) {
   const initialScene = project.scenes.find((scene) => scene.id === project.start?.targetSceneId) || project.scenes[0] || null;
@@ -184,6 +188,22 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
   };
 
   const goToScene = (sceneId, fallbackText = 'Nouvelle scène.') => {
+    const currentState = engineRef.current.getState();
+    const objectiveContext = {
+      inventory: currentState.inventory || [],
+      visitedSceneIds: currentState.visitedSceneIds || [],
+      completedHotspotIds: currentState.completedHotspotIds || [],
+      solvedEnigmaIds: currentState.solvedEnigmaIds || [],
+      chosenConversationReplyIds: currentState.chosenConversationReplyIds || [],
+      storyVariables: currentState.storyVariables || {},
+      project,
+      getItemById: (itemId) => getItemById?.(itemId) || (project.items || []).find((item) => item.id === itemId),
+    };
+    if (shouldBlockObjectiveFinalScene(sceneId, objectiveContext)) {
+      const blockMessage = getObjectiveFinalSceneBlockMessage(objectiveContext, { sceneId });
+      setDialogue([fallbackText, blockMessage].filter(Boolean).join(' '));
+      return false;
+    }
     const result = dispatchPreview({ ...gameActions.enterScene(sceneId), dialogue: fallbackText });
     if (result?.ok && sceneId) {
       setVisitedSceneIds((prev) => (prev.includes(sceneId) ? prev : [...prev, sceneId]));
@@ -273,6 +293,10 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
   const addInventoryItem = (itemId) => {
     if (!itemId) return false;
     const result = dispatchPreview(gameActions.addItem(itemId));
+    if (result?.ok) {
+      const viewer = createInventoryViewerImage(itemId);
+      if (viewer) setViewerImage(viewer);
+    }
     return Boolean(result?.ok);
   };
 
@@ -309,6 +333,17 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     if (!itemId) return false;
     const result = dispatchPreview(gameActions.removeItem(itemId));
     return Boolean(result?.ok);
+  };
+
+  const createInventoryViewerImage = (itemId) => {
+    const item = getItemById?.(itemId) || (project.items || []).find((entry) => entry.id === itemId);
+    if (!item) return null;
+    return {
+      id: item.id,
+      src: resolveAssetUrl(project, item.imageId, item.imageData) || '',
+      name: item.name || 'Objet',
+      icon: item.icon || 'Objet',
+    };
   };
 
   const markSceneObjectUsed = (sceneObjectId) => {
@@ -417,6 +452,10 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
       setSelectedInventoryIds((prev) => (
         prev.includes(rewardItemId) ? prev : selectRewardInventoryItem(prev, rewardItemId)
       ));
+      if (!spot.objectImageData) {
+        const rewardViewer = createInventoryViewerImage(rewardItemId);
+        if (rewardViewer) setViewerImage(rewardViewer);
+      }
     }
 
     if (spot.actionType === 'block' && spot.targetBlockId) {
@@ -682,6 +721,7 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     viewerImage,
     engineRef,
     getItemById,
+    createInventoryViewerImage,
     patchPreviewState,
     blockDefeatedHeroAction,
     updateHeroState,

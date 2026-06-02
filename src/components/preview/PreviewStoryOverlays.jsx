@@ -1,3 +1,5 @@
+import { getVisitedAwareReplyLabel } from '../../lib/conditionEngine';
+
 export default function PreviewStoryOverlays({
   conversationNode,
   isChoiceAdventure,
@@ -8,7 +10,6 @@ export default function PreviewStoryOverlays({
   isConversationReplyAvailable,
   getConversationReplyLockReason,
   handleConversationReplyClick,
-  choiceEffectNotices,
   activeEnding,
   endingLabel,
   closeEnding,
@@ -19,6 +20,7 @@ export default function PreviewStoryOverlays({
   loadGameState,
   restoreLastChoiceSnapshot,
   lastChoiceSnapshot,
+  visitedSceneIds = [],
 }) {
   return (
     <>
@@ -40,6 +42,7 @@ export default function PreviewStoryOverlays({
               {displayedConversationReplies.map((reply) => {
                 const isLocked = isConversationReplyAvailable?.(reply) === false;
                 const lockReason = isLocked ? getConversationReplyLockReason?.(reply) : '';
+                const replyLabel = getVisitedAwareReplyLabel(reply, { visitedSceneIds }) || 'Repondre';
                 return (
                   <button
                     key={reply.id}
@@ -49,7 +52,7 @@ export default function PreviewStoryOverlays({
                     title={lockReason || undefined}
                     onClick={() => handleConversationReplyClick(reply)}
                   >
-                    <span>{reply.label || 'Repondre'}</span>
+                    <span>{replyLabel}</span>
                     {isLocked ? <small>{lockReason || 'Choix verrouillée'}</small> : null}
                   </button>
                 );
@@ -61,12 +64,6 @@ export default function PreviewStoryOverlays({
               ) : null}
             </div>
           </div>
-        </div>
-      ) : null}
-
-      {choiceEffectNotices.length && !conversationNode && !activeEnding ? (
-        <div className="choice-effect-floating">
-          {renderChoiceEffectSummary(false)}
         </div>
       ) : null}
 

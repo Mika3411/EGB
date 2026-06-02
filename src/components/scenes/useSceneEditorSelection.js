@@ -82,6 +82,15 @@ export function useSceneEditorSelection({
     setSelectedSceneObjectIds([]);
   };
 
+  const clearSceneEditorSelection = () => {
+    setSelectedHotspotId('');
+    setSelectedSceneObjectId('');
+    setSelectedVisualEffectZoneId('');
+    setSelectedItemId('');
+    setSelectedHotspotIds([]);
+    setSelectedSceneObjectIds([]);
+  };
+
   return {
     selectedSceneObjectId,
     setSelectedSceneObjectId,
@@ -95,6 +104,7 @@ export function useSceneEditorSelection({
     activeSceneObjectIds,
     activeVisualEffectZoneIds,
     activeSelectionCount,
+    clearSceneEditorSelection,
     selectHotspot,
     selectSceneObject,
     selectVisualEffectZone,

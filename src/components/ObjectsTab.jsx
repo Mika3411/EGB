@@ -121,6 +121,7 @@ export default function ObjectsTab({
             <MediaSourcePicker
               className="button like full secondary-action"
               accept="image/*"
+              assetScope="object-image"
               handleUpload={handleUpload}
               mediaLibrary={mediaLibrary}
               onSelect={(data, name) => patchSelectedItem((item) => {

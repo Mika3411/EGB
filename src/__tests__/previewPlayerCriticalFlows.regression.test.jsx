@@ -35,6 +35,8 @@ const makeCriticalProject = () => ({
   items: [
     { id: 'key', name: 'Cle de cuivre', imageData: 'data:image/png;base64,a2V5' },
     { id: 'badge', name: 'Badge solaire', imageData: 'data:image/png;base64,YmFkZ2U=' },
+    { id: 'watch', name: 'Montre arretee', imageId: 'asset-watch', icon: 'WATCH' },
+    { id: 'note', name: 'Note froissee', icon: 'NOTE' },
   ],
   scenes: [
     {
@@ -96,6 +98,17 @@ const makeCriticalProject = () => ({
           combatVictoryDialogue: 'La sentinelle cede.',
           combatVictoryTargetSceneId: 'scene-vault',
         },
+        {
+          id: 'spot-note',
+          name: 'Papier froisse',
+          x: 30,
+          y: 70,
+          width: 10,
+          height: 10,
+          actionType: 'dialogue_item',
+          dialogue: 'Une note apparait dans votre main.',
+          rewardItemId: 'note',
+        },
       ],
       sceneObjects: [],
     },
@@ -129,7 +142,9 @@ const makeCriticalProject = () => ({
     targetSceneId: 'scene-vault',
   }],
   combinations: [],
-  assets: [],
+  assets: [
+    { id: 'asset-watch', type: 'image', name: 'Montre arretee.png', url: 'data:image/png;base64,d2F0Y2g=' },
+  ],
   storyVariables: [],
 });
 
@@ -306,6 +321,73 @@ describe('preview player critical flows', () => {
 
     expect(result.current.playingCinematic).toBe(null);
     expect(result.current.playSceneId).toBe('scene-vault');
+  });
+
+  test('shows collected and clicked inventory items in the viewer', () => {
+    const { result } = renderPreview();
+
+    act(() => {
+      result.current.addInventoryItem('key');
+    });
+
+    expect(result.current.inventory).toContain('key');
+    expect(result.current.viewerImage).toMatchObject({
+      id: 'key',
+      src: 'data:image/png;base64,a2V5',
+      name: 'Cle de cuivre',
+    });
+
+    act(() => {
+      result.current.setViewerImage(null);
+      result.current.addInventoryItem('watch');
+    });
+
+    expect(result.current.inventory).toContain('watch');
+    expect(result.current.viewerImage).toMatchObject({
+      id: 'watch',
+      src: 'data:image/png;base64,d2F0Y2g=',
+      name: 'Montre arretee',
+    });
+
+    act(() => {
+      result.current.setViewerImage(null);
+      result.current.openInventoryItem('watch', { previewOnly: true });
+    });
+
+    expect(result.current.viewerImage).toMatchObject({
+      id: 'watch',
+      src: 'data:image/png;base64,d2F0Y2g=',
+      name: 'Montre arretee',
+    });
+
+    act(() => {
+      result.current.setViewerImage(null);
+      result.current.openInventoryItem('note');
+    });
+
+    expect(result.current.selectedInventoryIds).toContain('note');
+    expect(result.current.viewerImage).toMatchObject({
+      id: 'note',
+      src: '',
+      name: 'Note froissee',
+      icon: 'NOTE',
+    });
+  });
+
+  test('shows hotspot reward items even without a dedicated hotspot image', () => {
+    const { project, result } = renderPreview();
+
+    act(() => {
+      result.current.triggerHotspot(project.scenes[0].hotspots[4]);
+    });
+
+    expect(result.current.inventory).toContain('note');
+    expect(result.current.viewerImage).toMatchObject({
+      id: 'note',
+      src: '',
+      name: 'Note froissee',
+      icon: 'NOTE',
+    });
   });
 
   test('preserves turn-based preview combat rewards and scene transition', () => {

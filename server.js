@@ -12,6 +12,7 @@ import {
   handleAdminUserUpdate,
 } from './server/admin.js';
 import { handleAdminModeration, handleModeration } from './server/moderation.js';
+import { handleAdminSupport, handleSupport } from './server/support.js';
 import {
   handleAdminCredits,
   handleCreditTopUp,
@@ -38,7 +39,9 @@ const apiRouteHandlers = {
   adminCredits: handleAdminCredits,
   adminProjects: handleAdminProjects,
   adminModeration: handleAdminModeration,
+  adminSupport: handleAdminSupport,
   moderation: handleModeration,
+  support: handleSupport,
   projectPublication: handleProjectPublication,
   shopPacks: handleShopPacks,
   creditsAdminList: handleCreditsAdminList,

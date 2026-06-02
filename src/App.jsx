@@ -7,6 +7,7 @@ import { isAdminAccount } from './lib/authStorage';
 import { hasSupabaseStorageConfig } from './supabaseStorage';
 import { readAppUiState, writeAppUiState } from './utils/storageHelpers';
 import { lazyWithRetry } from './utils/lazyImportRetry';
+import SupportWidget from './components/support/SupportWidget.jsx';
 
 const LandingPage = lazyWithRetry(() => import('./components/LandingPage'));
 const AuthPanel = lazyWithRetry(() => import('./components/AuthPanel'));
@@ -415,17 +416,20 @@ function ShellApp() {
 
   if (screen === 'builder' || screen === 'shared-preview') {
     return (
-      <Suspense fallback={<LandingLoadingFallback />}>
-        <BuilderApp
-          key={builderLaunch.key}
-          auth={auth}
-          initialProjectId={builderLaunch.projectId}
-          initialTab={builderLaunch.tab}
-          initialTutorialTab={builderLaunch.tutorialTab}
-          initialScreen={builderLaunch.screen}
-          onExitToProfile={openProfileScreen}
-        />
-      </Suspense>
+      <>
+        <Suspense fallback={<LandingLoadingFallback />}>
+          <BuilderApp
+            key={builderLaunch.key}
+            auth={auth}
+            initialProjectId={builderLaunch.projectId}
+            initialTab={builderLaunch.tab}
+            initialTutorialTab={builderLaunch.tutorialTab}
+            initialScreen={builderLaunch.screen}
+            onExitToProfile={openProfileScreen}
+          />
+        </Suspense>
+        <SupportWidget user={auth.user} />
+      </>
     );
   }
 
@@ -434,15 +438,18 @@ function ShellApp() {
       return <div className="app-shell"><div className="panel">Chargement du compte...</div></div>;
     }
     return (
-      <Suspense fallback={<LandingLoadingFallback />}>
-        <Rpg3DMode
-          user={auth.user}
-          authorProfile={auth.authorProfile}
-          authReady={auth.isReady}
-          projectId={auth.activeProjectId || auth.activeProject?.id || ''}
-          project={auth.activeProject?.data || null}
-        />
-      </Suspense>
+      <>
+        <Suspense fallback={<LandingLoadingFallback />}>
+          <Rpg3DMode
+            user={auth.user}
+            authorProfile={auth.authorProfile}
+            authReady={auth.isReady}
+            projectId={auth.activeProjectId || auth.activeProject?.id || ''}
+            project={auth.activeProject?.data || null}
+          />
+        </Suspense>
+        <SupportWidget user={auth.user} />
+      </>
     );
   }
 
@@ -466,17 +473,20 @@ function ShellApp() {
 
   if (screen === 'gallery') {
     return (
-      <Suspense fallback={<TabLoadingFallback />}>
-        <PublicGallery
-          user={auth.user}
-          authorProfile={auth.authorProfile}
-          initialGameKey={window.__escapeInitialGalleryGame || ''}
-          initialCreatorId={window.__escapeInitialGalleryCreator || ''}
-          onUpdateAuthorProfile={updateAuthorProfileFromProfile}
-          onSignup={openProfileScreen}
-          onClose={auth.user ? openProfileScreen : null}
-        />
-      </Suspense>
+      <>
+        <Suspense fallback={<TabLoadingFallback />}>
+          <PublicGallery
+            user={auth.user}
+            authorProfile={auth.authorProfile}
+            initialGameKey={window.__escapeInitialGalleryGame || ''}
+            initialCreatorId={window.__escapeInitialGalleryCreator || ''}
+            onUpdateAuthorProfile={updateAuthorProfileFromProfile}
+            onSignup={openProfileScreen}
+            onClose={auth.user ? openProfileScreen : null}
+          />
+        </Suspense>
+        <SupportWidget user={auth.user} />
+      </>
     );
   }
 
@@ -573,6 +583,7 @@ function ShellApp() {
       </Suspense>
       {accessibleDialog}
       {profileTutorialOverlay}
+      <SupportWidget user={auth.user} />
     </div>
   );
 }

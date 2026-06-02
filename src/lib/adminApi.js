@@ -34,6 +34,22 @@ const readLocalProjects = (userId) => {
   return safeParseJson(window.localStorage.getItem(`${LOCAL_PROJECTS_KEY_PREFIX}.${userId}`), []);
 };
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const getTime = (value) => {
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
+};
+
+const getConnectionTime = (account = {}) => Math.max(
+  getTime(account.lastSignInAt),
+  getTime(account.lastLoginAt),
+  getTime(account.updatedAt),
+);
+
+const isWithinDays = (time, days, now) => Boolean(time && now - time <= days * DAY_MS);
+
 export const getDisplayName = (account) =>
   account?.name || account?.email || account?.userId || 'Utilisateur';
 
@@ -79,6 +95,8 @@ export const getManagedUsers = ({ accounts = [], supabaseUsers = [], creditUsers
       provider: account.provider || 'local',
       status: account.status || 'active',
       createdAt: account.createdAt,
+      updatedAt: account.updatedAt,
+      lastLoginAt: account.lastLoginAt,
       projects,
       projectCount,
       publicProjects: projects.filter((project) => project.shareState?.isPublic).length,
@@ -128,6 +146,88 @@ export const getManagedUsers = ({ accounts = [], supabaseUsers = [], creditUsers
 
   return Array.from(byId.values())
     .sort((a, b) => getDisplayName(a).localeCompare(getDisplayName(b), 'fr'));
+};
+
+export const buildAdminStatistics = ({
+  managedUsers = [],
+  creditUsers = [],
+  publicGames = [],
+  moderation = {},
+  supportThreads = [],
+  now = Date.now(),
+} = {}) => {
+  const users = Array.isArray(managedUsers) ? managedUsers : [];
+  const credits = Array.isArray(creditUsers) ? creditUsers : [];
+  const games = Array.isArray(publicGames) ? publicGames : [];
+  const threads = Array.isArray(supportThreads) ? supportThreads : [];
+
+  const usersWithConnection = users
+    .map((account) => ({
+      ...account,
+      lastConnectionAt: getConnectionTime(account),
+    }))
+    .filter((account) => account.lastConnectionAt > 0);
+
+  const countConnectionsWithinDays = (days) => usersWithConnection
+    .filter((account) => isWithinDays(account.lastConnectionAt, days, now))
+    .length;
+
+  const totalProjectCount = users.reduce((sum, account) => sum + getAdminProjectCount(account), 0);
+  const usersWithProjects = users.filter((account) => getAdminProjectCount(account) > 0).length;
+  const publicAuthorIds = new Set(games.map((game) => game.userId).filter(Boolean));
+  const totalPlays = games.reduce((sum, game) => sum + Number(game.plays || 0), 0);
+  const totalVotes = games.reduce((sum, game) => sum + Number(game.feedback?.votes || 0), 0);
+  const totalComments = games.reduce((sum, game) => sum + (game.feedback?.comments || []).length, 0);
+  const totalCreditBalance = credits.reduce((sum, account) => sum + Number(account.balance || 0), 0);
+  const recentCreditTransactions = credits.reduce((sum, account) => (
+    sum + (Array.isArray(account.transactions) ? account.transactions.length : 0)
+  ), 0);
+  const supportOpen = threads.filter((thread) => thread.status !== 'closed').length;
+  const supportWaitingReply = threads.filter((thread) => {
+    const lastMessage = thread.messages?.[thread.messages.length - 1];
+    return thread.status !== 'closed' && lastMessage?.authorRole === 'user';
+  }).length;
+  const newUsersLast30Days = users
+    .filter((account) => isWithinDays(getTime(account.createdAt), 30, now))
+    .length;
+
+  return {
+    totalUsers: users.length,
+    activeUsers: users.filter((account) => account.status !== 'disabled').length,
+    disabledUsers: users.filter((account) => account.status === 'disabled').length,
+    supabaseUsers: users.filter((account) => account.provider === 'supabase').length,
+    localUsers: users.filter((account) => account.provider === 'local').length,
+    creditOnlyUsers: users.filter((account) => account.provider === 'credits').length,
+    uniqueConnections: usersWithConnection.length,
+    connectedLast24Hours: countConnectionsWithinDays(1),
+    connectedLast7Days: countConnectionsWithinDays(7),
+    connectedLast30Days: countConnectionsWithinDays(30),
+    neverConnectedUsers: Math.max(0, users.length - usersWithConnection.length),
+    newUsersLast30Days,
+    totalProjectCount,
+    usersWithProjects,
+    publicGameCount: games.length,
+    publicAuthorCount: publicAuthorIds.size,
+    totalPlays,
+    totalVotes,
+    totalComments,
+    totalCreditBalance,
+    creditAccountCount: credits.length,
+    recentCreditTransactions,
+    moderationActions: Array.isArray(moderation.actions) ? moderation.actions.length : 0,
+    supportOpen,
+    supportWaitingReply,
+    supportClosed: threads.filter((thread) => thread.status === 'closed').length,
+    connectionWindows: [
+      { id: '24h', label: '24h', count: countConnectionsWithinDays(1) },
+      { id: '7d', label: '7 jours', count: countConnectionsWithinDays(7) },
+      { id: '30d', label: '30 jours', count: countConnectionsWithinDays(30) },
+      { id: 'never', label: 'Jamais', count: Math.max(0, users.length - usersWithConnection.length) },
+    ],
+    recentConnections: usersWithConnection
+      .sort((a, b) => b.lastConnectionAt - a.lastConnectionAt)
+      .slice(0, 6),
+  };
 };
 
 export const loadAdminDashboard = async () => {

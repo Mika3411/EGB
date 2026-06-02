@@ -1,3 +1,5 @@
+import { resolveAssetUrl } from '../../lib/assetManager';
+
 export default function PreviewAdventureInventoryContent({
   compact = false,
   sharedPlayerMode,
@@ -81,13 +83,14 @@ export default function PreviewAdventureInventoryContent({
         {inventory.length ? inventory.map((itemId) => {
           const item = project.items.find((entry) => entry.id === itemId);
           if (!item) return null;
+          const itemImageUrl = resolveAssetUrl(project, item.imageId, item.imageData);
           return (
             <button
               key={itemId}
               type="button"
               className={`inventory-item inventory-tile ${selectedInventoryIds.includes(itemId) ? 'selected' : ''}`}
               draggable
-              onClick={() => openInventoryItem(itemId)}
+              onClick={() => openInventoryItem(itemId, { previewOnly: true })}
               onDragStart={() => setDraggedInventoryId(itemId)}
               onDragEnd={() => setDraggedInventoryId(null)}
               onDragOver={(event) => event.preventDefault()}
@@ -100,7 +103,7 @@ export default function PreviewAdventureInventoryContent({
               }}
             >
               <div className="inventory-thumb">
-                {item.imageData ? <img src={item.imageData} alt={item.name} /> : <span>{item.icon || 'Objet'}</span>}
+                {itemImageUrl ? <img src={itemImageUrl} alt={item.name} /> : <span>{item.icon || 'Objet'}</span>}
               </div>
               <strong>{item.name}</strong>
             </button>

@@ -9,6 +9,7 @@ import {
 export function useSceneEditorDragResize({
   canvasRef,
   fullscreenCanvasRef,
+  fullscreenContentRef,
   dragMovedRef,
   selectedScene,
   selectedSceneId,
@@ -45,7 +46,7 @@ export function useSceneEditorDragResize({
   const [isDragLocked, setIsDragLocked] = useState(false);
 
   const getCanvasPointerPosition = (clientX, clientY, source = 'main') => {
-    const activeRef = source === 'fullscreen' ? fullscreenCanvasRef : canvasRef;
+    const activeRef = source === 'fullscreen' ? (fullscreenContentRef || fullscreenCanvasRef) : canvasRef;
     if (!activeRef.current) return null;
 
     const rect = activeRef.current.getBoundingClientRect();
@@ -191,7 +192,7 @@ export function useSceneEditorDragResize({
     if ((!activeHotspotId && !activeSceneObjectId && !activeVisualEffectZoneId) || !selectedSceneId) return;
     dragMovedRef.current = true;
 
-    const activeRef = source === 'fullscreen' ? fullscreenCanvasRef : canvasRef;
+    const activeRef = source === 'fullscreen' ? (fullscreenContentRef || fullscreenCanvasRef) : canvasRef;
     if (!activeRef.current) return;
 
     const rect = activeRef.current.getBoundingClientRect();
@@ -239,7 +240,7 @@ export function useSceneEditorDragResize({
     if (!resizing || !selectedSceneId) return;
     dragMovedRef.current = true;
 
-    const activeRef = resizing.source === 'fullscreen' ? fullscreenCanvasRef : canvasRef;
+    const activeRef = resizing.source === 'fullscreen' ? (fullscreenContentRef || fullscreenCanvasRef) : canvasRef;
     if (!activeRef.current) return;
 
     const rect = activeRef.current.getBoundingClientRect();

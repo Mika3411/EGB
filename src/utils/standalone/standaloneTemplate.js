@@ -1,13 +1,15 @@
 import { buildStandaloneCss } from './standaloneCss.js';
 import { buildStandaloneRuntimeState } from './standaloneRuntimeState.js';
 import { buildStandaloneSecurityScript } from './standaloneSecurity.js';
-import { standaloneConversationCore, standaloneConversationRender, standaloneConversationReply } from './standaloneConversation.js';
+import { standaloneConversationCore, standaloneConversationCoreOverrides, standaloneConversationRender, standaloneConversationReply } from './standaloneConversation.js';
+import { standaloneConversationRenderOverrides } from './standaloneConversationOverrides.js';
 import { standaloneEnigmaActions, standaloneEnigmaPieceStyles, standaloneEnigmaPlayback, standaloneEnigmaRender } from './standaloneEnigmas.js';
 import { standaloneHeroRuntime } from './standaloneHeroRuntime.js';
 import { standaloneHeroSkillChecks } from './standaloneHeroSkillChecks.js';
 import { standaloneHeroCombat } from './standaloneHeroCombat.js';
 import { standaloneInventoryActions, standaloneInventorySelection } from './standaloneInventory.js';
 import { standaloneCinematicNavigation, standaloneNavigation, standaloneNavigationAudio } from './standaloneNavigation.js';
+import { standaloneNavigationOverrides } from './standaloneNavigationOverrides.js';
 import { standaloneEvents } from './standaloneEvents.js';
 import { standaloneProjectLookups } from './standaloneProjectLookups.js';
 import { standaloneSaveSystem } from './standaloneSaveSystem.js';
@@ -56,7 +58,7 @@ export function buildStandaloneEngineJs(project) {
 
 ${buildStandaloneSecurityScript(standaloneGameEngineScript)}
 
-${standaloneEnigmaPieceStyles}${standaloneProjectLookups}${standaloneNavigation}${standaloneInventorySelection}${standaloneNavigationAudio}${standaloneEnigmaPlayback}${standaloneCinematicNavigation}${standaloneConversationCore}${standaloneHeroRuntime}${standaloneHeroSkillChecks}${standaloneHeroCombat}function openEnding(reply = {}) {
+${standaloneEnigmaPieceStyles}${standaloneProjectLookups}${standaloneNavigation}${standaloneNavigationOverrides}${standaloneInventorySelection}${standaloneNavigationAudio}${standaloneEnigmaPlayback}${standaloneCinematicNavigation}${standaloneConversationCore}${standaloneConversationCoreOverrides}${standaloneHeroRuntime}${standaloneHeroSkillChecks}${standaloneHeroCombat}function openEnding(reply = {}) {
   const typeLabels = {
     good: 'Bonne fin',
     bad: 'Mauvaise fin',
@@ -148,15 +150,14 @@ function triggerSceneObject(objectId) {
     || resolveAssetUrl(obj.imageId, obj.imageData)
     || resolveAssetUrl(linkedItem?.imageId, linkedItem?.imageData);
 
-  if (mode === 'popup' || mode === 'both') {
-    if (popupSrc) {
-      state.viewerImage = {
-        id: obj.linkedItemId || obj.id,
-        src: popupSrc,
-        name: obj.name || linkedItem?.name || obj.popupImageName || 'Objet',
-        caption: obj.dialogue || obj.name || linkedItem?.name || '',
-      };
-    }
+  const hasPopupViewer = (mode === 'popup' || mode === 'both') && popupSrc;
+  if (hasPopupViewer) {
+    state.viewerImage = {
+      id: obj.linkedItemId || obj.id,
+      src: popupSrc,
+      name: obj.name || linkedItem?.name || obj.popupImageName || 'Objet',
+      caption: obj.dialogue || obj.name || linkedItem?.name || '',
+    };
   }
 
   if ((mode === 'inventory' || mode === 'both') && obj.linkedItemId) {
@@ -166,6 +167,7 @@ function triggerSceneObject(objectId) {
     if (!state.selectedInventoryIds.includes(obj.linkedItemId)) {
       state.selectedInventoryIds = [...state.selectedInventoryIds, obj.linkedItemId].slice(-2);
     }
+    if (!hasPopupViewer) showInventoryItem(obj.linkedItemId);
     state.dialogue = obj.dialogue || ('Tu obtiens ' + (linkedItem?.name || obj.name || 'un objet') + '.');
   } else if (obj.dialogue) {
     state.dialogue = obj.dialogue;
@@ -320,6 +322,7 @@ function resetPreview() {
   expiredSceneTimerKey = '';
   Object.assign(state, DEFAULT_STATE());
   state.inventoryDrawerOpen = false;
+  state.objectiveDrawerOpen = false;
   closeEnigma();
   if (cinematicAudio) {
     cinematicAudio.pause();
@@ -424,7 +427,7 @@ function revealControls(autoHide = true) {
   render(false);
 }
 
-${standaloneEvents}${standaloneCinematicRender}${standaloneEnigmaRender}${standaloneConversationRender}${standaloneRender}
+${standaloneEvents}${standaloneCinematicRender}${standaloneEnigmaRender}${standaloneConversationRender}${standaloneConversationRenderOverrides}${standaloneRender}
 if (!loadGame(false)) {
   render(false);
 }

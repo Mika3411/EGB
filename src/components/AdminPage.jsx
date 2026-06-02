@@ -3,6 +3,7 @@ import { showConfirm } from './AccessibleDialog';
 import { normalizeEmail } from '../lib/authStorage';
 import { getBlogModerationId } from '../lib/moderationStorage';
 import {
+  buildAdminStatistics,
   getDisplayName,
   getAdminProjectCount,
   getManagedUsers,
@@ -14,6 +15,14 @@ import {
   updateAdminModeration,
   updateAdminUser,
 } from '../lib/adminApi';
+import {
+  SUPPORT_STATUSES,
+  getSupportCategoryLabel,
+  getSupportStatusLabel,
+  loadAdminSupportThreads,
+  replyToSupportThread,
+  updateSupportThreadStatus,
+} from '../lib/supportMessages';
 import {
   createEmptyShopPack,
   archiveSharedShopPack,
@@ -40,6 +49,8 @@ const formatDate = (value) => {
   }
 };
 
+const formatNumber = (value) => new Intl.NumberFormat('fr-FR').format(Number(value || 0));
+
 const SHOP_PACK_NUMBER_FIELDS = [
   'costCredits',
   'rating',
@@ -65,6 +76,9 @@ export default function AdminPage({
   const [shopPacks, setShopPacks] = useState(() => getShopPacks());
   const [shopPackForm, setShopPackForm] = useState(() => createEmptyShopPack());
   const [moderation, setModeration] = useState({ games: new Set(), blogs: new Set(), comments: new Set(), actions: [] });
+  const [supportThreads, setSupportThreads] = useState([]);
+  const [selectedSupportThreadId, setSelectedSupportThreadId] = useState('');
+  const [supportReplyDraft, setSupportReplyDraft] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('');
   const [creditAction, setCreditAction] = useState('add');
   const [creditAmount, setCreditAmount] = useState(20);
@@ -83,6 +97,18 @@ export default function AdminPage({
     loadSharedShopPacks()
       .then(setShopPacks)
       .catch(() => {});
+    loadAdminSupportThreads()
+      .then((threads) => {
+        setSupportThreads(threads);
+        setSelectedSupportThreadId((currentId) => (
+          currentId && threads.some((thread) => thread.id === currentId)
+            ? currentId
+            : threads[0]?.id || ''
+        ));
+      })
+      .catch((error) => {
+        setStatus(error.message || 'Messagerie support indisponible.');
+      });
   };
 
   useEffect(() => {
@@ -354,6 +380,79 @@ export default function AdminPage({
 
   const activeShopPacks = shopPacks.filter((pack) => !pack.archived);
   const archivedShopPacks = shopPacks.filter((pack) => pack.archived);
+  const selectedSupportThread = supportThreads.find((thread) => thread.id === selectedSupportThreadId) || supportThreads[0] || null;
+  const openSupportThreads = supportThreads.filter((thread) => thread.status !== 'closed');
+  const adminStats = useMemo(() => buildAdminStatistics({
+    managedUsers,
+    creditUsers,
+    publicGames,
+    moderation,
+    supportThreads,
+  }), [managedUsers, creditUsers, publicGames, moderation, supportThreads]);
+
+  const refreshSupportThreads = async () => {
+    setIsBusy(true);
+    try {
+      const threads = await loadAdminSupportThreads();
+      setSupportThreads(threads);
+      setSelectedSupportThreadId((currentId) => (
+        currentId && threads.some((thread) => thread.id === currentId)
+          ? currentId
+          : threads[0]?.id || ''
+      ));
+      setStatus('Messagerie actualisée.');
+    } catch (error) {
+      setStatus(error.message || 'Messagerie support indisponible.');
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const replaceSupportThread = (thread) => {
+    if (!thread?.id) return;
+    setSupportThreads((currentThreads) => [
+      thread,
+      ...currentThreads.filter((entry) => entry.id !== thread.id),
+    ]);
+    setSelectedSupportThreadId(thread.id);
+  };
+
+  const submitSupportReply = async (event) => {
+    event.preventDefault();
+    if (!selectedSupportThread?.id || !supportReplyDraft.trim()) return;
+    setIsBusy(true);
+    try {
+      const thread = await replyToSupportThread({
+        threadId: selectedSupportThread.id,
+        body: supportReplyDraft,
+        status: 'answered',
+      }, user);
+      replaceSupportThread(thread);
+      setSupportReplyDraft('');
+      setStatus('Réponse support envoyée.');
+    } catch (error) {
+      setStatus(error.message || 'Réponse support impossible.');
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const setSupportStatus = async (statusValue) => {
+    if (!selectedSupportThread?.id) return;
+    setIsBusy(true);
+    try {
+      const thread = await updateSupportThreadStatus({
+        threadId: selectedSupportThread.id,
+        status: statusValue,
+      });
+      replaceSupportThread(thread);
+      setStatus(`Conversation marquée "${getSupportStatusLabel(statusValue)}".`);
+    } catch (error) {
+      setStatus(error.message || 'Statut support impossible.');
+    } finally {
+      setIsBusy(false);
+    }
+  };
 
   return (
     <main className="layout admin-page">
@@ -385,8 +484,10 @@ export default function AdminPage({
       <section className="panel admin-tabs-panel" aria-label="Navigation admin">
         <div className="admin-tabs">
           {[
+            ['statistics', 'Statistiques'],
             ['members', 'Membres'],
             ['gallery', 'Gallerie'],
+            ['support', `Messagerie${openSupportThreads.length ? ` (${openSupportThreads.length})` : ''}`],
             ['shop', 'Boutique'],
           ].map(([tabId, label]) => (
             <button
@@ -400,6 +501,155 @@ export default function AdminPage({
           ))}
         </div>
       </section>
+
+      {activeTab === 'statistics' ? (
+        <>
+          <section className="admin-stats-grid admin-overview-stats">
+            <article className="panel admin-stat-card">
+              <span>Connexions uniques</span>
+              <strong>{formatNumber(adminStats.uniqueConnections)}</strong>
+            </article>
+            <article className="panel admin-stat-card">
+              <span>Actifs 7 jours</span>
+              <strong>{formatNumber(adminStats.connectedLast7Days)}</strong>
+            </article>
+            <article className="panel admin-stat-card">
+              <span>Nouveaux 30 jours</span>
+              <strong>{formatNumber(adminStats.newUsersLast30Days)}</strong>
+            </article>
+            <article className="panel admin-stat-card">
+              <span>Projets créés</span>
+              <strong>{formatNumber(adminStats.totalProjectCount)}</strong>
+            </article>
+            <article className="panel admin-stat-card">
+              <span>Parties jouées</span>
+              <strong>{formatNumber(adminStats.totalPlays)}</strong>
+            </article>
+            <article className="panel admin-stat-card">
+              <span>Support ouvert</span>
+              <strong>{formatNumber(adminStats.supportOpen)}</strong>
+            </article>
+          </section>
+
+          <section className="panel admin-statistics-panel">
+            <div className="panel-head">
+              <div>
+                <span className="eyebrow">Statistiques</span>
+                <h2>Vue d'ensemble</h2>
+                <p className="small-note">
+                  Les connexions uniques correspondent aux comptes distincts avec une date de connexion connue.
+                </p>
+              </div>
+            </div>
+
+            <div className="admin-statistics-layout">
+              <article className="subpanel admin-stat-section">
+                <div className="subpanel-head">
+                  <div>
+                    <h3>Activité des connexions</h3>
+                    <p className="small-note">{formatNumber(adminStats.totalUsers)} compte{adminStats.totalUsers > 1 ? 's' : ''} suivi{adminStats.totalUsers > 1 ? 's' : ''}.</p>
+                  </div>
+                  <span className="status-badge soft">{formatNumber(adminStats.connectedLast24Hours)} en 24h</span>
+                </div>
+
+                <div className="admin-metric-bars">
+                  {adminStats.connectionWindows.map((metric) => {
+                    const ratio = adminStats.totalUsers ? Math.min(100, Math.max(0, (metric.count / adminStats.totalUsers) * 100)) : 0;
+                    return (
+                      <div className="admin-metric-row" key={metric.id}>
+                        <div>
+                          <span>{metric.label}</span>
+                          <strong>{formatNumber(metric.count)}</strong>
+                        </div>
+                        <span className="admin-metric-bar" style={{ '--metric-ratio': `${ratio}%` }}>
+                          <span />
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </article>
+
+              <article className="subpanel admin-stat-section">
+                <div className="subpanel-head">
+                  <div>
+                    <h3>Comptes</h3>
+                    <p className="small-note">Répartition des membres et comptes techniques.</p>
+                  </div>
+                </div>
+
+                <div className="admin-stat-pill-grid">
+                  <span><strong>{formatNumber(adminStats.activeUsers)}</strong> actifs</span>
+                  <span><strong>{formatNumber(adminStats.disabledUsers)}</strong> désactivés</span>
+                  <span><strong>{formatNumber(adminStats.supabaseUsers)}</strong> Supabase</span>
+                  <span><strong>{formatNumber(adminStats.localUsers)}</strong> locaux</span>
+                  <span><strong>{formatNumber(adminStats.creditOnlyUsers)}</strong> crédits seuls</span>
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <section className="admin-statistics-layout">
+            <article className="panel admin-stat-section">
+              <div className="panel-head">
+                <div>
+                  <h2>Création et galerie</h2>
+                  <p className="small-note">{formatNumber(adminStats.publicGameCount)} jeu{adminStats.publicGameCount > 1 ? 'x' : ''} public{adminStats.publicGameCount > 1 ? 's' : ''}.</p>
+                </div>
+              </div>
+              <div className="admin-stat-pill-grid wide">
+                <span><strong>{formatNumber(adminStats.usersWithProjects)}</strong> créateurs avec projet</span>
+                <span><strong>{formatNumber(adminStats.publicAuthorCount)}</strong> auteurs publiés</span>
+                <span><strong>{formatNumber(adminStats.totalVotes)}</strong> votes</span>
+                <span><strong>{formatNumber(adminStats.totalComments)}</strong> avis</span>
+                <span><strong>{formatNumber(adminStats.moderationActions)}</strong> éléments masqués</span>
+              </div>
+            </article>
+
+            <article className="panel admin-stat-section">
+              <div className="panel-head">
+                <div>
+                  <h2>Crédits IA et support</h2>
+                  <p className="small-note">{formatNumber(adminStats.creditAccountCount)} compte{adminStats.creditAccountCount > 1 ? 's' : ''} avec portefeuille IA.</p>
+                </div>
+              </div>
+              <div className="admin-stat-pill-grid wide">
+                <span><strong>{formatNumber(adminStats.totalCreditBalance)}</strong> crédits disponibles</span>
+                <span><strong>{formatNumber(adminStats.recentCreditTransactions)}</strong> transactions récentes</span>
+                <span><strong>{formatNumber(adminStats.supportWaitingReply)}</strong> à répondre</span>
+                <span><strong>{formatNumber(adminStats.supportClosed)}</strong> fermés</span>
+              </div>
+            </article>
+          </section>
+
+          <section className="panel admin-stat-section">
+            <div className="panel-head">
+              <div>
+                <h2>Dernières connexions</h2>
+                <p className="small-note">Comptes classés par date de connexion connue.</p>
+              </div>
+            </div>
+
+            <div className="admin-recent-login-list">
+              {adminStats.recentConnections.map((entry) => (
+                <article className="admin-recent-login-row" key={entry.userId}>
+                  <div>
+                    <strong>{getDisplayName(entry)}</strong>
+                    <span>{entry.email || entry.userId}</span>
+                  </div>
+                  <span className="status-badge soft">{entry.provider}</span>
+                  <time>{formatDate(entry.lastConnectionAt)}</time>
+                </article>
+              ))}
+              {adminStats.recentConnections.length === 0 ? (
+                <div className="empty-state-inline">
+                  <strong>Aucune connexion connue.</strong>
+                </div>
+              ) : null}
+            </div>
+          </section>
+        </>
+      ) : null}
 
       {activeTab === 'members' ? (
         <>
@@ -423,6 +673,10 @@ export default function AdminPage({
         <article className="panel admin-stat-card">
           <span>Elements masques</span>
           <strong>{moderation.actions.length}</strong>
+        </article>
+        <article className="panel admin-stat-card">
+          <span>Messages ouverts</span>
+          <strong>{openSupportThreads.length}</strong>
         </article>
       </section>
 
@@ -712,6 +966,114 @@ export default function AdminPage({
         </div>
       </section>
         </>
+      ) : null}
+
+      {activeTab === 'support' ? (
+        <section className="panel admin-support-panel">
+          <div className="panel-head">
+            <div>
+              <span className="eyebrow">Messagerie</span>
+              <h2>Support utilisateurs</h2>
+              <p className="small-note">{supportThreads.length} conversation{supportThreads.length > 1 ? 's' : ''}, dont {openSupportThreads.length} ouverte{openSupportThreads.length > 1 ? 's' : ''}.</p>
+            </div>
+            <button type="button" className="secondary-action" onClick={refreshSupportThreads} disabled={isBusy}>
+              Actualiser
+            </button>
+          </div>
+
+          {supportThreads.length ? (
+            <div className="admin-support-layout">
+              <aside className="support-thread-list admin-support-thread-list" aria-label="Messages support">
+                {supportThreads.map((thread) => {
+                  const lastMessage = thread.messages?.[thread.messages.length - 1];
+                  return (
+                    <button
+                      type="button"
+                      key={thread.id}
+                      className={`support-thread-button ${selectedSupportThread?.id === thread.id ? 'active' : ''}`}
+                      onClick={() => setSelectedSupportThreadId(thread.id)}
+                    >
+                      <span>{getSupportCategoryLabel(thread.category)}</span>
+                      <strong>{thread.subject}</strong>
+                      <small>{thread.userName} - {thread.userEmail || thread.userId}</small>
+                      <em>{getSupportStatusLabel(thread.status)} - {formatDate(thread.updatedAt)}</em>
+                      {lastMessage?.authorRole === 'user' && thread.status !== 'closed' ? (
+                        <b>À répondre</b>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </aside>
+
+              <article className="support-conversation admin-support-conversation">
+                <div className="support-conversation-head">
+                  <div>
+                    <span className="status-badge soft">{selectedSupportThread ? getSupportCategoryLabel(selectedSupportThread.category) : 'Support'}</span>
+                    <h3>{selectedSupportThread?.subject || 'Conversation'}</h3>
+                    <p className="small-note">
+                      {selectedSupportThread?.userName || 'Utilisateur'} - {selectedSupportThread?.userEmail || selectedSupportThread?.userId || ''}
+                    </p>
+                  </div>
+                  <span className={`support-status-pill status-${selectedSupportThread?.status || 'open'}`}>
+                    {getSupportStatusLabel(selectedSupportThread?.status)}
+                  </span>
+                </div>
+
+                {selectedSupportThread?.pageUrl ? (
+                  <a className="support-context-link" href={selectedSupportThread.pageUrl} target="_blank" rel="noreferrer">
+                    Ouvrir la page signalée
+                  </a>
+                ) : null}
+
+                <div className="support-message-list">
+                  {(selectedSupportThread?.messages || []).map((message) => (
+                    <div
+                      key={message.id}
+                      className={`support-message-bubble ${message.authorRole === 'admin' ? 'is-admin' : 'is-user'}`}
+                    >
+                      <div>
+                        <strong>{message.authorRole === 'admin' ? 'Support' : message.authorName}</strong>
+                        <span>{formatDate(message.createdAt)}</span>
+                      </div>
+                      <p>{message.body}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <form className="support-reply-form" onSubmit={submitSupportReply}>
+                  <label>
+                    Réponse admin
+                    <textarea
+                      value={supportReplyDraft}
+                      maxLength={2400}
+                      placeholder="Répondre à l'utilisateur..."
+                      onChange={(event) => setSupportReplyDraft(event.target.value)}
+                    />
+                  </label>
+                  <div className="admin-support-actions">
+                    <button type="submit" className="profile-action-button" disabled={!supportReplyDraft.trim() || isBusy}>
+                      Envoyer la réponse
+                    </button>
+                    <select
+                      value={selectedSupportThread?.status || 'open'}
+                      onChange={(event) => setSupportStatus(event.target.value)}
+                      disabled={!selectedSupportThread || isBusy}
+                      aria-label="Statut de la conversation"
+                    >
+                      {SUPPORT_STATUSES.map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </form>
+              </article>
+            </div>
+          ) : (
+            <div className="empty-state-inline">
+              <strong>Aucun message support.</strong>
+            </div>
+          )}
+        </section>
       ) : null}
 
       {activeTab === 'shop' ? (

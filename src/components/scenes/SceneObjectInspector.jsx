@@ -2,6 +2,7 @@ import { HelpLabel } from './SceneEditorChrome.jsx';
 import MediaSourcePicker from '../MediaSourcePicker.jsx';
 import NumberInput from '../forms/NumberInput.jsx';
 import { showConfirm } from '../AccessibleDialog';
+import CompactAudioPreview from './CompactAudioPreview.jsx';
 import {
   applySceneObjectTextOverride,
   getSceneObjectBlockType,
@@ -196,6 +197,7 @@ export default function SceneObjectInspector({
         <MediaSourcePicker
           className="button like full secondary-action"
           accept="image/*"
+          assetScope="object-image"
           handleUpload={handleUpload}
           mediaLibrary={mediaLibrary}
           onSelect={(data, name) => patchObject((obj) => {
@@ -214,6 +216,7 @@ export default function SceneObjectInspector({
       <MediaSourcePicker
         className="button like full secondary-action"
         accept="audio/*"
+        assetScope={isAnimationObject ? 'logic-sound' : 'object-sound'}
         handleUpload={handleUpload}
         mediaLibrary={mediaLibrary}
         onSelect={(data, name) => patchObject((obj) => {
@@ -225,15 +228,14 @@ export default function SceneObjectInspector({
         {selectedSceneObject.soundName || 'Importer un son'}
       </MediaSourcePicker>
       {selectedSceneObject.soundData ? (
-        <div className="hotspot-audio-compact">
-          <audio controls preload="metadata" src={selectedSceneObject.soundData} />
-          <button type="button" className="danger-button" onClick={() => patchObject((obj) => {
+        <CompactAudioPreview
+          src={selectedSceneObject.soundData}
+          name={selectedSceneObject.soundName}
+          onRemove={() => patchObject((obj) => {
             obj.soundData = '';
             obj.soundName = '';
-          })}>
-            Supprimer
-          </button>
-        </div>
+          })}
+        />
       ) : null}
       {!isBeginnerMode && isAnimationObject ? (
         <>
@@ -335,6 +337,7 @@ export default function SceneObjectInspector({
           <MediaSourcePicker
             className="button like full secondary-action"
             accept="audio/*"
+            assetScope="object-sound"
             handleUpload={handleUpload}
             mediaLibrary={mediaLibrary}
             onSelect={(data, name) => patchObject((obj) => {
@@ -345,20 +348,20 @@ export default function SceneObjectInspector({
             {selectedSceneObject.soundName || 'Importer un son unique'}
           </MediaSourcePicker>
           {selectedSceneObject.soundData ? (
-            <>
-              <audio controls preload="metadata" src={selectedSceneObject.soundData} style={{ width: '100%', marginTop: 10 }} />
-              <button type="button" className="danger-button" style={{ marginTop: 12 }} onClick={() => patchObject((obj) => {
+            <CompactAudioPreview
+              src={selectedSceneObject.soundData}
+              name={selectedSceneObject.soundName}
+              onRemove={() => patchObject((obj) => {
                 obj.soundData = '';
                 obj.soundName = '';
-              })}>
-                Supprimer le son ?
-              </button>
-            </>
+              })}
+            />
           ) : null}
           <HelpLabel help="Image montree en pop-up quand cette action réussit.">Image objet</HelpLabel>
           <MediaSourcePicker
             className="button like full secondary-action"
             accept="image/*"
+            assetScope="object-image"
             handleUpload={handleUpload}
             mediaLibrary={mediaLibrary}
             onSelect={(data, name) => patchObject((obj) => {

@@ -350,6 +350,7 @@ function MediaSlotEditor({
         <div className="inline-actions">
           <MediaSourcePicker
             accept="image/*"
+            assetScope="object-image"
             handleUpload={handleUpload}
             mediaLibrary={mediaLibrary}
             onSelect={onImageSelect}
@@ -484,6 +485,7 @@ function CombatEntryMediaSlotEditor({
         <div className="inline-actions">
           <MediaSourcePicker
             accept="image/*"
+            assetScope="object-image"
             handleUpload={handleUpload}
             mediaLibrary={mediaLibrary}
             onSelect={onImageSelect}
@@ -626,6 +628,7 @@ function EffectMediaSlotEditor({
         <div className="inline-actions">
           <MediaSourcePicker
             accept="image/*"
+            assetScope="object-image"
             handleUpload={handleUpload}
             mediaLibrary={mediaLibrary}
             onSelect={onImageSelect}
@@ -667,6 +670,7 @@ function EffectMediaSlotEditor({
         <div className="inline-actions">
           <MediaSourcePicker
             accept="video/mp4,video/webm,video/ogg"
+            assetScope="cinematic-video"
             handleUpload={handleUpload}
             mediaLibrary={mediaLibrary}
             onSelect={onVideoSelect}
@@ -680,6 +684,7 @@ function EffectMediaSlotEditor({
       <div className="inline-actions">
         <MediaSourcePicker
           accept="audio/*"
+          assetScope="logic-sound"
           handleUpload={handleUpload}
           mediaLibrary={mediaLibrary}
           onSelect={onAudioSelect}

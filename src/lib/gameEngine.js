@@ -67,6 +67,19 @@ export const createHotspotViewerImage = (hotspot = {}, src = hotspot.objectImage
   };
 };
 
+export const createInventoryViewerImage = (project = {}, itemOrId = '') => {
+  const item = typeof itemOrId === 'object' && itemOrId !== null
+    ? itemOrId
+    : getProjectItem(project, itemOrId);
+  if (!item) return null;
+  return {
+    id: item.id,
+    src: resolveAssetUrl(project, item.imageId, item.imageData) || '',
+    name: item.name || 'Objet',
+    icon: item.icon || 'Objet',
+  };
+};
+
 export const applyHotspotBlockState = (state = {}, hotspot = {}, options = {}) => {
   if (hotspot.actionType !== 'block' || !hotspot.targetBlockId) return state;
 
@@ -460,7 +473,7 @@ function reduceCombinationAction(state, action) {
     selectedInventoryIds: [resultItemId],
     completedCombinationIds: addUnique(state.completedCombinationIds, combination.id),
     dialogue: combination.message || `Tu obtiens ${resultItem?.name || 'un nouvel objet'}.`,
-    viewerImage: resultItem?.imageData ? { id: resultItem.id, src: resultItem.imageData, name: resultItem.name } : null,
+    viewerImage: createInventoryViewerImage(state.project, resultItem),
   }, action, { ok: true, engine: 'combination', combination, resultItemId, resultItem });
 }
 
@@ -478,8 +491,12 @@ function applyHotspotSideEffectsToState(state, hotspot, sourceHotspotId = hotspo
     if (!hotspot.dialogue) nextState.dialogue = `Tu obtiens ${rewardItem?.name || hotspot.name || 'un objet'}.`;
   }
 
-  if (hotspot.objectImageData) {
-    nextState.viewerImage = createHotspotViewerImage(hotspot);
+  const hotspotImageSrc = resolveAssetUrl(state.project, hotspot.objectImageId, hotspot.objectImageData);
+  const rewardViewer = rewardItemId ? createInventoryViewerImage(state.project, rewardItemId) : null;
+  if (hotspotImageSrc) {
+    nextState.viewerImage = createHotspotViewerImage(hotspot, hotspotImageSrc);
+  } else if (rewardViewer) {
+    nextState.viewerImage = rewardViewer;
   }
 
   nextState = applyHotspotBlockState(nextState, hotspot, { removedKey: 'usedSceneObjectIds' });
@@ -703,7 +720,7 @@ function applyCinematicEndToState(state, cinematic) {
       inventory: addUnique(state.inventory, endEvent.itemId),
       selectedInventoryIds: addUnique(state.selectedInventoryIds, endEvent.itemId).slice(-2),
       dialogue: endEvent.dialogue || `Tu obtiens ${rewardItem?.name || 'un nouvel objet'}.`,
-      viewerImage: rewardItem?.imageData ? { id: rewardItem.id, src: rewardItem.imageData, name: rewardItem.name } : state.viewerImage,
+      viewerImage: createInventoryViewerImage(state.project, rewardItem) || state.viewerImage,
     };
   }
 
@@ -786,6 +803,7 @@ function reduceGameAction(state, action) {
       ...state,
       inventory: addUnique(state.inventory, action.itemId),
       selectedInventoryIds: addUnique(state.selectedInventoryIds, action.itemId).slice(-2),
+      viewerImage: createInventoryViewerImage(state.project, action.itemId) || state.viewerImage,
     }, action, { ok: true, engine: 'game', itemId: action.itemId });
   }
 

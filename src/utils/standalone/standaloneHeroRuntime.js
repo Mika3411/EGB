@@ -93,6 +93,24 @@ function recoverHero(healthGain = 0, manaGain = 0) {
   return { hero: state.heroState, recovery };
 }
 
+function createInventoryViewerImage(itemId) {
+  const item = getItemById(itemId);
+  if (!item) return null;
+  return {
+    id: item.id,
+    src: resolveAssetUrl(item.imageId, item.imageData) || '',
+    name: item.name || 'Objet',
+    icon: item.icon || 'Objet',
+  };
+}
+
+function showInventoryItem(itemId) {
+  const viewer = createInventoryViewerImage(itemId);
+  if (!viewer) return false;
+  state.viewerImage = viewer;
+  return true;
+}
+
 function addInventoryItem(itemId) {
   if (!itemId) return false;
   if (!state.inventory.includes(itemId)) {
@@ -101,6 +119,7 @@ function addInventoryItem(itemId) {
   if (!state.selectedInventoryIds.includes(itemId)) {
     state.selectedInventoryIds = selectRewardInventoryItem(state.selectedInventoryIds, itemId);
   }
+  showInventoryItem(itemId);
   return true;
 }
 

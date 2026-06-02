@@ -697,6 +697,7 @@ export default function QuickLogicModal({
                   <MediaSourcePicker
                     className="button like full secondary-action"
                     accept="audio/*"
+                    assetScope="logic-sound"
                     handleUpload={handleUpload}
                     mediaLibrary={mediaLibrary}
                     onSelect={(data, name) => updateRule(rule.id, (draftRule) => {
@@ -718,6 +719,7 @@ export default function QuickLogicModal({
                   <MediaSourcePicker
                     className="button like full secondary-action"
                     accept="audio/*"
+                    assetScope="logic-sound"
                     handleUpload={handleUpload}
                     mediaLibrary={mediaLibrary}
                     onSelect={(data, name) => updateRule(rule.id, (draftRule) => {

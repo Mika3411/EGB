@@ -12,7 +12,7 @@ import SceneSidebar from './scenes/SceneSidebar.jsx';
 import SceneFullscreenEditor from './scenes/SceneFullscreenEditor.jsx';
 import SceneCanvasContextMenu from './scenes/SceneCanvasContextMenu.jsx';
 import SceneCanvasQuickToolbar from './scenes/SceneCanvasQuickToolbar.jsx';
-import SceneEditorDrawer, { SceneDrawerTriggers } from './scenes/SceneEditorDrawer.jsx';
+import SceneEditorDrawer, { SceneCanvasDrawerButton } from './scenes/SceneEditorDrawer.jsx';
 import HotspotInspectorPanel from './scenes/HotspotInspectorPanel.jsx';
 import SceneObjectInspector, { SceneObjectBlockContent, getSceneObjectClickMode } from './scenes/SceneObjectInspector.jsx';
 import QuickLogicModal from './scenes/QuickLogicModal.jsx';
@@ -92,6 +92,7 @@ export default function ScenesTab(props) {
   const canvasRef = useRef(null);
   const fullscreenViewportRef = useRef(null);
   const fullscreenCanvasRef = useRef(null);
+  const fullscreenContentRef = useRef(null);
   const dragMovedRef = useRef(false);
   const [snapGridEnabled, setSnapGridEnabled] = useState(false);
   const [multiSelectEnabled, setMultiSelectEnabled] = useState(false);
@@ -161,6 +162,7 @@ export default function ScenesTab(props) {
     activeSceneObjectIds,
     activeVisualEffectZoneIds,
     activeSelectionCount,
+    clearSceneEditorSelection,
     selectHotspot,
     selectSceneObject,
     selectVisualEffectZone,
@@ -180,13 +182,41 @@ export default function ScenesTab(props) {
   const isHeroAdventureProject = project.creationMode === 'hero_adventure' || Boolean(project.heroAdventure?.enabled);
   const heroSkills = project.heroAdventure?.hero.skills?.length ? project.heroAdventure.hero.skills : FALLBACK_HERO_SKILLS;
   const openMediaTab = () => setTab?.('media');
+  const handleCanvasBackgroundClick = (event) => {
+    if (event.defaultPrevented || event.button !== 0) return;
+    if (dragMovedRef.current) {
+      dragMovedRef.current = false;
+      return;
+    }
+
+    const interactiveTarget = event.target?.closest?.([
+      '.editor-hotspot',
+      '.editor-resize-handle',
+      '.scene-canvas-quick-toolbar',
+      '.scene-canvas-drawer-button',
+      '.editor-minimap',
+      '.scene-media-link-placeholder',
+      '.scene-inline-viewer',
+      '.scene-canvas-context-menu',
+      'button',
+      'input',
+      'select',
+      'textarea',
+      'a',
+      'label',
+    ].join(','));
+    if (interactiveTarget) return;
+
+    clearSceneEditorSelection();
+    setSceneContextMenu(null);
+  };
   const handleSceneImagePlaceholderKeyDown = (event) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
     openMediaTab();
   };
   const getCanvasPointFromEvent = (event, source = 'main') => {
-    const activeCanvas = source === 'fullscreen' ? fullscreenCanvasRef.current : canvasRef.current;
+    const activeCanvas = source === 'fullscreen' ? fullscreenContentRef.current : canvasRef.current;
     const rect = activeCanvas?.getBoundingClientRect();
     if (!rect?.width || !rect?.height) return { x: 50, y: 50 };
     return {
@@ -262,6 +292,7 @@ export default function ScenesTab(props) {
   } = useSceneEditorDragResize({
     canvasRef,
     fullscreenCanvasRef,
+    fullscreenContentRef,
     dragMovedRef,
     selectedScene,
     selectedSceneId,
@@ -608,7 +639,6 @@ export default function ScenesTab(props) {
                   <h3>Plan de scène</h3>
                 </div>
                 <div className="scene-canvas-head-actions">
-                  <SceneDrawerTriggers drawerMode={sceneDrawerMode} setDrawerMode={setSceneDrawerMode} />
                   <div className="editor-toolbar-wrap">
                     <EditorToolbarMenus {...editorToolbarProps} />
                   </div>
@@ -623,6 +653,7 @@ export default function ScenesTab(props) {
                     style={{ aspectRatio: sceneAspectRatio }}
                     onPointerUp={stopDragging}
                     onPointerCancel={stopDragging}
+                    onClick={handleCanvasBackgroundClick}
                     onContextMenu={(event) => openSceneCanvasContextMenu(event, 'canvas', '', 'main')}
                   >
                   {selectedScene.backgroundData ? <img src={selectedScene.backgroundData} alt="fond" onLoad={(event) => rememberSceneBackgroundAspectRatio(event.currentTarget)} /> : (
@@ -636,6 +667,7 @@ export default function ScenesTab(props) {
                       Ajoute une image de scène
                     </div>
                   )}
+                  <SceneCanvasDrawerButton drawerMode={sceneDrawerMode} setDrawerMode={setSceneDrawerMode} />
                   <SceneVisualEffect effect={selectedScene.visualEffect} intensity={selectedScene.visualEffectIntensity} />
                   {(selectedScene.visualEffectZones || []).filter((zone) => !zone.isHidden || zone.id === selectedVisualEffectZoneId).map((zone) => (
                     <button
@@ -708,6 +740,7 @@ export default function ScenesTab(props) {
                     canUseQuickLogic={canUseQuickLogic}
                     openQuickLogicForTarget={openQuickLogicForTarget}
                     isBeginnerMode={isBeginnerMode}
+                    projectMode={project.creationMode}
                   />
                   </div>
                 </div>
@@ -724,6 +757,7 @@ export default function ScenesTab(props) {
                       <MediaSourcePicker
                         className="button like full secondary-action"
                         accept="image/*"
+                        assetScope="object-image"
                         handleUpload={handleUpload}
                         mediaLibrary={mediaLibrary}
                         onSelect={(data, name) => patchProject((draft) => {
@@ -964,6 +998,7 @@ export default function ScenesTab(props) {
                   project={project}
                   fullscreenViewportRef={fullscreenViewportRef}
                   fullscreenCanvasRef={fullscreenCanvasRef}
+                  fullscreenContentRef={fullscreenContentRef}
                   selectActInFullscreen={selectActInFullscreen}
                   selectSceneInFullscreen={selectSceneInFullscreen}
                   getSceneDepth={getSceneDepth}
@@ -1014,8 +1049,14 @@ export default function ScenesTab(props) {
                   sendLayerToEdge={sendLayerToEdge}
                   previewScene={previewScene}
                   onCanvasContextMenu={openSceneCanvasContextMenu}
+                  onCanvasBackgroundClick={handleCanvasBackgroundClick}
                   drawerMode={sceneDrawerMode}
                   setDrawerMode={setSceneDrawerMode}
+                  conversationEditorOpen={conversationEditorOpen}
+                  setConversationEditorOpen={setConversationEditorOpen}
+                  addConversationQuestion={addConversationQuestion}
+                  isHeroAdventureProject={isHeroAdventureProject}
+                  heroSkills={heroSkills}
                 />
               ) : null}
               {canUseQuickLogic ? (

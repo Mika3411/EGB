@@ -283,6 +283,7 @@ export async function registerUser({
     salt,
     passwordHash,
     createdAt: new Date().toISOString(),
+    lastLoginAt: new Date().toISOString(),
   };
   account.roles = [account.role];
   account.isAdmin = account.role === 'admin';
@@ -310,7 +311,10 @@ export async function loginUser({ email, password }) {
     }
     const account = supabaseUserToAccount(data.user);
     if (!account) throw new Error('Connexion impossible.');
-    return rememberAccount(account);
+    return rememberAccount({
+      ...account,
+      lastLoginAt: new Date().toISOString(),
+    });
   }
 
   const normalizedEmail = normalizeEmail(email);
@@ -335,6 +339,7 @@ export async function loginUser({ email, password }) {
     role: account.role || (isConfiguredAdminEmail(account.email) ? 'admin' : 'user'),
     roles: account.roles || [account.role || 'user'],
     isAdmin: Boolean(account.isAdmin || account.role === 'admin'),
+    lastLoginAt: new Date().toISOString(),
   });
 }
 

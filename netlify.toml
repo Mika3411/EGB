@@ -52,6 +52,16 @@
   status = 200
 
 [[redirects]]
+  from = "/api/admin/support"
+  to = "/.netlify/functions/admin-support"
+  status = 200
+
+[[redirects]]
+  from = "/api/support"
+  to = "/.netlify/functions/support"
+  status = 200
+
+[[redirects]]
   from = "/api/ai-credits/admin"
   to = "/.netlify/functions/ai-credits-admin"
   status = 200

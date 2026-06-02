@@ -3,6 +3,7 @@ import {
   acceptToMediaType,
   assetMatchesMediaType,
   dedupeLibraryItems,
+  filterLibraryItems,
   matchesAssetScope,
 } from '../hooks/useMediaSourcePicker';
 
@@ -43,5 +44,66 @@ describe('media source picker filters', () => {
     ];
 
     expect(dedupeLibraryItems(items, 'audio').map((asset) => asset.name)).toEqual(['0422.MP3', '0505(5).MP3']);
+  });
+
+  it('filters library items to the current project and requested media folder', () => {
+    const items = [
+      {
+        id: 'asset_item_current',
+        type: 'image',
+        url: 'https://cdn.test/current-object.png',
+        name: 'Current object',
+        projectId: 'project-current',
+        usedIn: ['item:key'],
+      },
+      {
+        id: 'asset_scene_current_background',
+        type: 'image',
+        url: 'https://cdn.test/current-scene.png',
+        name: 'Current scene',
+        projectId: 'project-current',
+        meta: { role: 'background' },
+        usedIn: ['scène:hall'],
+      },
+      {
+        id: 'asset_item_other',
+        type: 'image',
+        url: 'https://cdn.test/other-object.png',
+        name: 'Other project object',
+        projectId: 'project-other',
+        usedIn: ['item:key'],
+      },
+    ];
+
+    expect(filterLibraryItems(items, {
+      assetScope: 'object-image',
+      mediaType: 'image',
+      projectId: 'project-current',
+    }).map((asset) => asset.name)).toEqual(['Current object']);
+  });
+
+  it('keeps scene objects out of the scene background scope even when they reference a scene', () => {
+    const items = [
+      {
+        id: 'asset_scene_object_image',
+        type: 'image',
+        url: 'https://cdn.test/object.png',
+        name: 'Scene object',
+        usedIn: ['scène:hall', 'sceneObject:door'],
+      },
+      {
+        id: 'asset_scene_background',
+        type: 'image',
+        url: 'https://cdn.test/background.png',
+        name: 'Background',
+        meta: { role: 'background' },
+        usedIn: ['scène:hall'],
+      },
+    ];
+
+    expect(filterLibraryItems(items, {
+      assetScope: 'scene-background',
+      mediaType: 'image',
+    }).map((asset) => asset.name)).toEqual(['Background']);
   });
 });

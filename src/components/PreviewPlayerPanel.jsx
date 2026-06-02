@@ -28,6 +28,7 @@ export default function PreviewPlayerPanel({
       getSceneLabel={editor.getSceneLabel}
       dialogue={preview.dialogue}
       inventory={preview.inventory}
+      visitedSceneIds={preview.visitedSceneIds}
       storyVariables={preview.storyVariables}
       adventureJournalEntries={preview.adventureJournalEntries}
       chosenConversationReplyIds={preview.chosenConversationReplyIds}

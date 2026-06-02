@@ -39,6 +39,56 @@ export const standaloneRender = `${standaloneCombatRender}${standaloneHeroSetupR
     + '</div></section></div></div>';
 }
 
+function getObjectiveChecklist() {
+  return project?.heroAdventure?.objectiveChecklist && typeof project.heroAdventure.objectiveChecklist === 'object'
+    ? project.heroAdventure.objectiveChecklist
+    : null;
+}
+
+function getObjectiveConditionContext() {
+  return {
+    inventory: state.inventory,
+    visitedSceneIds: state.visitedSceneIds,
+    completedHotspotIds: state.completedHotspotIds,
+    solvedEnigmaIds: state.solvedEnigmaIds,
+    chosenConversationReplyIds: state.chosenConversationReplyIds,
+    storyVariables: state.storyVariables,
+    project,
+  };
+}
+
+function renderObjectiveChecklist(options = {}) {
+  const checklist = getObjectiveChecklist();
+  const routes = Array.isArray(checklist?.routes) ? checklist.routes : [];
+  if (!checklist || !routes.length) return '';
+  if (options.finalOnly && checklist.finalSceneId && state.playSceneId !== checklist.finalSceneId) return '';
+  const context = getObjectiveConditionContext();
+  const routeHtml = routes.map((route, routeIndex) => {
+    const conditions = Array.isArray(route.conditions) ? route.conditions : [];
+    const checks = conditions.map((condition) => {
+      const ready = evaluateCondition(condition, context);
+      const label = condition.label || getConditionRequirementLabel(condition, context, { includeCurrent: true });
+      return '<li class="' + (ready ? 'complete' : '') + '"><span aria-hidden="true">' + (ready ? 'OK' : '-') + '</span><span>' + safeHtml(label) + '</span></li>';
+    }).join('');
+    const ready = conditions.length ? conditions.every((condition) => evaluateCondition(condition, context)) : false;
+    return '<section class="adventure-objective-route ' + (ready ? 'complete' : '') + '">'
+      + '<div class="adventure-objective-route-head"><strong>' + safeHtml(route.label || 'Voie ' + (routeIndex + 1)) + '</strong>'
+      + (ready ? '<span>Validé</span>' : '') + '</div>'
+      + (ready && route.successText ? '<small>' + safeHtml(route.successText) + '</small>' : '')
+      + '<ul class="adventure-objective-conditions">' + checks + '</ul></section>';
+  }).join('');
+  const readyRouteCount = routes.filter((route) => {
+    const conditions = Array.isArray(route.conditions) ? route.conditions : [];
+    return conditions.length ? conditions.every((condition) => evaluateCondition(condition, context)) : false;
+  }).length;
+  return '<div class="adventure-objective-card' + (options.compact ? ' compact' : '') + '"><div class="panel-head"><div><h3>'
+    + safeHtml(checklist.title || 'Objectif') + '</h3>'
+    + (checklist.description ? '<p class="small-note">' + safeHtml(checklist.description) + '</p>' : '')
+    + '</div><span class="objective-status-pill ' + (readyRouteCount ? 'ready' : '') + '">'
+    + safeHtml(readyRouteCount ? readyRouteCount + ' objectif validé' : 'À accomplir')
+    + '</span></div><div class="adventure-objective-routes">' + routeHtml + '</div></div>';
+}
+
 function renderPlayerTopbar(playScene) {
   return '<div class="player-topbar">'
     + '<div><span class="eyebrow">Player</span><strong>' + safeHtml(playScene ? getSceneLabel(playScene.id) : 'Aucune scène') + '</strong></div>'
@@ -115,11 +165,14 @@ function renderSceneObjects(playScene) {
 }
 
 function renderInlineViewer(viewerImageSrc) {
-  return viewerImageSrc
-    ? '<div class="scene-inline-viewer"><div class="scene-inline-viewer__backdrop"></div><div class="scene-inline-viewer__card">'
-      + '<img class="scene-inline-viewer__image" src="' + escapeMediaAttr(viewerImageSrc, 'image') + '" alt="' + escapeAttr(state.viewerImage.name || 'Objet') + '" />'
-      + '<div class="scene-inline-viewer__name">' + safeHtml(state.viewerImage.caption || state.viewerImage.name || 'Objet') + '</div></div></div>'
-    : '';
+  if (!state.viewerImage) return '';
+  const viewerName = state.viewerImage.name || 'Objet';
+  const viewerBody = viewerImageSrc
+    ? '<img class="scene-inline-viewer__image" src="' + escapeMediaAttr(viewerImageSrc, 'image') + '" alt="' + escapeAttr(viewerName) + '" />'
+    : '<div class="scene-inline-viewer__fallback" role="img" aria-label="' + escapeAttr(viewerName) + '"><span>' + safeHtml(state.viewerImage.icon || 'Objet') + '</span></div>';
+  return '<div class="scene-inline-viewer"><div class="scene-inline-viewer__backdrop"></div><div class="scene-inline-viewer__card">'
+    + viewerBody
+    + '<div class="scene-inline-viewer__name">' + safeHtml(state.viewerImage.caption || viewerName) + '</div></div></div>';
 }
 
 function renderActPreload() {
@@ -135,7 +188,10 @@ function renderNarrationBar() {
     + (state.narrationCollapsed
       ? '<button id="open-narration" type="button" class="narration-discreet-button">Texte</button>'
       : '<p id="collapse-narration" role="button" tabindex="0">' + safeHtml(state.dialogue || 'Aucun message.') + '</p>')
+    + '<div class="player-drawer-actions">'
+    + (getObjectiveChecklist() ? '<button id="open-objective-drawer" data-player-action="open-objective-drawer" type="button" class="inventory-discreet-button objective-discreet-button">Objectif</button>' : '')
     + '<button id="open-inventory-drawer" data-player-action="open-inventory-drawer" type="button" class="inventory-discreet-button">' + (IS_CHOICE_ADVENTURE ? 'Carnet' : 'Inventaire') + (state.inventory.length ? ' (' + state.inventory.length + ')' : '') + '</button>'
+    + '</div>'
     + '</div>';
 }
 
@@ -170,6 +226,15 @@ function renderInventoryDrawer(inventoryDrawerTitle, variant = 'stage') {
     + '</div>';
 }
 
+function renderObjectiveDrawer() {
+  if (!state.objectiveDrawerOpen || !getObjectiveChecklist()) return '';
+  return '<div id="objective-drawer-backdrop" class="player-inventory-backdrop"></div>'
+    + '<div class="player-inventory-drawer player-inventory-drawer--objective"><div class="panel-head"><h3>Objectif</h3>'
+    + '<button id="close-objective-drawer" data-player-action="close-objective-drawer" class="secondary-button" type="button">Fermer</button></div>'
+    + renderObjectiveChecklist({ compact: false })
+    + '</div>';
+}
+
 function renderSceneTransition(transitionSceneBackgroundUrl) {
   return state.sceneTransitionOverlay
     ? '<div class="scene-transition-overlay scene-transition-overlay--' + safeClassToken(state.sceneTransitionOverlay.type || 'fade', 'fade') + '" style="--scene-transition-duration:' + cssNumber(state.sceneTransitionOverlay.duration, 700, 0, 600000) + 'ms">'
@@ -195,8 +260,10 @@ function renderSceneLayer({ playScene, sceneAspectRatio, playSceneBackgroundUrl,
     + renderHeroCombatOverlay()
     + renderHeroSetupOverlay()
     + renderActPreload()
+    + renderChoiceEffectFloating()
     + renderNarrationBar()
     + renderInventoryDrawer(inventoryDrawerTitle)
+    + renderObjectiveDrawer()
     + '</div>';
 }
 
@@ -254,7 +321,6 @@ function render(shouldSave = true) {
       + '</div></div></div>' : '')
     + renderCinematic(cinematic, currentSlide)
     + renderConversation()
-    + renderChoiceEffectFloating()
     + renderEnding()
     + renderEnigma(enigma);
 

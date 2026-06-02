@@ -10,6 +10,7 @@ export default function MediaSourcePicker({
   handleUpload,
   mediaLibrary = [],
   onSelect,
+  projectId = '',
   tourId,
 }) {
   const picker = useMediaSourcePicker({
@@ -18,6 +19,7 @@ export default function MediaSourcePicker({
     handleUpload,
     mediaLibrary,
     onSelect,
+    projectId,
   });
 
   return (

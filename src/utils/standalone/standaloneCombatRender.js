@@ -303,13 +303,22 @@ function renderHeroCombatOverlay() {
       ? 'Utiliser ' + (selectedPower.name || 'Pouvoir')
       : 'Attaque normale';
   const actionDisabled = isEnded || (!isEnemyTurn && !isSurvivalTurn && (selectedPowerMissing || manaUnavailable));
+  const actionDisabledReason = !actionDisabled
+    ? ''
+    : isEnded
+    ? 'Combat terminé.'
+    : selectedPowerMissing
+    ? 'Pouvoir indisponible.'
+    : manaUnavailable
+    ? 'Mana insuffisante: ' + heroMana + '/' + selectedManaCost + '.'
+    : 'Action indisponible pendant ce tour.';
   const primaryActionLabel = isEnded ? 'Combat terminé' : actionLabel;
   const primaryActionClass = [
     'hero-combat-main-action',
     isEnemyTurn ? 'is-enemy' : '',
     isSurvivalTurn ? 'is-survival' : '',
   ].filter(Boolean).join(' ');
-  const closeCombatLabel = isEnded ? 'Revenir à la scène' : 'Fuir';
+  const closeCombatLabel = isEnded ? (combat.pendingSceneId ? 'Continuer' : 'Revenir à la scène') : 'Fuir';
   const enemyCunning = Math.max(1, Number(getCombatEntryValue(entry, 'combatEnemyCunning', combatSettings.enemyCunning || 10)) || 10);
   const attackPowers = heroPowers.filter((power) => power.statusType !== 'shield');
   const defensePowers = heroPowers.filter((power) => power.statusType === 'shield');
@@ -406,13 +415,16 @@ function renderHeroCombatOverlay() {
     + (combatJournalDetail ? '<p>' + safeHtml(combatJournalDetail) + '</p>' : '')
     + (combatJournalHistory.length ? '<details class="hero-combat-journal-history"><summary>Historique (' + combatJournalHistory.length + ')</summary><ol>' + [...combatJournalHistory].reverse().map((entry) => '<li>' + safeHtml(entry) + '</li>').join('') + '</ol></details>' : '')
     + '</div>';
-  const topCloseHtml = isEnded ? '<button id="close-hero-combat" type="button" class="secondary-action compact">' + safeHtml(closeCombatLabel) + '</button>' : '';
+  const topCloseHtml = isEnded ? '<button id="close-hero-combat" type="button" class="hero-combat-end-button hero-combat-end-button--top"><span>' + safeHtml(closeCombatLabel) + '</span><span aria-hidden="true">&rarr;</span></button>' : '';
+  const endActionHtml = isEnded
+    ? '<div class="hero-combat-end-panel"><span>Suite de l\\'aventure</span><button type="button" class="hero-combat-end-button hero-combat-end-button--primary" data-close-hero-combat="true"><span>' + safeHtml(closeCombatLabel) + '</span><span aria-hidden="true">&rarr;</span></button></div>'
+    : '<div class="inline-actions"><button id="hero-combat-action" type="button" class="' + escapeAttr(primaryActionClass) + '"' + (actionDisabled ? ' disabled title="' + escapeAttr(actionDisabledReason || 'Action indisponible') + '"' : '') + '><span class="hero-combat-action-die" aria-hidden="true">d20</span><span>' + safeHtml(primaryActionLabel) + '</span></button></div>';
 
   return '<div class="hero-combat-overlay hero-combat-overlay--' + safeClassToken(combat.status || 'active', 'active') + (isEnemyTurn ? ' hero-combat-overlay--enemy-turn' : '') + '"' + overlayStyle + '>'
     + '<div class="hero-combat-topline"><span>' + safeHtml(isSurvivalTurn ? 'Survie' : isEnemyTurn ? 'Tour ennemi' : 'Tour ' + (combat.round || 1)) + '</span><strong>' + safeHtml(enemyLabel) + '</strong>' + topCloseHtml + '</div>'
     + '<div class="hero-combat-stage">'
     + renderCombatActor(heroMedia, heroLabel, 'hero', { health: heroHealth, maxHealth: heroMaxHealth, mana: heroMana, maxMana: heroMaxMana, initiative: heroInitiative, isActive: !isEnemyTurn && !isSurvivalTurn && !isEnded, statusEffects: heroStatusEffects, activeEffectLabel: getActorEffectLabel('hero') })
-    + (showDice ? '<div class="' + escapeAttr(diceSpotlightClass) + '"><span class="hero-combat-dice-aura" aria-hidden="true"></span><button id="hero-combat-action" type="button" class="hero-combat-die-button' + (lastCombatRoll ? ' has-result' : '') + '"' + (actionDisabled ? ' disabled' : '') + '><span class="hero-combat-die hero-d20' + (lastCombatRoll ? ' has-result' : '') + '"><span class="hero-d20-core" aria-hidden="true">' + d20SvgHtml + '</span><span class="hero-roll-die-value">' + safeHtml(lastCombatRoll?.raw || '?') + '</span></span></button>' + diceResultHtml + '<strong><span class="hero-combat-dice-kicker">' + safeHtml(lastCombatRoll ? 'Résultat' : project?.heroAdventure?.dice?.label || 'Dé') + '</span>' + safeHtml(lastCombatRoll ? lastCombatRoll.total + ' total' : project?.heroAdventure?.dice?.label || 'Dé') + '</strong><small>' + safeHtml(isEnded ? 'Combat terminé' : actionLabel) + '</small></div>' : '<div></div>')
+    + (showDice ? '<div class="' + escapeAttr(diceSpotlightClass) + '"><span class="hero-combat-dice-aura" aria-hidden="true"></span><button id="hero-combat-action" type="button" class="hero-combat-die-button' + (lastCombatRoll ? ' has-result' : '') + '"' + (actionDisabled ? ' disabled title="' + escapeAttr(actionDisabledReason || 'Action indisponible') + '"' : '') + '><span class="hero-combat-die hero-d20' + (lastCombatRoll ? ' has-result' : '') + '"><span class="hero-d20-core" aria-hidden="true">' + d20SvgHtml + '</span><span class="hero-roll-die-value">' + safeHtml(lastCombatRoll?.raw || '?') + '</span></span></button>' + diceResultHtml + '<strong><span class="hero-combat-dice-kicker">' + safeHtml(lastCombatRoll ? 'Résultat' : project?.heroAdventure?.dice?.label || 'Dé') + '</span>' + safeHtml(lastCombatRoll ? lastCombatRoll.total + ' total' : project?.heroAdventure?.dice?.label || 'Dé') + '</strong><small>' + safeHtml(isEnded ? 'Combat terminé' : actionLabel) + '</small></div>' : '<div></div>')
     + renderCombatActor(enemyMedia, enemyLabel, 'enemy', { health: enemyHealth, maxHealth: enemyMaxHealth, mana: enemyMana, maxMana: enemyMaxMana, initiative: enemyInitiative, isActive: isEnemyTurn && !isEnded, statusEffects: enemyStatusEffects, activeEffectLabel: getActorEffectLabel('enemy') })
     + '</div>'
     + renderCombatVisualEffects(combat.visualEffects)
@@ -424,7 +436,8 @@ function renderHeroCombatOverlay() {
     + '</div>'
     + '<div class="hero-combat-log">' + combatJournalHtml
     + heroActionPanelHtml
-    + '<div class="inline-actions"><button id="hero-combat-action" type="button" class="' + escapeAttr(primaryActionClass) + '"' + (actionDisabled ? ' disabled' : '') + '><span class="hero-combat-action-die" aria-hidden="true">d20</span><span>' + safeHtml(primaryActionLabel) + '</span></button></div>'
+    + (actionDisabledReason && !isEnded ? '<p class="hero-combat-action-disabled-reason" role="status">' + safeHtml(actionDisabledReason) + '</p>' : '')
+    + endActionHtml
     + '</div></div>';
 }
 
