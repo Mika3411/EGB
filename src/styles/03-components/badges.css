@@ -1,5 +1,15 @@
 /* Badges */
 
-.badge,.status-badge,.mode-badge,.project-score-badge,.project-sync-badge,.auth-badge,.badge-line{display:inline-flex;align-items:center;padding:var(--component-badge-padding);border-radius:var(--radius-pill)}
+.badge,.status-badge,.mode-badge,.project-score-badge,.project-sync-badge,.auth-badge,.badge-line{display:inline-flex;align-items:center;min-height:26px;gap:6px;padding:4px 8px;border-radius:var(--radius-pill);border:1px solid var(--ds-state-muted-border);background:var(--ds-state-muted-bg);color:var(--ds-state-info-text);font-size:11px;font-weight:850;box-shadow:var(--component-surface-ring)}
 
-.badge-line{background:#2563eb26;border:1px solid rgba(96,165,250,.3);color:#bfdbfe;margin-bottom:12px}
+.badge-line{background:var(--ds-state-info-bg-soft);border-color:var(--ds-state-info-border);color:var(--focus-ring-strong);margin-bottom:12px}
+
+.badge.success,.status-badge.success,.mode-badge.beginner{background:var(--ds-state-success-bg-soft);border-color:var(--ds-state-success-border);color:var(--ds-state-success-text)}
+
+.badge.warning,.status-badge.warning,.mode-badge.intermediate{background:var(--ds-state-warning-bg);border-color:var(--ds-state-warning-border);color:var(--ds-state-warning-text)}
+
+.badge.danger,.status-badge.danger{background:var(--ds-state-danger-bg);border-color:var(--ds-state-danger-border);color:var(--ds-state-danger-text)}
+
+.badge.info,.status-badge.info,.status-badge.soft,.mode-badge.expert,.mode-badge.adventure{background:var(--ds-state-info-bg-soft);border-color:var(--ds-state-info-border);color:var(--ds-state-info-text)}
+
+.badge.muted,.status-badge.muted,.mode-badge.muted{background:var(--ds-state-muted-bg);border-color:var(--ds-state-muted-border);color:var(--ds-state-muted-text)}

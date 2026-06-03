@@ -1,16 +1,16 @@
 /* Overlays */
 
-.overlay{position:fixed;top:0;right:0;bottom:0;left:0;background:#000000c2;display:flex;align-items:center;justify-content:center;padding:20px;z-index:20}
+.overlay{position:fixed;top:0;right:0;bottom:0;left:0;background:var(--ds-surface-overlay-scrim);display:flex;align-items:center;justify-content:center;padding:20px;z-index:20}
 
-.overlay-card{width:min(88vw,760px);max-height:90vh;overflow:auto;border-radius:24px;padding:18px}
+.overlay-card{width:min(88vw,760px);max-height:90vh;overflow:auto;border-radius:var(--ds-surface-overlay-radius);padding:var(--ds-surface-overlay-padding)}
 
 .overlay-card.wide{width:min(92vw,980px)}
 
 .overlay-media{width:100%;max-height:62vh;object-fit:contain;display:block;border-radius:16px;background:#020617}
 
-.accessible-dialog-overlay{position:fixed;top:0;right:0;bottom:0;left:0;z-index:30000;display:grid;place-items:center;padding:20px;background:#020617d8;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.accessible-dialog-overlay{position:fixed;top:0;right:0;bottom:0;left:0;z-index:30000;display:grid;place-items:center;padding:20px;background:var(--ds-surface-overlay-scrim);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
 
-.accessible-dialog-panel{width:min(575px,calc(100vw - 32px));display:grid;gap:18px;padding:22px;border:1px solid rgba(148,163,184,.28);border-radius:10px;background:#07101efa;box-shadow:0 28px 90px #0000008a;color:#f8fbff}
+.accessible-dialog-panel{width:min(575px,calc(100vw - 32px));display:grid;gap:18px;padding:22px;border:1px solid var(--ds-surface-overlay-border);border-radius:var(--ds-surface-overlay-radius);background:var(--ds-surface-overlay-bg);box-shadow:var(--ds-surface-overlay-shadow);color:var(--text-on-dark)}
 
 .accessible-dialog-copy{display:grid;gap:8px}
 

@@ -1,5 +1,5 @@
 /* Cards */
 
-.card{padding:var(--component-card-padding)}
+.card{padding:var(--ds-surface-card-padding)}
 
-.card,.landing-card,.profile-order-card{border:1px solid var(--border-info-soft);border-radius:var(--radius-sm);background:var(--surface-card)}
+.card,.landing-card,.profile-order-card{border:1px solid var(--ds-surface-card-border);border-radius:var(--ds-surface-card-radius);background:var(--ds-surface-card-bg);box-shadow:var(--ds-surface-card-shadow)}

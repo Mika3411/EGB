@@ -1,10 +1,8 @@
 /* Panels */
 
-.panel{padding:var(--component-panel-padding)}
+.panel{padding:var(--ds-surface-panel-padding);border-radius:var(--ds-surface-panel-radius);box-shadow:var(--ds-surface-panel-shadow)}
 
-.panel{border-radius:28px}
-
-.panel-nav-pro,.panel-context-pro{overflow-x:clip!important;position:sticky;top:24px}
+.panel-nav-pro,.panel-context-pro{overflow-x:clip!important;position:sticky;top:10px;max-height:calc(100vh - 22px);overflow:auto}
 
 .panel-main-pro{min-height:auto}
 
@@ -18,9 +16,9 @@
 
 .subpanel-grid{display:grid;grid-template-columns:1fr;gap:10px}
 
-.subpanel{background:#0d1729d1;border:1px solid var(--line);border-radius:22px;padding:18px}
+.subpanel{background:var(--ds-surface-subpanel-bg);border:1px solid var(--ds-surface-subpanel-border);border-radius:var(--ds-surface-subpanel-radius);padding:var(--ds-surface-subpanel-padding);box-shadow:var(--ds-surface-subpanel-shadow)}
 
-.subpanel-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px}
+.subpanel-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px}
 
 .subpanel-head p{margin:6px 0 0}
 
@@ -32,13 +30,7 @@
 
 .shop-tab .panel.main{align-content:start}
 
-.subpanel-head{margin-bottom:8px}
-
 .subpanel-head h3{margin:0;font-size:18px}
-
-.panel{padding:8px;border-radius:12px;box-shadow:0 10px 32px #0000003d}
-
-.panel-nav-pro,.panel-context-pro{overflow-x:clip!important;top:10px;max-height:calc(100vh - 22px);overflow:auto}
 
 .panel-head{gap:8px;margin-bottom:8px}
 
@@ -47,8 +39,6 @@
 .panel-head h2{margin:4px 0 0;font-size:24px;line-height:1.05}
 
 .panel-head h3,.subpanel-head h3{font-size:17px;line-height:1.1}
-
-.subpanel{padding:10px;border-radius:12px;background:#0b1425a3}
 
 .panel-context-pro .panel-head h2{font-size:22px}
 
@@ -66,4 +56,4 @@
 
 .preview-editor>.panel-context-pro.side-editor-pro{height:auto!important;min-height:0!important;max-height:none!important;align-self:start;overflow:visible!important;padding-bottom:16px}
 
-.panel,.overlay-card,.project-actions-card,.user-chip{background:var(--surface-panel);border:1px solid var(--line);box-shadow:var(--shadow)}
+.panel,.overlay-card,.project-actions-card,.user-chip{background:var(--ds-surface-panel-bg);border:1px solid var(--ds-surface-panel-border);box-shadow:var(--ds-surface-panel-shadow)}

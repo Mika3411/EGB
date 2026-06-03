@@ -2,19 +2,23 @@
 
 *{box-sizing:border-box}
 
-*{scrollbar-color:rgba(100,116,139,.92) rgba(15,23,42,.82);scrollbar-width:thin}
+*{scrollbar-color:var(--scrollbar-thumb) var(--scrollbar-track);scrollbar-width:thin}
 
 *::-webkit-scrollbar{width:10px;height:10px}
 
-*::-webkit-scrollbar-track{background:rgba(15,23,42,.82);border-radius:999px}
+*::-webkit-scrollbar-track{background:var(--scrollbar-track);border-radius:999px}
 
-*::-webkit-scrollbar-thumb{min-height:36px;border:2px solid rgba(15,23,42,.82);border-radius:999px;background:rgba(100,116,139,.92)}
+*::-webkit-scrollbar-thumb{min-height:36px;border:2px solid var(--scrollbar-track);border-radius:999px;background:var(--scrollbar-thumb)}
 
-*::-webkit-scrollbar-thumb:hover{background:rgba(148,163,184,.96)}
+*::-webkit-scrollbar-thumb:hover{background:var(--scrollbar-thumb-hover)}
 
-*::-webkit-scrollbar-corner{background:rgba(15,23,42,.82)}
+*::-webkit-scrollbar-corner{background:var(--scrollbar-track)}
 
-body{margin:0;font-family:Inter,Arial,sans-serif;color:var(--text);background:radial-gradient(circle at top left,rgba(79,140,255,.14),transparent 28%),radial-gradient(circle at top right,rgba(59,130,246,.08),transparent 22%),linear-gradient(180deg,#08101c,#09111f)}
+html{color-scheme:dark}
+
+body{margin:0;font-family:Inter,Arial,sans-serif;color:var(--text);background:linear-gradient(180deg,var(--bg) 0%,var(--bg-soft) 42%,var(--bg-deep) 100%);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+
+::selection{background:var(--state-info-bg);color:var(--text-on-primary)}
 
 button,input,select,textarea{font:inherit}
 

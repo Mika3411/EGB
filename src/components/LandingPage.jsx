@@ -12,67 +12,85 @@ import ratingImage from '../assets/landing-rating.png';
 import reviewsImage from '../assets/landing-reviews.png';
 
 const featureCards = [
-  ['Gratuit pour créer', "Construis tes projets sans payer. Seules les fonctions d'IA utilisent des crédits."],
-  ['Sans code', 'Crée des scènes, objets, énigmes, cinématiques et règles de logique avec des formulaires simples.'],
-  ['Prêt à partager', 'Publie dans la galerie ou exporte une version jouable de ton escape game.'],
+  ['Studio no-code', 'Scènes, objets, indices, énigmes et logique se construisent avec des formulaires et des zones visuelles.'],
+  ['Gratuit pour créer', "Tu peux construire, tester et publier sans payer. L'IA reste une aide optionnelle avec crédits."],
+  ['Jouable tout de suite', 'Prévisualise le parcours côté joueur, corrige les blocages et partage quand tout est prêt.'],
 ];
 
 const workflowSteps = [
-  'Choisis un modèle ou pars de zéro.',
-  'Ajoute tes scènes, indices et objets.',
-  'Ajoute ta logique, tes énigmes et tes cinématiques.',
+  'Pose la structure du jeu.',
+  'Ajoute indices, objets et énigmes.',
+  'Relie les conditions et les scènes.',
   'Teste, publie, partage.',
+];
+
+const proofItems = [
+  ['No-code', 'Un builder visuel pour assembler le jeu sans développement.'],
+  ['Gratuit', 'Création, test et publication restent accessibles gratuitement.'],
+  ['IA optionnelle', "L'assistant accélère la création, sans devenir obligatoire."],
 ];
 
 export default function LandingPage({ onLogin, onRegister, onOpenGallery }) {
   return (
     <main className="landing-shell">
       <section className="landing-hero">
+        <img
+          className="landing-hero-bg"
+          src={builderPreviewImage}
+          alt=""
+          aria-hidden="true"
+        />
         <nav className="landing-nav">
           <img src={bannerImage} alt="Escape Game Studio" />
-          <div>
+          <div className="landing-nav-actions">
             <button type="button" className="secondary-action" onClick={onOpenGallery}>Galerie</button>
             <button type="button" onClick={onLogin}>Connexion</button>
           </div>
         </nav>
 
-        <div className="landing-hero-grid">
-          <div className="landing-hero-content">
-            <span className="section-kicker">Builder no-code</span>
-            <h1>Crée ton escape game en ligne, sans code.</h1>
-            <p>
-              Construis des scènes interactives, des objets, des énigmes, des cinématiques,
-              de la logique conditionnelle et un parcours jouable directement dans le navigateur.
-            </p>
-            <div className="landing-free-note">
-              Gratuit pour créer et publier. IA optionnelle avec crédits.
-            </div>
-            <div className="landing-hero-actions">
-              <button type="button" onClick={onRegister}>Commencer gratuitement</button>
-              <button type="button" className="secondary-action" onClick={onOpenGallery}>Voir la galerie</button>
-            </div>
+        <div className="landing-hero-content">
+          <span className="section-kicker">Builder no-code</span>
+          <h1>Crée ton escape game en ligne, sans code.</h1>
+          <p>
+            Assemble des scènes interactives, des objets, des énigmes, des cinématiques
+            et une logique conditionnelle dans un studio sombre, rapide et pensé pour produire.
+          </p>
+          <div className="landing-free-note">
+            Gratuit pour créer et publier. IA optionnelle avec crédits.
           </div>
-
-          <div className="landing-hero-visual" aria-label="Emplacement pour capture de l'application">
-            <div className="landing-visual-toolbar">
-              <span />
-              <span />
-              <span />
-            </div>
-            <img src={builderPreviewImage} alt="Aperçu de l'éditeur visuel Escape Game Studio" />
+          <div className="landing-hero-actions">
+            <button type="button" className="landing-cta-primary" onClick={onRegister}>Commencer gratuitement</button>
+            <button type="button" className="secondary-action landing-cta-secondary" onClick={onOpenGallery}>Voir des jeux publiés</button>
           </div>
+          <ul className="landing-hero-points" aria-label="Points forts">
+            <li>Éditeur visuel</li>
+            <li>Prévisualisation joueur</li>
+            <li>Publication galerie</li>
+          </ul>
         </div>
       </section>
 
-      <section className="landing-image-band" aria-label="Aperçus à remplacer par vos images">
+      <section className="landing-proof-strip" aria-label="Résumé du produit">
+        {proofItems.map(([title, text]) => (
+          <article key={title}>
+            <strong>{title}</strong>
+            <span>{text}</span>
+          </article>
+        ))}
+      </section>
+
+      <section className="landing-image-band" aria-label="Aperçus du produit">
         <div className="landing-image-slot main with-image">
           <img src={builderPreviewImage} alt="Aperçu du builder avec une scène et ses zones interactives" />
+          <span>Builder</span>
         </div>
         <div className="landing-image-slot with-image">
           <img src={galleryPageImage} alt="Galerie publique avec les escape games à découvrir" />
+          <span>Galerie</span>
         </div>
         <div className="landing-image-slot with-image">
           <img src={playerPageImage} alt="Page joueur avec image du jeu, note et avis" />
+          <span>Joueur</span>
         </div>
       </section>
 
@@ -80,7 +98,7 @@ export default function LandingPage({ onLogin, onRegister, onOpenGallery }) {
         <div className="landing-section-head">
           <span className="section-kicker">Facile</span>
           <h2>Un studio complet, pensé pour les créateurs.</h2>
-          <p>Tu ne programmes pas : tu remplis, tu places, tu relies et tu testes.</p>
+          <p>Tu ne programmes pas : tu remplis, tu places, tu relies et tu testes dans le même espace de travail.</p>
         </div>
         <div className="landing-card-grid">
           {featureCards.map(([title, text]) => (
@@ -92,8 +110,8 @@ export default function LandingPage({ onLogin, onRegister, onOpenGallery }) {
         </div>
       </section>
 
-      <section className="landing-section landing-split">
-        <div>
+      <section className="landing-section landing-split landing-split-product">
+        <div className="landing-section-copy">
           <span className="section-kicker">Logique & IA</span>
           <h2>Des jeux plus riches, sans devenir développeur.</h2>
           <p>
@@ -104,6 +122,7 @@ export default function LandingPage({ onLogin, onRegister, onOpenGallery }) {
           <p className="landing-note">
             Le builder reste gratuit. Les outils IA sont optionnels et consomment des crédits.
           </p>
+          <button type="button" className="secondary-action" onClick={onRegister}>Créer un projet gratuit</button>
         </div>
         <div className="landing-highlight-grid">
           <div className="landing-highlight-shot">
@@ -129,41 +148,15 @@ export default function LandingPage({ onLogin, onRegister, onOpenGallery }) {
         </div>
       </section>
 
-      <section className="landing-section landing-split">
-        <div>
-          <span className="section-kicker">Boutique</span>
-          <h2>Des packs de projets complets, uniques, prêts à continuer.</h2>
-          <p>
-            La boutique permet d'acheter des packs de projets complets : une base déjà structurée,
-            avec scènes, idées, ambiance et progression. Tu peux ensuite les compléter, les modifier
-            et continuer l'histoire à ta façon dans le builder.
-          </p>
-        </div>
-        <div className="landing-shop-preview">
-          <div className="landing-shop-card">
-            <span>Pack projet complet</span>
-            <strong>À compléter</strong>
-          </div>
-          <div className="landing-shop-card">
-            <span>Univers unique</span>
-            <strong>À personnaliser</strong>
-          </div>
-          <div className="landing-shop-card">
-            <span>Suite possible</span>
-            <strong>À continuer</strong>
-          </div>
-        </div>
-      </section>
-
-      <section className="landing-section landing-split">
-        <div>
+      <section className="landing-section landing-split landing-split-gallery">
+        <div className="landing-section-copy">
           <span className="section-kicker">Galerie</span>
           <h2>Publie tes jeux et laisse les joueurs les découvrir.</h2>
           <p>
             La galerie met en avant les escape games publics, les auteurs, les catégories,
             les avis et les parties jouées.
           </p>
-          <button type="button" onClick={onOpenGallery}>Explorer la galerie</button>
+          <button type="button" className="landing-cta-primary" onClick={onOpenGallery}>Explorer la galerie</button>
         </div>
         <div className="landing-gallery-preview">
           <div className="landing-gallery-card wide with-image">
@@ -182,6 +175,7 @@ export default function LandingPage({ onLogin, onRegister, onOpenGallery }) {
         <div className="landing-section-head">
           <span className="section-kicker">Méthode</span>
           <h2>De l'idée au jeu jouable en quelques étapes.</h2>
+          <p>Un parcours court pour démarrer, puis assez de profondeur pour produire un vrai jeu.</p>
         </div>
         <div className="landing-steps">
           {workflowSteps.map((step, index) => (
@@ -195,8 +189,11 @@ export default function LandingPage({ onLogin, onRegister, onOpenGallery }) {
 
       <section className="landing-final-cta">
         <h2>Prêt à construire un escape game sans code ?</h2>
-        <p>Crée un compte gratuitement, choisis un modèle ou un pack, puis commence à assembler ton premier parcours.</p>
-        <button type="button" onClick={onRegister}>Créer mon compte</button>
+        <p>Crée un compte gratuitement, pars d'une idée simple, puis assemble ton premier parcours jouable.</p>
+        <div className="landing-final-actions">
+          <button type="button" className="landing-cta-primary" onClick={onRegister}>Créer mon compte</button>
+          <button type="button" className="secondary-action" onClick={onOpenGallery}>Voir la galerie</button>
+        </div>
       </section>
     </main>
   );
