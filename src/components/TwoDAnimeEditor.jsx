@@ -282,11 +282,11 @@ const removeImageBackgroundWithAi = async (src, onProgress) => {
     },
     progress: (key, current, total) => {
       if (!total) {
-        onProgress?.('Téléchargement du modele IA...');
+        onProgress?.('Téléchargement du modèle IA...');
         return;
       }
       const percent = Math.max(0, Math.min(100, Math.round((current / total) * 100)));
-      onProgress?.(`Modele IA ${percent}%`);
+      onProgress?.(`Modèle IA ${percent}%`);
     },
   });
 
@@ -989,7 +989,7 @@ export default function TwoDAnimeEditor({
     layersRef.current = layers;
   }, [layers]);
 
-  const restoreDraft = useCallback((draft, label = 'Brouillon restaure.') => {
+  const restoreDraft = useCallback((draft, label = 'Brouillon restauré.') => {
     if (!draft?.layers?.length) return false;
     const restoredLayers = draft.layers.map(normalizeLayerDimensions);
     setLayers(restoredLayers);
@@ -1112,14 +1112,14 @@ export default function TwoDAnimeEditor({
       .then((draft) => {
         if (cancelled) return;
         if (draft?.layers?.length) {
-          restoreDraft(draft, 'Brouillon restaure.');
+          restoreDraft(draft, 'Brouillon restauré.');
         }
       })
       .catch(() => {
         if (!cancelled && initialDraftRef.current?.layers?.length) {
-          restoreDraft(initialDraftRef.current, 'Brouillon local restaure.');
+          restoreDraft(initialDraftRef.current, 'Brouillon local restauré.');
         } else if (!cancelled && initialProjectDraftRef.current?.layers?.length) {
-          restoreDraft(initialProjectDraftRef.current, 'Brouillon restaure depuis le projet.');
+          restoreDraft(initialProjectDraftRef.current, 'Brouillon restauré depuis le projet.');
         } else if (!cancelled) {
           setSaveStatus('Sauvegarde du brouillon 2D Anime indisponible sur ce navigateur.');
         }
@@ -1283,7 +1283,7 @@ export default function TwoDAnimeEditor({
         originalSrc: selectedLayer.originalSrc || selectedLayer.src,
         name: selectedLayer.name.replace(/\s*\(detoure\)$/i, '') + ' (detoure)',
       });
-      setSaveStatus('Arriere-plan supprime sur le calque sélectionne.');
+      setSaveStatus('Arrière-plan supprimé sur le calque sélectionné.');
     } catch (error) {
       setExportNotice(error.message || 'Detourage impossible.');
     } finally {
@@ -1351,7 +1351,7 @@ export default function TwoDAnimeEditor({
       src: selectedLayer.originalSrc,
       name: selectedLayer.name.replace(/\s*\(detoure\)$/i, '').replace(/\s*\(retouche\)$/i, ''),
     });
-    setSaveStatus('Image originale restauree.');
+    setSaveStatus('Image originale restaurée.');
   };
 
   const paintSelectedLayer = async (event, layer) => {
@@ -1784,7 +1784,7 @@ export default function TwoDAnimeEditor({
           <Menu label="Affichage" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
             <MenuItem shortcut="-" onClick={() => changeStageZoom(-0.25)}>Zoom -</MenuItem>
             <MenuItem shortcut="+" onClick={() => changeStageZoom(0.25)}>Zoom +</MenuItem>
-            <MenuItem shortcut="0" onClick={resetStageView}>Reinitialiser la vue</MenuItem>
+            <MenuItem shortcut="0" onClick={resetStageView}>Réinitialiser la vue</MenuItem>
             <MenuItem shortcut="Espace" onClick={() => setIsPlaying((value) => !value)}>{isPlaying ? 'Pause' : 'Lire'}</MenuItem>
           </Menu>
           <Menu label="Image" activeMenu={activeMenu} setActiveMenu={setActiveMenu}>
@@ -2001,7 +2001,7 @@ export default function TwoDAnimeEditor({
             <button type="button" className="anime-zoom-button" onClick={() => changeStageZoom(-0.25)}>-</button>
             <span className="anime-zoom-readout">{Math.round(stageZoom * 100)}%</span>
             <button type="button" className="anime-zoom-button" onClick={() => changeStageZoom(0.25)}>+</button>
-            <IconButton title="Reinitialiser la vue" onClick={resetStageView}>
+            <IconButton title="Réinitialiser la vue" onClick={resetStageView}>
               <RotateCcw size={18} />
             </IconButton>
           </div>

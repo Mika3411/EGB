@@ -1845,7 +1845,7 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel, setS
                 const room = rooms.find((entry) => entry.id === roomId);
                 return (
                   <span key={`${roomId}:${index}`} className="route-connection-status status-ok">
-                    <span>{index + 1}. {room ? roomLabel(room, project, getSceneLabel) : 'Pièce supprimee'}</span>
+                    <span>{index + 1}. {room ? roomLabel(room, project, getSceneLabel) : 'Pièce supprimée'}</span>
                   </span>
                 );
               })}
@@ -1858,7 +1858,7 @@ export default function RouteMapTab({ project, patchProject, getSceneLabel, setS
           return (
             <div className="editor-stack" data-tour="map-connection-detail">
               <div className={`route-selected-connection status-${check?.status || 'neutral'}`}>
-                <strong>{fromRoom ? roomLabel(fromRoom, project, getSceneLabel) : 'Pièce supprimee'} {'->'} {toRoom ? roomLabel(toRoom, project, getSceneLabel) : 'Pièce supprimee'}</strong>
+                <strong>{fromRoom ? roomLabel(fromRoom, project, getSceneLabel) : 'Pièce supprimée'} {'->'} {toRoom ? roomLabel(toRoom, project, getSceneLabel) : 'Pièce supprimée'}</strong>
                 <span>{check?.message || 'Liaison manuelle.'}</span>
               </div>
               <label>

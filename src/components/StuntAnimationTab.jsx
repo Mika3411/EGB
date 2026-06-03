@@ -677,7 +677,7 @@ export default function StuntAnimationTab({ project, patchProject }) {
     });
     setSelectedClipId(nextClipId);
     setProgress(0);
-    setStatus('Cascade supprimee');
+    setStatus('Cascade supprimée');
   }, [clips, defaultCharacterId, patchProject, selectedClip]);
 
   const applyPreset = useCallback((preset) => {
@@ -787,7 +787,7 @@ export default function StuntAnimationTab({ project, patchProject }) {
     patchKeyframeFields({
       [button.field]: currentValue + button.delta,
     });
-    setStatus(button.label ? `Personnage ${button.label.toLowerCase()}` : 'Personnage deplace');
+    setStatus(button.label ? `Personnage ${button.label.toLowerCase()}` : 'Personnage déplacé');
   }, [patchKeyframeFields, selectedKeyframe]);
 
   const selectRigMarker = useCallback((pointId, marker = null) => {
@@ -796,7 +796,7 @@ export default function StuntAnimationTab({ project, patchProject }) {
     setIsPlaying(false);
     setProgress(keyframeTime);
     playbackRef.current.progress = keyframeTime;
-    setStatus(`${marker?.label || pointId || 'Pastille'} selectionnee`);
+    setStatus(`${marker?.label || pointId || 'Pastille'} sélectionnée`);
   }, [selectedKeyframe]);
 
   const patchRigMarkerFromDrag = useCallback((pointId, updates = {}) => {
@@ -836,7 +836,7 @@ export default function StuntAnimationTab({ project, patchProject }) {
     setMovementCountDraft(String(Math.max(1, selectedClip.keyframes.length - 1)));
     setSelectedKeyframeId(fallback?.id || '');
     setProgress(fallback?.time || 0);
-    setStatus('Mouvement supprime');
+    setStatus('Mouvement supprimé');
   }, [patchSelectedClip, selectedClip, selectedKeyframe]);
 
   const copyExport = useCallback(async () => {
@@ -1038,7 +1038,7 @@ export default function StuntAnimationTab({ project, patchProject }) {
             </select>
           </label>
           <label>
-            Duree ms
+            Durée ms
             <input type="number" min="250" max="8000" step="50" value={selectedClip.durationMs} onChange={(event) => patchClipField('durationMs', event.target.value)} />
           </label>
         </div>

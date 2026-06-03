@@ -120,11 +120,11 @@ export default function ShopTab({ user }) {
       const response = await fetch(AI_CREDITS_ENDPOINT, {
         headers: await getAuthHeaders(),
       });
-      if (!response.ok) throw new Error(`Credits indisponibles (${response.status}).`);
-      const payload = await readJsonResponse(response, 'Credits indisponibles. Lance le serveur API pour actualiser le solde.');
+      if (!response.ok) throw new Error(`Crédits indisponibles (${response.status}).`);
+      const payload = await readJsonResponse(response, 'Crédits indisponibles. Lance le serveur API pour actualiser le solde.');
       setAiCredits({ balance: Number(payload.balance || 0), isLoading: false, error: '' });
     } catch (error) {
-      setAiCredits((previous) => ({ ...previous, isLoading: false, error: error.message || 'Credits indisponibles.' }));
+      setAiCredits((previous) => ({ ...previous, isLoading: false, error: error.message || 'Crédits indisponibles.' }));
     }
   };
 
@@ -137,7 +137,7 @@ export default function ShopTab({ user }) {
       await navigator.clipboard.writeText(purchaseId);
       setCopyStatus('Identifiant copie.');
     } catch {
-      setCopyStatus("Copie impossible, selectionne l'identifiant manuellement.");
+      setCopyStatus("Copie impossible, sélectionne l'identifiant manuellement.");
     }
   };
 
@@ -156,12 +156,12 @@ export default function ShopTab({ user }) {
 
   const buyProductPack = async (pack) => {
     if (pack.hasDownload === false) {
-      setPurchaseStatus('Ce pack n a pas encore de ZIP telechargeable.');
+      setPurchaseStatus("Ce pack n'a pas encore de ZIP téléchargeable.");
       return;
     }
     const cost = Number(pack.costCredits || 0);
     if (aiCredits.balance != null && aiCredits.balance < cost) {
-      setPurchaseStatus(`Credits insuffisants: ${aiCredits.balance}/${cost}.`);
+      setPurchaseStatus(`Crédits insuffisants: ${aiCredits.balance}/${cost}.`);
       return;
     }
 
@@ -209,32 +209,32 @@ export default function ShopTab({ user }) {
           <span className="status-badge soft">Gumroad</span>
         </div>
         <p className="small-note">
-          Achété un pack de credits puis garde le même compte dans l'application. L'identifiant ci-dessous permet de retrouver ton achat.
+          Achète un pack de crédits puis garde le même compte dans l'application. L'identifiant ci-dessous permet de retrouver ton achat.
         </p>
 
         <div className="shop-identity-panel">
           <span className="section-kicker">Identifiant achat</span>
           <strong>{purchaseId}</strong>
           <span className="status-badge soft">
-            {aiCredits.isLoading ? 'Credits...' : `${aiCredits.balance ?? 0} credits`}
+            {aiCredits.isLoading ? 'Crédits...' : `${aiCredits.balance ?? 0} crédits`}
           </span>
           <button type="button" className="secondary-action" onClick={copyPurchaseId}>Copier</button>
-          <button type="button" className="secondary-action" onClick={refreshAiCredits} disabled={aiCredits.isLoading}>Actualiser credits</button>
+          <button type="button" className="secondary-action" onClick={refreshAiCredits} disabled={aiCredits.isLoading}>Actualiser les crédits</button>
           {copyStatus ? <p className="small-note">{copyStatus}</p> : null}
           {aiCredits.error ? <p className="small-note">{aiCredits.error}</p> : null}
         </div>
 
         <div className="combo-card shop-info-card">
           <strong>Reperes</strong>
-          <p>Un projet comme l'exemple recent consomme environ 36 credits hors images.</p>
-          <p>Miniature economique d'objet: 1 credit. Image d'objet détaillee: 3 credits. Image de scene: 5 credits.</p>
+          <p>Un projet comme l'exemple récent consomme environ 36 crédits hors images.</p>
+          <p>Miniature économique d'objet: 1 crédit. Image d'objet détaillée: 3 crédits. Image de scène: 5 crédits.</p>
         </div>
       </section>
 
       <section className="panel main">
         <div className="panel-head">
           <div>
-            <span className="section-kicker">Credits IA</span>
+            <span className="section-kicker">Crédits IA</span>
             <h2>Packs disponibles</h2>
           </div>
         </div>
@@ -243,7 +243,7 @@ export default function ShopTab({ user }) {
           {packs.map((pack) => (
             <article className="shop-pack-card" key={pack.credits}>
               <span className="section-kicker">Pack</span>
-              <h3>{pack.credits} credits</h3>
+              <h3>{pack.credits} crédits</h3>
               <strong>{pack.price}</strong>
               <p>Environ {estimateProjects(pack.credits)} projet{estimateProjects(pack.credits) > 1 ? 's' : ''} complet{estimateProjects(pack.credits) > 1 ? 's' : ''}, hors images.</p>
               <button type="button" disabled={!pack.url} onClick={() => openPack(pack)}>
@@ -305,7 +305,7 @@ export default function ShopTab({ user }) {
                     </div>
                   ) : null}
                   <div>
-                    <span className="section-kicker">{pack.costCredits} credits</span>
+                    <span className="section-kicker">{pack.costCredits} crédits</span>
                     <h3>{pack.title}</h3>
                     <strong>{pack.rating}/10</strong>
                     <p>{pack.description || 'Pack prêt ? importer dans un projet.'}</p>
@@ -323,7 +323,7 @@ export default function ShopTab({ user }) {
                       disabled={buyingPackId === pack.id || pack.hasDownload === false || aiCredits.isLoading}
                       onClick={() => buyProductPack(pack)}
                     >
-                      {buyingPackId === pack.id ? 'Achat...' : `Achétér pour ${pack.costCredits} credits`}
+                      {buyingPackId === pack.id ? 'Achat...' : `Acheter pour ${pack.costCredits} crédits`}
                     </button>
                   </div>
                 </article>

@@ -547,8 +547,8 @@ export default function ScenesTab(props) {
     setIsCollapsed: setIsMiniMapCollapsed,
   };
   const sceneContextTitle = selectedSceneObject
-    ? ((selectedSceneObject.anime2dSpec || selectedSceneObject.anime2dName || selectedSceneObject.name === 'Animation') ? 'Animation selectionnee' : selectedSceneObject.isInvisible ? 'Objet invisible selectionne' : (getSceneObjectClickMode(selectedSceneObject) === 'action' ? "Zone d'action selectionnee" : 'Objet visible selectionne'))
-    : selectedVisualEffectZone ? 'Zone visuelle selectionnee' : 'Zone selectionnee';
+    ? ((selectedSceneObject.anime2dSpec || selectedSceneObject.anime2dName || selectedSceneObject.name === 'Animation') ? 'Animation sélectionnée' : selectedSceneObject.isInvisible ? 'Objet invisible sélectionné' : (getSceneObjectClickMode(selectedSceneObject) === 'action' ? "Zone d'action sélectionnée" : 'Objet visible sélectionné'))
+    : selectedVisualEffectZone ? 'Zone visuelle sélectionnée' : 'Zone sélectionnée';
   const isSceneObjectSelectedOnCanvas = (obj) => obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id);
   const isHotspotSelectedOnCanvas = (spot) => spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id);
   const addConversationQuestion = () => patchProject((draft) => {
@@ -801,7 +801,7 @@ export default function ScenesTab(props) {
                           <option value="none">Aucun effet</option>
                           <option value="health_potion">Potion de soin</option>
                           <option value="mana_potion">Potion de mana</option>
-                          <option value="equipment">Equipement avec bonus</option>
+                          <option value="equipment">Équipement avec bonus</option>
                         </select>
 
                         {['health_potion', 'mana_potion'].includes(selectedItem.heroItemType || 'none') ? (

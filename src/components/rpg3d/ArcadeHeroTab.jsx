@@ -76,13 +76,13 @@ function ArcadeHeroTab({
     {
       id: HERO_PROFILE_PLAYER_ID,
       type: 'player',
-      label: basePlayer.name || 'Heros principal',
+      label: basePlayer.name || 'Héros principal',
       item: basePlayer,
     },
     ...(config.heroes || []).map((hero, index) => ({
       id: hero.id,
       type: 'hero',
-      label: hero.name || `Heros ${index + 1}`,
+      label: hero.name || `Héros ${index + 1}`,
       item: hero,
       index,
     })),
@@ -98,8 +98,8 @@ function ArcadeHeroTab({
   const activeSource = activeProfile?.item || basePlayer;
   const isPlayerProfile = activeProfile?.type !== 'hero';
   const activeDisplayName = isPlayerProfile
-    ? activeSource.name || 'Heros principal'
-    : activeSource.name || `Heros ${(activeProfile?.index || 0) + 1}`;
+    ? activeSource.name || 'Héros principal'
+    : activeSource.name || `Héros ${(activeProfile?.index || 0) + 1}`;
   const playerCharacterPreset = getCharacterPreset(activeSource.character || 'runner', 'runner');
   const activeMaxHealth = Math.max(1, getHeroProfileNumber(activeSource, basePlayer, 'maxHealth', DEFAULT_ARCADE_CONFIG.player.maxHealth));
   const activeHealth = clamp(getHeroProfileNumber(activeSource, basePlayer, 'health', activeMaxHealth), 0, activeMaxHealth);
@@ -313,10 +313,10 @@ function ArcadeHeroTab({
   }, [heroProfileId, onPatchConfig, onSetMediaError]);
 
   return (
-    <section className="arcade-management-tab arcade-hero-tab" aria-label="Gestion du heros">
+    <section className="arcade-management-tab arcade-hero-tab" aria-label="Gestion du héros">
       <section className="panel arcade-management-summary arcade-hero-summary">
         <div>
-          <span className="section-kicker"><HeartPulse aria-hidden="true" size={14} /> Heros</span>
+          <span className="section-kicker"><HeartPulse aria-hidden="true" size={14} /> Héros</span>
           <h2>{activeDisplayName}</h2>
         </div>
         <div className="arcade-canvas-summary-stats arcade-hero-summary-stats">
@@ -428,14 +428,14 @@ function ArcadeHeroTab({
             </select>
           </label>
           <label>
-            <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.characterModel}>Modele 3D</Rpg3DHelpLabel>
+            <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.characterModel}>Modèle 3D</Rpg3DHelpLabel>
             <select value={activeSource.characterModel3dId || ''} onChange={(event) => patchActiveHero((target) => {
               const model = studioHeroModels.find((entry) => entry.id === event.target.value);
               applyCharacterModelToActor(target, model, studioWeaponModels);
             }, false)}>
               <option value="">Aucun</option>
               {studioHeroModels.map((model) => (
-                <option key={model.id} value={model.id}>{model.name || model.modelName || 'Modele 3D'}</option>
+                <option key={model.id} value={model.id}>{model.name || model.modelName || 'Modèle 3D'}</option>
               ))}
             </select>
           </label>
@@ -472,7 +472,7 @@ function ArcadeHeroTab({
         </div>
         <div className="arcade-hero-media-actions">
           <label className="button like secondary-action arcade-file-button">
-            Importer image heros
+            Importer image héros
             <input
               type="file"
               accept="image/*"
@@ -499,7 +499,7 @@ function ArcadeHeroTab({
               patchActiveHero((target) => {
                 applyCharacterModelToActor(target, null, studioWeaponModels);
               }, false);
-            }}>Retirer modele 3D</button>
+            }}>Retirer modèle 3D</button>
           ) : null}
         </div>
         {mediaError ? <p className="arcade-empty-state">{mediaError}</p> : null}
@@ -648,7 +648,7 @@ function ArcadeHeroTab({
         <div className="panel-head">
           <div>
             <span className="section-kicker"><Box aria-hidden="true" size={14} /> Inventaire</span>
-            <h2>Objets du heros</h2>
+            <h2>Objets du héros</h2>
           </div>
           <div className="arcade-hero-inventory-head-actions">
             <button type="button" onClick={() => addInventoryItem()}>
@@ -723,9 +723,9 @@ function ArcadeHeroTab({
                 {EQUIPMENT_MODEL_TYPES.has(item.type) ? (
                   <div className="arcade-hero-weapon-settings">
                     <label>
-                      <span>Modele {item.type === 'shield' ? 'bouclier' : (item.type === 'armor' ? 'armure' : (item.type === 'helmet' ? 'casque' : (item.type === 'leggings' ? 'jambieres' : 'arme')))}</span>
+                      <span>Modèle {item.type === 'shield' ? 'bouclier' : (item.type === 'armor' ? 'armure' : (item.type === 'helmet' ? 'casque' : (item.type === 'leggings' ? 'jambières' : 'arme')))}</span>
                       <select value={item.weaponModel3dId || ''} onChange={(event) => updateInventoryWeaponModel(item.id, event.target.value)}>
-                        <option value="">Aucun modele</option>
+                        <option value="">Aucun modèle</option>
                         {studioWeaponModels.map((model) => (
                           <option key={model.id} value={model.id}>{model.name || model.modelName || (item.type === 'shield' ? 'Bouclier 3D' : (item.type === 'armor' ? 'Armure 3D' : (item.type === 'helmet' ? 'Casque 3D' : (item.type === 'leggings' ? 'Jambieres 3D' : 'Arme 3D'))))}</option>
                         ))}

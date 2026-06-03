@@ -159,7 +159,7 @@ export default function AdminPage({
         const withoutUser = previous.filter((entry) => entry.userId !== payload.user.userId);
         return [payload.user, ...withoutUser];
       });
-      setStatus(`Credits mis a jour pour ${getDisplayName(selectedUser)}.`);
+      setStatus(`Crédits mis à jour pour ${getDisplayName(selectedUser)}.`);
     } catch (error) {
       setStatus(error.message || 'Modification impossible.');
     } finally {
@@ -171,7 +171,7 @@ export default function AdminPage({
     const result = toggleStoredLocalAccountStatus(targetUser);
     if (!result) return;
     setAccounts(result.accounts);
-    setStatus(result.nextStatus === 'disabled' ? 'Compte desactive.' : 'Compte reactive.');
+    setStatus(result.nextStatus === 'disabled' ? 'Compte désactivé.' : 'Compte réactivé.');
   };
 
   const updateSupabaseAccount = async (targetUser, action, options = {}) => {
@@ -190,14 +190,14 @@ export default function AdminPage({
         setSupabaseUsers((previous) => previous.filter((entry) => entry.id !== payload.deletedUserId));
         setCreditUsers((previous) => previous.filter((entry) => entry.userId !== payload.deletedUserId));
         setSelectedUserId('');
-        setStatus('Compte Supabase supprime.');
+        setStatus('Compte Supabase supprimé.');
         return;
       }
 
       setSupabaseUsers((previous) => previous.map((entry) => (
         entry.id === payload.user.id ? payload.user : entry
       )));
-      setStatus(payload.user.isDisabled ? 'Compte Supabase bloqué.' : 'Compte Supabase debloqué.');
+      setStatus(payload.user.isDisabled ? 'Compte Supabase bloqué.' : 'Compte Supabase débloqué.');
     } catch (error) {
       setStatus(error.message || 'Modification utilisateur impossible.');
     } finally {
@@ -218,7 +218,7 @@ export default function AdminPage({
     const label = targetUser.email || targetUser.name || targetUser.userId;
     const confirmed = await showConfirm({
       title: 'Supprimer le compte',
-      message: `Supprimer definitivement le compte "${label}" ? Cette action est irreversible.`,
+      message: `Supprimer définitivement le compte "${label}" ? Cette action est irréversible.`,
       confirmLabel: 'Supprimer',
       variant: 'danger',
     });
@@ -233,7 +233,7 @@ export default function AdminPage({
     try {
       await updateAdminModeration({ targetType, targetId, action, reason });
       await refreshAdminData();
-      setStatus(action === 'hidden' ? 'Element masque dans la galerie.' : 'Element restaure dans la galerie.');
+      setStatus(action === 'hidden' ? 'Élément masqué dans la galerie.' : 'Élément restauré dans la galerie.');
     } catch (error) {
       setStatus(error.message || 'Moderation impossible.');
     } finally {
@@ -328,7 +328,7 @@ export default function AdminPage({
       const nextPacks = await deleteSharedShopPack(pack.id);
       setShopPacks(nextPacks);
       if (shopPackForm.id === pack.id) setShopPackForm(createEmptyShopPack());
-      setStatus('Pack boutique supprime.');
+      setStatus('Pack boutique supprimé.');
     } catch (error) {
       setStatus(error.message || 'Suppression du pack impossible.');
     } finally {
@@ -466,7 +466,7 @@ export default function AdminPage({
             <span className="eyebrow">Admin</span>
             <h2>Gestion des utilisateurs</h2>
             <p className="small-note">
-              Ton compte admin est masque ici. Cette page sert à gerer les autres comptes et leurs crédits IA.
+              Ton compte admin est masqué ici. Cette page sert à gérer les autres comptes et leurs crédits IA.
             </p>
           </div>
 
@@ -479,7 +479,7 @@ export default function AdminPage({
               Retour profil
             </button>
             <button type="button" className="secondary-action" onClick={onLogout}>
-              Deconnexion
+              Déconnexion
             </button>
           </div>
         </div>
@@ -669,15 +669,15 @@ export default function AdminPage({
         <>
       <section className="admin-stats-grid">
         <article className="panel admin-stat-card">
-          <span>Utilisateurs geres</span>
+          <span>Utilisateurs gérés</span>
           <strong>{managedUsers.length}</strong>
         </article>
         <article className="panel admin-stat-card">
-          <span>Comptes desactives</span>
+          <span>Comptes désactivés</span>
           <strong>{managedUsers.filter((entry) => entry.status === 'disabled').length}</strong>
         </article>
         <article className="panel admin-stat-card">
-          <span>Credits distribues</span>
+          <span>Crédits distribués</span>
           <strong>{creditUsers.reduce((sum, entry) => sum + Number(entry.balance || 0), 0)}</strong>
         </article>
         <article className="panel admin-stat-card">
@@ -685,7 +685,7 @@ export default function AdminPage({
           <strong>{publicGames.length}</strong>
         </article>
         <article className="panel admin-stat-card">
-          <span>Elements masques</span>
+          <span>Éléments masqués</span>
           <strong>{moderation.actions.length}</strong>
         </article>
         <article className="panel admin-stat-card">
@@ -703,11 +703,11 @@ export default function AdminPage({
             </div>
           </div>
 
-          <div className="admin-table" role="table" aria-label="Comptes geres">
+          <div className="admin-table" role="table" aria-label="Comptes gérés">
             <div className="admin-table-row admin-table-head" role="row">
               <span role="columnheader">Utilisateur</span>
               <span role="columnheader">Statut</span>
-              <span role="columnheader">Credits</span>
+              <span role="columnheader">Crédits</span>
               <span role="columnheader">Action</span>
             </div>
             {managedUsers.map((entry) => (
@@ -722,7 +722,7 @@ export default function AdminPage({
                   <strong>{getDisplayName(entry)}</strong>
                   <small>{entry.provider} - {entry.email || entry.userId}</small>
                 </span>
-                <span role="cell">{entry.status === 'disabled' ? 'Desactive' : 'Actif'}</span>
+                <span role="cell">{entry.status === 'disabled' ? 'Désactivé' : 'Actif'}</span>
                 <span role="cell">{entry.credits?.balance ?? 0}</span>
                 <span role="cell">
                   <span className="status-badge soft">
@@ -749,7 +749,7 @@ export default function AdminPage({
           </div>
 
           <form onSubmit={applyCreditChange}>
-            <label>Operation</label>
+            <label>Opération</label>
             <select value={creditAction} onChange={(event) => setCreditAction(event.target.value)}>
               <option value="add">Ajouter</option>
               <option value="subtract">Retirer</option>
@@ -766,7 +766,7 @@ export default function AdminPage({
             />
 
             <button type="submit" className="profile-action-button" disabled={!selectedUser || isBusy}>
-              {isBusy ? 'Mise a jour...' : 'Appliquer aux crédits'}
+              {isBusy ? 'Mise à jour...' : 'Appliquer aux crédits'}
             </button>
           </form>
 
@@ -777,7 +777,7 @@ export default function AdminPage({
               onClick={() => toggleLocalAccountStatus(selectedUser)}
               disabled={!selectedUser || selectedUser.provider === 'credits' || selectedUser.provider === 'supabase'}
             >
-              {selectedUser?.status === 'disabled' ? 'Reactiver le compte local' : 'Desactiver le compte local'}
+              {selectedUser?.status === 'disabled' ? 'Réactiver le compte local' : 'Désactiver le compte local'}
             </button>
             {selectedUser?.provider === 'supabase' ? (
               <>
@@ -1141,7 +1141,7 @@ export default function AdminPage({
               <div className="admin-pack-metrics-form">
                 {[
                   ['actsCount', 'Actes'],
-                  ['scenesCount', 'Scenes'],
+                  ['scenesCount', 'Scènes'],
                   ['objectsCount', 'Objets'],
                   ['enigmasCount', 'Énigmes'],
                   ['cinematicsCount', 'Cinématiques'],
@@ -1173,13 +1173,13 @@ export default function AdminPage({
               ) : null}
 
               <label>
-                ZIP telechargeable
+                ZIP téléchargeable
                 <input type="file" accept=".zip,application/zip,application/x-zip-compressed" onChange={importShopPackZip} />
               </label>
               {shopPackForm.downloadUrl || shopPackForm.hasDownload ? (
                 <div className="admin-pack-download-chip">
                   <strong>{shopPackForm.downloadFileName || 'pack.zip'}</strong>
-                  <span>{shopPackForm.downloadUrl ? (shopPackForm.downloadMode === 'supabase' ? 'Prêt pour les acheteurs' : 'Stockage local') : 'ZIP conserve cote serveur'}</span>
+                  <span>{shopPackForm.downloadUrl ? (shopPackForm.downloadMode === 'supabase' ? 'Prêt pour les acheteurs' : 'Stockage local') : 'ZIP conservé côté serveur'}</span>
                 </div>
               ) : (
                 <p className="small-note">Ajoute le dossier ZIP qui sera proposé au téléchargement après achat.</p>

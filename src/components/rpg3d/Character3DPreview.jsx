@@ -131,7 +131,7 @@ const getPreviewAnimationStatusLabel = (slot = '') => {
   if (baseSlot === 'idle') return 'stand-by';
   if (baseSlot === 'walk') return 'marche';
   if (baseSlot === 'attack') return 'attaque';
-  return slot || 'selectionnee';
+  return slot || 'sélectionnée';
 };
 
 const PREVIEW_EQUIPMENT_ROLES = ['weapon', 'armor', 'shield', 'helmet', 'leggings'];
@@ -995,7 +995,7 @@ export default function Character3DPreview({
     try {
       renderer = new ThreeWebGLRenderer({ antialias: true, alpha: true, powerPreference: 'default' });
     } catch {
-      setWebglError('Apercu 3D indisponible.');
+      setWebglError('Aperçu 3D indisponible.');
       return undefined;
     }
 
@@ -1006,7 +1006,7 @@ export default function Character3DPreview({
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = ThreePCFShadowMap;
     renderer.domElement.className = 'character3d-canvas';
-    renderer.domElement.setAttribute('aria-label', 'Apercu personnage 3D');
+    renderer.domElement.setAttribute('aria-label', 'Aperçu personnage 3D');
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
     setWebglError('');
@@ -1414,7 +1414,7 @@ export default function Character3DPreview({
         setLoadedCharacterVersion((version) => version + 1);
         return undefined;
       }
-      setPreviewStatus('Chargement du modele 3D...');
+      setPreviewStatus('Chargement du modèle 3D...');
       const loadingRoot = new ThreeGroup();
       characterRoot.add(loadingRoot);
       loadThreeCharacter(sources, model, (object, animationClips) => {
@@ -1437,18 +1437,18 @@ export default function Character3DPreview({
         } catch (error) {
           clearGroup(loadingRoot);
           disposeThreeObject(object);
-          setPreviewStatus(error?.message ? `Modele 3D non affiche: ${error.message}` : 'Modele 3D non affiche.');
+          setPreviewStatus(error?.message ? `Modèle 3D non affiché: ${error.message}` : 'Modèle 3D non affiché.');
           setLoadedCharacterVersion((version) => version + 1);
           return;
         }
       }, (error) => {
         if (cancelled) return;
         clearGroup(loadingRoot);
-        setPreviewStatus(error?.message ? `Modele 3D non affiche: ${error.message}` : 'Modele 3D non affiche.');
+        setPreviewStatus(error?.message ? `Modèle 3D non affiché: ${error.message}` : 'Modèle 3D non affiché.');
         setLoadedCharacterVersion((version) => version + 1);
       });
     } else {
-      setPreviewStatus('Aucun modele 3D importe.');
+      setPreviewStatus('Aucun modèle 3D importé.');
       setLoadedCharacterVersion((version) => version + 1);
     }
     return () => {
@@ -1500,7 +1500,7 @@ export default function Character3DPreview({
     })).then((results) => {
       const failed = results.reduce((sum, result) => sum + (Number(result?.failed) || 0), 0);
       if (!characterRoot.userData?.disposed && characterObjectRef.current === characterObject && failed) {
-          setPreviewStatus('Equipement 3D non accroche sur ce rig.');
+          setPreviewStatus('Équipement 3D non accroché sur ce rig.');
       }
     });
     return undefined;
@@ -1537,7 +1537,7 @@ export default function Character3DPreview({
         }
         stopCurrentMixers();
         if (!externalClips.length) {
-          setPreviewStatus(`Animation ${previewSlotLabel} non chargee: aucun clip lisible.`);
+          setPreviewStatus(`Animation ${previewSlotLabel} non chargée: aucun clip lisible.`);
           return;
         }
         try {
@@ -1560,7 +1560,7 @@ export default function Character3DPreview({
       }).catch((error) => {
         if (cancelled || characterRoot.userData?.disposed || characterObjectRef.current !== object) return;
         stopCurrentMixers();
-        setPreviewStatus(error?.message ? `Animation ${previewSlotLabel} non chargee: ${error.message}` : `Animation ${previewSlotLabel} non chargee.`);
+        setPreviewStatus(error?.message ? `Animation ${previewSlotLabel} non chargée: ${error.message}` : `Animation ${previewSlotLabel} non chargée.`);
       });
     } else if (playEmbeddedAnimations) {
       try {

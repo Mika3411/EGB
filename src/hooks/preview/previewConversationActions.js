@@ -121,7 +121,7 @@ export function createPreviewConversationActions({
 
   const getConversationReplyLockReason = (reply = {}) => {
     if (isConversationReplyAvailable(reply)) return '';
-    if (reply.id && hiddenConversationReplyIds.includes(reply.id)) return 'Choix masque par une autre réponse';
+    if (reply.id && hiddenConversationReplyIds.includes(reply.id)) return 'Choix masqué par une autre réponse';
     if (reply.hideAfterChosen && reply.id && chosenConversationReplyIds.includes(reply.id)) return 'Choix déjà utilisé';
     return getReplyConditionLockReason(reply, {
       ...getPreviewConditionContext(),
@@ -192,7 +192,7 @@ export function createPreviewConversationActions({
       }
       if (type === 'remove_item' && effect.itemId) {
         removeInventoryItem(effect.itemId);
-        result.notices.push({ type: 'item', title: 'Objet retire', detail: getJournalItemName(effect.itemId) });
+        result.notices.push({ type: 'item', title: 'Objet retiré', detail: getJournalItemName(effect.itemId) });
       }
       if (type === 'heal_health' || type === 'heal_mana') {
         const amount = Math.max(0, Number(effect.value) || 0);

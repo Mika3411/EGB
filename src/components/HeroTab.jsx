@@ -711,7 +711,7 @@ export default function HeroTab({ project, patchProject, onPreviewHeroCharacter,
       {
         ...DEFAULT_HERO_ADVENTURE.hero,
         id: createHeroSheetId(),
-        name: `Nouveau heros ${index}`,
+        name: `Nouveau héros ${index}`,
         rules: draft.rules,
       },
       index,
@@ -730,7 +730,7 @@ export default function HeroTab({ project, patchProject, onPreviewHeroCharacter,
       {
         ...draft.hero,
         id: createHeroSheetId(),
-        name: `${draft.hero.name || 'Heros'} ${index}`,
+        name: `${draft.hero.name || 'Héros'} ${index}`,
         rules: draft.rules,
       },
       index,
@@ -975,7 +975,7 @@ export default function HeroTab({ project, patchProject, onPreviewHeroCharacter,
           <div className="subpanel-head">
             <div>
               <h3>Personnages jouables</h3>
-              <p>Chaque fiche garde ses PV, mana, competences, pouvoirs, resistances et critiques. Le joueur choisira son personnage au debut de la Preview.</p>
+              <p>Chaque fiche garde ses PV, mana, compétences, pouvoirs, résistances et critiques. Le joueur choisira son personnage au début de la Preview.</p>
             </div>
             <div className="toolbar">
               <button type="button" className="secondary-action" onClick={duplicateHeroSheet}>
@@ -999,7 +999,7 @@ export default function HeroTab({ project, patchProject, onPreviewHeroCharacter,
                   onClick={() => selectHeroSheet(sheet.id)}
                   aria-pressed={isActive}
                 >
-                  <strong>{sheet.name || 'Heros'}</strong>
+                  <strong>{sheet.name || 'Héros'}</strong>
                   {sheet.description ? <p className="hero-roster-description">{sheet.description}</p> : null}
                   <span>{sheet.health}/{sheet.maxHealth} PV - {sheet.mana}/{sheet.maxMana} Mana</span>
                   <small>Force {forceSkill?.value ?? 0} - Crit {sheet.rules?.criticalChance ?? 0}%</small>
@@ -1036,7 +1036,7 @@ export default function HeroTab({ project, patchProject, onPreviewHeroCharacter,
               <h3>Fiche du héros</h3>
               <button type="button" className="secondary-action compact" data-tour="hero-preview-button" onClick={previewHeroPage}>
                 <Eye size={16} aria-hidden="true" />
-                Apercu
+                Aperçu
               </button>
             </div>
             <div className="grid-two">
@@ -1342,7 +1342,7 @@ export default function HeroTab({ project, patchProject, onPreviewHeroCharacter,
               <div className="subpanel-head">
                 <div>
               <h3>Pouvoirs du héros</h3>
-                  <p>Chaque pouvoir peut etre utilise en combat avec son cout mana et sa force.</p>
+                  <p>Chaque pouvoir peut être utilisé en combat avec son coût mana et sa force.</p>
                 </div>
                 <button type="button" onClick={addPower}>
                   <Plus size={16} aria-hidden="true" />
@@ -1848,7 +1848,7 @@ export default function HeroTab({ project, patchProject, onPreviewHeroCharacter,
             </div>
 
             <div className="hero-guide-card">
-              <strong>Equipements et objets</strong>
+              <strong>Équipements et objets</strong>
               <p>
                 Crée des objets de type équipement pour donner un bonus de compétence, PV max ou mana max.
                 Les potions restent dans l'inventaire; les équipements se glissent sur la fiche personnage.

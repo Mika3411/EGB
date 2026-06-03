@@ -92,19 +92,19 @@ const SELECTABLE_KIND_OPTIONS = [
 const INVENTORY_KIND_IDS = new Set(INVENTORY_KIND_OPTIONS.map((option) => option.id));
 
 const DECOR_FIELD_HELP = {
-  name: 'Nom interne de cet objet 3D. Il sert a le retrouver dans la bibliotheque et sur la carte.',
-  rotationX: 'Incline le modele vers l avant ou l arriere. Utile pour coucher une image ou corriger un modele importe.',
-  rotationY: 'Tourne le modele autour de l axe vertical pour orienter sa face principale.',
-  rotationZ: 'Incline le modele sur le cote pour ajuster un objet mal aligne.',
-  floorTileSize: 'Largeur et profondeur de la dalle au sol. Les deux valeurs restent identiques pour garder un carre.',
-  floorZeroZ: 'Hauteur de reference ou les personnages marchent sur cette dalle. Ajuste-la si le sol semble flotter ou avaler les pieds.',
-  baseColor: 'Couleur principale du sol ou de l objet procedural quand aucune texture ne la remplace.',
-  accentColor: 'Couleur secondaire utilisee pour les details visibles: lignes, reflets ou reperes.',
-  glbImport: 'Charge ou remplace un modele 3D au format .glb, .fbx, .obj ou .zip. Pour un FBX/OBJ avec textures, importe un ZIP contenant le modele et ses images.',
-  glbTexture: 'Image appliquee sur le modele 3D importe, pratique pour tester une variation de materiau.',
-  modelScale: 'Regle les dimensions de cet objet quand il est place sur la carte RPG 3D. X = largeur, Y = profondeur, Z = hauteur.',
-  materialBrightness: 'Regle la luminosite de cet objet sur la carte RPG 3D sans changer la lumiere globale.',
-  repeatTexture: 'Repete l image sur le modele au lieu de l etirer une seule fois.',
+  name: 'Nom interne de cet objet 3D. Il sert à le retrouver dans la bibliothèque et sur la carte.',
+  rotationX: 'Incline le modèle vers l avant ou l arrière. Utile pour coucher une image ou corriger un modèle importé.',
+  rotationY: 'Tourne le modèle autour de l axe vertical pour orienter sa face principale.',
+  rotationZ: 'Incline le modèle sur le côté pour ajuster un objet mal aligné.',
+  floorTileSize: 'Largeur et profondeur de la dalle au sol. Les deux valeurs restent identiques pour garder un carré.',
+  floorZeroZ: 'Hauteur de référence où les personnages marchent sur cette dalle. Ajuste-la si le sol semble flotter ou avaler les pieds.',
+  baseColor: 'Couleur principale du sol ou de l objet procédural quand aucune texture ne la remplace.',
+  accentColor: 'Couleur secondaire utilisée pour les détails visibles: lignes, reflets ou repères.',
+  glbImport: 'Charge ou remplace un modèle 3D au format .glb, .fbx, .obj ou .zip. Pour un FBX/OBJ avec textures, importe un ZIP contenant le modèle et ses images.',
+  glbTexture: 'Image appliquée sur le modèle 3D importé, pratique pour tester une variation de matériau.',
+  modelScale: 'Règle les dimensions de cet objet quand il est placé sur la carte RPG 3D. X = largeur, Y = profondeur, Z = hauteur.',
+  materialBrightness: 'Règle la luminosité de cet objet sur la carte RPG 3D sans changer la lumière globale.',
+  repeatTexture: 'Répète l image sur le modèle au lieu de l étirer une seule fois.',
 };
 
 const DecorHelpLabel = ({ children, help }) => (
@@ -545,7 +545,7 @@ export default function Decor3DTab({
             : `${getThreeModelFormatLabel(sourceFormat)} charge${modelData ? '' : ' en local'}${localModelPersisted ? '' : ' - stockage local non confirme'}`);
     } catch (error) {
       console.error(error);
-      setCopyStatus('Import du modele 3D impossible');
+      setCopyStatus('Import du modèle 3D impossible');
     } finally {
       setImportInProgress(false);
     }
@@ -766,7 +766,7 @@ export default function Decor3DTab({
           <div>
             <span className="section-kicker">Atelier</span>
             <h2>Decors 3D</h2>
-            <p className="small-note">{models.length} modele{models.length > 1 ? 's' : ''}</p>
+            <p className="small-note">{models.length} modèle{models.length > 1 ? 's' : ''}</p>
           </div>
           <button type="button" className="primary-action" onClick={() => createModel()}>
             <Plus aria-hidden="true" size={16} />
@@ -859,7 +859,7 @@ export default function Decor3DTab({
           >
             <div className="decor3d-preview-toolbar decor3d-canvas-overlay">
               <div>
-                <span className="section-kicker"><KindIcon size={14} /> Modele</span>
+                <span className="section-kicker"><KindIcon size={14} /> Modèle</span>
                 <h2>{previewModel.name || 'Decor 3D'}</h2>
               </div>
               <div className="decor3d-preview-actions">
@@ -877,8 +877,8 @@ export default function Decor3DTab({
                 ) : null}
                 <button
                   type="button"
-                  title={previewFullscreen ? 'Quitter le plein ecran' : 'Plein ecran'}
-                  aria-label={previewFullscreen ? 'Quitter le plein ecran' : 'Activer le plein ecran'}
+                  title={previewFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
+                  aria-label={previewFullscreen ? 'Quitter le plein écran' : 'Activer le plein écran'}
                   aria-pressed={previewFullscreen}
                   onClick={togglePreviewFullscreen}
                 >
@@ -1080,10 +1080,10 @@ export default function Decor3DTab({
 
             {showGlbImportControl ? (
               <>
-                <DecorHelpLabel help={DECOR_FIELD_HELP.glbImport}>Modele 3D</DecorHelpLabel>
+                <DecorHelpLabel help={DECOR_FIELD_HELP.glbImport}>Modèle 3D</DecorHelpLabel>
                 <button type="button" className="button like full secondary-action decor3d-file-button" onClick={() => modelFileInputRef.current?.click()}>
                   <Upload aria-hidden="true" size={16} />
-                  <span>{selectedModel.modelName ? 'Remplacer modele 3D' : 'Importer modele 3D'}</span>
+                  <span>{selectedModel.modelName ? 'Remplacer modèle 3D' : 'Importer modèle 3D'}</span>
                 </button>
                 <input
                   ref={modelFileInputRef}
@@ -1121,7 +1121,7 @@ export default function Decor3DTab({
 
             {selectedIsInventoryWeapon ? (
               <div className="decor3d-weapon-grip-section">
-                <DecorHelpLabel help="Definis le point de l arme qui doit tomber dans la main du personnage. Les valeurs sont en coordonnees locales du modele apres taille normalisee.">
+                <DecorHelpLabel help="Définis le point de l arme qui doit tomber dans la main du personnage. Les valeurs sont en coordonnées locales du modèle après taille normalisée.">
                   Points de prise
                 </DecorHelpLabel>
                 <label>
@@ -1206,7 +1206,7 @@ export default function Decor3DTab({
 
             {selectedIsInventoryArmor ? (
               <div className="decor3d-weapon-grip-section">
-                <DecorHelpLabel help="Definis les points de l armure qui doivent suivre les epaules, les coudes et le bas du ventre du personnage. Les pastilles se deplacent directement dans l apercu.">
+                <DecorHelpLabel help="Définis les points de l armure qui doivent suivre les épaules, les coudes et le bas du ventre du personnage. Les pastilles se déplacent directement dans l aperçu.">
                   Points de prise armure
                 </DecorHelpLabel>
                 <div className="decor3d-weapon-grip-grid">
@@ -1252,7 +1252,7 @@ export default function Decor3DTab({
 
             {selectedIsInventoryHelmet ? (
               <div className="decor3d-weapon-grip-section">
-                <DecorHelpLabel help="Definis le point du casque qui doit tomber sur la bouche du personnage. Active puis deplace la pastille BO dans l apercu pour caler les casques fermes.">
+                <DecorHelpLabel help="Définis le point du casque qui doit tomber sur la bouche du personnage. Active puis déplace la pastille BO dans l aperçu pour caler les casques fermés.">
                   Point de prise casque
                 </DecorHelpLabel>
                 <div className="decor3d-weapon-grip-grid">
@@ -1298,7 +1298,7 @@ export default function Decor3DTab({
 
             {selectedIsInventoryLeggings ? (
               <div className="decor3d-weapon-grip-section">
-                <DecorHelpLabel help="Definis les points des jambieres qui doivent suivre les aines, les genoux et les pieds du personnage. Les pastilles se deplacent directement dans l apercu.">
+                <DecorHelpLabel help="Définis les points des jambières qui doivent suivre les aines, les genoux et les pieds du personnage. Les pastilles se déplacent directement dans l aperçu.">
                   Points de prise jambieres
                 </DecorHelpLabel>
                 <div className="decor3d-weapon-grip-grid">
@@ -1348,7 +1348,7 @@ export default function Decor3DTab({
                   Points de prise bouclier
                 </DecorHelpLabel>
                 <label>
-                  <span>Bras par defaut</span>
+                  <span>Bras par défaut</span>
                   <select
                     value={normalizeEquipmentArm(selectedModel.shieldGripArm)}
                     onChange={(event) => setSelectedShieldGripArm(event.target.value)}
@@ -1400,7 +1400,7 @@ export default function Decor3DTab({
 
             {selectedModelSource ? (
               <>
-                <DecorHelpLabel help={DECOR_FIELD_HELP.glbTexture}>Texture modele</DecorHelpLabel>
+                <DecorHelpLabel help={DECOR_FIELD_HELP.glbTexture}>Texture modèle</DecorHelpLabel>
                 <MediaSourcePicker
                   className="button like full secondary-action decor3d-file-button"
                   accept="image/*"
@@ -1413,7 +1413,7 @@ export default function Decor3DTab({
                   })}
                 >
                   <ImageIcon aria-hidden="true" size={16} />
-                  <span>{selectedModel.imageName || 'Texture modele'}</span>
+                  <span>{selectedModel.imageName || 'Texture modèle'}</span>
                 </MediaSourcePicker>
                 {selectedModel.imageData ? (
                   <>
@@ -1432,7 +1432,7 @@ export default function Decor3DTab({
                       model.imageName = '';
                       model.repeatTexture = false;
                     })}>
-                      Retirer texture modele
+                      Retirer texture modèle
                     </button>
                   </>
                 ) : null}
@@ -1457,7 +1457,7 @@ export default function Decor3DTab({
                 model.modelFileSize = 0;
                 model.modelResources = [];
               })}>
-                Retirer modele 3D
+                Retirer modèle 3D
               </button>
             ) : null}
 

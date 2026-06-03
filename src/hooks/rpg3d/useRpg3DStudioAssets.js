@@ -222,7 +222,7 @@ export function useRpg3DStudioAssets({
         next.heroes = Array.isArray(next.heroes) ? next.heroes : [];
         const item = {
           id: createId('hero'),
-          name: model.name || 'Heros',
+          name: model.name || 'Héros',
           x: position.x,
           y: position.y,
           z: 0,

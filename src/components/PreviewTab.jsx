@@ -562,7 +562,7 @@ export default function PreviewTab(props) {
     });
     const itemId = selectedEquipmentId || firstCarriedEquipmentId || '';
     if (!itemId) {
-      setDialogue?.("Aucun equipement disponible dans l'inventaire.");
+      setDialogue?.("Aucun équipement disponible dans l'inventaire.");
       return;
     }
     equipHeroItem?.(itemId, slotIndex);
@@ -843,13 +843,13 @@ export default function PreviewTab(props) {
     return (
       <div className={`hero-character-page ${compact ? 'hero-character-page--compact' : ''}`} style={heroBackgroundStyle}>
         <div className="hero-paper-doll">
-          <div className="hero-equipment-slot-grid" aria-label="Equipement porte">
+          <div className="hero-equipment-slot-grid" aria-label="Équipement porté">
             {heroEquipmentSlots.map((item, index) => (
               <button
                 key={item?.id || `empty-${index}`}
                 type="button"
                 className={`hero-equipment-slot slot-${index % 8} ${item ? 'is-filled' : 'is-empty'}`}
-                title={item ? `${item.name} - glisser vers l'inventaire pour retirer` : 'Deposer un equipement ici'}
+                title={item ? `${item.name} - glisser vers l'inventaire pour retirer` : 'Déposer un équipement ici'}
                 draggable={Boolean(item)}
                 onClick={() => {
                   if (item) unequipHeroItem?.(item.id);
@@ -969,7 +969,7 @@ export default function PreviewTab(props) {
                   <strong>{item.name}</strong>
                   <small>{getHeroEquipmentBonusLabel(item)}</small>
                 </button>
-            )) : <p>Aucun equipement porte.</p>}
+            )) : <p>Aucun équipement porté.</p>}
           </div>
         </div>
 

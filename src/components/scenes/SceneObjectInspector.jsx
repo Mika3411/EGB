@@ -177,7 +177,7 @@ export default function SceneObjectInspector({
               <textarea value={selectedSceneObject.failureDialogue || ''} onChange={(event) => patchObject((obj) => { obj.failureDialogue = event.target.value; })} />
             </>
           ) : null}
-          <HelpLabel help="Comportement au clic. Action avancee utilise les mêmes réglages qu'une zone d'action classique.">Comportement</HelpLabel>
+          <HelpLabel help="Comportement au clic. Action avancée utilise les mêmes réglages qu'une zone d'action classique.">Comportement</HelpLabel>
           <select value={clickMode} onChange={(event) => patchObject((obj) => { obj.clickMode = event.target.value; })}>
             <option value="none">Decoratif</option>
             <option value="object">Interaction simple</option>

@@ -960,7 +960,7 @@ function Rpg3DMode({ user = null, authorProfile = null, authReady = true, projec
   const actionZoneNpcTargets = [
     ...(config.heroes || []).map((hero, index) => ({
       id: hero.id,
-      label: hero.name || `Heros ${index + 1}`,
+      label: hero.name || `Héros ${index + 1}`,
     })),
     ...(config.enemies || []).map((enemy, index) => ({
       id: enemy.id,
@@ -969,7 +969,7 @@ function Rpg3DMode({ user = null, authorProfile = null, authReady = true, projec
   ];
   const workspaceTabs = [
     { id: 'arcade', label: 'Carte RPG 3D', icon: MapIcon },
-    { id: 'heroes', label: 'Heros', icon: HeartPulse },
+    { id: 'heroes', label: 'Héros', icon: HeartPulse },
     { id: 'canvases', label: 'Canevas', icon: FolderOpen },
     { id: 'management', label: 'Gestion', icon: List },
     { id: 'characters3d', label: 'Personnages 3D', icon: Cuboid },

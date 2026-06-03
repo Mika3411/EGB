@@ -237,7 +237,7 @@ export default function PreviewCombatOverlay({
   const backgroundImageData = entry.combatBackgroundImageData || combatSettings.backgroundImageData || playSceneBackgroundUrl || '';
   const heroMedia = getCombatActorMedia(entry, combatSettings, 'hero', heroState?.characterImageData || '');
   const enemyMedia = getCombatActorMedia(entry, combatSettings, 'enemy');
-  const heroLabel = heroState?.name || 'Heros';
+  const heroLabel = heroState?.name || 'Héros';
   const enemyLabel = activeHeroCombat.enemyName || entry.combatEnemyName || combatSettings.enemyName || 'Ennemi';
   const enemyMaxHealth = Math.max(1, Number(activeHeroCombat.enemyMaxHealth) || Number(entry.combatEnemyMaxHealth) || 1);
   const enemyHealth = Math.max(0, Math.min(enemyMaxHealth, Number(activeHeroCombat.enemyHealth) || 0));
@@ -734,7 +734,7 @@ export default function PreviewCombatOverlay({
         ) : null}
         {!isEnemyTurn && !isSurvivalTurn && !isEnded ? (
           <div className="hero-combat-action-panel">
-            <div className="hero-combat-action-bar" aria-label="Barre d'action du heros">
+            <div className="hero-combat-action-bar" aria-label="Barre d'action du héros">
               <button
                 type="button"
                 className={`hero-combat-action-button ${!selectedHeroCombatPower ? 'active' : ''}`}
@@ -792,7 +792,7 @@ export default function PreviewCombatOverlay({
               </button>
             </div>
             {heroPowers.length ? (
-              <div className="hero-combat-power-strip" aria-label="Pouvoirs du heros">
+              <div className="hero-combat-power-strip" aria-label="Pouvoirs du héros">
                 {heroPowers.map((power) => {
                   const manaCost = Math.max(0, Number(power.manaCost) || 0);
                   const totalManaCost = combatManaCost + manaCost;

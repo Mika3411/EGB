@@ -17,15 +17,15 @@ const AdminShopPackCard = ({
         <strong>{pack.title}</strong>
         <span>
           {isArchived
-            ? `${pack.costCredits} crédits - ${pack.soldTo ? `vendu a ${pack.soldTo}` : 'archive'}`
+            ? `${pack.costCredits} crédits - ${pack.soldTo ? `vendu à ${pack.soldTo}` : 'archivé'}`
             : `${pack.costCredits} crédits - note ${pack.rating}/10`}
         </span>
       </div>
-      <span className="status-badge soft">{isArchived ? 'Archive' : (pack.downloadUrl || pack.hasDownload ? 'ZIP prêt' : 'ZIP manquant')}</span>
+        <span className="status-badge soft">{isArchived ? 'Archivé' : (pack.downloadUrl || pack.hasDownload ? 'ZIP prêt' : 'ZIP manquant')}</span>
     </div>
     <p className="small-note">
       {isArchived
-        ? (pack.soldAt ? `Vendu le ${formatDate(pack.soldAt)}` : pack.description || 'Pack archive.')
+        ? (pack.soldAt ? `Vendu le ${formatDate(pack.soldAt)}` : pack.description || 'Pack archivé.')
         : pack.description || 'Aucun descriptif.'}
     </p>
     {!isArchived ? (
@@ -34,7 +34,7 @@ const AdminShopPackCard = ({
           <span>{pack.scenesCount} scènes</span>
           <span>{pack.objectsCount} objets</span>
           <span>{pack.enigmasCount} énigmes</span>
-          <span>{pack.cinematicsCount} cinemat.</span>
+          <span>{pack.cinematicsCount} cinémat.</span>
           <span>{pack.combinationsCount} combinaisons</span>
         </div>
         {pack.screenshots?.length > 1 ? (
@@ -102,7 +102,7 @@ export default function AdminShopPackLists({
         <div className="panel-head">
           <div>
             <h3>Archives de vente</h3>
-            <p className="small-note">{archivedShopPacks.length} pack{archivedShopPacks.length > 1 ? 's' : ''} archive{archivedShopPacks.length > 1 ? 's' : ''}</p>
+            <p className="small-note">{archivedShopPacks.length} pack{archivedShopPacks.length > 1 ? 's' : ''} archivé{archivedShopPacks.length > 1 ? 's' : ''}</p>
           </div>
         </div>
         <div className="admin-shop-card-grid">
@@ -112,7 +112,7 @@ export default function AdminShopPackLists({
         </div>
         {archivedShopPacks.length === 0 ? (
           <div className="empty-state-inline">
-            <strong>Aucune vente archivee.</strong>
+            <strong>Aucune vente archivée.</strong>
           </div>
         ) : null}
       </div>

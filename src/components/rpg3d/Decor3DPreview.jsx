@@ -2600,7 +2600,7 @@ export default function Decor3DPreview({
         stencil: true,
       });
     } catch {
-      setWebglError('Apercu 3D indisponible.');
+      setWebglError('Aperçu 3D indisponible.');
       return undefined;
     }
 
@@ -3615,7 +3615,7 @@ export default function Decor3DPreview({
     clearGroup(decorRoot);
     const sources = getDecorModelSources(model);
     if (sources.length) {
-      setPreviewStatus('Chargement du modele 3D...');
+      setPreviewStatus('Chargement du modèle 3D...');
       const loadingRoot = new ThreeGroup();
       decorRoot.add(loadingRoot);
       loadThreeDecor(sources, model, (object) => {
@@ -3641,7 +3641,7 @@ export default function Decor3DPreview({
       }, (error) => {
         if (cancelled) return;
         clearGroup(loadingRoot);
-        setPreviewStatus(error?.message ? `Modele 3D non affiche: ${error.message}` : 'Modele 3D non affiche.');
+        setPreviewStatus(error?.message ? `Modèle 3D non affiché: ${error.message}` : 'Modèle 3D non affiché.');
       });
     } else {
       clearGroup(decorRoot);

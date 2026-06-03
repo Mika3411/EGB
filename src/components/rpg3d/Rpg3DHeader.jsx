@@ -35,7 +35,7 @@ export default function Rpg3DHeader({
       <div className={`arcade-account-chip ${user?.id ? 'connected' : 'disconnected'}`}>
         <UserRound size={16} />
         <div>
-          <small>{user?.id ? 'Compte connecte' : 'Compte non connecte'}</small>
+          <small>{user?.id ? 'Compte connecté' : 'Compte non connecté'}</small>
           <strong>{user?.id ? userDisplayName : 'Sauvegarde locale'}</strong>
           {userEmail && userEmail !== userDisplayName ? <span>{userEmail}</span> : null}
         </div>

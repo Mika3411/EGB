@@ -611,7 +611,7 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
 
   const restoreLastChoiceSnapshot = () => {
     if (!lastChoiceSnapshot) {
-      setDialogue('Aucun choix precedent a restaurer.');
+      setDialogue('Aucun choix précédent à restaurer.');
       return false;
     }
     const snapshot = lastChoiceSnapshot;
@@ -834,7 +834,7 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
       addAdventureJournalEntry({
         type: 'item',
         title: getJournalItemName(resolvedSpot.rewardItemId),
-        detail: resolvedSpot.name || 'Zone exploree',
+        detail: resolvedSpot.name || 'Zone explorée',
       });
     }
     const startedEnigma = engineRef.current.getState().activeEnigma?.enigma;
@@ -1046,7 +1046,7 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     setHeroState(nextHero);
     setLastDiceRoll(null);
     engineRef.current.setState({ heroState: nextHero, lastDiceRoll: null });
-    setDialogue(`${nextHero.name || 'Heros'} choisi. Lance les competences pour commencer.`);
+    setDialogue(`${nextHero.name || 'Héros'} choisi. Lance les compétences pour commencer.`);
     return true;
   };
 

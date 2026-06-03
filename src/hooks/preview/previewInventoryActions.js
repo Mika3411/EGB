@@ -110,7 +110,7 @@ export function createPreviewInventoryActions({
         const nextSlotMap = getNextEquippedHeroSlotMap(item.id, slotIndex);
         engineRef.current.setState({ equippedHeroSlotMap: nextSlotMap });
         setEquippedHeroSlotMap(nextSlotMap);
-        setDialogue(`${item.name || 'Equipement'} deplace.`);
+        setDialogue(`${item.name || 'Équipement'} déplacé.`);
         return true;
       }
       const bonusTarget = item.heroItemBonusTarget || 'skill';
@@ -211,7 +211,7 @@ export function createPreviewInventoryActions({
       : bonusTarget === 'maxMana'
         ? 'mana max'
         : skill?.name || 'compétence';
-    setDialogue(`${item.name || 'Equipement'} retire: ${targetLabel} ${bonus >= 0 ? '-' : '+'}${Math.abs(bonus)}.`);
+    setDialogue(`${item.name || 'Équipement'} retiré: ${targetLabel} ${bonus >= 0 ? '-' : '+'}${Math.abs(bonus)}.`);
     return true;
   };
 

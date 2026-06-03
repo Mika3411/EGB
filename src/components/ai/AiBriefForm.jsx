@@ -9,7 +9,7 @@ export default function AiBriefForm({
   shouldGenerateCombinations = false,
   projectGenerationCosts = {},
   countCreditUnits = (value) => Math.max(0, Math.round(Number(value) || 0)),
-  formatCreditCost = (cost) => `${cost} credit${Number(cost) > 1 ? 's' : ''}`,
+  formatCreditCost = (cost) => `${cost} crédit${Number(cost) > 1 ? 's' : ''}`,
 }) {
   const getFieldCreditCost = (fieldKey, costKey) => {
     const unitCost = Number(projectGenerationCosts?.[costKey] || 0);
@@ -66,7 +66,7 @@ export default function AiBriefForm({
         </div>
 
         <div className="ai-brief-field">
-          <HelpLabel help={FIELD_HELP.difficulty}>Difficulte</HelpLabel>
+          <HelpLabel help={FIELD_HELP.difficulty}>Difficulté</HelpLabel>
           <select value={brief.difficulty} onChange={(event) => updateBrief('difficulty', event.target.value)}>
             <option value="easy">Facile</option>
             <option value="normal">Intermediaire</option>
@@ -130,7 +130,7 @@ export default function AiBriefForm({
         </div>
 
         <div className="ai-brief-field">
-          <HelpLabel help={FIELD_HELP.duration}>Duree visee</HelpLabel>
+          <HelpLabel help={FIELD_HELP.duration}>Durée visée</HelpLabel>
           <input value={brief.duration} onChange={(event) => updateBrief('duration', event.target.value)} />
         </div>
       </div>

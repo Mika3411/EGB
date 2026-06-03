@@ -59,20 +59,20 @@ import HelpLabel from './forms/HelpLabel.jsx';
 const Character3DPreview = lazyWithRetry(() => import('./rpg3d/Character3DPreview.jsx'));
 
 const ROLE_OPTIONS = [
-  { id: 'hero', label: 'Heros', icon: Shield },
+  { id: 'hero', label: 'Héros', icon: Shield },
   { id: 'enemy', label: 'Ennemi', icon: Swords },
   { id: 'npc', label: 'PNJ', icon: User },
 ];
 
 const CHARACTER_FIELD_HELP = {
   name: 'Nom interne et visible du personnage dans les listes du builder 3D.',
-  glbImport: 'Charge ou remplace le modele 3D du personnage avec son animation stand-by de base au format .glb, .fbx, .obj ou .zip. Pour un FBX avec dossier .fbm, importe un zip contenant le FBX et ses textures.',
-  animationImport: 'Ajoute un FBX/GLB d animation qui utilise le meme squelette que le modele principal. Le stand-by joue quand le joueur est arrete, la marche pendant le deplacement, l attaque pendant le tir ou le sort.',
-  characterModelScale: 'Regle les axes du personnage quand il est place sur la carte RPG 3D. X elargit, Y regle la profondeur, Z regle la hauteur.',
-  equipment: 'Choisit une arme, un casque, une armure, des jambieres ou un bouclier cree dans Objets 3D > Inventaire pour l associer au personnage.',
-  materialBrightness: 'Regle la luminosite de ce personnage quand il est place sur la carte RPG 3D.',
-  previewLightIntensity: 'Regle la puissance de l eclairage dans l apercu personnage. Cela aide a verifier les volumes et les textures.',
-  previewLightOrientation: 'Tourne la lumiere principale autour du personnage pour controler les ombres dans l apercu.',
+  glbImport: 'Charge ou remplace le modèle 3D du personnage avec son animation stand-by de base au format .glb, .fbx, .obj ou .zip. Pour un FBX avec dossier .fbm, importe un zip contenant le FBX et ses textures.',
+  animationImport: 'Ajoute un FBX/GLB d animation qui utilise le même squelette que le modèle principal. Le stand-by joue quand le joueur est arrêté, la marche pendant le déplacement, l attaque pendant le tir ou le sort.',
+  characterModelScale: 'Règle les axes du personnage quand il est placé sur la carte RPG 3D. X élargit, Y règle la profondeur, Z règle la hauteur.',
+  equipment: 'Choisit une arme, un casque, une armure, des jambières ou un bouclier créé dans Objets 3D > Inventaire pour l associer au personnage.',
+  materialBrightness: 'Règle la luminosité de ce personnage quand il est placé sur la carte RPG 3D.',
+  previewLightIntensity: 'Règle la puissance de l éclairage dans l aperçu personnage. Cela aide à vérifier les volumes et les textures.',
+  previewLightOrientation: 'Tourne la lumière principale autour du personnage pour contrôler les ombres dans l aperçu.',
 };
 
 const CharacterHelpLabel = ({ children, help }) => (
@@ -1393,13 +1393,13 @@ export default function Character3DTab({
       const cachedConversion = getCachedCharacterConversionResult(job);
       if (cachedConversion) {
         const applyResult = applyCachedCharacterModelUrl(cachedConversion);
-        setCopyStatus(`GLB cache lie au canvas (${formatBytes(cachedConversion.outputSize)})`);
+        setCopyStatus(`GLB cache lié au canvas (${formatBytes(cachedConversion.outputSize)})`);
         return;
       }
-      setCopyStatus('Telechargement du GLB local...');
+      setCopyStatus('Téléchargement du GLB local...');
       const conversionResult = await downloadLocalCharacterConversionJob(jobId);
       const applyResult = await applyConvertedCharacterModel(conversionResult.file, conversionResult);
-      setCopyStatus(`GLB cache charge: modele pret pour le canvas (${formatBytes(conversionResult.outputSize || conversionResult.file.size)})${applyResult?.localModelPersisted ? '' : ' - stockage local non confirme'}`);
+      setCopyStatus(`GLB cache chargé: modèle prêt pour le canvas (${formatBytes(conversionResult.outputSize || conversionResult.file.size)})${applyResult?.localModelPersisted ? '' : ' - stockage local non confirmé'}`);
     } catch (error) {
       setCopyStatus(error?.message ? `Cache GLB impossible: ${error.message}` : 'Cache GLB impossible');
     } finally {
@@ -1444,7 +1444,7 @@ export default function Character3DTab({
       return;
     }
     if (archiveFormat && archiveFormat !== 'zip') {
-      setCopyStatus('Archive 3D non supportee');
+      setCopyStatus('Archive 3D non supportée');
       return;
     }
     const previousUrl = localModelUrlsRef.current.get(selectedModelId);
@@ -1459,16 +1459,16 @@ export default function Character3DTab({
     setCopyStatus(isZip ? 'Lecture ZIP...' : `Import ${importLabel}...`);
     try {
       if (isZip) {
-        setCopyStatus('ZIP 3D: recherche du GLB local deja converti...');
+        setCopyStatus('ZIP 3D: recherche du GLB local déjà converti...');
         const conversionResult = await convertCharacterModelWithLocalTool(file, setImportStatus);
         if (conversionResult.cacheUrl) {
           const applyResult = applyCachedCharacterModelUrl(conversionResult);
-          setCopyStatus(`ZIP accepte: GLB haute qualite lie au canvas (${formatBytes(conversionResult.originalSize || file.size)} -> ${formatBytes(applyResult?.storedModelFileSize || conversionResult.outputSize)})`);
+          setCopyStatus(`ZIP accepté: GLB haute qualité lié au canvas (${formatBytes(conversionResult.originalSize || file.size)} -> ${formatBytes(applyResult?.storedModelFileSize || conversionResult.outputSize)})`);
           return;
         }
         const storedFile = conversionResult.file;
         const applyResult = await applyConvertedCharacterModel(storedFile, conversionResult);
-        setCopyStatus(`ZIP accepte: GLB haute qualite pret pour le canvas (${formatBytes(conversionResult.originalSize || file.size)} -> ${formatBytes(applyResult?.storedModelFileSize || storedFile.size)})${applyResult?.localModelPersisted ? '' : ' - stockage local non confirme'}`);
+        setCopyStatus(`ZIP accepté: GLB haute qualité prêt pour le canvas (${formatBytes(conversionResult.originalSize || file.size)} -> ${formatBytes(applyResult?.storedModelFileSize || storedFile.size)})${applyResult?.localModelPersisted ? '' : ' - stockage local non confirmé'}`);
         return;
       }
       const { readCharacterModelImport } = await import('../utils/rpg3dModelImport');
@@ -1491,7 +1491,7 @@ export default function Character3DTab({
         sourceFormat === 'fbx'
         && isHeavyLocalFbxAsset({ modelFormat: sourceFormat, modelUrl: 'blob:local-fbx', modelFileSize })
       ) {
-        setCopyStatus(`${isZip ? 'ZIP FBX' : 'FBX'} lourd: conversion locale haute qualite pour le canvas...`);
+        setCopyStatus(`${isZip ? 'ZIP FBX' : 'FBX'} lourd: conversion locale haute qualité pour le canvas...`);
         conversionResult = await convertCharacterModelWithLocalTool(file, setImportStatus);
         storedFile = conversionResult.file;
         storedFormat = 'glb';
@@ -1509,7 +1509,7 @@ export default function Character3DTab({
         model.modelUrl = modelUrl;
         model.modelData = storedModelData;
         model.localModelFileId = localModelPersisted ? localModelFileId : '';
-        model.modelName = storedFile.name || file.name || `modele.${storedFormat}`;
+        model.modelName = storedFile.name || file.name || `modèle.${storedFormat}`;
         model.modelFormat = storedFormat;
         model.modelFileSize = storedModelFileSize;
         model.modelResources = storedResources;
@@ -1520,14 +1520,14 @@ export default function Character3DTab({
         return next;
       });
       setCopyStatus(conversionResult
-        ? `${isZip ? 'ZIP FBX accepte' : 'FBX accepte'}: GLB haute qualite pret pour le canvas (${formatBytes(conversionResult.originalSize || file.size)} -> ${formatBytes(storedModelFileSize)})${localModelPersisted ? '' : ' - stockage local non confirme'}`
+        ? `${isZip ? 'ZIP FBX accepté' : 'FBX accepté'}: GLB haute qualité prêt pour le canvas (${formatBytes(conversionResult.originalSize || file.size)} -> ${formatBytes(storedModelFileSize)})${localModelPersisted ? '' : ' - stockage local non confirmé'}`
         : isGlb
-        ? `GLB charge sans recompression${modelData ? '' : ' en local'}${localModelPersisted ? '' : ' - stockage local non confirme'}`
+        ? `GLB chargé sans recompression${modelData ? '' : ' en local'}${localModelPersisted ? '' : ' - stockage local non confirmé'}`
         : isZip
-          ? `ZIP charge: ${getThreeModelFormatLabel(sourceFormat)} + ${zipBundle.modelResources.length} texture${zipBundle.modelResources.length > 1 ? 's' : ''}${modelData ? '' : ' en local'}${localModelPersisted ? '' : ' - stockage local non confirme'}${isHeavyLocalFbxAsset({ modelFormat: sourceFormat, modelUrl, modelFileSize }) ? ' - preview GLB conseille' : ''}`
-          : `${getThreeModelFormatLabel(sourceFormat)} charge${modelData ? '' : ' en local'}${localModelPersisted ? '' : ' - stockage local non confirme'}${isHeavyLocalFbxAsset({ modelFormat: sourceFormat, modelUrl, modelFileSize }) ? ' - preview GLB conseille' : ''}`);
+          ? `ZIP chargé: ${getThreeModelFormatLabel(sourceFormat)} + ${zipBundle.modelResources.length} texture${zipBundle.modelResources.length > 1 ? 's' : ''}${modelData ? '' : ' en local'}${localModelPersisted ? '' : ' - stockage local non confirmé'}${isHeavyLocalFbxAsset({ modelFormat: sourceFormat, modelUrl, modelFileSize }) ? ' - preview GLB conseillé' : ''}`
+          : `${getThreeModelFormatLabel(sourceFormat)} chargé${modelData ? '' : ' en local'}${localModelPersisted ? '' : ' - stockage local non confirmé'}${isHeavyLocalFbxAsset({ modelFormat: sourceFormat, modelUrl, modelFileSize }) ? ' - preview GLB conseillé' : ''}`);
     } catch (error) {
-      setCopyStatus(error?.message || 'Import du modele 3D impossible');
+      setCopyStatus(error?.message || 'Import du modèle 3D impossible');
     } finally {
       setImportInProgress(false);
       setImportProgress(null);
@@ -1550,7 +1550,7 @@ export default function Character3DTab({
       return;
     }
     if (archiveFormat && archiveFormat !== 'zip') {
-      setCopyStatus('Archive animation non supportee');
+      setCopyStatus('Archive animation non supportée');
       return;
     }
     const localAnimationKey = `${selectedModelId}:${targetKey}`;
@@ -1565,7 +1565,7 @@ export default function Character3DTab({
     setCopyStatus(isZip ? `${slotLabel}: lecture ZIP animation...` : `${slotLabel}: import animation ${getThreeModelFormatLabel(modelFormat)}...`);
     try {
       if (isZip) {
-        setCopyStatus(`${slotLabel}: ZIP animation, recherche du GLB local deja converti...`);
+        setCopyStatus(`${slotLabel}: ZIP animation, recherche du GLB local déjà converti...`);
         const conversionResult = await convertCharacterModelWithLocalTool(
           file,
           setImportStatus,
@@ -1573,11 +1573,11 @@ export default function Character3DTab({
         );
         if (conversionResult.cacheUrl) {
           applyCachedCharacterAnimationUrl(targetKey, baseSlot, conversionResult);
-          setCopyStatus(`${slotLabel}: animation ZIP convertie et liee`);
+          setCopyStatus(`${slotLabel}: animation ZIP convertie et liée`);
           return;
         }
         const applyResult = await applyConvertedCharacterAnimation(targetKey, baseSlot, conversionResult.file, conversionResult);
-        setCopyStatus(`${slotLabel}: animation ZIP convertie et liee${applyResult?.localModelPersisted ? '' : ' - stockage local non confirme'}`);
+        setCopyStatus(`${slotLabel}: animation ZIP convertie et liée${applyResult?.localModelPersisted ? '' : ' - stockage local non confirmé'}`);
         return;
       }
       const { readCharacterAnimationImport } = await import('../utils/rpg3dModelImport');
@@ -1603,7 +1603,7 @@ export default function Character3DTab({
         );
         if (conversionResult.cacheUrl) {
           applyCachedCharacterAnimationUrl(targetKey, baseSlot, conversionResult);
-          setCopyStatus(`${slotLabel}: animation FBX convertie et liee`);
+          setCopyStatus(`${slotLabel}: animation FBX convertie et liée`);
           return;
         }
         storedFile = conversionResult.file;
@@ -1635,8 +1635,8 @@ export default function Character3DTab({
       });
       setPreviewAnimationSlot(targetKey);
       setCopyStatus(conversionResult
-        ? `${slotLabel}: animation FBX convertie et liee${localModelPersisted ? '' : ' - stockage local non confirme'}`
-        : `${slotLabel}: animation ${getThreeModelFormatLabel(storedFormat)} chargee${storedAnimationData ? '' : ' en local'}${localModelPersisted ? '' : ' - stockage local non confirme'}`);
+        ? `${slotLabel}: animation FBX convertie et liée${localModelPersisted ? '' : ' - stockage local non confirmé'}`
+        : `${slotLabel}: animation ${getThreeModelFormatLabel(storedFormat)} chargée${storedAnimationData ? '' : ' en local'}${localModelPersisted ? '' : ' - stockage local non confirmé'}`);
     } catch (error) {
       setCopyStatus(error?.message ? `${slotLabel}: ${error.message}` : `${slotLabel}: import animation impossible`);
     } finally {
@@ -1738,7 +1738,7 @@ export default function Character3DTab({
           <div>
             <span className="section-kicker">Atelier</span>
             <h2>Personnages 3D</h2>
-            <p className="small-note">{models.length} modele{models.length > 1 ? 's' : ''}</p>
+            <p className="small-note">{models.length} modèle{models.length > 1 ? 's' : ''}</p>
           </div>
           <button type="button" className="primary-action" onClick={createModel}>
             <Plus aria-hidden="true" size={16} />
@@ -1762,7 +1762,7 @@ export default function Character3DTab({
                 </span>
                 <span>
                   <strong>{model.name || 'Personnage 3D'}</strong>
-                  <small>{modelRole.label} - {model.modelName || 'Aucun modele importe'}</small>
+                  <small>{modelRole.label} - {model.modelName || 'Aucun modèle importé'}</small>
                 </span>
               </button>
             );
@@ -1778,7 +1778,7 @@ export default function Character3DTab({
             <h2>{previewModel.name || 'Personnage 3D'}</h2>
           </div>
         </div>
-        <div className="character3d-card-role-buttons" role="group" aria-label="Role du personnage">
+        <div className="character3d-card-role-buttons" role="group" aria-label="Rôle du personnage">
           {cardRoleOptions.map((option) => {
             const OptionIcon = option.icon;
             return (
@@ -1806,7 +1806,7 @@ export default function Character3DTab({
           >
             <div className="character3d-preview-head character3d-canvas-overlay">
               <div>
-                <span className="section-kicker"><Cuboid size={14} /> Modele</span>
+                <span className="section-kicker"><Cuboid size={14} /> Modèle</span>
                 <h2>{previewModel.name || 'Personnage 3D'}</h2>
               </div>
               <div className="character3d-preview-actions">
@@ -1824,8 +1824,8 @@ export default function Character3DTab({
                 ) : null}
                 <button
                   type="button"
-                  title={previewFullscreen ? 'Quitter le plein ecran' : 'Plein ecran'}
-                  aria-label={previewFullscreen ? 'Quitter le plein ecran' : 'Activer le plein ecran'}
+                  title={previewFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
+                  aria-label={previewFullscreen ? 'Quitter le plein écran' : 'Activer le plein écran'}
                   aria-pressed={previewFullscreen}
                   onClick={togglePreviewFullscreen}
                 >
@@ -1841,7 +1841,7 @@ export default function Character3DTab({
       <section className="panel character3d-editor-panel">
         <div className="panel-head panel-head-stack">
           <div>
-            <span className="section-kicker">Reglages</span>
+            <span className="section-kicker">Réglages</span>
             <h2>{selectedModel ? 'Fiche personnage' : 'Aucun personnage'}</h2>
           </div>
           <div className="character3d-editor-actions">
@@ -1942,7 +1942,7 @@ export default function Character3DTab({
                   aria-pressed={!previewAnimationSlot}
                   onClick={() => selectPreviewAnimationSlot('')}
                 >
-                  Apercu
+                  Aperçu
                 </button>
                 <button type="button" className="secondary-action compact" onClick={removeSelectedModelFile}>
                   Retirer
@@ -1979,7 +1979,7 @@ export default function Character3DTab({
                             aria-pressed={previewAnimationSlot === key}
                             onClick={() => selectPreviewAnimationSlot(key)}
                           >
-                            Apercu
+                            Aperçu
                           </button>
                           <button type="button" className="secondary-action compact" onClick={() => removeSelectedAnimation(key)}>
                             Retirer
@@ -2007,7 +2007,7 @@ export default function Character3DTab({
             ) : null}
 
             <div className="character3d-equipment-section">
-              <CharacterHelpLabel help={CHARACTER_FIELD_HELP.equipment}>Equipement</CharacterHelpLabel>
+              <CharacterHelpLabel help={CHARACTER_FIELD_HELP.equipment}>Équipement</CharacterHelpLabel>
               <div className="character3d-equipment-grid">
                 {CHARACTER_EQUIPMENT_SLOTS.map((slot) => {
                   const SlotIcon = slot.icon;
@@ -2020,7 +2020,7 @@ export default function Character3DTab({
                         <strong>{slot.label}</strong>
                       </div>
                       <label>
-                        <span>Modele</span>
+                        <span>Modèle</span>
                         <select value={item.weaponModel3dId || ''} onChange={(event) => setSelectedEquipmentModel(slot.type, event.target.value)}>
                           <option value="">Aucun</option>
                           {options.map((model) => (
@@ -2075,7 +2075,7 @@ export default function Character3DTab({
             </div>
             <div className="character3d-light-fields">
               <FieldNumber
-                label="Lumiere carte"
+                label="Lumière carte"
                 help={CHARACTER_FIELD_HELP.materialBrightness}
                 min={CHARACTER_MATERIAL_BRIGHTNESS_MIN}
                 max={CHARACTER_MATERIAL_BRIGHTNESS_MAX}
@@ -2084,7 +2084,7 @@ export default function Character3DTab({
                 onChange={(value) => patchSelectedModel((model) => { model.materialBrightness = value; }, { rememberHistory: false })}
               />
               <FieldNumber
-                label="Lumiere apercu"
+                label="Lumière aperçu"
                 help={CHARACTER_FIELD_HELP.previewLightIntensity}
                 min="0.2"
                 max="2.5"
@@ -2093,7 +2093,7 @@ export default function Character3DTab({
                 onChange={(value) => patchSelectedModel((model) => { model.previewLightIntensity = value; }, { rememberHistory: false })}
               />
               <FieldNumber
-                label="Orientation lumiere"
+                label="Orientation lumière"
                 help={CHARACTER_FIELD_HELP.previewLightOrientation}
                 min="-180"
                 max="180"

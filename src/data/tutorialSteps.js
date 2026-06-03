@@ -354,7 +354,7 @@ export const prepareProjectForTutorial = (project, tab) => {
       key: 'confiance_du_guide',
       type: 'number',
       defaultValue: 0,
-      description: 'Augmente quand le joueur aide le guide. Débloqué une fin secrete.',
+      description: 'Augmente quand le joueur aide le guide. Débloque une fin secrète.',
       journalLabel: 'Confiance du guide',
       journalVisible: true,
     }];
@@ -381,7 +381,7 @@ export const prepareProjectForTutorial = (project, tab) => {
               replies: [
                 {
                   id: 'reply-safe-path',
-                  label: 'Quel chemin est le plus sur ?',
+                  label: 'Quel chemin est le plus sûr ?',
                   actionType: 'node',
                   nextNodeId: 'node-forest',
                   dialogue: '',
@@ -391,7 +391,7 @@ export const prepareProjectForTutorial = (project, tab) => {
                   label: 'As-tu quelque chose pour m aider ?',
                   actionType: 'multiple',
                   nextNodeId: '',
-                  dialogue: 'Le guide te donne un jeton grave. Il pourrait servir plus tard.',
+                  dialogue: 'Le guide te donne un jeton gravé. Il pourrait servir plus tard.',
                   rewardItemId: itemId,
                   storyVariableOperation: 'increment',
                   storyVariableKey: 'confiance_du_guide',
@@ -414,7 +414,7 @@ export const prepareProjectForTutorial = (project, tab) => {
             {
               id: 'node-forest',
               speaker: 'Guide',
-              text: 'La forêt est plus lente, mais elle revele parfois ce que la tour cache.',
+              text: 'La forêt est plus lente, mais elle révèle parfois ce que la tour cache.',
               replies: [
                 {
                   id: 'reply-tower',

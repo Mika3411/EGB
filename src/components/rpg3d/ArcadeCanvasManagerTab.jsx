@@ -213,7 +213,7 @@ function ArcadeCanvasManagerTab({
         <div className="editor-stack">
           <div className="subpanel scene-compact-card">
             <div className="subpanel-head">
-              <h3>Acte selectionne</h3>
+              <h3>Acte sélectionné</h3>
               <div className="inline-actions end">
                 <button type="button" className="secondary-action" onClick={createAct}>
                   Nouvel acte

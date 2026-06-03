@@ -1465,7 +1465,7 @@ function BuilderApp({
             <div className="panel-head">
               <div>
                 <span className="eyebrow">Admin</span>
-                <h2>Acces admin refuse</h2>
+                <h2>Accès admin refusé</h2>
                 <p className="small-note">Reconnecte-toi avec un compte admin pour ouvrir cette zone.</p>
               </div>
               <button type="button" className="secondary-action" onClick={openProfileScreen}>

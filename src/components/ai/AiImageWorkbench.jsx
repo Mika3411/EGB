@@ -13,9 +13,9 @@ export default function AiImageWorkbench({
         <div className="ai-image-preview-overlay" role="dialog" aria-modal="true" onClick={onClosePreview}>
           <div className="ai-image-preview-modal" onClick={(event) => event.stopPropagation()}>
             <button type="button" className="secondary-action" onClick={onClosePreview}>Fermer</button>
-            <img src={imagePreview.src} alt={imagePreview.name || 'Apercu'} />
-            <strong>{imagePreview.name || 'Apercu'}</strong>
-            <button type="button" className="secondary-action" onClick={() => onDownloadImage(imagePreview.src, imagePreview.name || 'image.png')}>Telecharger</button>
+            <img src={imagePreview.src} alt={imagePreview.name || 'Aperçu'} />
+            <strong>{imagePreview.name || 'Aperçu'}</strong>
+            <button type="button" className="secondary-action" onClick={() => onDownloadImage(imagePreview.src, imagePreview.name || 'image.png')}>Télécharger</button>
           </div>
         </div>
       ) : null}
@@ -40,10 +40,10 @@ export default function AiImageWorkbench({
                     <span>{variant.label || `Image ${index + 1}`}</span>
                     <div>
                       <button type="button" className="secondary-action" disabled={selected} onClick={() => onSelectImageVariant(variant)}>
-                        {selected ? 'Selectionnee' : 'Choisir'}
+                        {selected ? 'Sélectionnée' : 'Choisir'}
                       </button>
                       <button type="button" className="secondary-action" onClick={() => onDownloadImage(variant.imageData, variant.imageName || `${imageCompare.title}-${index + 1}.png`)}>
-                        Telecharger
+                        Télécharger
                       </button>
                     </div>
                   </article>

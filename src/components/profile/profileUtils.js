@@ -15,7 +15,7 @@ export const formatDate = (value) => {
 
 export const CREATION_TEMPLATES = [
   ['empty', 'Projet vide'],
-  ['book_hero', 'Livre dont vous etes le heros'],
+  ['book_hero', 'Livre dont vous êtes le héros'],
   ['adventure_choices', 'Narration choix multiples'],
   ['hero_adventure', 'Aventure de héros'],
   ['narrative_investigation', 'Enquête narrative'],

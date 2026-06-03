@@ -226,7 +226,7 @@ const makeEnigma = (overrides = {}) => ({
   miscMin: '',
   miscMax: '',
   miscTargetItemId: '',
-  successMessage: 'Bonne réponse. Quelque chose se débloqué.',
+    successMessage: 'Bonne réponse. Quelque chose se débloque.',
   failMessage: 'Ce n’est pas la bonne réponse.',
   unlockType: 'none',
   targetSceneId: '',

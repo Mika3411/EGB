@@ -78,12 +78,12 @@ export const HELP_TUTORIAL_OPTIONS = [
   ['combat', 'Combat', 'Centraliser les combats Hero Adventure : sources, arène, ennemis, pouvoirs, IA, équilibrage, effets et test direct en Preview.'],
   ['cinematics', 'Cinématiques', 'Construire une séquence narrative avec slides ou vidéo, régler le démarrage du jeu et définir l’action de fin.'],
   ['animation', 'Animation', 'Composer une séquence 2D avec storyboard, calques, retouches, mouvements, verrouillage et prévisualisation.'],
-  ['combinations', 'Combinaisons', 'Relier deux objets entre eux, choisir un résultat utile et ecrire un retour clair pour le joueur.'],
+  ['combinations', 'Combinaisons', 'Relier deux objets entre eux, choisir un résultat utile et écrire un retour clair pour le joueur.'],
   ['enigmas', 'Énigmes', 'Créer un défi, régler sa solution, son apparence joueur, son fond de pop-up et son déblocage.'],
-  ['logic', 'Logique', 'Declencher des conséquences selon les objets, énigmes, zones franchies, combinaisons, choix narratifs ou conditions héros.'],
+  ['logic', 'Logique', 'Déclencher des conséquences selon les objets, énigmes, zones franchies, combinaisons, choix narratifs ou conditions héros.'],
   ['preview', 'Preview', 'Tester le rendu joueur, les dialogues, l’inventaire, les énigmes, les transitions et les sauvegardes.'],
-  ['score', 'Bilan', 'Lire la note globale, les dimensions, les points forts, les alertes et le temps de jeu estime.'],
-  ['ai', 'IA', 'Utiliser l’assistant IA, comprendre les crédits, les modes, les brouillons, les validations et les generations d images.'],
+  ['score', 'Bilan', 'Lire la note globale, les dimensions, les points forts, les alertes et le temps de jeu estimé.'],
+  ['ai', 'IA', 'Utiliser l’assistant IA, comprendre les crédits, les modes, les brouillons, les validations et les générations d images.'],
 ];
 export const BEGINNER_HELP_TUTORIAL_OPTIONS = new Set(['guided_creation', 'profile', 'scenes', 'media', 'editor', 'enigmas', 'ai', 'preview']);
 export const INTERMEDIATE_HELP_TUTORIAL_OPTIONS = new Set(['guided_creation', 'profile', 'scenes', 'media', 'editor', 'map', 'hero', 'combat', 'cinematics', 'enigmas', 'ai', 'preview']);
@@ -197,7 +197,7 @@ export const BEGINNER_FAQ_ITEMS = [
 
 export const FAQ_ITEMS = [
   {
-    question: 'Par quoi commencer quand on decouvre le builder ?',
+    question: 'Par quoi commencer quand on découvre le builder ?',
     answer: "Commence par le didacticiel Profil pour comprendre les projets, puis Scènes et Éditeur pour créer les lieux, objets et zones cliquables. Pour un mode choix multiples, ajoute Narration afin de vérifier les branches. Pour une Hero Adventure, enchaîne Héros, Combat et Preview. Passe ensuite par Énigmes, Logique, Plan et Bilan.",
   },
   {
@@ -222,7 +222,7 @@ export const FAQ_ITEMS = [
   },
   {
     question: 'À quoi sert l’onglet Narration ?',
-    answer: 'Il sert de tableau dé bord narratif. Il compte les choix, réponses cachées, variables et fins, puis signale les problèmes : cible manquante, condition incomplète, variable testée mais jamais modifiée, chemin impossible par plage de variable ou fin sans titre. Il aide à sécuriser une histoire ramifiée avant le test joueur.',
+    answer: 'Il sert de tableau de bord narratif. Il compte les choix, réponses cachées, variables et fins, puis signale les problèmes : cible manquante, condition incomplète, variable testée mais jamais modifiée, chemin impossible par plage de variable ou fin sans titre. Il aide à sécuriser une histoire ramifiée avant le test joueur.',
   },
   {
     question: 'Comment lire une grosse conversation ? branches ?',
@@ -230,11 +230,11 @@ export const FAQ_ITEMS = [
   },
   {
     question: 'Pourquoi déclarer les variables d’histoire ?',
-    answer: 'Le registre officiel évite les fautes de nom entre les réponses. Chaque variable à un type, une valeur de départ, une description et un nom lisible pour le journal joueur. Si une conversation utilise une variable non déclarée, l’onglet Narration affiche une alerte et propose de la déclarer.',
+    answer: 'Le registre officiel évite les fautes de nom entre les réponses. Chaque variable a un type, une valeur de départ, une description et un nom lisible pour le journal joueur. Si une conversation utilise une variable non déclarée, l’onglet Narration affiche une alerte et propose de la déclarer.',
   },
   {
     question: 'À quoi sert le journal joueur ?',
-    answer: 'Le journal joueur affiche en Preview et dans l’export les choix déjà faits, les indices ou objets obtenus, et les variables importantes avec un libellé clair. Dans Narration > Variables, active ou desactive l’affichage d’une variable dans le journal et donne-lui un nom lisible.',
+    answer: 'Le journal joueur affiche en Preview et dans l’export les choix déjà faits, les indices ou objets obtenus, et les variables importantes avec un libellé clair. Dans Narration > Variables, active ou désactive l’affichage d’une variable dans le journal et donne-lui un nom lisible.',
   },
   {
     question: 'Comment tester rapidement une branche narrative ?',
@@ -245,12 +245,12 @@ export const FAQ_ITEMS = [
     answer: 'Utilise le bouton Fiche auteur HTML dans la barre du projet. Il exporte une page HTML imprimable avec la vue globale, les branches de conversation, conditions simples ou combinées, effets multiples, variables, fins, objets cités, chemins possibles détectés et transitions de scènes.',
   },
   {
-    question: 'Comment retrouver partout où une variable ou un objet est utilise ?',
-    answer: 'Dans l’onglet Narration, utilise Recherche globale narrative. Tape le nom d’une variable, d’un objet, d’une fin, d’une réponse ou un morceau dé dialogue. Les résultats indiquent les usages dans les réponses, conditions, effets, fins et diagnostics, avec des boutons pour ouvrir la conversation concernée.',
+    question: 'Comment retrouver partout où une variable ou un objet est utilisé ?',
+    answer: 'Dans l’onglet Narration, utilise Recherche globale narrative. Tape le nom d’une variable, d’un objet, d’une fin, d’une réponse ou un morceau de dialogue. Les résultats indiquent les usages dans les réponses, conditions, effets, fins et diagnostics, avec des boutons pour ouvrir la conversation concernée.',
   },
   {
     question: 'À quoi servent les tags de branche ?',
-    answer: 'Les tags de branche sont des etiquettes internes sur les réponses de conversation, par exemple voie_foret, voie_tour, secret ou danger. Ils permettent de filtrer le graphe interactif, de retrouver une branche dans la recherche narrative et de filtrer la fiche auteur HTML.',
+    answer: 'Les tags de branche sont des étiquettes internes sur les réponses de conversation, par exemple voie_foret, voie_tour, secret ou danger. Ils permettent de filtrer le graphe interactif, de retrouver une branche dans la recherche narrative et de filtrer la fiche auteur HTML.',
   },
   {
     question: 'O? noter mes intentions de scénario ?',

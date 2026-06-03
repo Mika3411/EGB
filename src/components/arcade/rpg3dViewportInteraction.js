@@ -156,9 +156,9 @@ export const resolveActionZoneShapeControl = (config, selected, multiSelected = 
 
 export const ACTION_ZONE_VIEW_MODES = [
   { id: 'north', label: 'N', title: 'Voir de face', direction: new ThreeVector3(0, 0, -1) },
-  { id: 'east', label: 'E', title: 'Voir le cote droit', direction: new ThreeVector3(1, 0, 0) },
+  { id: 'east', label: 'E', title: 'Voir le côté droit', direction: new ThreeVector3(1, 0, 0) },
   { id: 'south', label: 'S', title: 'Voir de dos', direction: new ThreeVector3(0, 0, 1) },
-  { id: 'west', label: 'O', title: 'Voir le cote gauche', direction: new ThreeVector3(-1, 0, 0) },
+  { id: 'west', label: 'O', title: 'Voir le côté gauche', direction: new ThreeVector3(-1, 0, 0) },
 ];
 export const ACTION_ZONE_VIEW_BY_ID = ACTION_ZONE_VIEW_MODES.reduce((map, mode) => {
   map[mode.id] = mode;

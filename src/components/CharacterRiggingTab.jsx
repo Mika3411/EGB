@@ -83,9 +83,9 @@ const CHARACTER_RIG_MODES = [
 
 const CHARACTER_RIG_CAMERA_VIEWS = [
   { id: 'north', label: 'N', title: 'Voir de face' },
-  { id: 'east', label: 'E', title: 'Voir le cote droit' },
+  { id: 'east', label: 'E', title: 'Voir le côté droit' },
   { id: 'south', label: 'S', title: 'Voir de dos' },
-  { id: 'west', label: 'O', title: 'Voir le cote gauche' },
+  { id: 'west', label: 'O', title: 'Voir le côté gauche' },
 ];
 
 const CHARACTER_RIG_PHALANGE_HANDS = [
@@ -477,11 +477,11 @@ export default function CharacterRiggingTab({
                 data-axis-percent={Math.round(symmetryAxisX * 100)}
                 aria-hidden="true"
               />
-              <div className="character-rigging-symmetry-axis-controls" role="group" aria-label="Axe de symetrie">
+              <div className="character-rigging-symmetry-axis-controls" role="group" aria-label="Axe de symétrie">
                 <button
                   type="button"
                   className="character-rigging-symmetry-axis-button left"
-                  aria-label="Deplacer l'axe de symetrie vers la gauche"
+                  aria-label="Déplacer l'axe de symétrie vers la gauche"
                   title="Deplacer l'axe vers la gauche"
                   onPointerDown={stopCanvasPointerEvent}
                   onPointerUp={stopCanvasPointerEvent}
@@ -496,7 +496,7 @@ export default function CharacterRiggingTab({
                 <button
                   type="button"
                   className="character-rigging-symmetry-axis-button right"
-                  aria-label="Deplacer l'axe de symetrie vers la droite"
+                  aria-label="Déplacer l'axe de symétrie vers la droite"
                   title="Deplacer l'axe vers la droite"
                   onPointerDown={stopCanvasPointerEvent}
                   onPointerUp={stopCanvasPointerEvent}
@@ -538,9 +538,9 @@ export default function CharacterRiggingTab({
                     <button
                       type="button"
                       className={`character-rigging-symmetry-toggle${symmetryEnabled ? ' active' : ''}`}
-                      aria-label={symmetryEnabled ? 'Desactiver la symetrie des pastilles' : 'Activer la symetrie des pastilles'}
+                      aria-label={symmetryEnabled ? 'Désactiver la symétrie des pastilles' : 'Activer la symétrie des pastilles'}
                       aria-pressed={symmetryEnabled}
-                      title={symmetryEnabled ? 'Symetrie active' : 'Activer la symetrie gauche droite'}
+                      title={symmetryEnabled ? 'Symétrie active' : 'Activer la symétrie gauche droite'}
                       onClick={() => setSymmetryEnabled((current) => !current)}
                     >
                       <FlipHorizontal2 aria-hidden="true" size={15} />
@@ -551,7 +551,7 @@ export default function CharacterRiggingTab({
                         type="button"
                         className={canvasZoomEnabled ? 'active' : ''}
                         title={canvasZoomEnabled ? 'Zoom souris actif: maintiens clic gauche et glisse haut/bas' : 'Activer le zoom souris'}
-                        aria-label={canvasZoomEnabled ? 'Desactiver le zoom souris' : 'Activer le zoom souris'}
+                        aria-label={canvasZoomEnabled ? 'Désactiver le zoom souris' : 'Activer le zoom souris'}
                         aria-pressed={canvasZoomEnabled}
                         onClick={() => setCanvasZoomEnabled((current) => !current)}
                       >

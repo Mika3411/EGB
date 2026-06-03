@@ -80,8 +80,8 @@ export default function ProfileSettingsPanel({
       <div className="panel-head panel-head-stack">
         <div>
           <span className="eyebrow">Compte</span>
-          <h2>Profil et securite</h2>
-          <p className="small-note">Modifie tes informations publiques et ton acces au compte.</p>
+          <h2>Profil et sécurité</h2>
+          <p className="small-note">Modifie tes informations publiques et ton accès au compte.</p>
         </div>
       </div>
 

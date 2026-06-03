@@ -17,7 +17,7 @@ import {
 import { hasSupabaseStorageConfig } from '../../supabaseStorage';
 
 const RPG3D_LOGIN_REQUIRED_STATUS = 'Connecte-toi pour sauvegarder dans Supabase.';
-const RPG3D_LOCAL_SESSION_FALLBACK_STATUS = 'Sauvegarde locale terminee. Connecte-toi pour synchroniser Supabase.';
+const RPG3D_LOCAL_SESSION_FALLBACK_STATUS = 'Sauvegarde locale terminée. Connecte-toi pour synchroniser Supabase.';
 
 let rpg3DAssetsStorageModulePromise = null;
 
@@ -64,7 +64,7 @@ export function useRpg3DSaveSync({
   const projectIdRef = useRef(projectId);
   const remoteAssetsLoadKeyRef = useRef('');
   const [managementSaveStatus, setManagementSaveStatus] = useState(
-    savedArcadeAssets ? 'Sauvegarde locale chargee.' : '',
+    savedArcadeAssets ? 'Sauvegarde locale chargée.' : '',
   );
   const [isSavingAssets, setIsSavingAssets] = useState(false);
 
@@ -94,7 +94,7 @@ export function useRpg3DSaveSync({
       setConfig(nextConfig);
       setStudioProject(nextStudioProject);
       resetGame(nextConfig);
-      setManagementSaveStatus((current) => current || 'Modeles 3D locaux restaures.');
+      setManagementSaveStatus((current) => current || 'Modèles 3D locaux restaurés.');
     }).catch(() => {
       // Local model recovery is best-effort; missing files fall back to normal asset sync.
     });
@@ -143,8 +143,8 @@ export function useRpg3DSaveSync({
           studioProject: nextStudioProject,
         });
         setManagementSaveStatus(restored.changed
-          ? 'Sauvegarde Supabase chargee, modeles locaux restaures.'
-          : 'Sauvegarde Supabase chargee.');
+          ? 'Sauvegarde Supabase chargée, modèles locaux restaurés.'
+          : 'Sauvegarde Supabase chargée.');
       })
       .catch(async (error) => {
         if (cancelled) return;
@@ -229,7 +229,7 @@ export function useRpg3DSaveSync({
         lastSavedAutosaveVersionRef.current = Math.max(lastSavedAutosaveVersionRef.current, savingVersion);
         setManagementSaveStatus(saveLocallyBecauseSessionMissing
           ? RPG3D_LOCAL_SESSION_FALLBACK_STATUS
-          : 'Sauvegarde locale terminee.');
+          : 'Sauvegarde locale terminée.');
         return;
       }
 
@@ -252,7 +252,7 @@ export function useRpg3DSaveSync({
           setStudioProject(studioProjectRef.current);
           resetGame(nextConfig);
         }
-        setManagementSaveStatus('Sauvegarde Supabase terminee.');
+        setManagementSaveStatus('Sauvegarde Supabase terminée.');
         return;
       }
 
@@ -269,7 +269,7 @@ export function useRpg3DSaveSync({
         setConfig(localSync.config);
       }
       lastSavedAutosaveVersionRef.current = Math.max(lastSavedAutosaveVersionRef.current, savingVersion);
-      setManagementSaveStatus('Sauvegarde locale terminee.');
+      setManagementSaveStatus('Sauvegarde locale terminée.');
     } catch (error) {
       if (!effectiveLocalOnly && supabaseConfigured) {
         try {
@@ -286,7 +286,7 @@ export function useRpg3DSaveSync({
               resetGame(localSync.config);
             }
             lastSavedAutosaveVersionRef.current = Math.max(lastSavedAutosaveVersionRef.current, savingVersion);
-            setManagementSaveStatus(`Sauvegarde locale terminee. Supabase inaccessible: ${formatRpg3DSaveError(error)}`);
+            setManagementSaveStatus(`Sauvegarde locale terminée. Supabase inaccessible: ${formatRpg3DSaveError(error)}`);
             return;
           }
         } catch {

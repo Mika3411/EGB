@@ -591,7 +591,7 @@ function ArcadeThreeViewport({
 
     const handleContextLost = (event) => {
       event.preventDefault();
-      setWebglError('La vue 3D a ete suspendue par le navigateur.');
+      setWebglError('La vue 3D a été suspendue par le navigateur.');
       latestRef.current.onUnavailable?.();
     };
     let renderer;

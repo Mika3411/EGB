@@ -104,7 +104,7 @@ export default function Rpg3DInspector({
       <div className="arcade-panel-section">
         <h2>Inspecteur</h2>
         {!inspectorSelectionEntities.length ? (
-          <p className="arcade-empty-state">Selectionne un objet sur la carte pour modifier ses reglages.</p>
+          <p className="arcade-empty-state">Sélectionne un objet sur la carte pour modifier ses réglages.</p>
         ) : hasMultiInspectorSelection ? (
           <div className="arcade-inspector">
             <span className="arcade-selected-type">Selection ({inspectorSelectionEntities.length})</span>
@@ -263,7 +263,7 @@ export default function Rpg3DInspector({
                   onClick={onToggleActionZoneEdgeInsertMode}
                 >
                   <Plus size={15} />
-                  <span>{actionZoneEdgeInsertMode ? 'Clique une arete' : 'Ajouter arete au clic'}</span>
+                  <span>{actionZoneEdgeInsertMode ? 'Clique une arête' : 'Ajouter arête au clic'}</span>
                 </button>
                 <div className="arcade-action-zone-veil-grid">
                   <label>
@@ -361,7 +361,7 @@ export default function Rpg3DInspector({
             {selectedEntity.type === 'hero' && (
               <>
                 <label>
-                  <Rpg3DHelpLabel help={fieldHelp.heroName}>Nom heros</Rpg3DHelpLabel>
+                  <Rpg3DHelpLabel help={fieldHelp.heroName}>Nom héros</Rpg3DHelpLabel>
                   <input value={selectedEntity.item.name || ''} onChange={(event) => onUpdateEntity('name', event.target.value)} />
                 </label>
                 <label>
@@ -376,7 +376,7 @@ export default function Rpg3DInspector({
                   />
                 </label>
                 <button type="button" className="secondary-action full" onClick={() => onUpdateEntity('characterModelScale', 1)}>
-                  Taille par defaut
+                  Taille par défaut
                 </button>
               </>
             )}
@@ -411,7 +411,7 @@ export default function Rpg3DInspector({
                   <Rpg3DInspectorNumberInput min="0" max="999" value={selectedEntity.item.combatEnemyMaxMana || 0} onCommit={(value) => onUpdateEntity('combatEnemyMaxMana', value)} />
                 </label>
                 <label>
-                  <Rpg3DHelpLabel help={fieldHelp.enemyPowerDamage}>Pouvoir degats</Rpg3DHelpLabel>
+                  <Rpg3DHelpLabel help={fieldHelp.enemyPowerDamage}>Pouvoir dégâts</Rpg3DHelpLabel>
                   <Rpg3DInspectorNumberInput min="0" max="999" value={selectedEntity.item.combatEnemyPowerDamage || 0} onCommit={(value) => onUpdateEntity('combatEnemyPowerDamage', value)} />
                 </label>
                 <label>

@@ -691,7 +691,7 @@ const applyReplyToSimulator = (current, entry, project) => {
     }
     if (type === 'remove_item' && effect.itemId) {
       next.itemIds = removeValue(next.itemIds, effect.itemId);
-      addEffect('item', `Objet retire: ${getProjectItemLabel(project, effect.itemId)}`);
+      addEffect('item', `Objet retiré: ${getProjectItemLabel(project, effect.itemId)}`);
     }
     if (['set_variable', 'increment_variable', 'decrement_variable'].includes(type)) {
       const operation = type === 'set_variable' ? 'set' : type === 'increment_variable' ? 'increment' : 'decrement';
@@ -1448,8 +1448,8 @@ export default function AdventureTab({ project, patchProject, getSceneLabel, set
             Contrôle du scénario à choix multiples
             <span
               className="help-dot adventure-title-help"
-              data-help="Tableau de bord narratif. Il ne remplace pas l'edition des conversations : il verifie les branches, variables, reponses cachees et fins."
-              aria-label="Tableau de bord narratif. Il ne remplace pas l'edition des conversations : il verifie les branches, variables, reponses cachees et fins."
+              data-help="Tableau de bord narratif. Il ne remplace pas l'édition des conversations : il vérifie les branches, variables, réponses cachées et fins."
+              aria-label="Tableau de bord narratif. Il ne remplace pas l'édition des conversations : il vérifie les branches, variables, réponses cachées et fins."
               tabIndex={0}
             >
               ?
@@ -1981,7 +1981,7 @@ export default function AdventureTab({ project, patchProject, getSceneLabel, set
                 return (
                   <div key={variable.id} className={`adventure-variable-editor-row ${audit.unknownVariableKeys.includes(variable.key) ? 'warning' : ''}`}>
                     <div className="adventure-variable-editor-main">
-                      <HelpLabel help="Nom exact utilise dans les conditions et effets des réponses. Exemple : confiance_du_guide.">Nom</HelpLabel>
+                      <HelpLabel help="Nom exact utilisé dans les conditions et effets des réponses. Exemple : confiance_du_guide.">Nom</HelpLabel>
                       <input value={variable.key || ''} placeholder="confiance_du_guide" onChange={(event) => updateStoryVariable(variable.id, { key: event.target.value })} />
                       <HelpLabel help="Type attendu pour la variable : nombre pour un compteur, booleen pour vrai/faux, texte pour un état narratif.">Type</HelpLabel>
                       <select value={variable.type || 'boolean'} onChange={(event) => updateStoryVariable(variable.id, { type: event.target.value })}>

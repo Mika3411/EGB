@@ -48,95 +48,95 @@ const CAMERA_ZOOM_DRAG_SENSITIVITY = 0.08;
 const RPG3D_ACTION_LOADING_DURATION_MS = 900;
 
 const RPG3D_FIELD_HELP = {
-  mapWidth: 'Largeur totale de la carte en unites du builder. Augmente-la pour donner plus d espace horizontal au parcours.',
-  mapHeight: 'Hauteur totale de la carte en unites du builder. Augmente-la pour construire une zone plus profonde.',
-  mapGrid: 'Pas de la grille utilise pour aligner les placements et garder des distances regulieres.',
-  mapObjects: 'Nombre total d elements places sur le canevas actif.',
+  mapWidth: 'Largeur totale de la carte en unités du builder. Augmente-la pour donner plus d espace horizontal au parcours.',
+  mapHeight: 'Hauteur totale de la carte en unités du builder. Augmente-la pour construire une zone plus profonde.',
+  mapGrid: 'Pas de la grille utilisé pour aligner les placements et garder des distances régulières.',
+  mapObjects: 'Nombre total d éléments placés sur le canevas actif.',
   actionZoneTool: 'Active le placement d une zone d action 3D: clique ensuite sur la carte pour la poser.',
   flatGroundTool: 'Ajoute un sol plat opaque qui cache la grille technique et sert de base au terrain.',
-  flatGroundColor: 'Couleur de base du plateau plat place sous la peinture du terrain.',
-  terrainPaintTool: 'Active la peinture du terrain: maintiens le clic gauche sur le sol pour dessiner une zone coloree.',
-  terrainPaintColor: 'Couleur appliquee aux nouvelles traces peintes au sol.',
-  terrainPaintBrush: 'Largeur de la brosse utilisee pour dessiner les zones de terrain.',
-  terrainPaintShape: 'Forme de la brosse utilisee pour peindre le terrain.',
+  flatGroundColor: 'Couleur de base du plateau plat placé sous la peinture du terrain.',
+  terrainPaintTool: 'Active la peinture du terrain: maintiens le clic gauche sur le sol pour dessiner une zone colorée.',
+  terrainPaintColor: 'Couleur appliquée aux nouvelles traces peintes au sol.',
+  terrainPaintBrush: 'Largeur de la brosse utilisée pour dessiner les zones de terrain.',
+  terrainPaintShape: 'Forme de la brosse utilisée pour peindre le terrain.',
   terrainPaintClear: 'Retire toutes les traces de peinture du terrain actuel.',
-  assetFiles: 'Fichiers 3D crees dans les ateliers Personnages 3D et Objets 3D, prets a etre importes sur la carte.',
-  cameraHeight: 'Hauteur de la camera au-dessus du sol pendant l edition et le test.',
-  cameraDistance: 'Distance de recul de la camera par rapport au centre vise.',
+  assetFiles: 'Fichiers 3D créés dans les ateliers Personnages 3D et Objets 3D, prêts à être importés sur la carte.',
+  cameraHeight: 'Hauteur de la caméra au-dessus du sol pendant l édition et le test.',
+  cameraDistance: 'Distance de recul de la caméra par rapport au centre visé.',
   wallHeight: 'Hauteur visuelle des murs et obstacles dans le rendu 3D.',
-  reliefScale: 'Amplifie ou reduit le volume des reliefs pour rendre le terrain plus lisible.',
-  propHeight: 'Hauteur par defaut des decors simples quand aucun modele 3D precis ne la remplace.',
-  lightIntensity: 'Puissance globale de l eclairage dans la carte 3D.',
-  lightOrientation: 'Direction du soleil et des ombres dans la scene 3D.',
-  playerCharacter: 'Preset de personnage utilise par le heros quand aucun modele 3D ou sprite personnalise ne le remplace.',
-  characterRenderMode: 'Choisit si le personnage s affiche en volume procedural, modele 3D, sprite vertical ou forme stylisee.',
-  characterModel: 'Modele 3D issu de l atelier Personnages 3D a appliquer au heros.',
-  characterScale: 'Taille du modele 3D du heros sur la carte.',
-  characterMaterialBrightness: 'Luminosite propre a ce personnage sur la carte RPG 3D.',
-  playerImage: 'Image verticale utilisee comme apparence du heros en mode sprite.',
-  currentHealth: 'Points de vie actuels du heros au lancement du test.',
-  maxHealth: 'Reserve maximale de points de vie du heros.',
+  reliefScale: 'Amplifie ou réduit le volume des reliefs pour rendre le terrain plus lisible.',
+  propHeight: 'Hauteur par défaut des décors simples quand aucun modèle 3D précis ne la remplace.',
+  lightIntensity: 'Puissance globale de l éclairage dans la carte 3D.',
+  lightOrientation: 'Direction du soleil et des ombres dans la scène 3D.',
+  playerCharacter: 'Preset de personnage utilisé par le héros quand aucun modèle 3D ou sprite personnalisé ne le remplace.',
+  characterRenderMode: 'Choisit si le personnage s affiche en volume procédural, modèle 3D, sprite vertical ou forme stylisée.',
+  characterModel: 'Modèle 3D issu de l atelier Personnages 3D à appliquer au héros.',
+  characterScale: 'Taille du modèle 3D du héros sur la carte.',
+  characterMaterialBrightness: 'Luminosité propre à ce personnage sur la carte RPG 3D.',
+  playerImage: 'Image verticale utilisée comme apparence du héros en mode sprite.',
+  currentHealth: 'Points de vie actuels du héros au lancement du test.',
+  maxHealth: 'Réserve maximale de points de vie du héros.',
   currentMana: 'Mana disponible au lancement du test.',
-  maxMana: 'Reserve maximale de mana du heros.',
-  playerSpeed: 'Vitesse de deplacement du heros dans la carte.',
-  attackSkill: 'Nom affiche pour l attaque principale du heros.',
-  attackBonus: 'Bonus numerique ajoute aux calculs de l attaque principale.',
-  attackManaCost: 'Mana depensee a chaque attaque principale.',
-  powerName: 'Nom affiche pour le pouvoir principal du heros.',
+  maxMana: 'Réserve maximale de mana du héros.',
+  playerSpeed: 'Vitesse de déplacement du héros dans la carte.',
+  attackSkill: 'Nom affiché pour l attaque principale du héros.',
+  attackBonus: 'Bonus numérique ajouté aux calculs de l attaque principale.',
+  attackManaCost: 'Mana dépensée à chaque attaque principale.',
+  powerName: 'Nom affiché pour le pouvoir principal du héros.',
   powerForce: 'Puissance de base du pouvoir avant les ajustements de combat.',
-  powerManaCost: 'Mana depensee quand le pouvoir est utilise.',
-  powerElement: 'Element du pouvoir, utile pour differencier les effets et futures resistances.',
-  enemyVision: 'Distance a partir de laquelle les ennemis detectent le heros.',
-  aiAggression: 'Tendance des ennemis a poursuivre et attaquer rapidement.',
-  positionX: 'Position horizontale du centre de la selection sur la carte.',
-  positionY: 'Position verticale du centre de la selection sur la carte.',
-  positionZ: 'Hauteur de la selection par rapport au sol. Utile pour faire flotter ou poser un objet.',
-  orientation: 'Rotation de la selection autour de l axe vertical.',
-  floorZeroZ: 'Hauteur de reference ou les personnages marchent sur une dalle plate.',
-  width: 'Largeur de l element selectionne.',
-  height: 'Hauteur ou longueur de l element selectionne selon son type.',
-  heroName: 'Nom du heros affiche dans les listes et futurs retours de jeu.',
-  enemyHealth: 'Points de vie de depart de cet ennemi.',
-  enemyStrength: 'Degats de base ou force offensive de cet ennemi.',
-  enemySpeed: 'Vitesse de deplacement de cet ennemi.',
-  enemyAttackSpeed: 'Frequence a laquelle cet ennemi peut attaquer.',
+  powerManaCost: 'Mana dépensée quand le pouvoir est utilisé.',
+  powerElement: 'Élément du pouvoir, utile pour différencier les effets et futures résistances.',
+  enemyVision: 'Distance à partir de laquelle les ennemis détectent le héros.',
+  aiAggression: 'Tendance des ennemis à poursuivre et attaquer rapidement.',
+  positionX: 'Position horizontale du centre de la sélection sur la carte.',
+  positionY: 'Position verticale du centre de la sélection sur la carte.',
+  positionZ: 'Hauteur de la sélection par rapport au sol. Utile pour faire flotter ou poser un objet.',
+  orientation: 'Rotation de la sélection autour de l axe vertical.',
+  floorZeroZ: 'Hauteur de référence où les personnages marchent sur une dalle plate.',
+  width: 'Largeur de l élément sélectionné.',
+  height: 'Hauteur ou longueur de l élément sélectionné selon son type.',
+  heroName: 'Nom du héros affiché dans les listes et futurs retours de jeu.',
+  enemyHealth: 'Points de vie de départ de cet ennemi.',
+  enemyStrength: 'Dégâts de base ou force offensive de cet ennemi.',
+  enemySpeed: 'Vitesse de déplacement de cet ennemi.',
+  enemyAttackSpeed: 'Fréquence à laquelle cet ennemi peut attaquer.',
   enemyCriticalChance: 'Chance de coup critique de cet ennemi.',
-  enemyCriticalMultiplier: 'Multiplicateur applique quand cet ennemi fait un critique.',
-  enemyMana: 'Reserve de mana disponible pour les pouvoirs ennemis.',
-  enemyPowerDamage: 'Degats de base du pouvoir ennemi.',
-  enemyPowerChance: 'Probabilite que l ennemi choisisse son pouvoir au lieu d une attaque simple.',
-  pickupType: 'Type de bonus ramasse par le joueur: soin, mana ou recharge de dash.',
+  enemyCriticalMultiplier: 'Multiplicateur appliqué quand cet ennemi fait un critique.',
+  enemyMana: 'Réserve de mana disponible pour les pouvoirs ennemis.',
+  enemyPowerDamage: 'Dégâts de base du pouvoir ennemi.',
+  enemyPowerChance: 'Probabilité que l ennemi choisisse son pouvoir au lieu d une attaque simple.',
+  pickupType: 'Type de bonus ramassé par le joueur: soin, mana ou recharge de dash.',
   reliefName: 'Nom interne du relief pour le retrouver dans la gestion des objets.',
-  reliefStyle: 'Forme visuelle du relief: plateau, crete ou fosse.',
+  reliefStyle: 'Forme visuelle du relief: plateau, crête ou fosse.',
   reliefDepth: 'Profondeur ou longueur du relief sur la carte.',
-  reliefElevation: 'Hauteur visuelle du relief. Une valeur negative cree un creux.',
-  collision: 'Indique si cet element bloque physiquement le passage du joueur.',
-  decorScale: 'Echelle appliquee au modele 3D de cet objet.',
-  materialBrightness: 'Luminosite propre a cet objet sur la carte RPG 3D.',
-  modelEraserRadius: 'Largeur de la gomme appliquee uniquement au modele GLB selectionne.',
-  rotationX: 'Inclinaison avant/arriere du modele selectionne.',
-  rotationY: 'Rotation verticale du modele selectionne.',
-  rotationZ: 'Inclinaison laterale du modele selectionne.',
-  floorTileSize: 'Taille de la dalle plate selectionnee.',
+  reliefElevation: 'Hauteur visuelle du relief. Une valeur négative crée un creux.',
+  collision: 'Indique si cet élément bloque physiquement le passage du joueur.',
+  decorScale: 'Échelle appliquée au modèle 3D de cet objet.',
+  materialBrightness: 'Luminosité propre à cet objet sur la carte RPG 3D.',
+  modelEraserRadius: 'Largeur de la gomme appliquée uniquement au modèle GLB sélectionné.',
+  rotationX: 'Inclinaison avant/arrière du modèle sélectionné.',
+  rotationY: 'Rotation verticale du modèle sélectionné.',
+  rotationZ: 'Inclinaison latérale du modèle sélectionné.',
+  floorTileSize: 'Taille de la dalle plate sélectionnée.',
   floorColor: 'Couleur de base d une dalle de sol plate sans texture.',
-  propWidth: 'Largeur visible de l image ou du decor selectionne.',
-  propDepth: 'Profondeur ou longueur visible de l image ou du decor selectionne.',
-  propModelHeight: 'Hauteur 3D utilisee pour le rendu de cet objet.',
+  propWidth: 'Largeur visible de l image ou du décor sélectionné.',
+  propDepth: 'Profondeur ou longueur visible de l image ou du décor sélectionné.',
+  propModelHeight: 'Hauteur 3D utilisée pour le rendu de cet objet.',
   actionZoneName: 'Nom interne du cube transparent pour le retrouver dans la gestion de carte.',
-  actionZoneType: 'Choisit si la zone envoie vers un autre canevas ou declenche une action liee a un PNJ.',
-  actionZoneColor: 'Couleur du voile transparent affiche dans le cube 3D.',
+  actionZoneType: 'Choisit si la zone envoie vers un autre canevas ou déclenche une action liée à un PNJ.',
+  actionZoneColor: 'Couleur du voile transparent affiché dans le cube 3D.',
   actionZoneOpacity: 'Transparence du voile: monte-la pour mieux voir le volume, baisse-la pour le rendre plus discret.',
-  actionZoneWidth: 'Largeur du cube transparent que le joueur peut traverser pour declencher l action.',
-  actionZoneDepth: 'Profondeur du cube transparent que le joueur peut traverser pour declencher l action.',
+  actionZoneWidth: 'Largeur du cube transparent que le joueur peut traverser pour déclencher l action.',
+  actionZoneDepth: 'Profondeur du cube transparent que le joueur peut traverser pour déclencher l action.',
   actionZoneModelHeight: 'Hauteur visible du cube transparent 3D.',
-  actionZoneAddEdge: 'Active le prochain clic sur une arete de la zone pour ajouter un nouveau sommet a cet endroit.',
-  targetCanvas: 'Canevas de destination utilise quand le joueur entre dans cette zone portail.',
-  targetNpc: 'Personnage de carte concerne par l action PNJ declenchee dans cette zone.',
-  zoneMessage: 'Texte ou cle d action associee a la zone, utile pour un dialogue, une interaction ou un script.',
-  npcInteractionMode: 'Choisit entre un simple message PNJ et une question a choix multiples.',
-  npcQuestion: 'Question affichee au joueur quand il declenche cette action PNJ.',
-  npcChoice: 'Reponse selectionnable par le joueur dans le QCM du PNJ.',
-  npcChoiceResponse: 'Retour affiche apres le choix. Il servira plus tard de consequence narrative.',
+  actionZoneAddEdge: 'Active le prochain clic sur une arête de la zone pour ajouter un nouveau sommet à cet endroit.',
+  targetCanvas: 'Canevas de destination utilisé quand le joueur entre dans cette zone portail.',
+  targetNpc: 'Personnage de carte concerné par l action PNJ déclenchée dans cette zone.',
+  zoneMessage: 'Texte ou clé d action associée à la zone, utile pour un dialogue, une interaction ou un script.',
+  npcInteractionMode: 'Choisit entre un simple message PNJ et une question à choix multiples.',
+  npcQuestion: 'Question affichée au joueur quand il déclenche cette action PNJ.',
+  npcChoice: 'Réponse sélectionnable par le joueur dans le QCM du PNJ.',
+  npcChoiceResponse: 'Retour affiché après le choix. Il servira plus tard de conséquence narrative.',
   zoneVisibility: 'En test, la zone reste invisible et se met en surbrillance quand le curseur la survole.',
 };
 
@@ -171,7 +171,7 @@ const PLAYER_CHARACTER_OPTIONS = getCharacterOptions(PLAYER_CHARACTER_IDS);
 const ENEMY_CHARACTER_OPTIONS = getCharacterOptions(ENEMY_CHARACTER_IDS);
 const CHARACTER_RENDER_OPTIONS = [
   { id: 'capsule', label: 'Personnage volume' },
-  { id: 'glb', label: 'Modele 3D' },
+  { id: 'glb', label: 'Modèle 3D' },
   { id: 'sprite', label: 'Image verticale' },
   { id: 'block', label: 'Bloc robot' },
   { id: 'boss', label: 'Boss creature' },
@@ -255,7 +255,7 @@ const HERO_INVENTORY_TYPE_LABELS = HERO_INVENTORY_TYPE_OPTIONS.reduce((labels, o
 }, {});
 
 const STUDIO_CHARACTER_ROLE_LABELS = {
-  hero: 'Heros',
+  hero: 'Héros',
   enemy: 'Ennemi',
   npc: 'PNJ',
 };
@@ -278,7 +278,7 @@ const STUDIO_DECOR_KIND_LABELS = {
   water: 'eau',
 };
 const CHARACTER_IMPORT_GROUPS = [
-  { id: 'hero', label: 'Heros' },
+  { id: 'hero', label: 'Héros' },
   { id: 'enemy', label: 'Ennemis' },
   { id: 'npc', label: 'PNJ' },
 ];
@@ -317,7 +317,7 @@ const SELECTED_ENTITY_TYPE_LABELS = {
 const MULTI_SELECT_ENTITY_TYPES = new Set(['hero', 'enemy', 'prop', 'relief', 'obstacle', 'pickup', 'actionZone']);
 const ROTATABLE_ENTITY_TYPES = new Set(['hero', 'enemy', 'prop']);
 const MAP_ENTITY_META = {
-  hero: { label: 'Heros carte', icon: Shield, tone: 'character' },
+  hero: { label: 'Héros carte', icon: Shield, tone: 'character' },
   enemy: { label: 'Personnage carte', icon: Crosshair, tone: 'character' },
   prop: { label: 'Objet carte', icon: Box, tone: 'decor' },
   relief: { label: 'Relief carte', icon: Mountain, tone: 'decor' },
@@ -326,7 +326,7 @@ const MAP_ENTITY_META = {
   actionZone: { label: 'Zone transparente', icon: MousePointerClick, tone: 'neutral' },
 };
 const MAP_CHARACTER_MANAGEMENT_GROUPS = [
-  { id: 'hero', label: 'Heros', icon: Shield },
+  { id: 'hero', label: 'Héros', icon: Shield },
   { id: 'enemy', label: 'Ennemis', icon: Crosshair },
 ];
 const MAP_OBJECT_MANAGEMENT_GROUPS = [
@@ -1001,14 +1001,14 @@ const ensureEngineConfig = (config) => {
 
 const readArcadeImageFile = (file) => new Promise((resolve, reject) => {
   if (!file) return resolve('');
-  if (!file.type?.startsWith('image/')) return reject(new Error('Le fichier selectionne doit etre une image.'));
+  if (!file.type?.startsWith('image/')) return reject(new Error('Le fichier sélectionné doit être une image.'));
   const reader = new FileReader();
   reader.onload = () => resolve(reader.result || '');
   reader.onerror = () => reject(reader.error || new Error("Impossible de charger l'image."));
   reader.readAsDataURL(file);
 });
 
-const createNpcChoice = (label = 'Reponse', response = '') => ({
+const createNpcChoice = (label = 'Réponse', response = '') => ({
   id: createId('npc-choice'),
   label,
   response,
@@ -1036,7 +1036,7 @@ const getNpcChoiceItems = (zone = {}) => {
     }
     return {
       id: choice.id || `${zone.id || 'npc'}-choice-${index + 1}`,
-      label: choice.label || `Reponse ${index + 1}`,
+      label: choice.label || `Réponse ${index + 1}`,
       response: choice.response || '',
     };
   });
@@ -1046,7 +1046,7 @@ const getNpcQuestionText = (zone = {}) => (
 );
 const getActionZoneNpcLabel = (config = {}, targetNpcId = '') => {
   const hero = (config.heroes || []).find((item) => item.id === targetNpcId);
-  if (hero) return hero.name || 'Heros';
+  if (hero) return hero.name || 'Héros';
   const enemy = (config.enemies || []).find((item) => item.id === targetNpcId);
   if (enemy) return enemy.combatEnemyName || enemy.name || 'Personnage';
   return 'PNJ';
@@ -1096,7 +1096,7 @@ const getMapEntityEditableName = (type, item = {}) => (
 );
 
 const getMapEntityFallbackName = (type, index) => ({
-  hero: `Heros ${index + 1}`,
+  hero: `Héros ${index + 1}`,
   enemy: `Ennemi ${index + 1}`,
   prop: `Decor ${index + 1}`,
   relief: `Relief ${index + 1}`,
@@ -1207,13 +1207,13 @@ const getDecorImportKindId = (model = {}) => {
   return DECOR_IMPORT_GROUP_IDS.has(kind) && kind !== 'inventory' ? kind : 'decor';
 };
 const getCharacterImportSubtitle = (model = {}) => (
-  `${STUDIO_CHARACTER_ROLE_LABELS[model.role] || 'Heros'} - ${getStudioModelSource(model) ? (model.modelName || 'Modele 3D') : 'Personnage volume'}`
+  `${STUDIO_CHARACTER_ROLE_LABELS[model.role] || 'Héros'} - ${getStudioModelSource(model) ? (model.modelName || 'Modèle 3D') : 'Personnage volume'}`
 );
 const getDecorImportSubtitle = (model = {}) => {
   const renderMode = getDecorImportRenderMode(model);
   const kindLabel = STUDIO_DECOR_KIND_LABELS[getStudioDecorKindId(model.kind)] || renderMode;
   return getStudioModelSource(model)
-    ? `${kindLabel} - ${model.modelName || 'Modele 3D'}`
+    ? `${kindLabel} - ${model.modelName || 'Modèle 3D'}`
     : kindLabel;
 };
 const compareAssetExplorerNodes = (left, right) => (

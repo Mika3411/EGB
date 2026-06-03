@@ -418,15 +418,15 @@ export default function AiTab({
         const preferredDraft = selectPreferredAiDraft([
           {
             draft: indexedResult.status === 'fulfilled' ? indexedResult.value : null,
-            label: 'Brouillon IA complet restaure.',
+            label: 'Brouillon IA complet restauré.',
           },
           {
             draft: localResult.status === 'fulfilled' ? localResult.value : null,
-            label: 'Brouillon IA local restaure.',
+            label: 'Brouillon IA local restauré.',
           },
           {
             draft: projectDraft,
-            label: 'Copie legere du brouillon IA restauree.',
+            label: 'Copie légère du brouillon IA restaurée.',
           },
         ]);
         if (preferredDraft) {
@@ -453,8 +453,8 @@ export default function AiTab({
     setAiWizardStep('visual');
     const cleanupFailures = await clearStoredAiDraft(aiDraftKey, onSaveAiDraft);
     const nextStatus = cleanupFailures.length
-      ? `Brouillon IA efface, mais suppression incomplete: ${cleanupFailures.join(', ')}.`
-      : 'Brouillon IA efface. Tu peux relancer une generation.';
+      ? `Brouillon IA effacé, mais suppression incomplète: ${cleanupFailures.join(', ')}.`
+      : 'Brouillon IA effacé. Tu peux relancer une génération.';
     setStatus(nextStatus);
     if (cleanupFailures.length) setDraftSaveStatus(nextStatus);
     if (!cleanupFailures.length) setDraftVersion((version) => version + 1);

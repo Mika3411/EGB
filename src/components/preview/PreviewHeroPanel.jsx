@@ -25,7 +25,7 @@ export default function PreviewHeroPanel({
       <div className="hero-adventure-head">
         <div>
           <span className="eyebrow">Hero Adventure</span>
-          <strong>{heroState.name || 'Heros'}</strong>
+          <strong>{heroState.name || 'Héros'}</strong>
         </div>
         <button
           type="button"
@@ -97,7 +97,7 @@ export default function PreviewHeroPanel({
           <small>
             {heroPanelRollingSkillId !== null
               ? 'Clique le de pour l arreter.'
-              : `${lastDiceRoll.die}: ${lastDiceRoll.raw}${lastDiceRoll.modifier ? ` + ${lastDiceRoll.modifier}` : ''} => ${lastDiceRoll.total}${lastDiceRoll.difficulty ? ` / difficulte ${lastDiceRoll.difficulty}` : ''}`}
+              : `${lastDiceRoll.die}: ${lastDiceRoll.raw}${lastDiceRoll.modifier ? ` + ${lastDiceRoll.modifier}` : ''} => ${lastDiceRoll.total}${lastDiceRoll.difficulty ? ` / difficulté ${lastDiceRoll.difficulty}` : ''}`}
           </small>
         </div>
       ) : null}

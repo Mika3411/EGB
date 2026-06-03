@@ -878,7 +878,7 @@ export default function ObjectRiggingTab({
       return undefined;
     }
     let cancelled = false;
-    setLoadStatus('Lecture du modele...');
+    setLoadStatus('Lecture du modèle...');
     setMeshNodes([]);
     loadThreeModelFromSource(
       source,
@@ -896,7 +896,7 @@ export default function ObjectRiggingTab({
       (error) => {
         if (cancelled) return;
         setMeshNodes([]);
-        setLoadStatus(error?.message || 'Modele non lisible');
+        setLoadStatus(error?.message || 'Modèle non lisible');
       },
     );
     return () => {

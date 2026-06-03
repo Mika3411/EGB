@@ -110,7 +110,7 @@ export default function Rpg3DStage({
             type="button"
             className={dragMode ? 'active' : ''}
             title={dragMode ? 'Main active: glisser les objets' : 'Activer la main pour glisser les objets'}
-            aria-label={dragMode ? 'Desactiver le glisser-deposer' : 'Activer le glisser-deposer'}
+            aria-label={dragMode ? 'Désactiver le glisser-déposer' : 'Activer le glisser-déposer'}
             aria-pressed={dragMode}
             onClick={onToggleDragMode}
           >
@@ -120,7 +120,7 @@ export default function Rpg3DStage({
             type="button"
             className={multiSelectMode ? 'active' : ''}
             title={multiSelectMode ? 'Selection multiple active' : 'Selectionner plusieurs objets'}
-            aria-label={multiSelectMode ? 'Desactiver la selection multiple' : 'Activer la selection multiple'}
+            aria-label={multiSelectMode ? 'Désactiver la sélection multiple' : 'Activer la sélection multiple'}
             aria-pressed={multiSelectMode}
             onClick={onToggleMultiSelectMode}
           >
@@ -157,8 +157,8 @@ export default function Rpg3DStage({
           </button>
           <button
             type="button"
-            title={mapFullscreen ? 'Quitter le plein ecran' : 'Plein ecran'}
-            aria-label={mapFullscreen ? 'Quitter le plein ecran' : 'Activer le plein ecran'}
+            title={mapFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
+            aria-label={mapFullscreen ? 'Quitter le plein écran' : 'Activer le plein écran'}
             aria-pressed={mapFullscreen}
             onClick={onToggleFullscreen}
           >
@@ -168,7 +168,7 @@ export default function Rpg3DStage({
             type="button"
             className={cameraZoomDragMode ? 'active' : ''}
             title={cameraZoomDragMode ? 'Zoom souris actif: maintiens clic gauche et glisse haut/bas' : 'Activer le zoom souris'}
-            aria-label={cameraZoomDragMode ? 'Desactiver le zoom souris' : 'Activer le zoom souris'}
+            aria-label={cameraZoomDragMode ? 'Désactiver le zoom souris' : 'Activer le zoom souris'}
             aria-pressed={cameraZoomDragMode}
             disabled={playMode}
             onClick={onToggleCameraZoomDragMode}
@@ -179,7 +179,7 @@ export default function Rpg3DStage({
         </div>
       ) : null}
       {mode === 'edit' ? (
-        <div className="arcade-stage-transform-toolbar" role="group" aria-label="Transformation rapide de la selection">
+        <div className="arcade-stage-transform-toolbar" role="group" aria-label="Transformation rapide de la sélection">
           <button
             type="button"
             className={activeTransformTool === 'rotate' ? 'active' : ''}

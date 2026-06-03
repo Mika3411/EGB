@@ -114,7 +114,7 @@ export const getModelToolsDisplayError = (error = null, fallback = 'Conversion l
   if (message === 'Failed to fetch') {
     return error instanceof TypeError
       ? 'Connexion API locale 3D interrompue. Relance le serveur local puis reessaie.'
-      : 'Optimisation GLB impossible: une ressource du modele n a pas pu etre lue. Reessaie avec un ZIP contenant le modele et toutes ses textures.';
+      : 'Optimisation GLB impossible: une ressource du modèle n a pas pu être lue. Réessaie avec un ZIP contenant le modèle et toutes ses textures.';
   }
   if (/network\s*error|load\s*failed|connexion interrompue|api locale 3d indisponible/i.test(message)) {
     return 'Connexion API locale 3D interrompue. Relance le serveur local puis reessaie.';
@@ -657,7 +657,7 @@ export default function ModelToolsTab() {
             </p>
             <a className="button like model-tools-download-link" href={result.downloadUrl} download={result.filename}>
               <Download aria-hidden="true" size={15} />
-              <span>Telecharger a nouveau</span>
+              <span>Télécharger à nouveau</span>
             </a>
             <small>Nom du fichier: {result.filename}</small>
           </div>
