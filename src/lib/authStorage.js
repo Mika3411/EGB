@@ -154,16 +154,12 @@ export function getSessionUserId() {
 
 export const supabaseUserToAccount = (user) => {
   if (!user) return null;
-  const metadata = {
-    ...(user.app_metadata || {}),
-    ...(user.user_metadata || {}),
-  };
+  const metadata = user.app_metadata || {};
   const roles = getMetadataRoles(metadata);
   const isAdmin = Boolean(
     hasTruthyAdminFlag(metadata.isAdmin)
     || hasTruthyAdminFlag(metadata.is_admin)
     || roles.includes('admin')
-    || isConfiguredAdminEmail(user.email)
   );
   return {
     id: user.id,

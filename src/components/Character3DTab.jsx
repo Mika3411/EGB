@@ -53,6 +53,7 @@ import {
 import { getStudioDecorKindId } from '../utils/rpg3dDomain.js';
 import { formatBytes } from '../utils/glbOptimizer';
 import { lazyWithRetry } from '../utils/lazyImportRetry';
+import { getAdminAuthHeaders } from '../lib/adminApi';
 import HelpLabel from './forms/HelpLabel.jsx';
 
 const Character3DPreview = lazyWithRetry(() => import('./rpg3d/Character3DPreview.jsx'));
@@ -718,13 +719,23 @@ const parseModelToolXhrError = (xhr) => {
   }
 };
 
-const requestModelToolsJsonWithXhr = (pathSuffix = '', { method = 'GET', body = null, headers = {} } = {}) => new Promise((resolve, reject) => {
+const getModelToolsAuthHeaders = async () => {
+  try {
+    return await getAdminAuthHeaders();
+  } catch {
+    return {};
+  }
+};
+
+const requestModelToolsJsonWithXhr = async (pathSuffix = '', { method = 'GET', body = null, headers = {} } = {}) => {
+  const authHeaders = await getModelToolsAuthHeaders();
+  return new Promise((resolve, reject) => {
   const urls = getLocalModelToolsApiUrls(pathSuffix);
   const sendToUrl = (urlIndex = 0, lastError = '') => {
     const xhr = new XMLHttpRequest();
     xhr.open(method, urls[urlIndex]);
     xhr.responseType = 'text';
-    Object.entries(headers || {}).forEach(([key, value]) => xhr.setRequestHeader(key, value));
+    Object.entries({ ...(headers || {}), ...authHeaders }).forEach(([key, value]) => xhr.setRequestHeader(key, value));
     xhr.onerror = () => {
       if (urlIndex + 1 < urls.length) {
         sendToUrl(urlIndex + 1, 'connexion interrompue');
@@ -747,14 +758,18 @@ const requestModelToolsJsonWithXhr = (pathSuffix = '', { method = 'GET', body = 
     xhr.send(body);
   };
   sendToUrl();
-});
+  });
+};
 
-const requestModelToolsBlobWithXhr = (pathSuffix = '') => new Promise((resolve, reject) => {
+const requestModelToolsBlobWithXhr = async (pathSuffix = '') => {
+  const authHeaders = await getModelToolsAuthHeaders();
+  return new Promise((resolve, reject) => {
   const urls = getLocalModelToolsApiUrls(pathSuffix);
   const sendToUrl = (urlIndex = 0, lastError = '') => {
     const xhr = new XMLHttpRequest();
     xhr.open('GET', urls[urlIndex]);
     xhr.responseType = 'blob';
+    Object.entries(authHeaders).forEach(([key, value]) => xhr.setRequestHeader(key, value));
     xhr.onerror = () => {
       if (urlIndex + 1 < urls.length) {
         sendToUrl(urlIndex + 1, 'connexion interrompue');
@@ -778,7 +793,8 @@ const requestModelToolsBlobWithXhr = (pathSuffix = '') => new Promise((resolve, 
     xhr.send();
   };
   sendToUrl();
-});
+  });
+};
 
 const getVisibleCharacterSaveStatus = (status = '', hasImportStatus = false) => {
   if (hasImportStatus) return '';
@@ -793,7 +809,7 @@ const requestLocalCharacterConversionJob = ({
   uploadLabel = 'Envoi du ZIP FBX',
   quality = CHARACTER_LOCAL_CONVERSION_QUALITY,
   forceConversion = false,
-}) => new Promise((resolve, reject) => {
+}) => getModelToolsAuthHeaders().then((authHeaders) => new Promise((resolve, reject) => {
   const formData = new FormData();
   formData.set('file', file);
   formData.set('quality', quality);
@@ -804,6 +820,7 @@ const requestLocalCharacterConversionJob = ({
     const xhr = new XMLHttpRequest();
     xhr.open('POST', urls[urlIndex]);
     xhr.responseType = 'text';
+    Object.entries(authHeaders).forEach(([key, value]) => xhr.setRequestHeader(key, value));
     xhr.upload.onprogress = (event) => {
       if (!event.lengthComputable) {
         onProgress?.(`${uploadLabel}...`, 8);
@@ -839,7 +856,7 @@ const requestLocalCharacterConversionJob = ({
     xhr.send(formData);
   };
   sendToUrl();
-});
+}));
 
 const requestLocalCharacterCachedJob = async (file, onStatus = () => {}, quality = CHARACTER_LOCAL_CONVERSION_QUALITY) => {
   onStatus('Recherche GLB deja converti...');

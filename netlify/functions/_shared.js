@@ -100,15 +100,11 @@ export const isConfiguredAdminEmail = (email = '') => Boolean(
 );
 
 export const isAdminUser = (user = {}) => {
-  const metadata = {
-    ...(user.app_metadata || {}),
-    ...(user.user_metadata || {}),
-  };
+  const metadata = user.app_metadata || {};
   return Boolean(
     hasTruthyAdminFlag(metadata.isAdmin)
     || hasTruthyAdminFlag(metadata.is_admin)
-    || getMetadataRoles(metadata).includes('admin')
-    || isConfiguredAdminEmail(user.email),
+    || getMetadataRoles(metadata).includes('admin'),
   );
 };
 

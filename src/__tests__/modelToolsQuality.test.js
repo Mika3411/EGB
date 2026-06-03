@@ -3,9 +3,13 @@ import {
   buildGltfTransformOptimizeArgs,
   buildGltfTransformMeshoptArgs,
   buildGltfTransformWebpArgs,
+  assertModelToolRateLimit,
+  assertModelToolZipBudget,
   getQualityTextureVariants,
+  getModelToolLimits,
   getModelToolQualitySettings,
   getModelToolOutputOversize,
+  resetModelToolRateLimitBuckets,
   scoreQualityCandidateSize,
 } from '../../server/modelTools';
 
@@ -169,5 +173,59 @@ describe('model tools quality presets', () => {
       originalInputBytes: 83 * 1024 * 1024,
       maxOutputBytesFromInput: 83 * 1024 * 1024,
     })).toBeNull();
+  });
+
+  it('uses safer defaults for upload and ZIP extraction budgets', () => {
+    expect(getModelToolLimits({})).toMatchObject({
+      maxUploadBytes: 200 * 1024 * 1024,
+      zipMaxUncompressedBytes: 512 * 1024 * 1024,
+      zipMaxEntries: 512,
+      maxActiveJobs: 1,
+      maxActiveJobsPerUser: 1,
+    });
+  });
+
+  it('rejects ZIP extraction entries beyond configured budgets', () => {
+    const limits = {
+      maxUploadBytes: 10,
+      zipMaxUncompressedBytes: 100,
+      zipMaxEntries: 2,
+      maxActiveJobs: 1,
+      maxActiveJobsPerUser: 1,
+    };
+
+    expect(() => assertModelToolZipBudget({
+      entrySize: 60,
+      nextEntryCount: 2,
+      currentUncompressedBytes: 30,
+      limits,
+    })).not.toThrow();
+    expect(() => assertModelToolZipBudget({
+      entrySize: 60,
+      nextEntryCount: 2,
+      currentUncompressedBytes: 50,
+      limits,
+    })).toThrow(/ZIP trop volumineux/);
+    expect(() => assertModelToolZipBudget({
+      entrySize: 1,
+      nextEntryCount: 3,
+      currentUncompressedBytes: 0,
+      limits,
+    })).toThrow(/maximum 2/);
+  });
+
+  it('rate-limits model tool job creation by admin and IP', () => {
+    resetModelToolRateLimitBuckets();
+    const env = {
+      MODEL_TOOL_RATE_LIMIT_WINDOW_MS: '1000',
+      MODEL_TOOL_RATE_LIMIT_USER_PER_WINDOW: '1',
+      MODEL_TOOL_RATE_LIMIT_IP_PER_WINDOW: '5',
+    };
+    const req = { headers: { 'x-forwarded-for': '192.0.2.10' } };
+    const user = { id: 'admin-1' };
+
+    expect(() => assertModelToolRateLimit({ req, user, env, now: 1000 })).not.toThrow();
+    expect(() => assertModelToolRateLimit({ req, user, env, now: 1200 })).toThrow(/Trop de conversions 3D/);
+    expect(() => assertModelToolRateLimit({ req, user, env, now: 2201 })).not.toThrow();
   });
 });

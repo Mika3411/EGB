@@ -131,9 +131,20 @@ SUPABASE_PRIVATE_DATA_BUCKET=escape-game-private-data
 # Fallback serveur temporaire pour anciens deploiements seulement. Laisser unset sinon.
 # SUPABASE_STORAGE_BUCKET=escape-game-private-data
 
-# Admin optionnel par email explicite. Preferer les roles Supabase.
+# Admin local/demo optionnel par email. Les droits Supabase doivent venir de app_metadata.
 ADMIN_EMAIL=admin@example.com
 VITE_ADMIN_EMAIL=admin@example.com
+
+# Outils 3D locaux. Auth admin Supabase obligatoire.
+MODEL_TOOLS_DISABLED=false
+MODEL_TOOL_MAX_BYTES=209715200
+MODEL_TOOL_ZIP_MAX_UNCOMPRESSED_BYTES=536870912
+MODEL_TOOL_ZIP_MAX_ENTRIES=512
+MODEL_TOOL_MAX_ACTIVE_JOBS=1
+MODEL_TOOL_MAX_ACTIVE_JOBS_PER_USER=1
+MODEL_TOOL_RATE_LIMIT_WINDOW_MS=3600000
+MODEL_TOOL_RATE_LIMIT_USER_PER_WINDOW=6
+MODEL_TOOL_RATE_LIMIT_IP_PER_WINDOW=20
 ```
 
 Ne jamais placer `SUPABASE_SERVICE_ROLE_KEY` dans le code frontend ou dans une variable `VITE_*`.

@@ -91,7 +91,8 @@ Groupes principaux :
 - Supabase client : `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`
 - Supabase serveur : `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
 - Buckets Storage : `VITE_SUPABASE_PUBLIC_ASSETS_BUCKET`, `VITE_SUPABASE_PRIVATE_DATA_BUCKET` cote client, `SUPABASE_PUBLIC_ASSETS_BUCKET`, `SUPABASE_PRIVATE_DATA_BUCKET` cote serveur
-- Admin : roles Supabase `admin` dans `app_metadata` / `user_metadata`, ou fallback explicite `ADMIN_EMAIL` / `VITE_ADMIN_EMAIL`
+- Admin Supabase : role(s) `admin` ou flag `isAdmin` / `is_admin` uniquement dans `app_metadata`
+- Outils 3D locaux : `/api/model-tools` reserve aux admins Supabase, avec `MODEL_TOOLS_DISABLED`, limites upload/ZIP et rate-limit dedies
 - Site et CORS : `VITE_SITE_URL`, `CORS_ALLOWED_ORIGINS`
 - Gumroad : URLs de packs, permalinks, webhook secret
 - Credits IA : couts, cle admin et limites d'usage

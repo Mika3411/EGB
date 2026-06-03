@@ -6,19 +6,137 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import JSZip from 'jszip';
 import { makeCorsHeaders } from '../src/utils/corsConfig.js';
+import { getClientIpFromHeaders } from '../src/utils/aiRateLimit.js';
+import { verifySupabaseAdminRequest } from './auth.js';
 
-const MODEL_TOOL_MAX_BYTES = 350 * 1024 * 1024;
+const DEFAULT_MODEL_TOOL_MAX_BYTES = 200 * 1024 * 1024;
+const DEFAULT_MODEL_TOOL_ZIP_MAX_UNCOMPRESSED_BYTES = 512 * 1024 * 1024;
+const DEFAULT_MODEL_TOOL_ZIP_MAX_ENTRIES = 512;
 const MODEL_TOOL_TIMEOUT_MS = 30 * 60 * 1000;
 const MODEL_TOOL_JOB_TTL_MS = 60 * 60 * 1000;
 const MODEL_TOOL_MIB = 1024 * 1024;
 const MODEL_EXTENSIONS = new Set(['.glb', '.fbx']);
 const modelToolJobs = new Map();
+const modelToolRateBuckets = new Map();
+let activeModelToolRuns = 0;
+const activeModelToolRunsByUser = new Map();
+
+const numberFromEnv = (env, key, fallback) => {
+  const value = Number(env?.[key]);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+};
+
+const sanitizeIdentity = (value = '') => String(value || '')
+  .trim()
+  .replace(/[^a-zA-Z0-9_.:@-]/g, '-')
+  .slice(0, 160) || 'unknown';
+
+export const getModelToolLimits = (env = process.env) => ({
+  maxUploadBytes: numberFromEnv(env, 'MODEL_TOOL_MAX_BYTES', DEFAULT_MODEL_TOOL_MAX_BYTES),
+  zipMaxUncompressedBytes: numberFromEnv(env, 'MODEL_TOOL_ZIP_MAX_UNCOMPRESSED_BYTES', DEFAULT_MODEL_TOOL_ZIP_MAX_UNCOMPRESSED_BYTES),
+  zipMaxEntries: Math.max(1, Math.floor(numberFromEnv(env, 'MODEL_TOOL_ZIP_MAX_ENTRIES', DEFAULT_MODEL_TOOL_ZIP_MAX_ENTRIES))),
+  maxActiveJobs: Math.max(1, Math.floor(numberFromEnv(env, 'MODEL_TOOL_MAX_ACTIVE_JOBS', 1))),
+  maxActiveJobsPerUser: Math.max(1, Math.floor(numberFromEnv(env, 'MODEL_TOOL_MAX_ACTIVE_JOBS_PER_USER', 1))),
+});
+
+export const getModelToolRateLimitConfig = (env = process.env) => ({
+  disabled: String(env.MODEL_TOOL_RATE_LIMIT_DISABLED || '').toLowerCase() === 'true',
+  windowMs: numberFromEnv(env, 'MODEL_TOOL_RATE_LIMIT_WINDOW_MS', 60 * 60 * 1000),
+  userLimit: Math.max(1, Math.floor(numberFromEnv(env, 'MODEL_TOOL_RATE_LIMIT_USER_PER_WINDOW', 6))),
+  ipLimit: Math.max(1, Math.floor(numberFromEnv(env, 'MODEL_TOOL_RATE_LIMIT_IP_PER_WINDOW', 20))),
+});
 
 const makeHttpError = (message, status = 500, code = 'MODEL_TOOL_ERROR') => {
   const error = new Error(message);
   error.status = status;
   error.code = code;
   return error;
+};
+
+const assertModelToolsEnabled = () => {
+  if (String(process.env.MODEL_TOOLS_DISABLED || '').toLowerCase() !== 'true') return;
+  throw makeHttpError('Outil modele desactive sur cet environnement.', 503, 'MODEL_TOOL_DISABLED');
+};
+
+const planRateBucketConsumption = (key, limit, windowMs, now) => {
+  const cutoff = now - windowMs;
+  const previous = modelToolRateBuckets.get(key) || [];
+  const entries = previous.filter((timestamp) => timestamp > cutoff);
+  if (entries.length >= limit) {
+    return {
+      allowed: false,
+      retryAfterMs: Math.max(1000, windowMs - (now - entries[0])),
+    };
+  }
+  return {
+    allowed: true,
+    nextEntries: [...entries, now],
+  };
+};
+
+export const resetModelToolRateLimitBuckets = () => modelToolRateBuckets.clear();
+
+export const assertModelToolRateLimit = ({
+  req = null,
+  user = {},
+  env = process.env,
+  now = Date.now(),
+} = {}) => {
+  const config = getModelToolRateLimitConfig(env);
+  if (config.disabled) return { ok: true, skipped: true };
+
+  const identities = [
+    ['user', sanitizeIdentity(user.id || user.email || 'admin'), config.userLimit],
+    ['ip', sanitizeIdentity(getClientIpFromHeaders(req?.headers || {})), config.ipLimit],
+  ];
+  const consumptions = [];
+  for (const [scope, identity, limit] of identities) {
+    const key = `model-tools:${scope}:${identity}`;
+    const result = planRateBucketConsumption(key, limit, config.windowMs, now);
+    if (!result.allowed) {
+      const error = makeHttpError('Trop de conversions 3D. Reessaie dans un instant.', 429, 'MODEL_TOOL_RATE_LIMITED');
+      error.retryAfter = Math.ceil(result.retryAfterMs / 1000);
+      error.scope = scope;
+      throw error;
+    }
+    consumptions.push([key, result.nextEntries]);
+  }
+
+  consumptions.forEach(([key, nextEntries]) => modelToolRateBuckets.set(key, nextEntries));
+  return { ok: true };
+};
+
+const reserveModelToolCapacity = (userId = '') => {
+  const limits = getModelToolLimits();
+  const safeUserId = sanitizeIdentity(userId || 'admin');
+  const activeForUser = activeModelToolRunsByUser.get(safeUserId) || 0;
+  if (activeModelToolRuns >= limits.maxActiveJobs || activeForUser >= limits.maxActiveJobsPerUser) {
+    throw makeHttpError('Une conversion 3D est deja en cours. Reessaie quand elle est terminee.', 429, 'MODEL_TOOL_BUSY');
+  }
+
+  activeModelToolRuns += 1;
+  activeModelToolRunsByUser.set(safeUserId, activeForUser + 1);
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    activeModelToolRuns = Math.max(0, activeModelToolRuns - 1);
+    const nextForUser = Math.max(0, (activeModelToolRunsByUser.get(safeUserId) || 0) - 1);
+    if (nextForUser) activeModelToolRunsByUser.set(safeUserId, nextForUser);
+    else activeModelToolRunsByUser.delete(safeUserId);
+  };
+};
+
+const assertJobOwner = (job = {}, user = {}) => {
+  if (!job.ownerId || job.ownerId === user.id) return;
+  throw makeHttpError('Job local introuvable ou expire.', 404, 'MODEL_TOOL_JOB_NOT_FOUND');
+};
+
+const assertContentLengthWithinLimit = (req, maxBytes) => {
+  const contentLength = Number(req.headers?.['content-length'] || 0);
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    throw makeHttpError('Fichier trop volumineux pour l outil local.', 413, 'MODEL_TOOL_PAYLOAD_TOO_LARGE');
+  }
 };
 
 const safeFilename = (value = 'modele.glb') => (
@@ -49,7 +167,6 @@ const publicJob = (job = {}) => ({
   originalSize: job.originalSize || 0,
   outputSize: job.outputSize || 0,
   sourceFormat: job.sourceFormat || '',
-  cacheUrl: job.cacheUrl || '',
   fromCache: Boolean(job.fromCache),
   createdAt: job.createdAt || 0,
   updatedAt: job.updatedAt || 0,
@@ -70,6 +187,8 @@ const cleanupJob = async (jobId) => {
   const job = modelToolJobs.get(jobId);
   if (!job) return;
   if (job.cleanupTimer) clearTimeout(job.cleanupTimer);
+  job.releaseCapacity?.();
+  job.releaseCapacity = null;
   modelToolJobs.delete(jobId);
   if (job.workDir) await fs.rm(job.workDir, { recursive: true, force: true }).catch(() => {});
 };
@@ -173,7 +292,7 @@ const scheduleJobCleanup = (jobId, delayMs = MODEL_TOOL_JOB_TTL_MS) => {
   }, delayMs);
 };
 
-const readRequestBuffer = (req, maxBytes = MODEL_TOOL_MAX_BYTES) => new Promise((resolve, reject) => {
+const readRequestBuffer = (req, maxBytes = getModelToolLimits().maxUploadBytes) => new Promise((resolve, reject) => {
   const chunks = [];
   let total = 0;
   let settled = false;
@@ -716,6 +835,42 @@ const optimizeGlb = async (inputPath, outputPath, settings = {}, progressOptions
   );
 };
 
+const getZipEntryUncompressedSize = (entry = {}) => {
+  const size = Number(entry?._data?.uncompressedSize ?? entry?.uncompressedSize ?? 0);
+  return Number.isFinite(size) && size > 0 ? size : 0;
+};
+
+export const assertModelToolZipBudget = ({
+  entry = null,
+  entrySize = 0,
+  nextEntryCount = 0,
+  currentUncompressedBytes = 0,
+  limits = getModelToolLimits(),
+} = {}) => {
+  const normalizedEntrySize = Number(entrySize) || getZipEntryUncompressedSize(entry);
+  if (nextEntryCount > limits.zipMaxEntries) {
+    throw makeHttpError(
+      `ZIP trop volumineux: maximum ${limits.zipMaxEntries} fichier${limits.zipMaxEntries > 1 ? 's' : ''}.`,
+      413,
+      'MODEL_TOOL_ZIP_TOO_MANY_ENTRIES',
+    );
+  }
+  if (normalizedEntrySize > limits.zipMaxUncompressedBytes) {
+    throw makeHttpError(
+      `ZIP trop volumineux apres extraction: maximum ${formatBytesForServer(limits.zipMaxUncompressedBytes)}.`,
+      413,
+      'MODEL_TOOL_ZIP_TOO_LARGE',
+    );
+  }
+  if (currentUncompressedBytes + normalizedEntrySize > limits.zipMaxUncompressedBytes) {
+    throw makeHttpError(
+      `ZIP trop volumineux apres extraction: maximum ${formatBytesForServer(limits.zipMaxUncompressedBytes)}.`,
+      413,
+      'MODEL_TOOL_ZIP_TOO_LARGE',
+    );
+  }
+};
+
 const writeUploadedModel = async (file, workDir) => {
   const filename = safeFilename(file.filename || 'modele');
   const extension = path.extname(filename).toLowerCase();
@@ -727,6 +882,9 @@ const writeUploadedModel = async (file, workDir) => {
     await fs.mkdir(zipRoot, { recursive: true });
     const zip = await JSZip.loadAsync(file.data);
     const modelEntries = [];
+    const limits = getModelToolLimits();
+    let extractedEntries = 0;
+    let uncompressedBytes = 0;
 
     for (const entry of Object.values(zip.files)) {
       if (entry.dir) continue;
@@ -734,8 +892,23 @@ const writeUploadedModel = async (file, workDir) => {
       if (!normalizedName || normalizedName.split('/').includes('..')) continue;
       const targetPath = path.resolve(zipRoot, normalizedName);
       if (!targetPath.startsWith(path.resolve(zipRoot))) continue;
+      assertModelToolZipBudget({
+        entry,
+        nextEntryCount: extractedEntries + 1,
+        currentUncompressedBytes: uncompressedBytes,
+        limits,
+      });
+      const entryData = Buffer.from(await entry.async('uint8array'));
+      assertModelToolZipBudget({
+        entrySize: entryData.byteLength,
+        nextEntryCount: extractedEntries + 1,
+        currentUncompressedBytes: uncompressedBytes,
+        limits,
+      });
+      extractedEntries += 1;
+      uncompressedBytes += entryData.byteLength;
       await fs.mkdir(path.dirname(targetPath), { recursive: true });
-      await fs.writeFile(targetPath, Buffer.from(await entry.async('uint8array')));
+      await fs.writeFile(targetPath, entryData);
       const entryExtension = path.extname(normalizedName).toLowerCase();
       if (MODEL_EXTENSIONS.has(entryExtension)) modelEntries.push(targetPath);
     }
@@ -883,7 +1056,9 @@ const prepareUploadedToolRequest = async (req) => {
   if (!contentType.toLowerCase().includes('multipart/form-data')) {
     throw makeHttpError('Envoie le fichier via FormData.', 400, 'MODEL_TOOL_FORMDATA_REQUIRED');
   }
-  const { fields, files } = parseMultipartBody(await readRequestBuffer(req), contentType);
+  const { maxUploadBytes } = getModelToolLimits();
+  assertContentLengthWithinLimit(req, maxUploadBytes);
+  const { fields, files } = parseMultipartBody(await readRequestBuffer(req, maxUploadBytes), contentType);
   const uploadedFile = files.file;
   if (!uploadedFile?.data?.byteLength) {
     throw makeHttpError('Aucun fichier 3D recu.', 400, 'MODEL_TOOL_FILE_MISSING');
@@ -1097,6 +1272,8 @@ const runModelToolJob = async (jobId, uploadedFile, fields) => {
       error: error.message || 'Conversion locale impossible.',
     });
   } finally {
+    job.releaseCapacity?.();
+    job.releaseCapacity = null;
     scheduleJobCleanup(jobId);
   }
 };
@@ -1158,7 +1335,7 @@ const findModelToolCachedConversion = async ({ filename = '', size = 0, quality 
   return latestMatch;
 };
 
-const createCachedModelToolJob = async (req, res) => {
+const createCachedModelToolJob = async (req, res, user = {}) => {
   const body = await readSmallJsonBody(req);
   const cachedResult = await findModelToolCachedConversion(body);
   if (!cachedResult) {
@@ -1181,6 +1358,7 @@ const createCachedModelToolJob = async (req, res) => {
     sourceFormat: cachedResult.sourceFormat || 'fbx',
     outputPath: cachedResult.outputPath,
     workDir: '',
+    ownerId: user.id || '',
     createdAt: now,
     updatedAt: now,
     cleanupTimer: null,
@@ -1190,30 +1368,40 @@ const createCachedModelToolJob = async (req, res) => {
   sendToolJson(req, res, 200, publicJob(job));
 };
 
-const createModelToolJob = async (req, res) => {
-  const { fields, uploadedFile } = await prepareUploadedToolRequest(req);
-  const jobId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-  const workDir = await makeModelToolWorkDir(`escape-model-job-${jobId}`);
-  const now = Date.now();
-  const job = {
-    id: jobId,
-    status: 'running',
-    progress: 30,
-    label: 'Fichier recu',
-    detail: uploadedFile.filename || 'Modele 3D',
-    filename: '',
-    originalSize: uploadedFile.data.byteLength,
-    outputSize: 0,
-    sourceFormat: '',
-    outputPath: '',
-    workDir,
-    createdAt: now,
-    updatedAt: now,
-    cleanupTimer: null,
-  };
-  modelToolJobs.set(jobId, job);
-  sendToolJson(req, res, 202, publicJob(job));
-  setTimeout(() => runModelToolJob(jobId, uploadedFile, fields), 0);
+const createModelToolJob = async (req, res, user = {}) => {
+  const releaseCapacity = reserveModelToolCapacity(user.id || user.email);
+  let workDir = '';
+  try {
+    const { fields, uploadedFile } = await prepareUploadedToolRequest(req);
+    const jobId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    workDir = await makeModelToolWorkDir(`escape-model-job-${jobId}`);
+    const now = Date.now();
+    const job = {
+      id: jobId,
+      status: 'running',
+      progress: 30,
+      label: 'Fichier recu',
+      detail: uploadedFile.filename || 'Modele 3D',
+      filename: '',
+      originalSize: uploadedFile.data.byteLength,
+      outputSize: 0,
+      sourceFormat: '',
+      outputPath: '',
+      workDir,
+      ownerId: user.id || '',
+      releaseCapacity,
+      createdAt: now,
+      updatedAt: now,
+      cleanupTimer: null,
+    };
+    modelToolJobs.set(jobId, job);
+    sendToolJson(req, res, 202, publicJob(job));
+    setTimeout(() => runModelToolJob(jobId, uploadedFile, fields), 0);
+  } catch (error) {
+    releaseCapacity();
+    if (workDir) await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
+    throw error;
+  }
 };
 
 const getJobFromRequest = (requestUrl) => {
@@ -1222,21 +1410,23 @@ const getJobFromRequest = (requestUrl) => {
   return { id: match[1], action: match[2] || 'status' };
 };
 
-const sendModelToolJobStatus = (req, res, jobId) => {
+const sendModelToolJobStatus = (req, res, jobId, user = {}) => {
   const job = modelToolJobs.get(jobId);
   if (!job) {
     sendToolJson(req, res, 404, { error: 'Job local introuvable ou expire.' });
     return;
   }
+  assertJobOwner(job, user);
   sendToolJson(req, res, 200, publicJob(job));
 };
 
-const sendModelToolJobDownload = async (req, res, jobId) => {
+const sendModelToolJobDownload = async (req, res, jobId, user = {}) => {
   const job = modelToolJobs.get(jobId);
   if (!job) {
     sendToolJson(req, res, 404, { error: 'Job local introuvable ou expire.' });
     return;
   }
+  assertJobOwner(job, user);
   if (job.status !== 'done' || !job.outputPath) {
     sendToolJson(req, res, 409, { error: 'Le GLB n est pas encore pret.' });
     return;
@@ -1283,17 +1473,32 @@ const sendModelToolCachedDownload = async (req, res, requestUrl) => {
 };
 
 export const handleModelTools = async (req, res) => {
+  assertModelToolsEnabled();
   const requestUrl = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+  const adminUser = await verifySupabaseAdminRequest(req);
+  const createsModelToolWork = req.method === 'POST'
+    && (
+      requestUrl.pathname === '/api/model-tools/convert'
+      || requestUrl.pathname === '/api/model-tools/jobs'
+      || requestUrl.pathname === '/api/model-tools/jobs/from-cache'
+    );
+  if (createsModelToolWork) assertModelToolRateLimit({ req, user: adminUser });
+
   if (req.method === 'POST' && requestUrl.pathname === '/api/model-tools/convert') {
-    await handleSyncConversion(req, res);
+    const releaseCapacity = reserveModelToolCapacity(adminUser.id || adminUser.email);
+    try {
+      await handleSyncConversion(req, res);
+    } finally {
+      releaseCapacity();
+    }
     return;
   }
   if (req.method === 'POST' && requestUrl.pathname === '/api/model-tools/jobs') {
-    await createModelToolJob(req, res);
+    await createModelToolJob(req, res, adminUser);
     return;
   }
   if (req.method === 'POST' && requestUrl.pathname === '/api/model-tools/jobs/from-cache') {
-    await createCachedModelToolJob(req, res);
+    await createCachedModelToolJob(req, res, adminUser);
     return;
   }
   if (req.method === 'GET' && requestUrl.pathname.startsWith('/api/model-tools/cache/')) {
@@ -1303,14 +1508,16 @@ export const handleModelTools = async (req, res) => {
 
   const jobRequest = getJobFromRequest(requestUrl);
   if (jobRequest && req.method === 'GET' && jobRequest.action === 'status') {
-    sendModelToolJobStatus(req, res, jobRequest.id);
+    sendModelToolJobStatus(req, res, jobRequest.id, adminUser);
     return;
   }
   if (jobRequest && req.method === 'GET' && jobRequest.action === 'download') {
-    await sendModelToolJobDownload(req, res, jobRequest.id);
+    await sendModelToolJobDownload(req, res, jobRequest.id, adminUser);
     return;
   }
   if (jobRequest && req.method === 'DELETE') {
+    const job = modelToolJobs.get(jobRequest.id);
+    if (job) assertJobOwner(job, adminUser);
     await cleanupJob(jobRequest.id);
     sendToolJson(req, res, 200, { ok: true });
     return;

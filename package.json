@@ -26,6 +26,10 @@
     "react-dom": "^18.3.1",
     "three": "^0.184.0"
   },
+  "overrides": {
+    "protobufjs": "7.6.2",
+    "tmp": "0.2.7"
+  },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
     "@testing-library/react": "^16.3.2",

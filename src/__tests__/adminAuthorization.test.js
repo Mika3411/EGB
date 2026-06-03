@@ -54,22 +54,34 @@ describe('admin authorization', () => {
     expect(isAdminAccount(account)).toBe(true);
   });
 
-  test('le client accepte uniquement un fallback email explicitement configure', async () => {
+  test('le client refuse user_metadata et le fallback email pour les comptes Supabase', async () => {
     const { isAdminAccount, supabaseUserToAccount } = await loadAuthStorage({
       VITE_ADMIN_EMAIL: 'admin@example.com',
     });
 
-    const account = supabaseUserToAccount({
+    const metadataAccount = supabaseUserToAccount({
+      id: 'user-1',
+      email: 'player@example.com',
+      app_metadata: {},
+      user_metadata: {
+        isAdmin: true,
+        is_admin: true,
+        role: 'admin',
+        roles: ['admin'],
+      },
+    });
+    const emailAccount = supabaseUserToAccount({
       id: 'user-1',
       email: 'admin@example.com',
       app_metadata: {},
       user_metadata: {},
     });
 
-    expect(isAdminAccount(account)).toBe(true);
+    expect(isAdminAccount(metadataAccount)).toBe(false);
+    expect(isAdminAccount(emailAccount)).toBe(false);
   });
 
-  test('les fonctions serveur acceptent les roles ou un email explicitement configure', async () => {
+  test('les fonctions serveur acceptent seulement app_metadata pour Supabase', async () => {
     const noEmailFallback = await loadShared();
     expect(noEmailFallback.ADMIN_EMAIL).toBe('');
     expect(noEmailFallback.isAdminUser({
@@ -82,13 +94,24 @@ describe('admin authorization', () => {
       app_metadata: { role: 'admin' },
       user_metadata: {},
     })).toBe(true);
+    expect(noEmailFallback.isAdminUser({
+      email: 'player@example.com',
+      app_metadata: {},
+      user_metadata: {
+        isAdmin: true,
+        is_admin: true,
+        role: 'admin',
+        roles: ['admin'],
+      },
+    })).toBe(false);
 
     const withEmailFallback = await loadShared({ ADMIN_EMAIL: 'admin@example.com' });
+    expect(withEmailFallback.ADMIN_EMAIL).toBe('admin@example.com');
     expect(withEmailFallback.isAdminUser({
       email: 'admin@example.com',
       app_metadata: {},
       user_metadata: {},
-    })).toBe(true);
+    })).toBe(false);
   });
 
   test('les helpers auth extraits du serveur gardent la meme autorisation admin', async () => {
@@ -103,6 +126,11 @@ describe('admin authorization', () => {
       email: 'admin@example.com',
       app_metadata: {},
       user_metadata: {},
-    })).toBe(true);
+    })).toBe(false);
+    expect(serverAuth.isAdminUser({
+      email: 'player@example.com',
+      app_metadata: {},
+      user_metadata: { roles: ['admin'], is_admin: true },
+    })).toBe(false);
   });
 });

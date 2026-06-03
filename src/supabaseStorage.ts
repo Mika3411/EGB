@@ -401,7 +401,7 @@ const logStorageDebug = (event: StorageDebugEvent, metadata: StorageDebugMetadat
 const DEFAULT_UPLOAD_VALIDATION: Record<'image' | 'audio' | 'json' | 'default', UploadValidationProfile> = {
   image: {
     maxFileSize: 10 * MB,
-    allowMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'],
+    allowMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
   },
   audio: {
     maxFileSize: 50 * MB,
@@ -422,7 +422,6 @@ const MIME_EXTENSION_MAP: Record<string, string[]> = {
   'image/png': ['png'],
   'image/webp': ['webp'],
   'image/gif': ['gif'],
-  'image/svg+xml': ['svg'],
   'audio/mpeg': ['mp3', 'mpeg'],
   'audio/mp3': ['mp3'],
   'audio/wav': ['wav'],
@@ -439,6 +438,9 @@ const MIME_EXTENSION_MAP: Record<string, string[]> = {
   'application/vnd.autodesk.fbx': ['fbx'],
   'model/vnd.fbx': ['fbx'],
 };
+
+const DISALLOWED_UPLOAD_MIME_TYPES = new Set(['image/svg+xml']);
+const DISALLOWED_UPLOAD_EXTENSIONS = new Set(['svg']);
 
 const createStorageValidationError = ({ action, bucket = PRIVATE_DATA_BUCKET, path, code, message }: StorageErrorDetails & { message: string }) => (
   new StorageError(message, { action, bucket, path, code })
@@ -519,6 +521,15 @@ const validateUploadFile = (path: string, file: UploadFile, { contentType, maxFi
     });
   }
 
+  if (DISALLOWED_UPLOAD_MIME_TYPES.has(mimeType) || DISALLOWED_UPLOAD_EXTENSIONS.has(extension)) {
+    throw createStorageValidationError({
+      action,
+      path,
+      code: 'unsupported-mime-type',
+      message: `SVG non autorise pour upload "${path}". Utilise PNG, JPEG, WebP ou GIF.`,
+    });
+  }
+
   if (effectiveMaxFileSize > 0 && size > effectiveMaxFileSize) {
     throw createStorageValidationError({
       action,
@@ -534,7 +545,7 @@ const validateUploadFile = (path: string, file: UploadFile, { contentType, maxFi
         action,
         path,
         code: 'unsupported-mime-type',
-      message: `Type de fichier non autorisé pour upload "${path}" : ${mimeType || 'type inconnu'}.`,
+        message: `Type de fichier non autorisé pour upload "${path}" : ${mimeType || 'type inconnu'}.`,
       });
     }
   }

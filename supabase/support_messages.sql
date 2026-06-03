@@ -74,8 +74,6 @@ stable
 as $$
   select lower(coalesce(auth.jwt() -> 'app_metadata' ->> 'isAdmin', '')) in ('1', 'true', 'yes')
     or lower(coalesce(auth.jwt() -> 'app_metadata' ->> 'is_admin', '')) in ('1', 'true', 'yes')
-    or lower(coalesce(auth.jwt() -> 'user_metadata' ->> 'isAdmin', '')) in ('1', 'true', 'yes')
-    or lower(coalesce(auth.jwt() -> 'user_metadata' ->> 'is_admin', '')) in ('1', 'true', 'yes')
     or exists (
       select 1
       from jsonb_array_elements_text(
@@ -89,19 +87,10 @@ as $$
     )
     or exists (
       select 1
-      from jsonb_array_elements_text(
-        case
-          when jsonb_typeof(coalesce(auth.jwt() -> 'user_metadata' -> 'roles', '[]'::jsonb)) = 'array'
-            then coalesce(auth.jwt() -> 'user_metadata' -> 'roles', '[]'::jsonb)
-          else '[]'::jsonb
-        end
-      ) role
+      from regexp_split_to_table(coalesce(auth.jwt() -> 'app_metadata' ->> 'roles', ''), '[,[:space:]]+') role
       where lower(role) = 'admin'
     )
-    or lower(coalesce(auth.jwt() -> 'app_metadata' ->> 'roles', '')) = 'admin'
-    or lower(coalesce(auth.jwt() -> 'user_metadata' ->> 'roles', '')) = 'admin'
-    or lower(coalesce(auth.jwt() -> 'app_metadata' ->> 'role', '')) = 'admin'
-    or lower(coalesce(auth.jwt() -> 'user_metadata' ->> 'role', '')) = 'admin';
+    or lower(coalesce(auth.jwt() -> 'app_metadata' ->> 'role', '')) = 'admin';
 $$;
 
 alter table public.support_threads enable row level security;

@@ -32,7 +32,7 @@ export const ARCADE_MODEL_MIME_TYPES = [
   'application/octet-stream',
 ];
 export const ARCADE_TEXTURE_MAX_BYTES = 15 * 1024 * 1024;
-export const ARCADE_TEXTURE_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml'];
+export const ARCADE_TEXTURE_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 export const ARCADE_MODEL_RESOURCE_MIME_TYPES = [...ARCADE_TEXTURE_MIME_TYPES, 'image/bmp', 'text/plain', 'application/octet-stream'];
 export const ARCADE_UPLOAD_MB = 1024 * 1024;
 export const ARCADE_MANIFEST_UPLOAD_TIMEOUT_MS = 90000;

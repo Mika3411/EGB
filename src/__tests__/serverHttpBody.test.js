@@ -126,6 +126,22 @@ describe('netlify storage upload validation', () => {
       statusCode: 400,
       code: 'INVALID_EXTENSION',
     });
+    expect(getThrownError(() => getStorageUploadValidationProfile({
+      path: 'users/user-1/logo.png',
+      contentType: 'image/svg+xml',
+      contentLength: 10,
+    }))).toMatchObject({
+      statusCode: 415,
+      code: 'SVG_UPLOAD_UNSUPPORTED',
+    });
+    expect(getThrownError(() => getStorageUploadValidationProfile({
+      path: 'users/user-1/logo.svg',
+      contentType: 'application/octet-stream',
+      contentLength: 10,
+    }))).toMatchObject({
+      statusCode: 415,
+      code: 'SVG_UPLOAD_UNSUPPORTED',
+    });
     expect(getThrownError(() => validateStorageUploadPayload(Buffer.alloc(0), { maxBytes: 10 }))).toMatchObject({
       statusCode: 400,
       code: 'EMPTY_FILE',
@@ -205,6 +221,22 @@ describe('server storage upload validation', () => {
     }))).toMatchObject({
       status: 415,
       code: 'UNSUPPORTED_MIME_TYPE',
+    });
+    expect(getThrownError(() => getStorageUploadValidationProfile({
+      path: 'users/user-1/logo.png',
+      contentType: 'image/svg+xml',
+      contentLength: 10,
+    }))).toMatchObject({
+      status: 415,
+      code: 'SVG_UPLOAD_UNSUPPORTED',
+    });
+    expect(getThrownError(() => getStorageUploadValidationProfile({
+      path: 'users/user-1/logo.svg',
+      contentType: 'application/octet-stream',
+      contentLength: 10,
+    }))).toMatchObject({
+      status: 415,
+      code: 'SVG_UPLOAD_UNSUPPORTED',
     });
     expect(getThrownError(() => validateStorageUploadPayload(Buffer.alloc(0), { maxBytes: 10 }))).toMatchObject({
       status: 400,

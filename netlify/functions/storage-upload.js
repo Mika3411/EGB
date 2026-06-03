@@ -21,7 +21,6 @@ export const STORAGE_UPLOAD_MIME_EXTENSIONS = {
   'image/png': ['png'],
   'image/webp': ['webp'],
   'image/gif': ['gif'],
-  'image/svg+xml': ['svg'],
   'image/bmp': ['bmp'],
   'audio/mpeg': ['mp3', 'mpeg'],
   'audio/mp3': ['mp3'],
@@ -43,12 +42,15 @@ export const STORAGE_UPLOAD_MIME_EXTENSIONS = {
 };
 
 const STORAGE_UPLOAD_PROFILE_EXTENSIONS = {
-  image: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'bmp'],
+  image: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'],
   audio: ['mp3', 'mpeg', 'wav', 'ogg', 'webm', 'm4a', 'mp4', 'aac', 'flac'],
   json: ['json'],
   model: ['glb', 'gltf', 'fbx', 'obj', 'bin'],
   text: ['txt', 'mtl'],
 };
+
+const DISALLOWED_STORAGE_UPLOAD_MIME_TYPES = new Set(['image/svg+xml']);
+const DISALLOWED_STORAGE_UPLOAD_EXTENSIONS = new Set(['svg']);
 
 const sanitizeStorageSegment = (value = '') => String(value || '')
   .normalize('NFD')
@@ -186,6 +188,14 @@ export const getStorageUploadValidationProfile = ({
   const storagePath = validateStorageUploadPath(path);
   const normalizedContentType = normalizeStorageUploadContentType(contentType || 'application/octet-stream');
   const extension = getPathExtension(storagePath);
+
+  if (
+    DISALLOWED_STORAGE_UPLOAD_MIME_TYPES.has(normalizedContentType)
+    || DISALLOWED_STORAGE_UPLOAD_EXTENSIONS.has(extension)
+  ) {
+    throw makeUploadError('Upload SVG refuse: utilise PNG, JPEG, WebP ou GIF.', 415, 'SVG_UPLOAD_UNSUPPORTED');
+  }
+
   const profile = getStorageUploadProfile(normalizedContentType, extension);
 
   if (!profile || !Object.prototype.hasOwnProperty.call(STORAGE_UPLOAD_MIME_EXTENSIONS, normalizedContentType)) {

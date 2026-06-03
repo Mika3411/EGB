@@ -386,6 +386,26 @@ describe('supabaseStorage', () => {
     expect(supabaseMock.upload).not.toHaveBeenCalled();
   });
 
+  test('uploadToStorage refuse les SVG avant appel reseau', async () => {
+    const { uploadToStorage } = await setupSupabaseStorage();
+
+    await expect(uploadToStorage('users/user-1/logo.svg', new Blob(['<svg />'], { type: 'image/svg+xml' }), {
+      allowMimeTypes: ['image/*'],
+    })).rejects.toMatchObject({
+      name: 'StorageError',
+      code: 'unsupported-mime-type',
+    });
+
+    await expect(uploadToStorage('users/user-1/logo.svg', new Blob(['data'], { type: 'application/octet-stream' }), {
+      allowMimeTypes: null,
+    })).rejects.toMatchObject({
+      name: 'StorageError',
+      code: 'unsupported-mime-type',
+    });
+
+    expect(supabaseMock.upload).not.toHaveBeenCalled();
+  });
+
   test('uploadToStorage retente les erreurs reseau temporaires', async () => {
     const { uploadToStorage } = await setupSupabaseStorage();
     supabaseMock.upload

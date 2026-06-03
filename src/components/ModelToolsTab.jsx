@@ -14,6 +14,7 @@ import {
   getThreeModelFileFormat,
   getThreeModelFormatLabel,
 } from '../utils/threeModelUtils.js';
+import { getAdminAuthHeaders } from '../lib/adminApi';
 
 const QUALITY_OPTIONS = [
   { id: 'web', label: 'Jeu fluide', textureSize: 1024, jpegQuality: 0.82 },
@@ -90,6 +91,23 @@ const getModelToolsUnavailableMessage = (error = null) => {
   return `API locale 3D indisponible: ${message}`;
 };
 
+const getModelToolsAuthHeaders = async () => {
+  try {
+    return await getAdminAuthHeaders();
+  } catch {
+    return {};
+  }
+};
+
+const normalizeFetchHeaders = (headers = {}) => (
+  headers instanceof Headers ? Object.fromEntries(headers.entries()) : { ...(headers || {}) }
+);
+
+const getModelToolsRequestHeaders = async (headers = {}) => ({
+  ...normalizeFetchHeaders(headers),
+  ...(await getModelToolsAuthHeaders()),
+});
+
 export const getModelToolsDisplayError = (error = null, fallback = 'Conversion locale impossible.') => {
   const message = String(error?.message || error || '').trim();
   if (!message) return fallback;
@@ -130,9 +148,10 @@ const getReachableModelToolsApiUrls = async (pathSuffix = '') => {
 
 const fetchModelToolsApi = async (pathSuffix = '', options = {}) => {
   let lastError = null;
+  const headers = await getModelToolsRequestHeaders(options.headers);
   for (const url of getModelToolsApiUrls(pathSuffix)) {
     try {
-      return await fetch(url, options);
+      return await fetch(url, { ...options, headers });
     } catch (error) {
       lastError = error;
     }
@@ -190,12 +209,14 @@ const requestLocalConversionJob = async ({ file, quality, onProgress }) => {
   formData.set('file', file);
   formData.set('quality', quality);
   const urls = await getReachableModelToolsApiUrls('/jobs');
+  const authHeaders = await getModelToolsAuthHeaders();
 
   return new Promise((resolve, reject) => {
     const sendToUrl = (urlIndex = 0, lastError = '') => {
       const xhr = new XMLHttpRequest();
       xhr.open('POST', urls[urlIndex]);
       xhr.responseType = 'text';
+      Object.entries(authHeaders).forEach(([key, value]) => xhr.setRequestHeader(key, value));
       xhr.upload.onprogress = (event) => {
         if (!event.lengthComputable) {
           onProgress?.({ value: 12, label: 'Envoi du fichier...', detail: 'Preparation du transfert local.' });

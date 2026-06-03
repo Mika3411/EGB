@@ -5,6 +5,8 @@ import {
   ARCADE_ASSETS_BACKUP_STORAGE_KEY,
   ARCADE_ASSETS_REMOTE_VERSION,
   ARCADE_ASSETS_STORAGE_KEY,
+  ARCADE_MODEL_RESOURCE_MIME_TYPES,
+  ARCADE_TEXTURE_MIME_TYPES,
   blobUrlToFile,
   cleanupOrphanedRpg3DLocalModelFiles,
   collectReferencedRpg3DLocalModelFileIds,
@@ -38,6 +40,11 @@ describe('rpg3d assets storage helpers', () => {
     expect(ARCADE_ASSETS_STORAGE_KEY).toBe('escape-game-builder:arcade-assets:v1');
     expect(ARCADE_ASSETS_BACKUP_STORAGE_KEY).toBe('escape-game-builder:arcade-assets-backups:v1');
     expect(ARCADE_ASSETS_REMOTE_VERSION).toBe(2);
+  });
+
+  it('keeps SVG out of remote texture upload allowlists', () => {
+    expect(ARCADE_TEXTURE_MIME_TYPES).not.toContain('image/svg+xml');
+    expect(ARCADE_MODEL_RESOURCE_MIME_TYPES).not.toContain('image/svg+xml');
   });
 
   it('keeps the richer RPG 3D save instead of replacing it with a thinner one', () => {
