@@ -11,11 +11,11 @@ const hiddenExpertTabs = ['Narration', 'Héros', 'Combat'];
 const hiddenExpertTabIds = ['adventure', 'hero', 'combat'];
 const projectModes = ['beginner', 'intermediate', 'expert', 'adventure', 'hero_adventure'];
 const expectedTabsByMode = {
-  beginner: ['scenes', 'media', 'preview', 'objects', 'enigmas', 'ai', 'shop', 'help'],
-  intermediate: ['scenes', 'media', 'map', 'preview', 'objects', 'cinematics', 'enigmas', 'ai', 'shop', 'help'],
-  expert: ['scenes', 'media', 'map', 'preview', 'objects', 'cinematics', 'enigmas', 'combinations', 'logic', 'animation', 'ai', 'shop', 'help', 'score'],
-  adventure: ['scenes', 'media', 'map', 'adventure', 'preview', 'objects', 'cinematics', 'enigmas', 'logic', 'animation', 'shop', 'help', 'score'],
-  hero_adventure: ['scenes', 'media', 'map', 'adventure', 'hero', 'combat', 'preview', 'objects', 'cinematics', 'enigmas', 'logic', 'animation', 'ai', 'shop', 'help', 'score'],
+  beginner: ['scenes', 'media', 'preview', 'objects', 'enigmas', 'ai', 'shop', 'resources', 'help'],
+  intermediate: ['scenes', 'media', 'map', 'preview', 'objects', 'cinematics', 'enigmas', 'ai', 'shop', 'resources', 'help'],
+  expert: ['scenes', 'media', 'map', 'preview', 'objects', 'cinematics', 'enigmas', 'combinations', 'logic', 'animation', 'ai', 'shop', 'resources', 'help', 'score'],
+  adventure: ['scenes', 'media', 'map', 'adventure', 'preview', 'objects', 'cinematics', 'enigmas', 'logic', 'animation', 'shop', 'resources', 'help', 'score'],
+  hero_adventure: ['scenes', 'media', 'map', 'adventure', 'hero', 'combat', 'preview', 'objects', 'cinematics', 'enigmas', 'logic', 'animation', 'ai', 'shop', 'resources', 'help', 'score'],
 };
 const classicTabIds = [...new Set(Object.values(expectedTabsByMode).flat())];
 

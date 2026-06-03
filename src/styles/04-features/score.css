@@ -1,22 +1,8 @@
 /* Score */
 
-.score-layout{grid-template-columns:minmax(0,1.05fr) minmax(360px,.95fr);grid-template-areas:"hero inventory" "dimensions inventory" "player inventory" "heroMode inventory" "badges inventory" "advice inventory" "conclusion conclusion";align-items:start}
+.score-layout{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
 
-.score-hero-panel{grid-area:hero}
-
-.score-dimensions-panel{grid-area:dimensions}
-
-.score-player-panel{grid-area:player}
-
-.score-hero-mode-panel{grid-area:heroMode}
-
-.score-badges-panel{grid-area:badges}
-
-.score-inventory-panel{grid-area:inventory}
-
-.score-advice-panel{grid-area:advice}
-
-.score-conclusion-panel{grid-area:conclusion}
+.score-hero-panel,.score-hero-mode-panel,.score-advice-panel,.score-conclusion-panel{grid-column:1/-1}
 
 .score-hero-panel,.score-conclusion-panel{display:grid;gap:14px}
 
@@ -36,9 +22,9 @@
 
 .score-section-grid,.score-metrics-grid,.score-connection-summary{display:grid;gap:8px}
 
-.score-section-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.score-section-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
 
-.score-metrics-grid{grid-template-columns:repeat(5,minmax(0,1fr))}
+.score-metrics-grid{grid-template-columns:repeat(auto-fit,minmax(132px,1fr))}
 
 .score-section-grid div,.score-metric-card,.score-connection-summary div{display:grid;gap:5px;padding:10px;border-radius:var(--radius-md);border:1px solid var(--border-muted);background:var(--surface-dark-muted)}
 
@@ -58,11 +44,11 @@
 
 .score-mini-total.warn{border-color:var(--state-warning-border-soft);background:var(--state-warning-bg);color:var(--text-warning)}
 
-.score-hero-metrics-grid{grid-template-columns:repeat(5,minmax(0,1fr))}
+.score-hero-metrics-grid{grid-template-columns:repeat(auto-fit,minmax(132px,1fr))}
 
 .score-hero-diagnostics{margin-top:10px}
 
-.score-badge-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.score-badge-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px}
 
 .score-badge-card{display:grid;grid-template-columns:auto 1fr;gap:9px;align-items:start;padding:10px;border-radius:var(--radius-md);border:1px solid rgba(34,197,94,.24);background:#16a34a1a;color:#dcfce7}
 
@@ -74,7 +60,7 @@
 
 .score-badge-card small{color:currentColor;opacity:.82;line-height:1.35}
 
-.score-connection-summary{grid-template-columns:repeat(4,minmax(0,1fr));margin-top:10px}
+.score-connection-summary{grid-template-columns:repeat(auto-fit,minmax(130px,1fr));margin-top:10px}
 
 .score-playtime-card{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start;margin-top:10px;padding:12px;border-radius:var(--radius-md);border:1px solid var(--border-info);background:#2563eb1a}
 
@@ -85,6 +71,8 @@
 .score-playtime-card small{display:block;margin-top:4px;color:var(--muted);line-height:1.35}
 
 .score-advice-list{display:grid;gap:8px}
+
+.score-advice-panel .score-advice-list{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch}
 
 .score-advice-card{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start;padding:10px;border-radius:var(--radius-md);border:1px solid rgba(96,165,250,.2);background:#2563eb17;color:var(--text-info);line-height:1.45}
 

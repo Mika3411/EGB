@@ -2,6 +2,7 @@
 @import './00-tokens.css';
 @import './01-reset-base.css';
 @import './02-layout.css';
+@import './03-components/primitives.css';
 @import './03-components/buttons.css';
 @import './05-utilities.css';
 @import './03-components/forms.css';
@@ -20,6 +21,7 @@
 @import './04-features/scene-editor.css';
 @import './04-features/route.css';
 @import './04-features/score.css';
+@import './04-features/resources.css';
 @import './04-features/arcade.css';
 @import './04-features/character3d.css';
 @import './04-features/decor3d.css';

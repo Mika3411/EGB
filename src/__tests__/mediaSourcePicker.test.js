@@ -46,6 +46,53 @@ describe('media source picker filters', () => {
     expect(dedupeLibraryItems(items, 'audio').map((asset) => asset.name)).toEqual(['0422.MP3', '0505(5).MP3']);
   });
 
+  it('deduplicates repeated image assets that point to the same remote storage object', () => {
+    const items = [
+      {
+        id: 'public-watch',
+        type: 'image',
+        url: 'https://project.supabase.co/storage/v1/object/public/game-media/users/42/images/watch-photo.webp?v=1',
+        name: 'watch-photo.png',
+      },
+      {
+        id: 'signed-watch',
+        type: 'image',
+        url: 'https://project.supabase.co/storage/v1/object/sign/game-media/users/42/images/watch-photo.webp?token=abc&expires=123',
+        name: 'watch-photo.png',
+      },
+    ];
+
+    expect(dedupeLibraryItems(items, 'image').map((asset) => asset.id)).toEqual(['public-watch']);
+  });
+
+  it('deduplicates repeated imported images when their filename and file signature match', () => {
+    const items = [
+      { id: 'photo-a', type: 'image', url: 'https://cdn.test/uploads/a.webp', name: 'photo.png', size: 2048, width: 800, height: 600 },
+      { id: 'photo-b', type: 'image', url: 'https://cdn.test/uploads/b.webp', name: 'photo(1).png', size: 2048, width: 800, height: 600 },
+      { id: 'photo-c', type: 'image', url: 'https://cdn.test/uploads/c.webp', name: 'photo.png', size: 4096, width: 800, height: 600 },
+    ];
+
+    expect(dedupeLibraryItems(items, 'image').map((asset) => asset.id)).toEqual(['photo-a', 'photo-c']);
+  });
+
+  it('deduplicates same-name remote image references like the standalone export', () => {
+    const items = [
+      { id: 'generated-a', type: 'image', url: 'https://cdn.test/generated/a.webp', name: 'ChatGPT Image.png' },
+      { id: 'generated-b', type: 'image', url: 'https://cdn.test/generated/b.webp', name: 'ChatGPT Image.png' },
+    ];
+
+    expect(dedupeLibraryItems(items, 'image').map((asset) => asset.id)).toEqual(['generated-a']);
+  });
+
+  it('keeps same-name local images when no file signature can prove they are duplicates', () => {
+    const items = [
+      { id: 'generated-a', type: 'image', url: 'data:image/png;base64,AAAA', name: 'ChatGPT Image.png' },
+      { id: 'generated-b', type: 'image', url: 'data:image/png;base64,BBBB', name: 'ChatGPT Image.png' },
+    ];
+
+    expect(dedupeLibraryItems(items, 'image').map((asset) => asset.id)).toEqual(['generated-a', 'generated-b']);
+  });
+
   it('filters library items to the current project and requested media folder', () => {
     const items = [
       {

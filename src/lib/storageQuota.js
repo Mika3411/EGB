@@ -1,5 +1,5 @@
 import { collectProjectAssetManifest, collectProjectAssets } from './assetManager';
-import { getRemoteAssetDedupeKey } from '../utils/exportAssetBundler';
+import { getRemoteAssetDedupeKey } from '../utils/mediaDedupe';
 
 export const MB = 1024 * 1024;
 export const ACCOUNT_FREE_STORAGE_BYTES = 250 * MB;

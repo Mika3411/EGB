@@ -1,17 +1,17 @@
 import { EXPORT_ASSET_SOURCE_KINDS, collectExportAssets } from './exportAssetCollector';
-import { getRemoteAssetDedupeKey, isLegacyStandaloneAssetReference } from './exportAssetBundler';
+import { isLegacyStandaloneAssetReference } from './exportAssetBundler';
+import {
+  REMOTE_MEDIA_URL_KEYS,
+  REMOTE_URL_PATTERN,
+  getKnownAssetByteSize,
+  getKnownAssetDuplicateName,
+  getKnownDuplicateMediaKey,
+  getReferenceDuplicateMediaKey,
+  getRemoteAssetDedupeKey,
+} from './mediaDedupe';
 
 const ONE_MIB = 1024 * 1024;
 
-const KNOWN_SIZE_KEYS = [
-  'storageBytes',
-  'sizeBytes',
-  'fileSizeBytes',
-  'byteSize',
-  'bytes',
-  'contentLengthBytes',
-  'contentLength',
-];
 const ASSET_LIBRARY_URL_PATH_PATTERN = /^assets\[(\d+)\]\.url$/;
 const MEDIA_ASSET_ID_FIELDS = new Set([
   'assetId',
@@ -30,42 +30,11 @@ const MEDIA_ASSET_ID_FIELDS = new Set([
   'audioId',
   'popupBackgroundId',
 ]);
-const REMOTE_SIZE_URL_KEYS = ['url', 'src', 'data', 'downloadUrl', 'thumbnailUrl'];
-
-const REMOTE_URL_PATTERN = /^(?:https?:)?\/\//i;
-const MEDIA_FILE_NAME_PATTERN = /\.(?:png|jpe?g|webp|gif|svg|bmp|mp3|wav|ogg|oga|m4a|aac|webm|mp4|mov|ogv|m4v|glb|gltf|fbx|obj)$/i;
-
-const normalizeDuplicateMediaName = (value = '') => String(value)
-  .trim()
-  .toLowerCase()
-  .replace(/\s+/g, ' ')
-  .replace(/\s*\(\d+\)(?=\.[a-z0-9]+$)/i, '');
-
-const getKnownAssetDuplicateName = (asset = {}) => (
-  asset.name
-  || asset.fileName
-  || asset.filename
-  || asset.label
-  || ''
-);
-
-const getKnownDuplicateMediaKey = ({
-  mediaType = '',
-  name = '',
-  byteSize = 0,
-  requireFileName = false,
-} = {}) => {
-  const normalizedName = normalizeDuplicateMediaName(name);
-  const normalizedSize = normalizePositiveByteSize(byteSize);
-  if (!normalizedName || normalizedSize <= 0) return '';
-  if (requireFileName && !MEDIA_FILE_NAME_PATTERN.test(normalizedName)) return '';
-  return `known-media:${mediaType || 'asset'}:${normalizedName}:${normalizedSize}`;
-};
-
 const getReferenceDuplicateNameKey = (reference = {}) => {
-  const normalizedName = normalizeDuplicateMediaName(reference.preferredName || '');
-  if (!normalizedName || !MEDIA_FILE_NAME_PATTERN.test(normalizedName)) return '';
-  return `reference-media:${reference.mediaType || 'asset'}:${normalizedName}`;
+  return getReferenceDuplicateMediaKey({
+    mediaType: reference.mediaType,
+    name: reference.preferredName,
+  });
 };
 
 const setKnownRemoteByteSize = (sizes, url, byteSize) => {
@@ -75,35 +44,7 @@ const setKnownRemoteByteSize = (sizes, url, byteSize) => {
   if (dedupeKey && !sizes.has(dedupeKey)) sizes.set(dedupeKey, byteSize);
 };
 
-const normalizePositiveByteSize = (value) => {
-  const size = typeof value === 'string' && value.trim()
-    ? Number(value)
-    : value;
-  if (!Number.isFinite(size) || size <= 0) return 0;
-  return Math.ceil(size);
-};
-
-const knownByteSizeFromObject = (value) => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return 0;
-
-  for (const key of KNOWN_SIZE_KEYS) {
-    const size = normalizePositiveByteSize(value[key]);
-    if (size > 0) return size;
-  }
-
-  const assetSize = normalizePositiveByteSize(value.size);
-  if (
-    assetSize > 0
-    && REMOTE_SIZE_URL_KEYS.some((key) => (
-      typeof value[key] === 'string'
-      && REMOTE_URL_PATTERN.test(value[key].trim())
-    ))
-  ) {
-    return assetSize;
-  }
-
-  return 0;
-};
+const knownByteSizeFromObject = getKnownAssetByteSize;
 
 const collectKnownRemoteByteSizes = (value, sizes = new Map(), seen = new Set()) => {
   if (!value || typeof value !== 'object' || seen.has(value)) return sizes;
@@ -137,7 +78,7 @@ const collectKnownRemoteByteSizesFromAssets = (assets = [], sizes = new Map()) =
     const byteSize = knownByteSizeFromObject(asset);
     if (byteSize <= 0) return;
 
-    REMOTE_SIZE_URL_KEYS.forEach((key) => {
+    REMOTE_MEDIA_URL_KEYS.forEach((key) => {
       const url = typeof asset[key] === 'string' ? asset[key].trim() : '';
       if (REMOTE_URL_PATTERN.test(url)) {
         setKnownRemoteByteSize(sizes, url, byteSize);
@@ -172,7 +113,7 @@ const collectKnownRemoteDuplicateKeysFromAssets = (assets = [], keys = new Map()
     });
     if (!mediaKey) return;
 
-    REMOTE_SIZE_URL_KEYS.forEach((key) => {
+    REMOTE_MEDIA_URL_KEYS.forEach((key) => {
       const url = typeof asset[key] === 'string' ? asset[key].trim() : '';
       if (!REMOTE_URL_PATTERN.test(url)) return;
       if (!keys.has(url)) keys.set(url, mediaKey);

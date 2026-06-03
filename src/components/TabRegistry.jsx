@@ -215,6 +215,10 @@ const ShopTab = lazyWithRetry(() => import('./ShopTab').then(({ default: Compone
   default: ({ tabContext }) => <Component user={tabContext.user} />,
 })));
 
+const ResourcesTab = lazyWithRetry(() => import('./ResourcesTab').then(({ default: Component }) => ({
+  default: () => <Component />,
+})));
+
 const HelpTab = lazyWithRetry(() => import('./HelpTab').then(({ default: Component }) => ({
   default: ({ project, tabContext }) => (
     <Component
@@ -268,6 +272,7 @@ const BUILDER_TAB_IMPORTERS = [
   () => import('./ScoreTab'),
   () => import('./AiTab'),
   () => import('./ShopTab'),
+  () => import('./ResourcesTab'),
   () => import('./HelpTab'),
   () => import('./PreviewPlayerPanel'),
   () => import('./TwoDAnimeEditor.jsx'),
@@ -295,6 +300,7 @@ export const TABS = {
   animation: { component: TwoDAnimeEditor, label: 'Animation' },
   ai: { component: AiTab, label: 'IA' },
   shop: { component: ShopTab, label: 'Boutique' },
+  resources: { component: ResourcesTab, label: 'Ressources' },
   help: { component: HelpTab, label: 'Aide' },
   score: { component: ScoreTab, label: 'Bilan' },
 };

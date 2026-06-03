@@ -23,6 +23,7 @@ import {
   Shield,
   Swords,
   User,
+  Wrench,
   Workflow,
 } from 'lucide-react';
 
@@ -46,6 +47,7 @@ const tabIcons = {
   preview: Play,
   animation: Brush,
   shop: ShoppingBag,
+  resources: Wrench,
   help: CircleHelp,
   score: ClipboardCheck,
 };

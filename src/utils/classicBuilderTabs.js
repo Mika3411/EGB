@@ -22,30 +22,30 @@ export const CLASSIC_BUILDER_VISIBLE_TABS_BY_MODE = Object.freeze({
     primary: ['scenes', 'media', 'preview'],
     creation: ['objects', 'enigmas'],
     assistant: ['ai'],
-    utility: ['shop', 'help'],
+    utility: ['shop', 'resources', 'help'],
   }),
   intermediate: freezeModeTabs({
     primary: ['scenes', 'media', 'map', 'preview'],
     creation: ['objects', 'cinematics', 'enigmas'],
     assistant: ['ai'],
-    utility: ['shop', 'help'],
+    utility: ['shop', 'resources', 'help'],
   }),
   expert: freezeModeTabs({
     primary: ['scenes', 'media', 'map', 'preview'],
     creation: ['objects', 'cinematics', 'enigmas', 'combinations', 'logic', 'animation'],
     assistant: ['ai'],
-    utility: ['shop', 'help', 'score'],
+    utility: ['shop', 'resources', 'help', 'score'],
   }),
   adventure: freezeModeTabs({
     primary: ['scenes', 'media', 'map', 'adventure', 'preview'],
     creation: ['objects', 'cinematics', 'enigmas', 'logic', 'animation'],
-    utility: ['shop', 'help', 'score'],
+    utility: ['shop', 'resources', 'help', 'score'],
   }),
   hero_adventure: freezeModeTabs({
     primary: ['scenes', 'media', 'map', 'adventure', 'hero', 'combat', 'preview'],
     creation: ['objects', 'cinematics', 'enigmas', 'logic', 'animation'],
     assistant: ['ai'],
-    utility: ['shop', 'help', 'score'],
+    utility: ['shop', 'resources', 'help', 'score'],
   }),
 });
 

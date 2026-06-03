@@ -1,4 +1,7 @@
 import { EXPORT_ASSET_SOURCE_KINDS, collectExportAssets } from './exportAssetCollector';
+import { SENSITIVE_ASSET_URL_PARAMS, getRemoteAssetDedupeKey } from './mediaDedupe';
+
+export { getRemoteAssetDedupeKey } from './mediaDedupe';
 
 const slugify = (value = '') => String(value)
   .normalize('NFD')
@@ -63,15 +66,7 @@ const extensionFromMime = (mimeType = '') => {
 const GENERIC_REMOTE_MIME_TYPES = new Set(['', 'application/octet-stream', 'binary/octet-stream']);
 const DEFAULT_REMOTE_ASSET_TIMEOUT_MS = 30000;
 const DEFAULT_MAX_REMOTE_ASSET_BYTES = 100 * 1024 * 1024;
-const SENSITIVE_REPORT_URL_PARAMS = new Set([
-  'token',
-  'signature',
-  'expires',
-  'access_token',
-  'refresh_token',
-  'key',
-  'apikey',
-]);
+const SENSITIVE_REPORT_URL_PARAMS = SENSITIVE_ASSET_URL_PARAMS;
 const REDACTED_REPORT_URL_VALUE = '[redacted]';
 
 const shortHash = (value = '') => {
@@ -164,37 +159,6 @@ const redactSensitiveReportUrl = (url = '') => {
   }).join('&');
 
   return `${base}?${redactedQuery}${hash}`;
-};
-
-const sortQueryEntries = (entries) => entries.sort(([leftName, leftValue], [rightName, rightValue]) => (
-  leftName === rightName ? String(leftValue).localeCompare(String(rightValue)) : String(leftName).localeCompare(String(rightName))
-));
-
-const encodeQueryEntry = ([name, value]) => `${encodeURIComponent(name)}=${encodeURIComponent(value)}`;
-
-export const getRemoteAssetDedupeKey = (url = '') => {
-  const value = String(url || '').trim();
-  if (!value) return '';
-
-  try {
-    const parsed = new URL(value, 'https://example.invalid');
-    const supabaseObjectMatch = parsed.pathname.match(/^(.*\/storage\/v1\/object)\/(?:public|sign|authenticated)\/(.+)$/);
-    if (supabaseObjectMatch) {
-      const objectPath = decodeURIComponent(supabaseObjectMatch[2]);
-      return `${parsed.origin}${supabaseObjectMatch[1]}/${objectPath}`;
-    }
-
-    const queryEntries = [];
-    parsed.searchParams.forEach((entryValue, entryName) => {
-      if (!SENSITIVE_REPORT_URL_PARAMS.has(entryName.toLowerCase())) {
-        queryEntries.push([entryName, entryValue]);
-      }
-    });
-    const query = sortQueryEntries(queryEntries).map(encodeQueryEntry).join('&');
-    return `${parsed.origin}${parsed.pathname}${query ? `?${query}` : ''}`;
-  } catch {
-    return value;
-  }
 };
 
 const getRemoteAssetFailureMessage = (error, timeoutMs) => {

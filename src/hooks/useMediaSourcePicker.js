@@ -1,5 +1,14 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { getAssetFolderIds } from '../lib/mediaLibraryFolders';
+import {
+  REMOTE_URL_PATTERN,
+  getKnownAssetByteSize,
+  getKnownAssetDuplicateName,
+  getKnownDuplicateMediaKey,
+  getReferenceDuplicateMediaKey,
+  getRemoteAssetDedupeKey,
+  normalizeDuplicateMediaName,
+} from '../utils/mediaDedupe';
 
 export const acceptToMediaType = (accept = '') => {
   if (accept.includes('image')) return 'image';
@@ -25,27 +34,45 @@ export const assetMatchesMediaType = (asset = {}, mediaType = '') => {
   return false;
 };
 
-const normalizeLibraryName = (value = '') => String(value)
-  .trim()
-  .toLowerCase()
-  .replace(/\s+/g, ' ')
-  .replace(/\s*\(\d+\)(?=\.[a-z0-9]+$)/i, '');
+const getLibraryUrlDedupeValue = (url = '') => {
+  const value = String(url || '').trim();
+  return REMOTE_URL_PATTERN.test(value) ? getRemoteAssetDedupeKey(value) || value : value;
+};
 
-const getLibraryDedupeKey = (asset = {}, mediaType = '') => {
-  const type = mediaType || asset.type || 'unknown';
-  const normalizedName = normalizeLibraryName(asset.name || '');
-  if ((type === 'audio' || type === 'video') && normalizedName) {
-    return `name:${type}:${normalizedName}`;
+const getReferenceNameDedupeKey = (asset = {}, type = '') => {
+  const name = getKnownAssetDuplicateName(asset);
+  const isRemote = REMOTE_URL_PATTERN.test(String(asset.url || '').trim());
+  if (isRemote) {
+    return getReferenceDuplicateMediaKey({ mediaType: type, name });
   }
-  return `url:${type}:${asset.url || asset.id || normalizedName}`;
+  if (type === 'audio' || type === 'video') {
+    return getReferenceDuplicateMediaKey({ mediaType: type, name, requireFileName: false });
+  }
+  return '';
+};
+
+const getLibraryDedupeKeys = (asset = {}, mediaType = '') => {
+  const type = mediaType || asset.type || 'unknown';
+  const normalizedName = normalizeDuplicateMediaName(getKnownAssetDuplicateName(asset));
+  const knownMediaKey = getKnownDuplicateMediaKey({
+    mediaType: type,
+    name: getKnownAssetDuplicateName(asset),
+    byteSize: getKnownAssetByteSize(asset),
+  });
+  const keys = [
+    `url:${type}:${getLibraryUrlDedupeValue(asset.url) || asset.id || normalizedName}`,
+    knownMediaKey,
+    knownMediaKey ? '' : getReferenceNameDedupeKey(asset, type),
+  ].filter(Boolean);
+  return keys.length ? keys : [`asset:${type}:${asset.id || normalizedName}`];
 };
 
 export const dedupeLibraryItems = (items = [], mediaType = '') => {
   const seen = new Set();
   return items.filter((asset) => {
-    const key = getLibraryDedupeKey(asset, mediaType);
-    if (seen.has(key)) return false;
-    seen.add(key);
+    const keys = getLibraryDedupeKeys(asset, mediaType);
+    if (keys.some((key) => seen.has(key))) return false;
+    keys.forEach((key) => seen.add(key));
     return true;
   });
 };
