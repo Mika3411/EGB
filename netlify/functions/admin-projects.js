@@ -6,6 +6,10 @@ import {
   verifyAdmin,
   withErrors,
 } from './_shared.js';
+import {
+  VISITOR_ANALYTICS_STORAGE_PATH,
+  summarizeVisitorAnalytics,
+} from '../../server/visitorAnalytics.js';
 
 const publicProjectsStoragePath = 'public/projects.json';
 
@@ -96,6 +100,24 @@ const downloadPublicProjects = async (supabase) => {
   return Array.isArray(records) ? records : [];
 };
 
+const downloadVisitorAnalytics = async (supabase) => {
+  const { data, error } = await supabase.storage.from(privateDataBucket).download(VISITOR_ANALYTICS_STORAGE_PATH);
+  if (error) {
+    if (isMissingStorageResource(error)) return {};
+    throw error;
+  }
+
+  const text = await data.text();
+  if (!text.trim()) return {};
+  try {
+    const record = JSON.parse(text);
+    return record && typeof record === 'object' ? record : {};
+  } catch (error) {
+    console.warn(`Analytics visiteurs illisibles: ${getErrorMessage(error)}`);
+    return {};
+  }
+};
+
 const downloadProjectIndexForUser = async (supabase, userId) => {
   const safeUserId = sanitizeStorageSegment(userId);
   if (!safeUserId) return [];
@@ -147,9 +169,14 @@ export const handler = async (event) => withErrors(event, async () => {
   if (event.httpMethod !== 'GET') return json(405, { error: 'Methode non autorisee.' });
 
   const supabase = getSupabaseAdminClient();
-  const [records, projectCounts] = await Promise.all([
+  const [records, projectCounts, visitorAnalyticsRecord] = await Promise.all([
     downloadPublicProjects(supabase),
     getProjectCountsByUser(supabase),
+    downloadVisitorAnalytics(supabase),
   ]);
-  return json(200, { projects: records.map(getAdminProjectPayload), projectCounts });
+  return json(200, {
+    projects: records.map(getAdminProjectPayload),
+    projectCounts,
+    visitorAnalytics: summarizeVisitorAnalytics(visitorAnalyticsRecord),
+  });
 });

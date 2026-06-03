@@ -7,6 +7,7 @@ vi.mock('../supabaseStorage', () => ({
   buildStoragePath: (...segments) => segments.filter(Boolean).join('/'),
   deleteStorageFile: vi.fn(),
   downloadTextFile: vi.fn(),
+  getPublicStorageUploadResult: vi.fn((path) => ({ path, publicUrl: '', visibility: 'public' })),
   getSupabaseClient: vi.fn(() => ({
     auth: {
       getSession: vi.fn(async () => ({ data: { session: null } })),
@@ -15,6 +16,7 @@ vi.mock('../supabaseStorage', () => ({
   })),
   hasSupabaseAuthConfig: vi.fn(() => false),
   hasSupabaseStorageConfig: vi.fn(() => false),
+  isStorageObjectAlreadyExistsError: vi.fn(() => false),
   isStorageNotFoundError: vi.fn(() => false),
   uploadToStorage: vi.fn(),
 }));

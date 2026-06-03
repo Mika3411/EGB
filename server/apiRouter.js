@@ -20,6 +20,7 @@ export const apiRouteDefinitions = [
   prefixRoute('adminSupport', ['GET', 'POST'], '/api/admin/support'),
   prefixRoute('moderation', ['GET', 'POST'], '/api/moderation'),
   prefixRoute('support', ['GET', 'POST'], '/api/support'),
+  exactRoute('visitorAnalytics', ['POST'], '/api/analytics/visit'),
   exactRoute('projectPublication', ['POST'], '/api/projects/publication'),
   prefixRoute('shopPacks', ['GET', 'POST'], '/api/shop/packs'),
   prefixRoute('creditsAdminList', ['GET'], '/api/ai-credits/admin'),

@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 export type StorageVisibility = 'public' | 'private';
 
 export type StorageErrorCode =
+  | 'already-exists'
   | 'aborted'
   | 'bucket-not-found'
   | 'empty-file'
@@ -37,6 +38,7 @@ export interface UploadResult {
 }
 
 export interface UploadOptions {
+  allowExistingObject?: boolean;
   upsert?: boolean;
   cacheControl?: string;
   contentType?: string;
@@ -308,6 +310,13 @@ const getStorageErrorDetails = ({ action = 'operation', bucket = PRIVATE_DATA_BU
     };
   }
 
+  if (status === 409 || /already exists|resource already exists|duplicate/i.test(causeText)) {
+    return {
+      code: 'already-exists',
+      message: `Fichier deja present pour ${action}${target}.`,
+    };
+  }
+
   if (/failed to fetch|network|load failed|fetch failed|internet|offline/i.test(causeText)) {
     return {
       code: 'network',
@@ -330,6 +339,13 @@ export function createStorageError({ action, bucket = PRIVATE_DATA_BUCKET, path,
     cause,
     code: details.code,
   });
+}
+
+export function isStorageObjectAlreadyExistsError(error: unknown): boolean {
+  if (error instanceof StorageError && error.code === 'already-exists') return true;
+  const status = getCauseStatus(error);
+  const causeText = getCauseText(error);
+  return status === 409 || /already exists|resource already exists|duplicate/i.test(causeText);
 }
 
 export const resolveStorageBucket = (visibility: StorageVisibility): string => {
@@ -665,12 +681,13 @@ const uploadToStorageViaServer = async (
   path: string,
   file: UploadFile,
   {
+    allowExistingObject,
     upsert,
     cacheControl,
     contentType,
     visibility,
     signal,
-  }: Required<Pick<UploadOptions, 'upsert' | 'cacheControl' | 'visibility'>> & Pick<UploadOptions, 'contentType' | 'signal'>,
+  }: Required<Pick<UploadOptions, 'allowExistingObject' | 'upsert' | 'cacheControl' | 'visibility'>> & Pick<UploadOptions, 'contentType' | 'signal'>,
 ): Promise<UploadResult | null> => {
   if (typeof window === 'undefined' || typeof fetch !== 'function') return null;
   if (!path.startsWith('users/')) return null;
@@ -681,6 +698,7 @@ const uploadToStorageViaServer = async (
   const params = new URLSearchParams({
     path,
     visibility,
+    allowExistingObject: String(Boolean(allowExistingObject)),
     upsert: String(Boolean(upsert)),
     cacheControl,
     contentType: contentType || file?.type || 'application/octet-stream',
@@ -840,6 +858,24 @@ export async function uploadPublicAsset(path: string, file: UploadFile, options:
   });
 }
 
+export function getPublicStorageUploadResult(path: string): UploadResult {
+  assertSupabaseStorageConfig();
+  const client = getSupabaseClient();
+  const storagePath = validateStoragePath(path);
+  const visibility: StorageVisibility = 'public';
+  const bucket = resolveStorageBucket(visibility);
+  const publicUrl = bucket === PUBLIC_ASSETS_BUCKET
+    ? client.storage.from(bucket).getPublicUrl(storagePath).data.publicUrl
+    : null;
+
+  return {
+    bucket,
+    path: storagePath,
+    visibility,
+    publicUrl,
+  };
+}
+
 export async function uploadPrivateUserFile(userId: string, path: string, file: UploadFile, options: UploadOptions = {}): Promise<UploadResult> {
   if (!String(userId || '').trim()) {
   throw new Error('Upload privé impossible : identifiant utilisateur manquant.');
@@ -869,6 +905,7 @@ export async function uploadToStorage(path: string, file: UploadFile, options: U
   // upsert: true can silently overwrite user assets; enable it only for
   // deliberate replacements such as JSON manifests or saved state files.
   const {
+    allowExistingObject = false,
     upsert = false,
     cacheControl = '3600',
     contentType,
@@ -946,6 +983,23 @@ export async function uploadToStorage(path: string, file: UploadFile, options: U
       });
 
       lastError = storageError;
+      if (
+        allowExistingObject
+        && !upsert
+        && normalizedVisibility === 'public'
+        && isStorageObjectAlreadyExistsError(storageError)
+      ) {
+        logStorageDebug('upload:success', {
+          action,
+          bucket,
+          path: storagePath,
+          visibility: normalizedVisibility,
+          attempt,
+          durationMs: getRoundedDuration(startedAt),
+          size: file?.size,
+        });
+        return getPublicStorageUploadResult(storagePath);
+      }
       if (attempt >= maxAttempts || !shouldRetryUploadError(storageError)) {
         if (shouldProxyUploadError(storageError)) {
           logStorageDebug('upload:proxy-start', {
@@ -958,6 +1012,7 @@ export async function uploadToStorage(path: string, file: UploadFile, options: U
           });
           try {
             const proxyResult = await uploadToStorageViaServer(storagePath, file, {
+              allowExistingObject,
               upsert,
               cacheControl,
               contentType,
@@ -1014,9 +1069,8 @@ export async function uploadToStorage(path: string, file: UploadFile, options: U
 
   // Public URLs expose the object directly; private files must stay behind
   // Supabase storage policies or signed URLs generated elsewhere.
-  const publicUrl = normalizedVisibility === 'public' && bucket === PUBLIC_ASSETS_BUCKET ?
-    client.storage.from(bucket).getPublicUrl(storagePath).data.publicUrl
-    : null;
+  const publicUploadResult = normalizedVisibility === 'public' ? getPublicStorageUploadResult(storagePath) : null;
+  const publicUrl = publicUploadResult?.publicUrl || null;
 
   logStorageDebug('upload:success', {
     action,

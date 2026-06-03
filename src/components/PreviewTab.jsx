@@ -18,8 +18,7 @@ import PreviewAdventureInventoryContent from './preview/PreviewAdventureInventor
 import PreviewAdventureJournal from './preview/PreviewAdventureJournal.jsx';
 import PreviewCinematicOverlay from './preview/PreviewCinematicOverlay.jsx';
 import PreviewCombatOverlay from './preview/PreviewCombatOverlay.jsx';
-import PreviewEnigmaContent from './preview/PreviewEnigmaContent.jsx';
-import PreviewEnigmaOverlay from './preview/PreviewEnigmaOverlay.jsx';
+import PreviewEnigmaModal from './preview/PreviewEnigmaModal.jsx';
 import PreviewHeroSetupOverlay from './preview/PreviewHeroSetupOverlay.jsx';
 import PreviewHeroPanel from './preview/PreviewHeroPanel.jsx';
 import PreviewObjectiveChecklist from './preview/PreviewObjectiveChecklist.jsx';
@@ -1240,34 +1239,13 @@ export default function PreviewTab(props) {
         visitedSceneIds={visitedSceneIds}
       />
 
-      {enigma ? (
-      <PreviewEnigmaOverlay enigma={enigma} overlayStyle={enigmaOverlayStyle} closeEnigma={closeEnigma}>
-        <PreviewEnigmaContent
-          enigma={enigma}
-          project={project}
-          enigmaCodeInput={enigmaCodeInput}
-          setEnigmaCodeInput={setEnigmaCodeInput}
-          submitEnigma={submitEnigma}
-          enigmaColorAttempt={enigmaColorAttempt}
-          setEnigmaColorAttempt={setEnigmaColorAttempt}
-          pushEnigmaColor={pushEnigmaColor}
-          simonPlayerTurn={simonPlayerTurn}
-          simonPlaybackIndex={simonPlaybackIndex}
-          startSimonPlayback={startSimonPlayback}
-          enigmaPuzzleOrder={enigmaPuzzleOrder}
-          enigmaPuzzleSelectedIndex={enigmaPuzzleSelectedIndex}
-          clickPuzzlePiece={clickPuzzlePiece}
-          enigmaRotationAngles={enigmaRotationAngles}
-          rotatePuzzlePiece={rotatePuzzlePiece}
-          enigmaDragSlots={enigmaDragSlots}
-          returnDragPieceToBank={returnDragPieceToBank}
-          moveDragPieceToSlot={moveDragPieceToSlot}
-          enigmaDraggedPiece={enigmaDraggedPiece}
-          setEnigmaDraggedPiece={setEnigmaDraggedPiece}
-          enigmaDragBank={enigmaDragBank}
-        />
-      </PreviewEnigmaOverlay>
-      ) : null}
+      <PreviewEnigmaModal
+        enigma={enigma}
+        overlayStyle={enigmaOverlayStyle}
+        closeEnigma={closeEnigma}
+        project={project}
+        controls={props}
+      />
 
       <PreviewPauseOverlay
         isOpen={isPauseOpen}

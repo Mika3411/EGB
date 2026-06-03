@@ -43,6 +43,7 @@ vi.mock('../components/TabRegistry.jsx', async () => {
     },
     getTabKey: (value) => value || 'scenes',
     getTabValue: (value) => value,
+    preloadBuilderTabs: vi.fn(),
   };
 });
 

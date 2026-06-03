@@ -45,6 +45,7 @@ import { useProjectSaveAcknowledger } from './hooks/useProjectSaveAcknowledger';
 import { collectDescendantSceneIds } from './lib/sceneHelpers';
 import { collectProjectAssets } from './lib/assetManager';
 import { isAdminAccount } from './lib/authStorage';
+import { trackVisitorSurface } from './lib/visitorAnalytics';
 import { getOfflineExportEstimateMessage } from './utils/offlineExportEstimate';
 import { lazyWithRetry } from './utils/lazyImportRetry';
 import {
@@ -202,6 +203,10 @@ function BuilderApp({
     return () => window.clearTimeout(timerId);
   }, []);
   const activeBuilderProjectId = hydratedProjectRef.current || auth.activeProjectId || initialProjectId || '';
+  useEffect(() => {
+    if (screen === 'editor') trackVisitorSurface('builder', { userId: auth.user?.id });
+  }, [auth.user?.id, screen]);
+
   useEffect(() => {
     if (screen !== 'editor') {
       setProjectScore(null);

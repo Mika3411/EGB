@@ -72,6 +72,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/analytics/visit"
+  to = "/.netlify/functions/analytics-visit"
+  status = 200
+
+[[redirects]]
   from = "/api/ai-credits/admin"
   to = "/.netlify/functions/ai-credits-admin"
   status = 200

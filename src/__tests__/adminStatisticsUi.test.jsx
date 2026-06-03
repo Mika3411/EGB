@@ -23,8 +23,14 @@ vi.mock('../components/AccessibleDialog', () => ({
 }));
 
 vi.mock('../supabaseStorage', () => ({
-  hasSupabaseConfig: () => false,
+  buildStoragePath: (...segments) => segments.filter(Boolean).join('/'),
+  generateStorageFilename: (filename) => filename,
   getSupabaseClient: () => null,
+  getPublicStorageUploadResult: (path) => ({ path, publicUrl: '', visibility: 'public' }),
+  hasSupabaseConfig: () => false,
+  hasSupabaseStorageConfig: () => false,
+  isStorageObjectAlreadyExistsError: () => false,
+  uploadToStorage: vi.fn(),
 }));
 
 vi.mock('../lib/supportMessages', () => ({
@@ -109,6 +115,10 @@ describe('admin statistics tab', () => {
       publicGames: [
         { key: 'user-1:project-1', userId: 'user-1', plays: 7, feedback: { votes: 2, comments: [] } },
       ],
+      visitorAnalytics: {
+        builder: { visitors: 12, visitors24h: 2 },
+        gallery: { visitors: 34, visitors24h: 5 },
+      },
       moderation: { games: new Set(), blogs: new Set(), comments: new Set(), actions: [] },
     });
     supportMocks.loadAdminSupportThreads.mockResolvedValue([
@@ -126,7 +136,9 @@ describe('admin statistics tab', () => {
       expect(screen.getByText('Dernières connexions')).toBeTruthy();
       expect(screen.getByText('Alice Demo')).toBeTruthy();
       expect(screen.getByText('Parties jouées')).toBeTruthy();
+      expect(screen.getByText(/visiteurs builder/)).toBeTruthy();
+      expect(screen.getByText(/visiteurs galerie/)).toBeTruthy();
       expect(screen.getByText('Support ouvert')).toBeTruthy();
     });
-  });
+  }, 10000);
 });

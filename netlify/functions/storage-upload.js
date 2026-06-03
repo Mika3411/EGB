@@ -103,6 +103,25 @@ export const validateStorageUploadPath = (path = '') => {
 
 const normalizeVisibility = (value = '') => (value === 'public' ? 'public' : 'private');
 
+const isStorageObjectAlreadyExistsError = (error = {}) => {
+  const status = Number(error?.statusCode || error?.status || 0);
+  const details = [
+    error?.message,
+    error?.error,
+    error?.name,
+    error?.code,
+    error?.statusCode,
+    error?.status,
+  ].filter(Boolean).join(' ');
+  return status === 409 || /already exists|resource already exists|duplicate/i.test(details);
+};
+
+const getPublicUploadUrl = (supabase, bucket, storagePath, visibility) => (
+  visibility === 'public' && bucket === publicAssetsBucket
+    ? supabase.storage.from(bucket).getPublicUrl(storagePath).data.publicUrl
+    : null
+);
+
 const getStorageUploadLimitBytes = () => {
   const configured = Number(process.env.STORAGE_UPLOAD_MAX_BYTES || process.env.RPG3D_UPLOAD_MAX_BYTES || 0);
   return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_STORAGE_UPLOAD_LIMIT_BYTES;
@@ -264,6 +283,7 @@ export const handler = (event) => withErrors(event, async () => {
 
   const visibility = normalizeVisibility(params.visibility || 'private');
   const bucket = resolveServerStorageBucket(visibility);
+  const allowExistingObject = params.allowExistingObject === 'true';
   const requestedContentType = params.contentType
     || getHeader(event.headers || {}, 'content-type')
     || 'application/octet-stream';
@@ -280,11 +300,20 @@ export const handler = (event) => withErrors(event, async () => {
     cacheControl: params.cacheControl || '3600',
     contentType: validationProfile.contentType,
   });
-  if (error) throw error;
+  const upsert = params.upsert === 'true';
+  if (error) {
+    if (allowExistingObject && !upsert && visibility === 'public' && isStorageObjectAlreadyExistsError(error)) {
+      return json(200, {
+        bucket,
+        path: storagePath,
+        visibility,
+        publicUrl: getPublicUploadUrl(supabase, bucket, storagePath, visibility),
+      }, event);
+    }
+    throw error;
+  }
 
-  const publicUrl = visibility === 'public' && bucket === publicAssetsBucket
-    ? supabase.storage.from(bucket).getPublicUrl(storagePath).data.publicUrl
-    : null;
+  const publicUrl = getPublicUploadUrl(supabase, bucket, storagePath, visibility);
 
   return json(200, {
     bucket,

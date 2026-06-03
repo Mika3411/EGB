@@ -33,6 +33,7 @@ import {
   upsertSharedShopPack,
 } from '../lib/shopPacksStorage';
 import { hasSupabaseConfig } from '../supabaseStorage';
+import AdminShopPackLists from './AdminShopPackLists.jsx';
 
 const formatDate = (value) => {
   if (!value) return 'Jamais';
@@ -73,6 +74,7 @@ export default function AdminPage({
   const [creditUsers, setCreditUsers] = useState([]);
   const [projectCounts, setProjectCounts] = useState({});
   const [publicGames, setPublicGames] = useState([]);
+  const [visitorAnalytics, setVisitorAnalytics] = useState({});
   const [shopPacks, setShopPacks] = useState(() => getShopPacks());
   const [shopPackForm, setShopPackForm] = useState(() => createEmptyShopPack());
   const [moderation, setModeration] = useState({ games: new Set(), blogs: new Set(), comments: new Set(), actions: [] });
@@ -92,6 +94,7 @@ export default function AdminPage({
     setCreditUsers(dashboard.creditUsers);
     setProjectCounts(dashboard.projectCounts || {});
     setPublicGames(dashboard.publicGames);
+    setVisitorAnalytics(dashboard.visitorAnalytics || {});
     setModeration(dashboard.moderation);
     if (dashboard.warning) setStatus(dashboard.warning);
     loadSharedShopPacks()
@@ -386,9 +389,10 @@ export default function AdminPage({
     managedUsers,
     creditUsers,
     publicGames,
+    visitorAnalytics,
     moderation,
     supportThreads,
-  }), [managedUsers, creditUsers, publicGames, moderation, supportThreads]);
+  }), [managedUsers, creditUsers, publicGames, visitorAnalytics, moderation, supportThreads]);
 
   const refreshSupportThreads = async () => {
     setIsBusy(true);
@@ -600,6 +604,16 @@ export default function AdminPage({
               <div className="admin-stat-pill-grid wide">
                 <span><strong>{formatNumber(adminStats.usersWithProjects)}</strong> créateurs avec projet</span>
                 <span><strong>{formatNumber(adminStats.publicAuthorCount)}</strong> auteurs publiés</span>
+                <span>
+                  <strong>{formatNumber(adminStats.builderVisitors)}</strong>
+                  visiteurs builder
+                  <small>{formatNumber(adminStats.builderVisitors24h)} en 24h</small>
+                </span>
+                <span>
+                  <strong>{formatNumber(adminStats.galleryVisitors)}</strong>
+                  visiteurs galerie
+                  <small>{formatNumber(adminStats.galleryVisitors24h)} en 24h</small>
+                </span>
                 <span><strong>{formatNumber(adminStats.totalVotes)}</strong> votes</span>
                 <span><strong>{formatNumber(adminStats.totalComments)}</strong> avis</span>
                 <span><strong>{formatNumber(adminStats.moderationActions)}</strong> éléments masqués</span>
@@ -1176,89 +1190,16 @@ export default function AdminPage({
               </button>
             </form>
 
-            <div className="admin-shop-list">
-              <div className="admin-shop-list-section">
-                <div className="panel-head">
-                  <div>
-                    <h3>En vente</h3>
-                    <p className="small-note">{activeShopPacks.length} pack{activeShopPacks.length > 1 ? 's' : ''} disponible{activeShopPacks.length > 1 ? 's' : ''}</p>
-                  </div>
-                </div>
-                <div className="admin-shop-card-grid">
-              {activeShopPacks.map((pack) => (
-                <article className="list-card admin-pack-card" key={pack.id}>
-                  {pack.screenshots?.[0]?.src ? <img className="admin-pack-cover" src={pack.screenshots[0].src} alt={pack.title} /> : null}
-                  <div className="inline-head">
-                    <div>
-                      <strong>{pack.title}</strong>
-                      <span>{pack.costCredits} crédits - note {pack.rating}/10</span>
-                    </div>
-                    <span className="status-badge soft">{pack.downloadUrl || pack.hasDownload ? 'ZIP prêt' : 'ZIP manquant'}</span>
-                  </div>
-                  <p className="small-note">{pack.description || 'Aucun descriptif.'}</p>
-                  <div className="admin-pack-metrics">
-                    <span>{pack.scenesCount} scènes</span>
-                    <span>{pack.objectsCount} objets</span>
-                    <span>{pack.enigmasCount} énigmes</span>
-                    <span>{pack.cinematicsCount} cinemat.</span>
-                    <span>{pack.combinationsCount} combinaisons</span>
-                  </div>
-                  {pack.screenshots?.length > 1 ? (
-                    <div className="admin-pack-thumbs">
-                      {pack.screenshots.slice(1, 5).map((screenshot) => (
-                        <img key={screenshot.id} src={screenshot.src} alt={screenshot.name || pack.title} />
-                      ))}
-                    </div>
-                  ) : null}
-                  <div className="toolbar">
-                    <button type="button" className="secondary-action" onClick={() => editShopPack(pack)}>Modifier</button>
-                    <button type="button" className="secondary-action" onClick={() => archiveShopPack(pack)} disabled={isBusy}>Archiver</button>
-                    <button type="button" className="danger-button" onClick={() => removeShopPack(pack)}>Supprimer</button>
-                  </div>
-                </article>
-              ))}
-                </div>
-              {activeShopPacks.length === 0 ? (
-                <div className="empty-state-inline">
-                  <strong>Aucun pack en vente pour le moment.</strong>
-                </div>
-              ) : null}
-              </div>
-
-              <div className="admin-shop-list-section">
-                <div className="panel-head">
-                  <div>
-                    <h3>Archives de vente</h3>
-                    <p className="small-note">{archivedShopPacks.length} pack{archivedShopPacks.length > 1 ? 's' : ''} archive{archivedShopPacks.length > 1 ? 's' : ''}</p>
-                  </div>
-                </div>
-                <div className="admin-shop-card-grid">
-                  {archivedShopPacks.map((pack) => (
-                    <article className="list-card admin-pack-card archived" key={pack.id}>
-                      {pack.screenshots?.[0]?.src ? <img className="admin-pack-cover" src={pack.screenshots[0].src} alt={pack.title} /> : null}
-                      <div className="inline-head">
-                        <div>
-                          <strong>{pack.title}</strong>
-                          <span>{pack.costCredits} crédits - {pack.soldTo ? `vendu a ${pack.soldTo}` : 'archive'}</span>
-                        </div>
-                        <span className="status-badge soft">Archive</span>
-                      </div>
-                      <p className="small-note">{pack.soldAt ? `Vendu le ${formatDate(pack.soldAt)}` : pack.description || 'Pack archive.'}</p>
-                      <div className="toolbar">
-                        <button type="button" className="secondary-action" onClick={() => editShopPack(pack)}>Modifier</button>
-                        <button type="button" className="profile-action-button" onClick={() => relistShopPack(pack)} disabled={isBusy}>Remettre en vente</button>
-                        <button type="button" className="danger-button" onClick={() => removeShopPack(pack)}>Supprimer</button>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-                {archivedShopPacks.length === 0 ? (
-                  <div className="empty-state-inline">
-                    <strong>Aucune vente archivee.</strong>
-                  </div>
-                ) : null}
-              </div>
-            </div>
+            <AdminShopPackLists
+              activeShopPacks={activeShopPacks}
+              archivedShopPacks={archivedShopPacks}
+              isBusy={isBusy}
+              editShopPack={editShopPack}
+              archiveShopPack={archiveShopPack}
+              removeShopPack={removeShopPack}
+              relistShopPack={relistShopPack}
+              formatDate={formatDate}
+            />
           </div>
         </section>
       ) : null}

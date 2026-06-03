@@ -265,6 +265,25 @@ export const readRawBody = (req, maxBytes = getStorageUploadLimitBytes()) => new
 
 const normalizeVisibility = (value = '') => (value === 'public' ? 'public' : 'private');
 
+const isStorageObjectAlreadyExistsError = (error = {}) => {
+  const status = Number(error?.statusCode || error?.status || 0);
+  const details = [
+    error?.message,
+    error?.error,
+    error?.name,
+    error?.code,
+    error?.statusCode,
+    error?.status,
+  ].filter(Boolean).join(' ');
+  return status === 409 || /already exists|resource already exists|duplicate/i.test(details);
+};
+
+const getPublicUploadUrl = (client, bucket, storagePath, visibility) => (
+  visibility === 'public' && bucket === publicAssetsBucket
+    ? client.storage.from(bucket).getPublicUrl(storagePath).data.publicUrl
+    : null
+);
+
 export const assertUserStoragePath = (userId = '', storagePath = '') => {
   const userPrefix = buildStoragePath('users', userId);
   if (!storagePath.startsWith(`${userPrefix}/`)) {
@@ -280,6 +299,7 @@ export const handleStorageUpload = async (req, res) => {
 
   const visibility = normalizeVisibility(requestUrl.searchParams.get('visibility') || 'private');
   const bucket = resolveServerStorageBucket(visibility);
+  const allowExistingObject = requestUrl.searchParams.get('allowExistingObject') === 'true';
   const upsert = requestUrl.searchParams.get('upsert') === 'true';
   const cacheControl = requestUrl.searchParams.get('cacheControl') || '3600';
   const requestedContentType = requestUrl.searchParams.get('contentType')
@@ -301,11 +321,20 @@ export const handleStorageUpload = async (req, res) => {
     cacheControl,
     contentType: validationProfile.contentType,
   });
-  if (error) throw error;
+  if (error) {
+    if (allowExistingObject && !upsert && visibility === 'public' && isStorageObjectAlreadyExistsError(error)) {
+      sendJson(res, 200, {
+        bucket,
+        path: storagePath,
+        visibility,
+        publicUrl: getPublicUploadUrl(client, bucket, storagePath, visibility),
+      });
+      return;
+    }
+    throw error;
+  }
 
-  const publicUrl = visibility === 'public' && bucket === publicAssetsBucket
-    ? client.storage.from(bucket).getPublicUrl(storagePath).data.publicUrl
-    : null;
+  const publicUrl = getPublicUploadUrl(client, bucket, storagePath, visibility);
 
   sendJson(res, 200, {
     bucket,

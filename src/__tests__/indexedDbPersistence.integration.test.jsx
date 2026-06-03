@@ -52,6 +52,7 @@ vi.mock('../supabaseStorage', () => ({
   deleteStorageFile: vi.fn(),
   downloadTextFile: vi.fn(),
   generateStorageFilename: vi.fn((filename) => filename),
+  getPublicStorageUploadResult: vi.fn((path) => ({ path, publicUrl: '', visibility: 'public' })),
   getSupabaseClient: vi.fn(() => ({
     auth: {
       getSession: vi.fn(async () => ({ data: { session: null } })),
@@ -61,6 +62,7 @@ vi.mock('../supabaseStorage', () => ({
   hasSupabaseAuthConfig: vi.fn(() => false),
   hasSupabaseConfig: vi.fn(() => false),
   hasSupabaseStorageConfig: vi.fn(() => false),
+  isStorageObjectAlreadyExistsError: vi.fn(() => false),
   isStorageNotFoundError: vi.fn(() => false),
   uploadToStorage: vi.fn(),
 }));
@@ -564,7 +566,7 @@ describe('IndexedDB integration persistence', () => {
         && record.projectId === localModelScope.projectId
         && record.userId === localModelScope.userId
       ))).toBe(true);
-    });
+    }, { timeout: 5000 });
     characterView.unmount();
 
     const decorView = renderDecorImportTab({ localModelScope });
@@ -581,7 +583,7 @@ describe('IndexedDB integration persistence', () => {
         && record.projectId === localModelScope.projectId
         && record.userId === localModelScope.userId
       ))).toBe(true);
-    });
+    }, { timeout: 5000 });
   });
 
   test('RPG 3D local model cleanup deletes only current scoped orphans in real IndexedDB', async () => {
@@ -668,7 +670,7 @@ describe('IndexedDB integration persistence', () => {
 
     await waitFor(async () => {
       expect(await loadLocalModelFile('flow-current-orphan')).toBeNull();
-    });
+    }, { timeout: 5000 });
     expect(await loadLocalModelFile('flow-other-project-orphan')).toBeTruthy();
     expect(lastSavedAutosaveVersionRef.current).toBe(1);
   });

@@ -31,6 +31,7 @@ import {
 } from './server/ai.js';
 import { handleModelTools } from './server/modelTools.js';
 import { serveStatic } from './server/staticFiles.js';
+import { handleVisitorAnalytics } from './server/visitorAnalytics.js';
 
 const apiRouteHandlers = {
   health: (req, res) => sendJson(res, 200, { ok: true }),
@@ -42,6 +43,7 @@ const apiRouteHandlers = {
   adminSupport: handleAdminSupport,
   moderation: handleModeration,
   support: handleSupport,
+  visitorAnalytics: handleVisitorAnalytics,
   projectPublication: handleProjectPublication,
   shopPacks: handleShopPacks,
   creditsAdminList: handleCreditsAdminList,

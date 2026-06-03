@@ -12,6 +12,10 @@ import {
   getPublicProjectCounts,
   getStoredProjectCountForUser,
 } from './projects.js';
+import {
+  VISITOR_ANALYTICS_STORAGE_PATH,
+  summarizeVisitorAnalytics,
+} from './visitorAnalytics.js';
 
 const publicProjectsStoragePath = 'public/projects.json';
 
@@ -141,8 +145,15 @@ export const handleAdminProjects = async (req, res) => {
   }
 
   const client = getSupabaseAdminClient();
-  const records = await downloadStorageJson(publicProjectsStoragePath, [], { visibility: 'public' });
+  const [records, visitorAnalyticsRecord] = await Promise.all([
+    downloadStorageJson(publicProjectsStoragePath, [], { visibility: 'public' }),
+    downloadStorageJson(VISITOR_ANALYTICS_STORAGE_PATH, {}, { visibility: 'private' }),
+  ]);
   const projects = Array.isArray(records) ? records.map(getAdminProjectPayload) : [];
   const projectCounts = await getAdminProjectCounts(client, records);
-  sendJson(res, 200, { projects, projectCounts });
+  sendJson(res, 200, {
+    projects,
+    projectCounts,
+    visitorAnalytics: summarizeVisitorAnalytics(visitorAnalyticsRecord),
+  });
 };

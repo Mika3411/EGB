@@ -1,4 +1,10 @@
-import { buildStoragePath, generateStorageFilename, uploadToStorage } from '../supabaseStorage';
+import {
+  buildStoragePath,
+  generateStorageFilename,
+  getPublicStorageUploadResult,
+  isStorageObjectAlreadyExistsError,
+  uploadToStorage,
+} from '../supabaseStorage';
 
 const IMAGE_UPLOAD_OPTIMIZATION = {
   maxDimension: 1920,
@@ -97,6 +103,22 @@ function getExtensionFromType(fileOrBlob, fallbackName = 'asset') {
   return fromType || fromName || 'bin';
 }
 
+async function calculateBlobSha256(blob) {
+  if (!blob || typeof blob.arrayBuffer !== 'function') {
+    throw new Error('Fichier invalide pour calculer son empreinte.');
+  }
+
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle || typeof subtle.digest !== 'function') {
+    throw new Error('Le navigateur ne permet pas de calculer le hash du fichier.');
+  }
+
+  const digest = await subtle.digest('SHA-256', await blob.arrayBuffer());
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 function renameBlob(blob, filename) {
   if (blob instanceof File) return blob;
   return new File([blob], filename, { type: blob.type || 'application/octet-stream' });
@@ -108,6 +130,7 @@ async function uploadFileToSupabase(file, {
   optimizeImage = true,
   imageOptions = IMAGE_UPLOAD_OPTIMIZATION,
   cacheControl = '31536000',
+  dedupePublicMedia = false,
 } = {}) {
   if (!file) {
     throw new Error('Aucun fichier à envoyer.');
@@ -123,24 +146,39 @@ async function uploadFileToSupabase(file, {
 
   const extension = getExtensionFromType(preparedBlob, file.name);
   const originalBaseName = String(file.name || 'asset').replace(/\.[^.]+$/, '') || 'asset';
-  const filename = generateStorageFilename(`${originalBaseName}.${extension}`);
+  const sha256 = dedupePublicMedia ? await calculateBlobSha256(preparedBlob) : '';
+  const filename = dedupePublicMedia
+    ? `${sha256}.${extension}`
+    : generateStorageFilename(`${originalBaseName}.${extension}`);
   const uploadFile = renameBlob(preparedBlob, filename);
-  const path = buildStoragePath('users', userId, folder, filename);
+  const path = dedupePublicMedia
+    ? buildStoragePath('users', userId, folder, 'deduped', filename)
+    : buildStoragePath('users', userId, folder, filename);
 
-  const result = await uploadToStorage(path, uploadFile, {
-    contentType: uploadFile.type || file.type || 'application/octet-stream',
-    cacheControl,
-    visibility: 'public',
-  });
+  let result;
+  try {
+    result = await uploadToStorage(path, uploadFile, {
+      allowExistingObject: dedupePublicMedia,
+      upsert: false,
+      contentType: uploadFile.type || file.type || 'application/octet-stream',
+      cacheControl,
+      visibility: 'public',
+    });
+  } catch (error) {
+    if (!dedupePublicMedia || !isStorageObjectAlreadyExistsError(error)) throw error;
+    result = getPublicStorageUploadResult(path);
+  }
 
   return {
     ...result,
     filename,
+    sha256,
     originalName: file.name,
     contentType: uploadFile.type || file.type || 'application/octet-stream',
     originalSize: file.size || 0,
     optimizedSize: uploadFile.size || preparedBlob.size || file.size || 0,
     optimized: preparedBlob !== file,
+    deduped: Boolean(dedupePublicMedia),
   };
 }
 
@@ -155,5 +193,6 @@ export {
   fileToDataURL,
   imageFileToOptimizedBlob,
   imageFileToOptimizedDataURL,
+  calculateBlobSha256,
   uploadFileToSupabase,
 };

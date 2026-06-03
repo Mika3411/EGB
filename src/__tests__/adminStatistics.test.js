@@ -51,6 +51,10 @@ describe('admin statistics', () => {
         { userId: 'u1', plays: 5, feedback: { votes: 2, comments: [{ id: 'c1' }] } },
         { userId: 'u2', plays: 3, feedback: { votes: 0, comments: [] } },
       ],
+      visitorAnalytics: {
+        builder: { visitors: 11, visitors24h: 3 },
+        gallery: { visitors: 19, visitors24h: 4 },
+      },
       moderation: { actions: [{ id: 'hide-1' }] },
       supportThreads: [
         { id: 's1', status: 'open', messages: [{ authorRole: 'user' }] },
@@ -73,6 +77,10 @@ describe('admin statistics', () => {
       usersWithProjects: 2,
       publicGameCount: 2,
       publicAuthorCount: 2,
+      builderVisitors: 11,
+      builderVisitors24h: 3,
+      galleryVisitors: 19,
+      galleryVisitors24h: 4,
       totalPlays: 8,
       totalVotes: 2,
       totalComments: 1,

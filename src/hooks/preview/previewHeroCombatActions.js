@@ -21,6 +21,12 @@ import {
   clampNumber,
   normalizeHeroAdventure,
 } from './previewPlayerDefaults.js';
+import {
+  buildHeroCombatHistory,
+  createPreviewHeroState,
+  normalizeHeroSkillKey,
+} from './previewHeroCombatActionHelpers.js';
+
 export function createPreviewHeroCombatActions({
   project,
   heroAdventure,
@@ -70,19 +76,6 @@ export function createPreviewHeroCombatActions({
     engineRef.current.setState({ heroCombatStates: nextStates });
     setHeroCombatStates(nextStates);
     return nextStates[combatId];
-  };
-  const buildHeroCombatHistory = (current = {}, nextMessage = '') => {
-    const cleanMessage = String(nextMessage || '').replace(/\s+/g, ' ').trim();
-    const existingHistory = Array.isArray(current.history)
-      ? current.history
-      : current.message
-      ? [current.message]
-      : [];
-    const history = existingHistory
-      .map((entry) => String(entry || '').replace(/\s+/g, ' ').trim())
-      .filter(Boolean);
-    if (cleanMessage && history[history.length - 1] !== cleanMessage) history.push(cleanMessage);
-    return history.slice(-8);
   };
   const runSkillCheckAction = (entry = {}, options = {}) => {
     if (blockDefeatedHeroAction()) return false;
@@ -160,24 +153,11 @@ export function createPreviewHeroCombatActions({
     ((engineRef.current.getState().heroState || heroState).powers || []).find((power) => power.id === powerId) || null
   );
   const getHeroSkillByKey = (key = '') => {
-    const normalizedKey = String(key || '')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .trim()
-      .toLowerCase();
+    const normalizedKey = normalizeHeroSkillKey(key);
     const skills = (engineRef.current.getState().heroState || heroState).skills || [];
     return skills.find((skill) => {
-      const id = String(skill.id || '')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .trim()
-        .toLowerCase();
-      const name = String(skill.name || '')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .trim()
-        .toLowerCase();
-      return id === normalizedKey || name === normalizedKey;
+      return normalizeHeroSkillKey(skill.id) === normalizedKey
+        || normalizeHeroSkillKey(skill.name) === normalizedKey;
     }) || null;
   };
   const createHeroCombatSurvivalRoll = (enemyStats = {}, rawRoll) => {
@@ -1171,11 +1151,7 @@ export function createPreviewHeroCombatActions({
     if (!entry) return false;
     const sourceScene = project.scenes.find((scene) => scene.id === options.sceneId) || playScene || project.scenes[0] || null;
     const nextHeroAdventure = normalizeHeroAdventure(project);
-    const previewHero = {
-      ...nextHeroAdventure.hero,
-      health: Math.max(1, Number(nextHeroAdventure.hero.maxHealth) || Number(nextHeroAdventure.hero.health) || 1),
-      mana: Math.max(0, Number(nextHeroAdventure.hero.maxMana) || Number(nextHeroAdventure.hero.mana) || 0),
-    };
+    const previewHero = createPreviewHeroState(nextHeroAdventure);
 
     initializeFromProject(project);
     engineRef.current.setState({

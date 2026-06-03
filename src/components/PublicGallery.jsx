@@ -7,6 +7,7 @@ import {
   incrementPublicGamePlay,
   ratePublicGame,
 } from '../lib/publicGalleryStorage';
+import { trackVisitorSurface } from '../lib/visitorAnalytics';
 
 const formatRating = (value) => (Number(value || 0) ? Number(value).toFixed(1) : 'Nouveau');
 
@@ -129,6 +130,10 @@ export default function PublicGallery({
 
   useEffect(() => {
     refreshGames();
+  }, [user?.id]);
+
+  useEffect(() => {
+    trackVisitorSurface('gallery', { userId: user?.id });
   }, [user?.id]);
 
   const openDiscover = () => {

@@ -9,6 +9,7 @@ const ADMIN_CREDITS_ENDPOINT = import.meta.env.VITE_ADMIN_CREDITS_ENDPOINT || '/
 const ADMIN_PROJECTS_ENDPOINT = import.meta.env.VITE_ADMIN_PROJECTS_ENDPOINT || '/api/admin/projects';
 const ADMIN_MODERATION_ENDPOINT = import.meta.env.VITE_ADMIN_MODERATION_ENDPOINT || '/api/admin/moderation';
 const LOCAL_PROJECTS_KEY_PREFIX = 'escapeGameBuilder.projects';
+const VISITOR_ANALYTICS_SURFACES = ['builder', 'gallery'];
 const isConfiguredAdminEmail = (email = '') => Boolean(
   ADMIN_EMAIL && normalizeEmail(email) === ADMIN_EMAIL,
 );
@@ -49,6 +50,24 @@ const getConnectionTime = (account = {}) => Math.max(
 );
 
 const isWithinDays = (time, days, now) => Boolean(time && now - time <= days * DAY_MS);
+
+const toSafeCount = (value = 0) => {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.round(number) : 0;
+};
+
+export const normalizeVisitorAnalyticsSummary = (visitorAnalytics = {}) => Object.fromEntries(
+  VISITOR_ANALYTICS_SURFACES.map((surface) => {
+    const entry = visitorAnalytics?.[surface] || {};
+    return [surface, {
+      visitors: toSafeCount(entry.visitors),
+      visitors24h: toSafeCount(entry.visitors24h),
+      visits: toSafeCount(entry.visits),
+      visits24h: toSafeCount(entry.visits24h),
+      updatedAt: entry.updatedAt || '',
+    }];
+  }),
+);
 
 export const getDisplayName = (account) =>
   account?.name || account?.email || account?.userId || 'Utilisateur';
@@ -152,6 +171,7 @@ export const buildAdminStatistics = ({
   managedUsers = [],
   creditUsers = [],
   publicGames = [],
+  visitorAnalytics = {},
   moderation = {},
   supportThreads = [],
   now = Date.now(),
@@ -160,6 +180,7 @@ export const buildAdminStatistics = ({
   const credits = Array.isArray(creditUsers) ? creditUsers : [];
   const games = Array.isArray(publicGames) ? publicGames : [];
   const threads = Array.isArray(supportThreads) ? supportThreads : [];
+  const visitors = normalizeVisitorAnalyticsSummary(visitorAnalytics);
 
   const usersWithConnection = users
     .map((account) => ({
@@ -208,6 +229,10 @@ export const buildAdminStatistics = ({
     usersWithProjects,
     publicGameCount: games.length,
     publicAuthorCount: publicAuthorIds.size,
+    builderVisitors: visitors.builder.visitors,
+    builderVisitors24h: visitors.builder.visitors24h,
+    galleryVisitors: visitors.gallery.visitors,
+    galleryVisitors24h: visitors.gallery.visitors24h,
     totalPlays,
     totalVotes,
     totalComments,
@@ -284,6 +309,7 @@ export const loadAdminDashboard = async () => {
     creditUsers: Array.isArray(creditsPayload.users) ? creditsPayload.users : [],
     projectCounts,
     publicGames: (projectsPayload.projects || []).filter((game) => !isConfiguredAdminEmail(game.authorEmail)),
+    visitorAnalytics: normalizeVisitorAnalyticsSummary(projectsPayload.visitorAnalytics),
     moderation: buildModerationState(Array.isArray(moderationPayload.actions) ? moderationPayload.actions : []),
   };
 };

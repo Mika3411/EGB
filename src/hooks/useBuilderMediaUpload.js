@@ -75,12 +75,10 @@ export function useBuilderMediaUpload({
 }) {
   const uploadMediaFile = useCallback(async (file, mediaInfo, preparedMedia = null) => {
     const uploadFile = preparedMedia?.file || file;
-    const fallbackName = mediaInfo.shouldOptimizeImage
-      ? (/\.[^.]+$/.test(file.name) ? file.name.replace(/\.[^.]+$/, '.webp') : `${file.name || 'media'}.webp`)
-      : file.name;
+    const displayName = file.name || 'media';
     if (!hasSupabaseStorageConfig()) {
       return {
-        name: fallbackName,
+        name: displayName,
         optimized: Boolean(preparedMedia?.optimized),
         originalSize: preparedMedia?.originalSize || file.size,
         size: preparedMedia?.size || uploadFile.size || file.size,
@@ -94,10 +92,11 @@ export function useBuilderMediaUpload({
       folder: mediaInfo.folder,
       optimizeImage: false,
       imageOptions: IMAGE_UPLOAD_OPTIMIZATION,
+      dedupePublicMedia: true,
     });
 
     return {
-      name: fallbackName,
+      name: displayName,
       optimized: Boolean(preparedMedia?.optimized || uploaded.optimized),
       originalSize: preparedMedia?.originalSize || uploaded.originalSize || file.size,
       size: uploaded.optimizedSize || preparedMedia?.size || uploadFile.size || file.size,

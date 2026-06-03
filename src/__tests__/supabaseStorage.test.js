@@ -185,6 +185,35 @@ describe('supabaseStorage', () => {
     expect(result.visibility).toBe('public');
   });
 
+  test('uploadToStorage retourne l URL publique existante quand un objet public deduplique existe deja', async () => {
+    const { uploadToStorage } = await setupSupabaseStorage();
+    const file = new Blob(['public-data'], { type: 'image/png' });
+    supabaseMock.upload.mockResolvedValueOnce({
+      error: { message: 'The resource already exists', statusCode: 409 },
+    });
+    supabaseMock.getPublicUrl.mockImplementationOnce((path) => ({
+      data: { publicUrl: `https://cdn.test/${path}` },
+    }));
+
+    const result = await uploadToStorage('users/user-1/images/deduped/hash.png', file, {
+      allowExistingObject: true,
+      visibility: 'public',
+      retries: 0,
+    });
+
+    expect(supabaseMock.upload).toHaveBeenCalledWith('users/user-1/images/deduped/hash.png', file, {
+      upsert: false,
+      cacheControl: '3600',
+      contentType: 'image/png',
+    });
+    expect(result).toEqual({
+      bucket: 'public-bucket',
+      path: 'users/user-1/images/deduped/hash.png',
+      visibility: 'public',
+      publicUrl: 'https://cdn.test/users/user-1/images/deduped/hash.png',
+    });
+  });
+
   test('uploadToStorage utilise des buckets differents selon la visibilite', async () => {
     const { uploadToStorage } = await setupSupabaseStorage();
 

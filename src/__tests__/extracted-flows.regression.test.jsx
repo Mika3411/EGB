@@ -21,6 +21,12 @@ vi.mock('../supabaseStorage', () => ({
     .map((segment) => String(segment).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'asset')
     .join('/'),
   generateStorageFilename: (filename) => `12345-${String(filename).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '')}`,
+  getPublicStorageUploadResult: (path) => ({
+    path,
+    publicUrl: `https://cdn.test/${path}`,
+    visibility: 'public',
+  }),
+  isStorageObjectAlreadyExistsError: (error) => error?.code === 'already-exists',
   uploadToStorage: vi.fn(async (path, file, options) => ({
     path,
     publicUrl: `https://cdn.test/${path}`,

@@ -4,10 +4,12 @@ const storageMock = vi.hoisted(() => ({
   buildStoragePath: vi.fn((...segments) => segments.filter(Boolean).join('/')),
   deleteStorageFile: vi.fn(),
   downloadTextFile: vi.fn(),
+  getPublicStorageUploadResult: vi.fn((path) => ({ path, publicUrl: '', visibility: 'public' })),
   getSupabaseClient: vi.fn(),
   hasSupabaseAuthConfig: vi.fn(),
   hasSupabaseConfig: vi.fn(),
   hasSupabaseStorageConfig: vi.fn(),
+  isStorageObjectAlreadyExistsError: vi.fn(),
   isStorageNotFoundError: vi.fn(),
   uploadToStorage: vi.fn(),
 }));
