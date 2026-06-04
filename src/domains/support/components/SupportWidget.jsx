@@ -12,6 +12,12 @@ const initialDraft = {
   body: '',
 };
 
+const isPlayerSurface = () => {
+  if (typeof window === 'undefined') return false;
+  const params = new URLSearchParams(window.location.search || '');
+  return Boolean(params.get('playUser') && params.get('playProject'));
+};
+
 export default function SupportWidget({ user }) {
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState(initialDraft);
@@ -19,7 +25,7 @@ export default function SupportWidget({ user }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const userName = useMemo(() => getSupportUserName(user), [user]);
 
-  if (!user) return null;
+  if (!user || isPlayerSurface()) return null;
 
   const updateDraft = (field, value) => {
     setDraft((current) => ({ ...current, [field]: value }));

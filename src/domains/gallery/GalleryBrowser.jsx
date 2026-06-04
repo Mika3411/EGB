@@ -17,6 +17,8 @@ const AGE_FILTERS = [
   ['mature', 'Mature inclus'],
 ];
 
+const PUBLIC_GALLERY_BANNER_SRC = '/assets/gallery/public-gallery-banner.png';
+
 const makePlayUrl = (game) => {
   const url = new URL(window.location.href);
   url.search = '';
@@ -260,15 +262,40 @@ export default function GalleryBrowser({
   return (
     <main className="public-gallery-shell">
       <header className="public-gallery-topbar">
-        <div>
-          <span className="eyebrow">Galerie publique</span>
-          <h1>Escape games à découvrir</h1>
+        <div className="public-gallery-banner-frame">
+          <img
+            className="public-gallery-banner"
+            src={PUBLIC_GALLERY_BANNER_SRC}
+            alt="Galerie publique - Escape games à découvrir"
+          />
         </div>
-        <div className="toolbar">
+        <div className="toolbar public-gallery-actions">
           <button type="button" className="secondary-action" onClick={openDiscover}>Découverte</button>
           {user?.id ? <button type="button" className="secondary-action" onClick={openAuthorEditor}>Mon profil auteur</button> : null}
           {onClose ? <button type="button" className="secondary-action" onClick={onClose}>Builder</button> : null}
         </div>
+        {!isLoading && view === 'discover' ? (
+          <div className="public-gallery-control-strip">
+            <div>
+              <strong>Explorer</strong>
+              <span>{games.length} jeu{games.length > 1 ? 'x' : ''} publié{games.length > 1 ? 's' : ''}</span>
+            </div>
+            <div className="public-filter-grid">
+              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Chercher un jeu, un auteur, une difficulté" />
+              <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+                <option value="">Catégorie</option>
+                {filterOptions.categories.map((category) => <option key={category} value={category}>{category}</option>)}
+              </select>
+              <select value={difficultyFilter} onChange={(event) => setDifficultyFilter(event.target.value)}>
+                <option value="">Difficulté</option>
+                {filterOptions.difficulties.map((difficulty) => <option key={difficulty} value={difficulty}>{difficulty}</option>)}
+              </select>
+              <select value={ageFilter} onChange={(event) => setAgeFilter(event.target.value)}>
+                {AGE_FILTERS.map(([value, label]) => <option key={value} value={value}>Age : {label}</option>)}
+              </select>
+            </div>
+          </div>
+        ) : null}
       </header>
 
       {!user?.id ? (
@@ -287,29 +314,6 @@ export default function GalleryBrowser({
 
       {!isLoading && view === 'discover' ? (
         <>
-          <section className="panel public-discovery-panel">
-            <div className="public-discovery-head">
-              <div>
-                <h2>Découverte</h2>
-                <p className="small-note">{games.length} jeu{games.length > 1 ? 'x' : ''} publié{games.length > 1 ? 's' : ''}</p>
-              </div>
-              <div className="public-filter-grid">
-                <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Chercher un jeu, un auteur, une difficulté" />
-                <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
-                  <option value="">Catégorie</option>
-                  {filterOptions.categories.map((category) => <option key={category} value={category}>{category}</option>)}
-                </select>
-                <select value={difficultyFilter} onChange={(event) => setDifficultyFilter(event.target.value)}>
-                  <option value="">Difficulté</option>
-                  {filterOptions.difficulties.map((difficulty) => <option key={difficulty} value={difficulty}>{difficulty}</option>)}
-                </select>
-                <select value={ageFilter} onChange={(event) => setAgeFilter(event.target.value)}>
-                  {AGE_FILTERS.map(([value, label]) => <option key={value} value={value}>Age : {label}</option>)}
-                </select>
-              </div>
-            </div>
-          </section>
-
           {[
             ['🔥 Tendance 24h', discoverSections.trending],
             ['⭐ Top semaine', discoverSections.weekTop],

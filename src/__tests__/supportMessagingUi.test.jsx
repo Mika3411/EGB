@@ -17,6 +17,7 @@ const loadSupportUi = async () => {
 
 afterEach(() => {
   cleanup();
+  window.history.pushState({}, '', '/');
   window.localStorage.clear();
   vi.unstubAllEnvs();
 });
@@ -36,6 +37,16 @@ describe('support messaging UI', () => {
     await waitFor(() => {
       expect(screen.getByText(/Message envoyé/i)).toBeTruthy();
     });
+  });
+
+  it('does not render the floating support button on player links', async () => {
+    const { SupportWidget } = await loadSupportUi();
+    const user = { id: 'user-ui', email: 'ui@example.com', name: 'Mika' };
+    window.history.pushState({}, '', '/?playUser=user-ui&playProject=project-ui');
+
+    render(<SupportWidget user={user} />);
+
+    expect(screen.queryByRole('button', { name: 'Message' })).toBeNull();
   });
 
   it('shows support threads in the profile messaging tab', async () => {

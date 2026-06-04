@@ -428,7 +428,7 @@ function ShellApp() {
             onExitToProfile={openProfileScreen}
           />
         </Suspense>
-        <SupportWidget user={auth.user} />
+        {screen === 'builder' ? <SupportWidget user={auth.user} /> : null}
       </>
     );
   }

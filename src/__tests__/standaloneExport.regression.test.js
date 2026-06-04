@@ -664,12 +664,15 @@ describe('standalone export regression', () => {
     expect(indexHtml).toContain('<link rel="stylesheet" href="./style.css">');
     expect(indexHtml).not.toContain('<script>const project');
     expect(indexHtml).not.toContain('<style>');
+    expect(indexHtml).not.toContain('support-widget');
     expect(engineJs).toContain('const project =');
     expect(engineJs).toContain('assets/scenes/hall-final-png.png');
     expect(engineJs).not.toContain('fetch(');
     expect(engineJs).not.toContain('project.json');
+    expect(engineJs).not.toContain('/api/support');
     expect(engineJs).toContain('function saveGame');
     expect(engineJs).toContain('function safeMediaUrl');
+    expect(styleCss).not.toContain('support-launcher');
     expect(styleCss).toBe(buildStandaloneCss());
     expect(exportedProject.scenes[0].backgroundData).toMatch(/^assets\/scenes\/hall-final-png\.png$/);
     expect(exportedProject.scenes[0].musicData).toMatch(/^assets\/audio\/theme-mp3\.mp3$/);
