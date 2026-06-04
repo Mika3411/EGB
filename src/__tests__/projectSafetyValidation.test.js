@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   parseProjectJsonPayload,
   validateProjectSafety,
-} from '../utils/projectSafetyValidation';
-import { validateProject } from '../utils/projectValidation';
+} from '../shared/utils/projectSafetyValidation';
+import { validateProject } from '../shared/utils/projectValidation';
 
 const makeProject = (overrides = {}) => ({
   title: 'Projet test',

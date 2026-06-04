@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { getAuthorProfile, saveAuthorProfile } from '../lib/authorProfiles';
+import { getAuthorProfile, saveAuthorProfile } from '../shared/services/authorProfiles';
 
 const AUTHOR_PROFILES_KEY = 'escapeGameBuilder.authorProfiles.v1';
 

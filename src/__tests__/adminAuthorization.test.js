@@ -4,7 +4,7 @@ const loadAuthStorage = async (env = {}) => {
   vi.resetModules();
   vi.stubEnv('VITE_ADMIN_EMAIL', '');
   Object.entries(env).forEach(([key, value]) => vi.stubEnv(key, value));
-  return import('../lib/authStorage');
+  return import('../shared/services/authStorage');
 };
 
 const loadShared = async (env = {}) => {

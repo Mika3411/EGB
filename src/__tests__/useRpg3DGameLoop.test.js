@@ -4,7 +4,7 @@ import {
   PLAYER_RADIUS,
   cloneConfig,
   createInitialState,
-} from '../utils/rpg3dDomain.js';
+} from '../shared/utils/rpg3dDomain.js';
 import {
   applyPlayerMoveTarget,
   clearPlayerMoveTarget,
@@ -25,7 +25,7 @@ import {
   rectCircleOverlap,
   resolveActionZoneEntryTrigger,
   resolveMapCollision,
-} from '../hooks/useRpg3DGameLoop.js';
+} from '../domains/rpg3d/hooks/useRpg3DGameLoop.js';
 
 const createRuntimeConfig = () => {
   const config = cloneConfig(DEFAULT_ARCADE_CONFIG);

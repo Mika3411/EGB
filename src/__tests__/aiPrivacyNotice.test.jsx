@@ -1,14 +1,14 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import AiTab from '../components/AiTab.jsx';
-import { createInitialProject } from '../data/projectData';
+import AiWorkbench from '../domains/ai/AiWorkbench.jsx';
+import { createInitialProject } from '../shared/data/projectData';
 
-vi.mock('../utils/aiAuthHeaders', () => ({
+vi.mock('../shared/utils/aiAuthHeaders', () => ({
   getAiAuthHeaders: vi.fn(async () => ({})),
 }));
 
-vi.mock('../utils/indexedDraftStorage', () => ({
+vi.mock('../shared/utils/indexedDraftStorage', () => ({
   createIndexedDraftStorage: () => ({
     read: vi.fn(async () => null),
     write: vi.fn(async () => undefined),
@@ -17,7 +17,7 @@ vi.mock('../utils/indexedDraftStorage', () => ({
   }),
 }));
 
-describe('AiTab privacy notice', () => {
+describe('AiWorkbench privacy notice', () => {
   beforeEach(() => {
     globalThis.fetch = vi.fn(async () => ({
       ok: true,
@@ -35,7 +35,7 @@ describe('AiTab privacy notice', () => {
 
   test('affiche clairement les donnees projet pouvant etre transmises a l IA', () => {
     render(
-      <AiTab
+      <AiWorkbench
         project={createInitialProject()}
         getSceneLabel={(scene) => scene?.name || scene}
         onApplyProject={vi.fn()}

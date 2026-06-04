@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { makeCorsHeaders } from '../src/utils/corsConfig.js';
+import { makeCorsHeaders } from '../src/shared/utils/corsConfig.js';
 
 export const requestContext = new AsyncLocalStorage();
 export const getActiveRequest = () => requestContext.getStore();

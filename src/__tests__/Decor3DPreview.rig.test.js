@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import {
   __decor3dPreviewRigTestUtils,
-} from '../components/rpg3d/Decor3DPreview.jsx';
+} from '../domains/rpg3d/components/Decor3DPreviewRuntime.js';
 
 const {
   classifyArmorCutPoint,

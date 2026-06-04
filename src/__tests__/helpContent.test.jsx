@@ -4,7 +4,7 @@ import { describe, expect, test } from 'vitest';
 import HelpContent, {
   parseHelpSections,
   parseMarkdownBlocks,
-} from '../components/help/HelpContent.jsx';
+} from '../domains/help/components/HelpContent.jsx';
 
 describe('HelpContent', () => {
   test('parse le mode emploi en titre, intro et sections numerotees', () => {

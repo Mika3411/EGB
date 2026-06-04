@@ -4,7 +4,7 @@ import {
   getAiRateLimitConfig,
   getClientIpFromHeaders,
   resetAiRateLimitBuckets,
-} from '../utils/aiRateLimit';
+} from '../shared/utils/aiRateLimit';
 
 describe('AI rate limit guards', () => {
   beforeEach(() => {

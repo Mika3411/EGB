@@ -4,7 +4,7 @@ import {
   estimateOfflineExportSize,
   formatOfflineExportSizeEstimate,
   getOfflineExportEstimateMessage,
-} from '../utils/offlineExportEstimate';
+} from '../shared/utils/offlineExportEstimate';
 
 const ONE_MIB = 1024 * 1024;
 

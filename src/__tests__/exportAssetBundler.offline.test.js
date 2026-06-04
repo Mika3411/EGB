@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildExportProjectWithAssets } from '../utils/exportAssetBundler';
+import { buildExportProjectWithAssets } from '../shared/utils/exportAssetBundler';
 
 const remotePngUrl = 'https://project.supabase.co/storage/v1/object/public/game-media/remote-background.png';
 const remoteWebpUrl = 'https://project.supabase.co/storage/v1/object/public/game-media/remote-poster.webp?token=abc';

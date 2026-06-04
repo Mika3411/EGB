@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_ARCADE_CONFIG, cloneConfig } from '../utils/rpg3dDomain.js';
+import { DEFAULT_ARCADE_CONFIG, cloneConfig } from '../shared/utils/rpg3dDomain.js';
 import {
   DEFAULT_RPG3D_ACT_ID,
   DEFAULT_RPG3D_CANVAS_ID,
@@ -15,7 +15,7 @@ import {
   normalizeRpg3DCanvases,
   normalizeRpg3DScenes,
   syncStudioProjectActiveCanvasConfig,
-} from '../utils/rpg3dStudioProject.js';
+} from '../shared/utils/rpg3dStudioProject.js';
 
 describe('rpg3d studio project helpers', () => {
   afterEach(() => {

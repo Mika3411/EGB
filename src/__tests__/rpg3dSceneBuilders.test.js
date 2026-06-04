@@ -22,8 +22,8 @@ import {
   updateFingerTipsWeaponSockets,
   updateSceneLighting,
   updateStaticEntityTransforms,
-} from '../components/arcade/rpg3dSceneBuilders.js';
-import { DEFAULT_ARCADE_CONFIG, cloneConfig } from '../utils/rpg3dDomain.js';
+} from '../domains/rpg3d/arcade/rpg3dSceneBuilders.js';
+import { DEFAULT_ARCADE_CONFIG, cloneConfig } from '../shared/utils/rpg3dDomain.js';
 
 const createSceneConfig = () => {
   const config = cloneConfig(DEFAULT_ARCADE_CONFIG);

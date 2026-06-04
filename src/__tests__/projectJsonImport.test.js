@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
-import { createInitialProject } from '../data/projectData';
-import { importProjectFromJsonText } from '../utils/projectJsonImport';
-import { PROJECT_SAFETY_LIMITS } from '../utils/projectSafetyValidation';
+import { createInitialProject } from '../shared/data/projectData';
+import { importProjectFromJsonText } from '../shared/utils/projectJsonImport';
+import { PROJECT_SAFETY_LIMITS } from '../shared/utils/projectSafetyValidation';
 
 const makeImportableProject = (overrides = {}) => {
   const project = createInitialProject();

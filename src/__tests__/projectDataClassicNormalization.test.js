@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { normalizeProject } from '../data/projectData.js';
+import { normalizeProject } from '../shared/data/projectData.js';
 
 const srcDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const readSource = (relativePath) => readFileSync(resolve(srcDir, relativePath), 'utf8');

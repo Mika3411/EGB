@@ -3,13 +3,13 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { BUILDER_TUTORIAL_STEPS } from '../data/tutorialStepData';
+import { BUILDER_TUTORIAL_STEPS } from '../shared/data/tutorialStepData';
 import {
   isTutorialStepComplete,
   prepareProjectForGuidedCreation,
-} from '../data/tutorialSteps';
-import { createInitialProject } from '../data/projectData';
-import BuilderApp from '../BuilderApp.jsx';
+} from '../shared/data/tutorialSteps';
+import { createInitialProject } from '../shared/data/projectData';
+import BuilderStudio from '../app/BuilderStudio.jsx';
 
 const autosaveHookMock = vi.hoisted(() => vi.fn(() => ({
   markProjectSaveFailed: vi.fn(),
@@ -17,15 +17,15 @@ const autosaveHookMock = vi.hoisted(() => vi.fn(() => ({
   markProjectSaved: vi.fn(),
 })));
 
-vi.mock('../hooks/useAutosaveProject', async () => {
-  const actual = await vi.importActual('../hooks/useAutosaveProject');
+vi.mock('../app/builder/hooks/useAutosaveProject', async () => {
+  const actual = await vi.importActual('../app/builder/hooks/useAutosaveProject');
   return {
     ...actual,
     useAutosaveProject: autosaveHookMock,
   };
 });
 
-vi.mock('../components/BuilderTutorial.jsx', async () => {
+vi.mock('../app/tutorial/BuilderGuide.jsx', async () => {
   const ReactModule = await import('react');
   const { useEffect: useReactEffect } = ReactModule;
   return {
@@ -48,7 +48,7 @@ vi.mock('../components/BuilderTutorial.jsx', async () => {
   };
 });
 
-vi.mock('../components/Tabs.jsx', async () => {
+vi.mock('../app/builder/navigation/BuilderDomainNav.jsx', async () => {
   const ReactModule = await import('react');
   const tabs = [
     ['scenes', 'Scenes'],
@@ -76,7 +76,7 @@ vi.mock('../components/Tabs.jsx', async () => {
   };
 });
 
-vi.mock('../components/TabRegistry.jsx', async () => {
+vi.mock('../app/builder/navigation/domainTabs.jsx', async () => {
   const ReactModule = await import('react');
 
   const getFirstScene = (project) => project?.scenes?.[0] || null;
@@ -101,7 +101,7 @@ vi.mock('../components/TabRegistry.jsx', async () => {
     });
   };
 
-  const ScenesTab = ({ project, tabContext }) => {
+  const SceneStudio = ({ project, tabContext }) => {
     const { editor } = tabContext;
     const firstScene = getFirstScene(project);
     const secondScene = project.scenes?.[1] || null;
@@ -172,7 +172,7 @@ vi.mock('../components/TabRegistry.jsx', async () => {
     );
   };
 
-  const MediaTab = ({ project, tabContext }) => {
+  const MediaLibrary = ({ project, tabContext }) => {
     const { editor } = tabContext;
     return ReactModule.createElement(
       'section',
@@ -196,7 +196,7 @@ vi.mock('../components/TabRegistry.jsx', async () => {
     );
   };
 
-  const PreviewTab = ({ project, tabContext }) => {
+  const PlaytestWorkspace = ({ project, tabContext }) => {
     const { preview } = tabContext;
     const playScene = project.scenes?.find((scene) => scene.id === preview.playSceneId) || getFirstScene(project);
     const guidedHotspot = (playScene?.hotspots || []).find((hotspot) => hotspot.tutorialCreated)
@@ -220,9 +220,9 @@ vi.mock('../components/TabRegistry.jsx', async () => {
 
   return {
     TABS: {
-      scenes: { component: ScenesTab, label: 'Scenes' },
-      media: { component: MediaTab, label: 'Media' },
-      preview: { component: PreviewTab, label: 'Preview' },
+      scenes: { component: SceneStudio, label: 'Scenes' },
+      media: { component: MediaLibrary, label: 'Media' },
+      preview: { component: PlaytestWorkspace, label: 'Preview' },
     },
     getTabKey: (value) => value || 'scenes',
     getTabValue: (value) => value,
@@ -362,17 +362,17 @@ afterEach(() => {
 describe('tutoriel demarrage guide classique', () => {
   test('reference des selectors data-tour presents dans le builder classique', () => {
     const source = [
-      'src/components/Tabs.jsx',
-      'src/components/MediaTab.jsx',
-      'src/components/MediaSourcePicker.jsx',
-      'src/components/ScenesTab.jsx',
-      'src/components/PreviewTab.jsx',
-      'src/components/scenes/SceneSidebar.jsx',
-      'src/components/scenes/SceneEditorChrome.jsx',
-      'src/components/scenes/HotspotInspectorPanel.jsx',
-      'src/components/scenes/HotspotActionFields.jsx',
+      'src/app/builder/navigation/BuilderDomainNav.jsx',
+      'src/domains/media/MediaLibrary.jsx',
+      'src/shared/ui/media/MediaSourcePicker.jsx',
+      'src/domains/scenes/studio/SceneStudio.jsx',
+      'src/domains/player/PlaytestWorkspace.jsx',
+      'src/domains/scenes/studio/components/SceneSidebar.jsx',
+      'src/domains/scenes/studio/components/SceneEditorChrome.jsx',
+      'src/domains/scenes/studio/components/HotspotInspectorPanel.jsx',
+      'src/domains/scenes/studio/components/HotspotActionFields.jsx',
     ].map(readSource).join('\n');
-    const tabSource = readSource('src/components/Tabs.jsx');
+    const tabSource = readSource('src/app/builder/navigation/BuilderDomainNav.jsx');
     const missing = [];
 
     guidedSteps.forEach((step) => {
@@ -446,7 +446,7 @@ describe('tutoriel demarrage guide classique', () => {
     const auth = makeAuth();
     window.scrollTo = vi.fn();
     render(
-      <BuilderApp
+      <BuilderStudio
         auth={auth}
         initialScreen="editor"
         initialTutorialTab="guided_creation"

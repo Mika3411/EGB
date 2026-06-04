@@ -4,7 +4,7 @@ import {
   getAllowedCorsOrigins,
   makeCorsHeaders,
   normalizeCorsOrigin,
-} from '../utils/corsConfig';
+} from '../shared/utils/corsConfig';
 
 describe('CORS configuration', () => {
   it('normalizes origins and removes wildcard defaults', () => {

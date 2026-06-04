@@ -5,8 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import JSZip from 'jszip';
-import { makeCorsHeaders } from '../src/utils/corsConfig.js';
-import { getClientIpFromHeaders } from '../src/utils/aiRateLimit.js';
+import { makeCorsHeaders } from '../src/shared/utils/corsConfig.js';
+import { getClientIpFromHeaders } from '../src/shared/utils/aiRateLimit.js';
 import { verifySupabaseAdminRequest } from './auth.js';
 
 const DEFAULT_MODEL_TOOL_MAX_BYTES = 200 * 1024 * 1024;

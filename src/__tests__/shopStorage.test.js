@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { getShopPacks, saveShopPacks } from '../lib/shopPacksStorage';
-import { readShopPurchases } from '../lib/shopPurchases';
+import { getShopPacks, saveShopPacks } from '../shared/services/shopPacksStorage';
+import { readShopPurchases } from '../shared/services/shopPurchases';
 
 const SHOP_PACKS_KEY = 'escapeGameBuilder.shopPacks.v1';
 const SHOP_PURCHASES_KEY = 'escapeGameBuilder.shopPurchases.user-1';

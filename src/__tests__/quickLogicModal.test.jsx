@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import QuickLogicModal from '../components/scenes/QuickLogicModal.jsx';
+import QuickLogicModal from '../domains/scenes/studio/components/QuickLogicModal.jsx';
 
 const makeProject = () => ({
   storyVariables: [{ id: 'var-trust', key: 'trust', type: 'number', defaultValue: 0 }],

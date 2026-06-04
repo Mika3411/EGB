@@ -4,7 +4,7 @@ import {
   createActorAnimationController,
   createCachedModelGetter,
   disposeRuntimeModelObject,
-} from '../components/arcade/rpg3dRuntimeModels.js';
+} from '../domains/rpg3d/arcade/rpg3dRuntimeModels.js';
 
 describe('rpg3d runtime models', () => {
   it('builds actor animation controllers without root motion moving the placed model', () => {

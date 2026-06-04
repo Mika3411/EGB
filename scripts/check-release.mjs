@@ -3,15 +3,15 @@ import path from 'node:path';
 
 const root = process.cwd();
 const filesToCheck = [
-  'src/App.jsx',
-  'src/hooks/useAutosaveProject.js',
-  'src/hooks/useAccountStorage.js',
-  'src/hooks/useMediaSourcePicker.js',
-  'src/hooks/useProfileProjectActions.js',
-  'src/components/AccessibleDialog.jsx',
-  'src/components/MediaSourceModal.jsx',
-  'src/components/MediaSourcePicker.jsx',
-  'src/components/TabRegistry.jsx',
+  'src/app/ShellApp.jsx',
+  'src/app/builder/hooks/useAutosaveProject.js',
+  'src/domains/auth/hooks/useAccountStorage.js',
+  'src/shared/hooks/useMediaSourcePicker.js',
+  'src/domains/profile/hooks/useProfileProjectActions.js',
+  'src/shared/ui/AccessibleDialog.jsx',
+  'src/shared/ui/media/MediaSourceModal.jsx',
+  'src/shared/ui/media/MediaSourcePicker.jsx',
+  'src/app/builder/navigation/domainTabs.jsx',
   'src/__tests__/extracted-flows.regression.test.jsx',
 ];
 
@@ -25,33 +25,33 @@ const maxSourceLineCount = 1200;
 // from this classic builder release check.
 const ignoredOversizedSourceFiles = new Set([
   'server/modelTools.js',
-  'src/components/arcade/ArcadeThreeViewport.jsx',
-  'src/components/arcade/rpg3dSceneActors.js',
-  'src/components/Character3DTab.jsx',
-  'src/components/Decor3DTab.jsx',
-  'src/components/ObjectRiggingTab.jsx',
-  'src/components/rpg3d/Character3DPreview.jsx',
-  'src/components/rpg3d/Decor3DPreview.jsx',
-  'src/components/rpg3d/rpg3dModeShared.js',
-  'src/components/Rpg3DMode.jsx',
-  'src/components/StuntCharacter3DPreview.jsx',
+  'src/domains/rpg3d/arcade/ArcadeThreeViewport.jsx',
+  'src/domains/rpg3d/arcade/rpg3dSceneActors.js',
+  'src/domains/characters/CharacterStudio.jsx',
+  'src/domains/rpg3d/rigging/DecorStudio.jsx',
+  'src/domains/rpg3d/rigging/ObjectRiggingWorkspace.jsx',
+  'src/domains/characters/preview/Character3DPreview.jsx',
+  'src/domains/rpg3d/components/Decor3DPreview.jsx',
+  'src/domains/rpg3d/components/rpg3dModeShared.js',
+  'src/domains/rpg3d/Rpg3DStudio.jsx',
+  'src/domains/rpg3d/stunts/StuntCharacter3DPreview.jsx',
   'src/__tests__/rpg3dSceneBuilders.test.js',
 ]);
 const oversizedSourceAllowlist = new Map([
-  ['src/components/TwoDAnimeEditor.jsx', 2352],
-  ['src/components/AdventureTab.jsx', 2151],
-  ['src/components/RouteMapTab.jsx', 2135],
-  ['src/components/HeroTab.jsx', 1894],
-  ['src/utils/aiProjectGenerator.js', 1812],
-  ['src/BuilderApp.jsx', 1798],
-  ['src/utils/standalone/standaloneTemplate.js', 1610],
-  ['src/components/AiTab.jsx', 1426],
-  ['src/components/CombatTab.jsx', 1417],
-  ['src/data/tutorialStepData.js', 1383],
-  ['src/components/PreviewTab.jsx', 1269],
-  ['src/components/HelpTab.jsx', 1220],
-  ['src/data/projectData.js', 1209],
-  ['src/lib/combatEngine.js', 1203],
+  ['src/domains/anime2d/Anime2DStudio.jsx', 2352],
+  ['src/domains/scenes/narrative/NarrativeWorkspace.jsx', 2151],
+  ['src/domains/scenes/routes/SceneRouteMap.jsx', 2135],
+  ['src/domains/characters/hero/HeroDesigner.jsx', 1894],
+  ['src/shared/utils/aiProjectGenerator.js', 1812],
+  ['src/app/BuilderStudio.jsx', 1798],
+  ['src/shared/utils/standalone/standaloneTemplate.js', 1610],
+  ['src/domains/ai/AiWorkbench.jsx', 1426],
+  ['src/domains/combat/CombatWorkspace.jsx', 1417],
+  ['src/shared/data/tutorialStepData.js', 1903],
+  ['src/domains/player/PlaytestWorkspace.jsx', 1269],
+  ['src/domains/help/HelpCenter.jsx', 1220],
+  ['src/shared/data/projectData.js', 1209],
+  ['src/shared/services/combatEngine.js', 1203],
 ]);
 
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -156,7 +156,7 @@ if (fs.existsSync(distIndexPath)) {
     /ort-wasm/i,
     /ort\.bundle/i,
     /ort\.webgpu/i,
-    /TwoDAnimeEditor/i,
+    /Anime2DStudio/i,
   ];
 
   forbiddenInitialAssets.forEach((pattern) => {

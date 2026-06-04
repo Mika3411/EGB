@@ -9,7 +9,7 @@ import {
   writeAppUiState,
   writeBuilderUiState,
   writeJsonStorage,
-} from '../utils/storageHelpers';
+} from '../shared/utils/storageHelpers';
 
 afterEach(() => {
   vi.unstubAllGlobals();

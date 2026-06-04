@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
-import { usePreviewPlayer } from '../hooks/usePreviewPlayer';
+import { usePreviewPlayer } from '../domains/player/hooks/usePreviewPlayer';
 
 const makeCriticalProject = () => ({
   id: 'critical-preview',
@@ -108,6 +108,41 @@ const makeCriticalProject = () => ({
           actionType: 'dialogue_item',
           dialogue: 'Une note apparait dans votre main.',
           rewardItemId: 'note',
+        },
+        {
+          id: 'spot-empty-scene',
+          name: 'Couloir',
+          x: 82,
+          y: 68,
+          width: 10,
+          height: 10,
+          actionType: 'scene',
+          targetSceneId: 'scene-vault',
+          dialogue: 'Vous avancez sans rien trouver.',
+        },
+        {
+          id: 'spot-lens',
+          name: 'Lentille sale',
+          x: 12,
+          y: 28,
+          width: 10,
+          height: 10,
+          actionType: 'dialogue',
+          dialogue: 'La lentille revele une marque.',
+          objectImageData: 'data:image/png;base64,bGVucw==',
+          objectImageName: 'Marque sur la lentille',
+        },
+        {
+          id: 'spot-painting-action',
+          name: 'Tableau sans prise',
+          x: 18,
+          y: 28,
+          width: 10,
+          height: 10,
+          clickMode: 'action',
+          actionType: 'dialogue',
+          dialogue: 'Le tableau cache un symbole.',
+          imageData: 'data:image/png;base64,cGFpbnRpbmc=',
         },
       ],
       sceneObjects: [],
@@ -387,6 +422,82 @@ describe('preview player critical flows', () => {
       src: '',
       name: 'Note froissee',
       icon: 'NOTE',
+    });
+  });
+
+  test('does not restore a closed item image on a later action without image', () => {
+    const { project, result } = renderPreview();
+
+    act(() => {
+      result.current.triggerHotspot(project.scenes[0].hotspots[0]);
+    });
+    expect(result.current.viewerImage).toMatchObject({
+      src: 'data:image/png;base64,dmFzZQ==',
+      name: 'Vase ancien',
+    });
+
+    act(() => {
+      result.current.setViewerImage(null);
+    });
+    expect(result.current.viewerImage).toBe(null);
+
+    const emptySceneHotspot = project.scenes[0].hotspots.find((spot) => spot.id === 'spot-empty-scene');
+    act(() => {
+      result.current.triggerHotspot(emptySceneHotspot);
+    });
+
+    expect(result.current.playSceneId).toBe('scene-vault');
+    expect(result.current.viewerImage).toBe(null);
+  });
+
+  test('keeps the engine viewer image cleared after the player closes it', () => {
+    const { result } = renderPreview();
+
+    act(() => {
+      result.current.addInventoryItem('key');
+    });
+    expect(result.current.viewerImage?.id).toBe('key');
+
+    act(() => {
+      result.current.setViewerImage(null);
+    });
+    act(() => {
+      result.current.markHotspotCompleted('manual-action-without-image');
+    });
+
+    expect(result.current.completedHotspotIds).toContain('manual-action-without-image');
+    expect(result.current.viewerImage).toBe(null);
+  });
+
+  test('shows action images even when no inventory item is rewarded', () => {
+    const { project, result } = renderPreview();
+
+    const imageOnlyHotspot = project.scenes[0].hotspots.find((spot) => spot.id === 'spot-lens');
+    act(() => {
+      result.current.triggerHotspot(imageOnlyHotspot);
+    });
+
+    expect(result.current.inventory).toEqual([]);
+    expect(result.current.viewerImage).toMatchObject({
+      src: 'data:image/png;base64,bGVucw==',
+      name: 'Marque sur la lentille',
+      caption: 'La lentille revele une marque.',
+    });
+  });
+
+  test('falls back to the visible action image when no inventory item is rewarded', () => {
+    const { project, result } = renderPreview();
+
+    const visibleImageAction = project.scenes[0].hotspots.find((spot) => spot.id === 'spot-painting-action');
+    act(() => {
+      result.current.triggerHotspot(visibleImageAction);
+    });
+
+    expect(result.current.inventory).toEqual([]);
+    expect(result.current.viewerImage).toMatchObject({
+      src: 'data:image/png;base64,cGFpbnRpbmc=',
+      name: 'Tableau sans prise',
+      caption: 'Le tableau cache un symbole.',
     });
   });
 

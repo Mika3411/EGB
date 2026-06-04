@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { isRetryableLazyImportError, retryLazyImport } from '../utils/lazyImportRetry';
+import { isRetryableLazyImportError, retryLazyImport } from '../shared/utils/lazyImportRetry';
 
 describe('lazy import retry', () => {
   it('detects dynamic import load errors', () => {

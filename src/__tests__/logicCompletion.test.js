@@ -3,7 +3,7 @@ import {
   buildLogicCompletionRefs,
   getLogicRuleCompletionIssues,
   getSceneTimerCompletionIssues,
-} from '../lib/logicCompletion';
+} from '../shared/services/logicCompletion';
 
 const makeProject = () => ({
   title: 'Projet',

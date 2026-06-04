@@ -3,7 +3,7 @@ import {
   EXPORT_ASSET_SOURCE_KINDS,
   classifyExportAssetSourceKind,
   collectExportAssetReferences,
-} from '../utils/exportAssetCollector';
+} from '../shared/utils/exportAssetCollector';
 
 const imageData = (label = 'image') => `data:image/png;base64,${label}`;
 const audioData = (label = 'audio') => `data:audio/mpeg;base64,${label}`;

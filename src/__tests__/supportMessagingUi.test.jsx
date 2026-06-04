@@ -8,9 +8,9 @@ const loadSupportUi = async () => {
   vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', '');
   vi.stubEnv('VITE_SUPABASE_ANON_KEY', '');
   const [{ default: SupportWidget }, { default: ProfileMessagesPanel }, supportMessages] = await Promise.all([
-    import('../components/support/SupportWidget.jsx'),
-    import('../components/profile/ProfileMessagesPanel.jsx'),
-    import('../lib/supportMessages.js'),
+    import('../domains/support/components/SupportWidget.jsx'),
+    import('../domains/profile/components/ProfileMessagesPanel.jsx'),
+    import('../shared/services/supportMessages.js'),
   ]);
   return { SupportWidget, ProfileMessagesPanel, supportMessages };
 };

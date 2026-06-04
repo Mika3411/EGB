@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_ARCADE_CONFIG, cloneConfig, getActionZoneTopVertices } from '../utils/rpg3dDomain.js';
+import { DEFAULT_ARCADE_CONFIG, cloneConfig, getActionZoneTopVertices } from '../shared/utils/rpg3dDomain.js';
 import {
   clampArcadeEntitiesToWorld,
   duplicateMapEntityIntoConfig,
@@ -15,7 +15,7 @@ import {
   resolveProportionalScaleDelta,
   scaleSelectionEntity,
   snapFlatTileToNeighbors,
-} from '../utils/rpg3dMapEditing.js';
+} from '../shared/utils/rpg3dMapEditing.js';
 
 const createMapConfig = () => {
   const config = cloneConfig(DEFAULT_ARCADE_CONFIG);

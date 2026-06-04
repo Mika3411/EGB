@@ -4,8 +4,8 @@ import {
   getCharacterRigAutoAnchorMap,
   getCharacterRigAutoWorldPosition,
   isDefaultCharacterRigPointPlacement,
-} from '../utils/rpg3dCharacterRigAutoPlacement.js';
-import { normalizeCharacterRigPoint } from '../utils/rpg3dCharacterRig.js';
+} from '../shared/utils/rpg3dCharacterRigAutoPlacement.js';
+import { normalizeCharacterRigPoint } from '../shared/utils/rpg3dCharacterRig.js';
 
 const makeRiggedRoot = () => {
   const root = new THREE.Group();

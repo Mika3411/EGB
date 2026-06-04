@@ -1,6 +1,6 @@
-import { assertAiContentAllowed, makeImageModerationInput } from '../src/utils/aiModeration.js';
-import { assertAiRateLimit, getClientIpFromHeaders } from '../src/utils/aiRateLimit.js';
-import { assertProjectSafety, parseProjectJsonPayload } from '../src/utils/projectSafetyValidation.js';
+import { assertAiContentAllowed, makeImageModerationInput } from '../src/shared/utils/aiModeration.js';
+import { assertAiRateLimit, getClientIpFromHeaders } from '../src/shared/utils/aiRateLimit.js';
+import { assertProjectSafety, parseProjectJsonPayload } from '../src/shared/utils/projectSafetyValidation.js';
 import { imageDataToBlob, readJsonBody, sendJson } from './http.js';
 import { shouldRunTextGenerationAsync } from './aiGenerationMode.js';
 import {

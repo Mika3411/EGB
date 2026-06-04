@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../utils/indexedDraftStorage', () => ({
+vi.mock('../shared/utils/indexedDraftStorage', () => ({
   deleteIndexedDrafts: vi.fn(async (_dbName, ids) => ids.length),
 }));
 
-import { deleteIndexedDrafts } from '../utils/indexedDraftStorage';
+import { deleteIndexedDrafts } from '../shared/utils/indexedDraftStorage';
 import {
   AI_DRAFT_DB_NAME,
   ANIME_2D_DRAFT_DB_NAME,
@@ -12,9 +12,9 @@ import {
   getProjectAiDraftIds,
   getProjectAiLocalDraftKeys,
   getProjectAnime2dDraftIds,
-} from '../utils/projectDraftCleanup';
-import { getAiDraftFallbackStorageKey } from '../utils/aiDraftStorageKeys';
-import { getAnime2dDraftStorageKey } from '../utils/storageHelpers';
+} from '../shared/utils/projectDraftCleanup';
+import { getAiDraftFallbackStorageKey } from '../shared/utils/aiDraftStorageKeys';
+import { getAnime2dDraftStorageKey } from '../shared/utils/storageHelpers';
 
 beforeEach(() => {
   window.localStorage.clear();

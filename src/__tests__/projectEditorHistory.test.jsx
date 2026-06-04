@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, test } from 'vitest';
-import { createInitialProject } from '../data/projectData';
-import { useProjectEditor } from '../hooks/useProjectEditor.jsx';
+import { createInitialProject } from '../shared/data/projectData';
+import { useProjectEditor } from '../app/builder/hooks/useProjectEditor.jsx';
 
 describe('project editor history', () => {
   test('keeps several undo steps on media-heavy projects', () => {

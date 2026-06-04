@@ -6,7 +6,7 @@ import {
   hasHiddenObject,
   hasLinkedScenes,
   hasPublishedProject,
-} from '../data/creatorMissions.js';
+} from '../shared/data/creatorMissions.js';
 
 const baseProject = (overrides = {}) => ({
   scenes: [

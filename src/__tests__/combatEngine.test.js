@@ -17,7 +17,7 @@ import {
   resolveHeroCombatAttack,
   simulateCombat,
   tickStatusEffects,
-} from '../lib/combatEngine.js';
+} from '../shared/services/combatEngine.js';
 
 const makeRandom = (values) => {
   let index = 0;

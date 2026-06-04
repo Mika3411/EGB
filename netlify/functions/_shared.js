@@ -1,10 +1,10 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
-import { assertAiRateLimit, getAiRateLimitConfig, getClientIpFromHeaders } from '../../src/utils/aiRateLimit.js';
-import { assertAiContentAllowed, makeImageModerationInput } from '../../src/utils/aiModeration.js';
-import { assertCorsRequestAllowed, makeCorsHeaders } from '../../src/utils/corsConfig.js';
-import { assertProjectSafety, parseProjectJsonPayload } from '../../src/utils/projectSafetyValidation.js';
+import { assertAiRateLimit, getAiRateLimitConfig, getClientIpFromHeaders } from '../../src/shared/utils/aiRateLimit.js';
+import { assertAiContentAllowed, makeImageModerationInput } from '../../src/shared/utils/aiModeration.js';
+import { assertCorsRequestAllowed, makeCorsHeaders } from '../../src/shared/utils/corsConfig.js';
+import { assertProjectSafety, parseProjectJsonPayload } from '../../src/shared/utils/projectSafetyValidation.js';
 import {
   createMissingStorageBucketError,
   getServerStorageBuckets,

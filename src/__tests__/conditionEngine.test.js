@@ -8,7 +8,7 @@ import {
   shouldBlockObjectiveFinalScene,
   isLogicRuleAvailable,
   isLogicRuleConfigured,
-} from '../lib/conditionEngine';
+} from '../shared/services/conditionEngine';
 
 describe('condition engine logic rules', () => {
   it('keeps disabled one-shot rules unavailable after use', () => {

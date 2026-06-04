@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { optimizeCharacterGlbFile } from '../utils/glbOptimizer';
+import { optimizeCharacterGlbFile } from '../shared/utils/glbOptimizer';
 
 const JSON_CHUNK_TYPE = 0x4e4f534a;
 const BIN_CHUNK_TYPE = 0x004e4942;

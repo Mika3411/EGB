@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildAdminStatistics } from '../lib/adminApi';
+import { buildAdminStatistics } from '../shared/services/adminApi';
 
 describe('admin statistics', () => {
   it('builds the admin overview from known account and activity data', () => {

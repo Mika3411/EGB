@@ -1,9 +1,9 @@
 import React from 'react';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import Tabs from '../components/Tabs.jsx';
-import { getSafeBuilderTab, isBuilderTab, isTabAllowedForProject } from '../utils/tutorialHelpers.js';
-import { getClassicBuilderTabValuesForMode } from '../utils/classicBuilderTabs.js';
+import Tabs from '../app/builder/navigation/BuilderDomainNav.jsx';
+import { getSafeBuilderTab, isBuilderTab, isTabAllowedForProject } from '../shared/utils/tutorialHelpers.js';
+import { getClassicBuilderTabValuesForMode } from '../shared/utils/classicBuilderTabs.js';
 
 const hiddenClassicTabs = ['Personnages 3D', 'Objets 3D', 'Cascadeur'];
 const hiddenClassicTabIds = ['characters3d', 'decors3d', 'stunts'];

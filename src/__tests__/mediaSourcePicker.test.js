@@ -5,7 +5,7 @@ import {
   dedupeLibraryItems,
   filterLibraryItems,
   matchesAssetScope,
-} from '../hooks/useMediaSourcePicker';
+} from '../shared/hooks/useMediaSourcePicker';
 
 describe('media source picker filters', () => {
   it('accepts imported mp3 assets for scene music even without a music role', () => {

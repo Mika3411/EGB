@@ -1,8 +1,8 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { useRpg3DProjectState, RPG3D_HISTORY_LIMIT } from '../hooks/useRpg3DProjectState.js';
-import { DEFAULT_ARCADE_CONFIG } from '../utils/rpg3dDomain.js';
-import { getActiveRpg3DCanvas } from '../utils/rpg3dStudioProject.js';
+import { useRpg3DProjectState, RPG3D_HISTORY_LIMIT } from '../domains/rpg3d/hooks/useRpg3DProjectState.js';
+import { DEFAULT_ARCADE_CONFIG } from '../shared/utils/rpg3dDomain.js';
+import { getActiveRpg3DCanvas } from '../shared/utils/rpg3dStudioProject.js';
 
 const renderProjectStateHook = () => {
   const selectedRef = { current: null };

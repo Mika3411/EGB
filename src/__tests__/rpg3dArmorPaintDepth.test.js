@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import {
   classifyArmorPaintSegment,
-} from '../components/arcade/rpg3dSceneActors.js';
+} from '../domains/rpg3d/arcade/rpg3dActorRigging.js';
 
 describe('armor paint depth guard', () => {
   it('keeps painted armor cuts on the painted surface depth', () => {

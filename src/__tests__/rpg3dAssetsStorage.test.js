@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { DEFAULT_ARCADE_CONFIG, cloneConfig } from '../utils/rpg3dDomain.js';
-import { createDefaultStudioProject } from '../utils/rpg3dStudioProject.js';
+import { DEFAULT_ARCADE_CONFIG, cloneConfig } from '../shared/utils/rpg3dDomain.js';
+import { createDefaultStudioProject } from '../shared/utils/rpg3dStudioProject.js';
 import {
   ARCADE_ASSETS_BACKUP_STORAGE_KEY,
   ARCADE_ASSETS_REMOTE_VERSION,
@@ -27,7 +27,7 @@ import {
   selectPreferredArcadeAssets,
   stripVolatileModelData,
   syncConfigModelReferences,
-} from '../utils/rpg3dAssetsStorage.js';
+} from '../shared/utils/rpg3dAssetsStorage.js';
 
 const toDataUrl = (mimeType, text) => `data:${mimeType};base64,${btoa(text)}`;
 

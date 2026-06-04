@@ -16,7 +16,7 @@ import {
   readCharacterModelImport,
   readDecorModelImport,
   resizeAxesProportionally,
-} from '../utils/rpg3dModelImport.js';
+} from '../shared/utils/rpg3dModelImport.js';
 
 const makeBoxObj = ({ width = 3, height = 2, depth = 4 } = {}) => [
   'o Box',

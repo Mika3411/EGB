@@ -7,7 +7,7 @@ Cette page documente le combat Hero Adventure côté développeur. La règle d'o
 - `src/lib/combatEngine.js` : règles pures, jets, mana, dégâts, critiques, résistances, victoire/défaite, récompense, simulation et équilibrage.
 - `src/lib/combatDefaults.js` : valeurs par défaut globales du combat et defaults des médias d'impact.
 - `src/hooks/usePreviewPlayer.js` : branchement runtime React, état courant du héros et de l'ennemi, messages et effets visuels.
-- `src/components/CombatTab.jsx` : éditeur, simulation ponctuelle et mode équilibrage.
+- `src/components/CombatWorkspace.jsx` : éditeur, simulation ponctuelle et mode équilibrage.
 - `src/utils/standaloneHtml.js` : sérialisation des helpers nécessaires pour que l'export standalone joue les mêmes règles.
 
 ## Stats disponibles
@@ -157,7 +157,7 @@ La fonction centrale est `resolveEnemyCombatAttack()`.
 - `heroDamagePerRound`, `enemyDamagePerRound`, `totalDamagePerRound`
 - `logs`
 
-`estimateCombatBalance()` lance plusieurs simulations avec un générateur pseudo-aléatoire seedé. Le mode équilibrage de `CombatTab.jsx` utilise 300 itérations et affiche :
+`estimateCombatBalance()` lance plusieurs simulations avec un générateur pseudo-aléatoire seedé. Le mode équilibrage de `CombatWorkspace.jsx` utilise 300 itérations et affiche :
 
 - chance de victoire estimée
 - durée moyenne
@@ -176,9 +176,9 @@ Les effets configurables actuels sont les médias d'impact `hit` et `death` pour
 Pour ajouter un nouvel outcome configurable, par exemple `shield` :
 
 1. Ajouter le slot dans `COMBAT_EFFECT_SLOTS` dans `src/lib/combatDefaults.js`.
-2. Ajouter son libellé dans `COMBAT_EFFECT_EDITOR_SLOTS` dans `src/components/CombatTab.jsx`.
+2. Ajouter son libellé dans `COMBAT_EFFECT_EDITOR_SLOTS` dans `src/components/CombatWorkspace.jsx`.
 3. Déclencher l'effet dans `src/hooks/usePreviewPlayer.js`, idéalement via `makeCombatVisualEffect()` ou une variante de `makeCombatOutcomeEffect()`.
-4. Vérifier que `src/components/PreviewTab.jsx` rend bien le nouveau `effect.type` avec une classe CSS adaptée.
+4. Vérifier que `src/components/PlaytestWorkspace.jsx` rend bien le nouveau `effect.type` avec une classe CSS adaptée.
 5. Si l'effet doit exister en export standalone, ajouter le rendu équivalent dans `src/utils/standaloneHtml.js`.
 6. Ajouter ou adapter un test si l'effet dépend d'une règle de calcul.
 
@@ -201,7 +201,7 @@ Pour un effet qui change les règles, par exemple poison, bouclier ou vol de vie
 1. Ajouter les champs de données dans les entrées de combat et/ou `DEFAULT_COMBAT_SETTINGS`.
 2. Normaliser ces champs dans `getCombatEnemyStats()` ou `getCombatSimulationStats()`.
 3. Appliquer la règle dans `resolveHeroCombatAttack()`, `resolveEnemyCombatAttack()` ou `resolveCombatExchange()`.
-4. Exposer le réglage dans `CombatTab.jsx`.
+4. Exposer le réglage dans `CombatWorkspace.jsx`.
 5. Mettre à jour `usePreviewPlayer.js` pour les messages, l'état persistant et les effets visuels.
 6. Mettre à jour `standaloneHtml.js` si la règle doit fonctionner dans les jeux exportés.
 7. Ajouter des tests unitaires dans `src/__tests__/combatEngine.test.js`.

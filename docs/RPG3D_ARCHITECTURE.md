@@ -4,7 +4,7 @@ Document court pour reprendre le module RPG 3D sans devoir relire toute la carte
 
 ## Vue d'ensemble
 
-Le point d'entree UI est `src/components/Rpg3DMode.jsx`. Il assemble les panneaux, l'etat projet, la boucle de jeu et le viewport Three.js.
+Le point d'entree UI est `src/components/Rpg3DStudio.jsx`. Il assemble les panneaux, l'etat projet, la boucle de jeu et le viewport Three.js.
 
 Les blocs principaux sont :
 
@@ -19,7 +19,7 @@ Les blocs principaux sont :
 
 ## Flux Edit / Play
 
-En mode edit, `Rpg3DMode` modifie `config` via les hooks `useRpg3DMapHandlers`, `useRpg3DActionZoneEditing`, `useRpg3DPlacement`, `useRpg3DEditingCommands`, etc. Les edits passent par `patchConfig` ou `patchConfigWithoutHistory`; les changements structurants doivent pousser un snapshot d'historique.
+En mode edit, `Rpg3DStudio` modifie `config` via les hooks `useRpg3DMapHandlers`, `useRpg3DActionZoneEditing`, `useRpg3DPlacement`, `useRpg3DEditingCommands`, etc. Les edits passent par `patchConfig` ou `patchConfigWithoutHistory`; les changements structurants doivent pousser un snapshot d'historique.
 
 En mode play, `useRpg3DGameLoop` lit `configRef.current` et mute `stateRef.current` a chaque frame : joueur, ennemis, pickups, projectiles, particules, score, victoire/defaite et messages. La UI ne lit pas directement chaque mutation : elle recoit des snapshots periodiques via `createRuntimeUiSnapshot`.
 

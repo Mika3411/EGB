@@ -5,7 +5,7 @@ import {
   normalizeHeroRuntimeSaveState,
   normalizeHeroRuntimeState,
   normalizeLastDiceRoll,
-} from '../lib/heroRuntimeState.js';
+} from '../shared/services/heroRuntimeState.js';
 
 const fallbackHero = {
   id: 'hero-1',

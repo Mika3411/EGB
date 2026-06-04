@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculateProjectScore } from '../lib/projectScoreEngine';
+import { calculateProjectScore } from '../shared/services/projectScoreEngine';
 
 const makeHeroProject = ({ combat = null } = {}) => ({
   creationMode: 'hero_adventure',

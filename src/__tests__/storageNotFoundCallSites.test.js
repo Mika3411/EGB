@@ -14,7 +14,7 @@ const storageMock = vi.hoisted(() => ({
   uploadToStorage: vi.fn(),
 }));
 
-vi.mock('../supabaseStorage', () => storageMock);
+vi.mock('../shared/storage/supabaseStorage', () => storageMock);
 
 const missingStorageError = {
   name: 'StorageError',
@@ -48,7 +48,7 @@ afterEach(() => {
 
 describe('Storage not-found call sites', () => {
   test('first-run: loadPublicProjectIndex retourne un index vide si le manifeste public est absent', async () => {
-    const { loadPublicProjectIndex } = await import('../lib/authStorage');
+    const { loadPublicProjectIndex } = await import('../shared/services/authStorage');
 
     await expect(loadPublicProjectIndex()).resolves.toEqual([]);
 
@@ -57,7 +57,7 @@ describe('Storage not-found call sites', () => {
   });
 
   test('fichier utilisateur absent: loadProjectRecordsForUser retourne null', async () => {
-    const { loadProjectRecordsForUser } = await import('../lib/authStorage');
+    const { loadProjectRecordsForUser } = await import('../shared/services/authStorage');
 
     await expect(loadProjectRecordsForUser('user-1')).resolves.toBeNull();
 
@@ -66,7 +66,7 @@ describe('Storage not-found call sites', () => {
   });
 
   test('projet utilisateur absent: loadProjectForUser retourne null sans fallback local', async () => {
-    const { loadProjectForUser } = await import('../lib/authStorage');
+    const { loadProjectForUser } = await import('../shared/services/authStorage');
 
     await expect(loadProjectForUser('user-1')).resolves.toBeNull();
 
@@ -75,7 +75,7 @@ describe('Storage not-found call sites', () => {
   });
 
   test('suppression projet: deleteProjectRecordForUser retire le fichier distant prive', async () => {
-    const { deleteProjectRecordForUser } = await import('../lib/authStorage');
+    const { deleteProjectRecordForUser } = await import('../shared/services/authStorage');
 
     await expect(deleteProjectRecordForUser('user-1', {
       id: 'project-1',
@@ -88,7 +88,7 @@ describe('Storage not-found call sites', () => {
   });
 
   test('suppression projet: un storagePath hors utilisateur est ignore', async () => {
-    const { deleteProjectRecordForUser } = await import('../lib/authStorage');
+    const { deleteProjectRecordForUser } = await import('../shared/services/authStorage');
 
     await expect(deleteProjectRecordForUser('user-1', {
       id: 'project-1',
@@ -102,7 +102,7 @@ describe('Storage not-found call sites', () => {
 
   test('publication: le navigateur ne tente pas d ecrire le manifeste public global', async () => {
     storageMock.uploadToStorage.mockResolvedValue(true);
-    const { saveProjectRecordsForUser } = await import('../lib/authStorage');
+    const { saveProjectRecordsForUser } = await import('../shared/services/authStorage');
 
     await expect(saveProjectRecordsForUser('user-1', [{
       id: 'project-1',
@@ -124,7 +124,7 @@ describe('Storage not-found call sites', () => {
   });
 
   test('API boutique absente: loadSharedShopPacks ne lit plus le manifeste Supabase public', async () => {
-    const { loadSharedShopPacks } = await import('../lib/shopPacksStorage');
+    const { loadSharedShopPacks } = await import('../shared/services/shopPacksStorage');
 
     await expect(loadSharedShopPacks()).resolves.toEqual([]);
 

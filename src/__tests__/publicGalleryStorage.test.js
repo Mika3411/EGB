@@ -5,7 +5,7 @@ import {
   ratePublicGame,
   readPublicFeedback,
   readPublicStats,
-} from '../lib/publicGalleryStorage';
+} from '../shared/services/publicGalleryStorage';
 
 const FEEDBACK_KEY = 'escapeGameBuilder.publicFeedback.v1';
 const STATS_KEY = 'escapeGameBuilder.publicStats.v1';

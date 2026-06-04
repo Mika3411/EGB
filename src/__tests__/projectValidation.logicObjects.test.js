@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validateProject } from '../utils/projectValidation';
+import { validateProject } from '../shared/utils/projectValidation';
 
 const makeProject = () => ({
   title: 'Projet logique objets',

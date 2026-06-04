@@ -4,7 +4,7 @@ import {
   makeImageModerationInput,
   scanLocalAiPolicy,
   summarizeModerationResult,
-} from '../utils/aiModeration';
+} from '../shared/utils/aiModeration';
 
 describe('AI moderation guards', () => {
   it('blocks protected character and franchise references locally', () => {

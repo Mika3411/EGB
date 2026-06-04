@@ -1,12 +1,12 @@
 import vm from 'node:vm';
 import JSZip from 'jszip';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { buildStandaloneModuleFiles } from '../utils/standaloneHtml';
-import { buildStandaloneCss } from '../utils/standalone/standaloneCss';
-import { exportStandalone } from '../utils/exportStandalone';
-import { downloadBlob } from '../utils/fileHelpers';
+import { buildStandaloneModuleFiles } from '../shared/utils/standaloneHtml';
+import { buildStandaloneCss } from '../shared/utils/standalone/standaloneCss';
+import { exportStandalone } from '../shared/utils/exportStandalone';
+import { downloadBlob } from '../shared/utils/fileHelpers';
 
-vi.mock('../utils/fileHelpers', () => ({
+vi.mock('../shared/utils/fileHelpers', () => ({
   downloadBlob: vi.fn(),
 }));
 

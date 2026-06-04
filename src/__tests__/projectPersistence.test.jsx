@@ -1,9 +1,9 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { createInitialProject } from '../data/projectData';
-import { useLocalAuth } from '../hooks/useLocalAuth';
+import { createInitialProject } from '../shared/data/projectData';
+import { useLocalAuth } from '../domains/auth/hooks/useLocalAuth';
 
-vi.mock('../supabaseStorage', () => ({
+vi.mock('../shared/storage/supabaseStorage', () => ({
   buildStoragePath: (...segments) => segments.filter(Boolean).join('/'),
   deleteStorageFile: vi.fn(),
   downloadTextFile: vi.fn(),
@@ -15,6 +15,7 @@ vi.mock('../supabaseStorage', () => ({
     },
   })),
   hasSupabaseAuthConfig: vi.fn(() => false),
+  hasSupabaseConfig: vi.fn(() => false),
   hasSupabaseStorageConfig: vi.fn(() => false),
   isStorageObjectAlreadyExistsError: vi.fn(() => false),
   isStorageNotFoundError: vi.fn(() => false),

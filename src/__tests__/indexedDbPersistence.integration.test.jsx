@@ -4,25 +4,25 @@ import FDBFactory from 'fake-indexeddb/lib/FDBFactory';
 import FDBKeyRange from 'fake-indexeddb/lib/FDBKeyRange';
 import FDBObjectStore from 'fake-indexeddb/lib/FDBObjectStore';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import AiTab from '../components/AiTab.jsx';
-import Character3DTab from '../components/Character3DTab.jsx';
-import Decor3DTab from '../components/Decor3DTab.jsx';
-import TwoDAnimeEditor from '../components/TwoDAnimeEditor.jsx';
-import { readAiDraft, readLocalAiDraft, saveFullAiDraftLocally } from '../components/ai/aiDraftPersistence';
-import { createInitialProject } from '../data/projectData';
-import useRpg3DSaveSync from '../hooks/rpg3d/useRpg3DSaveSync.js';
-import { useLocalAuth } from '../hooks/useLocalAuth';
-import { getAiDraftFallbackStorageKey } from '../utils/aiDraftStorageKeys';
-import { writeIndexedDraft } from '../utils/indexedDraftStorage';
-import { DEFAULT_ARCADE_CONFIG, cloneConfig } from '../utils/rpg3dDomain.js';
-import { createDefaultStudioProject } from '../utils/rpg3dStudioProject.js';
-import { getAnime2dDraftStorageKey } from '../utils/storageHelpers';
+import AiWorkbench from '../domains/ai/AiWorkbench.jsx';
+import CharacterStudio from '../domains/characters/CharacterStudio.jsx';
+import DecorStudio from '../domains/rpg3d/rigging/DecorStudio.jsx';
+import Anime2DStudio from '../domains/anime2d/Anime2DStudio.jsx';
+import { readAiDraft, readLocalAiDraft, saveFullAiDraftLocally } from '../domains/ai/components/aiDraftPersistence';
+import { createInitialProject } from '../shared/data/projectData';
+import useRpg3DSaveSync from '../domains/rpg3d/hooks/rpg3d/useRpg3DSaveSync.js';
+import { useLocalAuth } from '../domains/auth/hooks/useLocalAuth';
+import { getAiDraftFallbackStorageKey } from '../shared/utils/aiDraftStorageKeys';
+import { writeIndexedDraft } from '../shared/utils/indexedDraftStorage';
+import { DEFAULT_ARCADE_CONFIG, cloneConfig } from '../shared/utils/rpg3dDomain.js';
+import { createDefaultStudioProject } from '../shared/utils/rpg3dStudioProject.js';
+import { getAnime2dDraftStorageKey } from '../shared/utils/storageHelpers';
 import {
   cleanupOrphanedRpg3DLocalModelFiles,
   listRpg3DLocalModelFileRecords,
   loadLocalModelFile,
   persistLocalModelFile,
-} from '../utils/rpg3dAssetsStorage.js';
+} from '../shared/utils/rpg3dAssetsStorage.js';
 
 const modelImportMocks = vi.hoisted(() => ({
   readCharacterModelImport: vi.fn(async (file) => ({
@@ -45,9 +45,9 @@ const modelImportMocks = vi.hoisted(() => ({
   })),
 }));
 
-vi.mock('../utils/rpg3dModelImport', () => modelImportMocks);
+vi.mock('../shared/utils/rpg3dModelImport', () => modelImportMocks);
 
-vi.mock('../supabaseStorage', () => ({
+vi.mock('../shared/storage/supabaseStorage', () => ({
   buildStoragePath: (...segments) => segments.filter(Boolean).join('/'),
   deleteStorageFile: vi.fn(),
   downloadTextFile: vi.fn(),
@@ -183,7 +183,7 @@ const renderAiDraftTab = ({
 } = {}) => {
   stubAiCreditsFetch();
   return render(
-    <AiTab
+    <AiWorkbench
       project={project}
       getSceneLabel={(sceneOrId) => (
         typeof sceneOrId === 'string'
@@ -235,7 +235,7 @@ const makeAnimeDraft = (sceneName, savedAt) => ({
 });
 
 const renderAnimeEditor = ({ draftStorageKey, projectDraft = null }) => render(
-  <TwoDAnimeEditor
+  <Anime2DStudio
     projectName="Projet Anime Integration"
     projectDraft={projectDraft}
     draftStorageKey={draftStorageKey}
@@ -269,7 +269,7 @@ const renderCharacterImportTab = ({ localModelScope }) => {
   const Wrapper = () => {
     const [project, setProject] = React.useState(initialProject);
     return (
-      <Character3DTab
+      <CharacterStudio
         project={project}
         patchProject={makePatchProjectState(setProject)}
         selectedModelId="character-import-model"
@@ -295,7 +295,7 @@ const renderDecorImportTab = ({ localModelScope }) => {
   const Wrapper = () => {
     const [project, setProject] = React.useState(initialProject);
     return (
-      <Decor3DTab
+      <DecorStudio
         project={project}
         patchProject={makePatchProjectState(setProject)}
         selectedModelId="decor-import-model"

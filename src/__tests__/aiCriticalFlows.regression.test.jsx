@@ -1,10 +1,10 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import AiTab from '../components/AiTab.jsx';
-import { createInitialProject } from '../data/projectData';
-import { generateAiProject } from '../utils/aiProjectGenerator';
-import { showConfirm } from '../components/AccessibleDialog';
+import AiWorkbench from '../domains/ai/AiWorkbench.jsx';
+import { createInitialProject } from '../shared/data/projectData';
+import { generateAiProject } from '../shared/utils/aiProjectGenerator';
+import { showConfirm } from '../shared/ui/AccessibleDialog';
 
 const draftStorage = vi.hoisted(() => ({
   read: vi.fn(async () => null),
@@ -13,19 +13,19 @@ const draftStorage = vi.hoisted(() => ({
   removeMany: vi.fn(async () => undefined),
 }));
 
-vi.mock('../utils/aiProjectGenerator', () => ({
+vi.mock('../shared/utils/aiProjectGenerator', () => ({
   generateAiProject: vi.fn(),
 }));
 
-vi.mock('../utils/aiAuthHeaders', () => ({
+vi.mock('../shared/utils/aiAuthHeaders', () => ({
   getAiAuthHeaders: vi.fn(async () => ({})),
 }));
 
-vi.mock('../utils/indexedDraftStorage', () => ({
+vi.mock('../shared/utils/indexedDraftStorage', () => ({
   createIndexedDraftStorage: () => draftStorage,
 }));
 
-vi.mock('../components/AccessibleDialog', () => ({
+vi.mock('../shared/ui/AccessibleDialog', () => ({
   showConfirm: vi.fn(async () => true),
 }));
 
@@ -91,7 +91,7 @@ const renderAiTab = ({
 
   const project = createInitialProject();
   const view = render(
-    <AiTab
+    <AiWorkbench
       project={project}
       getSceneLabel={(sceneOrId) => (
         typeof sceneOrId === 'string'
@@ -215,7 +215,7 @@ describe('AI critical flows', () => {
 
     fireEvent.click(container.querySelector('[data-tour="ai-generate-button"]'));
     await waitFor(() => expect(screen.getByText('Projet IA')).toBeTruthy());
-    expect(screen.getByText(/Génération en cours/i)).toBeTruthy();
+    expect(screen.getAllByText(/Génération en cours/i).length).toBeGreaterThan(0);
 
     resolveGeneration({
       project: makeGeneratedProject(),

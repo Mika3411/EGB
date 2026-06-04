@@ -10,7 +10,7 @@ import {
   getHotspotRewardItemId,
   resolveHotspotInteraction,
   selectRewardInventoryItem,
-} from '../lib/gameEngine';
+} from '../shared/services/gameEngine';
 
 describe('hotspot runtime helpers', () => {
   it('computes inventory and viewer side-effect values without mutating inputs', () => {

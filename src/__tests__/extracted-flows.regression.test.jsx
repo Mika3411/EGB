@@ -1,21 +1,21 @@
 import React from 'react';
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { useAccessibleDialog } from '../components/AccessibleDialog';
-import MediaSourceModal from '../components/MediaSourceModal.jsx';
-import { createInitialProject } from '../data/projectData';
-import { useAccountStorage } from '../hooks/useAccountStorage';
-import { useBuilderProfileNavigation } from '../hooks/useBuilderProfileNavigation';
-import { useBuilderProjectFileActions } from '../hooks/useBuilderProjectFileActions';
-import { getProjectSaveStatus, useAutosaveProject } from '../hooks/useAutosaveProject';
-import { useProfileProjectActions } from '../hooks/useProfileProjectActions';
-import { useProjectSaveAcknowledger } from '../hooks/useProjectSaveAcknowledger';
-import { MB } from '../lib/storageQuota';
-import { fileToDataURL, uploadFileToSupabase } from '../utils/fileHelpers';
-import { removeMediaAssetsFromProject } from '../utils/mediaProjectHelpers';
-import { uploadToStorage } from '../supabaseStorage';
+import { useAccessibleDialog } from '../shared/ui/AccessibleDialog';
+import MediaSourceModal from '../shared/ui/media/MediaSourceModal.jsx';
+import { createInitialProject } from '../shared/data/projectData';
+import { useAccountStorage } from '../domains/auth/hooks/useAccountStorage';
+import { useBuilderProfileNavigation } from '../domains/profile/hooks/useBuilderProfileNavigation';
+import { useBuilderProjectFileActions } from '../app/builder/hooks/useBuilderProjectFileActions';
+import { getProjectSaveStatus, useAutosaveProject } from '../app/builder/hooks/useAutosaveProject';
+import { useProfileProjectActions } from '../domains/profile/hooks/useProfileProjectActions';
+import { useProjectSaveAcknowledger } from '../app/builder/hooks/useProjectSaveAcknowledger';
+import { MB } from '../shared/services/storageQuota';
+import { fileToDataURL, uploadFileToSupabase } from '../shared/utils/fileHelpers';
+import { removeMediaAssetsFromProject } from '../shared/utils/mediaProjectHelpers';
+import { uploadToStorage } from '../shared/storage/supabaseStorage';
 
-vi.mock('../supabaseStorage', () => ({
+vi.mock('../shared/storage/supabaseStorage', () => ({
   buildStoragePath: (...segments) => segments
     .filter(Boolean)
     .map((segment) => String(segment).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'asset')
@@ -26,6 +26,15 @@ vi.mock('../supabaseStorage', () => ({
     publicUrl: `https://cdn.test/${path}`,
     visibility: 'public',
   }),
+  getSupabaseClient: vi.fn(() => ({
+    auth: {
+      getSession: vi.fn(async () => ({ data: { session: null } })),
+      onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
+    },
+  })),
+  hasSupabaseAuthConfig: vi.fn(() => false),
+  hasSupabaseConfig: vi.fn(() => false),
+  hasSupabaseStorageConfig: vi.fn(() => true),
   isStorageObjectAlreadyExistsError: (error) => error?.code === 'already-exists',
   uploadToStorage: vi.fn(async (path, file, options) => ({
     path,

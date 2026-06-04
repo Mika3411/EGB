@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
-import Rpg3DStage from '../components/rpg3d/Rpg3DStage.jsx';
-import { DEFAULT_ARCADE_CONFIG } from '../utils/rpg3dDomain.js';
+import Rpg3DStage from '../domains/rpg3d/components/Rpg3DStage.jsx';
+import { DEFAULT_ARCADE_CONFIG } from '../shared/utils/rpg3dDomain.js';
 
-vi.mock('../components/arcade/ArcadeThreeViewport.jsx', () => ({
+vi.mock('../domains/rpg3d/arcade/ArcadeThreeViewport.jsx', () => ({
   default: () => <div data-testid="arcade-three-viewport" />,
 }));
 

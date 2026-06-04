@@ -60,7 +60,7 @@ import {
   getWorldCoverTileSize,
   isFlatGroundPlateauProp,
   isFlatTileLikeProp,
-} from '../utils/rpg3dDomain.js';
+} from '../shared/utils/rpg3dDomain.js';
 
 describe('rpg3d domain helpers', () => {
   it('keeps the default arcade config and exported constants stable', () => {

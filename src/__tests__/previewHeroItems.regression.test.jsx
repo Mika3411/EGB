@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, test } from 'vitest';
-import { usePreviewPlayer } from '../hooks/usePreviewPlayer';
+import { usePreviewPlayer } from '../domains/player/hooks/usePreviewPlayer';
 
 const makeHeroItemProject = () => ({
   id: 'preview-hero-items',

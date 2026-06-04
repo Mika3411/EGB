@@ -1,9 +1,9 @@
 import { webcrypto } from 'node:crypto';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { useBuilderMediaUpload } from '../hooks/useBuilderMediaUpload';
-import { MB, getAccountStorageUsageBytes } from '../lib/storageQuota';
-import { uploadFileToSupabase } from '../utils/fileHelpers';
+import { useBuilderMediaUpload } from '../domains/media/hooks/useBuilderMediaUpload';
+import { MB, getAccountStorageUsageBytes } from '../shared/services/storageQuota';
+import { uploadFileToSupabase } from '../shared/utils/fileHelpers';
 
 const storageMock = vi.hoisted(() => {
   const sanitizeSegment = (value = '') => String(value || '')
@@ -18,17 +18,28 @@ const storageMock = vi.hoisted(() => {
   return {
     buildStoragePath: vi.fn((...segments) => segments.filter(Boolean).map(sanitizeSegment).join('/')),
     generateStorageFilename: vi.fn((filename) => `generated-${sanitizeSegment(filename)}`),
+    getSupabaseClient: vi.fn(() => ({
+      auth: {
+        getSession: vi.fn(async () => ({ data: { session: null } })),
+        onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
+      },
+    })),
     getPublicStorageUploadResult: vi.fn(),
+    hasSupabaseAuthConfig: vi.fn(() => false),
+    hasSupabaseConfig: vi.fn(() => false),
     hasSupabaseStorageConfig: vi.fn(),
     isStorageObjectAlreadyExistsError: vi.fn(),
     uploadToStorage: vi.fn(),
   };
 });
 
-vi.mock('../supabaseStorage', () => ({
+vi.mock('../shared/storage/supabaseStorage', () => ({
   buildStoragePath: storageMock.buildStoragePath,
   generateStorageFilename: storageMock.generateStorageFilename,
+  getSupabaseClient: storageMock.getSupabaseClient,
   getPublicStorageUploadResult: storageMock.getPublicStorageUploadResult,
+  hasSupabaseAuthConfig: storageMock.hasSupabaseAuthConfig,
+  hasSupabaseConfig: storageMock.hasSupabaseConfig,
   hasSupabaseStorageConfig: storageMock.hasSupabaseStorageConfig,
   isStorageObjectAlreadyExistsError: storageMock.isStorageObjectAlreadyExistsError,
   uploadToStorage: storageMock.uploadToStorage,

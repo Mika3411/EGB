@@ -4,14 +4,24 @@ Ce mode d'emploi explique comment créer, tester, partager et publier un escape 
 
 ## 1. Utiliser l'écran Profil
 
-L'écran **Profil** est le tableau dé bord de tes projets.
+L'écran **Profil** est le tableau de bord de tes projets. Il est organisé par onglets pour séparer les tâches importantes : créer un projet, reprendre un jeu, ranger les médias, publier, lire la messagerie et modifier ton compte.
 
 Il sert aussi de point de contrôle avant d'entrer dans l'éditeur. Prends l'habitude de regarder le statut, les dates de modification et les indicateurs des cartes de projet avant de reprendre une version. Si un projet commence à devenir complexe, renomme-le clairement et duplique-le avant les gros changements.
 
+### Onglets du profil
+
+- **Nouveau projet** : crée un jeu, choisit le mode de création, applique un template ou importe un JSON.
+- **Projets** : reprend, teste, renomme, duplique ou supprime les projets sauvegardés.
+- **Médias** : affiche les fichiers utilisés, leur poids, leur dossier et leurs usages.
+- **Publication** : prépare les informations publiques, la miniature, le lien jouable et la présence dans la galerie.
+- **Messagerie** : regroupe les échanges support liés au compte.
+- **Profil** : règle l'identité publique et la sécurité du compte.
+
 ### Créer un nouveau projet
 
-1. Dans **Nouveau projet**, écris le nom de ton escape game.
-2. Choisis un template :
+1. Dans l'onglet **Nouveau projet**, écris le nom de ton escape game.
+2. Choisis un mode de création selon la complexité voulue : débutant, intermédiaire, expert, narration ou Hero aventure.
+3. Choisis un template :
    - **Projet vide** : démarre avec une base minimale.
    - **Narration choix multiples** : prépare des scènes reliées par des choix, conversations, réponses cachées et fins.
    - **Hero aventure** : ajoute une base de livre-jeu avec jet de dé virtuel, points de vie, mana et compétences.
@@ -19,7 +29,7 @@ Il sert aussi de point de contrôle avant d'entrer dans l'éditeur. Prends l'hab
    - **Enquête policière** : prépare une structure d'investigation.
    - **Laboratoire** : prépare une ambiance scientifique.
    - **Musée** : prépare une aventure autour d'artefacts.
-3. Clique sur **Créer**.
+4. Clique sur **Créer** pour ouvrir directement l'éditeur, ou sur **Créer avec aide guidée** si tu veux construire une première boucle avec le didacticiel.
 
 Le template donne une première structure, mais tu peux tout modifier ensuite.
 
@@ -27,7 +37,7 @@ Le mode **Hero aventure** reprend la logique du mode à choix multiples, mais aj
 
 ### Gérer les projets existants
 
-Dans **Mes projets**, chaque projet peut être :
+Dans l'onglet **Projets**, chaque projet peut être :
 
 - **ouvert** pour reprendre l'édition ;
 - **renommé** pour corriger son titre ;
@@ -43,7 +53,7 @@ Les compteurs et avertissements affichés sur les cartes ne remplacent pas un vr
 
 ### Importer un projet JSON
 
-Le bouton **Importer un projet JSON** sert à récupérer un projet précédemment exporté.
+Dans **Nouveau projet**, le bloc d'import sert à récupérer un projet précédemment exporté.
 
 Utilise cette fonction pour :
 
@@ -78,22 +88,23 @@ Différence importante :
 Pour éviter de se perdre, construis ton jeu dans cet ordre :
 
 1. Crée les scènes principales.
-2. Ajoute les images et effets dans **Média**.
-3. Place les objets visibles et les zones cliquables dans **Scènes**.
-4. Crée les objets d'inventaire.
-5. Crée les énigmes.
-6. Relie les énigmes aux zones d'action.
-7. Ajoute les cinématiques.
-8. Prépare les animations 2D dans **Animation** si ton jeu en utilise.
-9. Crée les combinaisons d'objets.
-10. Ajoute les règles avancées dans **Logique**.
-11. Si tu fais une aventure à choix multiples, construis les conversations, réponses cachées, variables d'histoire et fins multiples.
-12. Si tu fais une **Hero aventure**, définis les tests et combats importants : compétence utilisée, difficulté, coût de mana, dégâts, récompense et branche en cas d'échec.
-13. Ouvre **Narration** pour contrôler les branches, variables, réponses cachées et fins.
-14. Dessine le parcours dans **Plan** et vérifie la **Logique narrative**.
-15. Teste du début à la fin dans **Preview**.
-16. Corrige avec **Bilan**.
-17. Publie ou exporte.
+2. Crée les objets d'inventaire importants dans **Objets**.
+3. Ajoute les images, effets, sons et transitions dans **Média**.
+4. Place les objets visibles et les zones cliquables dans **Scènes**.
+5. Règle le comportement des objets visibles : pop-up, inventaire, dialogue ou retrait après usage.
+6. Crée les énigmes.
+7. Relie les énigmes aux zones d'action ou aux objets interactifs.
+8. Ajoute les cinématiques.
+9. Prépare les animations 2D dans **Animation** si ton jeu en utilise.
+10. Crée les combinaisons d'objets.
+11. Ajoute les règles avancées dans **Logique**.
+12. Si tu fais une aventure à choix multiples, construis les conversations, réponses cachées, variables d'histoire et fins multiples.
+13. Si tu fais une **Hero aventure**, définis les tests et combats importants : compétence utilisée, difficulté, coût de mana, dégâts, récompense et branche en cas d'échec.
+14. Ouvre **Narration** pour contrôler les branches, variables, réponses cachées et fins.
+15. Dessine le parcours dans **Plan** et vérifie la **Logique narrative**.
+16. Teste du début à la fin dans **Preview**.
+17. Corrige avec **Bilan**.
+18. Publie ou exporte.
 
 Cette méthode n'est pas obligatoire, mais elle évite les blocages les plus courants. Si tu commences par les images ou les énigmes, reviens ensuite au parcours global : chaque indice doit mener à une action, chaque action importante doit être testée, et chaque scène doit avoir une raison d'exister.
 
@@ -102,6 +113,26 @@ Cette méthode n'est pas obligatoire, mais elle évite les blocages les plus cou
 L'onglet **Scènes** sert à construire les lieux du jeu et les interactions placées dessus.
 
 Pense à cet onglet comme à l'atelier de jouabilité. Le décor vient de **Média**, mais c'est ici que tu décides ce que le joueur peut réellement faire : inspecter, ramasser, changer de lieu, résoudre une énigme ou déclencher une conséquence.
+
+### Organisation du studio de scène
+
+La nouvelle interface de **Scènes** est découpée en quatre zones :
+
+- **Navigation** à gauche : actes, scènes principales et sous-scènes. Utilise-la pour passer vite d'un lieu à l'autre.
+- **Général & structure** en haut : nom, acte, scène parente et texte d'introduction.
+- **Plan de scène** au centre : canvas où tu vois le décor et où tu places objets visibles, zones d'action et effets locaux.
+- **Panneau de sélection** à droite : réglages de l'élément sélectionné, par exemple position, taille, action, dialogue, objet lié ou effet.
+
+Sur le canvas, le bouton de tiroir ouvre **Zones et objets**. Ce tiroir liste les calques de la scène : objets visibles, zones d'action et zones visuelles. Il sert à sélectionner un élément difficile à cliquer, masquer un calque, le verrouiller ou changer son ordre d'affichage.
+
+Le menu **Ajouter** dans la barre du canvas sert à poser de nouveaux éléments :
+
+- **Zone d'action** : une zone cliquable qui déclenche dialogue, objet, scène, cinématique, énigme, conversation, test ou combat selon le mode.
+- **Objet visible** : une image ou un objet d'inventaire placé dans le décor.
+- **Bloc** : texte, image, bouton, champ de saisie, code ou indice pour les modes avancés.
+- **Animation** : animation 2D importée depuis l'onglet Animation, dans les modes qui l'autorisent.
+- **Objet invisible** : zone technique utile quand tu veux une interaction sans visuel.
+- **Zone visuelle** : effet local pour attirer l'attention ou renforcer l'ambiance.
 
 ### Champs principaux d'une scène
 
@@ -146,9 +177,11 @@ Mauvais exemple :
 
 Le deuxième donne trop directement la solution.
 
-### Objets d'inventaire
+### Onglet Objets et objets d'inventaire
 
 Un objet d'inventaire est ce que le joueur peut obtenir, garder, utiliser ou combiner.
+
+Crée sa fiche dans l'onglet **Objets** avant de le placer ou de le donner au joueur. Cette fiche contient son nom, son image ou son emoji de secours, et ses éventuels effets Hero aventure. Ensuite, dans **Scènes**, tu peux relier cet objet à une zone d'action ou à un objet visible.
 
 Champs importants :
 
@@ -172,6 +205,8 @@ Un bon objet d'inventaire a souvent trois qualités : un nom compréhensible, un
 
 Un objet visible est placé directement sur l'image de la scène. Il peut être cliquable, inspecté, ramassé ou les deux.
 
+Pour poser un objet visible, sélectionne la scène, ouvre **Ajouter**, puis choisis **Objet visible**. Si un objet d'inventaire est déjà sélectionné ou disponible, le builder peut reprendre son nom et son image pour le placer au centre du canvas. Déplace ensuite l'objet dans le décor, puis règle son comportement dans le panneau de sélection.
+
 Champs importants :
 
 - **Nom** : nom interne pour retrouver l'objet dans les calques et les listes.
@@ -179,11 +214,11 @@ Champs importants :
 - **Y** : position verticale du centre, en pourcentage de la hauteur de l'image. `0` = haut, `100` = bas.
 - **Largeur** : largeur de la zone cliquable et de l'image visible, en pourcentage.
 - **Hauteur** : hauteur de la zone cliquable et de l'image visible, en pourcentage.
-- **Image visible** : image affichée dans la scène à l'emplacement choisi.
-- **Image pop-up** : image montrée en grand quand le joueur inspecte l'objet.
+- **Image fixe** : image affichée dans la scène si l'objet ne reprend pas directement l'image d'un objet d'inventaire.
 - **Mode d'interaction** : définit si le clic montre un pop-up, ajoute un objet à l'inventaire, ou fait les deux.
 - **Objet d'inventaire lié** : objet ajouté à l'inventaire si le mode inclut l'inventaire.
 - **Dialogue** : texte affiché lors de l'interaction.
+- **Retirer l'objet visible après interaction** : masque l'objet après un ramassage ou une utilisation réussie.
 
 Modes d'interaction :
 
@@ -195,9 +230,13 @@ Conseil : sur mobile, évite les objets trop petits. Une largeur ou hauteur trop
 
 Pour les objets importants, vérifie aussi leur profondeur d'affichage et leur visibilité sur le fond. Un objet très sombre sur un fond sombre peut être techniquement présent mais invisible pour le joueur. Utilise l'aperçu ou la Preview pour contrôler la lisibilité réelle.
 
+Si tu ne retrouves pas un objet sur le canvas, ouvre le tiroir **Zones et objets**. Tu peux le sélectionner depuis la liste, le rendre visible, le déverrouiller ou le passer devant les autres éléments.
+
 ### Zones d'action
 
 Une zone d'action est une zone cliquable invisible ou semi-visible. Elle déclenche une action après validation des prérequis éventuels.
+
+Pour en créer une, ouvre **Ajouter** dans le canvas, puis choisis **Zone d'action**. La zone apparaît au centre de la scène : déplace-la sur une porte, un tiroir, un objet du décor ou un détail que le joueur doit pouvoir cliquer. Une fois sélectionnée, le panneau de droite affiche sa fiche complète.
 
 Champs importants :
 
@@ -221,6 +260,8 @@ Actions typiques :
 - lancer une cinématique ;
 - ouvrir une énigme ;
 - ouvrir une conversation texte pour un mode narration à choix multiples.
+
+Quand une zone est sélectionnée, une petite barre d'actions rapides peut apparaître au-dessus du canvas : dupliquer, masquer, verrouiller, changer l'ordre d'affichage, modifier rapidement l'action ou tester la zone. Utilise-la pour les corrections courtes, puis passe par le panneau de droite pour les réglages détaillés.
 
 ### Conversations et choix multiples
 
@@ -349,12 +390,14 @@ Utilise la deuxième action pour donner un retour naturel après un événement 
 
 Une scène peut contenir des zones d'effet visuel localisées.
 
+Crée-les depuis **Scènes > Ajouter > Zone visuelle**, puis ajuste leur effet dans le panneau de sélection. L'onglet **Média** affiche aussi la liste des zones visuelles de la scène pour régler rapidement leur effet et leur intensité.
+
 Champs importants :
 
 - **Nom** : nom interne de la zone d'effet.
 - **Effet** : effet affiché uniquement dans cette zone.
 - **Intensité** : force de l'effet.
-- **Profondeur** : détermine si l'effet passe derrière les objets, entre les objets et les zones, ou au-dessus de tout.
+- **Calque** : détermine si l'effet passe derrière les objets, entre les objets et les zones, ou au-dessus de tout.
 - **X**, **Y**, **Largeur**, **Hauteur** : position et taille dé la zone visuelle.
 
 Utilise-les pour attirer l'attention sans casser l'immersion : lumière sur un coffre, fumée devant une porte, étincelles sur un mécanisme.
@@ -371,6 +414,14 @@ Il complète l'onglet **Scènes** : tu y règles l'ambiance générale avant de 
 
 **Scène**  
 Choisis la scène dont tu veux régler les images, sons et effets.
+
+Les badges de statut indiquent rapidement ce qui est prêt : fond, effet, musique, son secondaire, transition ou minuteur. Ils ne remplacent pas un test, mais ils permettent de repérer une scène encore vide.
+
+### Aperçu de la scène
+
+L'aperçu de **Média** montre le rendu du fond, de l'effet global, des zones visuelles, des objets visibles, des zones d'action et du minuteur. Utilise-le pour vérifier l'ambiance avant de revenir dans **Scènes**.
+
+Cet aperçu est un contrôle visuel rapide. Pour vérifier les clics, l'inventaire, les dialogues et les changements de scène, passe ensuite dans **Preview**.
 
 ### Image et ambiance
 

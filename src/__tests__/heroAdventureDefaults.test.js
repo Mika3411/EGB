@@ -3,11 +3,11 @@ import {
   DEFAULT_HERO_ADVENTURE,
   DEFAULT_HERO_EDITOR_ADVENTURE,
   normalizeHeroAdventure,
-} from '../lib/heroAdventureDefaults.js';
+} from '../shared/services/heroAdventureDefaults.js';
 import {
   DEFAULT_HERO_ADVENTURE as PREVIEW_DEFAULT_HERO_ADVENTURE,
   normalizeHeroAdventure as normalizePreviewHeroAdventure,
-} from '../hooks/preview/previewPlayerDefaults.js';
+} from '../domains/player/hooks/preview/previewPlayerDefaults.js';
 
 describe('hero adventure defaults', () => {
   it('keeps preview defaults and normalizer exported from the shared source', () => {
@@ -57,7 +57,7 @@ describe('hero adventure defaults', () => {
     expect(normalized.rules.criticalMultiplier).toBe(2.5);
   });
 
-  it('keeps HeroTab editor defaults available through the shared normalizer profile', () => {
+  it('keeps HeroDesigner editor defaults available through the shared normalizer profile', () => {
     const normalized = normalizeHeroAdventure({ creationMode: 'classic' }, {
       defaults: DEFAULT_HERO_EDITOR_ADVENTURE,
       profile: 'editor',
@@ -77,7 +77,7 @@ describe('hero adventure defaults', () => {
     });
   });
 
-  it('preserves HeroTab editor clamping and generated ids', () => {
+  it('preserves HeroDesigner editor clamping and generated ids', () => {
     const normalized = normalizeHeroAdventure({
       heroAdventure: {
         enabled: true,

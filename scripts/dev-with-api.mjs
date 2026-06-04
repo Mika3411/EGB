@@ -48,7 +48,7 @@ process.on('SIGTERM', () => shutdown(0));
 if (await isPortOpen(API_PORT)) {
   console.log(`API already available on http://localhost:${API_PORT}`);
 } else {
-  run('node', ['server.js']);
+  run('node', ['server/index.js']);
 }
 
 run('npx', viteArgs);

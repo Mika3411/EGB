@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "api": "node server.js",
+    "api": "node server/index.js",
     "dev": "node scripts/dev-with-api.mjs",
     "dev:ui": "vite",
     "build": "vite build && node scripts/generate-seo-files.mjs",
@@ -13,7 +13,7 @@
     "test": "vitest run",
     "test:rpg3d:smoke": "playwright test tests/e2e/rpg3d-smoke.spec.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "start": "node server.js"
+    "start": "node server/index.js"
   },
   "dependencies": {
     "@gltf-transform/cli": "4.3.0",

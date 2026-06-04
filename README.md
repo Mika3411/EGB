@@ -21,7 +21,7 @@ L'application permet de construire un projet avec des scenes interactives, des o
 
 - React 18
 - Vite
-- Node.js / Express-like server local dans `server.js`
+- Node.js / Express-like server local dans `server/index.js`
 - Netlify Functions pour les endpoints deployes
 - Supabase Auth + Storage
 - Vitest + Testing Library
@@ -74,13 +74,23 @@ npm run dev:ui
 ```bash
 npm run dev       # Lance l'API locale et Vite
 npm run dev:ui    # Lance uniquement Vite
-npm run api       # Lance uniquement server.js
+npm run api       # Lance uniquement server/index.js
 npm run build     # Build production + generation SEO
 npm run preview   # Preview du build Vite
 npm test          # Lance les tests Vitest
 npm run check     # Verifications de release
-npm start         # Lance server.js
+npm start         # Lance server/index.js
 ```
+
+## Organisation du depot
+
+- `src/` : code applicatif React organise entre domaines metier, shared, tests et assets Vite.
+- `assets/` : assets sources ou generes conserves comme references, hors bundle direct.
+- `public/` : fichiers statiques publics copies tels quels dans le build.
+- `docs/` : documentation, exemples de projet, previews manuelles et artefacts QA.
+- `netlify/functions/` : fonctions serverless deployees.
+- `server/` : API locale Node.js, entree principale dans `server/index.js`.
+- `dist/` : sortie de build generee et ignoree par Git.
 
 ## Variables d'environnement
 
@@ -114,12 +124,32 @@ Voir la documentation dediee :
 
 ```text
 src/
-  components/      Interfaces React : builder, profil, galerie, onglets
-  hooks/           Etat metier, auth locale, autosave, preview, stockage
-  lib/             Moteurs et services : jeu, galerie, scoring, assets, boutique
-  utils/           Export, validation, fichiers, IA, quotas et helpers
-  data/            Donnees initiales, templates et tutoriels
-  styles/          CSS global, layout, composants et features
+  app/             Shell React, studio builder, navigation et hooks d'orchestration
+  domains/
+    admin/         Administration, moderation, statistiques
+    ai/            Generation IA, drafts et workbench image
+    analytics/     Bilan qualite et scoring de projet
+    anime2d/       Editeur et preview animation 2D
+    auth/          Auth locale et entree login/register
+    characters/    Personnages, heros, preview 3D et rigging
+    combat/        Reglages, simulation et equilibrage combat
+    gallery/       Galerie publique
+    media/         Mediatheque et upload
+    player/        Preview joueur et runtime de lecture
+    profile/       Profil auteur, projets et medias
+    resources/     Documentation et bibliotheque de ressources
+    rpg3d/         Mode RPG 3D, arcade, rigging decor et outils modele
+    scenes/        Scenes, objets, routes, narration, enigmes, logique et cinematics
+    shop/          Boutique et packs
+    support/       Widget et messagerie support
+  shared/
+    data/          Donnees initiales, templates et tutoriels partages
+    hooks/         Hooks communs reutilisables
+    selectors/     Selecteurs transversaux
+    services/      Moteurs, stockage, scoring et services applicatifs
+    ui/            Composants UI communs, formulaires, layout et media picker
+    utils/         Export, validation, fichiers, quotas et helpers generiques
+  styles/          CSS global, layout, composants, domaines et responsive
 
 netlify/functions/ Endpoints serverless de production
 supabase/          Scripts SQL et configuration liee a Supabase

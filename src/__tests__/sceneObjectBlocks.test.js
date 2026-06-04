@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applySceneObjectTextOverride } from '../lib/sceneObjectBlocks';
+import { applySceneObjectTextOverride } from '../shared/services/sceneObjectBlocks';
 
 describe('scene object block text overrides', () => {
   it('maps update_text overrides to the visible field for each block kind', () => {

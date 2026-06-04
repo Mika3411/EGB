@@ -52,7 +52,7 @@ const setupSupabaseStorage = async ({
     },
   });
 
-  return import('../supabaseStorage');
+  return import('../shared/storage/supabaseStorage');
 };
 
 beforeEach(() => {
@@ -126,7 +126,7 @@ describe('supabaseStorage', () => {
       hasSupabaseConfig,
       hasSupabaseStorageConfig,
       uploadToStorage,
-    } = await import('../supabaseStorage');
+    } = await import('../shared/storage/supabaseStorage');
 
     expect(hasSupabaseAuthConfig()).toBe(true);
     expect(hasSupabaseConfig()).toBe(true);

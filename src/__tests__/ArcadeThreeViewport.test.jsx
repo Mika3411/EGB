@@ -7,7 +7,7 @@ import {
   getNesoCameraTarget,
   getNesoViewEntity,
   syncArcadeShadowMapForFrame,
-} from '../components/arcade/ArcadeThreeViewport.jsx';
+} from '../domains/rpg3d/arcade/ArcadeThreeViewport.jsx';
 
 describe('ArcadeThreeViewport shadow map handling', () => {
   it('updates shadow maps on demand so tester-mode actor shadows follow movement', () => {

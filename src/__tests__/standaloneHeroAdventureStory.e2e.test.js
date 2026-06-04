@@ -1,6 +1,6 @@
 import vm from 'node:vm';
 import { describe, expect, it } from 'vitest';
-import { buildStandaloneModuleFiles } from '../utils/standaloneHtml';
+import { buildStandaloneModuleFiles } from '../shared/utils/standaloneHtml';
 
 const makeHeroAdventureStoryProject = () => ({
   id: 'hero-story-e2e',

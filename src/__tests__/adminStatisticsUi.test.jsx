@@ -18,22 +18,23 @@ const supportMocks = vi.hoisted(() => ({
   updateSupportThreadStatus: vi.fn(),
 }));
 
-vi.mock('../components/AccessibleDialog', () => ({
+vi.mock('../shared/ui/AccessibleDialog', () => ({
   showConfirm: vi.fn(async () => true),
 }));
 
-vi.mock('../supabaseStorage', () => ({
+vi.mock('../shared/storage/supabaseStorage', () => ({
   buildStoragePath: (...segments) => segments.filter(Boolean).join('/'),
   generateStorageFilename: (filename) => filename,
   getSupabaseClient: () => null,
   getPublicStorageUploadResult: (path) => ({ path, publicUrl: '', visibility: 'public' }),
+  hasSupabaseAuthConfig: () => false,
   hasSupabaseConfig: () => false,
   hasSupabaseStorageConfig: () => false,
   isStorageObjectAlreadyExistsError: () => false,
   uploadToStorage: vi.fn(),
 }));
 
-vi.mock('../lib/supportMessages', () => ({
+vi.mock('../shared/services/supportMessages', () => ({
   SUPPORT_STATUSES: [
     ['open', 'Ouvert'],
     ['answered', 'Répondu'],
@@ -46,7 +47,7 @@ vi.mock('../lib/supportMessages', () => ({
   updateSupportThreadStatus: supportMocks.updateSupportThreadStatus,
 }));
 
-vi.mock('../lib/shopPacksStorage', () => ({
+vi.mock('../shared/services/shopPacksStorage', () => ({
   createEmptyShopPack: () => ({
     id: '',
     title: '',
@@ -63,10 +64,11 @@ vi.mock('../lib/shopPacksStorage', () => ({
   upsertSharedShopPack: vi.fn(async () => []),
 }));
 
-vi.mock('../lib/adminApi', async () => {
-  const actual = await vi.importActual('../lib/adminApi');
+vi.mock('../shared/services/adminApi', async () => {
+  const actual = await vi.importActual('../shared/services/adminApi');
   return {
     ...actual,
+    canUseRemoteAdminApi: () => false,
     loadAdminDashboard: adminApiMocks.loadAdminDashboard,
     prepareAdminShopPackScreenshots: adminApiMocks.prepareAdminShopPackScreenshots,
     prepareAdminShopPackZip: adminApiMocks.prepareAdminShopPackZip,
@@ -126,8 +128,8 @@ describe('admin statistics tab', () => {
     ]);
     window.localStorage.setItem('escapeGameBuilder.projects.user-1', JSON.stringify([{ id: 'project-1' }]));
 
-    const { default: AdminPage } = await import('../components/AdminPage.jsx');
-    render(<AdminPage user={{ id: 'admin', email: 'admin@example.com' }} onBack={vi.fn()} onLogout={vi.fn()} />);
+    const { default: AdminConsole } = await import('../domains/admin/AdminConsole.jsx');
+    render(<AdminConsole user={{ id: 'admin', email: 'admin@example.com' }} onBack={vi.fn()} onLogout={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Statistiques' }));
 

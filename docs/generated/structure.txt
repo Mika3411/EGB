@@ -1,0 +1,375 @@
+Repository structure
+Generated snapshot. Heavy local/build directories are omitted.
+.
+|-- assets/
+|   +-- generated/
+|       +-- landing/
+|-- docs/
+|   |-- examples/
+|   |   +-- acte-1-valombre-hero-adventure.json
+|   |-- generated/
+|   |   |-- npm-package-lock.snapshot.json
+|   |   +-- structure.txt
+|   |-- previews/
+|   |   +-- 2d-anime-preview.html
+|   |-- prompts/
+|   |   +-- prompts-images-valombre-livre-jeu.docx
+|   |-- qa/
+|   |   |-- screenshots/
+|   |   +-- qa-results.json
+|   |-- COMBAT_ENGINE.md
+|   |-- readme.docx
+|   |-- RPG3D_ARCHITECTURE.md
+|   |-- RPG3D_VERTICALITY.md
+|   +-- SUPABASE_STORAGE.md
+|-- netlify/
+|   +-- functions/
+|       |-- _shared.js
+|       |-- _support.js
+|       |-- admin-projects.js
+|       |-- admin-support.js
+|       |-- admin-users.js
+|       |-- ai-credits-admin.js
+|       |-- ai-credits.js
+|       |-- ai-job.js
+|       |-- analytics-visit.js
+|       |-- generate-background.js
+|       |-- generate.js
+|       |-- gumroad-webhook.js
+|       |-- image.js
+|       |-- moderation.js
+|       |-- project-publication.js
+|       |-- remove-background.js
+|       |-- shop-packs.js
+|       |-- shop-purchase.js
+|       |-- storage-upgrade.js
+|       |-- storage-upload.js
+|       +-- support.js
+|-- public/
+|   |-- assets/
+|   |   |-- 3d/
+|   |   |-- ai-style-anime.png
+|   |   |-- ai-style-realistic.png
+|   |   |-- character-rig-help-hands.png
+|   |   +-- character-rig-help-humanoid.png
+|   |-- boutique/
+|   |   |-- La forêt maudite/
+|   |   +-- shop-packs.json
+|   |-- conditions-utilisation.html
+|   |-- google81f57747a4ccb22a.html
+|   |-- og-image.png
+|   +-- robots.txt
+|-- scripts/
+|   |-- check-release.mjs
+|   |-- dev-with-api.mjs
+|   +-- generate-seo-files.mjs
+|-- server/
+|   |-- admin.js
+|   |-- ai.js
+|   |-- aiGenerationMode.js
+|   |-- aiJobStore.js
+|   |-- apiRouter.js
+|   |-- auth.js
+|   |-- config.js
+|   |-- credits.js
+|   |-- http.js
+|   |-- httpTimeouts.js
+|   |-- index.js
+|   |-- modelTools.js
+|   |-- moderation.js
+|   |-- projects.js
+|   |-- shop.js
+|   |-- shopDownloads.js
+|   |-- staticFiles.js
+|   |-- storage.js
+|   |-- storageBuckets.js
+|   |-- storageUploads.js
+|   |-- supabase.js
+|   |-- support.js
+|   +-- visitorAnalytics.js
+|-- src/
+|   |-- __tests__/
+|   |   |-- adminAuthorization.test.js
+|   |   |-- adminStatistics.test.js
+|   |   |-- adminStatisticsUi.test.jsx
+|   |   |-- aiCriticalFlows.regression.test.jsx
+|   |   |-- aiModeration.test.js
+|   |   |-- aiPrivacyNotice.test.jsx
+|   |   |-- aiRateLimit.test.js
+|   |   |-- ArcadeThreeViewport.test.jsx
+|   |   |-- authorProfiles.test.js
+|   |   |-- BuilderStudio.autosave.test.jsx
+|   |   |-- builderClassicTabs.test.jsx
+|   |   |-- Character3DPreview.test.jsx
+|   |   |-- CharacterStudio.previewSelection.test.jsx
+|   |   |-- CharacterRiggingWorkspace.test.jsx
+|   |   |-- combatEngine.test.js
+|   |   |-- CombatWorkspace.test.jsx
+|   |   |-- conditionEngine.test.js
+|   |   |-- corsConfig.test.js
+|   |   |-- creatorMissions.test.js
+|   |   |-- Decor3DPreview.rig.test.js
+|   |   |-- DecorStudio.test.jsx
+|   |   |-- exportAssetBundler.offline.test.js
+|   |   |-- exportAssetCollector.test.js
+|   |   |-- extracted-flows.regression.test.jsx
+|   |   |-- glbOptimizer.test.js
+|   |   |-- guidedCreationTutorial.test.jsx
+|   |   |-- Header.test.jsx
+|   |   |-- helpContent.test.jsx
+|   |   |-- heroAdventureDefaults.test.js
+|   |   |-- heroBalanceReport.test.js
+|   |   |-- heroRuntimeState.test.js
+|   |   |-- hotspotRuntime.test.js
+|   |   |-- imageCreditReservation.test.js
+|   |   |-- indexedDbPersistence.integration.test.jsx
+|   |   |-- lazyImportRetry.test.js
+|   |   |-- logicCompletion.test.js
+|   |   |-- LogicRulesWorkspace.ux.test.jsx
+|   |   |-- mediaSourcePicker.test.js
+|   |   |-- mediaUploadDedup.test.jsx
+|   |   |-- modelToolsQuality.test.js
+|   |   |-- modelToolsTab.test.jsx
+|   |   |-- ObjectRiggingWorkspace.test.jsx
+|   |   |-- offlineExportEstimate.test.js
+|   |   |-- previewHeroItems.regression.test.jsx
+|   |   |-- previewHeroSkillCheckCriticalRules.test.jsx
+|   |   |-- previewPlayerCriticalFlows.regression.test.jsx
+|   |   |-- previewTabRender.regression.test.jsx
+|   |   |-- projectDataClassicNormalization.test.js
+|   |   |-- projectDraftCleanup.test.js
+|   |   |-- projectEditorHistory.test.jsx
+|   |   |-- projectJsonImport.test.js
+|   |   |-- projectPersistence.test.jsx
+|   |   |-- projectSafetyValidation.test.js
+|   |   |-- projectScoreEngine.test.js
+|   |   |-- projectValidation.logicObjects.test.js
+|   |   |-- publicGalleryStorage.test.js
+|   |   |-- quickLogicModal.test.jsx
+|   |   |-- routeMapHelpers.test.js
+|   |   |-- rpg3dArmorPaintDepth.test.js
+|   |   |-- rpg3dAssetsStorage.test.js
+|   |   |-- rpg3dCharacterRigAutoPlacement.test.js
+|   |   |-- rpg3dDomain.test.js
+|   |   |-- Rpg3DInspector.test.jsx
+|   |   |-- rpg3dMapEditing.test.js
+|   |   |-- rpg3dModelImport.test.js
+|   |   |-- rpg3dRuntimeModels.test.js
+|   |   |-- rpg3dSceneBuilders.test.js
+|   |   |-- Rpg3DStage.test.jsx
+|   |   |-- rpg3dStudioProject.test.js
+|   |   |-- sceneObjectBlocks.test.js
+|   |   |-- serverAiGenerationMode.test.js
+|   |   |-- serverAiJobStore.test.js
+|   |   |-- serverApiRouting.test.js
+|   |   |-- serverCreditAuth.test.js
+|   |   |-- serverHttpBody.test.js
+|   |   |-- serverHttpTimeouts.test.js
+|   |   |-- serverModelToolsSecurity.test.js
+|   |   |-- serverModerationPayload.test.js
+|   |   |-- serverShopDownloads.test.js
+|   |   |-- serverStorageBuckets.test.js
+|   |   |-- shopStorage.test.js
+|   |   |-- standaloneCombatExport.test.js
+|   |   |-- standaloneExport.regression.test.js
+|   |   |-- standaloneHeroAdventureStory.e2e.test.js
+|   |   |-- standaloneHtmlSecurity.test.js
+|   |   |-- staticSecurityHeaders.test.js
+|   |   |-- storageHelpers.test.js
+|   |   |-- storageNotFoundCallSites.test.js
+|   |   |-- supabaseStorage.test.js
+|   |   |-- supportMessages.test.js
+|   |   |-- supportMessagingUi.test.jsx
+|   |   |-- threeGltfUtils.test.js
+|   |   |-- twoDAnimeDraftRestore.test.jsx
+|   |   |-- useRpg3DGameLoop.test.js
+|   |   |-- useRpg3DProjectState.test.jsx
+|   |   +-- visitorAnalytics.test.js
+|   |-- assets/
+|   |   |-- header-banner.png
+|   |   |-- landing-ai-actions.png
+|   |   |-- landing-ai.png
+|   |   |-- landing-builder-home.jpeg
+|   |   |-- landing-builder-preview.png
+|   |   |-- landing-cinematics.png
+|   |   |-- landing-conditions.png
+|   |   |-- landing-creation-mode.png
+|   |   |-- landing-enigmas.png
+|   |   |-- landing-gallery-page.png
+|   |   |-- landing-game-gallery.png
+|   |   |-- landing-inventory.png
+|   |   |-- landing-link-tests.jpeg
+|   |   |-- landing-player-page.png
+|   |   |-- landing-rating.png
+|   |   |-- landing-reviews.png
+|   |   |-- landing-score-bilan.png
+|   |   |-- route-construction-preview.svg
+|   |   |-- route-player-character.png
+|   |   +-- route-test-preview.png
+|   |-- data/
+|   |   |-- creatorMissions.js
+|   |   |-- enigmaConfig.js
+|   |   |-- playerConfig.js
+|   |   |-- projectData.js
+|   |   |-- projectData3d.js
+|   |   |-- projectData3dAnimationSchema.js
+|   |   |-- projectData3dRigSchema.js
+|   |   |-- projectDataSewerAct.js
+|   |   |-- tutorialCombatSteps.js
+|   |   |-- tutorialGuidedCreationSteps.js
+|   |   |-- tutorialStepData.js
+|   |   +-- tutorialSteps.js
+|   |-- features/
+|   |   |-- admin/
+|   |   |-- ai/
+|   |   |-- anime2d/
+|   |   |-- auth/
+|   |   |-- builder/
+|   |   |-- gallery/
+|   |   |-- help/
+|   |   |-- landing/
+|   |   |-- media/
+|   |   |-- player/
+|   |   |-- profile/
+|   |   |-- resources/
+|   |   |-- rpg3d/
+|   |   |-- shop/
+|   |   +-- support/
+|   |-- lib/
+|   |   |-- adminApi.js
+|   |   |-- anime2dEngine.js
+|   |   |-- assetManager.js
+|   |   |-- authorProfiles.js
+|   |   |-- authStorage.js
+|   |   |-- cinematicEngine.js
+|   |   |-- combatDefaults.js
+|   |   |-- combatEngine.js
+|   |   |-- combinationEngine.js
+|   |   |-- conditionEngine.js
+|   |   |-- enigmaDefaults.js
+|   |   |-- enigmaEngine.js
+|   |   |-- forumStorage.js
+|   |   |-- gameEngine.js
+|   |   |-- heroAdventureDefaults.js
+|   |   |-- heroRuntimeState.js
+|   |   |-- logicCompletion.js
+|   |   |-- mediaLibraryFolders.js
+|   |   |-- moderationStorage.js
+|   |   |-- projectAnalysis.js
+|   |   |-- projectScoreEngine.js
+|   |   |-- projectTemplates.js
+|   |   |-- projectTransitions.js
+|   |   |-- publicGalleryStorage.js
+|   |   |-- sceneHelpers.js
+|   |   |-- sceneObjectBlocks.js
+|   |   |-- shopPacksStorage.js
+|   |   |-- shopPurchases.js
+|   |   |-- storageQuota.js
+|   |   |-- supportMessages.js
+|   |   +-- visitorAnalytics.js
+|   |-- selectors/
+|   |   +-- projectSelectors.js
+|   |-- shared/
+|   |   |-- forms/
+|   |   |-- layout/
+|   |   |-- media/
+|   |   |-- three/
+|   |   +-- ui/
+|   |-- styles/
+|   |   |-- 03-components/
+|   |   |-- 04-features/
+|   |   |-- 00-tokens.css
+|   |   |-- 01-reset-base.css
+|   |   |-- 02-layout.css
+|   |   |-- 05-utilities.css
+|   |   |-- 06-responsive.css
+|   |   |-- 2d-anime.css
+|   |   |-- ai.css
+|   |   |-- editor.css
+|   |   |-- index.css
+|   |   |-- inspector.css
+|   |   |-- player.css
+|   |   |-- public.css
+|   |   +-- stunt-animation.css
+|   |-- utils/
+|   |   |-- standalone/
+|   |   |-- aiAuthHeaders.js
+|   |   |-- aiDraftStorageKeys.js
+|   |   |-- aiImageGenerator.js
+|   |   |-- aiModeration.js
+|   |   |-- aiProjectGenerator.js
+|   |   |-- aiRateLimit.js
+|   |   |-- anime2dDraftPersistence.js
+|   |   |-- classicBuilderTabs.js
+|   |   |-- corsConfig.js
+|   |   |-- exportAssetBundler.js
+|   |   |-- exportAssetCollector.js
+|   |   |-- exportAuthorSummary.js
+|   |   |-- exporters.js
+|   |   |-- exportProjectJson.js
+|   |   |-- exportStandalone.js
+|   |   |-- fileHelpers.js
+|   |   |-- glbOptimizer.js
+|   |   |-- indexedDraftStorage.js
+|   |   |-- lazyImportRetry.js
+|   |   |-- mediaDedupe.js
+|   |   |-- mediaProjectHelpers.js
+|   |   |-- offlineExportEstimate.js
+|   |   |-- projectDraftCleanup.js
+|   |   |-- projectJsonImport.js
+|   |   |-- projectPersistenceStatus.js
+|   |   |-- projectSafetyValidation.js
+|   |   |-- projectScore.js
+|   |   |-- projectValidation.js
+|   |   |-- rpg3dAssetsCore.js
+|   |   |-- rpg3dAssetsStorage.js
+|   |   |-- rpg3dCharacterRig.js
+|   |   |-- rpg3dCharacterRigAutoPlacement.js
+|   |   |-- rpg3dDomain.js
+|   |   |-- rpg3dLocalModelFiles.js
+|   |   |-- rpg3dMapEditing.js
+|   |   |-- rpg3dModelImport.js
+|   |   |-- rpg3dModelImportCore.js
+|   |   |-- rpg3dStudioProject.js
+|   |   |-- standaloneHtml.js
+|   |   |-- storageHelpers.js
+|   |   |-- threeGltfUtils.js
+|   |   |-- threeModelUtils.js
+|   |   |-- thumbnailProcessor.js
+|   |   |-- tutorialHelpers.js
+|   |   +-- userDisplayName.js
+|   |-- App.jsx
+|   |-- BuilderStudio.jsx
+|   |-- main.jsx
+|   |-- MODE_EMPLOI.md
+|   |-- preview-2d-anime.jsx
+|   |-- styles.css
+|   +-- supabaseStorage.ts
+|-- supabase/
+|   |-- 20260529_storage_buckets.sql
+|   |-- ai_credits.sql
+|   |-- help_forum.sql
+|   |-- shop_pack_sales.sql
+|   +-- support_messages.sql
+|-- tests/
+|   +-- e2e/
+|       +-- rpg3d-smoke.spec.js
+|-- tools/
+|   +-- blender/
+|       |-- __pycache__/
+|       |-- alpha_character_to_glb.py
+|       |-- create_dark_knight_character.py
+|       +-- four_view_sheet_to_glb.py
+|-- .env
+|-- .env.example
+|-- .gitignore
+|-- index.html
+|-- netlify.toml
+|-- package-lock.json
+|-- package.json
+|-- playwright.config.js
+|-- README.md
+|-- render.yaml
+|-- tsconfig.json
+|-- vite.config.js
++-- vitest.setup.js

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildHeroBalanceReport } from '../components/HeroTab.jsx';
-import { DEFAULT_HERO_EDITOR_ADVENTURE } from '../lib/heroAdventureDefaults.js';
+import { buildHeroBalanceReport } from '../domains/characters/hero/HeroDesigner.jsx';
+import { DEFAULT_HERO_EDITOR_ADVENTURE } from '../shared/services/heroAdventureDefaults.js';
 
 const makeBalanceProject = (hotspots) => {
   const heroAdventure = {

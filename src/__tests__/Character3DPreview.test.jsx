@@ -1,9 +1,9 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
-import Character3DPreview from '../components/rpg3d/Character3DPreview.jsx';
-import { disposeThreeObject, loadCharacterAnimationAsset, loadThreeCharacter } from '../utils/rpg3dModelImport';
-import { loadThreeModelFromSource, playGltfAnimations } from '../utils/threeGltfUtils';
+import Character3DPreview from '../domains/characters/preview/Character3DPreview.jsx';
+import { disposeThreeObject, loadCharacterAnimationAsset, loadThreeCharacter } from '../shared/utils/rpg3dModelImport';
+import { loadThreeModelFromSource, playGltfAnimations } from '../shared/utils/threeGltfUtils';
 
 const orbitControlInstances = vi.hoisted(() => []);
 
@@ -79,11 +79,11 @@ vi.mock('three/examples/jsm/environments/RoomEnvironment.js', () => ({
   },
 }));
 
-vi.mock('../components/three/clickTargetCameraControls.js', () => ({
+vi.mock('../shared/utils/three/clickTargetCameraControls.js', () => ({
   attachClickTargetCameraControls: () => vi.fn(),
 }));
 
-vi.mock('../utils/rpg3dModelImport', async () => {
+vi.mock('../shared/utils/rpg3dModelImport', async () => {
   const THREE = await vi.importActual('three');
   return {
     clearGroup: (group) => group?.clear?.(),
@@ -119,7 +119,7 @@ vi.mock('../utils/rpg3dModelImport', async () => {
   };
 });
 
-vi.mock('../utils/threeGltfUtils', async () => {
+vi.mock('../shared/utils/threeGltfUtils', async () => {
   const THREE = await vi.importActual('three');
   return {
     applyObjectAxisScaleRatios: vi.fn(),
@@ -170,7 +170,7 @@ describe('Character3DPreview', () => {
       />,
     );
 
-    await screen.findByText('Animation attaque non chargee: aucun clip lisible.');
+    await screen.findByText('Animation attaque non chargée: aucun clip lisible.');
 
     expect(playGltfAnimations).not.toHaveBeenCalled();
     await waitFor(() => expect(loadCharacterAnimationAsset).toHaveBeenCalledTimes(1));

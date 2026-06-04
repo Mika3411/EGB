@@ -1,8 +1,8 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import Header from '../components/Header.jsx';
-import Rpg3DHeader from '../components/rpg3d/Rpg3DHeader.jsx';
+import Header from '../shared/ui/layout/Header.jsx';
+import Rpg3DHeader from '../domains/rpg3d/components/Rpg3DHeader.jsx';
 
 const noop = () => {};
 
@@ -158,7 +158,7 @@ describe('Header', () => {
       />,
     );
 
-    expect(screen.getByText('Compte connecte')).toBeTruthy();
+    expect(screen.getByText('Compte connecté')).toBeTruthy();
     expect(screen.getByText('Mika Studio')).toBeTruthy();
   });
 });

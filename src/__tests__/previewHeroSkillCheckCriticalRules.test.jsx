@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { usePreviewPlayer } from '../hooks/usePreviewPlayer';
+import { usePreviewPlayer } from '../domains/player/hooks/usePreviewPlayer';
 
 const makePreviewSkillCheckProject = (hotspotPatch = {}, heroPatch = {}) => ({
   id: 'preview-skill-critical-project',

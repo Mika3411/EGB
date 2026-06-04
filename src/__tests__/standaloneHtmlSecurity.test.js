@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildStandaloneHtml, buildStandaloneModuleFiles } from '../utils/standaloneHtml';
-import { buildStandaloneCss } from '../utils/standalone/standaloneCss';
+import { buildStandaloneHtml, buildStandaloneModuleFiles } from '../shared/utils/standaloneHtml';
+import { buildStandaloneCss } from '../shared/utils/standalone/standaloneCss';
 
 const makeProject = (scene = {}) => ({
   title: 'Projet export',

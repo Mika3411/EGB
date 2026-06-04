@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
-import { getPreviewAnimationOptions } from '../utils/rpg3dModelImport.js';
+import { getPreviewAnimationOptions } from '../shared/utils/rpg3dModelImport.js';
 import {
   fitObjectToHeight,
   getGltfAnimationClips,
@@ -20,7 +20,7 @@ import {
   stripImportedAnimationTracks,
   THREE_MODEL_ACCEPT,
   updateGltfModelMaterialAppearance,
-} from '../utils/threeGltfUtils';
+} from '../shared/utils/threeGltfUtils';
 
 describe('prepareGltfModel', () => {
   it('restores visible texture color for generated all-metal GLB materials', () => {
