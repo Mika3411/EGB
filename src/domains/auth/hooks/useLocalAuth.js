@@ -298,8 +298,12 @@ const getProjectThumbnail = (project = {}) => {
 };
 
 const normalizeShareState = (shareState = {}) => {
-  const { publishedData, ...rest } = shareState || {};
-  return rest;
+  const source = shareState || {};
+  const publishedData = source.publishedData || source.published_data;
+  return {
+    ...source,
+    ...(publishedData ? { publishedData } : {}),
+  };
 };
 
 const normalizeProjectRecord = (record) => {
@@ -925,6 +929,9 @@ export function useLocalAuth() {
             isPublic: true,
             copiedAt: timestamp,
             publishedAt: project.shareState?.publishedAt || timestamp,
+            publishedData: project.shareState?.publishedData || migrateProjectAssetReferences(cloneProjectData(project.data)),
+            publishedName: project.shareState?.publishedName || project.name || getProjectTitle(project.data),
+            publishedThumbnail: project.shareState?.publishedThumbnail || project.shareState?.galleryThumbnail || project.thumbnail || getProjectThumbnail(project.data) || '',
             durationMinutes: project.shareState?.durationMinutes || Math.max(15, Math.min(90, 15 + (project.data?.scenes?.length || 0) * 8 + (project.data?.enigmas?.length || 0) * 5)),
             difficulty: project.shareState?.difficulty || ((project.data?.enigmas?.length || 0) >= 5 ? 'difficile' : (project.data?.enigmas?.length || 0) >= 2 ? 'intermediaire' : 'facile'),
           },
@@ -956,6 +963,7 @@ export function useLocalAuth() {
           isPublic: true,
           copiedAt: project.shareState?.copiedAt || timestamp,
           publishedAt: timestamp,
+          publishedData: snapshot,
           publishedName: project.name || getProjectTitle(project.data),
           publishedThumbnail: project.shareState?.galleryThumbnail || project.thumbnail || getProjectThumbnail(snapshot) || '',
           durationMinutes: Math.max(15, Math.min(90, 15 + (snapshot?.scenes?.length || 0) * 8 + (snapshot?.enigmas?.length || 0) * 5)),

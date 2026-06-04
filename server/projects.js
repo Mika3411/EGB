@@ -28,10 +28,17 @@ export const getProjectThumbnail = (project = {}, record = {}) => {
   return candidates.find((value) => typeof value === 'string' && value.trim()) || '';
 };
 
-const normalizeProjectRecord = (record = {}) => ({
-  ...record,
-  shareState: record.shareState || record.share_state || { isPublic: false, copiedAt: '' },
-});
+const normalizeProjectRecord = (record = {}) => {
+  const rawShareState = record.shareState || record.share_state || { isPublic: false, copiedAt: '' };
+  const publishedData = rawShareState.publishedData || rawShareState.published_data;
+  return {
+    ...record,
+    shareState: {
+      ...rawShareState,
+      ...(publishedData ? { publishedData } : {}),
+    },
+  };
+};
 
 export const getPublicProjectCounts = (records = []) => (
   (Array.isArray(records) ? records : []).reduce((counts, record) => {
@@ -95,11 +102,17 @@ const loadServerProjectsForUser = async (userId) => {
 const savePublicProjectIndexForUser = async (userId, projects = []) => {
   const publicRecords = projects
     .filter((project) => project?.id && project.shareState?.isPublic)
-    .map((project) => ({
-      ...project,
-      userId,
-      publicKey: `${userId}:${project.id}`,
-    }));
+    .map((project) => {
+      const { publishedData, ...shareState } = project.shareState || {};
+      const publicData = cloneProjectData(publishedData || project.data || project.project || {});
+      return {
+        ...project,
+        data: publicData,
+        shareState,
+        userId,
+        publicKey: `${userId}:${project.id}`,
+      };
+    });
 
   const existingIndex = await downloadStorageJson(publicProjectsStoragePath, [], { visibility: 'public' });
   const safeIndex = Array.isArray(existingIndex) ? existingIndex : [];
@@ -177,6 +190,9 @@ export const handleProjectPublication = async (req, res) => {
           isPublic: true,
           copiedAt: timestamp,
           publishedAt: sourceProject.shareState?.publishedAt || timestamp,
+          publishedData: sourceProject.shareState?.publishedData || cloneProjectData(sourceProject.data),
+          publishedName: sourceProject.shareState?.publishedName || sourceProject.name || getProjectTitle(sourceProject.data),
+          publishedThumbnail: sourceProject.shareState?.publishedThumbnail || sourceProject.shareState?.galleryThumbnail || sourceProject.thumbnail || getProjectThumbnail(sourceProject.data) || '',
           durationMinutes: sourceProject.shareState?.durationMinutes || Math.max(15, Math.min(90, 15 + (sourceProject.data?.scenes?.length || 0) * 8 + (sourceProject.data?.enigmas?.length || 0) * 5)),
           difficulty: sourceProject.shareState?.difficulty || ((sourceProject.data?.enigmas?.length || 0) >= 5 ? 'difficile' : (sourceProject.data?.enigmas?.length || 0) >= 2 ? 'intermÃ©diaire' : 'facile'),
         },

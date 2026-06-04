@@ -19,7 +19,12 @@ const writeJson = (key, value) => writeJsonStorage(key, value);
 const getLocalProjectsKey = (userId) => `${LOCAL_PROJECTS_KEY_PREFIX}.${userId}`;
 
 const getProjectTitle = (project, record) =>
-  record?.name || project?.title || project?.name || 'Escape game sans titre';
+  record?.shareState?.publishedName
+  || record?.share_state?.publishedName
+  || project?.title
+  || project?.name
+  || record?.name
+  || 'Escape game sans titre';
 
 const getProjectThumbnail = (project = {}, record = {}) => {
   const startScene = Array.isArray(project.scenes) ?
@@ -86,7 +91,12 @@ const detectAgeRating = (project = {}, record = {}) => {
 };
 
 const normalizeRecord = (record = {}) => {
-  const shareState = record.shareState || record.share_state || {};
+  const rawShareState = record.shareState || record.share_state || {};
+  const publishedData = rawShareState.publishedData || rawShareState.published_data;
+  const shareState = {
+    ...rawShareState,
+    ...(publishedData ? { publishedData } : {}),
+  };
   const data = shareState.publishedData || record.data || record.project || record;
   return {
     ...record,

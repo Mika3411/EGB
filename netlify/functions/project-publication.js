@@ -90,7 +90,12 @@ const getProjectThumbnail = (project = {}, record = {}) => {
 };
 
 const normalizeProjectRecord = (record = {}) => {
-  const { publishedData, ...shareState } = record.shareState || record.share_state || { isPublic: false, copiedAt: '' };
+  const rawShareState = record.shareState || record.share_state || { isPublic: false, copiedAt: '' };
+  const publishedData = rawShareState.publishedData || rawShareState.published_data;
+  const shareState = {
+    ...rawShareState,
+    ...(publishedData ? { publishedData } : {}),
+  };
   return {
     ...record,
     shareState,
@@ -147,8 +152,10 @@ const savePublicProjectIndexForUser = async (supabase, userId, projects = []) =>
     .filter((project) => project?.id && project.shareState?.isPublic)
     .map((project) => {
       const { publishedData, ...shareState } = project.shareState || {};
+      const publicData = cloneProjectData(publishedData || project.data || project.project || {});
       return {
         ...project,
+        data: publicData,
         shareState,
         userId,
         publicKey: `${userId}:${project.id}`,
@@ -207,6 +214,9 @@ const applyPublicationAction = (sourceProject, action, settings, timestamp) => {
         isPublic: true,
         copiedAt: timestamp,
         publishedAt: sourceProject.shareState?.publishedAt || timestamp,
+        publishedData: sourceProject.shareState?.publishedData || cloneProjectData(sourceProject.data),
+        publishedName: sourceProject.shareState?.publishedName || sourceProject.name || getProjectTitle(sourceProject.data),
+        publishedThumbnail: sourceProject.shareState?.publishedThumbnail || sourceProject.shareState?.galleryThumbnail || sourceProject.thumbnail || getProjectThumbnail(sourceProject.data) || '',
         durationMinutes: sourceProject.shareState?.durationMinutes || Math.max(15, Math.min(90, 15 + scenes * 8 + enigmas * 5)),
         difficulty: sourceProject.shareState?.difficulty || (enigmas >= 5 ? 'difficile' : enigmas >= 2 ? 'intermediaire' : 'facile'),
       },
@@ -224,6 +234,7 @@ const applyPublicationAction = (sourceProject, action, settings, timestamp) => {
       isPublic: true,
       copiedAt: sourceProject.shareState?.copiedAt || timestamp,
       publishedAt: timestamp,
+      publishedData: snapshot,
       publishedName: sourceProject.name || getProjectTitle(sourceProject.data),
       publishedThumbnail: sourceProject.shareState?.galleryThumbnail || sourceProject.thumbnail || getProjectThumbnail(snapshot) || '',
       durationMinutes: Math.max(15, Math.min(90, 15 + scenes * 8 + enigmas * 5)),
