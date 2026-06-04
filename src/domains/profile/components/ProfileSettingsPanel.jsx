@@ -1,5 +1,92 @@
-import { Eye, EyeOff, Save } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Eye, EyeOff, ImageUp, Save } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import {
+  AUTHOR_SOCIAL_LINK_TYPES,
+  getAuthorSocialLinkUrl,
+  normalizeAuthorSocialLinks,
+  setAuthorSocialLinkUrl,
+} from '../../../shared/services/authorProfiles';
+import {
+  cropAuthorProfileImage,
+  readAuthorProfileImageFile,
+} from '../../../shared/utils/authorProfileMedia';
+import AuthorProfileImageCropper from './AuthorProfileImageCropper';
+
+const getAuthorInitial = (name = '') => String(name || 'Créateur').trim().charAt(0).toUpperCase() || 'C';
+
+function ProfileAvatarPreview({ avatar = '', displayName = '' }) {
+  const [hasError, setHasError] = useState(false);
+  const avatarSrc = String(avatar || '').trim();
+  const initial = getAuthorInitial(displayName);
+
+  useEffect(() => {
+    setHasError(false);
+  }, [avatarSrc]);
+
+  return (
+    <div className="profile-avatar-preview" aria-label="Aperçu avatar auteur">
+      {avatarSrc && !hasError ? (
+        <img
+          src={avatarSrc}
+          alt={`Avatar de ${displayName || 'l’auteur'}`}
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          onError={() => setHasError(true)}
+        />
+      ) : (
+        <span>{initial}</span>
+      )}
+    </div>
+  );
+}
+
+function ProfileBannerPreview({ banner = '', displayName = '' }) {
+  const [hasError, setHasError] = useState(false);
+  const bannerSrc = String(banner || '').trim();
+
+  useEffect(() => {
+    setHasError(false);
+  }, [bannerSrc]);
+
+  return (
+    <div className="profile-banner-preview" aria-label="Aperçu bannière auteur">
+      {bannerSrc && !hasError ? (
+        <img
+          src={bannerSrc}
+          alt={`Bannière de ${displayName || 'l’auteur'}`}
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          onError={() => setHasError(true)}
+        />
+      ) : (
+        <span aria-hidden="true" />
+      )}
+    </div>
+  );
+}
+
+const createProfileDraft = (authorProfile = {}, user = {}) => ({
+  displayName: authorProfile?.displayName || user?.name || user?.email || '',
+  tagline: authorProfile?.tagline || '',
+  bio: authorProfile?.bio || '',
+  website: authorProfile?.website || '',
+  avatar: authorProfile?.avatar || '',
+  banner: authorProfile?.banner || '',
+  socialLinks: normalizeAuthorSocialLinks(authorProfile?.socialLinks, authorProfile?.website),
+});
+
+const buildProfileDraftPayload = (draft = {}) => {
+  const socialLinks = normalizeAuthorSocialLinks(draft.socialLinks, draft.website);
+  return {
+    ...draft,
+    website: getAuthorSocialLinkUrl(socialLinks, 'site'),
+    avatar: String(draft.avatar || '').trim(),
+    banner: String(draft.banner || '').trim(),
+    socialLinks,
+  };
+};
 
 export default function ProfileSettingsPanel({
   user,
@@ -8,12 +95,7 @@ export default function ProfileSettingsPanel({
   onUpdateAuthorProfile,
   onUpdatePassword,
 }) {
-  const [profileDraft, setProfileDraft] = useState(() => ({
-    displayName: authorProfile?.displayName || user?.name || user?.email || '',
-    tagline: authorProfile?.tagline || '',
-    bio: authorProfile?.bio || '',
-    website: authorProfile?.website || '',
-  }));
+  const [profileDraft, setProfileDraft] = useState(() => createProfileDraft(authorProfile, user));
   const [passwordDraft, setPasswordDraft] = useState({ currentPassword: '', password: '', confirmPassword: '' });
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -21,14 +103,16 @@ export default function ProfileSettingsPanel({
   const [profileNotice, setProfileNotice] = useState('');
   const [passwordNotice, setPasswordNotice] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [mediaError, setMediaError] = useState('');
+  const [imageCrop, setImageCrop] = useState(null);
+  const [cropZoom, setCropZoom] = useState(1);
+  const [cropPan, setCropPan] = useState({ x: 0, y: 0 });
+  const [isCropBusy, setIsCropBusy] = useState(false);
+  const bannerInputRef = useRef(null);
+  const avatarInputRef = useRef(null);
 
   useEffect(() => {
-    setProfileDraft({
-      displayName: authorProfile?.displayName || user?.name || user?.email || '',
-      tagline: authorProfile?.tagline || '',
-      bio: authorProfile?.bio || '',
-      website: authorProfile?.website || '',
-    });
+    setProfileDraft(createProfileDraft(authorProfile, user));
   }, [authorProfile, user]);
 
   const updateProfileField = (field, value) => {
@@ -42,10 +126,63 @@ export default function ProfileSettingsPanel({
     setPasswordNotice('');
   };
 
+  const updateSocialLink = (type, url) => {
+    setProfileDraft((draft) => {
+      const socialLinks = setAuthorSocialLinkUrl(draft.socialLinks, type, url, draft.website);
+      return {
+        ...draft,
+        website: type === 'site' ? String(url || '') : draft.website,
+        socialLinks,
+      };
+    });
+    setProfileNotice('');
+  };
+
+  const importProfileImage = async (event, field) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    try {
+      const image = await readAuthorProfileImageFile(file);
+      setImageCrop({ ...image, field });
+      setCropZoom(1);
+      setCropPan({ x: 0, y: 0 });
+      setProfileNotice('');
+      setMediaError('');
+    } catch (error) {
+      setMediaError(error?.message || "Import de l'image impossible.");
+    }
+  };
+
+  const confirmProfileImageCrop = async () => {
+    if (!imageCrop) return;
+    setIsCropBusy(true);
+    try {
+      const imageData = await cropAuthorProfileImage({
+        src: imageCrop.src,
+        sourceWidth: imageCrop.width,
+        sourceHeight: imageCrop.height,
+        target: imageCrop.field,
+        zoom: cropZoom,
+        panX: cropPan.x,
+        panY: cropPan.y,
+      });
+      setProfileDraft((draft) => ({ ...draft, [imageCrop.field]: imageData }));
+      setImageCrop(null);
+      setProfileNotice('');
+      setMediaError('');
+    } catch (error) {
+      setMediaError(error?.message || "Recadrage de l'image impossible.");
+    } finally {
+      setIsCropBusy(false);
+    }
+  };
+
   const saveProfile = async (event) => {
     event.preventDefault();
-    await onUpdateAuthorProfile?.(profileDraft);
-      setProfileNotice('Informations du profil mises à jour.');
+    await onUpdateAuthorProfile?.(buildProfileDraftPayload(profileDraft));
+    setProfileNotice('Informations du profil mises à jour.');
   };
 
   const savePassword = async (event) => {
@@ -88,6 +225,53 @@ export default function ProfileSettingsPanel({
       <div className="profile-settings-grid">
         <form className="profile-settings-form" onSubmit={saveProfile} data-tour="profile-public-identity">
           <h3>Informations du profil</h3>
+          <ProfileBannerPreview banner={profileDraft.banner} displayName={profileDraft.displayName} />
+          <label htmlFor="profile-banner">Bannière auteur</label>
+          <input
+            id="profile-banner"
+            value={profileDraft.banner}
+            onChange={(event) => updateProfileField('banner', event.target.value)}
+            placeholder="https://..."
+            maxLength={1000}
+          />
+          <div className="profile-media-actions">
+            <button type="button" className="secondary-action profile-media-upload-button" onClick={() => bannerInputRef.current?.click()}>
+              <ImageUp size={16} />
+              Importer
+            </button>
+            <input
+              ref={bannerInputRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(event) => importProfileImage(event, 'banner')}
+            />
+          </div>
+          <div className="profile-avatar-control">
+            <ProfileAvatarPreview avatar={profileDraft.avatar} displayName={profileDraft.displayName} />
+            <label htmlFor="profile-avatar">Avatar auteur</label>
+            <input
+              id="profile-avatar"
+              value={profileDraft.avatar}
+              onChange={(event) => updateProfileField('avatar', event.target.value)}
+              placeholder="https://..."
+              maxLength={1000}
+            />
+            <div className="profile-media-actions">
+              <button type="button" className="secondary-action profile-media-upload-button" onClick={() => avatarInputRef.current?.click()}>
+                <ImageUp size={16} />
+                Importer
+              </button>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={(event) => importProfileImage(event, 'avatar')}
+              />
+            </div>
+          </div>
+          {mediaError ? <p className="auth-error">{mediaError}</p> : null}
           <label>Nom affiche</label>
           <input
             value={profileDraft.displayName}
@@ -107,12 +291,23 @@ export default function ProfileSettingsPanel({
             maxLength={600}
             placeholder="Présente ton style, tes thèmes, ton rythme de création..."
           />
-          <label>Site ou réseau</label>
-          <input
-            value={profileDraft.website}
-            onChange={(event) => updateProfileField('website', event.target.value)}
-            placeholder="https://..."
-          />
+          <fieldset className="social-links-editor profile-social-links">
+            <legend>Liens</legend>
+            <div className="social-links-grid">
+              {AUTHOR_SOCIAL_LINK_TYPES.map(({ type, label }) => (
+                <label key={type} htmlFor={`profile-social-${type}`}>
+                  {label}
+                  <input
+                    id={`profile-social-${type}`}
+                    value={getAuthorSocialLinkUrl(profileDraft.socialLinks, type)}
+                    onChange={(event) => updateSocialLink(type, event.target.value)}
+                    placeholder="https://..."
+                    maxLength={1000}
+                  />
+                </label>
+              ))}
+            </div>
+          </fieldset>
           {profileNotice ? <p className="small-note">{profileNotice}</p> : null}
           <button type="submit" className="profile-action-button" disabled={isBusy} data-tour="profile-save-public-identity">
             <Save size={16} />
@@ -186,6 +381,16 @@ export default function ProfileSettingsPanel({
           </button>
         </form>
       </div>
+      <AuthorProfileImageCropper
+        imageCrop={imageCrop}
+        cropZoom={cropZoom}
+        cropPan={cropPan}
+        isCropBusy={isCropBusy}
+        onClose={() => setImageCrop(null)}
+        onZoomChange={setCropZoom}
+        onPanChange={setCropPan}
+        onConfirm={confirmProfileImageCrop}
+      />
     </section>
   );
 }

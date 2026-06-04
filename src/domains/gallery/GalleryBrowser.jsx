@@ -1,4 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import {
+  AtSign,
+  BriefcaseBusiness,
+  Camera,
+  Globe,
+  Heart,
+  MessagesSquare,
+  Music2,
+  Play,
+  UserCheck,
+  UserPlus,
+} from 'lucide-react';
 import AuthorProfileEditor from '../profile/AuthorProfileEditor';
 import {
   commentPublicGame,
@@ -7,6 +19,18 @@ import {
   incrementPublicGamePlay,
   ratePublicGame,
 } from '../../shared/services/publicGalleryStorage';
+import {
+  AUTHOR_SOCIAL_LINK_TYPES,
+  normalizeAuthorSocialLinks,
+  toggleAuthorBlogPostLike,
+} from '../../shared/services/authorProfiles';
+import {
+  followCreator,
+  getCreatorLatestActivityAt,
+  getUnreadFollowedCreatorActivity,
+  isFollowingCreator,
+  unfollowCreator,
+} from '../../shared/services/creatorFollows';
 import { trackVisitorSurface } from '../../shared/services/visitorAnalytics';
 
 const formatRating = (value) => (Number(value || 0) ? Number(value).toFixed(1) : 'Nouveau');
@@ -18,6 +42,55 @@ const AGE_FILTERS = [
 ];
 
 const PUBLIC_GALLERY_BANNER_SRC = '/assets/gallery/public-gallery-banner.png';
+const PUBLIC_VISITOR_ID_KEY = 'escapeGameBuilder.publicVisitorId';
+
+const SOCIAL_LINK_LABELS = new Map(AUTHOR_SOCIAL_LINK_TYPES.map((link) => [link.type, link.label]));
+
+const SOCIAL_LINK_ICONS = {
+  site: Globe,
+  instagram: Camera,
+  youtube: Play,
+  tiktok: Music2,
+  discord: MessagesSquare,
+  'x-twitter': AtSign,
+  linkedin: BriefcaseBusiness,
+};
+
+const makeExternalHref = (url = '') => {
+  const value = String(url || '').trim();
+  if (!value) return '';
+  if (/^(https?:|mailto:)/i.test(value)) return value;
+  return `https://${value}`;
+};
+
+const getPublicVisitorId = () => {
+  if (typeof window === 'undefined') return 'guest';
+  const storedId = window.localStorage.getItem(PUBLIC_VISITOR_ID_KEY);
+  if (storedId) return storedId;
+  const nextId = `guest-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  window.localStorage.setItem(PUBLIC_VISITOR_ID_KEY, nextId);
+  return nextId;
+};
+
+const getVisibleCreatorLinks = (socialLinks = [], website = '') => (
+  normalizeAuthorSocialLinks(socialLinks, website)
+    .filter((link) => String(link.url || '').trim())
+);
+
+const getPostLikeCount = (value = 0) => {
+  const count = Number(value);
+  return Number.isFinite(count) ? Math.max(0, count) : 0;
+};
+
+const formatAuthorUpdatedAt = (value = '') => {
+  const date = new Date(value);
+  if (!value || Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
+};
 
 const makePlayUrl = (game) => {
   const url = new URL(window.location.href);
@@ -42,6 +115,126 @@ function GalleryImage({ src, alt = '', eager = false, fallback }) {
       referrerPolicy="no-referrer"
       onError={() => setHasError(true)}
     />
+  );
+}
+
+function CreatorAvatar({ avatar = '', name = 'Créateur' }) {
+  const initial = String(name || 'Créateur').trim().charAt(0).toUpperCase() || 'C';
+  const avatarSrc = String(avatar || '').trim();
+
+  return (
+    <div className="public-avatar">
+      <GalleryImage
+        key={avatarSrc}
+        src={avatarSrc}
+        alt={`Avatar de ${name}`}
+        eager
+        fallback={<span>{initial}</span>}
+      />
+    </div>
+  );
+}
+
+function CreatorBanner({ banner = '', name = 'Créateur' }) {
+  const bannerSrc = String(banner || '').trim();
+
+  return (
+    <div className="public-creator-banner">
+      <GalleryImage
+        key={bannerSrc}
+        src={bannerSrc}
+        alt={`Bannière de ${name}`}
+        eager
+        fallback={<div className="public-creator-banner-fallback" aria-hidden="true" />}
+      />
+    </div>
+  );
+}
+
+function CreatorSocialLinks({ socialLinks = [], website = '', includeTypes = null, excludeTypes = [] }) {
+  const includeSet = Array.isArray(includeTypes) ? new Set(includeTypes) : null;
+  const excludeSet = new Set(excludeTypes);
+  const visibleLinks = getVisibleCreatorLinks(socialLinks, website)
+    .filter((link) => (!includeSet || includeSet.has(link.type)) && !excludeSet.has(link.type));
+
+  if (!visibleLinks.length) return null;
+
+  return (
+    <div className="public-creator-links" aria-label="Liens du créateur">
+      {visibleLinks.map(({ type, url }) => {
+        const label = SOCIAL_LINK_LABELS.get(type) || type;
+        const Icon = SOCIAL_LINK_ICONS[type] || Globe;
+        return (
+          <a
+            key={type}
+            className={`public-creator-link-button public-creator-link-${type}`}
+            href={makeExternalHref(url)}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={label}
+          >
+            <Icon size={16} aria-hidden="true" />
+            <span>{label}</span>
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
+function CreatorAboutSection({ name = 'Créateur', profile = {} }) {
+  const updatedAt = formatAuthorUpdatedAt(profile.updatedAt);
+  const hasLinks = getVisibleCreatorLinks(profile.socialLinks, profile.website).length > 0;
+
+  return (
+    <section className="panel public-author-about">
+      <div className="public-author-about-head">
+        <div>
+          <span className="eyebrow">À propos de l’auteur</span>
+          <h2>{name}</h2>
+          {profile.tagline ? <p className="public-creator-tagline">{profile.tagline}</p> : null}
+        </div>
+        {updatedAt ? <span className="public-author-updated">Mis à jour le {updatedAt}</span> : null}
+      </div>
+
+      {profile.bio ? (
+        <p className="small-note public-creator-bio">{profile.bio}</p>
+      ) : null}
+
+      {hasLinks ? (
+        <div className="public-author-about-links">
+          <div className="public-author-link-group">
+            <span>Liens</span>
+            <CreatorSocialLinks socialLinks={profile.socialLinks} website={profile.website} />
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function CreatorNewsCard({ post, viewerId = '', onToggleLike }) {
+  const postTitle = post.title || 'cette actualité';
+  const likes = getPostLikeCount(post.likes);
+  const likedBy = Array.isArray(post.likedBy) ? post.likedBy : [];
+  const isLiked = Boolean(viewerId && likedBy.includes(viewerId));
+
+  return (
+    <article className="public-blog-card">
+      <strong>{post.title}</strong>
+      <p>{post.body}</p>
+      <button
+        type="button"
+        className={`public-news-like${isLiked ? ' active' : ''}`}
+        aria-pressed={isLiked}
+        aria-label={isLiked ? `Retirer le like de ${postTitle}` : `Liker ${postTitle}`}
+        onClick={() => onToggleLike?.(post.id)}
+      >
+        <Heart size={16} fill={isLiked ? 'currentColor' : 'none'} aria-hidden="true" />
+        <span>{isLiked ? 'Aimé' : 'J’aime'}</span>
+        <strong>{likes}</strong>
+      </button>
+    </article>
   );
 }
 
@@ -122,6 +315,9 @@ export default function GalleryBrowser({
   const [difficultyFilter, setDifficultyFilter] = useState('');
   const [ageFilter, setAgeFilter] = useState('all');
   const [commentText, setCommentText] = useState('');
+  const [creatorTab, setCreatorTab] = useState('creator');
+  const [publicVisitorId] = useState(() => getPublicVisitorId());
+  const [followVersion, setFollowVersion] = useState(0);
 
   const refreshGames = async () => {
     setIsLoading(true);
@@ -153,6 +349,7 @@ export default function GalleryBrowser({
   const openCreator = (creatorId) => {
     setView('creator');
     setSelectedCreatorId(creatorId);
+    setCreatorTab('creator');
   };
 
   const openAuthorEditor = () => {
@@ -252,26 +449,78 @@ export default function GalleryBrowser({
     refreshGames();
   };
 
+  const toggleNewsLike = (postId) => {
+    const viewerId = user?.id || publicVisitorId;
+    const result = toggleAuthorBlogPostLike(selectedCreatorId, postId, viewerId);
+    if (!result?.profile) return;
+
+    setGames((currentGames) => currentGames.map((game) => (
+      game.userId === selectedCreatorId
+        ? {
+            ...game,
+            author: result.profile.displayName || game.author,
+            authorProfile: result.profile,
+          }
+        : game
+    )));
+  };
+
+  const toggleCreatorFollow = () => {
+    if (!selectedCreatorId || selectedCreatorId === user?.id) return;
+    if (!user?.id) {
+      onSignup?.();
+      return;
+    }
+
+    if (isFollowingCreator(user.id, selectedCreatorId)) {
+      unfollowCreator(user.id, selectedCreatorId);
+    } else {
+      followCreator(user.id, selectedCreatorId, getCreatorLatestActivityAt(games, selectedCreatorId));
+    }
+    setFollowVersion((version) => version + 1);
+  };
+
   const creatorAverage = selectedCreatorGames.length ?
      selectedCreatorGames.reduce((sum, game) => sum + game.feedback.average, 0) / selectedCreatorGames.length
     : 0;
   const creatorName = selectedCreatorGames[0]?.author || 'Créateur';
   const creatorProfile = selectedCreatorGames[0]?.authorProfile || {};
   const currentUserRating = selectedGame?.feedback.ratings.find((entry) => entry.userId === (user?.id || 'guest'))?.rating || 0;
+  const currentNewsViewerId = user?.id || publicVisitorId;
+  const isCreatorFollowed = useMemo(() => (
+    Boolean(user?.id && selectedCreatorId && isFollowingCreator(user.id, selectedCreatorId))
+  ), [followVersion, selectedCreatorId, user?.id]);
+  const canFollowCreator = Boolean(selectedCreatorId && selectedCreatorId !== user?.id);
+  const unreadFollowedActivity = useMemo(() => (
+    user?.id ? getUnreadFollowedCreatorActivity(user.id, games) : []
+  ), [followVersion, games, user?.id]);
+  const hasUnreadFollowedActivity = unreadFollowedActivity.length > 0;
 
   return (
     <main className="public-gallery-shell">
-      <header className="public-gallery-topbar">
-        <div className="public-gallery-banner-frame">
-          <img
-            className="public-gallery-banner"
-            src={PUBLIC_GALLERY_BANNER_SRC}
-            alt="Galerie publique - Escape games à découvrir"
-          />
-        </div>
+      <header className={`public-gallery-topbar${view === 'discover' ? '' : ' public-gallery-topbar-compact'}`}>
+        {view === 'discover' ? (
+          <div className="public-gallery-banner-frame">
+            <img
+              className="public-gallery-banner"
+              src={PUBLIC_GALLERY_BANNER_SRC}
+              alt="Galerie publique - Escape games à découvrir"
+            />
+          </div>
+        ) : null}
         <div className="toolbar public-gallery-actions">
           <button type="button" className="secondary-action" onClick={openDiscover}>Découverte</button>
-          {user?.id ? <button type="button" className="secondary-action" onClick={openAuthorEditor}>Mon profil auteur</button> : null}
+          {user?.id ? (
+            <button
+              type="button"
+              className={`secondary-action public-author-profile-button${hasUnreadFollowedActivity ? ' has-updates' : ''}`}
+              onClick={openAuthorEditor}
+              aria-label={hasUnreadFollowedActivity ? 'Mon profil auteur, nouveautés des créateurs suivis' : 'Mon profil auteur'}
+            >
+              Mon profil auteur
+              {hasUnreadFollowedActivity ? <span className="public-profile-notification-dot" aria-hidden="true" /> : null}
+            </button>
+          ) : null}
           {onClose ? <button type="button" className="secondary-action" onClick={onClose}>Builder</button> : null}
         </div>
         {!isLoading && view === 'discover' ? (
@@ -439,6 +688,9 @@ export default function GalleryBrowser({
         <AuthorProfileEditor
           user={user}
           authorProfile={authorProfile}
+          publicGames={games}
+          onCreatorFollowsChange={() => setFollowVersion((version) => version + 1)}
+          onOpenCreator={openCreator}
           onUpdateAuthorProfile={async (profile) => {
             await onUpdateAuthorProfile?.(profile);
             await refreshGames();
@@ -450,44 +702,88 @@ export default function GalleryBrowser({
       {!isLoading && view === 'creator' ? (
         <section className="public-creator-page">
           <button type="button" className="secondary-action public-back-button" onClick={openDiscover}>← Galerie</button>
-          <section className="panel public-creator-card">
-            <div className="public-avatar">{creatorName.charAt(0).toUpperCase()}</div>
-            <div>
-              <span className="eyebrow">Profil créateur</span>
-              <h2>{creatorName}</h2>
-              {creatorProfile.tagline ? <p className="public-creator-tagline">{creatorProfile.tagline}</p> : null}
-              {creatorProfile.bio ? <p className="small-note public-creator-bio">{creatorProfile.bio}</p> : null}
-              {creatorProfile.website ? (
-                <a className="public-creator-link" href={creatorProfile.website} target="_blank" rel="noreferrer">
-                  Site auteur ?
-                </a>
-              ) : null}
-              <p className="small-note">🎮 {selectedCreatorGames.length} jeu{selectedCreatorGames.length > 1 ? 'x' : ''} créé{selectedCreatorGames.length > 1 ? 's' : ''}</p>
-              <p className="small-note">⭐ Moyenne : {formatRating(creatorAverage)}</p>
-            </div>
-          </section>
-          {creatorProfile.blogPosts?.length ? (
-            <section className="panel public-section">
-              <div className="panel-head">
-                <h2>Mini blog</h2>
+          <CreatorBanner banner={creatorProfile.banner} name={creatorName} />
+          <div className="public-creator-tabs" role="tablist" aria-label="Sections du créateur">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={creatorTab === 'creator'}
+              className={creatorTab === 'creator' ? 'active' : ''}
+              onClick={() => setCreatorTab('creator')}
+            >
+              Créateur
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={creatorTab === 'games'}
+              aria-label={`Jeux publiés ${selectedCreatorGames.length}`}
+              className={creatorTab === 'games' ? 'active' : ''}
+              onClick={() => setCreatorTab('games')}
+            >
+              Jeux publiés
+              <span>{selectedCreatorGames.length}</span>
+            </button>
+          </div>
+
+          {creatorTab === 'creator' ? (
+            <div className="public-creator-tab-panel" role="tabpanel">
+              <div className="public-creator-overview">
+                <div className="public-creator-side">
+                  <section className="panel public-creator-card">
+                    <CreatorAvatar avatar={creatorProfile.avatar} name={creatorName} />
+                    <div>
+                      <span className="eyebrow">Profil créateur</span>
+                      <h2>{creatorName}</h2>
+                      <p className="small-note">🎮 {selectedCreatorGames.length} jeu{selectedCreatorGames.length > 1 ? 'x' : ''} créé{selectedCreatorGames.length > 1 ? 's' : ''}</p>
+                      <p className="small-note">⭐ Moyenne : {formatRating(creatorAverage)}</p>
+                      {canFollowCreator ? (
+                        <button
+                          type="button"
+                          className={`secondary-action public-follow-button${isCreatorFollowed ? ' active' : ''}`}
+                          onClick={toggleCreatorFollow}
+                          disabled={!user?.id && !onSignup}
+                          aria-pressed={user?.id ? isCreatorFollowed : undefined}
+                        >
+                          {isCreatorFollowed ? <UserCheck size={16} aria-hidden="true" /> : <UserPlus size={16} aria-hidden="true" />}
+                          <span>{user?.id ? (isCreatorFollowed ? 'Suivi' : 'Suivre') : 'Se connecter pour suivre'}</span>
+                        </button>
+                      ) : null}
+                    </div>
+                  </section>
+                  {creatorProfile.blogPosts?.length ? (
+                    <section className="panel public-section public-author-news">
+                      <div className="panel-head">
+                        <h2>Actualité</h2>
+                      </div>
+                      <div className="public-blog-grid">
+                        {creatorProfile.blogPosts.map((post) => (
+                          <CreatorNewsCard
+                            key={post.id}
+                            post={post}
+                            viewerId={currentNewsViewerId}
+                            onToggleLike={toggleNewsLike}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  ) : null}
+                </div>
+                <CreatorAboutSection name={creatorName} profile={creatorProfile} />
               </div>
-              <div className="public-blog-grid">
-                {creatorProfile.blogPosts.map((post) => (
-                  <article key={post.id} className="public-blog-card">
-                    <strong>{post.title}</strong>
-                    <p>{post.body}</p>
-                  </article>
+            </div>
+          ) : (
+            <section className="panel public-section public-creator-tab-panel" role="tabpanel">
+              <div className="panel-head">
+                <h2>Jeux publiés</h2>
+              </div>
+              <div className="public-game-grid">
+                {selectedCreatorGames.map((game) => (
+                  <GameCard key={getGameKey(game.userId, game.projectId)} game={game} onOpenGame={openGame} onOpenCreator={openCreator} onPlay={playGame} />
                 ))}
               </div>
             </section>
-          ) : null}
-          <section className="panel public-section">
-            <div className="public-game-grid">
-              {selectedCreatorGames.map((game) => (
-                <GameCard key={getGameKey(game.userId, game.projectId)} game={game} onOpenGame={openGame} onOpenCreator={openCreator} onPlay={playGame} />
-              ))}
-            </div>
-          </section>
+          )}
         </section>
       ) : null}
     </main>

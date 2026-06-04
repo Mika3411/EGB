@@ -1,32 +1,279 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { BellDot, CheckCircle2, ImageUp, UserMinus, Users } from 'lucide-react';
 import { showConfirm } from '../../shared/ui/AccessibleDialog';
+import {
+  AUTHOR_SOCIAL_LINK_TYPES,
+  getAuthorSocialLinkUrl,
+  normalizeAuthorSocialLinks,
+  setAuthorSocialLinkUrl,
+} from '../../shared/services/authorProfiles';
+import { getAllAccounts } from '../../shared/services/authStorage';
+import {
+  getCreatorFollowState,
+  getCreatorLatestActivityAt,
+  getFollowersForCreator,
+  getUnreadFollowedCreatorActivity,
+  markCreatorActivitySeen,
+  markFollowedCreatorActivitySeen,
+  unfollowCreator,
+} from '../../shared/services/creatorFollows';
+import {
+  cropAuthorProfileImage,
+  readAuthorProfileImageFile,
+} from '../../shared/utils/authorProfileMedia';
+import AuthorProfileImageCropper from './components/AuthorProfileImageCropper';
+
+const getAuthorInitial = (name = '') => String(name || 'Créateur').trim().charAt(0).toUpperCase() || 'C';
+
+const AUTHOR_PROFILE_TABS = [
+  ['profile', 'Mettre à jour'],
+  ['following', 'Créateurs suivis'],
+  ['followers', 'Followers'],
+];
+
+const formatFollowDate = (value = '') => {
+  const date = new Date(value);
+  if (!value || Number.isNaN(date.getTime())) return 'Aucune activité';
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(date);
+};
+
+const getAccountLabel = (account = null, fallbackId = '') => (
+  account?.name || account?.email || `Compte ${String(fallbackId || '').slice(0, 8) || 'inconnu'}`
+);
+
+function AuthorAvatarPreview({ avatar = '', displayName = '' }) {
+  const [hasError, setHasError] = useState(false);
+  const avatarSrc = String(avatar || '').trim();
+  const initial = getAuthorInitial(displayName);
+
+  useEffect(() => {
+    setHasError(false);
+  }, [avatarSrc]);
+
+  return (
+    <div className="author-avatar-preview" aria-label="Aperçu avatar auteur">
+      {avatarSrc && !hasError ? (
+        <img
+          src={avatarSrc}
+          alt={`Avatar de ${displayName || 'l’auteur'}`}
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          onError={() => setHasError(true)}
+        />
+      ) : (
+        <span>{initial}</span>
+      )}
+    </div>
+  );
+}
+
+function AuthorBannerPreview({ banner = '', displayName = '' }) {
+  const [hasError, setHasError] = useState(false);
+  const bannerSrc = String(banner || '').trim();
+
+  useEffect(() => {
+    setHasError(false);
+  }, [bannerSrc]);
+
+  return (
+    <div className="author-banner-preview" aria-label="Aperçu bannière auteur">
+      {bannerSrc && !hasError ? (
+        <img
+          src={bannerSrc}
+          alt={`Bannière de ${displayName || 'l’auteur'}`}
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          onError={() => setHasError(true)}
+        />
+      ) : (
+        <span aria-hidden="true" />
+      )}
+    </div>
+  );
+}
+
+const createAuthorDraft = (authorProfile = {}, user = {}) => ({
+  displayName: authorProfile?.displayName || user?.name || user?.email || '',
+  tagline: authorProfile?.tagline || '',
+  bio: authorProfile?.bio || '',
+  website: authorProfile?.website || '',
+  avatar: authorProfile?.avatar || '',
+  banner: authorProfile?.banner || '',
+  socialLinks: normalizeAuthorSocialLinks(authorProfile?.socialLinks, authorProfile?.website),
+});
+
+const buildAuthorDraftPayload = (draft = {}) => {
+  const socialLinks = normalizeAuthorSocialLinks(draft.socialLinks, draft.website);
+  return {
+    ...draft,
+    website: getAuthorSocialLinkUrl(socialLinks, 'site'),
+    avatar: String(draft.avatar || '').trim(),
+    banner: String(draft.banner || '').trim(),
+    socialLinks,
+  };
+};
 
 export default function AuthorProfileEditor({
   user,
   authorProfile,
+  publicGames = [],
   onUpdateAuthorProfile,
+  onCreatorFollowsChange,
+  onOpenCreator,
   onBack,
 }) {
-  const [authorDraft, setAuthorDraft] = useState(() => ({
-    displayName: authorProfile?.displayName || user?.name || user?.email || '',
-    tagline: authorProfile?.tagline || '',
-    bio: authorProfile?.bio || '',
-    website: authorProfile?.website || '',
-  }));
+  const [authorDraft, setAuthorDraft] = useState(() => createAuthorDraft(authorProfile, user));
   const [blogDraft, setBlogDraft] = useState({ title: '', body: '' });
+  const [mediaError, setMediaError] = useState('');
+  const [activeAuthorTab, setActiveAuthorTab] = useState('profile');
+  const [followVersion, setFollowVersion] = useState(0);
+  const [imageCrop, setImageCrop] = useState(null);
+  const [cropZoom, setCropZoom] = useState(1);
+  const [cropPan, setCropPan] = useState({ x: 0, y: 0 });
+  const [isCropBusy, setIsCropBusy] = useState(false);
+  const bannerInputRef = useRef(null);
+  const avatarInputRef = useRef(null);
 
   useEffect(() => {
-    setAuthorDraft({
-      displayName: authorProfile?.displayName || user?.name || user?.email || '',
-      tagline: authorProfile?.tagline || '',
-      bio: authorProfile?.bio || '',
-      website: authorProfile?.website || '',
-    });
+    setAuthorDraft(createAuthorDraft(authorProfile, user));
   }, [authorProfile, user]);
+
+  const updateSocialLink = (type, url) => {
+    setAuthorDraft((draft) => {
+      const socialLinks = setAuthorSocialLinkUrl(draft.socialLinks, type, url, draft.website);
+      return {
+        ...draft,
+        website: type === 'site' ? String(url || '') : draft.website,
+        socialLinks,
+      };
+    });
+  };
+
+  const refreshFollows = () => {
+    setFollowVersion((version) => version + 1);
+    onCreatorFollowsChange?.();
+  };
+
+  const accountMap = useMemo(() => (
+    new Map(getAllAccounts().map((account) => [account.id, account]))
+  ), [followVersion, user?.id]);
+
+  const unreadCreatorIds = useMemo(() => (
+    new Set(getUnreadFollowedCreatorActivity(user?.id, publicGames).map((entry) => entry.creatorId))
+  ), [followVersion, publicGames, user?.id]);
+
+  const followedCreators = useMemo(() => {
+    const followState = getCreatorFollowState(user?.id);
+    return followState.followedCreatorIds.map((creatorId) => {
+      const creatorGames = publicGames.filter((game) => game.userId === creatorId);
+      const firstGame = creatorGames[0] || {};
+      const account = accountMap.get(creatorId);
+      const latestAt = getCreatorLatestActivityAt(publicGames, creatorId);
+      return {
+        creatorId,
+        name: firstGame.author || firstGame.authorProfile?.displayName || getAccountLabel(account, creatorId),
+        tagline: firstGame.authorProfile?.tagline || '',
+        gameCount: creatorGames.length,
+        latestAt,
+        lastSeenAt: followState.lastSeenAtByCreator[creatorId] || '',
+        unread: unreadCreatorIds.has(creatorId),
+      };
+    });
+  }, [accountMap, followVersion, publicGames, unreadCreatorIds, user?.id]);
+
+  const followers = useMemo(() => (
+    getFollowersForCreator(user?.id).map((entry) => {
+      const account = accountMap.get(entry.followerId);
+      return {
+        ...entry,
+        name: getAccountLabel(account, entry.followerId),
+        email: account?.email || '',
+      };
+    })
+  ), [accountMap, followVersion, user?.id]);
+
+  const markCreatorSeen = (creatorId) => {
+    markCreatorActivitySeen(user?.id, creatorId, publicGames);
+    refreshFollows();
+  };
+
+  const markAllCreatorsSeen = () => {
+    markFollowedCreatorActivitySeen(user?.id, publicGames);
+    refreshFollows();
+  };
+
+  const stopFollowingCreator = async (creatorId) => {
+    const confirmed = await showConfirm({
+      title: 'Ne plus suivre',
+      message: 'Ne plus suivre ce créateur ?',
+      confirmLabel: 'Ne plus suivre',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+    unfollowCreator(user?.id, creatorId);
+    refreshFollows();
+  };
+
+  const removeFollower = async (followerId) => {
+    const confirmed = await showConfirm({
+      title: 'Retirer le follower',
+      message: 'Retirer ce compte de tes followers ?',
+      confirmLabel: 'Retirer',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+    unfollowCreator(followerId, user?.id);
+    refreshFollows();
+  };
+
+  const importAuthorImage = async (event, field) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    try {
+      const image = await readAuthorProfileImageFile(file);
+      setImageCrop({ ...image, field });
+      setCropZoom(1);
+      setCropPan({ x: 0, y: 0 });
+      setMediaError('');
+    } catch (error) {
+      setMediaError(error?.message || "Import de l'image impossible.");
+    }
+  };
+
+  const confirmAuthorImageCrop = async () => {
+    if (!imageCrop) return;
+    setIsCropBusy(true);
+    try {
+      const imageData = await cropAuthorProfileImage({
+        src: imageCrop.src,
+        sourceWidth: imageCrop.width,
+        sourceHeight: imageCrop.height,
+        target: imageCrop.field,
+        zoom: cropZoom,
+        panX: cropPan.x,
+        panY: cropPan.y,
+      });
+      setAuthorDraft((draft) => ({ ...draft, [imageCrop.field]: imageData }));
+      setImageCrop(null);
+      setMediaError('');
+    } catch (error) {
+      setMediaError(error?.message || "Recadrage de l'image impossible.");
+    } finally {
+      setIsCropBusy(false);
+    }
+  };
 
   const saveAuthorDraft = async (event) => {
     event.preventDefault();
-    await onUpdateAuthorProfile?.(authorDraft);
+    await onUpdateAuthorProfile?.(buildAuthorDraftPayload(authorDraft));
   };
 
   const publishBlogPost = async (event) => {
@@ -40,9 +287,10 @@ export default function AuthorProfileEditor({
       body: body.slice(0, 600),
       createdAt: new Date().toISOString(),
     };
+    const authorPayload = buildAuthorDraftPayload(authorDraft);
     await onUpdateAuthorProfile?.({
       ...(authorProfile || {}),
-      ...authorDraft,
+      ...authorPayload,
       blogPosts: [post, ...(authorProfile?.blogPosts || [])].slice(0, 10),
     });
     setBlogDraft({ title: '', body: '' });
@@ -56,9 +304,10 @@ export default function AuthorProfileEditor({
       variant: 'danger',
     });
     if (!confirmed) return;
+    const authorPayload = buildAuthorDraftPayload(authorDraft);
     await onUpdateAuthorProfile?.({
       ...(authorProfile || {}),
-      ...authorDraft,
+      ...authorPayload,
       blogPosts: (authorProfile?.blogPosts || []).filter((post) => post.id !== postId),
     });
   };
@@ -74,8 +323,84 @@ export default function AuthorProfileEditor({
             <p className="small-note">Cette fiche est visible dans la galerie publique avec tes jeux publiés.</p>
           </div>
         </div>
+        <div className="author-profile-tabs" role="tablist" aria-label="Gestion du profil auteur">
+          {AUTHOR_PROFILE_TABS.map(([tabId, label]) => {
+            const badge = tabId === 'following'
+              ? unreadCreatorIds.size
+              : tabId === 'followers'
+                ? followers.length
+                : 0;
+            return (
+              <button
+                key={tabId}
+                type="button"
+                role="tab"
+                aria-selected={activeAuthorTab === tabId}
+                aria-label={badge ? `${label} ${badge}` : label}
+                className={activeAuthorTab === tabId ? 'active' : ''}
+                onClick={() => setActiveAuthorTab(tabId)}
+              >
+                <span>{label}</span>
+                {badge ? <strong>{badge}</strong> : null}
+              </button>
+            );
+          })}
+        </div>
+
+        {activeAuthorTab === 'profile' ? (
         <div className="author-profile-grid">
           <form onSubmit={saveAuthorDraft} className="author-profile-form">
+            <div className="author-banner-control">
+              <AuthorBannerPreview banner={authorDraft.banner} displayName={authorDraft.displayName} />
+              <label>
+                Bannière
+                <input
+                  value={authorDraft.banner}
+                  onChange={(event) => setAuthorDraft((draft) => ({ ...draft, banner: event.target.value }))}
+                  placeholder="https://..."
+                  maxLength={1000}
+                />
+              </label>
+              <div className="author-media-actions">
+                <button type="button" className="secondary-action author-media-upload-button" onClick={() => bannerInputRef.current?.click()}>
+                  <ImageUp size={16} />
+                  Importer
+                </button>
+                <input
+                  ref={bannerInputRef}
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  onChange={(event) => importAuthorImage(event, 'banner')}
+                />
+              </div>
+            </div>
+            <div className="author-avatar-control">
+              <AuthorAvatarPreview avatar={authorDraft.avatar} displayName={authorDraft.displayName} />
+              <label>
+                Avatar
+                <input
+                  value={authorDraft.avatar}
+                  onChange={(event) => setAuthorDraft((draft) => ({ ...draft, avatar: event.target.value }))}
+                  placeholder="https://..."
+                  maxLength={1000}
+                />
+              </label>
+              <div className="author-media-actions">
+                <button type="button" className="secondary-action author-media-upload-button" onClick={() => avatarInputRef.current?.click()}>
+                  <ImageUp size={16} />
+                  Importer
+                </button>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  onChange={(event) => importAuthorImage(event, 'avatar')}
+                />
+              </div>
+            </div>
+            {mediaError ? <p className="auth-error">{mediaError}</p> : null}
             <label>Nom d’auteur</label>
             <input
               value={authorDraft.displayName}
@@ -95,18 +420,29 @@ export default function AuthorProfileEditor({
               placeholder="Présente ton style, tes thèmes, ton rythme de création..."
               maxLength={600}
             />
-            <label>Site ou réseau</label>
-            <input
-              value={authorDraft.website}
-              onChange={(event) => setAuthorDraft((draft) => ({ ...draft, website: event.target.value }))}
-              placeholder="https://..."
-            />
+            <fieldset className="social-links-editor author-social-links">
+              <legend>Liens</legend>
+              <div className="social-links-grid">
+                {AUTHOR_SOCIAL_LINK_TYPES.map(({ type, label }) => (
+                  <label key={type} htmlFor={`author-social-${type}`}>
+                    {label}
+                    <input
+                      id={`author-social-${type}`}
+                      value={getAuthorSocialLinkUrl(authorDraft.socialLinks, type)}
+                      onChange={(event) => updateSocialLink(type, event.target.value)}
+                      placeholder="https://..."
+                      maxLength={1000}
+                    />
+                  </label>
+                ))}
+              </div>
+            </fieldset>
             <button type="submit" className="profile-action-button">Mettre à jour le profil</button>
           </form>
 
           <div className="author-blog-panel">
             <form onSubmit={publishBlogPost}>
-              <h3>Mini blog</h3>
+              <h3>Actualité</h3>
               <label>Titre</label>
               <input
                 value={blogDraft.title}
@@ -114,14 +450,14 @@ export default function AuthorProfileEditor({
                 placeholder="Nouveau décor, nouvelle énigme..."
                 maxLength={80}
               />
-              <label>Articlé court</label>
+              <label>Article court</label>
               <textarea
                 value={blogDraft.body}
                 onChange={(event) => setBlogDraft((draft) => ({ ...draft, body: event.target.value }))}
                 placeholder="Partage une actu, un making-of, une note d’auteur..."
                 maxLength={600}
               />
-              <button type="submit" className="profile-action-button secondary-action">Publier l’articlé</button>
+              <button type="submit" className="profile-action-button secondary-action">Publier l’actualité</button>
             </form>
 
             <div className="author-blog-list">
@@ -131,10 +467,130 @@ export default function AuthorProfileEditor({
                   <p>{post.body}</p>
                   <button type="button" className="secondary-action" onClick={() => deleteBlogPost(post.id)}>Supprimer</button>
                 </article>
-              )) : <p className="small-note">Aucun articlé publié.</p>}
+              )) : <p className="small-note">Aucune actualité publiée.</p>}
             </div>
           </div>
         </div>
+        ) : null}
+
+        {activeAuthorTab === 'following' ? (
+          <section className="author-follow-panel">
+            <div className="author-follow-head">
+              <div>
+                <h3>Créateurs suivis</h3>
+                <p className="small-note">
+                  Les nouveautés signalent les jeux publiés et les actualités ajoutées depuis ta dernière lecture.
+                </p>
+              </div>
+              {followedCreators.length ? (
+                <button type="button" className="secondary-action" onClick={markAllCreatorsSeen}>
+                  <CheckCircle2 size={16} aria-hidden="true" />
+                  Tout marquer comme lu
+                </button>
+              ) : null}
+            </div>
+
+            {followedCreators.length ? (
+              <div className="author-follow-list">
+                {followedCreators.map((creator) => (
+                  <article key={creator.creatorId} className={`author-follow-card${creator.unread ? ' has-unread' : ''}`}>
+                    <div className="author-follow-card-main">
+                      <span className="author-follow-avatar">{getAuthorInitial(creator.name)}</span>
+                      <div>
+                        <strong>{creator.name}</strong>
+                        {creator.tagline ? <p>{creator.tagline}</p> : null}
+                        <small>
+                          {creator.gameCount} jeu{creator.gameCount > 1 ? 'x' : ''} publié{creator.gameCount > 1 ? 's' : ''}
+                          {' · '}
+                          Dernière activité : {formatFollowDate(creator.latestAt)}
+                        </small>
+                      </div>
+                    </div>
+                    {creator.unread ? (
+                      <span className="author-follow-status unread">
+                        <BellDot size={15} aria-hidden="true" />
+                        Nouveau
+                      </span>
+                    ) : (
+                      <span className="author-follow-status">
+                        <CheckCircle2 size={15} aria-hidden="true" />
+                        Lu
+                      </span>
+                    )}
+                    <div className="author-follow-actions">
+                      {onOpenCreator ? (
+                        <button type="button" className="secondary-action" onClick={() => onOpenCreator(creator.creatorId)}>
+                          Voir la fiche
+                        </button>
+                      ) : null}
+                      {creator.unread ? (
+                        <button type="button" className="secondary-action" onClick={() => markCreatorSeen(creator.creatorId)}>
+                          Marquer comme lu
+                        </button>
+                      ) : null}
+                      <button type="button" className="danger-button" onClick={() => stopFollowingCreator(creator.creatorId)}>
+                        <UserMinus size={15} aria-hidden="true" />
+                        Ne plus suivre
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="small-note author-follow-empty">Aucun créateur suivi pour le moment.</p>
+            )}
+          </section>
+        ) : null}
+
+        {activeAuthorTab === 'followers' ? (
+          <section className="author-follow-panel">
+            <div className="author-follow-head">
+              <div>
+                <h3>Followers</h3>
+                <p className="small-note">Les comptes qui suivent ton profil auteur et recevront tes nouveautés publiques.</p>
+              </div>
+              <span className="author-follow-count">
+                <Users size={16} aria-hidden="true" />
+                {followers.length}
+              </span>
+            </div>
+
+            {followers.length ? (
+              <div className="author-follow-list">
+                {followers.map((follower) => (
+                  <article key={follower.followerId} className="author-follow-card compact">
+                    <div className="author-follow-card-main">
+                      <span className="author-follow-avatar">{getAuthorInitial(follower.name)}</span>
+                      <div>
+                        <strong>{follower.name}</strong>
+                        {follower.email ? <p>{follower.email}</p> : null}
+                        <small>Dernière lecture : {formatFollowDate(follower.lastSeenAt)}</small>
+                      </div>
+                    </div>
+                    <div className="author-follow-actions">
+                      <button type="button" className="danger-button" onClick={() => removeFollower(follower.followerId)}>
+                        <UserMinus size={15} aria-hidden="true" />
+                        Retirer
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="small-note author-follow-empty">Aucun follower pour le moment.</p>
+            )}
+          </section>
+        ) : null}
+        <AuthorProfileImageCropper
+          imageCrop={imageCrop}
+          cropZoom={cropZoom}
+          cropPan={cropPan}
+          isCropBusy={isCropBusy}
+          onClose={() => setImageCrop(null)}
+          onZoomChange={setCropZoom}
+          onPanChange={setCropPan}
+          onConfirm={confirmAuthorImageCrop}
+        />
       </section>
     </section>
   );
