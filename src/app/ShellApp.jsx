@@ -499,7 +499,6 @@ function ShellApp() {
             onClose={auth.user ? openProfileScreen : null}
           />
         </Suspense>
-        <SupportWidget user={auth.user} />
       </>
     );
   }
