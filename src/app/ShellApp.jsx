@@ -1,8 +1,10 @@
 import React, { Suspense, useCallback, useMemo, useState } from 'react';
 import { useAccessibleDialog } from '../shared/ui/AccessibleDialog';
+import CenterScreenNotice from '../shared/ui/CenterScreenNotice';
 import { useAccountStorage } from '../domains/auth/hooks/useAccountStorage';
 import { useLocalAuth } from '../domains/auth/hooks/useLocalAuth';
 import { upsertProjectAsset } from '../shared/services/assetManager';
+import { getProjectName } from '../shared/services/projectAnalysis';
 import { isAdminAccount } from '../shared/services/authStorage';
 import { hasRemoteStorageConfig } from '../shared/services/remoteSession';
 import { readAppUiState, writeAppUiState } from '../shared/utils/storageHelpers';
@@ -91,6 +93,7 @@ function ShellApp() {
   const [showAuthEntry, setShowAuthEntry] = useState(false);
   const [authEntryMode, setAuthEntryMode] = useState('login');
   const [saveStatus, setSaveStatus] = useState('');
+  const [centerNotice, setCenterNotice] = useState('');
   const [aiCreditBalance] = useState(0);
   const [profileTutorialSteps, setProfileTutorialSteps] = useState([]);
   const [profileTutorialStepIndex, setProfileTutorialStepIndex] = useState(null);
@@ -119,6 +122,10 @@ function ShellApp() {
 
   const closeAuthEntry = useCallback(() => {
     setShowAuthEntry(false);
+  }, []);
+
+  const showCenterNotice = useCallback((message) => {
+    setCenterNotice(String(message || ''));
   }, []);
 
   const openProfileScreen = useCallback((options = {}) => {
@@ -246,9 +253,16 @@ function ShellApp() {
   }, [auth.markProjectLinkCopied, auth.user?.id, promptDialog]);
 
   const publishProjectFromProfile = useCallback(async (projectId) => {
-    await auth.publishProject(projectId);
-    setSaveStatus('Jeu publié dans la galerie');
-  }, [auth.publishProject]);
+    const existingProject = auth.projects.find((project) => project.id === projectId);
+    const isUpdate = Boolean(existingProject?.shareState?.isPublic);
+    const publishedProject = await auth.publishProject(projectId);
+    const projectName = getProjectName(publishedProject || existingProject);
+    const statusMessage = isUpdate
+      ? `${projectName} est mis à jour dans la galerie publique`
+      : 'Jeu publié dans la galerie';
+    setSaveStatus(statusMessage);
+    if (isUpdate) showCenterNotice(statusMessage);
+  }, [auth.projects, auth.publishProject, showCenterNotice]);
 
   const unpublishProjectFromProfile = useCallback(async (projectId) => {
     const confirmed = await confirmDialog({
@@ -582,6 +596,7 @@ function ShellApp() {
           profileTutorialStep={activeProfileTutorialStep}
         />
       </Suspense>
+      <CenterScreenNotice message={centerNotice} onDone={() => setCenterNotice('')} />
       {accessibleDialog}
       {profileTutorialOverlay}
       <SupportWidget user={auth.user} />

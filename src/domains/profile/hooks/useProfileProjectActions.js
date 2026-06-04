@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { createInitialProject, normalizeProject } from '../../../shared/data/projectData';
 import { prepareProjectForTutorial } from '../../../shared/data/tutorialSteps';
+import { getProjectName } from '../../../shared/services/projectAnalysis';
 import { applyCreationTemplate } from '../../../shared/services/projectTemplates';
 import { showPrompt } from '../../../shared/ui/AccessibleDialog';
 import { getSafeBuilderTab } from '../../../shared/utils/tutorialHelpers';
@@ -18,6 +19,7 @@ export function useProfileProjectActions({
   preview,
   saveProject = auth.saveProject,
   setSaveStatus,
+  showCenterNotice,
   setScreen,
   startCreationGuide,
 }) {
@@ -189,16 +191,24 @@ export function useProfileProjectActions({
   ]);
 
   const publishProjectFromProfile = useCallback(async (projectId) => {
+    const existingProject = auth.projects.find((project) => project.id === projectId);
+    const isUpdate = Boolean(existingProject?.shareState?.isPublic);
     if (projectId === auth.activeProjectId && hydratedProjectRef.current === projectId) {
       await saveProject(editor.project, projectId, {
         tab: editor.tab,
         selectedSceneId: editor.selectedSceneId,
       });
     }
-    await auth.publishProject(projectId);
-    setSaveStatus('Jeu publié dans la galerie');
+    const publishedProject = await auth.publishProject(projectId);
+    const projectName = getProjectName(publishedProject || existingProject);
+    const statusMessage = isUpdate
+      ? `${projectName} est mis à jour dans la galerie publique`
+      : 'Jeu publié dans la galerie';
+    setSaveStatus(statusMessage);
+    if (isUpdate) showCenterNotice?.(statusMessage);
   }, [
     auth.activeProjectId,
+    auth.projects,
     auth.publishProject,
     editor.project,
     editor.selectedSceneId,
@@ -206,6 +216,7 @@ export function useProfileProjectActions({
     hydratedProjectRef,
     saveProject,
     setSaveStatus,
+    showCenterNotice,
   ]);
 
   const unpublishProjectFromProfile = useCallback(async (projectId) => {

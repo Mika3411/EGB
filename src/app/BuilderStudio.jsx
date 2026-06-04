@@ -3,6 +3,7 @@ import Header from '../shared/ui/layout/Header';
 import Tabs from './builder/navigation/BuilderDomainNav';
 import { TABS, getTabKey, preloadBuilderTabs } from './builder/navigation/domainTabs.jsx';
 import { useAccessibleDialog } from '../shared/ui/AccessibleDialog';
+import CenterScreenNotice from '../shared/ui/CenterScreenNotice';
 import { createInitialProject, normalizeProject } from '../shared/data/projectData';
 import {
   BUILDER_TUTORIAL_TABS,
@@ -170,6 +171,7 @@ function BuilderStudio({
     dialog: accessibleDialog,
   } = useAccessibleDialog();
   const [saveStatus, setSaveStatus] = useState('');
+  const [centerNotice, setCenterNotice] = useState('');
   const [screen, setScreen] = useState(initialScreen);
   const [projectScore, setProjectScore] = useState(null);
   const [showAuthEntry, setShowAuthEntry] = useState(false);
@@ -230,6 +232,10 @@ function BuilderStudio({
   const openLoginPanel = useCallback(() => {
     setAuthEntryMode('login');
     setShowAuthEntry(true);
+  }, []);
+
+  const showCenterNotice = useCallback((message) => {
+    setCenterNotice(String(message || ''));
   }, []);
   const openRegisterPanel = useCallback(() => {
     setAuthEntryMode('register');
@@ -729,6 +735,7 @@ function BuilderStudio({
     preview,
     saveProject: saveProjectAndAcknowledge,
     setSaveStatus,
+    showCenterNotice,
     setScreen,
     startCreationGuide: startLoadedProjectCreationGuide,
   });
@@ -1441,6 +1448,7 @@ function BuilderStudio({
             profileTutorialStep={selectedTutorialTab === 'profile' ? activeTutorialStep : null}
           />
         </Suspense>
+        <CenterScreenNotice message={centerNotice} onDone={() => setCenterNotice('')} />
         {accessibleDialog}
         {selectedTutorialTab === 'profile' ? tutorialOverlay : null}
       </div>

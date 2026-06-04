@@ -29,3 +29,7 @@
 .accessible-dialog-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}
 
 .accessible-dialog-panel.is-danger{border-color:rgba(248,113,113,.48)}
+
+.center-screen-notice{position:fixed;top:50%;left:50%;z-index:28000;transform:translate(-50%,-50%);width:min(520px,calc(100vw - 32px));pointer-events:none}
+
+.center-screen-notice p{margin:0;padding:16px 18px;border:1px solid rgba(134,239,172,.38);border-radius:12px;background:linear-gradient(180deg,#064e3bf2,#052e2bf5);box-shadow:0 24px 70px rgba(2,6,23,.46);color:#ecfdf5;font-size:18px;font-weight:900;line-height:1.35;text-align:center}
