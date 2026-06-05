@@ -202,6 +202,38 @@
   flex-wrap: wrap;
   pointer-events: auto;
 }
+.player-builder-credit {
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  z-index: 26;
+  max-width: calc(100% - 24px);
+  padding: 4px 8px;
+  border: 1px solid rgba(226, 232, 240, .10);
+  border-radius: 999px;
+  background: rgba(2, 6, 23, .34);
+  color: rgba(226, 232, 240, .72);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  pointer-events: auto;
+  transform: translateX(-50%);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  transition: color .16s ease, background .16s ease, opacity .16s ease;
+}
+.player-builder-credit:hover,
+.player-builder-credit:focus-visible {
+  background: rgba(15, 23, 42, .62);
+  color: #fff;
+  opacity: 1;
+}
+.player-builder-credit:focus-visible {
+  outline: 2px solid rgba(147, 197, 253, .7);
+  outline-offset: 3px;
+}
 .player-inventory-drawer {
   position: absolute;
   top: 14px;

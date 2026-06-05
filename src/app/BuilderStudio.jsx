@@ -723,6 +723,7 @@ function BuilderStudio({
     publishProjectFromProfile,
     renameProjectFromProfile,
     shareProjectFromProfile,
+    downloadProjectQrCodeFromProfile,
     testProjectFromProfile,
     unpublishProjectFromProfile,
     updateProjectModeFromProfile,
@@ -1422,6 +1423,7 @@ function BuilderStudio({
             onOpenProject={openProjectInEditor}
             onTestProject={testProjectFromProfile}
             onCopyProjectLink={shareProjectFromProfile}
+            onSaveProjectQrCode={downloadProjectQrCodeFromProfile}
             onPublishProject={publishProjectFromProfile}
             onUnpublishProject={unpublishProjectFromProfile}
             onUpdatePublicSettings={updatePublicSettingsFromProfile}

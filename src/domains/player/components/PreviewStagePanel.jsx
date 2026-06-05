@@ -10,6 +10,8 @@ import {
 import { SceneObjectBlockContent } from '../../../shared/ui/scene/SceneObjectBlockContent.jsx';
 import PreviewInventoryDrawer from './PreviewInventoryDrawer.jsx';
 
+const BUILDER_CREDIT_URL = 'https://escape-game-studio.netlify.app/';
+
 export default function PreviewStagePanel({
   playScene = null,
   project = {},
@@ -295,6 +297,16 @@ export default function PreviewStagePanel({
             </button>
           </div>
         </div>
+
+        <a
+          className="player-builder-credit"
+          href={BUILDER_CREDIT_URL}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(event) => event.stopPropagation()}
+        >
+          Créé avec Escape Game Studio
+        </a>
 
         <PreviewInventoryDrawer
           isHeroPanelOpen={isHeroPanelOpen}

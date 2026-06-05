@@ -141,6 +141,15 @@ describe('PlaytestWorkspace render regressions', () => {
     expect(screen.getAllByText('Le preview est stable.').length).toBeGreaterThan(0);
     expect(screen.queryByText('Valider l’enigme')).toBeNull();
   });
+
+  test('affiche le lien discret vers le builder', () => {
+    render(<PlaytestWorkspace {...makeProps()} />);
+
+    const builderLink = screen.getByRole('link', { name: 'Créé avec Escape Game Studio' });
+    expect(builderLink.getAttribute('href')).toBe('https://escape-game-studio.netlify.app/');
+    expect(builderLink.className).toContain('player-builder-credit');
+  });
+
   test('rend une enigme active avec contenu de saisie', () => {
     const setEnigmaCodeInput = vi.fn();
     render(<PlaytestWorkspace

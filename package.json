@@ -22,6 +22,7 @@
     "jszip": "^3.10.1",
     "lucide-react": "^1.9.0",
     "onnxruntime-web": "^1.21.0",
+    "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "three": "^0.184.0"

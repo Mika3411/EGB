@@ -672,7 +672,9 @@ describe('standalone export regression', () => {
     expect(engineJs).not.toContain('/api/support');
     expect(engineJs).toContain('function saveGame');
     expect(engineJs).toContain('function safeMediaUrl');
+    expect(engineJs).toContain('Créé avec Escape Game Studio');
     expect(styleCss).not.toContain('support-launcher');
+    expect(styleCss).toContain('.player-builder-credit');
     expect(styleCss).toBe(buildStandaloneCss());
     expect(exportedProject.scenes[0].backgroundData).toMatch(/^assets\/scenes\/hall-final-png\.png$/);
     expect(exportedProject.scenes[0].musicData).toMatch(/^assets\/audio\/theme-mp3\.mp3$/);

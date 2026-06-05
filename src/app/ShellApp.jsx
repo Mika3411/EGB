@@ -9,6 +9,7 @@ import { isAdminAccount } from '../shared/services/authStorage';
 import { hasRemoteStorageConfig } from '../shared/services/remoteSession';
 import { readAppUiState, writeAppUiState } from '../shared/utils/storageHelpers';
 import { lazyWithRetry } from '../shared/utils/lazyImportRetry';
+import { buildPlayableProjectUrl, downloadProjectQrCode } from '../shared/utils/publicProjectLinks';
 import SupportWidget from '../domains/support/components/SupportWidget.jsx';
 
 const LandingExperience = lazyWithRetry(() => import('../domains/landing/LandingExperience'));
@@ -232,25 +233,43 @@ function ShellApp() {
 
   const shareProjectFromProfile = useCallback(async (projectId) => {
     if (!auth.user?.id || !projectId) return;
-    const url = new URL(window.location.href);
-    url.search = '';
-    url.hash = '';
-    url.searchParams.set('playUser', auth.user.id);
-    url.searchParams.set('playProject', projectId);
+    const playableUrl = buildPlayableProjectUrl(auth.user.id, projectId);
     try {
       await auth.markProjectLinkCopied(projectId);
-      await navigator.clipboard.writeText(url.toString());
+      await navigator.clipboard.writeText(playableUrl);
       setSaveStatus('Lien joueur public copié');
     } catch {
       await promptDialog({
         title: 'Lien jouable',
         message: 'Copie ce lien pour partager le projet.',
-        defaultValue: url.toString(),
+        defaultValue: playableUrl,
         confirmLabel: 'Fermer',
       });
       setSaveStatus('Lien joueur public généré');
     }
   }, [auth.markProjectLinkCopied, auth.user?.id, promptDialog]);
+
+  const downloadProjectQrCodeFromProfile = useCallback(async (projectId) => {
+    if (!auth.user?.id || !projectId) return;
+    const playableUrl = buildPlayableProjectUrl(auth.user.id, projectId);
+    const project = auth.projects.find((projectRecord) => projectRecord.id === projectId);
+
+    try {
+      await downloadProjectQrCode(playableUrl, {
+        projectName: getProjectName(project),
+      });
+      setSaveStatus('QR code joueur téléchargé');
+    } catch (error) {
+      console.error('Erreur de génération du QR code jouable', error);
+      await promptDialog({
+        title: 'QR code impossible',
+        message: 'Le QR code n’a pas pu être généré. Tu peux copier ce lien joueur à la place.',
+        defaultValue: playableUrl,
+        confirmLabel: 'Fermer',
+      });
+      setSaveStatus('QR code impossible à générer');
+    }
+  }, [auth.projects, auth.user?.id, promptDialog]);
 
   const publishProjectFromProfile = useCallback(async (projectId) => {
     const existingProject = auth.projects.find((project) => project.id === projectId);
@@ -564,6 +583,7 @@ function ShellApp() {
           onOpenProject={openProjectInEditor}
           onTestProject={testProjectFromProfile}
           onCopyProjectLink={shareProjectFromProfile}
+          onSaveProjectQrCode={downloadProjectQrCodeFromProfile}
           onPublishProject={publishProjectFromProfile}
           onUnpublishProject={unpublishProjectFromProfile}
           onUpdatePublicSettings={updatePublicSettingsFromProfile}

@@ -45,6 +45,7 @@ export default function ProfileWorkspace({
   onOpenProject,
   onTestProject,
   onCopyProjectLink,
+  onSaveProjectQrCode,
   onPublishProject,
   onUnpublishProject,
   onUpdatePublicSettings,
@@ -243,6 +244,7 @@ export default function ProfileWorkspace({
         <PublicationPanel
           projects={projects}
           onCopyProjectLink={onCopyProjectLink}
+          onSaveProjectQrCode={onSaveProjectQrCode}
           onPublishProject={onPublishProject}
           onUnpublishProject={onUnpublishProject}
           onUpdatePublicSettings={onUpdatePublicSettings}

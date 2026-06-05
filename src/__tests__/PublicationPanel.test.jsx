@@ -1,6 +1,6 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, test } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import PublicationPanel from '../domains/profile/components/PublicationPanel';
 
 const makeProject = (overrides = {}) => ({
@@ -24,6 +24,16 @@ describe('PublicationPanel', () => {
     render(<PublicationPanel projects={[makeProject()]} />);
 
     expect(screen.getByRole('button', { name: 'Publier' })).toBeTruthy();
+  });
+
+  test('shows copy link and QR code save action', () => {
+    const onSaveProjectQrCode = vi.fn();
+    render(<PublicationPanel projects={[makeProject()]} onSaveProjectQrCode={onSaveProjectQrCode} />);
+
+    expect(screen.getByRole('button', { name: 'Copier le lien' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer le QR code' }));
+
+    expect(onSaveProjectQrCode).toHaveBeenCalledWith('project-1');
   });
 
   test('shows Update for already public projects', () => {

@@ -195,6 +195,10 @@ function renderNarrationBar() {
     + '</div>';
 }
 
+function renderBuilderCredit() {
+  return '<a class="player-builder-credit" href="https://escape-game-studio.netlify.app/" target="_blank" rel="noopener noreferrer">Créé avec Escape Game Studio</a>';
+}
+
 function renderInventoryTile(itemId) {
   const item = getItemById(itemId);
   if (!item) return '';
@@ -262,6 +266,7 @@ function renderSceneLayer({ playScene, sceneAspectRatio, playSceneBackgroundUrl,
     + renderActPreload()
     + renderChoiceEffectFloating()
     + renderNarrationBar()
+    + renderBuilderCredit()
     + renderInventoryDrawer(inventoryDrawerTitle)
     + renderObjectiveDrawer()
     + '</div>';

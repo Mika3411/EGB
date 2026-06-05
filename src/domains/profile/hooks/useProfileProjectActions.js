@@ -4,6 +4,7 @@ import { prepareProjectForTutorial } from '../../../shared/data/tutorialSteps';
 import { getProjectName } from '../../../shared/services/projectAnalysis';
 import { applyCreationTemplate } from '../../../shared/services/projectTemplates';
 import { showPrompt } from '../../../shared/ui/AccessibleDialog';
+import { buildPlayableProjectUrl, downloadProjectQrCode } from '../../../shared/utils/publicProjectLinks';
 import { getSafeBuilderTab } from '../../../shared/utils/tutorialHelpers';
 import { readBuilderUiState } from '../../../shared/utils/storageHelpers';
 import {
@@ -152,11 +153,7 @@ export function useProfileProjectActions({
 
   const shareProjectFromProfile = useCallback(async (projectId) => {
     if (!auth.user?.id || !projectId) return;
-    const url = new URL(window.location.href);
-    url.search = '';
-    url.hash = '';
-    url.searchParams.set('playUser', auth.user.id);
-    url.searchParams.set('playProject', projectId);
+    const playableUrl = buildPlayableProjectUrl(auth.user.id, projectId);
 
     try {
       if (projectId === auth.activeProjectId && hydratedProjectRef.current === projectId) {
@@ -166,14 +163,14 @@ export function useProfileProjectActions({
         });
       }
       await auth.markProjectLinkCopied(projectId);
-      await navigator.clipboard.writeText(url.toString());
+      await navigator.clipboard.writeText(playableUrl);
       setSaveStatus('Lien joueur public copié');
     } catch (error) {
       console.error('Erreur de génération du lien jouable', error);
       await showPrompt({
         title: 'Lien jouable',
         message: 'Copie ce lien pour partager le projet.',
-        defaultValue: url.toString(),
+        defaultValue: playableUrl,
         confirmLabel: 'Fermer',
       });
       setSaveStatus('Lien joueur public généré');
@@ -181,6 +178,44 @@ export function useProfileProjectActions({
   }, [
     auth.activeProjectId,
     auth.markProjectLinkCopied,
+    auth.user?.id,
+    editor.project,
+    editor.selectedSceneId,
+    editor.tab,
+    hydratedProjectRef,
+    saveProject,
+    setSaveStatus,
+  ]);
+
+  const downloadProjectQrCodeFromProfile = useCallback(async (projectId) => {
+    if (!auth.user?.id || !projectId) return;
+    const playableUrl = buildPlayableProjectUrl(auth.user.id, projectId);
+    const projectRecord = auth.projects.find((project) => project.id === projectId);
+
+    try {
+      if (projectId === auth.activeProjectId && hydratedProjectRef.current === projectId) {
+        await saveProject(editor.project, projectId, {
+          tab: editor.tab,
+          selectedSceneId: editor.selectedSceneId,
+        });
+      }
+      await downloadProjectQrCode(playableUrl, {
+        projectName: getProjectName(projectRecord || editor.project),
+      });
+      setSaveStatus('QR code joueur téléchargé');
+    } catch (error) {
+      console.error('Erreur de génération du QR code jouable', error);
+      await showPrompt({
+        title: 'QR code impossible',
+        message: 'Le QR code n’a pas pu être généré. Tu peux copier ce lien joueur à la place.',
+        defaultValue: playableUrl,
+        confirmLabel: 'Fermer',
+      });
+      setSaveStatus('QR code impossible à générer');
+    }
+  }, [
+    auth.activeProjectId,
+    auth.projects,
     auth.user?.id,
     editor.project,
     editor.selectedSceneId,
@@ -258,6 +293,7 @@ export function useProfileProjectActions({
     publishProjectFromProfile,
     renameProjectFromProfile,
     shareProjectFromProfile,
+    downloadProjectQrCodeFromProfile,
     testProjectFromProfile,
     unpublishProjectFromProfile,
     updateProjectModeFromProfile,

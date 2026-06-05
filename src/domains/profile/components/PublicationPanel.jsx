@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { QrCode } from 'lucide-react';
 import { showAlert, showConfirm } from '../../../shared/ui/AccessibleDialog';
 import ThumbnailCropper from './ThumbnailCropper';
 import { AGE_RATINGS, PUBLIC_CATEGORIES, formatDate } from './profileUtils';
@@ -12,6 +13,7 @@ import {
 function PublicationCard({
   project,
   onCopyProjectLink,
+  onSaveProjectQrCode,
   onPublishProject,
   onUnpublishProject,
   onUpdatePublicSettings,
@@ -184,6 +186,10 @@ function PublicationCard({
               <span aria-hidden="true">🔗</span>
               Copier le lien
             </button>
+            <button type="button" className="secondary-action profile-share-button profile-qr-button" onClick={() => onSaveProjectQrCode?.(project.id)}>
+              <QrCode size={16} aria-hidden="true" />
+              Enregistrer le QR code
+            </button>
             <button type="button" className="profile-publish-button" onClick={handlePublish}>
               {project.shareState?.isPublic ? 'Mettre à jour' : 'Publier'}
             </button>
@@ -215,6 +221,7 @@ function PublicationCard({
 export default function PublicationPanel({
   projects,
   onCopyProjectLink,
+  onSaveProjectQrCode,
   onPublishProject,
   onUnpublishProject,
   onUpdatePublicSettings,
@@ -253,6 +260,7 @@ export default function PublicationPanel({
               key={project.id}
               project={project}
               onCopyProjectLink={onCopyProjectLink}
+              onSaveProjectQrCode={onSaveProjectQrCode}
               onPublishProject={onPublishProject}
               onUnpublishProject={onUnpublishProject}
               onUpdatePublicSettings={onUpdatePublicSettings}
