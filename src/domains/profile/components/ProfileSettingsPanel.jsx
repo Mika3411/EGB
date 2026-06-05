@@ -8,6 +8,7 @@ import {
 } from '../../../shared/services/authorProfiles';
 import {
   cropAuthorProfileImage,
+  getAuthorProfileMediaRecommendation,
   readAuthorProfileImageFile,
 } from '../../../shared/utils/authorProfileMedia';
 import AuthorProfileImageCropper from './AuthorProfileImageCropper';
@@ -226,9 +227,13 @@ export default function ProfileSettingsPanel({
         <form className="profile-settings-form" onSubmit={saveProfile} data-tour="profile-public-identity">
           <h3>Informations du profil</h3>
           <ProfileBannerPreview banner={profileDraft.banner} displayName={profileDraft.displayName} />
-          <label htmlFor="profile-banner">Bannière auteur</label>
+          <label htmlFor="profile-banner" className="profile-media-label">
+            <span>Bannière auteur</span>
+            <small>Taille recommandée : {getAuthorProfileMediaRecommendation('banner')}</small>
+          </label>
           <input
             id="profile-banner"
+            aria-label="Bannière auteur"
             value={profileDraft.banner}
             onChange={(event) => updateProfileField('banner', event.target.value)}
             placeholder="https://..."
@@ -249,9 +254,13 @@ export default function ProfileSettingsPanel({
           </div>
           <div className="profile-avatar-control">
             <ProfileAvatarPreview avatar={profileDraft.avatar} displayName={profileDraft.displayName} />
-            <label htmlFor="profile-avatar">Avatar auteur</label>
+            <label htmlFor="profile-avatar" className="profile-media-label">
+              <span>Avatar auteur</span>
+              <small>Taille recommandée : {getAuthorProfileMediaRecommendation('avatar')}</small>
+            </label>
             <input
               id="profile-avatar"
+              aria-label="Avatar auteur"
               value={profileDraft.avatar}
               onChange={(event) => updateProfileField('avatar', event.target.value)}
               placeholder="https://..."

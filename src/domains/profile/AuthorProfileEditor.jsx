@@ -2,8 +2,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BellDot, CheckCircle2, ImageUp, UserMinus, Users } from 'lucide-react';
 import { showConfirm } from '../../shared/ui/AccessibleDialog';
 import {
+  AUTHOR_PROFILE_THEME_DEFAULTS,
   AUTHOR_SOCIAL_LINK_TYPES,
+  formatAuthorBlogPostDateTime,
   getAuthorSocialLinkUrl,
+  normalizeAuthorProfileTheme,
   normalizeAuthorSocialLinks,
   setAuthorSocialLinkUrl,
 } from '../../shared/services/authorProfiles';
@@ -19,7 +22,9 @@ import {
 } from '../../shared/services/creatorFollows';
 import {
   cropAuthorProfileImage,
+  getAuthorProfileMediaRecommendation,
   readAuthorProfileImageFile,
+  readAuthorProfileImageSource,
 } from '../../shared/utils/authorProfileMedia';
 import AuthorProfileImageCropper from './components/AuthorProfileImageCropper';
 
@@ -27,8 +32,17 @@ const getAuthorInitial = (name = '') => String(name || 'Créateur').trim().charA
 
 const AUTHOR_PROFILE_TABS = [
   ['profile', 'Mettre à jour'],
+  ['theme', 'Thème'],
   ['following', 'Créateurs suivis'],
   ['followers', 'Followers'],
+];
+
+const AUTHOR_THEME_FIELDS = [
+  ['pageBackground', 'Fond de page'],
+  ['panelBackground', 'Fond des blocs'],
+  ['accentColor', 'Couleur accent'],
+  ['textColor', 'Texte principal'],
+  ['mutedTextColor', 'Texte secondaire'],
 ];
 
 const formatFollowDate = (value = '') => {
@@ -45,7 +59,7 @@ const getAccountLabel = (account = null, fallbackId = '') => (
   account?.name || account?.email || `Compte ${String(fallbackId || '').slice(0, 8) || 'inconnu'}`
 );
 
-function AuthorAvatarPreview({ avatar = '', displayName = '' }) {
+function AuthorAvatarPreview({ avatar = '', displayName = '', onOpenCrop }) {
   const [hasError, setHasError] = useState(false);
   const avatarSrc = String(avatar || '').trim();
   const initial = getAuthorInitial(displayName);
@@ -55,7 +69,12 @@ function AuthorAvatarPreview({ avatar = '', displayName = '' }) {
   }, [avatarSrc]);
 
   return (
-    <div className="author-avatar-preview" aria-label="Aperçu avatar auteur">
+    <button
+      type="button"
+      className="author-avatar-preview author-media-preview-button"
+      aria-label="Recadrer l'avatar auteur"
+      onClick={onOpenCrop}
+    >
       {avatarSrc && !hasError ? (
         <img
           src={avatarSrc}
@@ -68,11 +87,11 @@ function AuthorAvatarPreview({ avatar = '', displayName = '' }) {
       ) : (
         <span>{initial}</span>
       )}
-    </div>
+    </button>
   );
 }
 
-function AuthorBannerPreview({ banner = '', displayName = '' }) {
+function AuthorBannerPreview({ banner = '', displayName = '', onOpenCrop }) {
   const [hasError, setHasError] = useState(false);
   const bannerSrc = String(banner || '').trim();
 
@@ -81,7 +100,12 @@ function AuthorBannerPreview({ banner = '', displayName = '' }) {
   }, [bannerSrc]);
 
   return (
-    <div className="author-banner-preview" aria-label="Aperçu bannière auteur">
+    <button
+      type="button"
+      className="author-banner-preview author-media-preview-button"
+      aria-label="Recadrer la bannière auteur"
+      onClick={onOpenCrop}
+    >
       {bannerSrc && !hasError ? (
         <img
           src={bannerSrc}
@@ -94,7 +118,7 @@ function AuthorBannerPreview({ banner = '', displayName = '' }) {
       ) : (
         <span aria-hidden="true" />
       )}
-    </div>
+    </button>
   );
 }
 
@@ -105,16 +129,19 @@ const createAuthorDraft = (authorProfile = {}, user = {}) => ({
   website: authorProfile?.website || '',
   avatar: authorProfile?.avatar || '',
   banner: authorProfile?.banner || '',
+  theme: normalizeAuthorProfileTheme(authorProfile?.theme),
   socialLinks: normalizeAuthorSocialLinks(authorProfile?.socialLinks, authorProfile?.website),
 });
 
 const buildAuthorDraftPayload = (draft = {}) => {
   const socialLinks = normalizeAuthorSocialLinks(draft.socialLinks, draft.website);
+  const theme = normalizeAuthorProfileTheme(draft.theme);
   return {
     ...draft,
     website: getAuthorSocialLinkUrl(socialLinks, 'site'),
     avatar: String(draft.avatar || '').trim(),
     banner: String(draft.banner || '').trim(),
+    theme,
     socialLinks,
   };
 };
@@ -132,6 +159,7 @@ export default function AuthorProfileEditor({
   const [blogDraft, setBlogDraft] = useState({ title: '', body: '' });
   const [mediaError, setMediaError] = useState('');
   const [activeAuthorTab, setActiveAuthorTab] = useState('profile');
+  const [themePreviewTab, setThemePreviewTab] = useState('creator');
   const [followVersion, setFollowVersion] = useState(0);
   const [imageCrop, setImageCrop] = useState(null);
   const [cropZoom, setCropZoom] = useState(1);
@@ -153,6 +181,23 @@ export default function AuthorProfileEditor({
         socialLinks,
       };
     });
+  };
+
+  const updateThemeField = (field, value) => {
+    setAuthorDraft((draft) => ({
+      ...draft,
+      theme: {
+        ...normalizeAuthorProfileTheme(draft.theme),
+        [field]: String(value || '').trim(),
+      },
+    }));
+  };
+
+  const restoreAuthorTheme = () => {
+    setAuthorDraft((draft) => ({
+      ...draft,
+      theme: normalizeAuthorProfileTheme(authorProfile?.theme),
+    }));
   };
 
   const refreshFollows = () => {
@@ -248,6 +293,25 @@ export default function AuthorProfileEditor({
     }
   };
 
+  const openAuthorImageCrop = async (field) => {
+    const src = String(authorDraft[field] || '').trim();
+    if (!src) {
+      const inputRef = field === 'banner' ? bannerInputRef : avatarInputRef;
+      inputRef.current?.click();
+      return;
+    }
+
+    try {
+      const image = await readAuthorProfileImageSource(src, field);
+      setImageCrop({ ...image, field });
+      setCropZoom(1);
+      setCropPan({ x: 0, y: 0 });
+      setMediaError('');
+    } catch (error) {
+      setMediaError(error?.message || "Image impossible à recadrer.");
+    }
+  };
+
   const confirmAuthorImageCrop = async () => {
     if (!imageCrop) return;
     setIsCropBusy(true);
@@ -312,6 +376,54 @@ export default function AuthorProfileEditor({
     });
   };
 
+  const currentTheme = normalizeAuthorProfileTheme(authorDraft.theme);
+  const previewName = authorDraft.displayName || user?.name || 'Créateur';
+  const previewTagline = authorDraft.tagline || 'Escape games narratifs et énigmes maison';
+  const previewBio = authorDraft.bio || 'Présente ton univers, tes thèmes favoris et le rythme de tes créations.';
+  const previewBlogPosts = (authorProfile?.blogPosts || []).slice(0, 1);
+  const previewGames = publicGames
+    .filter((game) => game.userId === user?.id)
+    .slice(0, 2);
+  const previewGameCards = previewGames.length ? previewGames : [
+    {
+      key: 'preview-game-1',
+      title: 'Crypte des secrets',
+      category: 'Mystère',
+      durationMinutes: 45,
+      difficulty: 'intermédiaire',
+      feedback: { average: 4.8 },
+      image: '',
+    },
+    {
+      key: 'preview-game-2',
+      title: 'Manoir aux horloges',
+      category: 'Enquête',
+      durationMinutes: 35,
+      difficulty: 'facile',
+      feedback: { average: 4.5 },
+      image: '',
+    },
+  ];
+  const previewPost = previewBlogPosts[0] || {
+    id: 'preview-news',
+    title: 'Nouvelle salle publiée',
+    body: 'Un court message d’actualité apparaît ici avec les couleurs de ta page.',
+    createdAt: new Date().toISOString(),
+  };
+  const previewPostDate = formatAuthorBlogPostDateTime(previewPost.createdAt || previewPost.updatedAt);
+  const renderThemePreviewGameCards = () => previewGameCards.map((game) => (
+    <article key={game.key || game.projectId || game.title}>
+      <span className="author-theme-preview-game-image">
+        {game.image ? <img src={game.image} alt="" /> : game.title.charAt(0).toUpperCase()}
+      </span>
+      <div>
+        <strong>{game.title}</strong>
+        <p>{game.category || 'Mystère'} · {game.durationMinutes || 45} min</p>
+        <small>★ {Number(game.feedback?.average || 4.7).toFixed(1)} · {game.difficulty || 'intermédiaire'}</small>
+      </div>
+    </article>
+  ));
+
   return (
     <section className="public-author-editor">
       <button type="button" className="secondary-action public-back-button" onClick={onBack}>← Retour au jeu</button>
@@ -351,10 +463,16 @@ export default function AuthorProfileEditor({
         <div className="author-profile-grid">
           <form onSubmit={saveAuthorDraft} className="author-profile-form">
             <div className="author-banner-control">
-              <AuthorBannerPreview banner={authorDraft.banner} displayName={authorDraft.displayName} />
-              <label>
-                Bannière
+              <AuthorBannerPreview
+                banner={authorDraft.banner}
+                displayName={authorDraft.displayName}
+                onOpenCrop={() => openAuthorImageCrop('banner')}
+              />
+              <label className="author-media-label">
+                <span>Bannière</span>
+                <small>Taille recommandée : {getAuthorProfileMediaRecommendation('banner')}</small>
                 <input
+                  aria-label="Bannière"
                   value={authorDraft.banner}
                   onChange={(event) => setAuthorDraft((draft) => ({ ...draft, banner: event.target.value }))}
                   placeholder="https://..."
@@ -376,10 +494,16 @@ export default function AuthorProfileEditor({
               </div>
             </div>
             <div className="author-avatar-control">
-              <AuthorAvatarPreview avatar={authorDraft.avatar} displayName={authorDraft.displayName} />
-              <label>
-                Avatar
+              <AuthorAvatarPreview
+                avatar={authorDraft.avatar}
+                displayName={authorDraft.displayName}
+                onOpenCrop={() => openAuthorImageCrop('avatar')}
+              />
+              <label className="author-media-label">
+                <span>Avatar</span>
+                <small>Taille recommandée : {getAuthorProfileMediaRecommendation('avatar')}</small>
                 <input
+                  aria-label="Avatar"
                   value={authorDraft.avatar}
                   onChange={(event) => setAuthorDraft((draft) => ({ ...draft, avatar: event.target.value }))}
                   placeholder="https://..."
@@ -464,6 +588,11 @@ export default function AuthorProfileEditor({
               {(authorProfile?.blogPosts || []).length ? authorProfile.blogPosts.map((post) => (
                 <article key={post.id} className="author-blog-card">
                   <strong>{post.title}</strong>
+                  {formatAuthorBlogPostDateTime(post.createdAt || post.updatedAt) ? (
+                    <time className="author-blog-date" dateTime={post.createdAt || post.updatedAt}>
+                      Publié le {formatAuthorBlogPostDateTime(post.createdAt || post.updatedAt)}
+                    </time>
+                  ) : null}
                   <p>{post.body}</p>
                   <button type="button" className="secondary-action" onClick={() => deleteBlogPost(post.id)}>Supprimer</button>
                 </article>
@@ -471,6 +600,157 @@ export default function AuthorProfileEditor({
             </div>
           </div>
         </div>
+        ) : null}
+
+        {activeAuthorTab === 'theme' ? (
+          <form onSubmit={saveAuthorDraft} className="author-theme-panel">
+            <div className="author-theme-head">
+              <div>
+                <h3>Thème de la page auteur</h3>
+                <p className="small-note">Ces couleurs s’appliquent à ta fiche publique dans la galerie.</p>
+              </div>
+            </div>
+
+            <div className="author-theme-grid">
+              <div className="author-theme-fields">
+                {AUTHOR_THEME_FIELDS.map(([field, label]) => (
+                  <label key={field} className="author-theme-color-field" htmlFor={`author-theme-${field}`}>
+                    <span>{label}</span>
+                    <div className="author-theme-color-inputs">
+                      <input
+                        id={`author-theme-${field}`}
+                        type="color"
+                        value={currentTheme[field]}
+                        onChange={(event) => updateThemeField(field, event.target.value)}
+                        aria-label={`${label} couleur`}
+                      />
+                      <input
+                        value={authorDraft.theme?.[field] || currentTheme[field]}
+                        onChange={(event) => updateThemeField(field, event.target.value)}
+                        placeholder={AUTHOR_PROFILE_THEME_DEFAULTS[field]}
+                        maxLength={7}
+                        aria-label={`${label} hexadécimal`}
+                      />
+                    </div>
+                  </label>
+                ))}
+                <div className="author-theme-actions">
+                  <button type="button" className="secondary-action" onClick={restoreAuthorTheme}>Rétablir</button>
+                  <button type="submit" className="profile-action-button">Sauvegarder</button>
+                </div>
+              </div>
+
+              <div
+                className="author-theme-preview"
+                aria-label="Aperçu complet de la page auteur"
+                style={{
+                  '--author-preview-bg': currentTheme.pageBackground,
+                  '--author-preview-panel': currentTheme.panelBackground,
+                  '--author-preview-accent': currentTheme.accentColor,
+                  '--author-preview-text': currentTheme.textColor,
+                  '--author-preview-muted': currentTheme.mutedTextColor,
+                }}
+              >
+                <span className="author-theme-preview-back">← Galerie</span>
+                <div className="author-theme-preview-banner">
+                  {authorDraft.banner ? (
+                    <img src={authorDraft.banner} alt="" />
+                  ) : (
+                    <span aria-hidden="true" />
+                  )}
+                </div>
+                <div className="author-theme-preview-tabs" role="tablist" aria-label="Sections de l’aperçu auteur">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={themePreviewTab === 'creator'}
+                    className={themePreviewTab === 'creator' ? 'active' : ''}
+                    onClick={() => setThemePreviewTab('creator')}
+                  >
+                    Créateur
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={themePreviewTab === 'games'}
+                    className={themePreviewTab === 'games' ? 'active' : ''}
+                    onClick={() => setThemePreviewTab('games')}
+                  >
+                    Jeux publiés <strong>{previewGameCards.length}</strong>
+                  </button>
+                </div>
+
+                {themePreviewTab === 'creator' ? (
+                  <div className="author-theme-preview-layout">
+                    <div className="author-theme-preview-side">
+                      <section className="author-theme-preview-card">
+                        <div className="author-theme-preview-profile">
+                          <div className="author-theme-preview-avatar">
+                            {authorDraft.avatar ? (
+                              <img src={authorDraft.avatar} alt="" />
+                            ) : (
+                              <span>{getAuthorInitial(previewName)}</span>
+                            )}
+                          </div>
+                          <div>
+                            <span className="author-theme-preview-kicker">Profil créateur</span>
+                            <h4>{previewName}</h4>
+                            <p>🎮 {previewGameCards.length} jeux créés</p>
+                            <p>👥 {followers.length} follower{followers.length > 1 ? 's' : ''}</p>
+                            <p>⭐ Moyenne : 4.7</p>
+                            <span className="author-theme-preview-follow">Suivre</span>
+                          </div>
+                        </div>
+                      </section>
+
+                      <section className="author-theme-preview-news">
+                        <h5>Actualité</h5>
+                        <article>
+                          <strong>{previewPost.title}</strong>
+                          {previewPostDate ? (
+                            <time dateTime={previewPost.createdAt || previewPost.updatedAt}>
+                              Publié le {previewPostDate}
+                            </time>
+                          ) : null}
+                          <p>{previewPost.body}</p>
+                          <span>J’aime · {previewPost.likes || 0}</span>
+                        </article>
+                      </section>
+                    </div>
+
+                    <div className="author-theme-preview-main">
+                      <section className="author-theme-preview-about">
+                        <div>
+                          <span className="author-theme-preview-kicker">À propos de l’auteur</span>
+                          <p className="author-theme-preview-tagline">{previewTagline}</p>
+                        </div>
+                        <p>{previewBio}</p>
+                        <div className="author-theme-preview-links">
+                          <span>Site</span>
+                          <span>Instagram</span>
+                          <span>Discord</span>
+                        </div>
+                      </section>
+
+                      <section className="author-theme-preview-games">
+                        <h5>Jeux publiés</h5>
+                        <div>
+                          {renderThemePreviewGameCards()}
+                        </div>
+                      </section>
+                    </div>
+                  </div>
+                ) : (
+                  <section className="author-theme-preview-games author-theme-preview-games-tab">
+                    <h5>Jeux publiés</h5>
+                    <div>
+                      {renderThemePreviewGameCards()}
+                    </div>
+                  </section>
+                )}
+              </div>
+            </div>
+          </form>
         ) : null}
 
         {activeAuthorTab === 'following' ? (

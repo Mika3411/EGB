@@ -5,7 +5,7 @@ import GalleryBrowser from '../domains/gallery/GalleryBrowser';
 import AuthorProfileEditor from '../domains/profile/AuthorProfileEditor';
 import ProfileSettingsPanel from '../domains/profile/components/ProfileSettingsPanel';
 import { saveAllAccounts } from '../shared/services/authStorage';
-import { getAuthorProfile, saveAuthorProfile } from '../shared/services/authorProfiles';
+import { formatAuthorBlogPostDateTime, getAuthorProfile, saveAuthorProfile } from '../shared/services/authorProfiles';
 import { followCreator, isFollowingCreator } from '../shared/services/creatorFollows';
 
 const PROJECTS_KEY_PREFIX = 'escapeGameBuilder.projects';
@@ -92,6 +92,8 @@ describe('author profile media', () => {
       />,
     );
 
+    expect(screen.getByText('Taille recommandée : 1600 x 320 px')).toBeTruthy();
+    expect(screen.getByText('Taille recommandée : 512 x 512 px')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Bannière'), {
       target: { value: '  https://cdn.example.test/mika-banner.png  ' },
     });
@@ -115,6 +117,54 @@ describe('author profile media', () => {
           { type: 'site', url: 'https://mika.example.test' },
           { type: 'instagram', url: 'https://instagram.example.test/mika' },
         ]),
+      }));
+    });
+  });
+
+  test('sauvegarde le theme de page depuis l editeur auteur', async () => {
+    const onUpdateAuthorProfile = vi.fn();
+    const { container } = render(
+      <AuthorProfileEditor
+        user={{ id: 'creator-1', name: 'Mika Studio', email: 'mika@example.test' }}
+        authorProfile={{ displayName: 'Mika Studio' }}
+        onUpdateAuthorProfile={onUpdateAuthorProfile}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Thème' }));
+    expect(screen.getByText('À propos de l’auteur')).toBeTruthy();
+    expect(screen.getByText('Actualité')).toBeTruthy();
+    expect(screen.getAllByText(/Jeux publiés/).length).toBeGreaterThan(1);
+    expect(container.querySelector('.author-theme-preview-about h4')).toBeNull();
+    const previewGamesTab = screen.getByRole('tab', { name: 'Jeux publiés 2' });
+    fireEvent.click(previewGamesTab);
+    expect(previewGamesTab.getAttribute('aria-selected')).toBe('true');
+    expect(screen.queryByText('À propos de l’auteur')).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'Créateur' }));
+    expect(screen.getByText('À propos de l’auteur')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Fond de page hexadécimal'), {
+      target: { value: '#190f2a' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Rétablir' }));
+    expect(screen.getByLabelText('Fond de page hexadécimal').value).toBe('#08101d');
+    fireEvent.change(screen.getByLabelText('Fond de page hexadécimal'), {
+      target: { value: '#190f2a' },
+    });
+    fireEvent.change(screen.getByLabelText('Fond des blocs hexadécimal'), {
+      target: { value: '#10251e' },
+    });
+    fireEvent.change(screen.getByLabelText('Couleur accent hexadécimal'), {
+      target: { value: '#f97316' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Sauvegarder' }));
+
+    await waitFor(() => {
+      expect(onUpdateAuthorProfile).toHaveBeenCalledWith(expect.objectContaining({
+        theme: expect.objectContaining({
+          pageBackground: '#190f2a',
+          panelBackground: '#10251e',
+          accentColor: '#f97316',
+        }),
       }));
     });
   });
@@ -179,6 +229,30 @@ describe('author profile media', () => {
     });
   });
 
+  test('ouvre le recadrage depuis un clic sur la banniere ou l avatar auteur', async () => {
+    installProfileImageImportMocks();
+    render(
+      <AuthorProfileEditor
+        user={{ id: 'creator-1', name: 'Mika Studio', email: 'mika@example.test' }}
+        authorProfile={{
+          displayName: 'Mika Studio',
+          banner: 'data:image/png;base64,banner-source',
+          avatar: 'data:image/png;base64,avatar-source',
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Recadrer la bannière auteur' }));
+    expect(await screen.findByRole('dialog', { name: 'Recadrer bannière' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Recadrer bannière' })).toBeNull();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: "Recadrer l'avatar auteur" }));
+    expect(await screen.findByRole('dialog', { name: 'Recadrer avatar' })).toBeTruthy();
+  });
+
   test('sauvegarde la banniere et les liens depuis les reglages du profil', async () => {
     const onUpdateAuthorProfile = vi.fn();
     render(
@@ -189,6 +263,8 @@ describe('author profile media', () => {
       />,
     );
 
+    expect(screen.getByText('Taille recommandée : 1600 x 320 px')).toBeTruthy();
+    expect(screen.getByText('Taille recommandée : 512 x 512 px')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Bannière auteur'), {
       target: { value: '  https://cdn.example.test/profile-banner.png  ' },
     });
@@ -273,6 +349,31 @@ describe('author profile media', () => {
     expect(banner.getAttribute('src')).toBe('https://cdn.example.test/mika-banner.png');
   });
 
+  test('applique le theme public du createur a sa page auteur', async () => {
+    saveAllAccounts([{ id: 'creator-1', name: 'Mika', email: 'mika@example.test' }]);
+    saveAuthorProfile('creator-1', {
+      displayName: 'Mika Studio',
+      theme: {
+        pageBackground: '#190f2a',
+        panelBackground: '#10251e',
+        accentColor: '#f97316',
+        textColor: '#fff7ed',
+        mutedTextColor: '#fed7aa',
+      },
+    });
+    window.localStorage.setItem(`${PROJECTS_KEY_PREFIX}.creator-1`, JSON.stringify([createPublicProject()]));
+
+    const { container } = render(<GalleryBrowser initialCreatorId="creator-1" />);
+
+    await screen.findByText('Profil créateur');
+    const creatorPage = container.querySelector('.public-creator-page');
+    expect(creatorPage.style.getPropertyValue('--author-theme-bg')).toBe('#190f2a');
+    expect(creatorPage.style.getPropertyValue('--author-theme-panel')).toBe('#10251e');
+    expect(creatorPage.style.getPropertyValue('--author-theme-accent')).toBe('#f97316');
+    expect(creatorPage.style.getPropertyValue('--author-theme-text')).toBe('#fff7ed');
+    expect(creatorPage.style.getPropertyValue('--author-theme-muted')).toBe('#fed7aa');
+  });
+
   test('affiche seulement les liens sociaux publics renseignes', async () => {
     saveAllAccounts([{ id: 'creator-1', name: 'Mika', email: 'mika@example.test' }]);
     saveAuthorProfile('creator-1', {
@@ -307,10 +408,11 @@ describe('author profile media', () => {
     });
     window.localStorage.setItem(`${PROJECTS_KEY_PREFIX}.creator-1`, JSON.stringify([createPublicProject()]));
 
-    render(<GalleryBrowser initialCreatorId="creator-1" />);
+    const { container } = render(<GalleryBrowser initialCreatorId="creator-1" />);
 
     expect(await screen.findByText('À propos de l’auteur')).toBeTruthy();
     expect(screen.getAllByText('Mika Studio').length).toBeGreaterThan(0);
+    expect(container.querySelector('.public-author-about h2')).toBeNull();
     expect(screen.getByText('Mystères artisanaux')).toBeTruthy();
     expect(screen.getByText('Je fabrique des escape games narratifs pour petits groupes.')).toBeTruthy();
     expect(screen.getByText(/Mis à jour le/i)).toBeTruthy();
@@ -343,7 +445,12 @@ describe('author profile media', () => {
     saveAllAccounts([{ id: 'creator-1', name: 'Mika', email: 'mika@example.test' }]);
     saveAuthorProfile('creator-1', {
       displayName: 'Mika Studio',
-      blogPosts: [{ id: 'post-1', title: 'Ouverture du carnet', body: 'Une actu courte.' }],
+      blogPosts: [{
+        id: 'post-1',
+        title: 'Ouverture du carnet',
+        body: 'Une actu courte.',
+        createdAt: '2026-01-02T10:30:00.000Z',
+      }],
     });
     window.localStorage.setItem(`${PROJECTS_KEY_PREFIX}.creator-1`, JSON.stringify([createPublicProject()]));
 
@@ -354,6 +461,7 @@ describe('author profile media', () => {
     expect(newsPanel).toBeTruthy();
     expect(container.querySelector('.public-creator-side .public-author-news')).toBe(newsPanel);
     expect(container.querySelector('.public-creator-overview > .public-author-about')).toBeTruthy();
+    expect(screen.getByText(`Publié le ${formatAuthorBlogPostDateTime('2026-01-02T10:30:00.000Z')}`)).toBeTruthy();
   });
 
   test('permet de liker une actualite publique', async () => {
@@ -396,9 +504,11 @@ describe('author profile media', () => {
       />,
     );
 
+    expect(await screen.findByText(/0 followers/)).toBeTruthy();
     fireEvent.click(await screen.findByRole('button', { name: 'Suivre' }));
 
     expect(isFollowingCreator('follower-1', 'creator-1')).toBe(true);
+    await waitFor(() => expect(screen.getByText(/1 follower/)).toBeTruthy());
     expect(await screen.findByRole('button', { name: 'Suivi' })).toBeTruthy();
   });
 

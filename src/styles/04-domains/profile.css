@@ -106,6 +106,10 @@
 
 .profile-settings-form label{color:#dbeafe;font-size:13px;font-weight:900}
 
+.profile-settings-form .profile-media-label{display:grid;gap:3px;min-width:0}
+
+.profile-settings-form .profile-media-label small{color:#9fb7d7;font-size:12px;font-weight:800;line-height:1.25}
+
 .profile-settings-form input,.profile-settings-form textarea{margin:0}
 
 .profile-settings-form textarea{min-height:132px;resize:vertical}
@@ -259,6 +263,8 @@
 .profile-test-button{gap:8px;min-width:112px;min-height:38px;padding:8px 14px;border-radius:12px;color:#eaf2ff}
 
 .profile-share-button{gap:8px;min-height:38px;padding:8px 14px;border-radius:12px;color:#eaf2ff}
+
+.profile-qr-button svg{flex:0 0 auto}
 
 .profile-publish-button{min-height:38px;padding:8px 14px;border-radius:12px;border:1px solid rgba(134,239,172,.3);background:linear-gradient(180deg,#10b981,#047857);color:#fff;box-shadow:0 10px 24px #05966938}
 

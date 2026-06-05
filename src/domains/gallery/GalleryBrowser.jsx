@@ -21,11 +21,14 @@ import {
 } from '../../shared/services/publicGalleryStorage';
 import {
   AUTHOR_SOCIAL_LINK_TYPES,
+  formatAuthorBlogPostDateTime,
+  normalizeAuthorProfileTheme,
   normalizeAuthorSocialLinks,
   toggleAuthorBlogPostLike,
 } from '../../shared/services/authorProfiles';
 import {
   followCreator,
+  getFollowersForCreator,
   getCreatorLatestActivityAt,
   getUnreadFollowedCreatorActivity,
   isFollowingCreator,
@@ -90,6 +93,17 @@ const formatAuthorUpdatedAt = (value = '') => {
     month: 'long',
     year: 'numeric',
   }).format(date);
+};
+
+const getCreatorThemeStyle = (theme = {}) => {
+  const safeTheme = normalizeAuthorProfileTheme(theme);
+  return {
+    '--author-theme-bg': safeTheme.pageBackground,
+    '--author-theme-panel': safeTheme.panelBackground,
+    '--author-theme-accent': safeTheme.accentColor,
+    '--author-theme-text': safeTheme.textColor,
+    '--author-theme-muted': safeTheme.mutedTextColor,
+  };
 };
 
 const makePlayUrl = (game) => {
@@ -182,7 +196,7 @@ function CreatorSocialLinks({ socialLinks = [], website = '', includeTypes = nul
   );
 }
 
-function CreatorAboutSection({ name = 'Créateur', profile = {} }) {
+function CreatorAboutSection({ profile = {} }) {
   const updatedAt = formatAuthorUpdatedAt(profile.updatedAt);
   const hasLinks = getVisibleCreatorLinks(profile.socialLinks, profile.website).length > 0;
 
@@ -191,7 +205,6 @@ function CreatorAboutSection({ name = 'Créateur', profile = {} }) {
       <div className="public-author-about-head">
         <div>
           <span className="eyebrow">À propos de l’auteur</span>
-          <h2>{name}</h2>
           {profile.tagline ? <p className="public-creator-tagline">{profile.tagline}</p> : null}
         </div>
         {updatedAt ? <span className="public-author-updated">Mis à jour le {updatedAt}</span> : null}
@@ -218,10 +231,13 @@ function CreatorNewsCard({ post, viewerId = '', onToggleLike }) {
   const likes = getPostLikeCount(post.likes);
   const likedBy = Array.isArray(post.likedBy) ? post.likedBy : [];
   const isLiked = Boolean(viewerId && likedBy.includes(viewerId));
+  const postDate = formatAuthorBlogPostDateTime(post.createdAt || post.updatedAt);
+  const dateTime = post.createdAt || post.updatedAt || '';
 
   return (
     <article className="public-blog-card">
       <strong>{post.title}</strong>
+      {postDate ? <time className="public-blog-date" dateTime={dateTime}>Publié le {postDate}</time> : null}
       <p>{post.body}</p>
       <button
         type="button"
@@ -490,7 +506,12 @@ export default function GalleryBrowser({
   const isCreatorFollowed = useMemo(() => (
     Boolean(user?.id && selectedCreatorId && isFollowingCreator(user.id, selectedCreatorId))
   ), [followVersion, selectedCreatorId, user?.id]);
-  const canFollowCreator = Boolean(selectedCreatorId && selectedCreatorId !== user?.id);
+  const canShowCreatorFollow = Boolean(selectedCreatorId);
+  const isViewingOwnCreatorProfile = Boolean(user?.id && selectedCreatorId === user.id);
+  const creatorFollowerCount = useMemo(() => (
+    selectedCreatorId ? getFollowersForCreator(selectedCreatorId).length : 0
+  ), [followVersion, selectedCreatorId]);
+  const creatorFollowLabel = isCreatorFollowed ? 'Suivi' : 'Suivre';
   const unreadFollowedActivity = useMemo(() => (
     user?.id ? getUnreadFollowedCreatorActivity(user.id, games) : []
   ), [followVersion, games, user?.id]);
@@ -509,7 +530,6 @@ export default function GalleryBrowser({
           </div>
         ) : null}
         <div className="toolbar public-gallery-actions">
-          <button type="button" className="secondary-action" onClick={openDiscover}>Découverte</button>
           {user?.id ? (
             <button
               type="button"
@@ -700,7 +720,7 @@ export default function GalleryBrowser({
       ) : null}
 
       {!isLoading && view === 'creator' ? (
-        <section className="public-creator-page">
+        <section className="public-creator-page" style={getCreatorThemeStyle(creatorProfile.theme)}>
           <button type="button" className="secondary-action public-back-button" onClick={openDiscover}>← Galerie</button>
           <CreatorBanner banner={creatorProfile.banner} name={creatorName} />
           <div className="public-creator-tabs" role="tablist" aria-label="Sections du créateur">
@@ -736,17 +756,19 @@ export default function GalleryBrowser({
                       <span className="eyebrow">Profil créateur</span>
                       <h2>{creatorName}</h2>
                       <p className="small-note">🎮 {selectedCreatorGames.length} jeu{selectedCreatorGames.length > 1 ? 'x' : ''} créé{selectedCreatorGames.length > 1 ? 's' : ''}</p>
+                      <p className="small-note">👥 {creatorFollowerCount} follower{creatorFollowerCount === 1 ? '' : 's'}</p>
                       <p className="small-note">⭐ Moyenne : {formatRating(creatorAverage)}</p>
-                      {canFollowCreator ? (
+                      {canShowCreatorFollow ? (
                         <button
                           type="button"
                           className={`secondary-action public-follow-button${isCreatorFollowed ? ' active' : ''}`}
                           onClick={toggleCreatorFollow}
-                          disabled={!user?.id && !onSignup}
-                          aria-pressed={user?.id ? isCreatorFollowed : undefined}
+                          disabled={isViewingOwnCreatorProfile || (!user?.id && !onSignup)}
+                          aria-pressed={user?.id && !isViewingOwnCreatorProfile ? isCreatorFollowed : undefined}
+                          title={isViewingOwnCreatorProfile ? 'Un autre compte peut suivre ce profil public.' : undefined}
                         >
                           {isCreatorFollowed ? <UserCheck size={16} aria-hidden="true" /> : <UserPlus size={16} aria-hidden="true" />}
-                          <span>{user?.id ? (isCreatorFollowed ? 'Suivi' : 'Suivre') : 'Se connecter pour suivre'}</span>
+                          <span>{creatorFollowLabel}</span>
                         </button>
                       ) : null}
                     </div>
@@ -769,7 +791,7 @@ export default function GalleryBrowser({
                     </section>
                   ) : null}
                 </div>
-                <CreatorAboutSection name={creatorName} profile={creatorProfile} />
+                <CreatorAboutSection profile={creatorProfile} />
               </div>
             </div>
           ) : (

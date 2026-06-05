@@ -17,6 +17,11 @@ export const AUTHOR_MEDIA_TARGETS = {
   },
 };
 
+export const getAuthorProfileMediaRecommendation = (target = 'avatar') => {
+  const options = AUTHOR_MEDIA_TARGETS[target] || AUTHOR_MEDIA_TARGETS.avatar;
+  return `${options.width} x ${options.height} px`;
+};
+
 const loadImageFromFile = (file) => new Promise((resolve, reject) => {
   const objectUrl = URL.createObjectURL(file);
   const image = new Image();
@@ -59,6 +64,24 @@ export const readAuthorProfileImageFile = (file) => new Promise((resolve, reject
   };
   reader.onerror = () => reject(new Error('Image illisible.'));
   reader.readAsDataURL(file);
+});
+
+export const readAuthorProfileImageSource = (src = '', name = 'image') => new Promise((resolve, reject) => {
+  const imageSrc = String(src || '').trim();
+  if (!imageSrc) {
+    reject(new Error('Image manquante.'));
+    return;
+  }
+
+  const image = new Image();
+  image.onload = () => resolve({
+    src: imageSrc,
+    name,
+    width: image.naturalWidth || image.width,
+    height: image.naturalHeight || image.height,
+  });
+  image.onerror = (error) => reject(error || new Error('Image illisible.'));
+  image.src = imageSrc;
 });
 
 export async function cropAuthorProfileImage({

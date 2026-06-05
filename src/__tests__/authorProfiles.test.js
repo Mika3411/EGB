@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { getAuthorProfile, saveAuthorProfile, toggleAuthorBlogPostLike } from '../shared/services/authorProfiles';
+import {
+  getAuthorProfile,
+  normalizeAuthorProfileTheme,
+  saveAuthorProfile,
+  toggleAuthorBlogPostLike,
+} from '../shared/services/authorProfiles';
 
 const AUTHOR_PROFILES_KEY = 'escapeGameBuilder.authorProfiles.v1';
 
@@ -127,6 +132,37 @@ describe('author profiles storage', () => {
       { type: 'discord', url: '42' },
     ]));
     expect(saved.socialLinks.find((link) => link.type === 'unknown')).toBeUndefined();
+  });
+
+  it('normalizes author page theme colors safely', () => {
+    expect(normalizeAuthorProfileTheme({
+      pageBackground: '#123',
+      panelBackground: '#101820',
+      accentColor: 'red',
+      textColor: '#ABCDEF',
+      mutedTextColor: 'var(--danger)',
+    })).toMatchObject({
+      pageBackground: '#112233',
+      panelBackground: '#101820',
+      accentColor: '#60a5fa',
+      textColor: '#abcdef',
+      mutedTextColor: '#cbd5e1',
+    });
+
+    const saved = saveAuthorProfile('user-1', {
+      displayName: 'Mika',
+      theme: {
+        pageBackground: '#18181b',
+        panelBackground: 'linear-gradient(red, blue)',
+        accentColor: '#f97316',
+      },
+    });
+
+    expect(saved.theme).toMatchObject({
+      pageBackground: '#18181b',
+      panelBackground: '#0f172a',
+      accentColor: '#f97316',
+    });
   });
 
   it('toggles likes on author news while keeping legacy posts valid', () => {

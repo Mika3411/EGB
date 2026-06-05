@@ -16,6 +16,14 @@ export const AUTHOR_SOCIAL_LINK_TYPES = [
   { type: 'linkedin', label: 'LinkedIn' },
 ];
 
+export const AUTHOR_PROFILE_THEME_DEFAULTS = {
+  pageBackground: '#08101d',
+  panelBackground: '#0f172a',
+  accentColor: '#60a5fa',
+  textColor: '#f8fafc',
+  mutedTextColor: '#cbd5e1',
+};
+
 const AUTHOR_SOCIAL_LINK_TYPE_ALIASES = {
   twitter: 'x-twitter',
   x: 'x-twitter',
@@ -25,6 +33,15 @@ const AUTHOR_SOCIAL_LINK_TYPE_ALIASES = {
 const AUTHOR_SOCIAL_LINK_TYPES_SET = new Set(AUTHOR_SOCIAL_LINK_TYPES.map((link) => link.type));
 
 const normalizeProfileString = (value = '') => String(value || '').trim();
+
+const normalizeProfileColor = (value = '', fallback = '#000000') => {
+  const color = normalizeProfileString(value).toLowerCase();
+  if (/^#[0-9a-f]{6}$/.test(color)) return color;
+  if (/^#[0-9a-f]{3}$/.test(color)) {
+    return `#${color.slice(1).split('').map((digit) => `${digit}${digit}`).join('')}`;
+  }
+  return fallback;
+};
 
 const normalizeLikeCount = (value = 0) => {
   const count = Number(value);
@@ -50,6 +67,16 @@ const normalizeBlogPost = (post = {}) => {
 const normalizeBlogPosts = (blogPosts = []) => (
   Array.isArray(blogPosts) ? blogPosts.map(normalizeBlogPost).filter((post) => post.id) : []
 );
+
+export const formatAuthorBlogPostDateTime = (value = '') => {
+  const date = new Date(value);
+  if (!value || Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('fr-FR', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'Europe/Paris',
+  }).format(date).replace(',', ' à');
+};
 
 const normalizeSocialLinkType = (type = '') => {
   const normalized = String(type || '').trim().toLowerCase();
@@ -87,6 +114,16 @@ export const setAuthorSocialLinkUrl = (socialLinks = [], type = '', url = '', we
   ));
 };
 
+export const normalizeAuthorProfileTheme = (theme = {}) => {
+  const source = theme && typeof theme === 'object' ? theme : {};
+  return Object.fromEntries(
+    Object.entries(AUTHOR_PROFILE_THEME_DEFAULTS).map(([key, fallback]) => [
+      key,
+      normalizeProfileColor(source[key], fallback),
+    ]),
+  );
+};
+
 export const normalizeAuthorProfile = (profile = {}, user = {}) => {
   const socialLinks = normalizeAuthorSocialLinks(profile.socialLinks, profile.website);
   const website = normalizeProfileString(getAuthorSocialLinkUrl(socialLinks, 'site') || profile.website);
@@ -98,6 +135,7 @@ export const normalizeAuthorProfile = (profile = {}, user = {}) => {
     website,
     avatar: normalizeProfileString(profile.avatar),
     banner: normalizeProfileString(profile.banner),
+    theme: normalizeAuthorProfileTheme(profile.theme),
     socialLinks,
     blogPosts: normalizeBlogPosts(profile.blogPosts),
     updatedAt: profile.updatedAt || '',
