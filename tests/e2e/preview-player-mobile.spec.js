@@ -134,6 +134,101 @@ const createPreviewProject = ({ startWithCinematic = false } = {}) => {
   };
 };
 
+const createInteractiveOverlayProject = () => {
+  const project = createPreviewProject();
+  const hero = {
+    id: 'hero-mobile',
+    name: 'Hero mobile',
+    description: 'Profil QA pour verifier les overlays mobiles.',
+    health: 18,
+    maxHealth: 18,
+    mana: 8,
+    maxMana: 8,
+    initiative: 4,
+    armor: 0,
+    dodgeChance: 0,
+    skills: [
+      { id: 'force', name: 'Force', value: 8, baseValue: 8, rolledValue: 0, manaCost: 0 },
+    ],
+    powers: [],
+  };
+
+  return {
+    ...project,
+    title: 'Preview mobile overlays QA',
+    heroAdventure: {
+      enabled: true,
+      dice: { sides: 20, label: 'd20', skin: 'classic' },
+      hero,
+      heroes: [hero],
+      rules: {
+        criticalSuccess: 20,
+        criticalFailure: 1,
+        criticalChance: 0,
+        criticalMultiplier: 2,
+      },
+      combat: {
+        turnMode: true,
+        showDice: true,
+        heroDieDamagePercent: 100,
+        enemyName: 'Gardien mobile',
+        enemyStrength: 0,
+        enemyMaxMana: 0,
+        enemyPowerUsageChance: 0,
+        enemyInitiative: -5,
+      },
+    },
+    enigmas: [{
+      id: 'enigma-mobile-code',
+      name: 'Code mobile',
+      type: 'code',
+      codeSkin: 'digicode',
+      question: 'Entre le code sans perdre les actions en bas de l ecran.',
+      solutionText: '1234',
+      successMessage: 'Code mobile valide.',
+      failMessage: 'Code incorrect.',
+      unlockType: 'none',
+    }],
+    scenes: project.scenes.map((scene) => ({
+      ...scene,
+      hotspots: [
+        ...scene.hotspots,
+        {
+          id: 'open-mobile-enigma',
+          name: 'Ouvrir enigme mobile',
+          x: 28,
+          y: 38,
+          width: 18,
+          height: 18,
+          actionType: 'enigma',
+          enigmaId: 'enigma-mobile-code',
+          dialogue: 'Le clavier apparait.',
+        },
+        {
+          id: 'open-mobile-combat',
+          name: 'Combattre le gardien',
+          x: 72,
+          y: 38,
+          width: 18,
+          height: 18,
+          actionType: 'hero_combat',
+          combatEnemyName: 'Gardien mobile',
+          combatEnemyMaxHealth: 4,
+          combatEnemyMaxMana: 0,
+          combatEnemyStrength: 0,
+          combatEnemyInitiative: -5,
+          combatAttackDifficulty: 1,
+          combatHeroDieDamagePercent: 100,
+          combatShowDice: true,
+          combatTurnMode: true,
+          combatStartDialogue: 'Combat mobile lance.',
+          combatVictoryDialogue: 'Gardien vaincu.',
+        },
+      ],
+    })),
+  };
+};
+
 async function openSharedPreview(page, viewport, options = {}) {
   const project = options.project
     ? JSON.parse(JSON.stringify(options.project))
@@ -368,6 +463,67 @@ async function getMobileControlsMetrics(page) {
   });
 }
 
+async function getOverlayUsabilityMetrics(page) {
+  return page.evaluate(() => {
+    const toRect = (selector) => {
+      const element = document.querySelector(selector);
+      if (!element) return null;
+      const rect = element.getBoundingClientRect();
+      return {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+      };
+    };
+    const isVisible = (selector) => {
+      const element = document.querySelector(selector);
+      if (!element) return false;
+      const style = window.getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return style.display !== 'none'
+        && style.visibility !== 'hidden'
+        && Number(style.opacity || 1) > 0.05
+        && rect.width > 1
+        && rect.height > 1;
+    };
+    return {
+      windowWidth: window.innerWidth,
+      windowHeight: window.innerHeight,
+      enigmaCard: toRect('#enigma-overlay .overlay-card'),
+      enigmaClose: toRect('#enigma-overlay .danger-button'),
+      enigmaAction: toRect('#enigma-overlay .code-primary-button'),
+      combatTopline: toRect('.hero-combat-topline'),
+      combatStage: toRect('.hero-combat-stage'),
+      combatLog: toRect('.hero-combat-log'),
+      combatMainAction: toRect('.hero-combat-main-action'),
+      combatActionBar: toRect('.hero-combat-action-bar'),
+      visible: {
+        enigma: isVisible('#enigma-overlay'),
+        combat: isVisible('.hero-combat-overlay'),
+      },
+    };
+  });
+}
+
+async function completeHeroSetupIfOpen(page) {
+  const setup = page.locator('.hero-setup-overlay');
+  if (!(await setup.isVisible().catch(() => false))) return;
+
+  await page.getByRole('button', { name: 'Sélectionner ce personnage' }).click();
+  const die = page.locator('.hero-setup-die-wrap').first();
+  await die.click();
+  await expect(die).toHaveClass(/is-current/);
+  await die.click();
+  await expect(page.getByRole('button', { name: /Decouvrir/ })).toBeEnabled();
+  await page.getByRole('button', { name: /Decouvrir/ }).click();
+  await expect(page.getByRole('button', { name: "Commencer l'aventure" })).toBeEnabled();
+  await page.getByRole('button', { name: "Commencer l'aventure" }).click();
+  await expect(setup).not.toBeVisible();
+}
+
 function expectRectInsideViewport(rect, width, height) {
   expect(rect.left).toBeGreaterThanOrEqual(0);
   expect(rect.top).toBeGreaterThanOrEqual(0);
@@ -538,6 +694,43 @@ test.describe('Preview player mobile layout', () => {
     expectRectInSideGutter(collapsedMetrics.inventoryButton, collapsedMetrics.scene);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'preview-player-mobile-844x390-collapsed-controls.png'), fullPage: true });
+  });
+
+  test('enigma and combat overlays stay usable on mobile viewports', async ({ page }) => {
+    mkdirSync(SCREENSHOT_DIR, { recursive: true });
+    const project = createInteractiveOverlayProject();
+
+    await openSharedPreview(page, { width: 390, height: 844 }, { project });
+    await expect(page.locator('.player-mobile-orientation-gate')).toBeVisible();
+    await page.getByRole('button', { name: 'Continuer en portrait' }).click();
+    await expect(page.locator('.player-mobile-orientation-gate')).not.toBeVisible();
+    await completeHeroSetupIfOpen(page);
+
+    await page.getByRole('button', { name: 'Ouvrir enigme mobile' }).click();
+    await expect(page.locator('#enigma-overlay')).toBeVisible();
+    const enigmaMetrics = await getOverlayUsabilityMetrics(page);
+    expect(enigmaMetrics.visible.enigma).toBe(true);
+    expectRectInsideViewport(enigmaMetrics.enigmaCard, enigmaMetrics.windowWidth, enigmaMetrics.windowHeight);
+    expectRectInsideViewport(enigmaMetrics.enigmaClose, enigmaMetrics.windowWidth, enigmaMetrics.windowHeight);
+    expectRectInsideViewport(enigmaMetrics.enigmaAction, enigmaMetrics.windowWidth, enigmaMetrics.windowHeight);
+    expect(enigmaMetrics.enigmaAction.height).toBeGreaterThanOrEqual(40);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'preview-player-enigma-390x844.png'), fullPage: true });
+    await page.getByRole('button', { name: 'Fermer' }).click();
+    await expect(page.locator('#enigma-overlay')).not.toBeVisible();
+
+    await openSharedPreview(page, { width: 844, height: 390 }, { project });
+    await expect(page.locator('.player-mobile-orientation-gate')).not.toBeVisible();
+    await completeHeroSetupIfOpen(page);
+
+    await page.getByRole('button', { name: 'Combattre le gardien' }).click();
+    await expect(page.locator('.hero-combat-overlay')).toBeVisible();
+    const combatMetrics = await getOverlayUsabilityMetrics(page);
+    expect(combatMetrics.visible.combat).toBe(true);
+    expectRectInsideViewport(combatMetrics.combatTopline, combatMetrics.windowWidth, combatMetrics.windowHeight);
+    expectRectInsideViewport(combatMetrics.combatMainAction, combatMetrics.windowWidth, combatMetrics.windowHeight);
+    expect(combatMetrics.combatMainAction.height).toBeGreaterThanOrEqual(44);
+    expect(combatMetrics.combatActionBar.height).toBeGreaterThanOrEqual(44);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'preview-player-combat-844x390.png'), fullPage: true });
   });
 
   test('cinematic stays readable in portrait and short landscape', async ({ page }) => {

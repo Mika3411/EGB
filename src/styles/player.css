@@ -4562,29 +4562,32 @@
 
 @media (max-width: 900px) and (orientation: landscape) {
   .hero-combat-overlay {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, .78fr);
+    grid-template-rows: auto minmax(0, 1fr);
     align-items: stretch;
-    grid-template-rows: auto auto auto;
     align-content: start;
     gap: 7px;
     max-height: 100%;
-    overflow: auto;
+    overflow: hidden;
     padding: calc(env(safe-area-inset-top) + 8px) calc(env(safe-area-inset-right) + 8px) calc(env(safe-area-inset-bottom) + 8px) calc(env(safe-area-inset-left) + 8px);
     overscroll-behavior: contain;
     scroll-padding-bottom: calc(env(safe-area-inset-bottom) + 12px);
     -webkit-overflow-scrolling: touch;
   }
   .hero-combat-topline {
+    grid-column: 1 / -1;
     position: static;
     padding: 7px 9px;
   }
   .hero-combat-stage {
+    grid-column: 1;
+    grid-row: 2;
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-    align-items: end;
+    align-items: stretch;
     gap: 8px;
-    min-height: max-content;
-    overflow: visible;
+    min-height: 0;
+    overflow: hidden;
   }
   .hero-combat-topline,
   .hero-combat-stage,
@@ -4613,7 +4616,7 @@
     min-height: 21px;
   }
   .hero-combat-actor-media {
-    height: min(112px, 28vh);
+    height: min(76px, 20vh);
   }
   .hero-combat-actor-status-row {
     gap: 5px;
@@ -4646,8 +4649,15 @@
     display: none;
   }
   .hero-combat-log {
+    grid-column: 2;
+    grid-row: 2;
+    align-content: start;
     gap: 6px;
     padding: 8px;
+    min-height: 0;
+    max-height: 100%;
+    overflow: auto;
+    overscroll-behavior: contain;
   }
   .hero-combat-journal {
     gap: 4px;
@@ -4661,8 +4671,11 @@
     font-size: 11px;
   }
   .hero-combat-action-bar {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: 1fr;
     gap: 6px;
+  }
+  .hero-combat-action-button.is-danger {
+    grid-column: auto;
   }
   .hero-combat-action-button {
     min-height: 44px;
@@ -4687,6 +4700,21 @@
   .hero-combat-main-action {
     width: 100%;
     min-height: 46px;
+    line-height: 1.12;
+  }
+  .hero-combat-main-action span {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .hero-combat-log .inline-actions {
+    position: sticky;
+    bottom: calc(env(safe-area-inset-bottom) + 0px);
+    z-index: 4;
+    margin: 0 -8px -8px;
+    padding: 6px 8px 8px;
+    background: linear-gradient(180deg, rgba(8, 16, 30, 0), rgba(8, 16, 30, .96) 26%);
   }
 }
 
