@@ -1,7 +1,5 @@
 /// <reference types="vite/client" />
-
 import { createClient } from '@supabase/supabase-js';
-
 export type StorageVisibility = 'public' | 'private';
 
 export type StorageErrorCode =

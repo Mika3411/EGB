@@ -121,7 +121,6 @@ const isProjectRecordFresher = (candidate, current) => {
   }
   return candidateFreshness.updatedAt >= currentFreshness.updatedAt;
 };
-
 const mergeProjectRecordsByFreshness = (...projectLists) => {
   const projectsById = new Map();
   projectLists.flat().filter(Boolean).forEach((entry) => {
@@ -132,7 +131,6 @@ const mergeProjectRecordsByFreshness = (...projectLists) => {
   });
   return Array.from(projectsById.values());
 };
-
 const writeProjectToIndexedDb = async (userId, project) => {
   if (!userId || !project?.id) return false;
   try {

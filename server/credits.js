@@ -6,10 +6,8 @@ import { getSupabaseAdminClient } from './supabase.js';
 import { verifySupabaseAdminRequest, verifySupabaseUserRequest } from './auth.js';
 import { readJsonBody, sendJson } from './http.js';
 import { getGumroadPack, getGumroadUserId } from './creditsGumroad.js';
-
 const creditStorePath = process.env.AI_CREDITS_FILE || join(rootDir, '.data', 'ai-credits.json');
 const creditStoreLockPath = `${creditStorePath}.lock`;
-
 export const defaultAiCredits = Number(process.env.AI_DEFAULT_CREDITS || 20);
 export const FREE_STORAGE_BYTES = 250 * 1024 * 1024;
 export const STORAGE_BYTES_PER_CREDIT = 5 * 1024 * 1024;
@@ -31,13 +29,11 @@ export const aiCreditCosts = {
     item: Number(process.env.AI_PROJECT_ITEM_CREDIT_COST || 1),
   },
 };
-
 export const toCount = (value) => {
   const number = Number(value);
   if (!Number.isFinite(number)) return 0;
   return Math.max(0, Math.round(number));
 };
-
 export const calculateProjectGenerationCost = (brief = {}) => {
   const units = aiCreditCosts.projectGeneration;
   return Math.max(1, Math.ceil(
@@ -48,7 +44,6 @@ export const calculateProjectGenerationCost = (brief = {}) => {
     + toCount(brief.itemCount) * units.item,
   ));
 };
-
 export const calculateTextCreditCost = (body = {}) => (
   body.mode === 'repair_item_names' ? 0
     : body.mode === 'generate'
@@ -58,7 +53,6 @@ export const calculateTextCreditCost = (body = {}) => (
       : body.mode === 'improve' ? aiCreditCosts.improve
       : aiCreditCosts.text
 );
-
 export const readCreditStore = () => {
   if (!existsSync(creditStorePath)) return { users: {}, gumroadSales: {} };
   try {
@@ -70,14 +64,12 @@ export const readCreditStore = () => {
     return { users: {}, gumroadSales: {} };
   }
 };
-
 export const writeCreditStore = (store) => {
   mkdirSync(join(creditStorePath, '..'), { recursive: true });
   const tempPath = `${creditStorePath}.${process.pid}.${Date.now()}.tmp`;
   writeFileSync(tempPath, JSON.stringify(store, null, 2));
   renameSync(tempPath, creditStorePath);
 };
-
 const sleepSync = (delayMs) => {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delayMs);
 };

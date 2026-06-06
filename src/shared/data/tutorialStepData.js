@@ -1,28 +1,19 @@
 import { GUIDED_CREATION_TUTORIAL_STEPS } from './tutorialGuidedCreationSteps';
 import { COMBAT_TUTORIAL_STEPS } from './tutorialCombatSteps';
-
-const makeTutorialEndStep = (tab, selector) => ({
-  tab,
-  selector,
-  title: 'À toi de jouer',
+const makeTutorialEndStep = (tab, selector) => ({ tab, selector, title: 'À toi de jouer',
   body: 'Bravo {name}, tu as fait le tour de ce parcours. Familiarise-toi tranquillement avec cet environnement, puis crée ton propre projet depuis Profil. PS : ce projet-ci ne sera pas enregistré.',
-  action: 'Clique sur Terminer quand tu es prêt a explorer librement.',
-  celebration: true,
-});
-
+  action: 'Clique sur Terminer quand tu es prêt a explorer librement.', celebration: true });
 export const BUILDER_TUTORIAL_STEPS = [
   ...GUIDED_CREATION_TUTORIAL_STEPS,
   {
-    tab: 'profile',
-    selector: '[data-tour="profile-header"]',
+    tab: 'profile', selector: '[data-tour="profile-header"]',
     title: 'Bienvenue dans le profil',
     body: 'Ici, tu retrouves ton espace de départ. Le profil est organisé par onglets : création, projets, publication, médias, messagerie, identité publique, badges créateur et espace Pro quand ton compte y a accès.',
     action: "Clique dans l'en-tête du profil pour commencer le tour.",
     completedWhen: { type: 'interact' },
   },
   {
-    tab: 'profile',
-    selector: '[data-tour="profile-status"]',
+    tab: 'profile', selector: '[data-tour="profile-status"]',
     title: 'État du compte',
     body: 'Ce badge indique ce qui vient de se passer : sauvegarde, import, publication, achat de stockage ou erreur. Regarde-le après chaque action importante.',
     action: 'Clique sur la zone de statut pour la repérer.',
@@ -1906,7 +1897,6 @@ export const BUILDER_TUTORIAL_STEPS = [
         body: "Un Test de compétence compare automatiquement dé + bonus à la difficulté. Un Combat simple mémorise les PV de l'ennemi, applique les dégâts, la riposte, la récompense et les scènes de victoire ou défaite.",
   },
 ];
-
 export const getTutorialStepIndexes = (tab) => BUILDER_TUTORIAL_STEPS
   .map((step, index) => ({ step, index }))
   .filter(({ step }) => (step.tutorial || step.tab) === tab)
