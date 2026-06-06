@@ -35,6 +35,7 @@ function DrawerIconButton({ label, onClick, disabled = false, active = false, ch
 function getLayerLabel(layer) {
   if (layer.type === 'hotspot') return 'Zone';
   if (layer.type === 'visualEffectZone') return 'Zone visuelle';
+  if (layer.entry.blockType === 'text') return 'Texte';
   if (layer.entry.isInvisible) return 'Objet invisible';
   return 'Objet';
 }

@@ -63,7 +63,7 @@ export default function HotspotAssetsPanel({
       </div>
 
       <div className="hotspot-assets-field">
-        <HelpLabel help="Image associée à l'action principale de cette zone, souvent utilisée pour montrer un objet trouvé ou un indice visuel.">Image objet</HelpLabel>
+        <HelpLabel help="Image associée à l'action principale de cette zone, souvent utilisée pour montrer un objet trouvé ou un indice visuel.">Image de la zone</HelpLabel>
         <MediaSourcePicker
           className="button like full secondary-action"
           accept="image/*"
@@ -76,28 +76,36 @@ export default function HotspotAssetsPanel({
           })}
           tourId="hotspot-object-image"
         >
-          {selectedHotspot.objectImageName ? "Remplacer l'image objet" : 'Importer une image objet'}
+          {selectedHotspot.objectImageName ? "Remplacer l'image" : 'Importer une image'}
         </MediaSourcePicker>
         {selectedHotspot.objectImageData && (
-          <button
-            type="button"
-            className="danger-button"
-            onClick={async () => {
-              const confirmed = await showConfirm({
-                title: "Supprimer l'image",
-                message: "Supprimer l'image de cette zone ?",
-                confirmLabel: 'Supprimer',
-                variant: 'danger',
-              });
-              if (!confirmed) return;
-              patchSelectedHotspot((spot) => {
-                spot.objectImageData = '';
-                spot.objectImageName = '';
-              });
-            }}
-          >
-            Supprimer l'image
-          </button>
+          <div className="hotspot-image-preview">
+            <img src={selectedHotspot.objectImageData} alt={selectedHotspot.objectImageName || selectedHotspot.name || 'Image de la zone'} />
+            <div className="hotspot-image-preview-actions">
+              <span title={selectedHotspot.objectImageName || selectedHotspot.name || 'Image de la zone'}>
+                {selectedHotspot.objectImageName || selectedHotspot.name || 'Image de la zone'}
+              </span>
+              <button
+                type="button"
+                className="danger-button"
+                onClick={async () => {
+                  const confirmed = await showConfirm({
+                    title: "Supprimer l'image",
+                    message: "Supprimer l'image de cette zone ?",
+                    confirmLabel: 'Supprimer',
+                    variant: 'danger',
+                  });
+                  if (!confirmed) return;
+                  patchSelectedHotspot((spot) => {
+                    spot.objectImageData = '';
+                    spot.objectImageName = '';
+                  });
+                }}
+              >
+                Supprimer l'image
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>

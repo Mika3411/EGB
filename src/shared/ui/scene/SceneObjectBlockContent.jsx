@@ -1,6 +1,6 @@
 import {
+  getSceneObjectBlockStyle,
   getSceneObjectBlockType,
-  getSceneObjectFontSize,
 } from '../../services/sceneObjectBlocks';
 
 export function SceneObjectBlockContent({ object, displayImage = '', linkedItem = null }) {
@@ -8,7 +8,7 @@ export function SceneObjectBlockContent({ object, displayImage = '', linkedItem 
   const title = object.blockLabel || object.name || linkedItem?.name || 'Bloc';
   const text = object.blockText || object.dialogue || title;
 
-  const blockStyle = { fontSize: `${getSceneObjectFontSize(object)}px` };
+  const blockStyle = getSceneObjectBlockStyle(object);
 
   if (blockType === 'text') {
     return <span className="interactive-block interactive-block--text" style={blockStyle}>{text}</span>;

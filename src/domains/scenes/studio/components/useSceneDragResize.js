@@ -5,6 +5,10 @@ import {
   getElementShapePoints,
   getElementShapeType,
 } from '../../../../shared/services/sceneRender.js';
+import {
+  getSceneDragSnapPosition,
+  getSceneResizeSnapPosition,
+} from '../../../../shared/services/sceneAlignmentSnapping.js';
 
 export function useSceneEditorDragResize({
   canvasRef,
@@ -39,6 +43,8 @@ export function useSceneEditorDragResize({
   const dragFrameRef = useRef(0);
   const pendingDragUpdateRef = useRef(null);
   const dragPreviewRef = useRef(null);
+  const alignmentGuideOverlayRef = useRef(null);
+  const alignmentGuideLineRefs = useRef({ vertical: null, horizontal: null });
   const [draggingHotspotId, setDraggingHotspotId] = useState('');
   const [draggingSceneObjectId, setDraggingSceneObjectId] = useState('');
   const [draggingVisualEffectZoneId, setDraggingVisualEffectZoneId] = useState('');
@@ -71,17 +77,93 @@ export function useSceneEditorDragResize({
     };
   };
 
+  const removeAlignmentGuides = () => {
+    alignmentGuideOverlayRef.current?.remove?.();
+    alignmentGuideOverlayRef.current = null;
+    alignmentGuideLineRefs.current = { vertical: null, horizontal: null };
+  };
+
+  const ensureAlignmentGuideOverlay = (source = 'main') => {
+    const parent = source === 'fullscreen'
+      ? (fullscreenContentRef?.current || fullscreenCanvasRef?.current)
+      : canvasRef.current;
+    if (!parent) return null;
+    if (alignmentGuideOverlayRef.current && alignmentGuideOverlayRef.current.parentElement === parent) {
+      return alignmentGuideOverlayRef.current;
+    }
+
+    removeAlignmentGuides();
+    const overlay = document.createElement('div');
+    overlay.className = 'scene-alignment-guides';
+    overlay.setAttribute('aria-hidden', 'true');
+
+    const vertical = document.createElement('span');
+    vertical.className = 'scene-alignment-guide scene-alignment-guide--vertical';
+    vertical.style.display = 'none';
+
+    const horizontal = document.createElement('span');
+    horizontal.className = 'scene-alignment-guide scene-alignment-guide--horizontal';
+    horizontal.style.display = 'none';
+
+    overlay.append(vertical, horizontal);
+    parent.appendChild(overlay);
+    alignmentGuideOverlayRef.current = overlay;
+    alignmentGuideLineRefs.current = { vertical, horizontal };
+    return overlay;
+  };
+
+  const updateAlignmentGuides = (guides, source = 'main') => {
+    const hasGuides = Boolean(guides?.vertical || guides?.horizontal);
+    if (!hasGuides && !alignmentGuideOverlayRef.current) return;
+
+    const overlay = hasGuides ? ensureAlignmentGuideOverlay(source) : alignmentGuideOverlayRef.current;
+    if (!overlay) return;
+
+    const { vertical, horizontal } = alignmentGuideLineRefs.current;
+    if (vertical) {
+      vertical.style.display = guides?.vertical ? 'block' : 'none';
+      if (guides?.vertical) vertical.style.left = `${guides.vertical.position}%`;
+    }
+    if (horizontal) {
+      horizontal.style.display = guides?.horizontal ? 'block' : 'none';
+      if (guides?.horizontal) horizontal.style.top = `${guides.horizontal.position}%`;
+    }
+  };
+
+  const getMovedIdsForDrag = (type, id) => {
+    if (type === 'hotspot' && multiSelectEnabled && selectedHotspotIds.includes(id)) return selectedHotspotIds;
+    if (type === 'sceneObject' && multiSelectEnabled && selectedSceneObjectIds.includes(id)) return selectedSceneObjectIds;
+    return [id];
+  };
+
+  const getResizeSnapAxes = (handle = '') => {
+    if (handle.startsWith('point-')) return { x: true, y: true };
+    return {
+      x: handle.includes('e') || handle.includes('w'),
+      y: handle.includes('n') || handle.includes('s'),
+    };
+  };
+
   const previewDragPosition = (clientX, clientY, source = 'main') => {
     const preview = dragPreviewRef.current;
     if (!preview) return;
     const position = getCanvasPointerPosition(clientX, clientY, source);
     if (!position) return;
+    const snappedPosition = getSceneDragSnapPosition({
+      scene: selectedScene,
+      type: preview.type,
+      id: preview.id,
+      x: position.x,
+      y: position.y,
+      movedIds: getMovedIdsForDrag(preview.type, preview.id),
+    });
     dragMovedRef.current = true;
-    preview.latest = position;
+    preview.latest = snappedPosition;
     if (preview.element?.style) {
-      preview.element.style.left = `${Number(position.x.toFixed(2))}%`;
-      preview.element.style.top = `${Number(position.y.toFixed(2))}%`;
+      preview.element.style.left = `${Number(snappedPosition.x.toFixed(2))}%`;
+      preview.element.style.top = `${Number(snappedPosition.y.toFixed(2))}%`;
     }
+    updateAlignmentGuides(snappedPosition.guides, source);
   };
 
   const commitDragPreview = () => {
@@ -169,6 +251,7 @@ export function useSceneEditorDragResize({
   const stopDragging = () => {
     flushPendingDragUpdate();
     commitDragPreview();
+    removeAlignmentGuides();
     draggingHotspotIdRef.current = '';
     draggingSceneObjectIdRef.current = '';
     draggingVisualEffectZoneIdRef.current = '';
@@ -180,6 +263,7 @@ export function useSceneEditorDragResize({
 
   const stopResizing = () => {
     flushPendingDragUpdate();
+    removeAlignmentGuides();
     resizingElementRef.current = null;
     setResizingElement(null);
     setIsDragLocked(false);
@@ -246,9 +330,20 @@ export function useSceneEditorDragResize({
     const rect = activeRef.current.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
 
-    const pointerX = clampPercent(snapValue(((clientX - rect.left) / rect.width) * 100));
-    const pointerY = clampPercent(snapValue(((clientY - rect.top) / rect.height) * 100));
+    const rawPointerX = clampPercent(snapValue(((clientX - rect.left) / rect.width) * 100));
+    const rawPointerY = clampPercent(snapValue(((clientY - rect.top) / rect.height) * 100));
+    const snappedPointer = getSceneResizeSnapPosition({
+      scene: selectedScene,
+      type: resizing.type,
+      id: resizing.id,
+      x: rawPointerX,
+      y: rawPointerY,
+      axes: getResizeSnapAxes(resizing.handle),
+    });
+    const pointerX = snappedPointer.x;
+    const pointerY = snappedPointer.y;
     const minSize = 2;
+    updateAlignmentGuides(snappedPointer.guides, resizing.source);
 
     patchProject((draft) => {
       const scene = draft.scenes.find((s) => s.id === selectedSceneId);
@@ -486,6 +581,10 @@ export function useSceneEditorDragResize({
       flushPendingDragUpdate();
     };
   }, [draggingHotspotId, draggingSceneObjectId, draggingVisualEffectZoneId, resizingElement]);
+
+  useEffect(() => () => {
+    removeAlignmentGuides();
+  }, []);
 
   return {
     draggingHotspotId,

@@ -14,18 +14,23 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { getSceneObjectClickMode } from '../../../../shared/services/sceneObjectBlocks';
+import { getSceneObjectBlockType, getSceneObjectClickMode } from '../../../../shared/services/sceneObjectBlocks';
+import { PRO_PROMOTION_PROJECT_MODE } from '../../../../shared/services/proPromotion';
 import { clampPercent, getLayerZIndex } from '../../../../shared/services/sceneRender.js';
 
-const CLASSIC_ACTION_MODES = ['beginner', 'intermediate', 'expert', 'adventure', 'hero_adventure'];
+const CLASSIC_ACTION_MODES = [PRO_PROMOTION_PROJECT_MODE, 'beginner', 'intermediate', 'expert', 'adventure', 'hero_adventure'];
+const INVENTORY_ACTION_MODES = CLASSIC_ACTION_MODES.filter((mode) => mode !== PRO_PROMOTION_PROJECT_MODE);
 const CINEMATIC_ACTION_MODES = ['intermediate', 'expert', 'adventure', 'hero_adventure'];
 const NARRATIVE_ACTION_MODES = ['adventure', 'hero_adventure'];
 const HERO_ACTION_MODES = ['hero_adventure'];
 
 const HOTSPOT_ACTION_OPTIONS = [
+  { value: 'none', label: 'Aucun', modes: [PRO_PROMOTION_PROJECT_MODE] },
   { value: 'dialogue', label: 'Dialogue', modes: CLASSIC_ACTION_MODES },
-  { value: 'dialogue_item', label: 'Dialogue + objet', modes: CLASSIC_ACTION_MODES },
-  { value: 'scene', label: 'Changer de scène', modes: CLASSIC_ACTION_MODES },
+  { value: 'dialogue_item', label: 'Dialogue + objet', modes: INVENTORY_ACTION_MODES },
+  { value: 'external_link', label: 'Lien externe', modes: [PRO_PROMOTION_PROJECT_MODE] },
+  { value: 'project_link', label: 'Lien projet', modes: [PRO_PROMOTION_PROJECT_MODE] },
+  { value: 'scene', label: 'Changer de scène', modes: CLASSIC_ACTION_MODES.filter((mode) => mode !== PRO_PROMOTION_PROJECT_MODE) },
   { value: 'cinematic', label: 'Lancer une cinématique', modes: CINEMATIC_ACTION_MODES },
   { value: 'conversation', label: 'Conversation texte', modes: NARRATIVE_ACTION_MODES },
   { value: 'skill_check', label: 'Test de compétence', modes: HERO_ACTION_MODES },
@@ -33,9 +38,12 @@ const HOTSPOT_ACTION_OPTIONS = [
 ];
 
 const SCENE_OBJECT_ACTION_OPTIONS = [
+  { value: 'none', label: 'Aucun', modes: [PRO_PROMOTION_PROJECT_MODE] },
   { value: 'dialogue', label: 'Dialogue', modes: CLASSIC_ACTION_MODES },
-  { value: 'dialogue_item', label: 'Dialogue + objet', modes: CLASSIC_ACTION_MODES },
-  { value: 'scene', label: 'Changer de scène', modes: CLASSIC_ACTION_MODES },
+  { value: 'dialogue_item', label: 'Dialogue + objet', modes: INVENTORY_ACTION_MODES },
+  { value: 'external_link', label: 'Lien externe', modes: [PRO_PROMOTION_PROJECT_MODE] },
+  { value: 'project_link', label: 'Lien projet', modes: [PRO_PROMOTION_PROJECT_MODE] },
+  { value: 'scene', label: 'Changer de scène', modes: CLASSIC_ACTION_MODES.filter((mode) => mode !== PRO_PROMOTION_PROJECT_MODE) },
   { value: 'cinematic', label: 'Lancer une cinématique', modes: CINEMATIC_ACTION_MODES },
 ];
 
@@ -228,13 +236,18 @@ export default function SceneCanvasQuickToolbar({
   if (!entry) return null;
 
   const isHotspot = type === 'hotspot';
-  const isSceneObjectAction = type === 'sceneObject' && getSceneObjectClickMode(entry) === 'action';
-  const showActionSelect = isHotspot || isSceneObjectAction;
   const effectiveProjectMode = projectMode || (isBeginnerMode ? 'beginner' : '');
+  const isProTextObject = type === 'sceneObject'
+    && effectiveProjectMode === PRO_PROMOTION_PROJECT_MODE
+    && getSceneObjectBlockType(entry) === 'text';
+  const isSceneObjectAction = type === 'sceneObject' && getSceneObjectClickMode(entry) === 'action';
+  const showActionSelect = isHotspot || isSceneObjectAction || isProTextObject;
   const actionOptions = isHotspot
     ? getActionOptionsForMode(HOTSPOT_ACTION_OPTIONS, effectiveProjectMode)
     : getActionOptionsForMode(SCENE_OBJECT_ACTION_OPTIONS, effectiveProjectMode);
-  const currentAction = entry.actionType || 'dialogue';
+  const currentAction = type === 'sceneObject' && getSceneObjectClickMode(entry) === 'none'
+    ? 'none'
+    : entry.actionType || 'dialogue';
   const displayedAction = actionOptions.some((option) => option.value === currentAction)
     ? currentAction
     : actionOptions[0]?.value || 'dialogue';
@@ -258,8 +271,11 @@ export default function SceneCanvasQuickToolbar({
 
   const handleActionChange = (nextActionType) => {
     patchEntry((item) => {
-      if (type === 'sceneObject') item.clickMode = 'action';
+      if (type === 'sceneObject') {
+        item.clickMode = nextActionType === 'none' ? 'none' : 'action';
+      }
       item.actionType = nextActionType;
+      if (type === 'sceneObject' && nextActionType === 'none') item.actionType = 'dialogue';
     });
   };
 

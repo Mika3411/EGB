@@ -18,7 +18,7 @@ const HelpLabel = ({ children, help, className = '' }) => (
 
 export default function CombinationRulesWorkspace({ project, addCombination, getItemById, patchProject }) {
   return (
-    <div className="layout two-cols-wide">
+    <div className="layout two-cols-wide combinations-layout">
       <section className="panel side">
         <div className="panel-head">
           <h2>Recettes</h2>

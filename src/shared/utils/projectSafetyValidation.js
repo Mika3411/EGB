@@ -57,7 +57,8 @@ const MEDIA_ID_KEYS = [
 
 const ACTION_KEYS = [
   'actionType', 'dialogue', 'requiredItemId', 'consumeRequiredItemOnUse', 'rewardItemId',
-  'targetSceneId', 'targetCinematicId', 'enigmaId', 'requiredHotspotId', 'lockedMessage',
+  'targetSceneId', 'targetCinematicId', 'externalUrl', 'targetProjectId', 'targetProjectUserId',
+  'enigmaId', 'requiredHotspotId', 'lockedMessage',
   'conditionType', 'conditionItemId', 'conditionSceneId', 'conditionHotspotId',
   'conditionEnigmaId', 'conditionCinematicId', 'conditionCombinationId', 'conditionReplyId',
   'conditionVariableKey', 'conditionVariableOperator', 'conditionVariableValue',
@@ -101,7 +102,8 @@ const HOTSPOT_KEYS = makeSet([
   'id', 'name', 'x', 'y', 'width', 'height', 'conversation', 'logicRules',
   'objectImageData', 'objectImageName', 'hasSecondAction', 'secondActionType',
   'secondDialogue', 'secondRequiredItemId', 'secondConsumeRequiredItemOnUse',
-  'secondRewardItemId', 'secondTargetSceneId', 'secondTargetCinematicId', 'secondEnigmaId',
+  'secondRewardItemId', 'secondTargetSceneId', 'secondTargetCinematicId',
+  'secondExternalUrl', 'secondTargetProjectId', 'secondTargetProjectUserId', 'secondEnigmaId',
   'secondObjectImageData', 'secondObjectImageName', 'shapeType', 'shapeCorners', 'shapePoints',
   'shapePointCount', 'zIndex', 'tutorialCreated', ...ACTION_KEYS, ...MEDIA_ID_KEYS,
   ...SHARED_AI_KEYS,
@@ -113,7 +115,8 @@ const SCENE_OBJECT_KEYS = makeSet([
   'width', 'height', 'isInvisible', 'isHidden', 'isLocked', 'isClickable', 'clickMode',
   'interactionMode', 'linkedItemId', 'removeAfterUse', 'blockLabel', 'blockText',
   'buttonLabel', 'placeholder', 'expectedAnswer', 'successDialogue', 'failureDialogue',
-  'fontSize', 'anime2dSpec', 'anime2dName', 'logicRules', 'zIndex', 'shapeType',
+  'fontSize', 'fontFamily', 'textColor', 'backgroundColor', 'backgroundOpacity',
+  'anime2dSpec', 'anime2dName', 'logicRules', 'zIndex', 'shapeType',
   'shapeCorners', 'shapePoints', 'shapePointCount', 'tutorialCreated', ...ACTION_KEYS,
   ...MEDIA_ID_KEYS, ...SHARED_AI_KEYS,
 ]);

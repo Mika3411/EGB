@@ -22,6 +22,7 @@ import {
   getSelectedScene,
 } from '../../../shared/selectors/projectSelectors';
 import { buildSceneLabel, collectDescendantSceneIds, getSceneDepth as computeSceneDepth } from '../../../shared/services/sceneHelpers';
+import { isProPromotionProject } from '../../../shared/services/proPromotion';
 
 const makeSceneObject = (index = 0) => ({
   id: `scene_object_${Math.random().toString(36).slice(2, 10)}`,
@@ -237,6 +238,7 @@ export function useProjectEditor() {
   const selectedItem = useMemo(() => getSelectedItem(project, selectedItemId), [project, selectedItemId]);
   const selectedSceneObject = useMemo(() => (selectedScene?.sceneObjects || []).find((entry) => entry.id === selectedSceneObjectId) || null, [selectedScene, selectedSceneObjectId]);
   const selectedEnigma = useMemo(() => (project.enigmas || []).find((entry) => entry.id === selectedEnigmaId) || null, [project, selectedEnigmaId]);
+  const isProPromotionMode = isProPromotionProject(project);
 
   const actsWithScenes = useMemo(() => (
     project.acts.map((act) => ({
@@ -283,11 +285,13 @@ export function useProjectEditor() {
   }, []);
 
   const addAct = useCallback(() => {
+    if (isProPromotionMode) return;
     const act = makeAct(`Acte ${project.acts.length + 1}`);
     patchProject((draft) => draft.acts.push(act));
-  }, [patchProject, project.acts.length]);
+  }, [isProPromotionMode, patchProject, project.acts.length]);
 
   const deleteAct = useCallback((actId) => {
+    if (isProPromotionMode) return false;
     const actScenes = project.scenes.filter((scene) => scene.actId === actId);
     if (actScenes.length) return false;
     if (project.acts.length <= 1) return false;
@@ -296,9 +300,10 @@ export function useProjectEditor() {
       if (draft.start?.targetActId === actId) draft.start.targetActId = '';
     });
     return true;
-  }, [patchProject, project.acts.length, project.scenes]);
+  }, [isProPromotionMode, patchProject, project.acts.length, project.scenes]);
 
   const addScene = useCallback(() => {
+    if (isProPromotionMode) return;
     const defaultActId = selectedScene?.actId || project.acts[0]?.id || '';
     const scene = makeScene({ actId: defaultActId });
     scene.sceneObjects = scene.sceneObjects || [];
@@ -307,9 +312,10 @@ export function useProjectEditor() {
     setSelectedHotspotId(scene.hotspots[0]?.id || '');
     setSelectedSceneObjectId(scene.sceneObjects[0]?.id || '');
     setSelectedItemId('');
-  }, [patchProject, project.acts, selectedScene]);
+  }, [isProPromotionMode, patchProject, project.acts, selectedScene]);
 
   const addSubsceneToSelectedScene = useCallback(() => {
+    if (isProPromotionMode) return;
     if (!selectedScene) return;
     const scene = makeScene({
       actId: selectedScene.actId,
@@ -322,7 +328,7 @@ export function useProjectEditor() {
     setSelectedHotspotId(scene.hotspots[0]?.id || '');
     setSelectedSceneObjectId(scene.sceneObjects[0]?.id || '');
     setSelectedItemId('');
-  }, [patchProject, selectedScene]);
+  }, [isProPromotionMode, patchProject, selectedScene]);
 
   const addHotspot = useCallback(() => {
     const hotspot = {
@@ -463,6 +469,7 @@ export function useProjectEditor() {
   }, [patchProject, selectedCinematicId]);
 
   const deleteScene = useCallback((sceneId) => {
+    if (isProPromotionMode) return;
     const sceneIdsToDelete = collectDescendantSceneIds(project.scenes, sceneId);
     const remainingScenes = project.scenes.filter((scene) => !sceneIdsToDelete.has(scene.id));
     const fallbackScene = remainingScenes[0] || null;
@@ -481,7 +488,7 @@ export function useProjectEditor() {
     setSelectedHotspotId(fallbackScene?.hotspots?.[0]?.id || '');
     setSelectedSceneObjectId(fallbackScene?.sceneObjects?.[0]?.id || '');
     setSelectedItemId('');
-  }, [patchProject, project.scenes]);
+  }, [isProPromotionMode, patchProject, project.scenes]);
 
   const renderSceneTree = useCallback((scenes, depth = 0) => (
     scenes

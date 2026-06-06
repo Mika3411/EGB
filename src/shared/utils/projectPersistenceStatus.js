@@ -2,12 +2,25 @@ export const hasDurableProjectSave = (syncStatus = {}) => Boolean(
   syncStatus.localSaved || syncStatus.remoteSaved,
 );
 
+const formatRemoteSaveError = (remoteError = '') => {
+  const message = String(remoteError || '').trim();
+  if (!message) return '';
+  return message.length > 160 ? `${message.slice(0, 157)}...` : message;
+};
+
+const getRemoteUnsyncedStatus = (syncStatus = {}) => {
+  const remoteError = formatRemoteSaveError(syncStatus.remoteError);
+  return remoteError
+    ? `Supabase non synchronisé : ${remoteError}`
+    : 'Supabase non synchronisé';
+};
+
 export const getProjectSaveStatus = (syncStatus = {}) => (
   syncStatus.remoteSaved
     ? 'Sauvegardé sur Supabase'
     : syncStatus.remoteAttempted
       ? syncStatus.localSaved
-        ? 'Supabase non synchronisé'
+        ? getRemoteUnsyncedStatus(syncStatus)
         : syncStatus.localCacheSaved
           ? 'Sauvegarde locale incomplète'
           : 'Erreur de sauvegarde'

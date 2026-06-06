@@ -1,5 +1,54 @@
 import NumberInput from '../../../../shared/ui/forms/NumberInput.jsx';
+import { isProPromotionProject } from '../../../../shared/services/proPromotion';
 import { HelpLabel } from './SceneEditorChrome.jsx';
+
+const getProjectRecordId = (record = {}) => (
+  record.id
+  || record.projectId
+  || record.project_id
+  || record.data?.id
+  || record.data?.projectId
+  || record.data?.project_id
+  || ''
+);
+const getProjectRecordUserId = (record = {}, fallbackUser = null) => (
+  record.userId
+  || record.user_id
+  || record.ownerId
+  || record.owner_id
+  || record.authorId
+  || record.author_id
+  || record.data?.userId
+  || record.data?.user_id
+  || record.data?.ownerId
+  || record.data?.owner_id
+  || record.data?.authorId
+  || record.data?.author_id
+  || fallbackUser?.id
+  || ''
+);
+const getProjectRecordTitle = (record = {}) => (
+  record.name
+  || record.data?.title
+  || record.title
+  || record.data?.name
+  || 'Projet sans titre'
+);
+
+export const getProjectLinkOptions = (projectLibrary = [], activeProjectId = '', user = null) => {
+  const seenIds = new Set();
+  return (Array.isArray(projectLibrary) ? projectLibrary : [])
+    .map((record) => ({
+      id: getProjectRecordId(record),
+      userId: getProjectRecordUserId(record, user),
+      title: getProjectRecordTitle(record),
+    }))
+    .filter((option) => {
+      if (!option.id || option.id === activeProjectId || seenIds.has(option.id)) return false;
+      seenIds.add(option.id);
+      return true;
+    });
+};
 
 export function SkillCheckFields({
   entry,
@@ -9,6 +58,8 @@ export function SkillCheckFields({
   heroSkills,
   getSceneLabel,
 }) {
+  const isProPromotionMode = isProPromotionProject(project);
+
   return (
     <div className="nested-editor-card hero-skill-check-editor">
       <HelpLabel help="Compétence utilisée par le jet automatique en Preview. Le joueur clique la zone ou la réponse, puis le jeu lance le dé et ajoute ce bonus.">Compétence testée</HelpLabel>
@@ -62,13 +113,17 @@ export function SkillCheckFields({
         </>
       ) : null}
 
-      <HelpLabel help="Scène ouverte si le test réussit. Laisse vide pour rester dans la scène actuelle ou seulement afficher le message.">Scène de réussite</HelpLabel>
-      <select value={entry.skillCheckSuccessTargetSceneId || ''} onChange={(event) => updateEntry((target) => {
-        target.skillCheckSuccessTargetSceneId = event.target.value;
-      })}>
-        <option value="">Aucune scène</option>
-        {project.scenes.map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
-      </select>
+      {!isProPromotionMode ? (
+        <>
+          <HelpLabel help="Scène ouverte si le test réussit. Laisse vide pour rester dans la scène actuelle ou seulement afficher le message.">Scène de réussite</HelpLabel>
+          <select value={entry.skillCheckSuccessTargetSceneId || ''} onChange={(event) => updateEntry((target) => {
+            target.skillCheckSuccessTargetSceneId = event.target.value;
+          })}>
+            <option value="">Aucune scène</option>
+            {project.scenes.map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
+          </select>
+        </>
+      ) : null}
 
       <HelpLabel help="Texte ajouté au résultat du jet quand le total est inférieur à la difficulté. Indique clairement la conséquence.">Message d'échec</HelpLabel>
       <textarea value={entry.skillCheckFailureDialogue || ''} placeholder="Tu rates le test." onChange={(event) => updateEntry((target) => {
@@ -89,13 +144,17 @@ export function SkillCheckFields({
         </>
       ) : null}
 
-      <HelpLabel help="Scène ouverte si le test échoue. Laisse vide si l'échec doit seulement afficher un message ou retirer des PV.">Scène d'échec</HelpLabel>
-      <select value={entry.skillCheckFailureTargetSceneId || ''} onChange={(event) => updateEntry((target) => {
-        target.skillCheckFailureTargetSceneId = event.target.value;
-      })}>
-        <option value="">Aucune scène</option>
-        {project.scenes.map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
-      </select>
+      {!isProPromotionMode ? (
+        <>
+          <HelpLabel help="Scène ouverte si le test échoue. Laisse vide si l'échec doit seulement afficher un message ou retirer des PV.">Scène d'échec</HelpLabel>
+          <select value={entry.skillCheckFailureTargetSceneId || ''} onChange={(event) => updateEntry((target) => {
+            target.skillCheckFailureTargetSceneId = event.target.value;
+          })}>
+            <option value="">Aucune scène</option>
+            {project.scenes.map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
+          </select>
+        </>
+      ) : null}
 
       <HelpLabel help="PV retirés au héros en cas d'échec. Évite une valeur égale ou supérieure aux PV max sauf si tu veux une défaite immédiate.">Perte de PV en échec</HelpLabel>
       <NumberInput
@@ -125,6 +184,8 @@ export function HeroCombatFields({
   heroSkills,
   getSceneLabel,
 }) {
+  const isProPromotionMode = isProPromotionProject(project);
+
   return (
     <div className="nested-editor-card hero-skill-check-editor">
       <HelpLabel help="Nom utilisé dans les messages de combat en Preview. Exemple : Garde spectral ou Araignée géante.">Ennemi</HelpLabel>
@@ -202,21 +263,25 @@ export function HeroCombatFields({
         {project.items.map((item) => <option key={item.id} value={item.id}>{item.icon} {item.name}</option>)}
       </select>
 
-      <HelpLabel help="Scène ouverte après la victoire. Laisse vide pour rester sur place avec l'ennemi marqué comme vaincu.">Scène de victoire</HelpLabel>
-      <select value={entry.combatVictoryTargetSceneId || ''} onChange={(event) => updateEntry((target) => {
-        target.combatVictoryTargetSceneId = event.target.value;
-      })}>
-        <option value="">Aucune scène</option>
-        {project.scenes.map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
-      </select>
+      {!isProPromotionMode ? (
+        <>
+          <HelpLabel help="Scène ouverte après la victoire. Laisse vide pour rester sur place avec l'ennemi marqué comme vaincu.">Scène de victoire</HelpLabel>
+          <select value={entry.combatVictoryTargetSceneId || ''} onChange={(event) => updateEntry((target) => {
+            target.combatVictoryTargetSceneId = event.target.value;
+          })}>
+            <option value="">Aucune scène</option>
+            {project.scenes.map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
+          </select>
 
-      <HelpLabel help="Scène ouverte si le héros tombe à 0 PV pendant ce combat. Laisse vide pour afficher seulement le message de défaite.">Scène de défaite</HelpLabel>
-      <select value={entry.combatDefeatTargetSceneId || ''} onChange={(event) => updateEntry((target) => {
-        target.combatDefeatTargetSceneId = event.target.value;
-      })}>
-        <option value="">Aucune scène</option>
-        {project.scenes.map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
-      </select>
+          <HelpLabel help="Scène ouverte si le héros tombe à 0 PV pendant ce combat. Laisse vide pour afficher seulement le message de défaite.">Scène de défaite</HelpLabel>
+          <select value={entry.combatDefeatTargetSceneId || ''} onChange={(event) => updateEntry((target) => {
+            target.combatDefeatTargetSceneId = event.target.value;
+          })}>
+            <option value="">Aucune scène</option>
+            {project.scenes.map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
+          </select>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -272,6 +337,9 @@ export default function HotspotActionFields({
   isHeroAdventureProject = false,
   selectedSceneId = '',
   project = { scenes: [], items: [], cinematics: [], enigmas: [] },
+  user = null,
+  projectLibrary = [],
+  activeProjectId = '',
   heroSkills = [],
   getSceneLabel = (id) => id,
 }) {
@@ -279,11 +347,23 @@ export default function HotspotActionFields({
   if (!entry || !updateEntry) return null;
 
   const currentActionType = actionType || entry.actionType || 'dialogue';
-  const showDialogue = !['skill_check', 'hero_combat'].includes(currentActionType);
-  const showRewardItem = currentActionType === 'dialogue_item' || Boolean(entry.rewardItemId);
-  const showSceneTarget = currentActionType === 'scene';
+  const isProPromotionMode = isProPromotionProject(project);
+  const showDialogue = !['none', 'skill_check', 'hero_combat'].includes(currentActionType);
+  const showRewardItem = !isProPromotionMode && (currentActionType === 'dialogue_item' || Boolean(entry.rewardItemId));
+  const showSceneTarget = !isProPromotionMode && currentActionType === 'scene';
   const showCinematicTarget = currentActionType === 'cinematic';
-  const showEnigmaLink = !['conversation', 'skill_check', 'hero_combat'].includes(currentActionType);
+  const showExternalLink = currentActionType === 'external_link';
+  const showProjectLink = currentActionType === 'project_link';
+  const showEnigmaLink = !isProPromotionMode && !['none', 'conversation', 'skill_check', 'hero_combat'].includes(currentActionType);
+  const projectLinkOptions = getProjectLinkOptions(projectLibrary, activeProjectId, user);
+  const selectedProjectOption = entry.targetProjectId && !projectLinkOptions.some((option) => option.id === entry.targetProjectId)
+    ? [{
+      id: entry.targetProjectId,
+      userId: entry.targetProjectUserId || user?.id || '',
+      title: 'Projet sélectionné',
+    }]
+    : [];
+  const displayedProjectLinkOptions = [...selectedProjectOption, ...projectLinkOptions];
 
   return (
     <div className="hotspot-action-fields">
@@ -293,7 +373,9 @@ export default function HotspotActionFields({
       {!isBeginnerMode && currentActionType === 'hero_combat' ? (
         <HeroCombatFields entry={entry} updateEntry={updateEntry} project={project} heroSkills={heroSkills} getSceneLabel={getSceneLabel} />
       ) : null}
-      <HeroMalusFields entry={entry} updateEntry={updateEntry} isHeroAdventureProject={isHeroAdventureProject} />
+      {currentActionType !== 'none' ? (
+        <HeroMalusFields entry={entry} updateEntry={updateEntry} isHeroAdventureProject={isHeroAdventureProject} />
+      ) : null}
 
       {showDialogue ? (
         <>
@@ -313,6 +395,42 @@ export default function HotspotActionFields({
             <option value="">Aucun</option>
             {(project.items || []).map((item) => <option key={item.id} value={item.id}>{item.icon} {item.name}</option>)}
           </select>
+        </>
+      ) : null}
+
+      {showExternalLink ? (
+        <>
+          <HelpLabel help="URL ouverte dans un nouvel onglet quand le joueur clique cette zone. Tu peux saisir une adresse complète ou un domaine.">Lien externe</HelpLabel>
+          <input
+            data-tour="hotspot-external-url"
+            type="url"
+            value={entry.externalUrl || ''}
+            placeholder="https://ton-site.fr/page"
+            onChange={(event) => updateEntry((target) => {
+              target.externalUrl = event.target.value;
+            })}
+          />
+        </>
+      ) : null}
+
+      {showProjectLink ? (
+        <>
+          <HelpLabel help="Projet joueur ouvert dans un nouvel onglet quand cette zone est cliquée.">Projet cible</HelpLabel>
+          <select data-tour="hotspot-target-project" value={entry.targetProjectId || ''} onChange={(event) => updateEntry((target) => {
+            const nextProject = displayedProjectLinkOptions.find((option) => option.id === event.target.value);
+            target.targetProjectId = nextProject?.id || '';
+            target.targetProjectUserId = nextProject?.userId || '';
+          })}>
+            <option value="">Aucun projet</option>
+            {displayedProjectLinkOptions.map((option) => (
+              <option key={`${option.userId || 'user'}-${option.id}`} value={option.id}>
+                {option.title}
+              </option>
+            ))}
+          </select>
+          {!displayedProjectLinkOptions.length ? (
+            <p className="small-note">Aucun autre projet disponible pour ce compte.</p>
+          ) : null}
         </>
       ) : null}
 

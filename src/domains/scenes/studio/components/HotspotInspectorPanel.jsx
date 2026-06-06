@@ -5,6 +5,7 @@ import ConversationEditorModal from './ConversationEditorModal.jsx';
 import ConversationGraph from './ConversationGraph.jsx';
 import HotspotActionFields, { HeroMalusFields, SkillCheckFields } from './HotspotActionFields.jsx';
 import HotspotAssetsPanel from './HotspotAssetsPanel.jsx';
+import { isProPromotionProject } from '../../../../shared/services/proPromotion';
 
 const makeAdvancedCondition = () => ({
   id: `advanced_condition_${Math.random().toString(36).slice(2, 10)}`,
@@ -69,6 +70,9 @@ export default function HotspotInspectorPanel({
   selectedHotspotId,
   selectedSceneId,
   project,
+  user = null,
+  projectLibrary = [],
+  activeProjectId = '',
   patchProject,
   renderShapeControls,
   isBeginnerMode = false,
@@ -82,7 +86,11 @@ export default function HotspotInspectorPanel({
   heroSkills = [],
 }) {
   if (!selectedHotspot) return null;
+  const isProPromotionMode = isProPromotionProject(project);
   const isConversationHotspot = !isBeginnerMode && selectedHotspot.actionType === 'conversation';
+  const conversationEffectLabels = Object.fromEntries(
+    Object.entries(CONVERSATION_EFFECT_LABELS).filter(([value]) => !isProPromotionMode || value !== 'scene'),
+  );
   const updateSelectedHotspot = (updater) => patchProject((draft) => {
     const spot = draft.scenes
       .find((scene) => scene.id === selectedSceneId)
@@ -111,6 +119,9 @@ export default function HotspotInspectorPanel({
                         isHeroAdventureProject={isHeroAdventureProject}
                         selectedSceneId={selectedSceneId}
                         project={project}
+                        user={user}
+                        projectLibrary={projectLibrary}
+                        activeProjectId={activeProjectId}
                         heroSkills={heroSkills}
                         getSceneLabel={getSceneLabel}
                       />
@@ -323,7 +334,7 @@ export default function HotspotInspectorPanel({
                                     <option value="item">Objet</option>
                                     <option value="multiple">Actions multiples</option>
                                     <option value="skill_check">Test de compétence</option>
-                                    <option value="scene">Scène</option>
+                                    {!isProPromotionMode ? <option value="scene">Scène</option> : null}
                                     <option value="cinematic">Cinématique</option>
                                     <option value="enigma">Énigme</option>
                                     <option value="ending">Fin d'aventure</option>
@@ -677,7 +688,7 @@ export default function HotspotInspectorPanel({
                                               const targetEffect = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId)?.conversation?.nodes?.[nodeIndex]?.replies?.[replyIndex]?.effects?.[effectIndex];
                                               if (targetEffect) targetEffect.type = e.target.value;
                                             })}>
-                                              {Object.entries(CONVERSATION_EFFECT_LABELS).map(([value, label]) => (
+                                              {Object.entries(conversationEffectLabels).map(([value, label]) => (
                                                 <option key={value} value={value}>{label}</option>
                                               ))}
                                             </select>
@@ -751,7 +762,7 @@ export default function HotspotInspectorPanel({
                                                 </select>
                                               </>
                                             ) : null}
-                                            {(effect.type || 'message') === 'scene' ? (
+                                            {!isProPromotionMode && (effect.type || 'message') === 'scene' ? (
                                               <>
                                                 <HelpLabel help="Scène ouverte après cette réponse.">Scène cible</HelpLabel>
                                                 <select value={effect.targetSceneId || ''} onChange={(e) => patchProject((draft) => {
@@ -893,7 +904,7 @@ export default function HotspotInspectorPanel({
                                       </select>
                                     </>
                                   ) : null}
-                                  {(reply.actionType || 'node') === 'scene' ? (
+                                  {!isProPromotionMode && (reply.actionType || 'node') === 'scene' ? (
                                     <>
                                       <HelpLabel help="Scène vers laquelle le joueur est envoyé après cette réponse.">Scène cible</HelpLabel>
                                       <select value={reply.targetSceneId || ''} onChange={(e) => patchProject((draft) => {

@@ -698,7 +698,7 @@ export default function LogicRulesWorkspace({
   );
 
   return (
-    <div className="layout two-cols-wide">
+    <div className="layout two-cols-wide logic-workspace">
       <section className="panel side panel-nav-pro scene-left-nav logic-left-nav" data-tour="logic-scene-tree">
         <div className="panel-head">
           <h2>Actes et scènes</h2>
@@ -720,7 +720,7 @@ export default function LogicRulesWorkspace({
         })}
       </section>
 
-      <section className="panel main">
+      <section className="panel main logic-main-panel">
         <datalist id="logic-story-variable-keys">
           {storyVariableKeys.map((key) => <option key={key} value={key} />)}
         </datalist>
@@ -732,8 +732,8 @@ export default function LogicRulesWorkspace({
         </div>
 
         {selectedScene ? (
-          <div className="editor-stack">
-            <section className="combo-card logic-scene-rules-card" data-tour="logic-scene-timer">
+          <div className="editor-stack logic-editor-stack">
+            <section className="combo-card logic-scene-rules-card logic-mobile-card" data-tour="logic-scene-timer">
               <div className="panel-head">
                 <div>
                   <HelpLabel className="compact-section-title" help="Règles qui s'appliquent ? toute la scène, avant les exceptions propres aux zones d'action.">Règles de scène</HelpLabel>
@@ -852,13 +852,13 @@ export default function LogicRulesWorkspace({
               </div>
             </section>
 
-            <section className="combo-card" data-tour="logic-zones">
+            <section className="combo-card logic-action-zones-card logic-mobile-card" data-tour="logic-zones">
               <div className="panel-head">
                 <HelpLabel className="compact-section-title" help={FIELD_HELP.actionZones}>Zones d’action</HelpLabel>
                 <span className="status-badge soft">{selectedActionTargets.length}</span>
               </div>
               {selectedActionTargets.map(({ target, type }) => (
-                <div className="combo-card" key={`${type}-${target.id}`}>
+                <div className="combo-card logic-target-card" key={`${type}-${target.id}`}>
                   <div className="panel-head">
                     <div>
                       <h3>{target.name}</h3>
@@ -870,9 +870,11 @@ export default function LogicRulesWorkspace({
                     </div>
                   </div>
 
-                  {(target.logicRules || []).length ? target.logicRules.map((rule) => {
-                    const ruleCompletionIssues = getLogicRuleCompletionIssues(rule, logicCompletionRefs);
-                    return (
+                  {(target.logicRules || []).length ? (
+                    <div className="logic-rule-list">
+                      {target.logicRules.map((rule) => {
+                        const ruleCompletionIssues = getLogicRuleCompletionIssues(rule, logicCompletionRefs);
+                        return (
                     <details className={`logic-rule-card${ruleCompletionIssues.length ? ' incomplete' : ''}`} key={rule.id} open data-tour="logic-rule-card">
                       <summary>
                         <span>
@@ -1036,19 +1038,21 @@ export default function LogicRulesWorkspace({
                         </details>
                       </div>
                     </details>
-                    );
-                  }) : <p className="small-note">Cette zone utilise sa logique normale.</p>}
+                        );
+                      })}
+                    </div>
+                  ) : <p className="small-note">Cette zone utilise sa logique normale.</p>}
                 </div>
               ))}
             </section>
 
-            <section className="combo-card" data-tour="logic-visible-objects">
+            <section className="combo-card logic-visible-objects-card logic-mobile-card" data-tour="logic-visible-objects">
               <div className="panel-head">
                 <HelpLabel className="compact-section-title" help={FIELD_HELP.visibleObjects}>Réactions des objets visibles</HelpLabel>
                 <span className="status-badge soft">{selectedClickableObjects.length}</span>
               </div>
               {selectedClickableObjects.length ? selectedClickableObjects.map((object) => (
-                <div className="combo-card" key={object.id}>
+                <div className="combo-card logic-visible-object-card" key={object.id}>
                   <div className="logic-visible-object-head" data-tour="logic-visible-object-card">
                     <strong>{object.name || 'Objet visible'}</strong>
                     <span>{OBJECT_MODES[object.interactionMode || 'popup'] || 'Interaction'}</span>

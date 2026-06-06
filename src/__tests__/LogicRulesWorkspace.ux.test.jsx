@@ -63,5 +63,8 @@ describe('LogicRulesWorkspace UX layout', () => {
     expect(screen.getByText('si la condition n’est pas remplie')).toBeTruthy();
     expect(screen.getByText('Scène cible')).toBeTruthy();
     expect(screen.getByDisplayValue('Un coffre fort caché ...')).toBeTruthy();
+    expect(document.querySelector('.logic-workspace')).toBeTruthy();
+    expect(document.querySelector('.logic-target-card')).toBeTruthy();
+    expect(document.querySelector('.logic-rule-list')).toBeTruthy();
   });
 });

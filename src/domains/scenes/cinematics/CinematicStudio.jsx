@@ -139,8 +139,8 @@ export default function CinematicStudio({
   };
 
   return (
-    <div className="layout two-cols-wide">
-      <section className="panel side" data-tour="cinematic-sidebar">
+    <div className="layout two-cols-wide cinematic-workspace">
+      <section className="panel side cinematic-sidebar" data-tour="cinematic-sidebar">
         <div className="panel-head">
           <h2>Cinématiques</h2>
           <div className="label-with-help">
@@ -154,7 +154,7 @@ export default function CinematicStudio({
           <input type="file" accept="application/json,.json" hidden onChange={import2dAnimeJson} />
         </label>
 
-        <div data-tour="cinematic-list">
+        <div className="cinematic-list" data-tour="cinematic-list">
           {project.cinematics.map((cine) => (
             <button key={cine.id} className={`list-card ${cine.id === selectedCinematicId ? 'selected' : ''}`} onClick={() => setSelectedCinematicId(cine.id)}>
               <strong>{cine.name}</strong>
@@ -164,12 +164,12 @@ export default function CinematicStudio({
         </div>
       </section>
 
-      <section className="panel main" data-tour="cinematic-editor">
+      <section className="panel main cinematic-editor" data-tour="cinematic-editor">
         {selectedCinematic ? (
           <>
             <div className="panel-head">
               <h2>Éditeur de cinematic</h2>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div className="cinematic-editor-actions">
                 {(selectedCinematic.cinematicType || 'slides') === 'slides' ?
                    <button data-tour="cinematic-add-slide" onClick={addSlide}>+ Slide</button>
                   : <span className="small-note">{selectedCinematic.cinematicType === 'anime2d' ? 'Mode 2D Anime actif' : 'Mode vidéo actif'}</span>}
@@ -201,7 +201,7 @@ export default function CinematicStudio({
             </select>
 
             {(selectedCinematic.cinematicType || 'slides') === 'video' ? (
-              <div className="stack" style={{ marginBottom: 18 }}>
+              <div className="stack cinematic-media-panel" style={{ marginBottom: 18 }}>
                 <h3 style={{ margin: '6px 0 0' }}>Vidéo</h3>
                 <HelpLabel help={FIELD_HELP.videoFile}>Fichier vidéo</HelpLabel>
                 <label className="button like full">
@@ -214,7 +214,7 @@ export default function CinematicStudio({
                   />
                 </label>
                 {selectedCinematic.videoData ? (
-                  <video className="thumb" src={selectedCinematic.videoData} controls preload="metadata" style={{ width: '100%', maxHeight: 320, background: '#020617' }} />
+                  <video className="thumb cinematic-video-preview" src={selectedCinematic.videoData} controls preload="metadata" style={{ width: '100%', maxHeight: 320, background: '#020617' }} />
                 ) : (
                   <p className="small-note">MP4 conseillé. WebM et MOV peuvent marcher selon le navigateur.</p>
                 )}
@@ -234,7 +234,7 @@ export default function CinematicStudio({
                 })} />Afficher les contrôles<span className="help-dot" data-help={FIELD_HELP.videoControls} aria-label={FIELD_HELP.videoControls} tabIndex={0}>?</span></label>
               </div>
             ) : selectedCinematic.cinematicType === 'anime2d' ? (
-              <div className="stack" style={{ marginBottom: 18 }}>
+              <div className="stack cinematic-media-panel" style={{ marginBottom: 18 }}>
                 <h3 style={{ margin: '6px 0 0' }}>2D Anime</h3>
                 <label className="button like full">
                   Remplacer le JSON 2D Anime
@@ -270,7 +270,7 @@ export default function CinematicStudio({
               <div className="slides-grid" data-tour="cinematic-slides">
                 {selectedCinematic.slides.map((slide, index) => (
                   <div className="slide-card" data-tour={index === 0 ? 'cinematic-slide-card' : undefined} key={slide.id}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
+                    <div className="cinematic-slide-card-head">
                       <h3 style={{ margin: 0 }}>Slide {index + 1}</h3>
                       <button type="button" onClick={() => deleteSlide(slide.id)}>Supprimer le slide</button>
                     </div>
@@ -322,7 +322,7 @@ export default function CinematicStudio({
               </div>
             )}
 
-            <div className="stack" data-tour="cinematic-end-settings" style={{ marginBottom: 18 }}>
+            <div className="stack cinematic-end-settings" data-tour="cinematic-end-settings" style={{ marginBottom: 18 }}>
               <h3 style={{ margin: '6px 0 0' }}>À la fin de la cinématique</h3>
               <HelpLabel help={FIELD_HELP.endAction}>Action de fin</HelpLabel>
               <select

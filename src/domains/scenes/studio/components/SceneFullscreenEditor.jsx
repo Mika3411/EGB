@@ -10,7 +10,8 @@ import { SceneCanvasDrawerButton } from './SceneEditorDrawer.jsx';
 import SceneObjectEditPanel from './SceneObjectEditPanel.jsx';
 import SceneVisualEffect, { getVisualEffectZoneZIndex } from '../../../../shared/ui/scene/SceneVisualEffect.jsx';
 import { SceneObjectBlockContent } from '../../../../shared/ui/scene/SceneObjectBlockContent.jsx';
-import { getSceneObjectClickMode } from '../../../../shared/services/sceneObjectBlocks';
+import { getSceneObjectBlockType, getSceneObjectClickMode } from '../../../../shared/services/sceneObjectBlocks';
+import { isProPromotionProject } from '../../../../shared/services/proPromotion';
 import HotspotInspectorPanel from './HotspotInspectorPanel.jsx';
 import {
   getElementShapeStyle,
@@ -18,6 +19,7 @@ import {
   getSceneObjectStyle,
   gridOverlayStyle,
 } from '../../../../shared/services/sceneRender.js';
+import { resolveAssetUrl } from '../../../../shared/services/assetManager.js';
 
 const FULLSCREEN_CANVAS_ASPECT_RATIO = 16 / 10;
 
@@ -31,6 +33,9 @@ export default function SceneFullscreenEditor({
   selectedHotspot,
   selectedHotspotId,
   project,
+  user = null,
+  projectLibrary = [],
+  activeProjectId = '',
   fullscreenViewportRef,
   fullscreenCanvasRef,
   fullscreenContentRef,
@@ -94,8 +99,10 @@ export default function SceneFullscreenEditor({
 }) {
   const getLinkedItem = (itemId) => project.items?.find((item) => item.id === itemId) || null;
   const getSceneObjectDisplayImage = (obj) => obj?.imageData || getLinkedItem(obj?.linkedItemId)?.imageData || '';
+  const getHotspotDisplayImage = (spot) => resolveAssetUrl(project, spot?.objectImageId, spot?.objectImageData);
   const isBeginnerMode = project?.creationMode === 'beginner';
-  const canUseQuickLogic = !isBeginnerMode && project?.creationMode !== 'intermediate';
+  const isProPromotionMode = isProPromotionProject(project);
+  const canUseQuickLogic = !isProPromotionMode && !isBeginnerMode && project?.creationMode !== 'intermediate';
   const isSceneObjectSelectedOnCanvas = (obj) => obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id);
   const isHotspotSelectedOnCanvas = (spot) => spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id);
   const sceneImageAspectRatio = Number(selectedScene?.backgroundAspectRatio) > 0
@@ -121,28 +128,36 @@ export default function SceneFullscreenEditor({
                     <div style={{ minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                       <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flex: '0 0 auto', minWidth: 0 }}>
                         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', minWidth: 0 }}>
-                          <select
-                            value={selectedScene.actId || ''}
-                            onChange={(event) => selectActInFullscreen(event.target.value)}
-                            style={{ width: 190, flex: '0 0 190px' }}
-                          >
-                            {project.acts.map((act) => (
-                              <option key={act.id} value={act.id}>{act.name}</option>
-                            ))}
-                          </select>
-                          <select
-                            value={selectedSceneId || ''}
-                            onChange={(event) => selectSceneInFullscreen(event.target.value)}
-                            style={{ width: 260, flex: '0 1 260px' }}
-                          >
-                            {project.scenes
-                              .filter((scene) => scene.actId === selectedScene.actId)
-                              .map((scene) => (
-                                <option key={scene.id} value={scene.id}>
-                                  {getSceneDepth(scene) ? `${'— '.repeat(getSceneDepth(scene))}${scene.name}` : scene.name}
-                                </option>
-                              ))}
-                          </select>
+                          {isProPromotionMode ? (
+                            <span className="status-badge soft" style={{ minWidth: 140, justifyContent: 'center', flex: '0 0 auto' }}>
+                              Page d’extension
+                            </span>
+                          ) : (
+                            <>
+                              <select
+                                value={selectedScene.actId || ''}
+                                onChange={(event) => selectActInFullscreen(event.target.value)}
+                                style={{ width: 190, flex: '0 0 190px' }}
+                              >
+                                {project.acts.map((act) => (
+                                  <option key={act.id} value={act.id}>{act.name}</option>
+                                ))}
+                              </select>
+                              <select
+                                value={selectedSceneId || ''}
+                                onChange={(event) => selectSceneInFullscreen(event.target.value)}
+                                style={{ width: 260, flex: '0 1 260px' }}
+                              >
+                                {project.scenes
+                                  .filter((scene) => scene.actId === selectedScene.actId)
+                                  .map((scene) => (
+                                    <option key={scene.id} value={scene.id}>
+                                      {getSceneDepth(scene) ? `${'— '.repeat(getSceneDepth(scene))}${scene.name}` : scene.name}
+                                    </option>
+                                  ))}
+                              </select>
+                            </>
+                          )}
                           <EditorToolbarMenus {...editorToolbarProps} fullscreen />
                         </div>
                         <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'nowrap', minWidth: 0 }}>
@@ -259,22 +274,26 @@ export default function SceneFullscreenEditor({
                               {renderShapePointHandles?.('sceneObject', obj.id, isSceneObjectSelectedOnCanvas(obj), 'fullscreen')}
                             </button>
                           ))}
-                          {selectedScene.hotspots.filter((spot) => !spot.isHidden || isHotspotSelectedOnCanvas(spot)).map((spot) => (
-                            <button
-                              key={spot.id}
-                              type="button"
-                              className={`editor-hotspot ${getShapeClassName?.(spot) || ''} ${spot.isHidden ? 'editor-hidden-on-canvas' : ''} ${isHotspotSelectedOnCanvas(spot) ? 'selected' : ''} ${spot.id === draggingHotspotId ? 'dragging' : ''}`}
-                              style={{ left: `${spot.x}%`, top: `${spot.y}%`, width: `${spot.width}%`, height: `${spot.height}%`, zIndex: getLayerZIndex(spot, 'hotspot'), ...getElementShapeStyle(spot) }}
-                              onPointerDown={(event) => beginDrag(event, spot.id, 'fullscreen')}
-                              onContextMenu={(event) => onCanvasContextMenu?.(event, 'hotspot', spot.id, 'fullscreen')}
-                              onClick={(event) => selectHotspot(spot.id, event)}
-                            >
-                              <span>{spot.name}</span>
-                              {renderShapeOutline?.(spot, isHotspotSelectedOnCanvas(spot))}
-                              {renderResizeHandles?.('hotspot', spot.id, isHotspotSelectedOnCanvas(spot), 'fullscreen')}
-                              {renderShapePointHandles?.('hotspot', spot.id, isHotspotSelectedOnCanvas(spot), 'fullscreen')}
-                            </button>
-                          ))}
+                          {selectedScene.hotspots.filter((spot) => !spot.isHidden || isHotspotSelectedOnCanvas(spot)).map((spot) => {
+                            const hotspotImageSrc = getHotspotDisplayImage(spot);
+                            return (
+                              <button
+                                key={spot.id}
+                                type="button"
+                                className={`editor-hotspot ${hotspotImageSrc ? 'editor-hotspot-with-image' : ''} ${getShapeClassName?.(spot) || ''} ${spot.isHidden ? 'editor-hidden-on-canvas' : ''} ${isHotspotSelectedOnCanvas(spot) ? 'selected' : ''} ${spot.id === draggingHotspotId ? 'dragging' : ''}`}
+                                style={{ left: `${spot.x}%`, top: `${spot.y}%`, width: `${spot.width}%`, height: `${spot.height}%`, zIndex: getLayerZIndex(spot, 'hotspot'), ...getElementShapeStyle(spot) }}
+                                onPointerDown={(event) => beginDrag(event, spot.id, 'fullscreen')}
+                                onContextMenu={(event) => onCanvasContextMenu?.(event, 'hotspot', spot.id, 'fullscreen')}
+                                onClick={(event) => selectHotspot(spot.id, event)}
+                              >
+                                {hotspotImageSrc ? <img className="editor-hotspot-image" src={hotspotImageSrc} alt="" aria-hidden="true" /> : null}
+                                <span>{spot.name}</span>
+                                {renderShapeOutline?.(spot, isHotspotSelectedOnCanvas(spot))}
+                                {renderResizeHandles?.('hotspot', spot.id, isHotspotSelectedOnCanvas(spot), 'fullscreen')}
+                                {renderShapePointHandles?.('hotspot', spot.id, isHotspotSelectedOnCanvas(spot), 'fullscreen')}
+                              </button>
+                            );
+                          })}
                           <SceneCanvasQuickToolbar
                             selectedScene={selectedScene}
                             selectedSceneId={selectedSceneId}
@@ -304,7 +323,7 @@ export default function SceneFullscreenEditor({
                       <div className="panel-head panel-head-stack">
                         <div>
                           <span className="section-kicker">Contexte</span>
-                          <h2>{selectedItem ? 'Objet sélectionné' : selectedSceneObject ? ((selectedSceneObject.anime2dSpec || selectedSceneObject.anime2dName || selectedSceneObject.name === 'Animation') ? 'Animation sélectionnée' : selectedSceneObject.isInvisible ? 'Objet invisible sélectionné' : (getSceneObjectClickMode(selectedSceneObject) === 'action' ? "Zone d'action sélectionnée" : 'Objet visible sélectionné')) : 'Zone sélectionnée'}</h2>
+                          <h2>{selectedItem ? 'Objet sélectionné' : selectedSceneObject ? (getSceneObjectBlockType(selectedSceneObject) === 'text' ? 'Texte sélectionné' : (selectedSceneObject.anime2dSpec || selectedSceneObject.anime2dName || selectedSceneObject.name === 'Animation') ? 'Animation sélectionnée' : selectedSceneObject.isInvisible ? 'Objet invisible sélectionné' : (getSceneObjectClickMode(selectedSceneObject) === 'action' ? "Zone d'action sélectionnée" : 'Objet visible sélectionné')) : 'Zone sélectionnée'}</h2>
                         </div>
                       </div>
 
@@ -350,6 +369,9 @@ export default function SceneFullscreenEditor({
                           selectedSceneId={selectedSceneId}
                           selectedSceneObject={selectedSceneObject}
                           selectedSceneObjectId={selectedSceneObjectId}
+                          user={user}
+                          projectLibrary={projectLibrary}
+                          activeProjectId={activeProjectId}
                           patchProject={patchProject}
                           renderShapeControls={renderShapeControls}
                           handleUpload={handleUpload}
@@ -365,6 +387,9 @@ export default function SceneFullscreenEditor({
                           selectedHotspotId={selectedHotspotId}
                           selectedSceneId={selectedSceneId}
                           project={project}
+                          user={user}
+                          projectLibrary={projectLibrary}
+                          activeProjectId={activeProjectId}
                           patchProject={patchProject}
                           renderShapeControls={renderShapeControls}
                           isBeginnerMode={isBeginnerMode}

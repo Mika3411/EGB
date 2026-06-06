@@ -164,10 +164,17 @@ export default function Tabs({ value, onChange, onProfile, projectScore, project
           ))
         ) : <TabMenu label="Outils" entries={visibleUtilityTabs} activeValue={value} onChange={onChange} onToggle={handleMenuToggle} />}
         {!isBeginnerMode && projectScore ? (
-          <div className={`project-score-badge ${projectScore.tone || 'warn'}`} title={projectScore.summary || ''}>
+          <button
+            type="button"
+            className={`project-score-badge ${projectScore.tone || 'warn'}`}
+            title={projectScore.summary || 'Ouvrir le bilan du projet'}
+            onClick={() => onChange('score')}
+            aria-current={value === 'score' ? 'page' : undefined}
+            aria-label={`Ouvrir le bilan du projet, note ${projectScore.label}`}
+          >
             <span>Note</span>
             <strong>{projectScore.label}</strong>
-          </div>
+          </button>
         ) : null}
         <button type="button" className="tabs-profile-button secondary-action" onClick={onProfile}>
           <User aria-hidden="true" size={16} strokeWidth={2.2} />

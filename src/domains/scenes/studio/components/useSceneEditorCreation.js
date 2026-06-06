@@ -1,3 +1,5 @@
+import { isProPromotionProject } from '../../../../shared/services/proPromotion';
+
 export function useSceneEditorCreation({
   project,
   selectedSceneId,
@@ -11,6 +13,8 @@ export function useSceneEditorCreation({
   setSelectedSceneObjectIds,
   patchProject,
 }) {
+  const isProPromotionMode = isProPromotionProject(project);
+
   const addSceneObject = ({
     invisible = false,
     animation = false,
@@ -18,8 +22,11 @@ export function useSceneEditorCreation({
     sourceItem: requestedSourceItem = null,
   } = {}) => {
     if (!selectedSceneId) return;
+    if (isProPromotionMode && (invisible || animation || requestedSourceItem || blockType !== 'text')) return;
     const nextId = `scene-object-${Math.random().toString(36).slice(2, 10)}`;
-    const sourceItem = requestedSourceItem || selectedItem || project.items?.find((item) => item.id === selectedItemId) || project.items?.[0];
+    const sourceItem = isProPromotionMode
+      ? null
+      : requestedSourceItem || selectedItem || project.items?.find((item) => item.id === selectedItemId) || project.items?.[0];
     const isTutorialObject = Boolean(document.body.classList.contains('tutorial-active'));
     const blockDefaults = {
       text: {
@@ -103,6 +110,7 @@ export function useSceneEditorCreation({
         removeAfterUse: !animation,
         dialogue: animation ? '' : (sourceItem?.name ? `Tu as trouvé ${sourceItem.name}.` : ''),
         tutorialCreated: isTutorialObject,
+        fontFamily: 'system',
         fontSize: 13,
         ...blockDefaults,
       });
@@ -114,7 +122,10 @@ export function useSceneEditorCreation({
 
   const addInvisibleSceneObject = () => addSceneObject({ invisible: true });
   const addAnimationObject = () => addSceneObject({ animation: true });
-  const addInteractiveBlock = (blockType) => addSceneObject({ blockType });
+  const addInteractiveBlock = (blockType) => {
+    if (isProPromotionMode && blockType !== 'text') return;
+    addSceneObject({ blockType });
+  };
 
   const addVisualEffectZone = () => {
     if (!selectedSceneId) return;

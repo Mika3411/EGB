@@ -34,6 +34,17 @@ export default function EnigmaStudio({
   mediaLibrary = [],
   previewEnigma,
 }) {
+  const keepMobileFieldInView = (event) => {
+    if (typeof window === 'undefined' || !window.matchMedia('(max-width: 900px)').matches) return;
+    const target = event.target;
+    if (!target?.matches?.('input, select, textarea')) return;
+    [80, 260, 520].forEach((delay) => {
+      window.setTimeout(() => {
+        target.scrollIntoView({ block: 'center', inline: 'nearest' });
+      }, delay);
+    });
+  };
+
   const updateEnigma = (enigmaId, updater) => {
     patchProject((draft) => {
       const enigma = (draft.enigmas || []).find((entry) => entry.id === enigmaId);
@@ -64,8 +75,8 @@ export default function EnigmaStudio({
     : {};
 
   return (
-    <div className="layout two-cols-wide">
-      <div data-tour="enigma-list">
+    <div className="layout two-cols-wide enigma-studio-layout">
+      <div className="enigma-list-shell" data-tour="enigma-list">
       <EnigmaList
         enigmas={project.enigmas || []}
         selectedEnigmaId={selectedEnigmaId}
@@ -74,13 +85,13 @@ export default function EnigmaStudio({
       />
       </div>
 
-      <section className="panel main">
+      <section className="panel main enigma-main-panel" onFocusCapture={keepMobileFieldInView}>
         <div className="panel-head">
           <h2>Éditeur d’énigme</h2>
           {selectedEnigma && (
             <div className="inline-actions end">
               <button type="button" className="secondary-action" data-tour="enigma-preview-button" onClick={() => previewEnigma?.(selectedEnigma.id)}>
-                Prévisualiser ?
+                Prévisualiser
               </button>
               <button className="danger-button" onClick={() => deleteEnigma(selectedEnigma.id)}>
                 Supprimer
@@ -90,9 +101,9 @@ export default function EnigmaStudio({
         </div>
 
         {selectedEnigma ? (
-          <div className="combo-card">
+          <div className="combo-card enigma-form-card">
             <div className={`enigma-editor-grid${hasRightPreview ? ' has-preview' : ''}`}>
-              <div>
+              <div className="enigma-form-column">
             <div className="grid-two" data-tour="enigma-identity">
               <div>
                 <HelpLabel help={FIELD_HELP.name}>Nom</HelpLabel>

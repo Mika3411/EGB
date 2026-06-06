@@ -5,6 +5,9 @@ const SceneStudio = lazyWithRetry(() => import('../../../domains/scenes/studio/S
   default: ({ project, onUpdateProject, tabContext }) => (
     <Component
       project={project}
+      user={tabContext.user}
+      projectLibrary={tabContext.projects}
+      activeProjectId={tabContext.activeProjectId}
       actsWithScenes={tabContext.editor.actsWithScenes}
       renderSceneTree={tabContext.editor.renderSceneTree}
       addAct={tabContext.editor.addAct}

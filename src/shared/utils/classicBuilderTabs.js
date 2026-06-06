@@ -10,6 +10,7 @@ const freezeModeTabs = (groups) => Object.freeze({
 export const CLASSIC_BUILDER_TAB_GROUP_KEYS = freezeTabs(['primary', 'creation', 'assistant', 'utility']);
 
 export const CLASSIC_BUILDER_PROJECT_MODES = freezeTabs([
+  'pro_promo',
   'beginner',
   'intermediate',
   'expert',
@@ -18,6 +19,9 @@ export const CLASSIC_BUILDER_PROJECT_MODES = freezeTabs([
 ]);
 
 export const CLASSIC_BUILDER_VISIBLE_TABS_BY_MODE = Object.freeze({
+  pro_promo: freezeModeTabs({
+    primary: ['scenes', 'media', 'preview'],
+  }),
   beginner: freezeModeTabs({
     primary: ['scenes', 'media', 'preview'],
     creation: ['objects', 'enigmas'],

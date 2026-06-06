@@ -474,34 +474,151 @@ const applyBookHeroTemplate = (project, name) => {
   return normalizeProject(project);
 };
 
-const SCENE_THEMES = {
-  manor: ['Hall du manoir', 'Bibliothèque interdite', 'Chambre verrouillée'],
-  investigation: ['Bureau dé l’inspecteur', 'Scène de crime', 'Archives du commissariat'],
-  laboratory: ['Sas d’entrée', 'Salle dés expériences', 'Réacteur instable'],
-  museum: ['Galerie principale', 'Réserve secrète', 'Salle dés artefacts'],
-};
-
-const SCENE_INTROS = {
-  manor: [
-    'La porte du manoir grince derrière toi. Quelque chose t’observé.',
-    'Des livres anciens cachent peut-être le premier indice.',
-    'La chambre semble intacte, mais la serrure raconte autre chose.',
-  ],
-  investigation: [
-    'Un dossier urgent t’attend sur le bureau.',
-    'Chaque détail de la pièce peut devenir une preuve.',
-    'Les archives contiennent des noms que personne ne veut revoir.',
-  ],
-  laboratory: [
-    'Les néons clignotent. Le protocole d’urgence est actif.',
-    'Des instruments bourdonnént autour d’une expérience inachevée.',
-    'Le réacteur pulse lentement, comme un compte à rebours.',
-  ],
-  museum: [
-    'Le musée est fermé, mais une vitrine vient de s’ouvrir.',
-    'La réserve conserve les pièces que le public ne doit jamais voir.',
-    'Un artefact manque. Sa place vide semble prèsque lumineuse.',
-  ],
+const CLASSIC_TEMPLATE_CONFIGS = {
+  manor: {
+    actName: 'Nuit I',
+    scenes: ['Hall du manoir', 'Bibliotheque interdite', 'Chambre verrouillee'],
+    intros: [
+      'La porte du manoir grince derriere toi. Une horloge arretee, un portrait lacere et une bibliotheque fermee donnent deja trois pistes.',
+      'Les rayonnages montent jusqu au plafond. Un pupitre, une etiquette de cave et un portrait retournable cachent le code de la chambre.',
+      'La chambre semble intacte, mais le lit froid, le miroir voile et le coffret scelle racontent la derniere nuit de la maison.',
+    ],
+    itemNames: ['Clef de la bibliotheque', 'Portrait dechire', 'Sceau de cire noire'],
+    itemIcons: ['[]', '[]', 'O'],
+    startObjectName: 'Horloge du hall',
+    startObjectDialogue: 'Derriere l horloge, tu trouves la clef de la bibliotheque.',
+    startClueName: 'Portrait lacere',
+    startClueDialogue: 'Le portrait montre trois dates. La seconde a ete rayee plus profondement que les autres.',
+    branchEntryName: 'Porte de la bibliotheque',
+    branchEntryDialogue: 'La clef tourne avec difficulte. La bibliotheque s ouvre.',
+    branchLockedMessage: 'La porte est verrouillee. Il faut fouiller le hall.',
+    enigmaName: 'Portrait aux trois dates',
+    enigmaQuestion: 'Quelle date ouvre le passage de la chambre ?',
+    enigmaChoices: ['1894', '1912', '1931'],
+    enigmaSolution: '1912',
+    enigmaSuccess: 'La bibliotheque tremble. Un panneau coulisse vers la chambre.',
+    enigmaFail: 'Le portrait reste muet. La date rayee est la cle.',
+    branchObjectName: 'Portrait retourne',
+    branchObjectDialogue: 'Au dos du portrait, un morceau manquant confirme la date de 1912.',
+    finalObjectName: 'Coffret scelle',
+    finalObjectDialogue: 'Le coffret s ouvre. Le sceau de cire noire prouve que la chambre etait condamnee volontairement.',
+    conclusionSpeaker: 'La maison',
+    conclusionText: 'Le manoir attend que tu relies le portrait, la date et le sceau.',
+    goodEndingTitle: 'Le secret du manoir',
+    goodEndingSummary: 'Tu comprends qui a ferme la chambre et pourquoi le manoir refusait d oublier.',
+    neutralEndingTitle: 'Sortie prudente',
+    neutralEndingSummary: 'Tu quittes le manoir avec des indices, mais la chambre garde une partie de son histoire.',
+    routeLabels: ['Clef trouvee', '1912'],
+    routeNotes: 'Plan: Hall -> Bibliotheque -> Chambre. Objets: clef, portrait, sceau. Enigme: date du portrait.',
+  },
+  investigation: {
+    actName: 'Dossier I',
+    scenes: ['Bureau de l inspecteur', 'Scene de crime', 'Archives du commissariat'],
+    intros: [
+      'Un dossier urgent attend sur le bureau. La victime, un temoin absent et une preuve mal classee dessinent deja une fausse piste.',
+      'La scene de crime est calme, trop calme. Une empreinte, un ticket humide et une fenetre forcee contredisent le rapport.',
+      'Les archives contiennent les noms que personne ne veut revoir. La bonne cote peut transformer un soupcon en preuve.',
+    ],
+    itemNames: ['Badge de scene', 'Ticket humide', 'Dossier classe C-17'],
+    itemIcons: ['[]', '[]', 'C17'],
+    startObjectName: 'Dossier urgent',
+    startObjectDialogue: 'Tu prends le badge de scene. Sans lui, personne ne te laissera approcher les preuves.',
+    startClueName: 'Note du standard',
+    startClueDialogue: 'La note mentionne un appel a 23h40, mais le rapport officiel parle de minuit.',
+    branchEntryName: 'Ruban de police',
+    branchEntryDialogue: 'Le badge suffit a passer le ruban. La scene de crime devient accessible.',
+    branchLockedMessage: 'Un agent bloque l entree: badge obligatoire.',
+    enigmaName: 'Chronologie impossible',
+    enigmaQuestion: 'Quelle heure contredit le rapport officiel ?',
+    enigmaChoices: ['22h15', '23h40', '00h30'],
+    enigmaSolution: '23h40',
+    enigmaSuccess: 'La chronologie se recale. Les archives C-17 deviennent la prochaine piste.',
+    enigmaFail: 'Cette heure ne colle pas avec la note du standard.',
+    branchObjectName: 'Ticket humide',
+    branchObjectDialogue: 'Le ticket humide porte la meme heure: 23h40.',
+    finalObjectName: 'Dossier C-17',
+    finalObjectDialogue: 'Le dossier C-17 relie le temoin absent a la scene de crime.',
+    conclusionSpeaker: 'Inspecteur',
+    conclusionText: 'Il faut choisir quoi faire de la preuve.',
+    goodEndingTitle: 'Affaire bouclee',
+    goodEndingSummary: 'La chronologie, le ticket et le dossier C-17 suffisent a innocenter la mauvaise personne.',
+    neutralEndingTitle: 'Piste a verifier',
+    neutralEndingSummary: 'Tu gardes le ticket, mais le dossier reste trop fragile pour conclure.',
+    routeLabels: ['Badge', '23h40'],
+    routeNotes: 'Plan: Bureau -> Scene de crime -> Archives. Objets: badge, ticket, dossier. Enigme: chronologie.',
+  },
+  laboratory: {
+    actName: 'Protocole I',
+    scenes: ['Sas d entree', 'Salle des experiences', 'Reacteur instable'],
+    intros: [
+      'Les neons clignotent. Le protocole d urgence est actif et le sas ne repond plus aux cartes ordinaires.',
+      'Des instruments bourdonnent autour d une experience inachevee. Trois fioles colorent encore la paillasse.',
+      'Le reacteur pulse lentement. La bonne sequence peut le stabiliser; une erreur peut verrouiller tout le laboratoire.',
+    ],
+    itemNames: ['Carte de securite', 'Echantillon bleu', 'Module de controle'],
+    itemIcons: ['[]', '[]', 'MOD'],
+    startObjectName: 'Casier de securite',
+    startObjectDialogue: 'Dans le casier, tu trouves une carte de securite encore active.',
+    startClueName: 'Journal de garde',
+    startClueDialogue: 'Le journal repete une consigne: bleu avant vert, rouge jamais en premier.',
+    branchEntryName: 'Lecteur du sas',
+    branchEntryDialogue: 'La carte deverrouille la salle des experiences.',
+    branchLockedMessage: 'Le lecteur refuse l acces sans carte de securite.',
+    enigmaName: 'Sequence des fioles',
+    enigmaQuestion: 'Quelle sequence respecte le protocole de stabilisation ?',
+    enigmaChoices: ['Rouge bleu vert', 'Bleu vert rouge', 'Vert rouge bleu'],
+    enigmaSolution: 'Bleu vert rouge',
+    enigmaSuccess: 'Les fioles s alignent. Le reacteur accepte le module de controle.',
+    enigmaFail: 'La sequence est rejetee. Relis la consigne du journal.',
+    branchObjectName: 'Fiole bleue',
+    branchObjectDialogue: 'Tu prends l echantillon bleu, encore froid malgre les alarmes.',
+    finalObjectName: 'Module de controle',
+    finalObjectDialogue: 'Le module s extrait de la console. Le reacteur peut etre stabilise.',
+    conclusionSpeaker: 'Console',
+    conclusionText: 'Le reacteur demande une confirmation finale.',
+    goodEndingTitle: 'Reacteur stabilise',
+    goodEndingSummary: 'La carte, la sequence et le module remettent le laboratoire sous controle.',
+    neutralEndingTitle: 'Confinement maintenu',
+    neutralEndingSummary: 'Tu stoppes l urgence immediate, mais le protocole complet reste a documenter.',
+    routeLabels: ['Carte', 'Sequence'],
+    routeNotes: 'Plan: Sas -> Salle des experiences -> Reacteur. Objets: carte, echantillon, module. Enigme: sequence des fioles.',
+  },
+  museum: {
+    actName: 'Nuit au musee',
+    scenes: ['Galerie principale', 'Reserve secrete', 'Salle des artefacts'],
+    intros: [
+      'Le musee est ferme, mais une vitrine vient de s ouvrir. Un cartel manquant et une trace de poussiere pointent vers la reserve.',
+      'La reserve conserve les pieces que le public ne doit jamais voir. Une caisse ouverte porte un symbole incomplet.',
+      'La salle des artefacts attend dans le silence. Le socle vide reclame le bon objet et le bon symbole.',
+    ],
+    itemNames: ['Clef de reserve', 'Cartel ancien', 'Medaille solaire'],
+    itemIcons: ['[]', '[]', 'SUN'],
+    startObjectName: 'Vitrine ouverte',
+    startObjectDialogue: 'Sous le velours de la vitrine, tu trouves la clef de reserve.',
+    startClueName: 'Trace de poussiere',
+    startClueDialogue: 'La poussiere dessine un soleil a huit branches.',
+    branchEntryName: 'Porte de reserve',
+    branchEntryDialogue: 'La clef ouvre la reserve secrete.',
+    branchLockedMessage: 'La reserve est fermee. La vitrine a peut-etre laisse un indice.',
+    enigmaName: 'Symbole du socle',
+    enigmaQuestion: 'Quel symbole manque sur le socle de l artefact ?',
+    enigmaChoices: ['Lune', 'Soleil', 'Couronne'],
+    enigmaSolution: 'Soleil',
+    enigmaSuccess: 'Le socle reconnait le symbole. La salle des artefacts s ouvre.',
+    enigmaFail: 'Le socle reste eteint. La trace de poussiere indiquait autre chose.',
+    branchObjectName: 'Cartel ancien',
+    branchObjectDialogue: 'Le cartel nomme l artefact: Medaille solaire.',
+    finalObjectName: 'Medaille solaire',
+    finalObjectDialogue: 'La medaille solaire retrouve son socle. L alarme cesse enfin.',
+    conclusionSpeaker: 'Conservatrice',
+    conclusionText: 'La disparition peut etre classee comme vol ou comme restitution.',
+    goodEndingTitle: 'Artefact restitue',
+    goodEndingSummary: 'La clef, le cartel et la medaille prouvent que l objet a ete deplace pour etre protege.',
+    neutralEndingTitle: 'Alarme suspendue',
+    neutralEndingSummary: 'Tu interromps l alarme, mais le rapport du musee reste incomplet.',
+    routeLabels: ['Clef', 'Soleil'],
+    routeNotes: 'Plan: Galerie -> Reserve -> Salle des artefacts. Objets: clef, cartel, medaille. Enigme: symbole du socle.',
+  },
 };
 
 const NARRATIVE_TEMPLATE_CONFIGS = {
@@ -513,6 +630,10 @@ const NARRATIVE_TEMPLATE_CONFIGS = {
     opening: 'Je peux parler, mais je ne veux pas être accuse. Que veux-tu savoir ?',
     itemName: 'Photo froissee',
     itemIcon: '[]',
+    supportItemName: 'Releve d appels',
+    supportItemIcon: 'TEL',
+    finalItemName: 'Aveu signe',
+    finalItemIcon: 'SIG',
     variableKey: 'confiance_temoin',
     enigmaName: 'Contradiction du dossier',
     enigmaQuestion: 'Quelle preuve contredit l alibi ?',
@@ -530,6 +651,10 @@ const NARRATIVE_TEMPLATE_CONFIGS = {
     opening: 'Chaque sentier à un prix. Quelle verite apportes-tu ?',
     itemName: 'Graine d argent',
     itemIcon: '*',
+    supportItemName: 'Ecorce gravee',
+    supportItemIcon: '[]',
+    finalItemName: 'Rosace des lucioles',
+    finalItemIcon: 'O',
     variableKey: 'respect_foret',
     enigmaName: 'Serment des racines',
     enigmaQuestion: 'Quel mot ouvre le passage des lucioles ?',
@@ -547,6 +672,10 @@ const NARRATIVE_TEMPLATE_CONFIGS = {
     opening: 'On ne tiendra pas longtemps. On cherche de l eau, un abri ou un signal ?',
     itemName: 'Gourde intacte',
     itemIcon: '[]',
+    supportItemName: 'Carte detrempee',
+    supportItemIcon: 'MAP',
+    finalItemName: 'Fumigene de signal',
+    finalItemIcon: 'SOS',
     variableKey: 'energie',
     enigmaName: 'Signal de detresse',
     enigmaQuestion: 'Quel signal international demande de l aide ?',
@@ -564,6 +693,10 @@ const NARRATIVE_TEMPLATE_CONFIGS = {
     opening: 'Je sais ou est la clé, mais je ne parlé pas aux inconnus presses.',
     itemName: 'Sceau dé confiance',
     itemIcon: '[]',
+    supportItemName: 'Phrase de passe',
+    supportItemIcon: 'PWD',
+    finalItemName: 'Cle de la cite',
+    finalItemIcon: 'KEY',
     variableKey: 'confiance_archiviste',
     enigmaName: 'Question de memoire',
     enigmaQuestion: 'Quel detail l archiviste a-t-il mentionne ?',
@@ -581,6 +714,10 @@ const NARRATIVE_TEMPLATE_CONFIGS = {
     opening: 'Tu veux un accord ? Alors dis-moi qui doit ceder en premier.',
     itemName: 'Lettre de garantie',
     itemIcon: '[]',
+    supportItemName: 'Clause annotee',
+    supportItemIcon: 'ART',
+    finalItemName: 'Pacte scelle',
+    finalItemIcon: 'SIG',
     variableKey: 'credit_diplomatique',
     enigmaName: 'Clause cachée',
     enigmaQuestion: 'Quelle clause évite la trahison ?',
@@ -598,6 +735,10 @@ const NARRATIVE_TEMPLATE_CONFIGS = {
     opening: 'Tu es déjà venu ici, même si tu ne t en souviens pas. Quelle trace suis-tu ?',
     itemName: 'Fil rouge',
     itemIcon: '~',
+    supportItemName: 'Fragment d echo',
+    supportItemIcon: 'ECO',
+    finalItemName: 'Cle du centre',
+    finalItemIcon: 'KEY',
     variableKey: 'memoire_labyrinthe',
     enigmaName: 'Ordre des echos',
     enigmaQuestion: 'Quel mot revient a chaque boucle ?',
@@ -616,6 +757,8 @@ const applyNarrativeTemplate = (project, templateId) => {
   const [startScene, branchScene, endScene] = scenes;
   const actId = project.acts[0]?.id || '';
   const item = makeItem(config.itemName, config.itemIcon);
+  const supportItem = makeItem(config.supportItemName, config.supportItemIcon);
+  const finalItem = makeItem(config.finalItemName, config.finalItemIcon);
   const enigma = makeEnigma({
     name: config.enigmaName,
     type: 'misc',
@@ -623,13 +766,14 @@ const applyNarrativeTemplate = (project, templateId) => {
     question: config.enigmaQuestion,
     miscChoices: config.choices,
     solutionText: config.solution,
-    successMessage: 'Le bon choix débloqué une nouvelle issue.',
+    successMessage: 'Le bon choix debloque la conclusion du parcours.',
     failMessage: 'Cette piste affaiblit ta position.',
-    unlockType: 'none',
+    unlockType: 'scene',
+    targetSceneId: endScene?.id || '',
   });
 
   project.acts = [{ ...project.acts[0], name: config.actName }];
-  project.items = [item];
+  project.items = [item, supportItem, finalItem];
   project.combinations = [];
   project.cinematics = [];
   project.enigmas = [enigma];
@@ -646,50 +790,64 @@ const applyNarrativeTemplate = (project, templateId) => {
     startScene.actId = actId;
     startScene.parentSceneId = '';
     startScene.introText = config.intros[0];
-    startScene.hotspots = [{
-      ...makeHotspot(),
-      name: config.npc,
-      x: 46,
-      y: 52,
-      width: 22,
-      height: 20,
-      actionType: 'conversation',
-      dialogue: config.opening,
-      conversation: {
-        startNodeId: 'start',
-        nodes: [
-          {
-            id: 'start',
-            speaker: config.npc,
-            text: config.opening,
-            replies: [
-              { id: 'reply_careful', label: 'Je pose une question prudente.', actionType: 'node', nextNodeId: 'trust', dialogue: 'La discussion devient possible.', storyVariableKey: config.variableKey, storyVariableOperation: 'increment', storyVariableValue: '1' },
-              { id: 'reply_direct', label: 'Je force une réponse immédiate.', actionType: 'ending', endingType: 'bad', endingTitle: config.badTitle, endingSummary: "Tu obtiens une réponse trop vite, mais tu perds la branche importante de l'histoire.", dialogue: 'La tension monte et la discussion se ferme.' },
-              { id: 'reply_item', label: 'Je cherche un indice utile.', actionType: 'multiple', rewardItemId: item.id, nextNodeId: 'after_item', dialogue: `${config.npc} te remet: ${config.itemName}.` },
-            ],
-          },
-          {
-            id: 'trust',
-            speaker: config.npc,
-            text: 'Tu ecoutes vraiment. Je peux te montrer une voie moins evidente.',
-            replies: [
-              { id: 'reply_branch', label: 'Je suis cette piste.', actionType: 'scene', targetSceneId: branchScene?.id || '', dialogue: 'Tu prends la branche narrative secondaire.' },
-              { id: 'reply_secret', label: 'Je connais déjà la pièce cachée.', branchTags: ['secret'], actionType: 'ending', conditionType: 'has_item', conditionItemId: item.id, endingType: 'secret', endingTitle: config.secretTitle, endingSummary: 'L indice change le sens de la scène. Tu atteins une conclusion alternative.', dialogue: 'Le detail cache fait basculer la conversation.' },
-              { id: 'reply_good', label: 'Je conclus avec ce que j ai appris.', branchTags: ['voie_principale'], actionType: 'ending', conditionType: 'advanced', advancedConditionMode: 'all', advancedConditions: [{ id: 'condition_good_item', type: 'has_item', itemId: item.id }, { id: 'condition_good_variable', type: 'story_variable', variableKey: config.variableKey, operator: 'greater_or_equal', value: '1' }], endingType: 'good', endingTitle: config.goodTitle, endingSummary: 'Tes choix ont construit assez de confiance pour obtenir une issue favorable.', dialogue: 'La derniere decision devient claire.' },
-            ],
-          },
-          {
-            id: 'after_item',
-            speaker: config.npc,
-            text: 'Cet objet ne sert que si tu comprends son contexte.',
-            replies: [
-              { id: 'reply_enigma', label: "Je veux vérifier l'indice.", actionType: 'enigma', enigmaId: enigma.id, dialogue: "L'indice demande une interprétation précise." },
-              { id: 'reply_neutral', label: 'Je m arrete avec cet indice.', actionType: 'ending', endingType: 'neutral', endingTitle: 'Fin neutre', endingSummary: 'Tu conserves une partie de la verite, mais l histoire garde ses zones d ombre.', dialogue: 'Tu choisis de ne pas pousser plus loin.' },
-            ],
-          },
-        ],
+    startScene.hotspots = [
+      {
+        ...makeHotspot(),
+        name: config.npc,
+        x: 46,
+        y: 52,
+        width: 22,
+        height: 20,
+        actionType: 'conversation',
+        dialogue: config.opening,
+        conversation: {
+          startNodeId: 'start',
+          nodes: [
+            {
+              id: 'start',
+              speaker: config.npc,
+              text: config.opening,
+              replies: [
+                { id: 'reply_careful', label: 'Je pose une question prudente.', actionType: 'node', nextNodeId: 'trust', dialogue: 'La discussion devient possible.', storyVariableKey: config.variableKey, storyVariableOperation: 'increment', storyVariableValue: '1' },
+                { id: 'reply_direct', label: 'Je force une reponse immediate.', actionType: 'ending', endingType: 'bad', endingTitle: config.badTitle, endingSummary: "Tu obtiens une reponse trop vite, mais tu perds la branche importante de l'histoire.", dialogue: 'La tension monte et la discussion se ferme.' },
+                { id: 'reply_item', label: 'Je cherche un indice utile.', actionType: 'multiple', rewardItemId: item.id, nextNodeId: 'after_item', dialogue: `${config.npc} te remet: ${config.itemName}.` },
+              ],
+            },
+            {
+              id: 'trust',
+              speaker: config.npc,
+              text: 'Tu ecoutes vraiment. Je peux te montrer une voie moins evidente.',
+              replies: [
+                { id: 'reply_branch', label: 'Je suis cette piste.', actionType: 'scene', targetSceneId: branchScene?.id || '', dialogue: 'Tu prends la branche narrative secondaire.' },
+                { id: 'reply_secret', label: 'Je tente la voie cachee.', branchTags: ['secret'], actionType: 'ending', conditionType: 'has_item', conditionItemId: item.id, endingType: 'secret', endingTitle: config.secretTitle, endingSummary: 'L indice change le sens de la scene. Tu atteins une conclusion alternative.', dialogue: 'Le detail cache fait basculer la conversation.', showWhenLocked: true, lockedLabel: `Il faut obtenir: ${config.itemName}.` },
+                { id: 'reply_verify', label: 'Je verifie la piste principale.', branchTags: ['voie_principale'], actionType: 'scene', targetSceneId: branchScene?.id || '', dialogue: 'Tu pars confirmer ce que le dialogue a revele.' },
+              ],
+            },
+            {
+              id: 'after_item',
+              speaker: config.npc,
+              text: 'Cet objet ne sert que si tu comprends son contexte.',
+              replies: [
+                { id: 'reply_enigma', label: "Je veux verifier l'indice.", actionType: 'enigma', enigmaId: enigma.id, dialogue: "L'indice demande une interpretation precise." },
+                { id: 'reply_branch_with_item', label: 'Je vais confronter cet indice sur place.', actionType: 'scene', targetSceneId: branchScene?.id || '', dialogue: 'Tu pars chercher la preuve qui manque.' },
+                { id: 'reply_neutral', label: 'Je m arrete avec cet indice.', actionType: 'ending', endingType: 'neutral', endingTitle: 'Fin neutre', endingSummary: 'Tu conserves une partie de la verite, mais l histoire garde ses zones d ombre.', dialogue: 'Tu choisis de ne pas pousser plus loin.' },
+              ],
+            },
+          ],
+        },
       },
-    }];
+      {
+        ...makeHotspot(),
+        name: config.itemName,
+        x: 22,
+        y: 66,
+        width: 18,
+        height: 14,
+        actionType: 'dialogue_item',
+        dialogue: `Tu recuperes un indice de depart: ${config.itemName}.`,
+        rewardItemId: item.id,
+      },
+    ];
   }
 
   if (branchScene) {
@@ -698,8 +856,52 @@ const applyNarrativeTemplate = (project, templateId) => {
     branchScene.parentSceneId = startScene?.id || '';
     branchScene.introText = config.intros[1];
     branchScene.hotspots = [
-      { ...makeHotspot(), name: config.enigmaName, x: 48, y: 46, width: 22, height: 18, actionType: 'dialogue', dialogue: 'Cette étape valide ce que le dialogue a prepare.', enigmaId: enigma.id },
-      { ...makeHotspot(), name: 'Continuer', x: 78, y: 70, width: 16, height: 12, actionType: 'scene', dialogue: 'Tu avances vers la conclusion.', targetSceneId: endScene?.id || '' },
+      {
+        ...makeHotspot(),
+        name: config.enigmaName,
+        x: 46,
+        y: 42,
+        width: 22,
+        height: 18,
+        actionType: 'dialogue',
+        dialogue: 'Cette etape valide ce que le dialogue a prepare.',
+        enigmaId: enigma.id,
+      },
+      {
+        ...makeHotspot(),
+        name: config.supportItemName,
+        x: 58,
+        y: 64,
+        width: 18,
+        height: 14,
+        actionType: 'dialogue_item',
+        dialogue: `Tu trouves une preuve de contexte: ${config.supportItemName}.`,
+        rewardItemId: supportItem.id,
+      },
+      {
+        ...makeHotspot(),
+        name: 'Continuer',
+        x: 78,
+        y: 70,
+        width: 16,
+        height: 12,
+        actionType: 'scene',
+        dialogue: 'Tu avances vers la conclusion avec la preuve en main.',
+        requiredItemId: supportItem.id,
+        lockedMessage: `Il faut d abord recuperer: ${config.supportItemName}.`,
+        targetSceneId: endScene?.id || '',
+      },
+      {
+        ...makeHotspot(),
+        name: 'Retour',
+        x: 10,
+        y: 78,
+        width: 14,
+        height: 12,
+        actionType: 'scene',
+        dialogue: 'Tu reviens au point de depart pour verifier une autre piste.',
+        targetSceneId: startScene?.id || '',
+      },
     ];
   }
 
@@ -708,7 +910,93 @@ const applyNarrativeTemplate = (project, templateId) => {
     endScene.actId = actId;
     endScene.parentSceneId = branchScene?.id || startScene?.id || '';
     endScene.introText = config.intros[2];
-    endScene.hotspots = [{ ...makeHotspot(), name: 'Résumé final', x: 48, y: 48, width: 24, height: 18, actionType: 'conversation', conversation: { startNodeId: 'final', nodes: [{ id: 'final', speaker: config.npc, text: 'Il reste à choisir comment cette histoire se termine.', replies: [{ id: 'final_good', label: 'Assumer la meilleure issue.', actionType: 'ending', endingType: 'good', endingTitle: config.goodTitle, endingSummary: 'Tu as suivi les indices et garde la maîtrise de la conclusion.' }, { id: 'final_secret', label: 'Révéler la voie cachée.', actionType: 'ending', conditionType: 'has_item', conditionItemId: item.id, endingType: 'secret', endingTitle: config.secretTitle, endingSummary: 'L’objet obtenu plus tôt révèle une fin alternative.' }] }] } }];
+    endScene.hotspots = [
+      {
+        ...makeHotspot(),
+        name: config.finalItemName,
+        x: 34,
+        y: 60,
+        width: 20,
+        height: 16,
+        actionType: 'dialogue_item',
+        dialogue: `La derniere piece du parcours est la: ${config.finalItemName}.`,
+        requiredItemId: supportItem.id,
+        rewardItemId: finalItem.id,
+        lockedMessage: `Il manque encore: ${config.supportItemName}.`,
+      },
+      {
+        ...makeHotspot(),
+        name: 'Resume final',
+        x: 58,
+        y: 48,
+        width: 24,
+        height: 18,
+        actionType: 'conversation',
+        dialogue: 'Il reste a choisir comment cette histoire se termine.',
+        conversation: {
+          startNodeId: 'final',
+          nodes: [{
+            id: 'final',
+            speaker: config.npc,
+            text: 'Il reste a choisir comment cette histoire se termine.',
+            replies: [
+              {
+                id: 'final_good',
+                label: 'Assumer la meilleure issue.',
+                actionType: 'ending',
+                conditionType: 'advanced',
+                advancedConditionMode: 'all',
+                advancedConditions: [
+                  { id: `${templateId}_final_item`, type: 'has_item', itemId: finalItem.id },
+                  { id: `${templateId}_final_enigma`, type: 'solved_enigma', enigmaId: enigma.id },
+                  { id: `${templateId}_final_variable`, type: 'story_variable', variableKey: config.variableKey, operator: 'greater_or_equal', value: '1' },
+                ],
+                showWhenLocked: true,
+                lockedLabel: 'Il faut la preuve finale, l enigme resolue et assez de confiance.',
+                endingType: 'good',
+                endingTitle: config.goodTitle,
+                endingSummary: 'Tu as suivi les indices, structure le plan et garde la maitrise de la conclusion.',
+              },
+              {
+                id: 'final_secret',
+                label: 'Reveler la voie cachee.',
+                actionType: 'ending',
+                conditionType: 'advanced',
+                advancedConditionMode: 'all',
+                advancedConditions: [
+                  { id: `${templateId}_secret_item`, type: 'has_item', itemId: item.id },
+                  { id: `${templateId}_secret_support`, type: 'has_item', itemId: supportItem.id },
+                ],
+                showWhenLocked: true,
+                lockedLabel: 'Il faut l indice de depart et la preuve de contexte.',
+                endingType: 'secret',
+                endingTitle: config.secretTitle,
+                endingSummary: 'Les objets obtenus plus tot revelent une fin alternative.',
+              },
+              {
+                id: 'final_neutral',
+                label: 'Conclure sans tout prouver.',
+                actionType: 'ending',
+                endingType: 'neutral',
+                endingTitle: 'Fin neutre',
+                endingSummary: 'Le parcours reste jouable, mais il manque encore une preuve ou une enigme resolue.',
+              },
+            ],
+          }],
+        },
+      },
+      {
+        ...makeHotspot(),
+        name: 'Retour',
+        x: 10,
+        y: 78,
+        width: 14,
+        height: 12,
+        actionType: 'scene',
+        dialogue: 'Tu retournes vers la scene precedente.',
+        targetSceneId: branchScene?.id || '',
+      },
+    ];
   }
 
   project.scenes = scenes.filter(Boolean);
@@ -723,10 +1011,229 @@ const applyNarrativeTemplate = (project, templateId) => {
     ],
     connections: [
       { id: `${templateId}_connection_branch`, fromRoomId: `${templateId}_room_start`, toRoomId: `${templateId}_room_branch`, label: 'Choix principal', locked: false, allowOneWay: false },
-      { id: `${templateId}_connection_end`, fromRoomId: `${templateId}_room_branch`, toRoomId: `${templateId}_room_end`, label: 'Conclusion', locked: false, allowOneWay: false },
+      { id: `${templateId}_connection_end`, fromRoomId: `${templateId}_room_branch`, toRoomId: `${templateId}_room_end`, label: config.enigmaName, locked: true, allowOneWay: true },
     ],
     actMaps: {},
-    notes: `Template narratif: ${TEMPLATE_TITLES[templateId]}. Utilise les réponses cachées, variables d'histoire et fins multiples pour prolonger cette base.`,
+    notes: `Template narratif: ${TEMPLATE_TITLES[templateId]}. Plan: ${config.scenes[0]} -> ${config.scenes[1]} -> ${config.scenes[2]}. Objets: ${config.itemName}, ${config.supportItemName}, ${config.finalItemName}. Enigme: ${config.enigmaName}. La bonne fin demande l'objet final, l'enigme resolue et une variable de confiance positive.`,
+  };
+  project.start = { type: 'scene', targetSceneId: startScene?.id || '', targetCinematicId: '' };
+  return normalizeProject(project);
+};
+
+const applyClassicTemplate = (project, templateId) => {
+  const config = CLASSIC_TEMPLATE_CONFIGS[templateId];
+  if (!config) return null;
+
+  const scenes = project.scenes.slice(0, 3);
+  const [startScene, branchScene, endScene] = scenes;
+  const actId = project.acts[0]?.id || '';
+  const [accessItem, clueItem, finalItem] = config.itemNames.map((itemName, index) => (
+    makeItem(itemName, config.itemIcons[index] || '[]')
+  ));
+  const enigma = makeEnigma({
+    name: config.enigmaName,
+    type: 'misc',
+    miscMode: 'multiple-choice',
+    question: config.enigmaQuestion,
+    miscChoices: config.enigmaChoices,
+    solutionText: config.enigmaSolution,
+    successMessage: config.enigmaSuccess,
+    failMessage: config.enigmaFail,
+    unlockType: 'scene',
+    targetSceneId: endScene?.id || '',
+  });
+
+  project.acts = [{ ...project.acts[0], name: config.actName }];
+  project.items = [accessItem, clueItem, finalItem];
+  project.combinations = [];
+  project.cinematics = [];
+  project.enigmas = [enigma];
+  project.storyVariables = [];
+
+  if (startScene) {
+    startScene.name = config.scenes[0];
+    startScene.actId = actId;
+    startScene.parentSceneId = '';
+    startScene.introText = config.intros[0];
+    startScene.hotspots = [
+      {
+        ...makeHotspot(),
+        name: config.startObjectName,
+        x: 24,
+        y: 58,
+        width: 18,
+        height: 14,
+        actionType: 'dialogue_item',
+        dialogue: config.startObjectDialogue,
+        rewardItemId: accessItem.id,
+      },
+      {
+        ...makeHotspot(),
+        name: config.startClueName,
+        x: 56,
+        y: 42,
+        width: 20,
+        height: 16,
+        actionType: 'dialogue',
+        dialogue: config.startClueDialogue,
+      },
+      {
+        ...makeHotspot(),
+        name: config.branchEntryName,
+        x: 78,
+        y: 58,
+        width: 16,
+        height: 18,
+        actionType: 'scene',
+        dialogue: config.branchEntryDialogue,
+        requiredItemId: accessItem.id,
+        lockedMessage: config.branchLockedMessage,
+        targetSceneId: branchScene?.id || '',
+      },
+    ];
+  }
+
+  if (branchScene) {
+    branchScene.name = config.scenes[1];
+    branchScene.actId = actId;
+    branchScene.parentSceneId = startScene?.id || '';
+    branchScene.introText = config.intros[1];
+    branchScene.hotspots = [
+      {
+        ...makeHotspot(),
+        name: config.enigmaName,
+        x: 46,
+        y: 44,
+        width: 24,
+        height: 18,
+        actionType: 'dialogue',
+        dialogue: config.enigmaQuestion,
+        enigmaId: enigma.id,
+      },
+      {
+        ...makeHotspot(),
+        name: config.branchObjectName,
+        x: 62,
+        y: 66,
+        width: 18,
+        height: 14,
+        actionType: 'dialogue_item',
+        dialogue: config.branchObjectDialogue,
+        rewardItemId: clueItem.id,
+      },
+      {
+        ...makeHotspot(),
+        name: 'Retour',
+        x: 10,
+        y: 78,
+        width: 14,
+        height: 12,
+        actionType: 'scene',
+        dialogue: 'Tu reviens au point de depart pour verifier tes indices.',
+        targetSceneId: startScene?.id || '',
+      },
+    ];
+  }
+
+  if (endScene) {
+    endScene.name = config.scenes[2];
+    endScene.actId = actId;
+    endScene.parentSceneId = branchScene?.id || startScene?.id || '';
+    endScene.introText = config.intros[2];
+    endScene.hotspots = [
+      {
+        ...makeHotspot(),
+        name: config.finalObjectName,
+        x: 42,
+        y: 58,
+        width: 20,
+        height: 16,
+        actionType: 'dialogue_item',
+        dialogue: config.finalObjectDialogue,
+        requiredItemId: clueItem.id,
+        rewardItemId: finalItem.id,
+        lockedMessage: 'Il manque encore l indice de la scene precedente.',
+      },
+      {
+        ...makeHotspot(),
+        name: 'Conclusion',
+        x: 64,
+        y: 42,
+        width: 22,
+        height: 18,
+        actionType: 'conversation',
+        dialogue: config.conclusionText,
+        conversation: {
+          startNodeId: 'final',
+          nodes: [{
+            id: 'final',
+            speaker: config.conclusionSpeaker,
+            text: config.conclusionText,
+            replies: [
+              {
+                id: `${templateId}_final_good`,
+                label: 'Relier tous les indices.',
+                actionType: 'ending',
+                conditionType: 'advanced',
+                advancedConditionMode: 'all',
+                advancedConditions: [
+                  { id: `${templateId}_condition_item`, type: 'has_item', itemId: finalItem.id },
+                  { id: `${templateId}_condition_enigma`, type: 'solved_enigma', enigmaId: enigma.id },
+                ],
+                showWhenLocked: true,
+                lockedLabel: 'Il faut resoudre l enigme et recuperer le dernier objet.',
+                endingType: 'good',
+                endingTitle: config.goodEndingTitle,
+                endingSummary: config.goodEndingSummary,
+              },
+              {
+                id: `${templateId}_final_neutral`,
+                label: 'Sortir avec les indices actuels.',
+                actionType: 'ending',
+                endingType: 'neutral',
+                endingTitle: config.neutralEndingTitle,
+                endingSummary: config.neutralEndingSummary,
+              },
+              {
+                id: `${templateId}_final_back`,
+                label: 'Retourner chercher un detail.',
+                actionType: 'scene',
+                targetSceneId: branchScene?.id || startScene?.id || '',
+              },
+            ],
+          }],
+        },
+      },
+      {
+        ...makeHotspot(),
+        name: 'Retour',
+        x: 10,
+        y: 78,
+        width: 14,
+        height: 12,
+        actionType: 'scene',
+        dialogue: 'Tu retournes vers la scene precedente.',
+        targetSceneId: branchScene?.id || '',
+      },
+    ];
+  }
+
+  project.scenes = scenes.filter(Boolean);
+  project.routeMap = {
+    rows: 16,
+    cols: 24,
+    cells: [],
+    rooms: [
+      { id: `${templateId}_room_start`, name: config.scenes[0], sceneId: startScene?.id || '', x: 18, y: 54, type: 'start' },
+      { id: `${templateId}_room_branch`, name: config.scenes[1], sceneId: branchScene?.id || '', x: 50, y: 38, type: 'room' },
+      { id: `${templateId}_room_end`, name: config.scenes[2], sceneId: endScene?.id || '', x: 82, y: 58, type: 'end' },
+    ],
+    connections: [
+      { id: `${templateId}_connection_branch`, fromRoomId: `${templateId}_room_start`, toRoomId: `${templateId}_room_branch`, label: config.routeLabels[0], locked: true, allowOneWay: false },
+      { id: `${templateId}_connection_end`, fromRoomId: `${templateId}_room_branch`, toRoomId: `${templateId}_room_end`, label: config.routeLabels[1], locked: true, allowOneWay: true },
+    ],
+    actMaps: {},
+    notes: config.routeNotes,
   };
   project.start = { type: 'scene', targetSceneId: startScene?.id || '', targetCinematicId: '' };
   return normalizeProject(project);
@@ -762,6 +1269,8 @@ export function applyCreationTemplate(baseProject, templateId, name) {
     const [arrival, forest, tower] = scenes;
     const actId = project.acts[0]?.id || '';
     const guideToken = makeItem('Jeton du guide', '[]');
+    const valleyMap = makeItem('Carte de la vallee', 'MAP');
+    const watcherSeal = makeItem('Sceau du guetteur', 'O');
     const choiceEnigma = makeEnigma({
       name: 'Decision du vieux panneau',
       type: 'misc',
@@ -776,7 +1285,7 @@ export function applyCreationTemplate(baseProject, templateId, name) {
     });
 
     project.acts = [{ ...project.acts[0], name: 'Chapitre I' }];
-    project.items = [guideToken];
+    project.items = [guideToken, valleyMap, watcherSeal];
     project.combinations = [];
     project.cinematics = [];
     project.enigmas = [choiceEnigma];
@@ -880,6 +1389,17 @@ export function applyCreationTemplate(baseProject, templateId, name) {
             ],
           },
         },
+        {
+          ...makeHotspot(),
+          name: 'Sac abandonne',
+          x: 34,
+          y: 76,
+          width: 16,
+          height: 12,
+          actionType: 'dialogue_item',
+          dialogue: 'Tu trouves une carte de la vallee. Elle montre que la forêt contourne la tour.',
+          rewardItemId: valleyMap.id,
+        },
       ];
     }
 
@@ -899,6 +1419,18 @@ export function applyCreationTemplate(baseProject, templateId, name) {
           actionType: 'dialogue',
           dialogue: 'Le panneau démande de choisir le symbole qui protege le voyageur.',
           enigmaId: choiceEnigma.id,
+        },
+        {
+          ...makeHotspot(),
+          name: 'Comparer la carte',
+          x: 62,
+          y: 62,
+          width: 18,
+          height: 14,
+          actionType: 'dialogue',
+          dialogue: 'La carte confirme que le symbole de la lune correspond au passage discret.',
+          requiredItemId: valleyMap.id,
+          lockedMessage: 'Une carte rendrait ce panneau plus clair.',
         },
         {
           ...makeHotspot(),
@@ -932,6 +1464,63 @@ export function applyCreationTemplate(baseProject, templateId, name) {
         },
         {
           ...makeHotspot(),
+          name: 'Coffret du guetteur',
+          x: 44,
+          y: 58,
+          width: 18,
+          height: 14,
+          actionType: 'dialogue_item',
+          dialogue: 'Le coffret contient le sceau du guetteur, preuve que tu as atteint la bonne branche.',
+          requiredItemId: guideToken.id,
+          rewardItemId: watcherSeal.id,
+          lockedMessage: 'Le coffret demande le jeton du guide.',
+        },
+        {
+          ...makeHotspot(),
+          name: 'Conclusion',
+          x: 68,
+          y: 56,
+          width: 18,
+          height: 14,
+          actionType: 'conversation',
+          dialogue: 'La tour peut conclure cette branche ou renvoyer vers une autre route.',
+          conversation: {
+            startNodeId: 'tower_final',
+            nodes: [{
+              id: 'tower_final',
+              speaker: 'Tour du guetteur',
+              text: 'Ta route est lisible si tu as garde une preuve du passage.',
+              replies: [
+                {
+                  id: 'tower_final_good',
+                  label: 'Montrer le sceau du guetteur.',
+                  actionType: 'ending',
+                  conditionType: 'advanced',
+                  advancedConditionMode: 'all',
+                  advancedConditions: [
+                    { id: 'tower_condition_seal', type: 'has_item', itemId: watcherSeal.id },
+                    { id: 'tower_condition_enigma', type: 'solved_enigma', enigmaId: choiceEnigma.id },
+                  ],
+                  showWhenLocked: true,
+                  lockedLabel: 'Il faut le sceau et la bonne decision du panneau.',
+                  endingType: 'good',
+                  endingTitle: 'Route du guetteur',
+                  endingSummary: 'Tu as construit une branche complete: choix, carte, enigme et preuve finale.',
+                },
+                {
+                  id: 'tower_final_neutral',
+                  label: 'Observer encore la vallee.',
+                  actionType: 'ending',
+                  endingType: 'neutral',
+                  endingTitle: 'Branche ouverte',
+                  endingSummary: 'La tour donne une vue d ensemble, mais il reste des objets ou enigmes a exploiter.',
+                },
+              ],
+            }],
+          },
+        },
+        {
+          ...makeHotspot(),
           name: 'Retour à la croisee',
           x: 12,
           y: 78,
@@ -960,7 +1549,7 @@ export function applyCreationTemplate(baseProject, templateId, name) {
         { id: 'adventure_connection_secret', fromRoomId: 'adventure_room_forest', toRoomId: 'adventure_room_tower', label: 'Panneau: La lune', locked: true, allowOneWay: true },
       ],
       actMaps: {},
-      notes: 'Mode aventure: construis le recit avec des scènes reliées par des choix. Utilise les énigmes Divers / choix multiples pour verrouilléer certaines branches.',
+      notes: 'Mode aventure: plan Croisee -> Foret -> Tour. Objets: jeton du guide, carte de la vallee, sceau du guetteur. Enigme: Decision du vieux panneau. La bonne fin demande le sceau et l enigme resolue.',
     };
     project.start = { type: 'scene', targetSceneId: arrival?.id || '', targetCinematicId: '' };
     return normalizeProject(project);
@@ -1170,16 +1759,8 @@ export function applyCreationTemplate(baseProject, templateId, name) {
   const narrativeProject = applyNarrativeTemplate(project, templateId);
   if (narrativeProject) return narrativeProject;
 
-  const sceneThemes = SCENE_THEMES[templateId];
-  if (sceneThemes) {
-    project.scenes = project.scenes.slice(0, 3).map((scene, index) => ({
-      ...scene,
-      name: sceneThemes[index] || scene.name,
-      parentSceneId: index === 1 ? project.scenes[0]?.id || '' : '',
-      introText: SCENE_INTROS[templateId][index],
-    }));
-    project.start = { type: 'scene', targetSceneId: project.scenes[0]?.id || '', targetCinematicId: '' };
-  }
+  const classicProject = applyClassicTemplate(project, templateId);
+  if (classicProject) return classicProject;
 
   return normalizeProject(project);
 }

@@ -8,6 +8,7 @@ import NumberInput from '../../../shared/ui/forms/NumberInput.jsx';
 import MediaSourcePicker from '../../../shared/ui/media/MediaSourcePicker.jsx';
 import { showConfirm } from '../../../shared/ui/AccessibleDialog';
 import { makeLogicRule } from '../../../shared/data/projectData';
+import { isProPromotionProject } from '../../../shared/services/proPromotion';
 import SceneSidebar from './components/SceneSidebar.jsx';
 import SceneFullscreenEditor from './components/SceneFullscreenEditor.jsx';
 import SceneCanvasContextMenu from './components/SceneCanvasContextMenu.jsx';
@@ -20,7 +21,7 @@ import SceneContextPanel from './components/SceneContextPanel.jsx';
 import SceneMainLayout from './components/SceneMainLayout.jsx';
 import SceneVisualEffect, { VISUAL_EFFECT_INTENSITY_OPTIONS, getVisualEffectZoneZIndex } from '../../../shared/ui/scene/SceneVisualEffect.jsx';
 import { SceneObjectBlockContent } from '../../../shared/ui/scene/SceneObjectBlockContent.jsx';
-import { getSceneObjectClickMode } from '../../../shared/services/sceneObjectBlocks';
+import { getSceneObjectBlockType, getSceneObjectClickMode } from '../../../shared/services/sceneObjectBlocks';
 import VisualEffectCascadeMenu from './VisualEffectCascadeMenu.jsx';
 import { useSceneEditorCreation } from './components/useSceneEditorCreation.js';
 import { useSceneEditorSceneState } from './components/useSceneEditorSceneState.js';
@@ -37,6 +38,7 @@ import {
   getSceneObjectStyle,
   gridOverlayStyle,
 } from '../../../shared/services/sceneRender.js';
+import { resolveAssetUrl } from '../../../shared/services/assetManager.js';
 
 const FALLBACK_HERO_SKILLS = [
   { id: 'force', name: 'Force', value: 3, manaCost: 0 },
@@ -51,6 +53,9 @@ const parseBranchTags = (value = '') => (
 export default function SceneStudio(props) {
   const {
     project,
+    user = null,
+    projectLibrary = [],
+    activeProjectId = '',
     actsWithScenes,
     addAct,
     deleteAct,
@@ -180,7 +185,8 @@ export default function SceneStudio(props) {
   const snapValue = (value) => (snapGridEnabled ? Math.round(value / 5) * 5 : value);
   const isBeginnerMode = project.creationMode === 'beginner';
   const isIntermediateMode = project.creationMode === 'intermediate';
-  const canUseQuickLogic = !isBeginnerMode && !isIntermediateMode;
+  const isProPromotionMode = isProPromotionProject(project);
+  const canUseQuickLogic = !isProPromotionMode && !isBeginnerMode && !isIntermediateMode;
   const isHeroAdventureProject = project.creationMode === 'hero_adventure' || Boolean(project.heroAdventure?.enabled);
   const heroSkills = project.heroAdventure?.hero.skills?.length ? project.heroAdventure.hero.skills : FALLBACK_HERO_SKILLS;
   const openMediaTab = () => setTab?.('media');
@@ -522,6 +528,7 @@ export default function SceneStudio(props) {
     addVisualEffectZone,
     isBeginnerMode,
     isIntermediateMode,
+    isSinglePageMode: isProPromotionMode,
   };
 
   const layersPanelProps = {
@@ -549,10 +556,11 @@ export default function SceneStudio(props) {
     setIsCollapsed: setIsMiniMapCollapsed,
   };
   const sceneContextTitle = selectedSceneObject
-    ? ((selectedSceneObject.anime2dSpec || selectedSceneObject.anime2dName || selectedSceneObject.name === 'Animation') ? 'Animation sélectionnée' : selectedSceneObject.isInvisible ? 'Objet invisible sélectionné' : (getSceneObjectClickMode(selectedSceneObject) === 'action' ? "Zone d'action sélectionnée" : 'Objet visible sélectionné'))
+    ? (getSceneObjectBlockType(selectedSceneObject) === 'text' ? 'Texte sélectionné' : (selectedSceneObject.anime2dSpec || selectedSceneObject.anime2dName || selectedSceneObject.name === 'Animation') ? 'Animation sélectionnée' : selectedSceneObject.isInvisible ? 'Objet invisible sélectionné' : (getSceneObjectClickMode(selectedSceneObject) === 'action' ? "Zone d'action sélectionnée" : 'Objet visible sélectionné'))
     : selectedVisualEffectZone ? 'Zone visuelle sélectionnée' : 'Zone sélectionnée';
   const isSceneObjectSelectedOnCanvas = (obj) => obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id);
   const isHotspotSelectedOnCanvas = (spot) => spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id);
+  const getHotspotDisplayImage = (spot) => resolveAssetUrl(project, spot?.objectImageId, spot?.objectImageData);
   const addConversationQuestion = () => patchProject((draft) => {
     const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId);
     if (!spot) return;
@@ -578,19 +586,26 @@ export default function SceneStudio(props) {
         selectSceneFromTree={selectSceneFromTree}
       />
 
-      <SceneMainLayout selectedScene={selectedScene} actName={selectedScene ? getActById(selectedScene.actId)?.name : ''}>
+      <SceneMainLayout
+        selectedScene={selectedScene}
+        actName={selectedScene ? getActById(selectedScene.actId)?.name : ''}
+        showActBadge={!isProPromotionMode}
+        title={isProPromotionMode ? 'Editeur de page' : 'Editeur de scene'}
+      >
         {selectedScene ? (
           <div className="editor-stack">
-            <div className="subpanel scene-compact-card" data-tour="scene-general-panel">
+            <div className="subpanel scene-compact-card scene-general-panel" data-tour="scene-general-panel">
                 <div className="subpanel-head">
                   <h3>Général & structure</h3>
                   <div className="inline-actions end">
                     <button type="button" className="secondary-action" data-tour="scene-preview-button" onClick={() => previewScene?.(selectedSceneId)}>
                       Prévisualiser
                     </button>
-                    <button type="button" className="danger-button" onClick={() => deleteScene(selectedSceneId)}>
-                      Supprimer
-                    </button>
+                    {!isProPromotionMode ? (
+                      <button type="button" className="danger-button" onClick={() => deleteScene(selectedSceneId)}>
+                        Supprimer
+                      </button>
+                    ) : null}
                   </div>
                 </div>
                 <div className="scene-compact-grid">
@@ -600,38 +615,44 @@ export default function SceneStudio(props) {
                       const scene = draft.scenes.find((s) => s.id === selectedSceneId); if (scene) scene.name = e.target.value;
                     })} />
                   </div>
-                  <div data-tour="scene-act">
-                    <HelpLabel help="Regroupe la scène dans un chapitre. Changer d’acte peut retirer une scène parente qui n’appartient plus au même acte.">Acte</HelpLabel>
-                    <select value={selectedScene.actId} onChange={(e) => patchProject((draft) => {
-                      const scene = draft.scenes.find((s) => s.id === selectedSceneId);
-                      if (scene) {
-                        scene.actId = e.target.value;
-                        if (scene.parentSceneId) {
-                          const parent = draft.scenes.find((s) => s.id === scene.parentSceneId);
-                          if (parent && parent.actId !== e.target.value) scene.parentSceneId = '';
-                        }
-                      }
-                    })}>
-                      {project.acts.map((act) => <option key={act.id} value={act.id}>{act.name}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <HelpLabel help="Transforme cette scène en sous-scène d’une autre. Utile pour les gros plans, tiroirs, portes ou variantes d’une même pièce.">Scène parente</HelpLabel>
-                    <select value={selectedScene.parentSceneId} onChange={(e) => patchProject((draft) => {
-                      const scene = draft.scenes.find((s) => s.id === selectedSceneId); if (scene) scene.parentSceneId = e.target.value;
-                    })}>
-                      <option value="">Scène principale</option>
-                      {project.scenes.filter((scene) => scene.id !== selectedSceneId && scene.actId === selectedScene.actId).map((scene) => (
-                        <option key={scene.id} value={scene.id}>{getSceneDepth(scene) ? '— '.repeat(getSceneDepth(scene)) : ''}{scene.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="scene-intro-field" data-tour="scene-intro">
-                    <HelpLabel help="Texte montré à l’entrée de la scène, avant que le joueur interagisse. Sert à poser l’ambiance ou l’objectif local.">Texte d’introduction</HelpLabel>
-                    <input value={selectedScene.introText} onChange={(e) => patchProject((draft) => {
-                      const scene = draft.scenes.find((s) => s.id === selectedSceneId); if (scene) scene.introText = e.target.value;
-                    })} />
-                  </div>
+                  {!isProPromotionMode ? (
+                    <>
+                      <div data-tour="scene-act">
+                        <HelpLabel help="Regroupe la scène dans un chapitre. Changer d’acte peut retirer une scène parente qui n’appartient plus au même acte.">Acte</HelpLabel>
+                        <select value={selectedScene.actId} onChange={(e) => patchProject((draft) => {
+                          const scene = draft.scenes.find((s) => s.id === selectedSceneId);
+                          if (scene) {
+                            scene.actId = e.target.value;
+                            if (scene.parentSceneId) {
+                              const parent = draft.scenes.find((s) => s.id === scene.parentSceneId);
+                              if (parent && parent.actId !== e.target.value) scene.parentSceneId = '';
+                            }
+                          }
+                        })}>
+                          {project.acts.map((act) => <option key={act.id} value={act.id}>{act.name}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <HelpLabel help="Transforme cette scène en sous-scène d’une autre. Utile pour les gros plans, tiroirs, portes ou variantes d’une même pièce.">Scène parente</HelpLabel>
+                        <select value={selectedScene.parentSceneId} onChange={(e) => patchProject((draft) => {
+                          const scene = draft.scenes.find((s) => s.id === selectedSceneId); if (scene) scene.parentSceneId = e.target.value;
+                        })}>
+                          <option value="">Scène principale</option>
+                          {project.scenes.filter((scene) => scene.id !== selectedSceneId && scene.actId === selectedScene.actId).map((scene) => (
+                            <option key={scene.id} value={scene.id}>{getSceneDepth(scene) ? '— '.repeat(getSceneDepth(scene)) : ''}{scene.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </>
+                  ) : null}
+                  {!isProPromotionMode ? (
+                    <div className="scene-intro-field" data-tour="scene-intro">
+                      <HelpLabel help="Texte montré à l’entrée de la scène, avant que le joueur interagisse. Sert à poser l’ambiance ou l’objectif local.">Texte d’introduction</HelpLabel>
+                      <input value={selectedScene.introText} onChange={(e) => patchProject((draft) => {
+                        const scene = draft.scenes.find((s) => s.id === selectedSceneId); if (scene) scene.introText = e.target.value;
+                      })} />
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
@@ -641,6 +662,14 @@ export default function SceneStudio(props) {
                   <h3>Plan de scène</h3>
                 </div>
                 <div className="scene-canvas-head-actions">
+                  <button type="button" className="secondary-action scene-mobile-preview-action" onClick={() => previewScene?.(selectedSceneId)}>
+                    Prévisualiser
+                  </button>
+                  {!isProPromotionMode ? (
+                    <button type="button" className="danger-button scene-mobile-delete-action" onClick={() => deleteScene(selectedSceneId)}>
+                      Supprimer
+                    </button>
+                  ) : null}
                   <div className="editor-toolbar-wrap">
                     <EditorToolbarMenus {...editorToolbarProps} />
                   </div>
@@ -652,6 +681,7 @@ export default function SceneStudio(props) {
                   <div
                     ref={canvasRef}
                     className="editor-canvas editor-canvas-pro"
+                    aria-label="Canvas tactile de l'éditeur de scène"
                     style={{ aspectRatio: sceneAspectRatio }}
                     onPointerUp={stopDragging}
                     onPointerCancel={stopDragging}
@@ -710,23 +740,27 @@ export default function SceneStudio(props) {
                       {renderShapePointHandles('sceneObject', obj.id, isSceneObjectSelectedOnCanvas(obj))}
                     </button>
                   ))}
-                  {selectedScene.hotspots.filter((spot) => !spot.isHidden || isHotspotSelectedOnCanvas(spot)).map((spot) => (
-                    <button
-                      key={spot.id}
-                      type="button"
-                      data-tour={spot.tutorialCreated ? 'hotspot-on-canvas' : undefined}
-                      className={`editor-hotspot ${getShapeClassName(spot)} ${spot.isHidden ? 'editor-hidden-on-canvas' : ''} ${isHotspotSelectedOnCanvas(spot) ? 'selected' : ''} ${spot.id === draggingHotspotId ? 'dragging' : ''}`}
-                      style={{ left: `${spot.x}%`, top: `${spot.y}%`, width: `${spot.width}%`, height: `${spot.height}%`, zIndex: getLayerZIndex(spot, 'hotspot'), ...getElementShapeStyle(spot) }}
-                      onPointerDown={(event) => beginDrag(event, spot.id)}
-                      onClick={(event) => selectHotspot(spot.id, event)}
-                      onContextMenu={(event) => openSceneCanvasContextMenu(event, 'hotspot', spot.id, 'main')}
-                    >
-                      <span>{spot.name}</span>
-                      {renderShapeOutline(spot, isHotspotSelectedOnCanvas(spot))}
-                      {renderResizeHandles('hotspot', spot.id, isHotspotSelectedOnCanvas(spot))}
-                      {renderShapePointHandles('hotspot', spot.id, isHotspotSelectedOnCanvas(spot))}
-                    </button>
-                  ))}
+                  {selectedScene.hotspots.filter((spot) => !spot.isHidden || isHotspotSelectedOnCanvas(spot)).map((spot) => {
+                    const hotspotImageSrc = getHotspotDisplayImage(spot);
+                    return (
+                      <button
+                        key={spot.id}
+                        type="button"
+                        data-tour={spot.tutorialCreated ? 'hotspot-on-canvas' : undefined}
+                        className={`editor-hotspot ${hotspotImageSrc ? 'editor-hotspot-with-image' : ''} ${getShapeClassName(spot)} ${spot.isHidden ? 'editor-hidden-on-canvas' : ''} ${isHotspotSelectedOnCanvas(spot) ? 'selected' : ''} ${spot.id === draggingHotspotId ? 'dragging' : ''}`}
+                        style={{ left: `${spot.x}%`, top: `${spot.y}%`, width: `${spot.width}%`, height: `${spot.height}%`, zIndex: getLayerZIndex(spot, 'hotspot'), ...getElementShapeStyle(spot) }}
+                        onPointerDown={(event) => beginDrag(event, spot.id)}
+                        onClick={(event) => selectHotspot(spot.id, event)}
+                        onContextMenu={(event) => openSceneCanvasContextMenu(event, 'hotspot', spot.id, 'main')}
+                      >
+                        {hotspotImageSrc ? <img className="editor-hotspot-image" src={hotspotImageSrc} alt="" aria-hidden="true" /> : null}
+                        <span>{spot.name}</span>
+                        {renderShapeOutline(spot, isHotspotSelectedOnCanvas(spot))}
+                        {renderResizeHandles('hotspot', spot.id, isHotspotSelectedOnCanvas(spot))}
+                        {renderShapePointHandles('hotspot', spot.id, isHotspotSelectedOnCanvas(spot))}
+                      </button>
+                    );
+                  })}
                   <SceneCanvasQuickToolbar
                     selectedScene={selectedScene}
                     selectedSceneId={selectedSceneId}
@@ -885,6 +919,9 @@ export default function SceneStudio(props) {
                       selectedSceneId={selectedSceneId}
                       selectedSceneObject={selectedSceneObject}
                       selectedSceneObjectId={selectedSceneObjectId}
+                      user={user}
+                      projectLibrary={projectLibrary}
+                      activeProjectId={activeProjectId}
                       patchProject={patchProject}
                       renderShapeControls={renderShapeControls}
                       handleUpload={handleUpload}
@@ -969,6 +1006,9 @@ export default function SceneStudio(props) {
                       selectedHotspotId={selectedHotspotId}
                       selectedSceneId={selectedSceneId}
                       project={project}
+                      user={user}
+                      projectLibrary={projectLibrary}
+                      activeProjectId={activeProjectId}
                       patchProject={patchProject}
                       renderShapeControls={renderShapeControls}
                       isBeginnerMode={isBeginnerMode}
@@ -998,6 +1038,9 @@ export default function SceneStudio(props) {
                   selectedHotspot={selectedHotspot}
                   selectedHotspotId={selectedHotspotId}
                   project={project}
+                  user={user}
+                  projectLibrary={projectLibrary}
+                  activeProjectId={activeProjectId}
                   fullscreenViewportRef={fullscreenViewportRef}
                   fullscreenCanvasRef={fullscreenCanvasRef}
                   fullscreenContentRef={fullscreenContentRef}

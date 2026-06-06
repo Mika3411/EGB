@@ -8,7 +8,7 @@ export default function EnigmaList({
   addEnigma,
 }) {
   return (
-    <section className="panel side">
+    <section className="panel side enigma-list-panel">
       <div className="panel-head">
         <h2>Énigmes</h2>
         <div className="label-with-help">

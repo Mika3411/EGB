@@ -31,7 +31,7 @@ export default function EnigmaPreviewAside({
   return (
     <>
               {selectedEnigma.type === 'code' ? (
-                <aside className="combo-card" data-tour="enigma-code-appearance" style={{ position: 'sticky', top: 12, background: 'rgba(15, 23, 42, 0.72)' }}>
+                <aside className="combo-card enigma-preview-aside" data-tour="enigma-code-appearance" style={{ position: 'sticky', top: 12, background: 'rgba(15, 23, 42, 0.72)' }}>
                   <h3 style={{ marginTop: 0 }}>Apparence du code</h3>
                   <HelpLabel help={FIELD_HELP.codeSkin}>Forme côté joueur</HelpLabel>
                   <select data-tour="enigma-code-skin" value={selectedCodeSkin} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
@@ -79,7 +79,7 @@ export default function EnigmaPreviewAside({
               ) : null}
 
               {selectedEnigma.type === 'colors' ? (
-                <aside className="combo-card" style={{ position: 'sticky', top: 12, background: 'rgba(15, 23, 42, 0.72)' }}>
+                <aside className="combo-card enigma-preview-aside" style={{ position: 'sticky', top: 12, background: 'rgba(15, 23, 42, 0.72)' }}>
                   <h3 style={{ marginTop: 0 }}>Logique couleur</h3>
                   <HelpLabel help={FIELD_HELP.colorLogic}>Mode de jeu</HelpLabel>
                   <select value={selectedColorLogic} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
@@ -248,7 +248,7 @@ export default function EnigmaPreviewAside({
               ) : null}
 
               {selectedEnigma.type === 'misc' ? (
-                <aside className="combo-card" style={{ position: 'sticky', top: 12, background: 'rgba(15, 23, 42, 0.72)' }}>
+                <aside className="combo-card enigma-preview-aside" style={{ position: 'sticky', top: 12, background: 'rgba(15, 23, 42, 0.72)' }}>
                   <h3 style={{ marginTop: 0 }}>Logique Divers</h3>
                   <p className="small-note">Aperçu : {MISC_MODE_OPTIONS.find(([value]) => value === selectedMiscMode)?.[1] || 'Question / réponse'}</p>
 
@@ -366,7 +366,7 @@ export default function EnigmaPreviewAside({
               ) : null}
 
               {usesEditorImageEnigma(selectedEnigma.type) ? (
-                <aside className="combo-card" style={{ position: 'sticky', top: 12, background: 'rgba(15, 23, 42, 0.72)' }}>
+                <aside className="combo-card enigma-preview-aside" style={{ position: 'sticky', top: 12, background: 'rgba(15, 23, 42, 0.72)' }}>
                   <h3 style={{ marginTop: 0 }}>Logique du puzzle</h3>
                   <HelpLabel help={FIELD_HELP.imagePuzzleLogic}>Mode image</HelpLabel>
                   <select value={selectedImagePuzzleLogic} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {

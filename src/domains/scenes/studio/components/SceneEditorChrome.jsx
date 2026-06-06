@@ -70,6 +70,7 @@ export function EditorToolbarMenus({
   addVisualEffectZone,
   isBeginnerMode = false,
   isIntermediateMode = false,
+  isSinglePageMode = false,
 }) {
   const menuBarRef = useRef(null);
 
@@ -117,7 +118,7 @@ export function EditorToolbarMenus({
         <summary>Fichier</summary>
         <div className="editor-menu-popover">
           <MenuItem onClick={() => previewScene?.(selectedSceneId)}>Prévisualiser</MenuItem>
-          <MenuItem danger onClick={() => deleteScene(selectedSceneId)}>Supprimer la scène</MenuItem>
+          {!isSinglePageMode ? <MenuItem danger onClick={() => deleteScene(selectedSceneId)}>Supprimer la scène</MenuItem> : null}
           {fullscreen ? <MenuItem shortcut="Esc" onClick={closeEditorFullscreen}>Fermer le plein écran</MenuItem> : null}
         </div>
       </details>
@@ -161,20 +162,29 @@ export function EditorToolbarMenus({
         <summary>Ajouter</summary>
         <div className="editor-menu-popover">
           <MenuItem tour="scene-add-hotspot" onClick={addHotspot}>Zone d'action</MenuItem>
-          <MenuItem tour="scene-add-visible-object" onClick={addSceneObject}>Objet visible</MenuItem>
-          {!isBeginnerMode ? (
-            <SubMenuItem label="Bloc">
+          {isSinglePageMode ? (
+            <>
               <MenuItem onClick={() => addInteractiveBlock?.('text')}>Texte</MenuItem>
-              <MenuItem onClick={() => addInteractiveBlock?.('image')}>Image</MenuItem>
-              <MenuItem onClick={() => addInteractiveBlock?.('button')}>Bouton</MenuItem>
-              <MenuItem onClick={() => addInteractiveBlock?.('input')}>Champ de saisie</MenuItem>
-              <MenuItem onClick={() => addInteractiveBlock?.('code')}>Code</MenuItem>
-              <MenuItem onClick={() => addInteractiveBlock?.('hint')}>Indice</MenuItem>
-            </SubMenuItem>
-          ) : null}
-          {!isBeginnerMode && !isIntermediateMode ? <MenuItem onClick={addAnimationObject}>Animation</MenuItem> : null}
-          {!isBeginnerMode ? <MenuItem onClick={addInvisibleSceneObject}>Objet invisible</MenuItem> : null}
-          {!isBeginnerMode ? <MenuItem tour="scene-add-visual-zone" onClick={addVisualEffectZone}>Zone visuelle</MenuItem> : null}
+              <MenuItem tour="scene-add-visual-zone" onClick={addVisualEffectZone}>Zone visuelle</MenuItem>
+            </>
+          ) : (
+            <>
+              <MenuItem tour="scene-add-visible-object" onClick={addSceneObject}>Objet visible</MenuItem>
+              {!isBeginnerMode ? (
+                <SubMenuItem label="Bloc">
+                  <MenuItem onClick={() => addInteractiveBlock?.('text')}>Texte</MenuItem>
+                  <MenuItem onClick={() => addInteractiveBlock?.('image')}>Image</MenuItem>
+                  <MenuItem onClick={() => addInteractiveBlock?.('button')}>Bouton</MenuItem>
+                  <MenuItem onClick={() => addInteractiveBlock?.('input')}>Champ de saisie</MenuItem>
+                  <MenuItem onClick={() => addInteractiveBlock?.('code')}>Code</MenuItem>
+                  <MenuItem onClick={() => addInteractiveBlock?.('hint')}>Indice</MenuItem>
+                </SubMenuItem>
+              ) : null}
+              {!isBeginnerMode && !isIntermediateMode ? <MenuItem onClick={addAnimationObject}>Animation</MenuItem> : null}
+              {!isBeginnerMode ? <MenuItem onClick={addInvisibleSceneObject}>Objet invisible</MenuItem> : null}
+              {!isBeginnerMode ? <MenuItem tour="scene-add-visual-zone" onClick={addVisualEffectZone}>Zone visuelle</MenuItem> : null}
+            </>
+          )}
         </div>
       </details>
     </nav>
@@ -269,7 +279,11 @@ export function LayersPanel({
 }) {
   if (!selectedScene) return null;
   const layers = [
-    ...(selectedScene.sceneObjects || []).map((entry) => ({ entry, type: 'sceneObject', label: 'Objet' })),
+    ...(selectedScene.sceneObjects || []).map((entry) => ({
+      entry,
+      type: 'sceneObject',
+      label: entry.blockType === 'text' ? 'Texte' : 'Objet',
+    })),
     ...(selectedScene.hotspots || []).map((entry) => ({ entry, type: 'hotspot', label: 'Zone' })),
   ].sort((a, b) => getLayerZIndex(b.entry, b.type) - getLayerZIndex(a.entry, a.type));
 

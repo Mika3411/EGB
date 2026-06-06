@@ -550,6 +550,9 @@ export function resolveHotspotInteraction(spot, context = {}) {
       rewardItemId: matchingRule.rewardItemId || (useDefaultAction ? spot.rewardItemId || '' : ''),
       targetSceneId: useDefaultAction ? spot.targetSceneId || '' : matchingRule.targetSceneId || '',
       targetCinematicId: useDefaultAction ? spot.targetCinematicId || '' : matchingRule.targetCinematicId || '',
+      externalUrl: useDefaultAction ? spot.externalUrl || '' : '',
+      targetProjectId: useDefaultAction ? spot.targetProjectId || '' : '',
+      targetProjectUserId: useDefaultAction ? spot.targetProjectUserId || '' : '',
       enigmaId: useDefaultAction ? spot.enigmaId || '' : matchingRule.enigmaId || '',
       blockActionType: matchingRule.blockActionType || 'show',
       targetBlockId: matchingRule.targetBlockId || '',
@@ -580,6 +583,9 @@ export function resolveHotspotInteraction(spot, context = {}) {
       rewardItemId: '',
       targetSceneId: '',
       targetCinematicId: '',
+      externalUrl: '',
+      targetProjectId: '',
+      targetProjectUserId: '',
       enigmaId: '',
       objectImageData: '',
       objectImageName: '',
@@ -612,6 +618,9 @@ export function resolveHotspotInteraction(spot, context = {}) {
     rewardItemId: spot.secondRewardItemId || '',
     targetSceneId: spot.secondTargetSceneId || '',
     targetCinematicId: spot.secondTargetCinematicId || '',
+    externalUrl: spot.secondExternalUrl || '',
+    targetProjectId: spot.secondTargetProjectId || '',
+    targetProjectUserId: spot.secondTargetProjectUserId || '',
     enigmaId: spot.secondEnigmaId || '',
     objectImageId: spot.secondObjectImageId || '',
     objectImageData: spot.secondObjectImageData || '',
@@ -637,6 +646,10 @@ function reduceHotspotAction(state, action) {
       sourceHotspot,
       getHotspotConditionContext(state, sourceHotspot.id),
     ) || sourceHotspot;
+
+  if (hotspot.actionType === 'none') {
+    return withResult(state, action, { ok: true, engine: 'hotspot', hotspot, scene, noAction: true });
+  }
 
   if (hotspot.requiredHotspotId && !state.completedHotspotIds.includes(hotspot.requiredHotspotId)) {
     return withResult({

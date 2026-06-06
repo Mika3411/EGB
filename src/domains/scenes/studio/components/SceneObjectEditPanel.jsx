@@ -3,11 +3,19 @@ import MediaSourcePicker from '../../../../shared/ui/media/MediaSourcePicker.jsx
 import NumberInput from '../../../../shared/ui/forms/NumberInput.jsx';
 import { showConfirm } from '../../../../shared/ui/AccessibleDialog';
 import CompactAudioPreview from './CompactAudioPreview.jsx';
+import { getProjectLinkOptions } from './HotspotActionFields.jsx';
+import { isProPromotionProject } from '../../../../shared/services/proPromotion';
 import {
   getSceneObjectBlockType,
+  getSceneObjectBackgroundColor,
+  getSceneObjectBackgroundOpacity,
   getSceneObjectClickMode,
+  getSceneObjectFontFamilyValue,
   getSceneObjectFontSize,
+  getSceneObjectTextColor,
+  clampSceneObjectBackgroundOpacity,
   SCENE_OBJECT_BLOCK_TYPES,
+  SCENE_OBJECT_FONT_FAMILY_OPTIONS,
 } from '../../../../shared/services/sceneObjectBlocks';
 
 export default function SceneObjectEditPanel({
@@ -15,6 +23,9 @@ export default function SceneObjectEditPanel({
   selectedSceneId,
   selectedSceneObject,
   selectedSceneObjectId,
+  user = null,
+  projectLibrary = [],
+  activeProjectId = '',
   patchProject,
   renderShapeControls,
   handleUpload,
@@ -34,7 +45,35 @@ export default function SceneObjectEditPanel({
     || selectedSceneObject.name === 'Animation',
   );
   const isBeginnerMode = project?.creationMode === 'beginner';
-  const canUseQuickLogic = !isBeginnerMode && project?.creationMode !== 'intermediate';
+  const isProPromotionMode = isProPromotionProject(project);
+  const isProTextBlock = isProPromotionMode && blockType === 'text';
+  const proTextActionOptions = [
+    { value: 'none', label: 'Aucun' },
+    { value: 'dialogue', label: 'Dialogue' },
+    { value: 'external_link', label: 'Lien externe' },
+    { value: 'project_link', label: 'Lien projet' },
+  ];
+  const proTextActionType = clickMode === 'none'
+    ? 'none'
+    : (
+      proTextActionOptions.some((option) => option.value === selectedSceneObject.actionType)
+        ? selectedSceneObject.actionType
+        : 'dialogue'
+    );
+  const proTextProjectLinkOptions = getProjectLinkOptions(projectLibrary, activeProjectId, user);
+  const selectedProTextProjectOption = selectedSceneObject.targetProjectId
+    && !proTextProjectLinkOptions.some((option) => option.id === selectedSceneObject.targetProjectId)
+    ? [{
+      id: selectedSceneObject.targetProjectId,
+      userId: selectedSceneObject.targetProjectUserId || user?.id || '',
+      title: 'Projet sélectionné',
+    }]
+    : [];
+  const displayedProTextProjectLinkOptions = [...selectedProTextProjectOption, ...proTextProjectLinkOptions];
+  const canUseQuickLogic = !isProPromotionMode && !isBeginnerMode && project?.creationMode !== 'intermediate';
+  const selectedActionType = isProPromotionMode && ['scene', 'dialogue_item'].includes(selectedSceneObject.actionType)
+    ? 'dialogue'
+    : selectedSceneObject.actionType || 'dialogue';
   const patchObject = (updater) => patchProject((draft) => {
     const obj = draft.scenes.find((scene) => scene.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === selectedSceneObjectId);
     if (obj) updater(obj);
@@ -60,7 +99,7 @@ export default function SceneObjectEditPanel({
     <div className="scene-object-inspector-card" data-tour="scene-object-panel">
       <HelpLabel help="Nom interne de cet element. Il aide au retrouver dans les calques et les listes de l'éditeur.">Nom</HelpLabel>
       <input value={selectedSceneObject.name} onChange={(event) => patchObject((obj) => { obj.name = event.target.value; })} />
-      {!isBeginnerMode ? (
+      {!isBeginnerMode && !isProPromotionMode ? (
         <>
           <HelpLabel help="Type de bloc affiché dans la scène. Objet visible garde le comportement historique, les autres types ajoutent des blocs interactifs plus lisibles.">Type de bloc</HelpLabel>
           <select value={blockType} onChange={(event) => patchObject((obj) => {
@@ -94,8 +133,12 @@ export default function SceneObjectEditPanel({
 
       {!isBeginnerMode && isBlockObject ? (
         <>
-          <HelpLabel help="Libellé visible sur le bloc, par exemple le titre d'un indice, le texte du bouton ou le nom du champ.">Libellé du bloc</HelpLabel>
-          <input value={selectedSceneObject.blockLabel || ''} onChange={(event) => patchObject((obj) => { obj.blockLabel = event.target.value; })} />
+          {!isProTextBlock ? (
+            <>
+              <HelpLabel help="Libellé visible sur le bloc, par exemple le titre d'un indice, le texte du bouton ou le nom du champ.">Libellé du bloc</HelpLabel>
+              <input value={selectedSceneObject.blockLabel || ''} onChange={(event) => patchObject((obj) => { obj.blockLabel = event.target.value; })} />
+            </>
+          ) : null}
           {['text', 'hint'].includes(blockType) ? (
             <>
               <HelpLabel help="Texte affiché directement dans la scène. Pour un indice, il apparait dans le bloc et peut aussi être repris comme dialogue au clic.">Texte</HelpLabel>
@@ -123,19 +166,159 @@ export default function SceneObjectEditPanel({
               <textarea value={selectedSceneObject.failureDialogue || ''} onChange={(event) => patchObject((obj) => { obj.failureDialogue = event.target.value; })} />
             </>
           ) : null}
-          <HelpLabel help="Comportement au clic. Action avancée utilise les mêmes réglages qu'une zone d'action classique.">Comportement</HelpLabel>
-          <select value={clickMode} onChange={(event) => patchObject((obj) => { obj.clickMode = event.target.value; })}>
-            <option value="none">Decoratif</option>
-            <option value="object">Interaction simple</option>
-            <option value="action">Action avancee</option>
-          </select>
-          <HelpLabel help="Taille du texte affiché dans le cadre du bloc.">Taille dé police</HelpLabel>
-          <NumberInput
-            min="8"
-            max="48"
-            value={getSceneObjectFontSize(selectedSceneObject)}
-            onValueChange={(nextValue) => patchObject((obj) => { obj.fontSize = nextValue; })}
-          />
+          {!isProPromotionMode ? (
+            <>
+              <HelpLabel help="Comportement au clic. Action avancée utilise les mêmes réglages qu'une zone d'action classique.">Comportement</HelpLabel>
+              <select value={clickMode} onChange={(event) => patchObject((obj) => { obj.clickMode = event.target.value; })}>
+                <option value="none">Decoratif</option>
+                <option value="object">Interaction simple</option>
+                <option value="action">Action avancee</option>
+              </select>
+            </>
+          ) : null}
+          <div className="scene-text-style-grid">
+            <div>
+              <HelpLabel help="Taille du texte affiché dans le cadre du bloc.">Taille de police</HelpLabel>
+              <NumberInput
+                min="8"
+                max="48"
+                value={getSceneObjectFontSize(selectedSceneObject)}
+                onValueChange={(nextValue) => patchObject((obj) => { obj.fontSize = nextValue; })}
+              />
+            </div>
+            <div>
+              <HelpLabel help="Police utilisée pour le texte affiché dans la scène.">Police</HelpLabel>
+              <select
+                data-tour="scene-object-font-family"
+                value={getSceneObjectFontFamilyValue(selectedSceneObject)}
+                onChange={(event) => patchObject((obj) => { obj.fontFamily = event.target.value; })}
+              >
+                {SCENE_OBJECT_FONT_FAMILY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="scene-text-color-grid">
+            <div>
+              <HelpLabel help="Couleur de l'écriture affichée dans ce bloc.">Couleur texte</HelpLabel>
+              <input
+                type="color"
+                className="scene-color-input"
+                data-tour="scene-object-text-color"
+                value={getSceneObjectTextColor(selectedSceneObject)}
+                onChange={(event) => patchObject((obj) => { obj.textColor = event.target.value; })}
+              />
+            </div>
+            <div>
+              <HelpLabel help="Couleur du fond derrière le texte de ce bloc.">Couleur fond</HelpLabel>
+              <input
+                type="color"
+                className="scene-color-input"
+                data-tour="scene-object-background-color"
+                value={getSceneObjectBackgroundColor(selectedSceneObject)}
+                onChange={(event) => patchObject((obj) => { obj.backgroundColor = event.target.value; })}
+              />
+            </div>
+            <div className="scene-text-opacity-field">
+              <HelpLabel help="Opacité du fond du bloc. 0 rend le fond transparent, 100 le rend opaque.">Opacité fond</HelpLabel>
+              <div className="scene-text-opacity-number">
+                <NumberInput
+                  min="0"
+                  max="100"
+                  step="1"
+                  inputMode="numeric"
+                  value={getSceneObjectBackgroundOpacity(selectedSceneObject)}
+                  onValueChange={(nextValue) => patchObject((obj) => {
+                    obj.backgroundOpacity = clampSceneObjectBackgroundOpacity(nextValue);
+                  })}
+                />
+                <span className="scene-text-opacity-unit">%</span>
+              </div>
+            </div>
+          </div>
+          {isProTextBlock ? (
+            <>
+              <HelpLabel help="Action déclenchée quand le joueur clique ce texte dans l'extension.">Action du texte</HelpLabel>
+              <select
+                data-tour="scene-object-pro-text-action"
+                value={proTextActionType}
+                onChange={(event) => patchObject((obj) => {
+                  if (event.target.value === 'none') {
+                    obj.clickMode = 'none';
+                    obj.actionType = 'dialogue';
+                    return;
+                  }
+                  obj.clickMode = 'action';
+                  obj.actionType = event.target.value;
+                })}
+              >
+                {proTextActionOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+
+              {proTextActionType === 'dialogue' ? (
+                <>
+                  <HelpLabel help="Texte affiché quand le joueur clique ce texte.">Dialogue au clic</HelpLabel>
+                  <textarea
+                    data-tour="scene-object-pro-text-dialogue"
+                    value={selectedSceneObject.dialogue || ''}
+                    onChange={(event) => patchObject((obj) => {
+                      obj.clickMode = 'action';
+                      obj.dialogue = event.target.value;
+                    })}
+                  />
+                </>
+              ) : null}
+
+              {proTextActionType === 'external_link' ? (
+                <>
+                  <HelpLabel help="URL ouverte dans un nouvel onglet quand le joueur clique ce texte.">Lien externe</HelpLabel>
+                  <input
+                    data-tour="scene-object-pro-text-external-url"
+                    type="url"
+                    value={selectedSceneObject.externalUrl || ''}
+                    placeholder="https://ton-site.fr/page"
+                    onChange={(event) => patchObject((obj) => {
+                      obj.clickMode = 'action';
+                      obj.externalUrl = event.target.value;
+                    })}
+                  />
+                </>
+              ) : null}
+
+              {proTextActionType === 'project_link' ? (
+                <>
+                  <HelpLabel help="Projet joueur ouvert dans un nouvel onglet quand ce texte est cliqué.">Projet cible</HelpLabel>
+                  <select
+                    data-tour="scene-object-pro-text-target-project"
+                    value={selectedSceneObject.targetProjectId || ''}
+                    onChange={(event) => patchObject((obj) => {
+                      const nextProject = displayedProTextProjectLinkOptions.find((option) => option.id === event.target.value);
+                      obj.clickMode = 'action';
+                      obj.targetProjectId = nextProject?.id || '';
+                      obj.targetProjectUserId = nextProject?.userId || '';
+                    })}
+                  >
+                    <option value="">Aucun projet</option>
+                    {displayedProTextProjectLinkOptions.map((option) => (
+                      <option key={`${option.userId || 'user'}-${option.id}`} value={option.id}>
+                        {option.title}
+                      </option>
+                    ))}
+                  </select>
+                  {!displayedProTextProjectLinkOptions.length ? (
+                    <p className="small-note">Aucun autre projet disponible pour ce compte.</p>
+                  ) : null}
+                </>
+              ) : null}
+            </>
+          ) : null}
         </>
       ) : null}
 
@@ -159,30 +342,34 @@ export default function SceneObjectEditPanel({
           {selectedSceneObject.imageName || 'Importer une image fixe'}
         </MediaSourcePicker>
       ) : null}
-      <HelpLabel help={isAnimationObject ? "Son joué quand le joueur clique sur cette animation." : "Son joué quand le joueur clique sur cet objet."}>{isAnimationObject ? "Son de l'animation" : "Son de l'objet"}</HelpLabel>
-      <MediaSourcePicker
-        className="button like full secondary-action"
-        accept="audio/*"
-        assetScope={isAnimationObject ? 'logic-sound' : 'object-sound'}
-        handleUpload={handleUpload}
-        mediaLibrary={mediaLibrary}
-        onSelect={(data, name) => patchObject((obj) => {
-          obj.soundData = data;
-          obj.soundName = name;
-          if (isAnimationObject) obj.clickMode = 'object';
-        })}
-      >
-        {selectedSceneObject.soundName || 'Importer un son'}
-      </MediaSourcePicker>
-      {selectedSceneObject.soundData ? (
-        <CompactAudioPreview
-          src={selectedSceneObject.soundData}
-          name={selectedSceneObject.soundName}
-          onRemove={() => patchObject((obj) => {
-            obj.soundData = '';
-            obj.soundName = '';
-          })}
-        />
+      {!isProTextBlock ? (
+        <>
+          <HelpLabel help={isAnimationObject ? "Son joué quand le joueur clique sur cette animation." : "Son joué quand le joueur clique sur cet objet."}>{isAnimationObject ? "Son de l'animation" : "Son de l'objet"}</HelpLabel>
+          <MediaSourcePicker
+            className="button like full secondary-action"
+            accept="audio/*"
+            assetScope={isAnimationObject ? 'logic-sound' : 'object-sound'}
+            handleUpload={handleUpload}
+            mediaLibrary={mediaLibrary}
+            onSelect={(data, name) => patchObject((obj) => {
+              obj.soundData = data;
+              obj.soundName = name;
+              if (isAnimationObject) obj.clickMode = 'object';
+            })}
+          >
+            {selectedSceneObject.soundName || 'Importer un son'}
+          </MediaSourcePicker>
+          {selectedSceneObject.soundData ? (
+            <CompactAudioPreview
+              src={selectedSceneObject.soundData}
+              name={selectedSceneObject.soundName}
+              onRemove={() => patchObject((obj) => {
+                obj.soundData = '';
+                obj.soundName = '';
+              })}
+            />
+          ) : null}
+        </>
       ) : null}
       {!isBeginnerMode && isAnimationObject ? (
         <>
@@ -240,13 +427,13 @@ export default function SceneObjectEditPanel({
         </>
       ) : null}
 
-      {clickMode === 'action' ? (
+      {clickMode === 'action' && !isProTextBlock ? (
         <>
           <HelpLabel help="Action principale déclénchée par cette image après validation des prerequis eventuels.">Action</HelpLabel>
-          <select value={selectedSceneObject.actionType || 'dialogue'} onChange={(event) => patchObject((obj) => { obj.actionType = event.target.value; })}>
+          <select value={selectedActionType} onChange={(event) => patchObject((obj) => { obj.actionType = event.target.value; })}>
             <option value="dialogue">Dialogue</option>
-            <option value="dialogue_item">Dialogue + objet</option>
-            <option value="scene">Changer de scène</option>
+            {!isProPromotionMode ? <option value="dialogue_item">Dialogue + objet</option> : null}
+            {!isProPromotionMode ? <option value="scene">Changer de scène</option> : null}
             <option value="cinematic">Lancer une cinématique</option>
           </select>
           <HelpLabel help="Texte affiché lors de l'interaction principale.">Dialogue</HelpLabel>
@@ -260,16 +447,24 @@ export default function SceneObjectEditPanel({
             <input type="checkbox" checked={Boolean(selectedSceneObject.consumeRequiredItemOnUse)} onChange={(event) => patchObject((obj) => { obj.consumeRequiredItemOnUse = event.target.checked; })} />
             Consommer l'objet requis
           </label>
-          <HelpLabel help="Objet donné au joueur si l'action réussit.">Objet donné</HelpLabel>
-          <select value={selectedSceneObject.rewardItemId || ''} onChange={(event) => patchObject((obj) => { obj.rewardItemId = event.target.value; })}>
-            <option value="">Aucun</option>
-            {project.items.map((item) => <option key={item.id} value={item.id}>{item.icon} {item.name}</option>)}
-          </select>
-          <HelpLabel help="Destination utilisée si l'action est Changer de scène.">Scène cible</HelpLabel>
-          <select value={selectedSceneObject.targetSceneId || ''} onChange={(event) => patchObject((obj) => { obj.targetSceneId = event.target.value; })}>
-            <option value="">Aucune</option>
-            {project.scenes.filter((scene) => scene.id !== selectedSceneId).map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
-          </select>
+          {!isProPromotionMode ? (
+            <>
+              <HelpLabel help="Objet donné au joueur si l'action réussit.">Objet donné</HelpLabel>
+              <select value={selectedSceneObject.rewardItemId || ''} onChange={(event) => patchObject((obj) => { obj.rewardItemId = event.target.value; })}>
+                <option value="">Aucun</option>
+                {project.items.map((item) => <option key={item.id} value={item.id}>{item.icon} {item.name}</option>)}
+              </select>
+            </>
+          ) : null}
+          {!isProPromotionMode ? (
+            <>
+              <HelpLabel help="Destination utilisée si l'action est Changer de scène.">Scène cible</HelpLabel>
+              <select value={selectedSceneObject.targetSceneId || ''} onChange={(event) => patchObject((obj) => { obj.targetSceneId = event.target.value; })}>
+                <option value="">Aucune</option>
+                {project.scenes.filter((scene) => scene.id !== selectedSceneId).map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
+              </select>
+            </>
+          ) : null}
           <HelpLabel help="Cinématique lancée après l'interaction réussie.">Cinématique cible</HelpLabel>
           <select value={selectedSceneObject.targetCinematicId || ''} onChange={(event) => patchObject((obj) => { obj.targetCinematicId = event.target.value; })}>
             <option value="">Aucune</option>

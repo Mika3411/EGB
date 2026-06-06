@@ -11,8 +11,19 @@ import {
   resolveHotspotInteraction,
   selectRewardInventoryItem,
 } from '../shared/services/gameEngine';
+import { getHotspotLinkUrl, normalizeHotspotExternalUrl } from '../shared/services/hotspotLinks';
 
 describe('hotspot runtime helpers', () => {
+  it('normalizes hotspot external and project links', () => {
+    expect(normalizeHotspotExternalUrl('example.com/reserver', 'https://studio.test/app')).toBe('https://example.com/reserver');
+    expect(normalizeHotspotExternalUrl('javascript:alert(1)', 'https://studio.test/app')).toBe('');
+    expect(getHotspotLinkUrl({
+      actionType: 'project_link',
+      targetProjectUserId: 'user-1',
+      targetProjectId: 'project-2',
+    }, { href: 'https://studio.test/builder?tab=scenes' })).toBe('https://studio.test/builder?playUser=user-1&playProject=project-2');
+  });
+
   it('computes inventory and viewer side-effect values without mutating inputs', () => {
     const inventory = ['key'];
     const selected = ['old'];
@@ -70,6 +81,35 @@ describe('hotspot runtime helpers', () => {
       name: 'Note froissee',
       icon: 'NOTE',
     });
+  });
+
+  it('ignores hotspots configured with no action', () => {
+    const project = {
+      scenes: [{
+        id: 'scene-1',
+        hotspots: [{
+          id: 'silent-zone',
+          actionType: 'none',
+          dialogue: 'Should not show',
+          rewardItemId: 'note',
+        }],
+      }],
+      items: [{ id: 'note', name: 'Note', icon: 'N' }],
+    };
+    const engine = createGameEngine(project, {
+      currentSceneId: 'scene-1',
+      dialogue: 'Initial',
+    });
+
+    const state = engine.dispatch(gameActions.triggerHotspot('silent-zone'));
+
+    expect(state.lastResult).toMatchObject({
+      ok: true,
+      noAction: true,
+    });
+    expect(state.dialogue).toBe('Initial');
+    expect(state.inventory).toEqual([]);
+    expect(state.completedHotspotIds).toEqual([]);
   });
 
   it('applies block side-effect state with configurable removed ids key', () => {

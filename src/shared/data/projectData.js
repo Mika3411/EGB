@@ -1,5 +1,12 @@
 import { normalizeCinematicSteps } from '../services/cinematicEngine';
 import { migrateProjectAssetReferences } from '../services/assetManager';
+import { PRO_PROMOTION_PROJECT_MODE } from '../services/proPromotion';
+import {
+  SCENE_OBJECT_FONT_FAMILY_OPTIONS,
+  clampSceneObjectBackgroundOpacity,
+  hasSceneObjectBackgroundOpacityOverride,
+  normalizeSceneObjectHexColor,
+} from '../services/sceneObjectBlocks';
 import { ensureSewerAct2 } from './projectDataSewerAct.js';
 import {
   makeCharacter3DModel,
@@ -17,10 +24,12 @@ const ADVANCED_CONDITION_VALUES = ['has_item', 'visited_scene', 'completed_hotsp
 const CONVERSATION_EFFECT_VALUES = ['message', 'add_item', 'remove_item', 'heal_health', 'heal_mana', 'set_variable', 'increment_variable', 'decrement_variable', 'journal', 'next_node', 'scene', 'cinematic', 'enigma', 'ending'];
 const CONVERSATION_REPLY_ACTION_VALUES = ['node', 'dialogue', 'item', 'multiple', 'skill_check', 'hero_combat', 'scene', 'cinematic', 'enigma', 'ending', 'end'];
 const CONVERSATION_CONDITION_VALUES = ['none', 'has_item', 'visited_scene', 'completed_hotspot', 'solved_enigma', 'chose_reply', 'story_variable', 'advanced'];
-const HOTSPOT_ACTION_VALUES = ['dialogue', 'conversation', 'skill_check', 'hero_combat', 'dialogue_item', 'scene', 'cinematic'];
+const HOTSPOT_ACTION_VALUES = ['none', 'dialogue', 'conversation', 'skill_check', 'hero_combat', 'dialogue_item', 'scene', 'cinematic', 'external_link', 'project_link'];
+const PRO_PROMOTION_TEXT_ACTION_VALUES = ['none', 'dialogue', 'external_link', 'project_link'];
 const LOGIC_RULE_CONDITION_VALUES = ['always', 'has_item', 'missing_item', 'visited_scene', 'completed_hotspot', 'solved_enigma', 'launched_cinematic', 'completed_combination', 'chose_reply', 'story_variable', 'advanced', 'second_click', 'hero_health_below', 'hero_mana_at_least', 'hero_last_roll_success', 'hero_skill_used'];
 const LOGIC_RULE_ACTION_VALUES = ['default', 'dialogue', 'dialogue_item', 'scene', 'cinematic', 'block'];
 const BLOCK_ACTION_VALUES = ['show', 'hide', 'update_text'];
+const SCENE_OBJECT_FONT_FAMILY_VALUES = SCENE_OBJECT_FONT_FAMILY_OPTIONS.map((option) => option.value);
 const CINEMATIC_END_VALUES = ['none', 'act', 'scene', 'item'];
 const ENIGMA_UNLOCK_VALUES = ['none', 'scene', 'cinematic'];
 const LEGACY_TECHNICAL_VALUE_MAP = {
@@ -93,6 +102,9 @@ const makeLogicRule = () => ({
   rewardItemId: '',
   targetSceneId: '',
   targetCinematicId: '',
+  externalUrl: '',
+  targetProjectId: '',
+  targetProjectUserId: '',
   enigmaId: '',
   blockActionType: 'show',
   targetBlockId: '',
@@ -125,6 +137,9 @@ const makeHotspot = () => ({
   secondRewardItemId: '',
   secondTargetSceneId: '',
   secondTargetCinematicId: '',
+  secondExternalUrl: '',
+  secondTargetProjectId: '',
+  secondTargetProjectUserId: '',
   secondEnigmaId: '',
   secondObjectImageData: '',
   secondObjectImageName: '',
@@ -371,6 +386,138 @@ const normalizeRouteMapShape = (rawRouteMap = makeRouteMap()) => {
   };
 };
 
+const PRO_PROMOTION_SCENE_REF_KEYS = new Set([
+  'targetActId',
+  'targetSceneId',
+  'secondTargetSceneId',
+  'timerTargetSceneId',
+  'skillCheckSuccessTargetSceneId',
+  'skillCheckFailureTargetSceneId',
+  'combatVictoryTargetSceneId',
+  'combatDefeatTargetSceneId',
+  'conditionSceneId',
+  'sceneId',
+]);
+
+const PRO_PROMOTION_ENIGMA_REF_KEYS = new Set([
+  'enigmaId',
+  'secondEnigmaId',
+  'conditionEnigmaId',
+]);
+
+const PRO_PROMOTION_INVENTORY_REF_KEYS = new Set([
+  'linkedItemId',
+  'requiredItemId',
+  'rewardItemId',
+  'skillCheckSuccessRewardItemId',
+  'combatRewardItemId',
+]);
+
+const PRO_PROMOTION_TECHNICAL_VALUE_FALLBACKS = {
+  actionType: { fallback: 'dialogue', values: new Set(['scene', 'act', 'enigma', 'dialogue_item']) },
+  secondActionType: { fallback: 'dialogue', values: new Set(['scene', 'act', 'enigma', 'dialogue_item']) },
+  onEndType: { fallback: 'none', values: new Set(['scene', 'act']) },
+  type: { fallback: 'message', values: new Set(['scene', 'act', 'enigma']) },
+  unlockType: { fallback: 'none', values: new Set(['scene', 'act']) },
+  timerEndAction: { fallback: 'none', values: new Set(['scene', 'act']) },
+  conditionType: { fallback: 'none', values: new Set(['visited_scene', 'solved_enigma']) },
+};
+
+const clearProPromotionSceneLinks = (value, seen = new WeakSet()) => {
+  if (!value || typeof value !== 'object') return;
+  if (seen.has(value)) return;
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    value.forEach((entry) => clearProPromotionSceneLinks(entry, seen));
+    return;
+  }
+
+  Object.entries(value).forEach(([key, entry]) => {
+    if (PRO_PROMOTION_SCENE_REF_KEYS.has(key)) {
+      value[key] = '';
+      return;
+    }
+
+    if (PRO_PROMOTION_ENIGMA_REF_KEYS.has(key)) {
+      value[key] = '';
+      return;
+    }
+
+    if (PRO_PROMOTION_INVENTORY_REF_KEYS.has(key)) {
+      value[key] = '';
+      return;
+    }
+
+    const technicalFallback = PRO_PROMOTION_TECHNICAL_VALUE_FALLBACKS[key];
+    if (technicalFallback?.values?.has(entry)) {
+      value[key] = technicalFallback.fallback;
+      return;
+    }
+
+    clearProPromotionSceneLinks(entry, seen);
+  });
+};
+
+const normalizeProPromotionProjectPage = (draft) => {
+  if (draft.creationMode !== PRO_PROMOTION_PROJECT_MODE) return;
+
+  const technicalAct = draft.acts?.[0] || makeAct('Extension');
+  draft.acts = [technicalAct];
+
+  const pageScene = draft.scenes?.[0] || makeScene({
+    actId: technicalAct.id,
+    name: 'Page d’extension',
+    parentSceneId: '',
+  });
+  pageScene.actId = technicalAct.id || '';
+  pageScene.parentSceneId = '';
+  clearProPromotionSceneLinks(pageScene);
+  pageScene.sceneObjects = (Array.isArray(pageScene.sceneObjects) ? pageScene.sceneObjects : [])
+    .filter((object) => object?.blockType === 'text')
+    .map((object) => {
+      const actionType = PRO_PROMOTION_TEXT_ACTION_VALUES.includes(object.actionType)
+        ? object.actionType
+        : 'dialogue';
+      const hasTextAction = actionType !== 'none' && (
+        object.clickMode === 'action'
+        || ['external_link', 'project_link'].includes(actionType)
+      );
+
+      return {
+        ...object,
+        blockType: 'text',
+        isInvisible: false,
+        clickMode: hasTextAction ? 'action' : 'none',
+        actionType,
+        interactionMode: 'popup',
+        linkedItemId: '',
+        targetSceneId: '',
+        targetCinematicId: '',
+        externalUrl: object.externalUrl || '',
+        targetProjectId: object.targetProjectId || '',
+        targetProjectUserId: object.targetProjectUserId || '',
+        rewardItemId: '',
+        requiredItemId: '',
+        enigmaId: '',
+        logicRules: [],
+        anime2dSpec: null,
+        anime2dName: '',
+        fontFamily: SCENE_OBJECT_FONT_FAMILY_VALUES.includes(object.fontFamily) ? object.fontFamily : 'system',
+      };
+    });
+
+  draft.scenes = [pageScene];
+  clearProPromotionSceneLinks(draft.cinematics);
+  clearProPromotionSceneLinks(draft.enigmas);
+  draft.routeMap = makeRouteMap();
+  draft.start = {
+    type: 'scene',
+    targetSceneId: pageScene.id,
+    targetCinematicId: '',
+  };
+};
+
 const makeImportedHotspot = ({
   id,
   name,
@@ -382,6 +529,9 @@ const makeImportedHotspot = ({
   dialogue = '',
   targetSceneId = '',
   targetCinematicId = '',
+  externalUrl = '',
+  targetProjectId = '',
+  targetProjectUserId = '',
   enigmaId = '',
   requiredItemId = '',
   rewardItemId = '',
@@ -398,6 +548,9 @@ const makeImportedHotspot = ({
   dialogue,
   targetSceneId,
   targetCinematicId,
+  externalUrl,
+  targetProjectId,
+  targetProjectUserId,
   enigmaId,
   requiredItemId,
   rewardItemId,
@@ -666,7 +819,7 @@ const normalizeProject = (rawProject) => {
     targetSceneId: draft.start.targetSceneId || '',
     targetCinematicId: draft.start.targetCinematicId || '',
   };
-  draft.creationMode = ['beginner', 'intermediate', 'expert', 'adventure', 'hero_adventure'].includes(draft.creationMode) ? draft.creationMode : 'beginner';
+  draft.creationMode = [PRO_PROMOTION_PROJECT_MODE, 'beginner', 'intermediate', 'expert', 'adventure', 'hero_adventure'].includes(draft.creationMode) ? draft.creationMode : 'beginner';
   draft.anime2dDraft = draft.anime2dDraft && typeof draft.anime2dDraft === 'object' ? draft.anime2dDraft : null;
   const rawRouteMap = draft.routeMap && typeof draft.routeMap === 'object' ? draft.routeMap : makeRouteMap();
   const routeRows = Number.isFinite(Number(rawRouteMap.rows)) ? Math.max(8, Math.min(32, Number(rawRouteMap.rows))) : 16;
@@ -790,6 +943,7 @@ const normalizeProject = (rawProject) => {
         interactionMode: ['popup', 'inventory', 'both'].includes(object.interactionMode) ? object.interactionMode : 'popup',
         linkedItemId: object.linkedItemId || '',
         removeAfterUse: object.removeAfterUse !== false,
+        actionType: HOTSPOT_ACTION_VALUES.includes(object.actionType) ? object.actionType : 'dialogue',
         dialogue: object.dialogue || '',
         blockLabel: object.blockLabel || '',
         blockText: object.blockText || '',
@@ -799,11 +953,18 @@ const normalizeProject = (rawProject) => {
         successDialogue: object.successDialogue || '',
         failureDialogue: object.failureDialogue || '',
         fontSize: Number.isFinite(Number(object.fontSize)) ? Math.max(8, Math.min(48, Number(object.fontSize))) : 13,
+        fontFamily: SCENE_OBJECT_FONT_FAMILY_VALUES.includes(object.fontFamily) ? object.fontFamily : 'system',
+        ...(normalizeSceneObjectHexColor(object.textColor, '') ? { textColor: normalizeSceneObjectHexColor(object.textColor, '') } : {}),
+        ...(normalizeSceneObjectHexColor(object.backgroundColor, '') ? { backgroundColor: normalizeSceneObjectHexColor(object.backgroundColor, '') } : {}),
+        ...(hasSceneObjectBackgroundOpacityOverride(object.backgroundOpacity) ? { backgroundOpacity: clampSceneObjectBackgroundOpacity(object.backgroundOpacity) } : {}),
         requiredItemId: object.requiredItemId || '',
         consumeRequiredItemOnUse: Boolean(object.consumeRequiredItemOnUse),
         rewardItemId: object.rewardItemId || '',
         targetSceneId: object.targetSceneId || '',
         targetCinematicId: object.targetCinematicId || '',
+        externalUrl: object.externalUrl || '',
+        targetProjectId: object.targetProjectId || '',
+        targetProjectUserId: object.targetProjectUserId || '',
         enigmaId: object.enigmaId || '',
         lockedMessage: object.lockedMessage || '',
         anime2dSpec: object.anime2dSpec && typeof object.anime2dSpec === 'object' ? object.anime2dSpec : null,
@@ -878,6 +1039,7 @@ const normalizeProject = (rawProject) => {
     makeImportedScene,
     makeImportedHotspot,
   });
+  normalizeProPromotionProjectPage(draft);
   migrateProjectAssetReferences(draft);
   return draft;
 };
