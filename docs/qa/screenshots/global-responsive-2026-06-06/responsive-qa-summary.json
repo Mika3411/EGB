@@ -1,0 +1,650 @@
+[
+  {
+    "viewport": "desktop-1440x900",
+    "label": "Preview",
+    "overflow": 0,
+    "small": 20,
+    "overlaps": 20,
+    "actions": 43,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/desktop-1440x900/01-preview.png"
+  },
+  {
+    "viewport": "desktop-1440x900",
+    "label": "Scènes",
+    "overflow": 0,
+    "small": 20,
+    "overlaps": 20,
+    "actions": 62,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/desktop-1440x900/02-scenes.png"
+  },
+  {
+    "viewport": "desktop-1440x900",
+    "label": "Média",
+    "overflow": 0,
+    "small": 19,
+    "overlaps": 0,
+    "actions": 19,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/desktop-1440x900/03-media.png"
+  },
+  {
+    "viewport": "desktop-1440x900",
+    "label": "Objets",
+    "overflow": 0,
+    "small": 14,
+    "overlaps": 0,
+    "actions": 19,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/desktop-1440x900/04-objets.png"
+  },
+  {
+    "viewport": "desktop-1440x900",
+    "label": "Énigmes",
+    "overflow": 0,
+    "small": 20,
+    "overlaps": 0,
+    "actions": 29,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/desktop-1440x900/05-enigmes.png"
+  },
+  {
+    "viewport": "desktop-1440x900",
+    "label": "Logique",
+    "overflow": 0,
+    "small": 20,
+    "overlaps": 1,
+    "actions": 20,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/desktop-1440x900/06-logique.png"
+  },
+  {
+    "viewport": "desktop-1440x900",
+    "label": "Combinaisons",
+    "overflow": 0,
+    "small": 14,
+    "overlaps": 0,
+    "actions": 16,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/desktop-1440x900/07-combinaisons.png"
+  },
+  {
+    "viewport": "desktop-1440x900",
+    "label": "Plan",
+    "overflow": 0,
+    "small": 0,
+    "overlaps": 0,
+    "actions": 2,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/desktop-1440x900/08-plan.png"
+  },
+  {
+    "viewport": "desktop-1440x900",
+    "label": "Aventure",
+    "overflow": 0,
+    "small": 6,
+    "overlaps": 0,
+    "actions": 14,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/desktop-1440x900/09-aventure.png"
+  },
+  {
+    "viewport": "desktop-1440x900",
+    "label": "Hero Adventure",
+    "overflow": 0,
+    "small": 20,
+    "overlaps": 0,
+    "actions": 41,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/desktop-1440x900/10-hero-adventure.png"
+  },
+  {
+    "viewport": "desktop-1440x900",
+    "label": "Combat",
+    "overflow": 0,
+    "small": 17,
+    "overlaps": 0,
+    "actions": 18,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/desktop-1440x900/11-combat.png"
+  },
+  {
+    "viewport": "desktop-1440x900",
+    "label": "Cinématiques",
+    "overflow": 0,
+    "small": 17,
+    "overlaps": 0,
+    "actions": 21,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/desktop-1440x900/12-cinematiques.png"
+  },
+  {
+    "viewport": "desktop-1440x900",
+    "label": "Animation",
+    "overflow": 0,
+    "small": 20,
+    "overlaps": 0,
+    "actions": 45,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/desktop-1440x900/13-animation.png"
+  },
+  {
+    "viewport": "desktop-1440x900",
+    "label": "Profil",
+    "overflow": 0,
+    "small": 20,
+    "overlaps": 2,
+    "actions": 42,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/desktop-1440x900/14-profil.png"
+  },
+  {
+    "viewport": "desktop-1440x900",
+    "label": "Projets",
+    "overflow": 0,
+    "small": 20,
+    "overlaps": 2,
+    "actions": 35,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/desktop-1440x900/15-projets.png"
+  },
+  {
+    "viewport": "desktop-1440x900",
+    "label": "Publication",
+    "overflow": 0,
+    "small": 20,
+    "overlaps": 2,
+    "actions": 34,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/desktop-1440x900/16-publication.png"
+  },
+  {
+    "viewport": "desktop-1440x900",
+    "label": "IA",
+    "overflow": 0,
+    "small": 0,
+    "overlaps": 0,
+    "actions": 2,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/desktop-1440x900/17-ia.png"
+  },
+  {
+    "viewport": "desktop-1440x900",
+    "label": "Score",
+    "overflow": 0,
+    "small": 4,
+    "overlaps": 0,
+    "actions": 7,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/desktop-1440x900/18-score.png"
+  },
+  {
+    "viewport": "mobile-portrait-390x844",
+    "label": "Preview",
+    "overflow": 0,
+    "small": 18,
+    "overlaps": 20,
+    "actions": 24,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-portrait-390x844/01-preview.png"
+  },
+  {
+    "viewport": "mobile-portrait-390x844",
+    "label": "Scènes",
+    "overflow": 0,
+    "small": 20,
+    "overlaps": 20,
+    "actions": 48,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-portrait-390x844/02-scenes.png"
+  },
+  {
+    "viewport": "mobile-portrait-390x844",
+    "label": "Média",
+    "overflow": 0,
+    "small": 14,
+    "overlaps": 0,
+    "actions": 14,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-portrait-390x844/03-media.png"
+  },
+  {
+    "viewport": "mobile-portrait-390x844",
+    "label": "Objets",
+    "overflow": 0,
+    "small": 6,
+    "overlaps": 0,
+    "actions": 15,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-portrait-390x844/04-objets.png"
+  },
+  {
+    "viewport": "mobile-portrait-390x844",
+    "label": "Énigmes",
+    "overflow": 0,
+    "small": 14,
+    "overlaps": 0,
+    "actions": 18,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-portrait-390x844/05-enigmes.png"
+  },
+  {
+    "viewport": "mobile-portrait-390x844",
+    "label": "Logique",
+    "overflow": 0,
+    "small": 14,
+    "overlaps": 1,
+    "actions": 14,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-portrait-390x844/06-logique.png"
+  },
+  {
+    "viewport": "mobile-portrait-390x844",
+    "label": "Combinaisons",
+    "overflow": 0,
+    "small": 9,
+    "overlaps": 0,
+    "actions": 16,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-portrait-390x844/07-combinaisons.png"
+  },
+  {
+    "viewport": "mobile-portrait-390x844",
+    "label": "Plan",
+    "overflow": 0,
+    "small": 0,
+    "overlaps": 0,
+    "actions": 2,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-portrait-390x844/08-plan.png"
+  },
+  {
+    "viewport": "mobile-portrait-390x844",
+    "label": "Aventure",
+    "overflow": 0,
+    "small": 1,
+    "overlaps": 0,
+    "actions": 7,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-portrait-390x844/09-aventure.png"
+  },
+  {
+    "viewport": "mobile-portrait-390x844",
+    "label": "Hero Adventure",
+    "overflow": 0,
+    "small": 2,
+    "overlaps": 0,
+    "actions": 8,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-portrait-390x844/10-hero-adventure.png"
+  },
+  {
+    "viewport": "mobile-portrait-390x844",
+    "label": "Combat",
+    "overflow": 0,
+    "small": 0,
+    "overlaps": 0,
+    "actions": 2,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-portrait-390x844/11-combat.png"
+  },
+  {
+    "viewport": "mobile-portrait-390x844",
+    "label": "Cinématiques",
+    "overflow": 0,
+    "small": 7,
+    "overlaps": 0,
+    "actions": 16,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-portrait-390x844/12-cinematiques.png"
+  },
+  {
+    "viewport": "mobile-portrait-390x844",
+    "label": "Animation",
+    "overflow": 0,
+    "small": 3,
+    "overlaps": 0,
+    "actions": 16,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-portrait-390x844/13-animation.png"
+  },
+  {
+    "viewport": "mobile-portrait-390x844",
+    "label": "Profil",
+    "overflow": 0,
+    "small": 0,
+    "overlaps": 0,
+    "actions": 11,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-portrait-390x844/14-profil.png"
+  },
+  {
+    "viewport": "mobile-portrait-390x844",
+    "label": "Projets",
+    "overflow": 0,
+    "small": 0,
+    "overlaps": 0,
+    "actions": 11,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-portrait-390x844/15-projets.png"
+  },
+  {
+    "viewport": "mobile-portrait-390x844",
+    "label": "Publication",
+    "overflow": 0,
+    "small": 0,
+    "overlaps": 0,
+    "actions": 11,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-portrait-390x844/16-publication.png"
+  },
+  {
+    "viewport": "mobile-portrait-390x844",
+    "label": "IA",
+    "overflow": 0,
+    "small": 1,
+    "overlaps": 0,
+    "actions": 3,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-portrait-390x844/17-ia.png"
+  },
+  {
+    "viewport": "mobile-portrait-390x844",
+    "label": "Score",
+    "overflow": 0,
+    "small": 4,
+    "overlaps": 0,
+    "actions": 5,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-portrait-390x844/18-score.png"
+  },
+  {
+    "viewport": "mobile-large-430x932",
+    "label": "Preview",
+    "overflow": 0,
+    "small": 17,
+    "overlaps": 20,
+    "actions": 24,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-large-430x932/01-preview.png"
+  },
+  {
+    "viewport": "mobile-large-430x932",
+    "label": "Scènes",
+    "overflow": 0,
+    "small": 20,
+    "overlaps": 20,
+    "actions": 50,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-large-430x932/02-scenes.png"
+  },
+  {
+    "viewport": "mobile-large-430x932",
+    "label": "Média",
+    "overflow": 0,
+    "small": 15,
+    "overlaps": 0,
+    "actions": 15,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-large-430x932/03-media.png"
+  },
+  {
+    "viewport": "mobile-large-430x932",
+    "label": "Objets",
+    "overflow": 0,
+    "small": 7,
+    "overlaps": 0,
+    "actions": 17,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-large-430x932/04-objets.png"
+  },
+  {
+    "viewport": "mobile-large-430x932",
+    "label": "Énigmes",
+    "overflow": 0,
+    "small": 14,
+    "overlaps": 0,
+    "actions": 19,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-large-430x932/05-enigmes.png"
+  },
+  {
+    "viewport": "mobile-large-430x932",
+    "label": "Logique",
+    "overflow": 0,
+    "small": 14,
+    "overlaps": 1,
+    "actions": 14,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-large-430x932/06-logique.png"
+  },
+  {
+    "viewport": "mobile-large-430x932",
+    "label": "Combinaisons",
+    "overflow": 0,
+    "small": 9,
+    "overlaps": 0,
+    "actions": 16,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-large-430x932/07-combinaisons.png"
+  },
+  {
+    "viewport": "mobile-large-430x932",
+    "label": "Plan",
+    "overflow": 0,
+    "small": 0,
+    "overlaps": 0,
+    "actions": 2,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-large-430x932/08-plan.png"
+  },
+  {
+    "viewport": "mobile-large-430x932",
+    "label": "Aventure",
+    "overflow": 0,
+    "small": 2,
+    "overlaps": 0,
+    "actions": 8,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-large-430x932/09-aventure.png"
+  },
+  {
+    "viewport": "mobile-large-430x932",
+    "label": "Hero Adventure",
+    "overflow": 0,
+    "small": 3,
+    "overlaps": 0,
+    "actions": 12,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-large-430x932/10-hero-adventure.png"
+  },
+  {
+    "viewport": "mobile-large-430x932",
+    "label": "Combat",
+    "overflow": 0,
+    "small": 0,
+    "overlaps": 0,
+    "actions": 4,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-large-430x932/11-combat.png"
+  },
+  {
+    "viewport": "mobile-large-430x932",
+    "label": "Cinématiques",
+    "overflow": 0,
+    "small": 9,
+    "overlaps": 0,
+    "actions": 18,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-large-430x932/12-cinematiques.png"
+  },
+  {
+    "viewport": "mobile-large-430x932",
+    "label": "Animation",
+    "overflow": 0,
+    "small": 4,
+    "overlaps": 0,
+    "actions": 17,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-large-430x932/13-animation.png"
+  },
+  {
+    "viewport": "mobile-large-430x932",
+    "label": "Profil",
+    "overflow": 0,
+    "small": 0,
+    "overlaps": 0,
+    "actions": 12,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-large-430x932/14-profil.png"
+  },
+  {
+    "viewport": "mobile-large-430x932",
+    "label": "Projets",
+    "overflow": 0,
+    "small": 0,
+    "overlaps": 0,
+    "actions": 12,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-large-430x932/15-projets.png"
+  },
+  {
+    "viewport": "mobile-large-430x932",
+    "label": "Publication",
+    "overflow": 0,
+    "small": 0,
+    "overlaps": 0,
+    "actions": 12,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-large-430x932/16-publication.png"
+  },
+  {
+    "viewport": "mobile-large-430x932",
+    "label": "IA",
+    "overflow": 0,
+    "small": 1,
+    "overlaps": 0,
+    "actions": 3,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-large-430x932/17-ia.png"
+  },
+  {
+    "viewport": "mobile-large-430x932",
+    "label": "Score",
+    "overflow": 0,
+    "small": 4,
+    "overlaps": 0,
+    "actions": 5,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-large-430x932/18-score.png"
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "label": "Preview",
+    "overflow": 0,
+    "small": 20,
+    "overlaps": 20,
+    "actions": 32,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-landscape-844x390/01-preview.png"
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "label": "Scènes",
+    "overflow": 0,
+    "small": 4,
+    "overlaps": 0,
+    "actions": 5,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-landscape-844x390/02-scenes.png"
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "label": "Média",
+    "overflow": 0,
+    "small": 5,
+    "overlaps": 0,
+    "actions": 5,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-landscape-844x390/03-media.png"
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "label": "Objets",
+    "overflow": 0,
+    "small": 1,
+    "overlaps": 0,
+    "actions": 5,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-landscape-844x390/04-objets.png"
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "label": "Énigmes",
+    "overflow": 0,
+    "small": 11,
+    "overlaps": 5,
+    "actions": 13,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-landscape-844x390/05-enigmes.png"
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "label": "Logique",
+    "overflow": 0,
+    "small": 6,
+    "overlaps": 1,
+    "actions": 6,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-landscape-844x390/06-logique.png"
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "label": "Combinaisons",
+    "overflow": 0,
+    "small": 4,
+    "overlaps": 0,
+    "actions": 8,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-landscape-844x390/07-combinaisons.png"
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "label": "Plan",
+    "overflow": 0,
+    "small": 0,
+    "overlaps": 0,
+    "actions": 2,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-landscape-844x390/08-plan.png"
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "label": "Aventure",
+    "overflow": 0,
+    "small": 1,
+    "overlaps": 0,
+    "actions": 9,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-landscape-844x390/09-aventure.png"
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "label": "Hero Adventure",
+    "overflow": 0,
+    "small": 2,
+    "overlaps": 0,
+    "actions": 2,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-landscape-844x390/10-hero-adventure.png"
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "label": "Combat",
+    "overflow": 0,
+    "small": 0,
+    "overlaps": 0,
+    "actions": 2,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-landscape-844x390/11-combat.png"
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "label": "Cinématiques",
+    "overflow": 0,
+    "small": 1,
+    "overlaps": 0,
+    "actions": 6,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-landscape-844x390/12-cinematiques.png"
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "label": "Animation",
+    "overflow": 0,
+    "small": 0,
+    "overlaps": 0,
+    "actions": 9,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-landscape-844x390/13-animation.png"
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "label": "Profil",
+    "overflow": 0,
+    "small": 0,
+    "overlaps": 0,
+    "actions": 8,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-landscape-844x390/14-profil.png"
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "label": "Projets",
+    "overflow": 0,
+    "small": 0,
+    "overlaps": 0,
+    "actions": 8,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-landscape-844x390/15-projets.png"
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "label": "Publication",
+    "overflow": 0,
+    "small": 0,
+    "overlaps": 0,
+    "actions": 8,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-landscape-844x390/16-publication.png"
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "label": "IA",
+    "overflow": 0,
+    "small": 1,
+    "overlaps": 0,
+    "actions": 2,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-landscape-844x390/17-ia.png"
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "label": "Score",
+    "overflow": 0,
+    "small": 3,
+    "overlaps": 0,
+    "actions": 3,
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06/mobile-landscape-844x390/18-score.png"
+  }
+]
