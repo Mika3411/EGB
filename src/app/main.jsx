@@ -2,11 +2,6 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './ShellApp.jsx';
 import '../styles.css';
-import '../styles/player.css';
-import '../styles/public.css';
-import '../styles/editor.css';
-import '../styles/inspector.css';
-import '../styles/ai.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

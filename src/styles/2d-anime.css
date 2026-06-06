@@ -1245,3 +1245,288 @@
     min-height: auto;
   }
 }
+
+@media (max-width: 760px), (max-width: 900px) and (orientation: landscape) {
+  .anime-editor-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    gap: 10px;
+    width: 100%;
+    max-width: 100%;
+    min-height: 100svh;
+    padding: 10px;
+    overflow-x: clip;
+  }
+
+  .anime-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    padding: 9px;
+  }
+
+  .anime-menubar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+    min-width: 0;
+  }
+
+  .anime-menu,
+  .anime-menu-summary {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .anime-menu-summary {
+    min-height: 44px;
+    justify-content: center;
+    white-space: normal;
+  }
+
+  .anime-menu-popover {
+    width: min(280px, calc(100vw - 28px));
+    max-width: calc(100vw - 28px);
+  }
+
+  .anime-menu-item {
+    min-height: 44px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .anime-menu-item kbd {
+    align-self: center;
+  }
+
+  .anime-topbar-status {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 7px;
+    width: 100%;
+  }
+
+  .anime-builder-link,
+  .anime-save-button {
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .anime-save-banner {
+    min-width: 0;
+    align-items: flex-start;
+    overflow-wrap: anywhere;
+  }
+
+  .anime-sidebar,
+  .anime-stage-panel,
+  .anime-inspector {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .anime-sidebar,
+  .anime-inspector {
+    max-height: min(62svh, 520px);
+    overflow: auto;
+  }
+
+  .anime-panel-head,
+  .anime-stage-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 9px;
+  }
+
+  .anime-cinematic-list {
+    gap: 7px;
+  }
+
+  .anime-cinematic-step {
+    grid-template-columns: minmax(48px, auto) minmax(72px, auto) minmax(0, 1fr);
+    min-height: 44px;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .anime-cinematic-step small,
+  .anime-cinematic-step span,
+  .anime-layer-row small,
+  .anime-lock-status,
+  .anime-save-banner span,
+  .anime-section-title {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .anime-cinematic-form,
+  .anime-number-grid,
+  .anime-preset-grid,
+  .anime-retouch-modes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .anime-cinematic-form .anime-field:not(.anime-field-wide) input,
+  .anime-cinematic-form .anime-field:not(.anime-field-wide) select,
+  .anime-field input,
+  .anime-field select,
+  .anime-narration-input {
+    min-height: 44px;
+    font-size: 14px;
+  }
+
+  .anime-narration-input {
+    min-height: 116px;
+  }
+
+  .anime-step-image-picker {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .anime-step-image-placeholder {
+    min-height: 44px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .anime-tool-button,
+  .anime-icon-button,
+  .anime-zoom-button,
+  .anime-preset-grid button,
+  .anime-retouch-modes button {
+    min-height: 44px;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .anime-icon-button,
+  .anime-zoom-button {
+    width: 44px;
+    flex: 0 0 44px;
+  }
+
+  .anime-stage-panel {
+    grid-template-rows: auto auto auto;
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .anime-title-button,
+  .anime-title-input {
+    width: 100%;
+    min-height: 44px;
+    font-size: 22px;
+  }
+
+  .anime-stage-actions,
+  .anime-inspector-actions,
+  .anime-draft-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .anime-stage-actions {
+    justify-content: flex-start;
+  }
+
+  .anime-zoom-readout {
+    min-height: 44px;
+  }
+
+  .anime-stage {
+    width: 100%;
+    max-height: min(52svh, 430px);
+    align-self: center;
+    justify-self: center;
+  }
+
+  .anime-narration-preview {
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    max-height: 40%;
+    overflow: auto;
+    padding: 9px 11px;
+    font-size: 14px;
+    line-height: 1.3;
+    pointer-events: auto;
+  }
+
+  .anime-timeline {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+  }
+
+  .anime-timeline-scale,
+  .anime-track-list {
+    width: max(720px, 100%);
+    min-width: 720px;
+  }
+
+  .anime-timeline-scale {
+    padding-left: 104px;
+  }
+
+  .anime-track {
+    grid-template-columns: 98px minmax(0, 1fr);
+    min-height: 44px;
+  }
+
+  .anime-track span {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+    line-height: 1.15;
+  }
+
+  .anime-track i {
+    min-height: 12px;
+  }
+
+  .anime-layer-row {
+    min-height: 52px;
+    max-width: 100%;
+    overflow: hidden;
+  }
+}
+
+@media (max-width: 900px) and (orientation: landscape) {
+  .anime-editor-shell {
+    padding: 8px;
+  }
+
+  .anime-topbar {
+    position: static;
+  }
+
+  .anime-menubar {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .anime-topbar-status {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .anime-sidebar,
+  .anime-inspector {
+    max-height: 58svh;
+  }
+
+  .anime-stage {
+    width: min(100%, 640px);
+    max-height: 54svh;
+  }
+}

@@ -611,6 +611,116 @@
   .logic-flow-keyword{justify-self:start}
 }
 
+@media (max-width: 760px), (max-width: 900px) and (orientation: landscape){
+  .adventure-tab{overflow-x:clip}
+  .adventure-hero-panel{gap:10px}
+  .adventure-hero-panel .toolbar{display:grid;grid-template-columns:minmax(0,1fr);width:100%;min-width:0}
+  .adventure-hero-panel .toolbar button{min-height:44px;width:100%;white-space:normal;overflow-wrap:anywhere}
+  .adventure-hero-panel h1,
+  .adventure-hero-panel p{max-width:100%;overflow-wrap:anywhere}
+  .adventure-internal-tabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+  .adventure-internal-tabs button{min-width:142px;flex:0 0 auto;scroll-snap-align:start}
+  .adventure-internal-tabs span{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.15}
+  .adventure-stat-grid,
+  .adventure-narrative-summary,
+  .adventure-debugger-summary,
+  .adventure-simulator-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .adventure-narrative-feed{max-height:none;overflow:visible;padding-right:0}
+  .adventure-narrative-side{grid-template-columns:minmax(0,1fr)}
+  .adventure-narrative-entry,
+  .adventure-narrative-side-card,
+  .adventure-diagnostic,
+  .adventure-choice-card,
+  .adventure-ending-card,
+  .adventure-variable-editor-row,
+  .adventure-debugger-statement,
+  .adventure-debugger-conversation,
+  .adventure-debugger-node,
+  .adventure-debugger-reply,
+  .adventure-simulator-result-card,
+  .adventure-simulator-effects,
+  .adventure-simulator-state,
+  .adventure-simulator-current-node,
+  .adventure-simulator-controls section{max-width:100%;overflow:hidden}
+  .adventure-narrative-entry strong,
+  .adventure-narrative-entry span,
+  .adventure-narrative-entry em,
+  .adventure-narrative-entry small,
+  .adventure-narrative-side-card strong,
+  .adventure-narrative-side-card span,
+  .adventure-narrative-side-card em,
+  .adventure-diagnostic strong,
+  .adventure-diagnostic small,
+  .adventure-choice-card strong,
+  .adventure-choice-card small,
+  .adventure-choice-card span,
+  .adventure-choice-card em,
+  .adventure-ending-card strong,
+  .adventure-ending-card small,
+  .adventure-ending-card span,
+  .adventure-variable-row strong,
+  .adventure-variable-row small,
+  .adventure-variable-editor-side span,
+  .adventure-variable-editor-side em,
+  .adventure-unknown-variable-row span,
+  .adventure-search-result strong,
+  .adventure-search-result small,
+  .adventure-debugger-statement strong,
+  .adventure-debugger-statement small,
+  .adventure-debugger-statement em,
+  .adventure-debugger-conversation header strong,
+  .adventure-debugger-conversation header small,
+  .adventure-debugger-node-head strong,
+  .adventure-debugger-reply button,
+  .adventure-simulator-variable-row span,
+  .adventure-simulator-result-card strong,
+  .adventure-simulator-result-card span,
+  .adventure-simulator-result-card small,
+  .adventure-state-list span{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+  .adventure-narrative-badges small,
+  .adventure-debugger-badges span,
+  .adventure-branch-tags small,
+  .adventure-simulator-pill,
+  .adventure-simulator-effect{white-space:normal;overflow-wrap:anywhere;line-height:1.15}
+  .adventure-diagnostic-main,
+  .adventure-search-result,
+  .adventure-variable-editor-main,
+  .adventure-simulator-variable-row,
+  .adventure-ending-card{grid-template-columns:minmax(0,1fr)}
+  .adventure-diagnostic-actions,
+  .adventure-choice-actions{display:grid;grid-template-columns:minmax(0,1fr);padding-left:0}
+  .adventure-choice-actions .compact,
+  .adventure-diagnostic-actions .compact,
+  .adventure-simulator-result-card button,
+  .adventure-search-result button,
+  .adventure-variable-editor-side .danger-button,
+  .adventure-unknown-variable-row button,
+  .adventure-panel .panel-head button{min-height:44px;width:100%;max-width:100%;white-space:normal;overflow-wrap:anywhere;line-height:1.2}
+  .adventure-variable-editor-main input,
+  .adventure-variable-editor-main select,
+  .adventure-variable-editor-main textarea,
+  .adventure-simulator-variable-row input,
+  .adventure-simulator-variable-row select,
+  .adventure-search-input input{min-height:44px}
+  .adventure-simulator-controls{order:1}
+  .adventure-simulator-results{order:2}
+  .adventure-simulator-pill-list{display:grid;grid-template-columns:minmax(0,1fr)}
+  .adventure-simulator-pill{border-radius:10px;min-height:44px;align-items:flex-start}
+  .adventure-simulator-pill input{flex:0 0 auto;margin-top:2px}
+  .adventure-simulator-state{max-height:none}
+  .adventure-state-list{max-height:none;overflow:visible}
+  .adventure-checklist span{align-items:flex-start;line-height:1.3;overflow-wrap:anywhere}
+  .adventure-unknown-variable-row{display:grid;grid-template-columns:minmax(0,1fr);align-items:stretch}
+}
+
+@media (max-width: 420px){
+  .adventure-stat-grid,
+  .adventure-narrative-summary,
+  .adventure-debugger-summary,
+  .adventure-simulator-summary{grid-template-columns:minmax(0,1fr)}
+  .adventure-internal-tabs button{min-width:132px}
+}
+
 .scene-media-link-placeholder{cursor:pointer;transition:border-color .16s ease,color .16s ease,background .16s ease}
 
 .scene-media-link-placeholder:hover,.scene-media-link-placeholder:focus-visible{color:#bfdbfe;border-color:rgba(96,165,250,.42);background:#0f1b31cc;outline:none}
@@ -1077,6 +1187,394 @@
 
 @media (max-width: 760px){.hero-skill-editor,.hero-power-editor,.hero-resistance-grid,.hero-equipment-slot-editor-grid,.hero-guide-grid,.hero-balance-summary,.hero-balance-grid,.hero-balance-skill-grid,.hero-balance-reward-grid,.combat-config-grid,.combat-enemy-grid,.combat-narration-grid,.combat-resistance-grid,.combat-enemy-stat-strip,.combat-mode-switch,.combat-entry-settings-grid,.combat-entry-media-grid,.combat-effect-media-grid,.combat-balance-summary,.combat-balance-outcomes,.combat-hero-skill-row{grid-template-columns:1fr}.hero-equipment-slot-editor-head{display:grid}.hero-skill-delete{width:100%}.hero-check-preview{grid-template-columns:1fr}.hero-dice-skin-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hero-balance-panel--wide{grid-column:auto}.hero-balance-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.combat-arena-preview{grid-template-columns:1fr;min-height:auto;padding:18px}.combat-dice-preview{order:2}.combat-media-head{grid-template-columns:1fr}.combat-editor-tabs{display:grid;grid-template-columns:1fr}.combat-resistance-row,.hero-resistance-row{grid-template-columns:minmax(0,1fr) 84px auto}.combat-balance-badge{justify-self:start}}
 
+@media (max-width: 760px){
+  .hero-editor-layout{
+    gap:12px;
+  }
+  .hero-editor-summary,
+  .hero-editor-main{
+    min-width:0;
+  }
+  .hero-editor-summary{
+    order:1;
+  }
+  .hero-editor-main{
+    order:2;
+  }
+  .hero-editor-main>.panel-head{
+    margin-bottom:10px;
+  }
+  .hero-internal-tabs{
+    position:sticky;
+    top:0;
+    z-index:8;
+    display:flex;
+    gap:8px;
+    width:100%;
+    margin:0 0 12px;
+    padding:8px;
+    overflow-x:auto;
+    border:1px solid rgba(148,163,184,.18);
+    border-radius:12px;
+    background:rgba(8,17,31,.96);
+    backdrop-filter:blur(10px);
+    scroll-snap-type:x proximity;
+    -webkit-overflow-scrolling:touch;
+  }
+  .hero-internal-tabs button{
+    flex:0 0 auto;
+    min-width:126px;
+    min-height:44px;
+    scroll-snap-align:start;
+    white-space:normal;
+    line-height:1.15;
+  }
+  .hero-roster-panel .subpanel-head,
+  .hero-equipment-slot-editor-head,
+  .hero-editor-main .subpanel-head{
+    align-items:stretch;
+  }
+  .hero-roster-panel .toolbar,
+  .hero-editor-main .toolbar{
+    display:grid;
+    grid-template-columns:1fr;
+    width:100%;
+  }
+  .hero-roster-panel .toolbar button,
+  .hero-editor-main .toolbar button,
+  .hero-editor-main .subpanel-head button,
+  .hero-skill-delete{
+    min-height:44px;
+    width:100%;
+    justify-content:center;
+  }
+  .hero-roster-grid{
+    grid-template-columns:1fr;
+  }
+  .hero-roster-card{
+    min-height:84px;
+  }
+  .hero-stat-preview{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    align-items:center;
+  }
+  .hero-stat-preview strong,
+  .hero-stat-preview>span{
+    grid-column:1/-1;
+  }
+  .hero-gauge-grid,
+  .hero-character-image-grid{
+    grid-template-columns:1fr;
+  }
+  .hero-editor-main input,
+  .hero-editor-main select,
+  .hero-editor-main textarea{
+    min-height:44px;
+  }
+  .hero-editor-main .button.like,
+  .combat-editor-main .button.like{
+    min-height:44px;
+  }
+  .hero-character-page--editor{
+    gap:10px;
+    padding:10px;
+  }
+  .hero-character-page--editor .hero-paper-doll{
+    min-height:320px;
+    padding:10px 72px;
+  }
+  .hero-character-page--editor .hero-character-combat-stats,
+  .hero-character-page--editor .hero-character-skills,
+  .hero-character-page--editor .hero-character-resistances{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .hero-character-page--editor .hero-inventory-dropzone{
+    min-height:0;
+  }
+  .hero-character-page--editor .hero-inventory-dropzone .inventory-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    max-height:none;
+    overflow:visible;
+  }
+  .hero-equipment-slot-editor-card,
+  .hero-skill-editor,
+  .hero-power-editor{
+    border-radius:12px;
+  }
+  .hero-skill-editor,
+  .hero-power-editor{
+    align-items:stretch;
+    padding:12px;
+  }
+  .hero-power-editor button,
+  .hero-skill-editor button,
+  .hero-dice-skin-option,
+  .hero-button-style-option,
+  .hero-font-style-option{
+    min-height:44px;
+  }
+  .hero-resistance-row{
+    grid-template-columns:1fr;
+    align-items:stretch;
+  }
+  .hero-resistance-row input{
+    width:100%;
+  }
+  .hero-dice-skin-grid,
+  .hero-button-style-grid,
+  .hero-font-style-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .hero-balance-summary{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .combat-editor-layout{
+    gap:12px;
+  }
+  .combat-editor-summary,
+  .combat-editor-main{
+    min-width:0;
+  }
+  .combat-editor-main>.panel-head{
+    position:sticky;
+    top:0;
+    z-index:8;
+    margin:-14px -14px 12px;
+    padding:14px;
+    border-radius:12px 12px 0 0;
+    background:rgba(8,17,31,.96);
+    backdrop-filter:blur(10px);
+  }
+  .combat-editor-main>.panel-head .inline-actions{
+    display:grid;
+    grid-template-columns:1fr;
+    width:100%;
+  }
+  .combat-editor-main>.panel-head .inline-actions button,
+  .combat-editor-tabs button,
+  .combat-source-list button,
+  .combat-mode-switch button,
+  .combat-editor-main button,
+  .combat-editor-summary button{
+    min-height:44px;
+  }
+  .combat-source-list{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .combat-source-list button{
+    align-content:start;
+  }
+  .combat-editor-tabs{
+    position:sticky;
+    top:72px;
+    z-index:7;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    width:100%;
+    background:rgba(8,17,31,.96);
+    backdrop-filter:blur(10px);
+  }
+  .combat-editor-tabs button{
+    justify-content:center;
+    white-space:normal;
+  }
+  .combat-arena-preview{
+    gap:12px;
+    padding:14px;
+  }
+  .combat-actor-preview{
+    width:100%;
+    padding:10px;
+    border:1px solid rgba(147,197,253,.16);
+    border-radius:12px;
+    background:rgba(2,6,23,.45);
+  }
+  .combat-actor-preview>img,
+  .combat-actor-preview .anime2d-embedded{
+    height:min(180px,30vh);
+  }
+  .combat-actor-preview.is-empty>span{
+    width:min(160px,100%);
+  }
+  .combat-dice-preview{
+    width:min(220px,100%);
+    justify-self:center;
+    min-width:0;
+  }
+  .combat-config-card,
+  .combat-enemy-section,
+  .combat-hero-skill-row,
+  .combat-background-picker,
+  .combat-turn-mode-picker,
+  .combat-media-slot,
+  .combat-effect-media-slot{
+    border-radius:12px;
+  }
+  .combat-hero-skill-row{
+    align-items:stretch;
+  }
+  .combat-hero-skill-row button,
+  .combat-enemy-section button,
+  .combat-media-slot button,
+  .combat-effect-media-slot button,
+  .combat-background-picker button,
+  .combat-entry-toggles button{
+    min-height:44px;
+  }
+  .combat-resistance-row,
+  .hero-resistance-row{
+    grid-template-columns:1fr;
+    align-items:stretch;
+  }
+  .combat-resistance-row input,
+  .hero-resistance-row input{
+    width:100%;
+  }
+  .combat-balance-summary,
+  .combat-balance-outcomes,
+  .combat-enemy-stat-strip{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+}
+
+@media (max-width: 430px){
+  .hero-stat-preview,
+  .hero-character-page--editor .hero-character-combat-stats,
+  .hero-character-page--editor .hero-character-skills,
+  .hero-character-page--editor .hero-character-resistances,
+  .hero-character-page--editor .hero-inventory-dropzone .inventory-grid,
+  .hero-dice-skin-grid,
+  .hero-button-style-grid,
+  .hero-font-style-grid,
+  .hero-balance-summary,
+  .combat-source-list,
+  .combat-editor-tabs,
+  .combat-balance-summary,
+  .combat-balance-outcomes,
+  .combat-enemy-stat-strip{
+    grid-template-columns:1fr;
+  }
+  .hero-internal-tabs button{
+    min-width:118px;
+  }
+  .hero-character-page--editor .hero-paper-doll{
+    min-height:300px;
+    padding-inline:60px;
+  }
+  .combat-editor-tabs{
+    top:64px;
+  }
+}
+
+@media (max-width: 900px) and (orientation: landscape){
+  .hero-editor-layout{
+    gap:10px;
+  }
+  .hero-internal-tabs{
+    position:sticky;
+    top:0;
+    z-index:8;
+    display:flex;
+    gap:8px;
+    width:100%;
+    margin:0 0 10px;
+    padding:7px;
+    overflow-x:auto;
+    border:1px solid rgba(148,163,184,.18);
+    border-radius:12px;
+    background:rgba(8,17,31,.96);
+    backdrop-filter:blur(10px);
+    -webkit-overflow-scrolling:touch;
+  }
+  .hero-internal-tabs button{
+    flex:0 0 auto;
+    min-width:118px;
+    min-height:44px;
+    white-space:normal;
+    line-height:1.15;
+  }
+  .hero-roster-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .hero-skill-editor,
+  .hero-power-editor,
+  .hero-equipment-slot-editor-grid,
+  .hero-resistance-grid,
+  .hero-guide-grid,
+  .hero-balance-grid,
+  .hero-balance-skill-grid,
+  .hero-balance-reward-grid{
+    grid-template-columns:1fr;
+  }
+  .hero-character-page--editor{
+    grid-template-columns:1fr;
+    grid-template-areas:"doll" "description" "skills" "combat" "equipped" "inventory";
+  }
+  .hero-character-page--editor .hero-paper-doll{
+    min-height:270px;
+  }
+  .hero-skill-editor,
+  .hero-power-editor{
+    align-items:stretch;
+  }
+  .hero-editor-main input,
+  .hero-editor-main select,
+  .hero-editor-main textarea,
+  .hero-editor-main .button.like,
+  .hero-roster-panel .toolbar button,
+  .hero-editor-main .toolbar button,
+  .hero-editor-main .subpanel-head button,
+  .hero-power-editor button,
+  .hero-skill-editor button{
+    min-height:44px;
+  }
+  .hero-resistance-row{
+    grid-template-columns:1fr;
+    align-items:stretch;
+  }
+  .hero-balance-summary,
+  .hero-balance-metrics{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .combat-editor-main>.panel-head{
+    position:static;
+    margin:0 0 12px;
+    padding:0;
+    background:transparent;
+    backdrop-filter:none;
+  }
+  .combat-editor-tabs{
+    position:static;
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    width:100%;
+  }
+  .combat-editor-tabs button,
+  .combat-editor-main>.panel-head .inline-actions button,
+  .combat-source-list button,
+  .combat-editor-main .button.like,
+  .combat-editor-main button,
+  .combat-editor-summary button{
+    min-height:44px;
+  }
+  .combat-arena-preview{
+    grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+    min-height:220px;
+    gap:10px;
+    padding:12px;
+  }
+  .combat-actor-preview>img,
+  .combat-actor-preview .anime2d-embedded{
+    height:min(150px,38vh);
+  }
+  .combat-dice-preview{
+    min-width:88px;
+    padding:8px;
+  }
+  .combat-dice-preview .hero-die-face{
+    --die-size:58px;
+  }
+}
+
 .dialogue-box{line-height:1.7;background:#0c1527eb;border-radius:var(--radius-xl);padding:14px;border:1px solid var(--line)}
 
 .player-scene-object-not-clickable{cursor:default;pointer-events:none}
@@ -1086,7 +1584,7 @@
 
 .interactive-block strong{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-.interactive-block small{display:block;max-width:100%;color:#cbd5e1;font-size:11px;line-height:1.25}
+.interactive-block small{display:block;max-width:100%;color:var(--interactive-block-muted-color,#cbd5e1);font-size:.85em;line-height:1.25}
 
 .interactive-block--text{align-items:flex-start;justify-content:flex-start;text-align:left;white-space:pre-wrap}
 
@@ -1094,13 +1592,142 @@
 
 .interactive-block--field{align-items:stretch;background:#f8fafcf0;color:#0f172a}
 
-.interactive-block--field small{padding:6px 8px;border:1px solid rgba(15,23,42,.18);border-radius:6px;background:#fff;color:#64748b}
+.interactive-block--field small{padding:6px 8px;border:1px solid rgba(15,23,42,.18);border-radius:6px;background:#fff;color:var(--interactive-block-muted-color,#64748b)}
 
-.interactive-block--code span{font-size:20px;letter-spacing:2px}
+.interactive-block--code span{font-size:1.54em;letter-spacing:2px}
 
 .interactive-block--image{border-style:dashed;background:#1e293bbd}
 
 .thumb{width:100%;height:180px;object-fit:cover;border-radius:var(--radius-lg);margin-top:10px}
+
+@media (max-width: 760px), (max-width: 900px) and (orientation: landscape){
+  .cinematic-workspace{
+    grid-template-columns:minmax(0,1fr);
+    gap:12px;
+    overflow-x:clip;
+  }
+
+  .cinematic-sidebar,
+  .cinematic-editor{
+    min-width:0;
+    max-width:100%;
+    overflow:hidden;
+  }
+
+  .cinematic-sidebar{
+    position:sticky;
+    top:6px;
+    z-index:8;
+    max-height:min(38svh,310px);
+    overflow:auto;
+  }
+
+  .cinematic-sidebar .panel-head,
+  .cinematic-editor>.panel-head,
+  .cinematic-slide-card-head{
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+    align-items:stretch;
+    gap:8px;
+  }
+
+  .cinematic-sidebar .label-with-help,
+  .cinematic-editor .label-with-help{
+    min-width:0;
+    max-width:100%;
+  }
+
+  .cinematic-list{
+    display:grid;
+    gap:8px;
+  }
+
+  .cinematic-list .list-card{
+    min-height:44px;
+    min-width:0;
+    max-width:100%;
+    overflow:hidden;
+    overflow-wrap:anywhere;
+  }
+
+  .cinematic-list .list-card strong,
+  .cinematic-list .list-card span,
+  .cinematic-editor .small-note{
+    white-space:normal;
+    overflow-wrap:anywhere;
+  }
+
+  .cinematic-editor{
+    display:block;
+  }
+
+  .cinematic-editor-actions{
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+    gap:8px;
+    width:100%;
+  }
+
+  .cinematic-workspace .cinematic-sidebar :where(button,.button.like,input,select,textarea),
+  .cinematic-workspace .cinematic-editor :where(button,.button.like,input,select,textarea){
+    width:100%;
+    max-width:100%;
+    min-width:0;
+    box-sizing:border-box;
+    white-space:normal;
+    overflow-wrap:anywhere;
+  }
+
+  .cinematic-workspace .cinematic-sidebar :where(button,.button.like,input,select),
+  .cinematic-workspace .cinematic-editor :where(button,.button.like,input,select){
+    min-height:44px;
+  }
+
+  .cinematic-editor textarea{
+    min-height:112px;
+    resize:vertical;
+  }
+
+  .cinematic-editor .slides-grid{
+    grid-template-columns:minmax(0,1fr);
+    gap:10px;
+    margin-top:10px;
+  }
+
+  .cinematic-editor .slide-card,
+  .cinematic-media-panel,
+  .cinematic-end-settings{
+    min-width:0;
+    max-width:100%;
+    overflow:hidden;
+  }
+
+  .cinematic-editor .slide-card{
+    border-radius:12px;
+    padding:10px;
+  }
+
+  .cinematic-editor .thumb,
+  .cinematic-video-preview{
+    width:100%;
+    height:auto;
+    max-height:min(42svh,320px);
+    aspect-ratio:16 / 9;
+    object-fit:contain;
+    background:#020617;
+  }
+
+  .cinematic-editor audio{
+    width:100%;
+    max-width:100%;
+  }
+}
+
+@media (max-width: 900px) and (orientation: landscape){
+  .cinematic-sidebar{
+    max-height:54svh;
+  }
+}
 
 .inventory-object-preview{width:88px;height:88px;display:grid;place-items:center;overflow:hidden;border:1px solid var(--border-muted-strong);border-radius:16px;background:var(--surface-dark)}
 
@@ -1108,6 +1735,55 @@
 
 /* Inventory and logic */
 .item-editor-card,.combo-card{background:#0c1527d1;border:1px solid var(--line);border-radius:20px;padding:14px;margin-bottom:10px}
+
+@media (max-width:900px){
+  .combinations-layout,
+  .combinations-layout .panel,
+  .combinations-layout .list-card,
+  .combinations-layout .combo-card,
+  .combinations-layout .grid-two,
+  .combinations-layout .label-with-help,
+  .combinations-layout .checkbox-row{min-width:0;max-width:100%}
+
+  .combinations-layout{grid-template-columns:minmax(0,1fr)}
+
+  .combinations-layout .panel-head{align-items:flex-start;gap:10px}
+
+  .combinations-layout .panel-head .label-with-help{width:100%;justify-content:flex-start}
+
+  .combinations-layout .panel-head button{width:100%;min-height:44px;white-space:normal;overflow-wrap:anywhere}
+
+  .combinations-layout .list-card{overflow:hidden;overflow-wrap:anywhere}
+
+  .combinations-layout .list-card strong,
+  .combinations-layout .list-card span{white-space:normal;overflow-wrap:anywhere}
+
+  .combinations-layout .combo-card{display:grid;gap:10px;overflow:hidden}
+
+  .combinations-layout .combo-card .grid-two{grid-template-columns:minmax(0,1fr);gap:10px}
+
+  .combinations-layout .combo-card :where(select,input,textarea,button){width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+
+  .combinations-layout .combo-card :where(select,input,button){min-height:44px}
+
+  .combinations-layout .combo-card textarea{min-height:96px}
+
+  .combinations-layout .checkbox-row{display:grid;grid-template-columns:24px minmax(0,1fr) auto;align-items:center;gap:10px;min-height:44px;margin-top:2px;padding:6px 0;line-height:1.25}
+
+  .combinations-layout .checkbox-row input{width:22px;min-width:22px;height:22px;margin:0}
+
+  .combinations-layout .checkbox-row span:not(.help-dot){min-width:0;overflow-wrap:anywhere}
+}
+
+@media (max-width:620px){
+  .combinations-layout .panel{padding:14px}
+
+  .combinations-layout .panel-head{display:grid;grid-template-columns:minmax(0,1fr);align-items:stretch}
+
+  .combinations-layout .combo-card{padding:12px;border-radius:14px}
+
+  .combinations-layout .label-with-help{align-items:flex-start;line-height:1.2;white-space:normal}
+}
 
 .logic-rule-card{border:1px solid var(--line);border-radius:14px;background:#080f1d94;margin:8px 0;overflow:hidden}
 
@@ -1130,6 +1806,8 @@
 .logic-incomplete-note{margin:0 0 10px;padding:8px 10px;border:1px solid rgba(250,204,21,.3);border-radius:8px;background:rgba(202,138,4,.13);color:#fde68a;font-size:12px;line-height:1.35}
 
 .logic-rule-body{display:grid;gap:8px;border-top:1px solid var(--line);padding:8px 10px 10px}
+
+.logic-rule-list{display:grid;gap:8px;min-width:0}
 
 .logic-rule-name-field{display:grid;gap:4px}
 
@@ -1185,6 +1863,72 @@
 
 .logic-timer-toggle,.logic-timer-message-field{grid-column:1 / -1}
 
+@media (max-width:760px), (max-width:900px) and (orientation:landscape){
+  .logic-workspace{grid-template-columns:minmax(0,1fr);gap:10px;min-width:0}
+  .logic-workspace>*{min-width:0}
+  .panel-nav-pro.logic-left-nav{max-height:min(34svh,280px);overflow-x:clip!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch}
+  .logic-main-panel{min-width:0;overflow:clip}
+  .logic-main-panel>.panel-head{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
+  .logic-main-panel>.panel-head h2{font-size:18px;line-height:1.15;overflow-wrap:anywhere}
+  .logic-editor-stack{gap:10px}
+  .logic-mobile-card{padding:10px;border-radius:12px;overflow:hidden}
+  .logic-mobile-card>.panel-head,
+  .logic-target-card>.panel-head{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;align-items:start}
+  .logic-mobile-card>.panel-head .status-badge{justify-self:start}
+  .logic-target-card{display:grid;gap:9px;padding:10px;border-left:3px solid rgba(96,165,250,.42)}
+  .logic-target-card h3{margin:0;font-size:15px;line-height:1.18;overflow-wrap:anywhere}
+  .logic-target-card .label-with-help[data-tour="logic-add-rule"]{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;width:100%;margin:0}
+  .logic-target-card .label-with-help[data-tour="logic-add-rule"] button{width:100%;justify-content:center}
+  .logic-rule-list{gap:10px}
+  .logic-rule-card{margin:0;border-radius:12px;background:#07101fd9}
+  .logic-rule-card summary{display:grid;grid-template-columns:minmax(0,1fr);gap:9px;padding:10px}
+  .logic-rule-card summary>span{min-width:0}
+  .logic-rule-card summary small{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.35}
+  .logic-rule-card summary .danger-button{width:100%;justify-content:center}
+  .logic-rule-name-line{display:grid!important;grid-template-columns:minmax(0,1fr);gap:6px}
+  .logic-incomplete-pill{width:max-content;max-width:100%}
+  .logic-rule-body{gap:10px;padding:10px;border-top-color:rgba(148,163,184,.16)}
+  .logic-rule-name-field{padding:9px;border:1px solid rgba(148,163,184,.12);border-radius:10px;background:#08111fb8}
+  .logic-flow-step{gap:9px;padding:10px;border-radius:12px;border-left-width:4px}
+  .logic-flow-step-condition{border-left-color:#60a5fa}
+  .logic-flow-step-action{border-left-color:#22c55e}
+  .logic-flow-step-failure{border-left-color:#f59e0b}
+  .logic-flow-step-options{border-left-color:#94a3b8}
+  .logic-flow-step-condition+.logic-flow-step-action{margin-top:-2px}
+  .logic-flow-step-head{grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:center}
+  .logic-flow-title{font-size:12px;line-height:1.25}
+  .logic-flow-keyword{min-width:48px;height:24px;padding:0 7px;font-size:10px}
+  .logic-flow-grid,
+  .logic-flow-options,
+  .logic-story-variable-grid,
+  .conversation-advanced-condition-head,
+  .conversation-advanced-condition-row{grid-template-columns:minmax(0,1fr)!important}
+  .logic-flow-field,
+  .logic-sound-field{width:100%;min-width:0;padding:8px;border:1px solid rgba(148,163,184,.12);border-radius:10px;background:rgba(2,6,23,.28)}
+  .logic-flow-field-wide{grid-column:auto}
+  .logic-flow-field :where(input,select,textarea),
+  .logic-sound-field :where(input,select,textarea),
+  .logic-story-variable-grid :where(input,select,textarea),
+  .conversation-advanced-condition-row :where(input,select,textarea),
+  .conversation-advanced-condition-head select{width:100%;min-width:0;max-width:100%;box-sizing:border-box}
+  .logic-flow-step textarea{min-height:72px}
+  .conversation-advanced-condition-list{gap:9px;padding:8px;border-radius:12px}
+  .conversation-advanced-condition-head{align-items:stretch;padding:8px;border:1px solid rgba(147,197,253,.12);border-radius:10px;background:rgba(15,23,42,.48)}
+  .conversation-advanced-condition-row{align-items:stretch;padding:9px;border-left:3px solid rgba(56,189,248,.46)}
+  .conversation-advanced-condition-row .danger-action{width:100%;justify-content:center}
+  .logic-story-variable-grid{gap:8px}
+  .logic-sound-preview{grid-template-columns:minmax(0,1fr);gap:7px}
+  .logic-sound-preview .danger-button{width:100%;justify-content:center}
+  .logic-visible-object-card{display:grid;gap:9px;padding:10px;border-left:3px solid rgba(34,197,94,.34)}
+  .logic-visible-object-head{display:grid;grid-template-columns:minmax(0,1fr);align-items:start;margin-bottom:0}
+  .logic-visible-object-head strong,
+  .logic-visible-object-head span{white-space:normal;overflow:visible;text-overflow:clip}
+  .logic-visible-object-card textarea{min-height:72px}
+  .logic-scene-timer-grid{grid-template-columns:minmax(0,1fr)}
+  .logic-timer-toggle,
+  .logic-timer-message-field{grid-column:auto}
+}
+
 .ai-json-editor{min-height:420px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;line-height:1.45;white-space:pre}
 
 .item-editor-top{display:flex;gap:12px;align-items:center;margin-bottom:10px}
@@ -1228,6 +1972,14 @@
 .auth-switcher{display:flex;gap:10px;margin:22px 0 18px}
 
 .auth-form{display:grid;gap:8px}
+
+.auth-account-type{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+
+.auth-account-type label{display:flex;align-items:center;justify-content:center;gap:8px;min-width:0;min-height:42px;padding:9px 10px;border:1px solid rgba(148,163,184,.2);border-radius:10px;background:#0f172ab8;color:#dbeafe;font-size:13px;font-weight:900}
+
+.auth-account-type label.selected{border-color:#60a5fabd;background:#1d4ed870;color:#fff}
+
+.auth-account-type input{margin:0}
 
 .auth-consents{display:grid;gap:8px;margin-top:4px}
 

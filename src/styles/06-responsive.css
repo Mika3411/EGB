@@ -16,6 +16,8 @@
 
 @media (max-width: 1280px){.route-map-layout{grid-template-areas:"tools" "canvas" "inspector";grid-template-columns:minmax(0,1fr)}}
 
+@media (max-width: 760px), (max-width: 900px) and (orientation: landscape){.route-map-layout{grid-template-areas:"tools" "inspector" "canvas";grid-template-columns:minmax(0,1fr)}.route-map-tools{position:sticky;top:6px;max-height:58vh;overflow:auto}.route-map-inspector{position:sticky;top:auto;bottom:8px;max-height:min(58vh,460px);overflow:auto}}
+
 @media (prefers-reduced-motion: reduce){html:focus-within{scroll-behavior:auto}*,*:before,*:after{scroll-behavior:auto!important;transition-duration:.01ms!important;transition-delay:0ms!important;animation-duration:.01ms!important;animation-delay:0ms!important;animation-iteration-count:1!important}button:hover,.btn:hover,[role=button]:hover,[tabindex]:not([tabindex="-1"]):hover{transform:none}.tutorial-confetti span,.scene-visual-effect,.scene-visual-effect:before,.scene-visual-effect:after{animation:none!important}.scene-transition-overlay,.scene-transition-overlay:before,.scene-transition-overlay:after{animation-duration:1ms!important}}
 
 @media (max-width: 820px){.public-gallery-shell{padding:12px}.public-gallery-topbar,.public-discovery-head,.public-filter-grid,.public-game-hero,.public-game-columns{grid-template-columns:1fr}.public-gallery-topbar,.public-builder-cta{display:grid}.public-builder-cta button{width:100%}}
@@ -27,3 +29,24 @@
 @media (max-width: 900px){.app-shell{padding:10px}.compact-form-grid,.music-compact-row{grid-template-columns:1fr}.music-compact-row audio{width:100%}}
 
 @media (max-width: 720px){.help-dot:after,.grid-two>.checkbox-row:last-child .help-dot:after,.grid-two>div+.checkbox-row .help-dot:after,.logic-rule-body .checkbox-row:last-child .help-dot:after,.side-editor-pro .help-dot:after,.side-editor .help-dot:after{left:var(--help-left, 12px)!important;right:auto!important;top:var(--help-top, 12px)!important;width:var(--help-width, min(280px, calc(100vw - 24px) ))!important;max-width:min(280px,calc(100vw - 24px))!important;transform:none!important}.help-dot:hover:after,.help-dot:focus:after{transform:none!important}}
+
+@media (max-width: 900px){
+  .profile-tutorial-menu:not([open]) .profile-tutorial-popover{display:none!important}
+  .profile-template-picker button{min-height:44px!important;white-space:normal;overflow-wrap:anywhere;line-height:1.15}
+  [data-tour="profile-projects-section"] .project-card-footer{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,auto);align-items:stretch}
+  [data-tour="profile-projects-section"] .profile-test-button,
+  [data-tour="profile-projects-section"] .inline-head form.grid-two button{width:100%;min-width:0;min-height:44px!important;white-space:normal;overflow-wrap:anywhere;line-height:1.2}
+  [data-tour="profile-publication-section"] .project-public-settings .secondary-action{width:100%;min-width:0;min-height:44px!important;white-space:normal;overflow-wrap:anywhere;line-height:1.2}
+  .accessible-dialog-overlay{align-items:end;padding:10px}
+  .accessible-dialog-panel{width:100%;max-height:calc(100dvh - 20px);overflow:auto;border-radius:14px}
+  .accessible-dialog-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .accessible-dialog-actions button{width:100%;min-width:0;min-height:44px!important;white-space:normal;overflow-wrap:anywhere;line-height:1.2}
+  .thumbnail-crop-panel{width:100%;max-width:100%;box-sizing:border-box}
+  .thumbnail-crop-panel .segmented-control button{min-height:44px!important}
+  .thumbnail-crop-panel .author-crop-tool-buttons .secondary-action{width:44px!important;min-width:44px!important;height:44px!important;min-height:44px!important}
+}
+
+@media (max-width: 620px){
+  [data-tour="profile-projects-section"] .project-card-footer{grid-template-columns:minmax(0,1fr)}
+  .accessible-dialog-actions{grid-template-columns:minmax(0,1fr)}
+}

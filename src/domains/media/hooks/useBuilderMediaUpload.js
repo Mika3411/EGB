@@ -35,6 +35,27 @@ const validateMediaFile = (file) => {
   return '';
 };
 
+const LOCAL_FALLBACK_BLOCKED_ERROR_CODES = new Set([
+  'aborted',
+  'empty-file',
+  'file-too-large',
+  'invalid-extension',
+  'invalid-file',
+  'unsupported-mime-type',
+]);
+
+const getMediaImportErrorMessage = (error) => (
+  error?.message || String(error || 'Erreur inconnue.')
+);
+
+const canFallbackToLocalMedia = (error) => {
+  const code = String(error?.code || '');
+  if (LOCAL_FALLBACK_BLOCKED_ERROR_CODES.has(code)) return false;
+  if (error?.name === 'StorageError') return true;
+  return /supabase storage|bucket|policy|permission|forbidden|unauthorized|row-level security|network|failed to fetch|utilisateur introuvable/i
+    .test(getMediaImportErrorMessage(error));
+};
+
 const prepareMediaFileForUpload = async (file, mediaInfo) => {
   if (!mediaInfo.shouldOptimizeImage) {
     return {
@@ -87,13 +108,28 @@ export function useBuilderMediaUpload({
       };
     }
 
-    const uploaded = await uploadFileToSupabase(uploadFile, {
-      userId,
-      folder: mediaInfo.folder,
-      optimizeImage: false,
-      imageOptions: IMAGE_UPLOAD_OPTIMIZATION,
-      dedupePublicMedia: true,
-    });
+    let uploaded = null;
+    try {
+      uploaded = await uploadFileToSupabase(uploadFile, {
+        userId,
+        folder: mediaInfo.folder,
+        optimizeImage: false,
+        imageOptions: IMAGE_UPLOAD_OPTIMIZATION,
+        dedupePublicMedia: true,
+      });
+    } catch (error) {
+      if (!canFallbackToLocalMedia(error)) throw error;
+      return {
+        name: displayName,
+        optimized: Boolean(preparedMedia?.optimized),
+        originalSize: preparedMedia?.originalSize || file.size,
+        size: preparedMedia?.size || uploadFile.size || file.size,
+        optimizedSize: preparedMedia?.size || uploadFile.size || file.size,
+        remoteErrorMessage: getMediaImportErrorMessage(error),
+        storageMode: 'local-fallback',
+        url: await fileToDataURL(uploadFile),
+      };
+    }
 
     return {
       name: displayName,
@@ -101,6 +137,7 @@ export function useBuilderMediaUpload({
       originalSize: preparedMedia?.originalSize || uploaded.originalSize || file.size,
       size: uploaded.optimizedSize || preparedMedia?.size || uploadFile.size || file.size,
       optimizedSize: uploaded.optimizedSize || preparedMedia?.size || uploadFile.size || file.size,
+      storageMode: 'supabase',
       url: uploaded.publicUrl,
     };
   }, [userId]);
@@ -168,7 +205,9 @@ export function useBuilderMediaUpload({
       }, { rememberHistory: false });
       invalidateStorageUsage();
 
-      if (hasRemoteStorageConfig()) {
+      if (uploaded.storageMode === 'local-fallback') {
+        setSaveStatus(`${mediaInfo.mediaKind} importé${mediaInfo.isImage ? 'e' : ''} localement${uploaded.optimized ? ' en WebP optimisé' : ''} : ${file.name}. Supabase non synchronisé : ${uploaded.remoteErrorMessage}`);
+      } else if (hasRemoteStorageConfig()) {
         const savedPercent = uploaded.optimized && uploaded.originalSize > 0 && uploaded.optimizedSize > 0
           ? Math.round((1 - uploaded.optimizedSize / uploaded.originalSize) * 100)
           : 0;
@@ -182,10 +221,11 @@ export function useBuilderMediaUpload({
     } catch (error) {
       console.error('Erreur import média', error);
       setSaveStatus('Import média impossible');
+      const errorMessage = getMediaImportErrorMessage(error);
       await alertDialog({
         title: 'Import média impossible',
         message: hasRemoteStorageConfig() ?
-           "Impossible d'envoyer ce fichier vers Supabase Storage. Vérifie le bucket et les policies."
+           `${errorMessage}\n\nImpossible d'envoyer ce fichier vers Supabase Storage. Vérifie le bucket et les policies.`
           : 'Configuration Supabase manquante. Ajoute VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY (ou VITE_SUPABASE_ANON_KEY), VITE_SUPABASE_PUBLIC_ASSETS_BUCKET et VITE_SUPABASE_PRIVATE_DATA_BUCKET.',
         variant: 'danger',
       });

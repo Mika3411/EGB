@@ -1,1 +1,6 @@
 @import './styles/index.css';
+@import './styles/player.css';
+@import './styles/public.css';
+@import './styles/editor.css';
+@import './styles/inspector.css';
+@import './styles/ai.css';

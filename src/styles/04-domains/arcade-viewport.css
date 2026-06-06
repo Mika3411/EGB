@@ -266,7 +266,53 @@
   }
 
   .arcade-hero-section-tabs {
+    position: sticky;
+    top: 8px;
+    z-index: 5;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 8px;
+    border: 1px solid rgba(148, 163, 184, .18);
+    border-radius: 12px;
+    background: rgba(8, 17, 31, .96);
+    backdrop-filter: blur(10px);
+  }
+
+  .arcade-hero-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .arcade-hero-sidebar {
+    z-index: 4;
+  }
+
+  .arcade-hero-section-tabs button,
+  .arcade-hero-inventory-head-actions button,
+  .arcade-hero-media-actions .arcade-file-button,
+  .arcade-hero-media-actions button,
+  .arcade-hero-inventory-delete {
+    min-height: 44px;
+  }
+
+  .arcade-hero-inventory-head-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+
+  .arcade-hero-inventory-head-actions button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .arcade-hero-inventory-row,
+  .arcade-hero-weapon-settings {
+    align-items: stretch;
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .arcade-hero-inventory-delete {
+    width: 100%;
   }
 
   .arcade-canvas-row-actions,

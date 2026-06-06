@@ -36,6 +36,23 @@ const scoreHelp = {
   polish: 'Mesure le polish: ambiance des scènes, médias, sons, effets visuels et cinématiques renseignées.',
 };
 
+function ScoreAccordion({ className = '', tour, kicker, title, aside = null, children }) {
+  return (
+    <details className={`panel score-accordion-panel ${className}`.trim()} data-tour={tour} open>
+      <summary className="panel-head score-accordion-summary">
+        <div>
+          <span className="section-kicker">{kicker}</span>
+          <h2>{title}</h2>
+        </div>
+        {aside}
+      </summary>
+      <div className="score-accordion-content">
+        {children}
+      </div>
+    </details>
+  );
+}
+
 const asCount = (value) => (Array.isArray(value) ? value.length : Number(value || 0));
 
 const getHeroDiagnostics = (heroAnalysis = {}, heroCombat = {}) => {
@@ -126,13 +143,7 @@ export default function ProjectScoreDashboard({ project }) {
         </div>
       </section>
 
-      <section className="panel score-dimensions-panel" data-tour="score-dimensions">
-        <div className="panel-head">
-          <div>
-            <span className="section-kicker">Scoring multi-dimension</span>
-            <h2>Profil du projet</h2>
-          </div>
-        </div>
+      <ScoreAccordion className="score-dimensions-panel" tour="score-dimensions" kicker="Scoring multi-dimension" title="Profil du projet">
         <div className="score-metrics-grid">
           {dimensionCards.map(([key, label, Icon]) => (
             <div className="score-metric-card" key={key}>
@@ -142,16 +153,15 @@ export default function ProjectScoreDashboard({ project }) {
             </div>
           ))}
         </div>
-      </section>
+      </ScoreAccordion>
 
-      <section className="panel score-player-panel" data-tour="score-player">
-        <div className="panel-head">
-          <div>
-            <span className="section-kicker">Score basé joueur</span>
-            <h2>Expérience estimée</h2>
-          </div>
-          <strong className="score-mini-total">{playerScore.label || '0,0/10'}</strong>
-        </div>
+      <ScoreAccordion
+        className="score-player-panel"
+        tour="score-player"
+        kicker="Score basé joueur"
+        title="Expérience estimée"
+        aside={<strong className="score-mini-total">{playerScore.label || '0,0/10'}</strong>}
+      >
         <div className="score-metrics-grid">
           {playerScoreCards.map(([key, label, Icon]) => {
             const data = playerScore[key] || {};
@@ -170,17 +180,16 @@ export default function ProjectScoreDashboard({ project }) {
             );
           })}
         </div>
-      </section>
+      </ScoreAccordion>
 
       {isHeroMode && (
-        <section className="panel score-hero-mode-panel" data-tour="score-hero-mode">
-          <div className="panel-head">
-            <div>
-              <span className="section-kicker">Mode héros</span>
-              <h2>Bilan Hero Adventure</h2>
-            </div>
-            <strong className={`score-mini-total ${heroIssueCount ? 'warn' : 'good'}`}>{heroSummary}</strong>
-          </div>
+        <ScoreAccordion
+          className="score-hero-mode-panel"
+          tour="score-hero-mode"
+          kicker="Mode héros"
+          title="Bilan Hero Adventure"
+          aside={<strong className={`score-mini-total ${heroIssueCount ? 'warn' : 'good'}`}>{heroSummary}</strong>}
+        >
           <div className="score-metrics-grid score-hero-metrics-grid">
             <div className="score-metric-card">
               <Dices size={18} aria-hidden="true" />
@@ -228,17 +237,11 @@ export default function ProjectScoreDashboard({ project }) {
               );
             })}
           </div>
-        </section>
+        </ScoreAccordion>
       )}
 
       {badges.length > 0 && (
-        <section className="panel score-badges-panel" data-tour="score-badges">
-          <div className="panel-head">
-            <div>
-              <span className="section-kicker">Badges</span>
-              <h2>Forces du projet</h2>
-            </div>
-          </div>
+        <ScoreAccordion className="score-badges-panel" tour="score-badges" kicker="Badges" title="Forces du projet">
           <div className="score-badge-grid">
             {badges.map((badge) => (
               <div className={`score-badge-card ${badge.tone}`} key={badge.id}>
@@ -250,16 +253,10 @@ export default function ProjectScoreDashboard({ project }) {
               </div>
             ))}
           </div>
-        </section>
+        </ScoreAccordion>
       )}
 
-      <section className="panel score-inventory-panel" data-tour="score-inventory">
-        <div className="panel-head">
-          <div>
-            <span className="section-kicker">Inventaire projet</span>
-            <h2>Éléments créés</h2>
-          </div>
-        </div>
+      <ScoreAccordion className="score-inventory-panel" tour="score-inventory" kicker="Inventaire projet" title="Éléments créés">
         <div className="score-metrics-grid">
           {metricCards.map(([key, label, Icon]) => (
             <div className="score-metric-card" key={key}>
@@ -283,15 +280,9 @@ export default function ProjectScoreDashboard({ project }) {
             <small>{`Basé sur les scènes, énigmes, cinématiques, objets, détours du plan${isHeroMode ? ', combats Hero' : ''}.`}</small>
           </div>
         </div>
-      </section>
+      </ScoreAccordion>
 
-      <section className="panel score-advice-panel" data-tour="score-advice">
-        <div className="panel-head">
-          <div>
-            <span className="section-kicker">Feedback intelligent</span>
-            <h2>Ce que le moteur voit</h2>
-          </div>
-        </div>
+      <ScoreAccordion className="score-advice-panel" tour="score-advice" kicker="Feedback intelligent" title="Ce que le moteur voit">
         <div className="score-advice-list">
           {feedback.map((entry) => {
             const Icon = feedbackIcons[entry.level] || AlertTriangle;
@@ -307,7 +298,7 @@ export default function ProjectScoreDashboard({ project }) {
             );
           })}
         </div>
-      </section>
+      </ScoreAccordion>
 
       <section className="panel score-conclusion-panel" data-tour="score-conclusion">
         <CheckCircle2 size={20} aria-hidden="true" />

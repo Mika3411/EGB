@@ -269,6 +269,59 @@ describe('Supabase media upload deduplication', () => {
     }
   });
 
+  test('importe localement si Supabase Storage refuse le media', async () => {
+    const restoreImageStubs = installOptimizedImageStubs();
+    storageMock.uploadToStorage.mockRejectedValueOnce(Object.assign(
+      new Error('Permission refusée pour upload du fichier. Vérifie les policies Supabase Storage.'),
+      { name: 'StorageError', code: 'permission-denied' },
+    ));
+    let storedAsset = null;
+    const setSaveStatus = vi.fn();
+    const alertDialog = vi.fn(async () => true);
+    const editor = {
+      loadProject: vi.fn(),
+      patchProject: vi.fn((updater) => {
+        const draft = { assets: [] };
+        updater(draft);
+        storedAsset = draft.assets[0];
+      }),
+      project: { assets: [] },
+      selectedSceneId: 'scene-1',
+      tab: 'media',
+    };
+    const { result } = renderHook(() => useBuilderMediaUpload({
+      accountStorageQuotaBytes: 10 * MB,
+      activeProjectId: 'project-1',
+      alertDialog,
+      editor,
+      getCurrentStorageUsageBytes: vi.fn(async () => 0),
+      invalidateStorageUsage: vi.fn(),
+      preview: { syncWithProject: vi.fn() },
+      saveProjectAndAcknowledge: vi.fn(),
+      setSaveStatus,
+      userId: 'User 42',
+    }));
+
+    try {
+      await act(async () => {
+        await result.current.importMediaAsset(
+          new File(['source-image-bytes'], 'Scene 5.png', { type: 'image/png' }),
+        );
+      });
+
+      expect(storedAsset).toMatchObject({
+        name: 'Scene 5.png',
+        type: 'image',
+        size: 'optimized-image-bytes'.length,
+      });
+      expect(storedAsset.url).toMatch(/^data:image\/webp;base64,/);
+      expect(alertDialog).not.toHaveBeenCalled();
+      expect(setSaveStatus).toHaveBeenLastCalledWith(expect.stringContaining('Supabase non synchronisé'));
+    } finally {
+      restoreImageStubs();
+    }
+  });
+
   test('le stockage estime compte une seule fois une URL dedupliquee reutilisee', () => {
     const url = `https://cdn.test/users/user-42/images/deduped/${SAME_MEDIA_HASH}.png`;
 

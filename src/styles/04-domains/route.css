@@ -416,7 +416,7 @@
 
 .route-check.danger{border-color:#fca5a53d;color:var(--text-danger)}
 
-@media (max-width: 760px){
+@media (max-width: 760px), (max-width: 900px) and (orientation: landscape){
   .route-choice-grid,.route-choice-summary{grid-template-columns:minmax(0,1fr)}
 
   .route-choice-card,button.route-choice-card{grid-template-columns:minmax(0,1fr);min-height:0}
@@ -430,4 +430,97 @@
   .route-choice-card.tests .route-choice-content{border-top-color:rgba(34,197,94,.34);border-left:0}
 
   .route-choice-content strong{font-size:17px}
+
+  .route-map-layout{grid-template-areas:"tools" "inspector" "canvas";grid-template-columns:minmax(0,1fr);gap:10px;overflow-x:clip}
+
+  .route-map-tools{position:sticky;top:6px;z-index:22;gap:8px;max-height:58vh;overflow:auto}
+
+  .route-map-tools>.inline-actions[data-tour="map-add-room"],
+  .route-tool-grid,
+  .route-mode-switch,
+  .route-gameplay-stats,
+  .route-legend,
+  .route-test-legend,
+  .route-map-below-canvas .route-mechanic-legend,
+  .route-narrative-strip{grid-template-columns:minmax(0,1fr)}
+
+  .route-map-tools button,
+  .route-map-tools .button.like,
+  .route-map-tools .secondary-action,
+  .route-map-tools .danger-button,
+  .route-map-inspector button,
+  .route-map-inspector .button.like,
+  .route-map-inspector .secondary-action,
+  .route-map-inspector .danger-button,
+  .route-map-main>.panel-head button,
+  .route-map-head-actions button,
+  .route-canvas-section-head button,
+  .route-canvas-limit-message button{min-height:44px;max-width:100%;white-space:normal;overflow-wrap:anywhere;line-height:1.2}
+
+  .route-map-tools :where(input,select,textarea),
+  .route-map-inspector :where(input,select,textarea){width:100%;min-width:0;min-height:44px;box-sizing:border-box}
+
+  .route-map-main{min-width:0;overflow:hidden}
+
+  .route-map-main>.panel-head{align-items:flex-start;gap:8px}
+
+  .route-map-head-actions{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;min-width:0}
+
+  .route-map-head-actions .small-note{min-width:0;overflow:visible;text-overflow:clip;white-space:normal}
+
+  .route-canvas-stack{gap:10px;min-width:0}
+
+  .route-canvas-section{max-width:100%;overflow-x:auto;overflow-y:hidden;padding:8px;-webkit-overflow-scrolling:touch;overscroll-behavior-inline:contain}
+
+  .route-canvas-section-head{position:sticky;left:0;z-index:8;width:100%;min-width:0;align-items:flex-start}
+
+  .route-canvas-section-head strong,
+  .route-canvas-section-head span{white-space:normal;overflow-wrap:anywhere}
+
+  .route-canvas-limit-message{position:sticky;left:0;z-index:8;grid-template-columns:minmax(0,1fr)}
+
+  .route-room-board{width:760px;min-width:760px;min-height:520px;touch-action:pan-x pan-y}
+
+  .route-room-node{width:118px;min-height:54px!important;padding:8px!important;gap:6px}
+
+  .route-room-node span{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;line-height:1.15}
+
+  .route-connection-effects{width:86px;height:auto;min-height:28px}
+
+  .route-effect-badge{white-space:normal;line-height:1.1;overflow-wrap:anywhere}
+
+  .route-cross-canvas-links,
+  .route-map-below-canvas,
+  .route-narrative-strip{position:sticky;left:0;width:100%;min-width:0}
+
+  .route-cross-link{grid-template-columns:auto minmax(0,1fr);min-height:44px}
+
+  .route-cross-link small{grid-column:2;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+
+  .route-cross-link span,
+  .route-connection-status>span,
+  .route-selected-connection strong,
+  .route-selected-connection span,
+  .route-narrative-entry strong,
+  .route-narrative-entry span,
+  .route-narrative-entry small,
+  .route-narrative-entry em,
+  .route-gameplay-move small{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+
+  .route-map-inspector{position:sticky;bottom:8px;z-index:25;max-height:min(58vh,460px);overflow:auto;border-color:rgba(96,165,250,.42);box-shadow:0 -18px 44px rgba(2,6,23,.58)}
+
+  .route-map-inspector>.panel-head{position:sticky;top:0;z-index:2;margin:-1px -1px 8px;padding:10px;border-radius:12px 12px 0 0;background:#08111ff2;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+
+  .route-connection-list{min-width:0;overflow:hidden}
+
+  .route-connection-status{grid-template-columns:minmax(0,1fr);gap:6px;padding-left:8px}
+
+  .route-connection-status .route-approve-connection,
+  .route-connection-status .route-delete-connection{width:100%;height:auto;min-height:44px}
+
+  .route-gameplay-move,button.route-gameplay-move{grid-template-columns:auto minmax(0,1fr);min-height:44px}
+
+  .route-gameplay-move small{grid-column:1/-1}
+
+  .route-context-menu{max-width:calc(100vw - 32px)}
 }

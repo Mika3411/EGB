@@ -1238,6 +1238,230 @@
   }
 }
 
+@media (max-width: 760px), (max-width: 900px) and (orientation: landscape) {
+  .ai-page-layout,
+  .ai-wizard-panel,
+  .ai-output-panel,
+  .ai-narrative-preview,
+  .ai-narrative-card,
+  .ai-narrative-columns,
+  .ai-object-card,
+  .ai-cinematic-card,
+  .ai-diff-panel,
+  .ai-coherence-panel,
+  .ai-history-panel,
+  .success-panel,
+  .danger-panel {
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: clip;
+  }
+
+  .ai-page-layout {
+    gap: 10px;
+  }
+
+  .ai-wizard-panel,
+  .ai-output-panel {
+    padding: 12px;
+  }
+
+  .ai-output-panel > .panel-head {
+    position: sticky;
+    top: 0;
+    z-index: 12;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    margin: -12px -12px 10px;
+    padding: 12px;
+    background: rgba(8, 17, 31, 0.96);
+    border-bottom: 1px solid rgba(147, 197, 253, 0.18);
+  }
+
+  .ai-panel-actions,
+  .ai-wizard-footer-actions,
+  .ai-action-step-header,
+  .ai-brief-topbar,
+  .ai-compare-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .ai-panel-actions button,
+  .ai-wizard-footer-actions button,
+  .ai-wizard-panel button[data-tour="ai-generate-button"],
+  .ai-progressive-steps button,
+  .ai-image-action,
+  .ai-suggestion-list button,
+  .ai-history-panel button,
+  .ai-compare-head .secondary-action,
+  .ai-compare-grid article > div .secondary-action,
+  .ai-disabled-actions button {
+    width: 100%;
+    max-width: 100%;
+    min-height: 44px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.2;
+  }
+
+  .ai-wizard-form {
+    max-height: min(66svh, 620px);
+    overflow-y: auto;
+    overflow-x: clip;
+    overscroll-behavior: contain;
+    padding-right: 2px;
+  }
+
+  .ai-brief-compact-grid,
+  .ai-brief-document-grid,
+  .ai-style-selection-layout,
+  .ai-style-card-grid,
+  .ai-visual-tuning-grid,
+  .ai-action-step .ai-mode-card-grid,
+  .ai-mode-card-grid,
+  .ai-narrative-columns,
+  .ai-object-grid,
+  .ai-compare-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ai-brief-field,
+  .ai-brief-field.wide,
+  .ai-brief-field.compact,
+  .ai-brief-compact-grid > .ai-brief-field:not(.compact):not(.wide),
+  .ai-brief-document-grid .ai-brief-field.wide,
+  .ai-visual-tuning-grid > div:nth-child(3) {
+    grid-column: auto;
+  }
+
+  .ai-brief-field input,
+  .ai-brief-field select,
+  .ai-brief-field textarea,
+  .ai-visual-tuning-grid input,
+  .ai-visual-tuning-grid select,
+  .ai-visual-tuning-grid textarea,
+  .ai-extend-card :where(input, select, textarea) {
+    min-height: 44px;
+  }
+
+  .ai-action-step .ai-mode-card-grid button,
+  .ai-style-card {
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .ai-mode-card-visual {
+    width: 100%;
+    min-height: 58px;
+  }
+
+  .ai-mode-card-visual small,
+  .ai-style-card-title span,
+  .ai-field-credit-cost {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .ai-style-card-body {
+    padding: 0;
+  }
+
+  .ai-narrative-preview,
+  .ai-diff-panel > div,
+  .ai-history-panel,
+  .success-panel .compact-list,
+  .danger-panel .compact-list,
+  .ai-chronology-scroll-card {
+    max-height: min(62svh, 560px);
+    overflow-y: auto;
+    overflow-x: clip;
+    overscroll-behavior: contain;
+    padding-right: 2px;
+  }
+
+  .ai-narrative-list,
+  .ai-cinematic-slide-list,
+  .ai-dialogue-list,
+  .ai-elements-list,
+  .ai-estimate-tags,
+  .ai-disabled-actions {
+    min-width: 0;
+  }
+
+  .ai-diff-panel {
+    gap: 10px;
+  }
+
+  .ai-diff-panel > div {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  .ai-estimate-panel,
+  .ai-diff-panel span,
+  .ai-elements-list span {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 8px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .ai-coherence-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ai-coherence-panel b {
+    white-space: normal;
+  }
+
+  .ai-object-card {
+    grid-template-columns: 52px minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .ai-object-card strong,
+  .ai-narrative-card strong,
+  .ai-narrative-card p,
+  .ai-narrative-columns p,
+  .ai-cinematic-card p,
+  .ai-dialogue-list p,
+  .ai-progressive-summary p,
+  .ai-privacy-notice p,
+  .ai-credit-panel p,
+  .ai-step-heading p,
+  .ai-brief-topbar strong,
+  .ai-brief-topbar > span:last-child,
+  .compact-list li {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 900px) and (orientation: landscape) {
+  .ai-wizard-form {
+    max-height: min(54svh, 360px);
+  }
+
+  .ai-narrative-preview,
+  .ai-diff-panel > div,
+  .ai-history-panel,
+  .success-panel .compact-list,
+  .danger-panel .compact-list {
+    max-height: min(54svh, 340px);
+  }
+}
+
 .ai-editor-badge {
   display: inline-flex;
   align-items: center;
@@ -1602,5 +1826,27 @@
   .ai-action-step .ai-mode-card-grid button {
     aspect-ratio: auto;
     min-height: 112px;
+  }
+}
+
+@media (max-width: 760px), (max-width: 900px) and (orientation: landscape) {
+  .ai-output-panel .ai-panel-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .ai-output-panel .ai-image-action,
+  .ai-output-panel .ai-object-card .ai-image-action,
+  .ai-output-panel .ai-cinematic-card .ai-image-action,
+  .ai-output-panel .ai-panel-actions button,
+  .ai-wizard-panel .ai-wizard-footer-actions button,
+  .ai-wizard-panel button[data-tour="ai-generate-button"] {
+    width: 100%;
+    max-width: 100%;
+    min-height: 44px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.2;
   }
 }

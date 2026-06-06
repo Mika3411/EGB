@@ -34,6 +34,16 @@
 
 .score-help-label .help-dot{width:17px;height:17px;font-size:11px}
 
+.score-accordion-panel{display:block}
+
+.score-accordion-summary{list-style:none;cursor:pointer}
+
+.score-accordion-summary::-webkit-details-marker{display:none}
+
+.score-accordion-summary::marker{content:""}
+
+.score-accordion-content{display:grid;gap:10px}
+
 .score-section-grid strong,.score-metric-card strong,.score-connection-summary strong{color:#fff;font-size:18px;font-variant-numeric:tabular-nums}
 
 .score-metric-card small{color:var(--muted);font-size:11px;font-weight:800}
@@ -95,3 +105,54 @@
 .score-conclusion-panel h2{margin:0 0 6px}
 
 .score-conclusion-panel small{display:block;margin-top:8px;color:var(--muted);line-height:1.4}
+
+@media (max-width: 760px), (max-width: 900px) and (orientation: landscape){
+  .score-layout{grid-template-columns:minmax(0,1fr);gap:10px;overflow-x:clip}
+  .score-layout>*{min-width:0;max-width:100%;overflow-x:clip}
+  .score-hero-panel{position:sticky;top:0;z-index:10;padding:12px;gap:10px;border-color:rgba(96,165,250,.38);background:#08111ff2;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+  .score-hero-main h2{font-size:22px;line-height:1.15}
+  .score-big{width:100%;min-height:52px;justify-content:center}
+  .score-big strong{font-size:22px}
+  .score-section-grid,
+  .score-metrics-grid,
+  .score-connection-summary,
+  .score-badge-grid,
+  .score-advice-panel .score-advice-list,
+  .score-hero-metrics-grid{grid-template-columns:minmax(0,1fr)}
+  .score-accordion-panel{padding:0;overflow:hidden}
+  .score-accordion-summary{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;min-height:50px;padding:12px}
+  .score-accordion-summary::after{content:"+";display:grid;place-items:center;width:28px;height:28px;border:1px solid rgba(147,197,253,.24);border-radius:8px;color:#bfdbfe;background:rgba(15,23,42,.72);font-weight:900}
+  .score-accordion-panel[open]>.score-accordion-summary::after{content:"-"}
+  .score-accordion-summary .score-mini-total{justify-self:start;grid-column:1/-1;width:100%;text-align:center}
+  .score-accordion-content{max-height:min(58svh,520px);overflow-y:auto;overflow-x:clip;overscroll-behavior:contain;padding:0 12px 12px}
+  .score-advice-panel .score-accordion-content,
+  .score-hero-mode-panel .score-accordion-content{max-height:min(64svh,560px)}
+  .score-section-grid div,
+  .score-metric-card,
+  .score-connection-summary div,
+  .score-badge-card,
+  .score-advice-card,
+  .score-playtime-card,
+  .score-conclusion-panel{max-width:100%;min-width:0;overflow:hidden}
+  .score-badge-card,
+  .score-advice-card,
+  .score-playtime-card,
+  .score-conclusion-panel{grid-template-columns:minmax(0,1fr);gap:8px}
+  .score-section-grid span,
+  .score-metric-card span,
+  .score-metric-card small,
+  .score-connection-summary span,
+  .score-badge-card strong,
+  .score-badge-card small,
+  .score-advice-card strong,
+  .score-advice-card small,
+  .score-conclusion-panel p,
+  .score-conclusion-panel small,
+  .score-hero-main p{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+  .score-advice-card em{max-width:100%;white-space:normal;overflow-wrap:anywhere}
+}
+
+@media (max-width: 900px) and (orientation: landscape){
+  .score-hero-panel{position:relative;top:auto}
+  .score-accordion-content{max-height:min(52svh,320px)}
+}
