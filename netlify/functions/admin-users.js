@@ -8,6 +8,7 @@ import {
   verifyAdmin,
   withErrors,
 } from './_shared.js';
+import { normalizeAccountType } from '../../src/shared/services/accountPlans.js';
 
 const sanitizeStorageSegment = (value = '') => String(value || '')
   .trim()
@@ -57,10 +58,21 @@ const getSafeStoredProjectCountForUser = async (supabase, userId) => {
   }
 };
 
+const getUserAccountType = (user = {}) => normalizeAccountType(
+  user.user_metadata?.accountType
+  || user.user_metadata?.account_type
+  || user.app_metadata?.accountType
+  || user.app_metadata?.account_type
+  || '',
+);
+
 const supabaseUserToAdminRecord = (user, projectCount = 0) => ({
   id: user.id,
   email: user.email || '',
   name: user.user_metadata?.name || user.email?.split('@')[0] || 'Utilisateur',
+  accountType: getUserAccountType(user),
+  profileType: user.user_metadata?.profileType || user.user_metadata?.profile_type || '',
+  organization: user.user_metadata?.organization || '',
   provider: 'supabase',
   createdAt: user.created_at || '',
   updatedAt: user.updated_at || '',
@@ -111,6 +123,17 @@ export const handler = async (event) => withErrors(event, async () => {
     if (action === 'disable') attributes.ban_duration = '876000h';
     if (action === 'enable') attributes.ban_duration = 'none';
     if (action === 'ban_temp') attributes.ban_duration = String(body.banDuration || '24h');
+    if (action === 'set_account_type') {
+      if (!String(body.accountType || '').trim()) return json(400, { error: 'Type de compte manquant.' });
+      const accountType = normalizeAccountType(body.accountType);
+      const { data: currentData, error: currentError } = await supabase.auth.admin.getUserById(userId);
+      if (currentError) throw currentError;
+      attributes.user_metadata = {
+        ...(currentData.user?.user_metadata || {}),
+        accountType,
+        account_type: accountType,
+      };
+    }
     if (!Object.keys(attributes).length) return json(400, { error: 'Action admin inconnue.' });
 
     const { data, error } = await supabase.auth.admin.updateUserById(userId, attributes);

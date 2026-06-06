@@ -34,6 +34,10 @@ export const aiCreditCosts = {
 };
 
 export const defaultAiCredits = Number(process.env.AI_DEFAULT_CREDITS || 20);
+export const FREE_STORAGE_BYTES = 250 * 1024 * 1024;
+export const STORAGE_BYTES_PER_CREDIT = 5 * 1024 * 1024;
+export const STORAGE_UPGRADE_REASON_PREFIX = 'storage_upgrade:';
+export const STORAGE_QUOTA_SET_REASON_PREFIX = 'storage_quota_set:';
 const storageBuckets = getServerStorageBuckets();
 export { LEGACY_STORAGE_BUCKET_DEPRECATION_MESSAGE, warnLegacyStorageBucketFallback };
 export const legacyStorageBucket = storageBuckets.legacyStorageBucket;
@@ -287,6 +291,60 @@ export const getRecentTransactions = async (supabase, userId) => {
     reason: entry.reason || '',
     at: entry.created_at || '',
   }));
+};
+
+const getTransactionOrder = (entry = {}, index = 0) => {
+  const time = new Date(entry.created_at || entry.createdAt || entry.at || '').getTime();
+  return Number.isFinite(time) ? time : index;
+};
+
+const getStorageQuotaBytesFromReason = (reason = '', prefix = STORAGE_UPGRADE_REASON_PREFIX) => {
+  const parts = String(reason || '').split(':');
+  const rawBytes = prefix === STORAGE_QUOTA_SET_REASON_PREFIX ? parts[1] : parts[parts.length - 1];
+  const bytes = Math.round(Number(rawBytes || 0));
+  return Number.isFinite(bytes) ? Math.max(0, bytes) : 0;
+};
+
+export const resolveStorageQuotaFromTransactionEntries = (transactions = []) => {
+  const entries = Array.isArray(transactions) ? transactions : [];
+  const latestAdminSet = entries.reduce((latest, entry, index) => {
+    const reason = String(entry.reason || '');
+    if (!reason.startsWith(STORAGE_QUOTA_SET_REASON_PREFIX)) return latest;
+    const bytes = getStorageQuotaBytesFromReason(reason, STORAGE_QUOTA_SET_REASON_PREFIX);
+    if (!bytes) return latest;
+    const order = getTransactionOrder(entry, index);
+    if (!latest || order >= latest.order) return { bytes, order };
+    return latest;
+  }, null);
+
+  return entries.reduce((quota, entry, index) => {
+    const reason = String(entry.reason || '');
+    if (!reason.startsWith(STORAGE_UPGRADE_REASON_PREFIX)) return quota;
+    if (latestAdminSet && getTransactionOrder(entry, index) < latestAdminSet.order) return quota;
+    return Math.max(quota, getStorageQuotaBytesFromReason(reason));
+  }, latestAdminSet?.bytes || FREE_STORAGE_BYTES);
+};
+
+export const getStorageQuotaFromTransactions = async (supabase, userId) => {
+  const [upgradesResult, adminSetsResult] = await Promise.all([
+    supabase
+      .from('ai_credit_transactions')
+      .select('reason, created_at')
+      .eq('user_id', userId)
+      .like('reason', `${STORAGE_UPGRADE_REASON_PREFIX}%`),
+    supabase
+      .from('ai_credit_transactions')
+      .select('reason, created_at')
+      .eq('user_id', userId)
+      .like('reason', `${STORAGE_QUOTA_SET_REASON_PREFIX}%`),
+  ]);
+
+  if (upgradesResult.error) throw upgradesResult.error;
+  if (adminSetsResult.error) throw adminSetsResult.error;
+  return resolveStorageQuotaFromTransactionEntries([
+    ...(upgradesResult.data || []),
+    ...(adminSetsResult.data || []),
+  ]);
 };
 
 export const getAiJobPath = (jobId) => `ai-jobs/${String(jobId || '').replace(/[^a-zA-Z0-9._-]/g, '-')}.json`;

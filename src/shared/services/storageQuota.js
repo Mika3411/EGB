@@ -1,8 +1,10 @@
 import { collectProjectAssetManifest, collectProjectAssets } from './assetManager';
+import { isProfessionalAccount } from './accountPlans';
 import { getRemoteAssetDedupeKey } from '../utils/mediaDedupe';
 
 export const MB = 1024 * 1024;
 export const ACCOUNT_FREE_STORAGE_BYTES = 250 * MB;
+export const ACCOUNT_PRO_STORAGE_BYTES = 1024 * MB;
 
 export const STORAGE_PACK_TIERS = [
   { credits: 100, bytes: 500 * MB, label: '~500 Mo' },
@@ -23,12 +25,18 @@ export const formatStorageSize = (bytes = 0) => {
   return `${Math.round(safeBytes / MB)} Mo`;
 };
 
-export const getStorageQuotaBytes = ({ storageQuotaBytes = 0, storagePackCredits = 0 } = {}) => {
+export const getAccountBaseStorageBytes = (account = {}) => (
+  isProfessionalAccount(account) ? ACCOUNT_PRO_STORAGE_BYTES : ACCOUNT_FREE_STORAGE_BYTES
+);
+
+export const getStorageQuotaBytes = ({ storageQuotaBytes = 0, storagePackCredits = 0, account = null, accountType = '' } = {}) => {
+  const accountForQuota = accountType ? { ...(account || {}), accountType } : account;
+  const baseQuota = getAccountBaseStorageBytes(accountForQuota || {});
   const explicitQuota = Number(storageQuotaBytes) || 0;
-  if (explicitQuota > 0) return explicitQuota;
+  if (explicitQuota > 0) return Math.max(baseQuota, explicitQuota);
   const credits = Number(storagePackCredits) || 0;
   const tier = [...STORAGE_PACK_TIERS].reverse().find((entry) => credits >= entry.credits);
-  return tier?.bytes || ACCOUNT_FREE_STORAGE_BYTES;
+  return Math.max(baseQuota, tier?.bytes || 0);
 };
 
 const estimateDataUrlBytes = (url = '') => {

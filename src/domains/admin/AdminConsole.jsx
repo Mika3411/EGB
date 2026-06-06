@@ -12,10 +12,23 @@ import {
   prepareAdminShopPackScreenshots,
   prepareAdminShopPackZip,
   toggleStoredLocalAccountStatus,
+  updateStoredLocalAccountType,
   updateAdminCredits,
   updateAdminModeration,
+  updateAdminStorageQuota,
   updateAdminUser,
 } from '../../shared/services/adminApi';
+import {
+  ACCOUNT_FREE_STORAGE_BYTES,
+  formatStorageSize,
+  getStorageQuotaBytes,
+} from '../../shared/services/storageQuota';
+import {
+  ACCOUNT_TYPE_PERSONAL,
+  ACCOUNT_TYPE_PRO,
+  getAccountType,
+  getAccountTypeLabel,
+} from '../../shared/services/accountPlans';
 import {
   SUPPORT_STATUSES,
   getSupportCategoryLabel,
@@ -52,6 +65,36 @@ const formatDate = (value) => {
 
 const formatNumber = (value) => new Intl.NumberFormat('fr-FR').format(Number(value || 0));
 
+const MB = 1024 * 1024;
+const ONLINE_WINDOW_MS = 15 * 60 * 1000;
+
+const getAccountStorageQuotaBytes = (account = {}) => getStorageQuotaBytes({
+  storageQuotaBytes: account?.credits?.storageQuotaBytes,
+  account,
+});
+
+const getProviderLabel = (provider = '') => ({
+  supabase: 'Supabase',
+  local: 'Local',
+  credits: 'Crédits seuls',
+}[provider] || provider || 'Inconnu');
+
+const getLastConnectionDate = (account = {}) => (
+  account.lastSignInAt || account.lastLoginAt || account.updatedAt || ''
+);
+
+const isAccountOnline = (account = {}) => {
+  if (account.status === 'disabled') return false;
+  const time = new Date(getLastConnectionDate(account)).getTime();
+  return Number.isFinite(time) && Date.now() - time <= ONLINE_WINDOW_MS;
+};
+
+const getPresenceLabel = (account = {}) => (isAccountOnline(account) ? 'En ligne' : 'Hors ligne');
+
+const getAccountTypeActionLabel = (account = {}) => (
+  getAccountType(account) === ACCOUNT_TYPE_PRO ? 'Reléguer en particulier' : 'Promouvoir en Pro'
+);
+
 const SHOP_PACK_NUMBER_FIELDS = [
   'costCredits',
   'rating',
@@ -82,8 +125,10 @@ export default function AdminConsole({
   const [selectedSupportThreadId, setSelectedSupportThreadId] = useState('');
   const [supportReplyDraft, setSupportReplyDraft] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('');
+  const [isUserSheetOpen, setIsUserSheetOpen] = useState(false);
   const [creditAction, setCreditAction] = useState('add');
   const [creditAmount, setCreditAmount] = useState(20);
+  const [storageQuotaMb, setStorageQuotaMb] = useState(Math.round(ACCOUNT_FREE_STORAGE_BYTES / MB));
   const [status, setStatus] = useState('');
   const [isBusy, setIsBusy] = useState(false);
 
@@ -135,11 +180,47 @@ export default function AdminConsole({
     [accounts, supabaseUsers, creditUsers, projectCounts],
   );
 
-  const selectedUser = managedUsers.find((entry) => entry.userId === selectedUserId) || managedUsers[0] || null;
+  const selectedUser = managedUsers.find((entry) => entry.userId === selectedUserId) || null;
+
+  const replaceCreditUser = (nextUser) => {
+    if (!nextUser?.userId) return;
+    setCreditUsers((previous) => {
+      const existing = previous.find((entry) => entry.userId === nextUser.userId) || {};
+      const merged = { ...existing, ...nextUser };
+      return [merged, ...previous.filter((entry) => entry.userId !== nextUser.userId)];
+    });
+  };
+
+  const replaceSupabaseUser = (nextUser) => {
+    if (!nextUser?.id) return;
+    setSupabaseUsers((previous) => previous.map((entry) => (
+      entry.id === nextUser.id ? { ...entry, ...nextUser } : entry
+    )));
+  };
+
+  const openUserSheet = (targetUser) => {
+    if (!targetUser?.userId) return;
+    setSelectedUserId(targetUser.userId);
+    setStorageQuotaMb(Math.round(getAccountStorageQuotaBytes(targetUser) / MB));
+    setIsUserSheetOpen(true);
+  };
+
+  const closeUserSheet = () => {
+    setIsUserSheetOpen(false);
+  };
 
   useEffect(() => {
-    if (!selectedUserId && managedUsers[0]?.userId) setSelectedUserId(managedUsers[0].userId);
-  }, [managedUsers, selectedUserId]);
+    if (!isUserSheetOpen) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') closeUserSheet();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isUserSheetOpen]);
+
+  useEffect(() => {
+    if (isUserSheetOpen && !selectedUser) closeUserSheet();
+  }, [isUserSheetOpen, selectedUser]);
 
   const applyCreditChange = async (event) => {
     event.preventDefault();
@@ -155,13 +236,36 @@ export default function AdminConsole({
         reason: `admin:${user?.email || 'admin'}`,
       });
 
-      setCreditUsers((previous) => {
-        const withoutUser = previous.filter((entry) => entry.userId !== payload.user.userId);
-        return [payload.user, ...withoutUser];
-      });
+      replaceCreditUser(payload.user);
       setStatus(`Crédits mis à jour pour ${getDisplayName(selectedUser)}.`);
     } catch (error) {
       setStatus(error.message || 'Modification impossible.');
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const applyStorageQuotaChange = async (event) => {
+    event.preventDefault();
+    if (!selectedUser?.userId) return;
+    const storageQuotaBytes = Math.max(
+      ACCOUNT_FREE_STORAGE_BYTES,
+      Math.round(Number(storageQuotaMb || 0) * MB),
+    );
+    setIsBusy(true);
+    setStatus('');
+
+    try {
+      const payload = await updateAdminStorageQuota({
+        userId: selectedUser.userId,
+        storageQuotaBytes,
+        reason: `admin_storage:${user?.email || 'admin'}`,
+      });
+      replaceCreditUser(payload.user);
+      setStorageQuotaMb(Math.round((payload.user?.storageQuotaBytes || storageQuotaBytes) / MB));
+      setStatus(`Stockage média mis à jour pour ${getDisplayName(selectedUser)}.`);
+    } catch (error) {
+      setStatus(error.message || 'Modification du stockage impossible.');
     } finally {
       setIsBusy(false);
     }
@@ -172,6 +276,38 @@ export default function AdminConsole({
     if (!result) return;
     setAccounts(result.accounts);
     setStatus(result.nextStatus === 'disabled' ? 'Compte désactivé.' : 'Compte réactivé.');
+  };
+
+  const applyAccountTypeChange = async (targetUser) => {
+    if (!targetUser?.userId || targetUser.provider === 'credits') return;
+    const nextAccountType = getAccountType(targetUser) === ACCOUNT_TYPE_PRO
+      ? ACCOUNT_TYPE_PERSONAL
+      : ACCOUNT_TYPE_PRO;
+    setIsBusy(true);
+    setStatus('');
+
+    try {
+      if (targetUser.provider === 'supabase') {
+        const payload = await updateAdminUser({
+          userId: targetUser.userId,
+          action: 'set_account_type',
+          accountType: nextAccountType,
+        });
+        replaceSupabaseUser({ ...payload.user, accountType: nextAccountType });
+      } else {
+        const result = updateStoredLocalAccountType(targetUser, nextAccountType);
+        if (!result) throw new Error('Modification du type de compte impossible.');
+        setAccounts(result.accounts);
+      }
+
+      setStatus(nextAccountType === ACCOUNT_TYPE_PRO
+        ? `Compte promu en Pro pour ${getDisplayName(targetUser)}.`
+        : `Compte relégué en particulier pour ${getDisplayName(targetUser)}.`);
+    } catch (error) {
+      setStatus(error.message || 'Modification du type de compte impossible.');
+    } finally {
+      setIsBusy(false);
+    }
   };
 
   const updateSupabaseAccount = async (targetUser, action, options = {}) => {
@@ -190,13 +326,12 @@ export default function AdminConsole({
         setSupabaseUsers((previous) => previous.filter((entry) => entry.id !== payload.deletedUserId));
         setCreditUsers((previous) => previous.filter((entry) => entry.userId !== payload.deletedUserId));
         setSelectedUserId('');
+        setIsUserSheetOpen(false);
         setStatus('Compte Supabase supprimé.');
         return;
       }
 
-      setSupabaseUsers((previous) => previous.map((entry) => (
-        entry.id === payload.user.id ? payload.user : entry
-      )));
+      replaceSupabaseUser(payload.user);
       setStatus(payload.user.isDisabled ? 'Compte Supabase bloqué.' : 'Compte Supabase débloqué.');
     } catch (error) {
       setStatus(error.message || 'Modification utilisateur impossible.');
@@ -393,6 +528,11 @@ export default function AdminConsole({
     moderation,
     supportThreads,
   }), [managedUsers, creditUsers, publicGames, visitorAnalytics, moderation, supportThreads]);
+  const selectedUserStorageQuotaBytes = getAccountStorageQuotaBytes(selectedUser || {});
+  const selectedUserProjectCount = selectedUser ? getAdminProjectCount(selectedUser) : 0;
+  const selectedUserLastConnectionAt = getLastConnectionDate(selectedUser || {});
+  const selectedUserTransactions = selectedUser?.credits?.transactions || [];
+  const selectedUserAccountType = getAccountType(selectedUser || {});
 
   const refreshSupportThreads = async () => {
     setIsBusy(true);
@@ -695,152 +835,317 @@ export default function AdminConsole({
       </section>
 
       <section className="panel admin-control-grid">
-        <div>
-          <div className="panel-head">
-            <div>
-              <h2>Comptes</h2>
-              <p className="small-note">Sélectionne un utilisateur pour ajuster ses crédits.</p>
-            </div>
-          </div>
-
-          <div className="admin-table" role="table" aria-label="Comptes gérés">
-            <div className="admin-table-row admin-table-head" role="row">
-              <span role="columnheader">Utilisateur</span>
-              <span role="columnheader">Statut</span>
-              <span role="columnheader">Crédits</span>
-              <span role="columnheader">Action</span>
-            </div>
-            {managedUsers.map((entry) => (
-              <button
-                type="button"
-                className={`admin-table-row admin-user-row ${entry.userId === selectedUser?.userId ? 'selected' : ''}`}
-                role="row"
-                key={entry.userId}
-                onClick={() => setSelectedUserId(entry.userId)}
-              >
-                <span role="cell">
-                  <strong>{getDisplayName(entry)}</strong>
-                  <small>{entry.provider} - {entry.email || entry.userId}</small>
-                </span>
-                <span role="cell">{entry.status === 'disabled' ? 'Désactivé' : 'Actif'}</span>
-                <span role="cell">{entry.credits?.balance ?? 0}</span>
-                <span role="cell">
-                  <span className="status-badge soft">
-                    {getAdminProjectCount(entry)} projet{getAdminProjectCount(entry) > 1 ? 's' : ''}
-                  </span>
-                </span>
-              </button>
-            ))}
-            {managedUsers.length === 0 ? (
-              <div className="empty-state-inline">
-                <strong>Aucun autre compte trouvé.</strong>
-              </div>
-            ) : null}
+        <div className="panel-head">
+          <div>
+            <h2>Comptes</h2>
+            <p className="small-note">Ouvre la fiche d'un utilisateur pour voir ses infos, ajuster le type de compte, les crédits, le blocage et le stockage média.</p>
           </div>
         </div>
 
-        <aside className="subpanel admin-credit-editor">
-          <div className="subpanel-head">
-            <div>
-              <h3>{selectedUser ? getDisplayName(selectedUser) : 'Aucun utilisateur'}</h3>
-              <p className="small-note">{selectedUser?.email || selectedUser?.userId || ''}</p>
-            </div>
-            <span className="status-badge">{selectedUser?.credits?.balance ?? 0} crédits</span>
+        <div className="admin-table" role="table" aria-label="Comptes gérés">
+          <div className="admin-table-row admin-table-head" role="row">
+            <span role="columnheader">Utilisateur</span>
+            <span role="columnheader">Type</span>
+            <span role="columnheader">Présence</span>
+            <span role="columnheader">Dernière connexion</span>
+            <span role="columnheader">Crédits</span>
+            <span role="columnheader">Action</span>
           </div>
-
-          <form onSubmit={applyCreditChange}>
-            <label>Opération</label>
-            <select value={creditAction} onChange={(event) => setCreditAction(event.target.value)}>
-              <option value="add">Ajouter</option>
-              <option value="subtract">Retirer</option>
-              <option value="set">Fixer le solde</option>
-            </select>
-
-            <label>Montant</label>
-            <input
-              type="number"
-              min="0"
-              step="1"
-              value={creditAmount}
-              onChange={(event) => setCreditAmount(event.target.value)}
-            />
-
-            <button type="submit" className="profile-action-button" disabled={!selectedUser || isBusy}>
-              {isBusy ? 'Mise à jour...' : 'Appliquer aux crédits'}
-            </button>
-          </form>
-
-          <div className="admin-account-actions">
-            <button
-              type="button"
-              className="secondary-action"
-              onClick={() => toggleLocalAccountStatus(selectedUser)}
-              disabled={!selectedUser || selectedUser.provider === 'credits' || selectedUser.provider === 'supabase'}
-            >
-              {selectedUser?.status === 'disabled' ? 'Réactiver le compte local' : 'Désactiver le compte local'}
-            </button>
-            {selectedUser?.provider === 'supabase' ? (
-              <>
-                <div className="admin-ban-grid">
+          {managedUsers.map((entry) => {
+            const projectCount = getAdminProjectCount(entry);
+            const lastConnectionAt = getLastConnectionDate(entry);
+            const isOnline = isAccountOnline(entry);
+            return (
+              <div
+                className={`admin-table-row admin-user-row ${entry.userId === selectedUser?.userId && isUserSheetOpen ? 'selected' : ''}`}
+                role="row"
+                key={entry.userId}
+              >
+                <span role="cell">
+                  <strong>{getDisplayName(entry)}</strong>
+                  <small>{getProviderLabel(entry.provider)} - {entry.email || entry.userId}</small>
+                </span>
+                <span role="cell">
+                  <span className={`status-badge ${getAccountType(entry) === ACCOUNT_TYPE_PRO ? 'warning' : 'soft'}`}>
+                    {entry.provider === 'credits' ? 'Sans profil' : getAccountTypeLabel(entry)}
+                  </span>
+                </span>
+                <span role="cell">
+                  <span className={`admin-presence-badge ${isOnline ? 'online' : 'offline'}`}>
+                    {getPresenceLabel(entry)}
+                  </span>
+                  {entry.status === 'disabled' ? <small>Compte bloqué</small> : null}
+                </span>
+                <span className="admin-last-connection-cell" role="cell">
+                  {lastConnectionAt ? (
+                    <time dateTime={lastConnectionAt}>{formatDate(lastConnectionAt)}</time>
+                  ) : (
+                    <span>Jamais</span>
+                  )}
+                </span>
+                <span role="cell">{entry.credits?.balance ?? 0}</span>
+                <span className="admin-account-action-cell" role="cell">
                   <button
                     type="button"
-                    className="secondary-action"
-                    onClick={() => banSupabaseAccountTemporarily(selectedUser, '24h')}
-                    disabled={isBusy}
+                    className="secondary-action admin-account-type-button"
+                    onClick={() => applyAccountTypeChange(entry)}
+                    disabled={isBusy || entry.provider === 'credits'}
                   >
-                    Bloquer 24h
+                    {getAccountTypeActionLabel(entry)}
                   </button>
-                  <button
-                    type="button"
-                    className="secondary-action"
-                    onClick={() => banSupabaseAccountTemporarily(selectedUser, '168h')}
-                    disabled={isBusy}
-                  >
-                    Bloquer 7j
+                  <button type="button" className="secondary-action admin-sheet-button" onClick={() => openUserSheet(entry)}>
+                    Fiche
                   </button>
+                  <span className="status-badge soft">
+                    {projectCount} projet{projectCount > 1 ? 's' : ''}
+                  </span>
+                </span>
+              </div>
+            );
+          })}
+          {managedUsers.length === 0 ? (
+            <div className="empty-state-inline">
+              <strong>Aucun autre compte trouvé.</strong>
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      {isUserSheetOpen && selectedUser ? (
+        <div className="admin-account-sheet-overlay" role="dialog" aria-modal="true" aria-labelledby="admin-account-sheet-title" onMouseDown={closeUserSheet}>
+          <section className="admin-account-sheet" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="admin-account-sheet-head">
+              <div>
+                <span className="eyebrow">Fiche compte</span>
+                <h2 id="admin-account-sheet-title">{getDisplayName(selectedUser)}</h2>
+                <p className="small-note">{selectedUser.email || selectedUser.userId}</p>
+              </div>
+              <div className="admin-account-sheet-head-actions">
+                <span className={`status-badge ${selectedUserAccountType === ACCOUNT_TYPE_PRO ? 'warning' : 'soft'}`}>
+                  {selectedUser.provider === 'credits' ? 'Sans profil' : getAccountTypeLabel(selectedUser)}
+                </span>
+                <span className="status-badge">{selectedUser.credits?.balance ?? 0} crédits</span>
+                <button type="button" className="secondary-action" onClick={closeUserSheet}>
+                  Fermer
+                </button>
+              </div>
+            </div>
+
+            <div className="admin-account-sheet-body">
+              <section className="admin-sheet-section">
+                <div className="subpanel-head">
+                  <div>
+                    <h3>Informations</h3>
+                    <p className="small-note">Vue complète du compte sélectionné.</p>
+                  </div>
+                  <span className={`admin-presence-badge ${isAccountOnline(selectedUser) ? 'online' : 'offline'}`}>
+                    {getPresenceLabel(selectedUser)}
+                  </span>
+                </div>
+
+                <dl className="admin-account-info-grid">
+                  <div>
+                    <dt>Identifiant</dt>
+                    <dd>{selectedUser.userId}</dd>
+                  </div>
+                  <div>
+                    <dt>Email</dt>
+                    <dd>{selectedUser.email || 'Non renseigné'}</dd>
+                  </div>
+                  <div>
+                    <dt>Source</dt>
+                    <dd>{getProviderLabel(selectedUser.provider)}</dd>
+                  </div>
+                  <div>
+                    <dt>Type de compte</dt>
+                    <dd>{selectedUser.provider === 'credits' ? 'Sans profil utilisateur' : getAccountTypeLabel(selectedUser)}</dd>
+                  </div>
+                  <div>
+                    <dt>Profil</dt>
+                    <dd>{selectedUser.profileType || selectedUser.organization || 'Non renseigné'}</dd>
+                  </div>
+                  <div>
+                    <dt>Création</dt>
+                    <dd>{formatDate(selectedUser.createdAt)}</dd>
+                  </div>
+                  <div>
+                    <dt>Dernière connexion</dt>
+                    <dd>{formatDate(selectedUserLastConnectionAt)}</dd>
+                  </div>
+                  <div>
+                    <dt>Mise à jour</dt>
+                    <dd>{formatDate(selectedUser.updatedAt || selectedUser.credits?.updatedAt)}</dd>
+                  </div>
+                  <div>
+                    <dt>Projets</dt>
+                    <dd>{selectedUserProjectCount} total · {selectedUser.publicProjects || 0} public{selectedUser.publicProjects > 1 ? 's' : ''}</dd>
+                  </div>
+                  <div>
+                    <dt>Stockage médias</dt>
+                    <dd>{formatStorageSize(selectedUserStorageQuotaBytes)}</dd>
+                  </div>
+                  <div>
+                    <dt>Compte crédits</dt>
+                    <dd>{selectedUser.credits?.createdAt ? `Créé le ${formatDate(selectedUser.credits.createdAt)}` : 'Aucun portefeuille distant'}</dd>
+                  </div>
+                  <div>
+                    <dt>Blocage Supabase</dt>
+                    <dd>{selectedUser.bannedUntil ? formatDate(selectedUser.bannedUntil) : 'Aucun blocage daté'}</dd>
+                  </div>
+                </dl>
+              </section>
+
+              <section className="admin-sheet-section">
+                <div className="subpanel-head">
+                  <div>
+                    <h3>Type de compte</h3>
+                    <p className="small-note">Bascule ce membre entre l'accès particulier et les fonctions Pro.</p>
+                  </div>
+                </div>
+
+                <div className="admin-account-plan-row">
+                  <span className={`status-badge ${selectedUserAccountType === ACCOUNT_TYPE_PRO ? 'warning' : 'soft'}`}>
+                    {selectedUser.provider === 'credits' ? 'Sans profil utilisateur' : getAccountTypeLabel(selectedUser)}
+                  </span>
                   <button
                     type="button"
-                    className="secondary-action"
-                    onClick={() => banSupabaseAccountTemporarily(selectedUser, '720h')}
-                    disabled={isBusy}
+                    className="profile-action-button"
+                    onClick={() => applyAccountTypeChange(selectedUser)}
+                    disabled={isBusy || selectedUser.provider === 'credits'}
                   >
-                    Bloquer 30j
+                    {isBusy ? 'Mise à jour...' : getAccountTypeActionLabel(selectedUser)}
                   </button>
                 </div>
-                <button
-                  type="button"
-                  className="secondary-action"
-                  onClick={() => toggleSupabaseAccountStatus(selectedUser)}
-                  disabled={isBusy}
-                >
-                  {selectedUser.status === 'disabled' ? 'Debloquér le compte Supabase' : 'Bloquer sans limite'}
-                </button>
-                <button
-                  type="button"
-                  className="danger-button"
-                  onClick={() => deleteSupabaseAccount(selectedUser)}
-                  disabled={isBusy}
-                >
-                  Supprimer le membre
-                </button>
-              </>
-            ) : null}
-          </div>
+                {selectedUser.provider === 'credits' ? (
+                  <p className="small-note">Ce portefeuille de crédits n'est relié à aucun profil authentifié.</p>
+                ) : null}
+              </section>
 
-          <div className="editor-stack">
-            <strong>Dernieres transactions</strong>
-            {(selectedUser?.credits?.transactions || []).slice(0, 5).map((transaction, index) => (
-              <div className="admin-transaction-row" key={`${transaction.at}-${index}`}>
-                <span>{transaction.amount > 0 ? '+' : ''}{transaction.amount}</span>
-                <small>{transaction.reason || transaction.type} - {formatDate(transaction.at)}</small>
-              </div>
-            ))}
-            {!selectedUser?.credits?.transactions?.length ? (
-              <p className="small-note">Aucune transaction de crédits.</p>
-            ) : null}
-          </div>
-        </aside>
-      </section>
+              <section className="admin-sheet-section">
+                <div className="subpanel-head">
+                  <div>
+                    <h3>Crédits IA</h3>
+                    <p className="small-note">Solde actuel: {selectedUser.credits?.balance ?? 0} crédit{Number(selectedUser.credits?.balance || 0) > 1 ? 's' : ''}.</p>
+                  </div>
+                </div>
+
+                <form className="admin-sheet-form" onSubmit={applyCreditChange}>
+                  <label>
+                    Opération
+                    <select value={creditAction} onChange={(event) => setCreditAction(event.target.value)}>
+                      <option value="add">Ajouter</option>
+                      <option value="subtract">Retirer</option>
+                      <option value="set">Fixer le solde</option>
+                    </select>
+                  </label>
+                  <label>
+                    Montant
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={creditAmount}
+                      onChange={(event) => setCreditAmount(event.target.value)}
+                    />
+                  </label>
+                  <button type="submit" className="profile-action-button" disabled={isBusy}>
+                    {isBusy ? 'Mise à jour...' : 'Appliquer aux crédits'}
+                  </button>
+                </form>
+              </section>
+
+              <section className="admin-sheet-section">
+                <div className="subpanel-head">
+                  <div>
+                    <h3>Stockage médias</h3>
+                    <p className="small-note">Quota actuel: {formatStorageSize(selectedUserStorageQuotaBytes)}. Minimum gratuit: {formatStorageSize(ACCOUNT_FREE_STORAGE_BYTES)}.</p>
+                  </div>
+                </div>
+
+                <form className="admin-sheet-form admin-storage-form" onSubmit={applyStorageQuotaChange}>
+                  <label>
+                    Quota en Mo
+                    <input
+                      type="number"
+                      min={Math.round(ACCOUNT_FREE_STORAGE_BYTES / MB)}
+                      step="1"
+                      value={storageQuotaMb}
+                      onChange={(event) => setStorageQuotaMb(event.target.value)}
+                    />
+                  </label>
+                  <span className="status-badge soft">
+                    {formatStorageSize(Math.max(ACCOUNT_FREE_STORAGE_BYTES, Number(storageQuotaMb || 0) * MB))}
+                  </span>
+                  <button type="submit" className="profile-action-button" disabled={isBusy}>
+                    {isBusy ? 'Mise à jour...' : 'Modifier le stockage'}
+                  </button>
+                </form>
+              </section>
+
+              <section className="admin-sheet-section">
+                <div className="subpanel-head">
+                  <div>
+                    <h3>Blocage du compte</h3>
+                    <p className="small-note">Les comptes Supabase peuvent être bloqués temporairement ou sans limite.</p>
+                  </div>
+                </div>
+
+                <div className="admin-account-actions">
+                  <button
+                    type="button"
+                    className="secondary-action"
+                    onClick={() => toggleLocalAccountStatus(selectedUser)}
+                    disabled={isBusy || selectedUser.provider === 'credits' || selectedUser.provider === 'supabase'}
+                  >
+                    {selectedUser.status === 'disabled' ? 'Réactiver le compte local' : 'Désactiver le compte local'}
+                  </button>
+                  {selectedUser.provider === 'supabase' ? (
+                    <>
+                      <div className="admin-ban-grid">
+                        <button type="button" className="secondary-action" onClick={() => banSupabaseAccountTemporarily(selectedUser, '24h')} disabled={isBusy}>
+                          Bloquer 24h
+                        </button>
+                        <button type="button" className="secondary-action" onClick={() => banSupabaseAccountTemporarily(selectedUser, '168h')} disabled={isBusy}>
+                          Bloquer 7j
+                        </button>
+                        <button type="button" className="secondary-action" onClick={() => banSupabaseAccountTemporarily(selectedUser, '720h')} disabled={isBusy}>
+                          Bloquer 30j
+                        </button>
+                      </div>
+                      <button type="button" className="secondary-action" onClick={() => toggleSupabaseAccountStatus(selectedUser)} disabled={isBusy}>
+                        {selectedUser.status === 'disabled' ? 'Débloquer le compte Supabase' : 'Bloquer sans limite'}
+                      </button>
+                      <button type="button" className="danger-button" onClick={() => deleteSupabaseAccount(selectedUser)} disabled={isBusy}>
+                        Supprimer le membre
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              </section>
+
+              <section className="admin-sheet-section">
+                <div className="subpanel-head">
+                  <div>
+                    <h3>Dernières transactions</h3>
+                    <p className="small-note">Historique récent du portefeuille IA.</p>
+                  </div>
+                </div>
+                <div className="editor-stack">
+                  {selectedUserTransactions.slice(0, 8).map((transaction, index) => (
+                    <div className="admin-transaction-row" key={`${transaction.at}-${index}`}>
+                      <span>{transaction.amount > 0 ? '+' : ''}{transaction.amount}</span>
+                      <small>{transaction.reason || transaction.type} - {formatDate(transaction.at)}</small>
+                    </div>
+                  ))}
+                  {!selectedUserTransactions.length ? (
+                    <p className="small-note">Aucune transaction de crédits.</p>
+                  ) : null}
+                </div>
+              </section>
+            </div>
+          </section>
+        </div>
+      ) : null}
         </>
       ) : null}
 

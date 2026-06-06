@@ -1,3 +1,4 @@
+import { ACCOUNT_TYPE_PERSONAL, normalizeAccountType } from './accountPlans';
 import { getAllAccounts, normalizeEmail, updateStoredAccount } from './authStorage';
 import { getSupabaseAuthHeaders, hasRemoteSupabaseConfig } from './remoteSession';
 import { fileToDataURL, uploadFileToSupabase } from '../utils/fileHelpers';
@@ -22,10 +23,28 @@ const readJsonResponse = async (response, fallbackMessage) => {
 
 const getErrorMessage = (error) => error?.message || String(error || '');
 
+const normalizeWarningMessage = (value = '') => String(value || '').trim().replace(/\s+/g, ' ');
+
+const normalizeWarningPrefix = (value = '') => normalizeWarningMessage(value)
+  .replace(/[.!?\s]+$/g, '')
+  .toLowerCase();
+
+export const buildAdminFallbackWarning = (warning, details) => {
+  const cleanWarning = normalizeWarningMessage(warning);
+  const cleanDetails = normalizeWarningMessage(details);
+  if (!cleanDetails) return cleanWarning;
+  if (!cleanWarning) return cleanDetails;
+  const warningPrefix = normalizeWarningPrefix(cleanWarning);
+  const detailsPrefix = normalizeWarningPrefix(cleanDetails);
+  return warningPrefix && detailsPrefix.startsWith(warningPrefix)
+    ? cleanDetails
+    : `${cleanWarning} ${cleanDetails}`;
+};
+
 const fallbackAdminPayload = (result, fallback, warning) => {
   if (result.status === 'fulfilled') return { payload: result.value, warning: '' };
   const details = getErrorMessage(result.reason);
-  const nextWarning = details ? `${warning} ${details}` : warning;
+  const nextWarning = buildAdminFallbackWarning(warning, details);
   console.warn(nextWarning, result.reason);
   return { payload: fallback, warning: nextWarning };
 };
@@ -115,6 +134,9 @@ export const getManagedUsers = ({ accounts = [], supabaseUsers = [], creditUsers
       createdAt: account.createdAt,
       updatedAt: account.updatedAt,
       lastLoginAt: account.lastLoginAt,
+      accountType: normalizeAccountType(account.accountType || account.account_type),
+      profileType: account.profileType || account.profile_type || '',
+      organization: account.organization || '',
       projects,
       projectCount,
       publicProjects: projects.filter((project) => project.shareState?.isPublic).length,
@@ -133,6 +155,10 @@ export const getManagedUsers = ({ accounts = [], supabaseUsers = [], creditUsers
       createdAt: account.createdAt,
       updatedAt: account.updatedAt,
       lastSignInAt: account.lastSignInAt,
+      bannedUntil: account.bannedUntil,
+      accountType: normalizeAccountType(account.accountType || account.account_type),
+      profileType: account.profileType || account.profile_type || '',
+      organization: account.organization || '',
       projects,
       projectCount,
       publicProjects: projects.filter((project) => project.shareState?.isPublic).length,
@@ -155,6 +181,7 @@ export const getManagedUsers = ({ accounts = [], supabaseUsers = [], creditUsers
     byId.set(creditAccount.userId, {
       ...existing,
       credits: creditAccount,
+      accountType: normalizeAccountType(existing.accountType || creditAccount.accountType || ACCOUNT_TYPE_PERSONAL),
       projectCount: Math.max(
         Number(existing.projectCount || 0),
         getRemoteProjectCount(creditAccount.userId, creditAccount, projectCounts),
@@ -325,6 +352,23 @@ export const updateAdminCredits = async ({ userId, action, amount, reason }) => 
   return readJsonResponse(response, 'Modification crédits impossible.');
 };
 
+export const updateAdminStorageQuota = async ({ userId, storageQuotaBytes, reason }) => {
+  const response = await fetch(ADMIN_CREDITS_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(await getAdminAuthHeaders()),
+    },
+    body: JSON.stringify({
+      userId,
+      action: 'set_storage_quota',
+      storageQuotaBytes,
+      reason,
+    }),
+  });
+  return readJsonResponse(response, 'Modification du stockage impossible.');
+};
+
 export const updateAdminUser = async ({ userId, action, ...options }) => {
   const response = await fetch(ADMIN_USERS_ENDPOINT, {
     method: 'POST',
@@ -356,6 +400,20 @@ export const toggleStoredLocalAccountStatus = (targetUser) => {
   return {
     nextStatus,
     accounts: getAllAccounts().filter((account) => !isConfiguredAdminEmail(account.email)),
+  };
+};
+
+export const updateStoredLocalAccountType = (targetUser, accountType) => {
+  if (!targetUser?.userId || targetUser.provider === 'credits' || targetUser.provider === 'supabase') return null;
+  const nextAccountType = normalizeAccountType(accountType);
+  const account = updateStoredAccount(targetUser.userId, {
+    accountType: nextAccountType,
+    account_type: nextAccountType,
+  });
+  return {
+    account,
+    accountType: nextAccountType,
+    accounts: getAllAccounts().filter((entry) => !isConfiguredAdminEmail(entry.email)),
   };
 };
 

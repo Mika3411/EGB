@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   deleteProjectRecordForUser,
+  getCurrentSupabaseAccount,
   getProjectMetaForUser,
   getSessionUser,
   isAdminAccount,
@@ -585,18 +586,31 @@ export function useLocalAuth() {
     hydrateSession();
 
     let subscription = null;
+    let authStateRequestId = 0;
     if (hasRemoteAuthConfig()) {
       subscription = subscribeToRemoteAuthStateChanges((_event, session) => {
         if (!isMounted) return;
-        const sessionUser = supabaseUserToAccount(session?.user);
-        if (!sessionUser && _event !== 'SIGNED_OUT') return;
-        setUser(sessionUser);
-        if (sessionUser?.id) setAuthorProfile(getAuthorProfile(sessionUser.id, sessionUser));
+        authStateRequestId += 1;
+        const requestId = authStateRequestId;
         if (_event === 'SIGNED_OUT') {
+          setUser(null);
           setProjects([]);
           setActiveProjectId('');
           setAuthorProfile(null);
+          return;
         }
+
+        getCurrentSupabaseAccount(session?.user).then((sessionUser) => {
+          if (!isMounted || requestId !== authStateRequestId || !sessionUser) return;
+          setUser(sessionUser);
+          setAuthorProfile(getAuthorProfile(sessionUser.id, sessionUser));
+        }).catch(() => {
+          if (!isMounted || requestId !== authStateRequestId) return;
+          const sessionUser = supabaseUserToAccount(session?.user);
+          if (!sessionUser) return;
+          setUser(sessionUser);
+          setAuthorProfile(getAuthorProfile(sessionUser.id, sessionUser));
+        });
       });
     }
 
@@ -703,11 +717,11 @@ export function useLocalAuth() {
     }
   };
 
-  const register = async ({ name, email, password }) => {
+  const register = async (registration = {}) => {
     setIsBusy(true);
     setAuthError('');
     try {
-      const account = await registerUser({ name, email, password });
+      const account = await registerUser(registration);
       if (account.needsEmailConfirmation) {
         return account;
       }

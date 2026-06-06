@@ -1,7 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { buildAdminStatistics } from '../shared/services/adminApi';
+import { buildAdminFallbackWarning, buildAdminStatistics } from '../shared/services/adminApi';
 
 describe('admin statistics', () => {
+  it('deduplicates admin fallback warnings with the same prefix', () => {
+    expect(buildAdminFallbackWarning(
+      'Utilisateurs Supabase indisponibles.',
+      'Utilisateurs Supabase indisponibles (502).',
+    )).toBe('Utilisateurs Supabase indisponibles (502).');
+
+    expect(buildAdminFallbackWarning(
+      'Utilisateurs Supabase indisponibles.',
+      'Erreur réseau.',
+    )).toBe('Utilisateurs Supabase indisponibles. Erreur réseau.');
+  });
+
   it('builds the admin overview from known account and activity data', () => {
     const now = new Date('2026-06-02T12:00:00.000Z').getTime();
     const hours = (value) => value * 60 * 60 * 1000;

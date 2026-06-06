@@ -1,5 +1,5 @@
 import React from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const adminApiMocks = vi.hoisted(() => ({
@@ -7,8 +7,10 @@ const adminApiMocks = vi.hoisted(() => ({
   prepareAdminShopPackScreenshots: vi.fn(async () => []),
   prepareAdminShopPackZip: vi.fn(),
   toggleStoredLocalAccountStatus: vi.fn(),
+  updateStoredLocalAccountType: vi.fn(),
   updateAdminCredits: vi.fn(),
   updateAdminModeration: vi.fn(),
+  updateAdminStorageQuota: vi.fn(),
   updateAdminUser: vi.fn(),
 }));
 
@@ -73,8 +75,10 @@ vi.mock('../shared/services/adminApi', async () => {
     prepareAdminShopPackScreenshots: adminApiMocks.prepareAdminShopPackScreenshots,
     prepareAdminShopPackZip: adminApiMocks.prepareAdminShopPackZip,
     toggleStoredLocalAccountStatus: adminApiMocks.toggleStoredLocalAccountStatus,
+    updateStoredLocalAccountType: adminApiMocks.updateStoredLocalAccountType,
     updateAdminCredits: adminApiMocks.updateAdminCredits,
     updateAdminModeration: adminApiMocks.updateAdminModeration,
+    updateAdminStorageQuota: adminApiMocks.updateAdminStorageQuota,
     updateAdminUser: adminApiMocks.updateAdminUser,
   };
 });
@@ -141,6 +145,137 @@ describe('admin statistics tab', () => {
       expect(screen.getByText(/visiteurs builder/)).toBeTruthy();
       expect(screen.getByText(/visiteurs galerie/)).toBeTruthy();
       expect(screen.getByText('Support ouvert')).toBeTruthy();
+    });
+  }, 10000);
+
+  it('opens an account sheet with credit, blocking and media storage controls', async () => {
+    adminApiMocks.loadAdminDashboard.mockResolvedValue({
+      accounts: [
+        {
+          id: 'user-1',
+          name: 'Alice Demo',
+          email: 'alice@example.com',
+          provider: 'local',
+          status: 'active',
+          accountType: 'particulier',
+          createdAt: '2026-05-20T10:00:00.000Z',
+          updatedAt: '2026-06-02T09:10:00.000Z',
+          lastLoginAt: '2020-06-03T12:00:00.000Z',
+        },
+      ],
+      supabaseUsers: [],
+      creditUsers: [
+        {
+          userId: 'user-1',
+          balance: 42,
+          storageQuotaBytes: 1024 * 1024 * 1024,
+          transactions: [
+            { amount: 42, type: 'admin_adjustment', reason: 'test', at: '2026-06-02T10:00:00.000Z' },
+          ],
+        },
+      ],
+      projectCounts: {},
+      publicGames: [],
+      visitorAnalytics: {},
+      moderation: { games: new Set(), blogs: new Set(), comments: new Set(), actions: [] },
+    });
+    adminApiMocks.updateStoredLocalAccountType.mockImplementation((targetUser, accountType) => ({
+      accountType,
+      accounts: [
+        {
+          id: targetUser.userId,
+          name: targetUser.name,
+          email: targetUser.email,
+          provider: 'local',
+          status: targetUser.status,
+          accountType,
+          createdAt: targetUser.createdAt,
+          updatedAt: targetUser.updatedAt,
+          lastLoginAt: targetUser.lastLoginAt,
+        },
+      ],
+    }));
+    supportMocks.loadAdminSupportThreads.mockResolvedValue([]);
+    window.localStorage.setItem('escapeGameBuilder.projects.user-1', JSON.stringify([
+      { id: 'project-1', shareState: { isPublic: true } },
+    ]));
+
+    const { default: AdminConsole } = await import('../domains/admin/AdminConsole.jsx');
+    render(<AdminConsole user={{ id: 'admin', email: 'admin@example.com' }} onBack={vi.fn()} onLogout={vi.fn()} />);
+
+    expect(await screen.findByText('Dernière connexion')).toBeTruthy();
+    expect(screen.getByText('Hors ligne')).toBeTruthy();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Fiche' }));
+
+    const sheet = screen.getByRole('dialog');
+    expect(within(sheet).getByText('Fiche compte')).toBeTruthy();
+    expect(within(sheet).getByRole('heading', { name: 'Alice Demo' })).toBeTruthy();
+    expect(within(sheet).getAllByText('alice@example.com').length).toBeGreaterThan(0);
+    expect(within(sheet).getByText('42 crédits')).toBeTruthy();
+    expect(within(sheet).getAllByText('Compte particulier').length).toBeGreaterThan(0);
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Promouvoir en Pro' }));
+    await waitFor(() => {
+      expect(adminApiMocks.updateStoredLocalAccountType).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'user-1' }),
+        'pro',
+      );
+    });
+    expect(within(sheet).getAllByText('Stockage médias').length).toBeGreaterThan(0);
+    expect(within(sheet).getByText(/Quota actuel: 1 Go/)).toBeTruthy();
+    expect(within(sheet).getByLabelText('Quota en Mo').value).toBe('1024');
+    expect(within(sheet).getByText('Blocage du compte')).toBeTruthy();
+    expect(within(sheet).getByRole('button', { name: 'Désactiver le compte local' })).toBeTruthy();
+  }, 10000);
+
+  it('promotes a Supabase account to pro from the account sheet', async () => {
+    adminApiMocks.loadAdminDashboard.mockResolvedValue({
+      accounts: [],
+      supabaseUsers: [
+        {
+          id: 'user-pro',
+          name: 'Studio Pro Test',
+          email: 'probrowser@example.fr',
+          provider: 'supabase',
+          isDisabled: false,
+          accountType: 'particulier',
+          createdAt: '2026-06-05T20:22:00.000Z',
+          updatedAt: '2026-06-05T20:22:00.000Z',
+          lastSignInAt: '2026-06-05T20:22:00.000Z',
+        },
+      ],
+      creditUsers: [],
+      projectCounts: {},
+      publicGames: [],
+      visitorAnalytics: {},
+      moderation: { games: new Set(), blogs: new Set(), comments: new Set(), actions: [] },
+    });
+    adminApiMocks.updateAdminUser.mockResolvedValue({
+      user: {
+        id: 'user-pro',
+        name: 'Studio Pro Test',
+        email: 'probrowser@example.fr',
+        provider: 'supabase',
+        isDisabled: false,
+        accountType: 'pro',
+      },
+    });
+    supportMocks.loadAdminSupportThreads.mockResolvedValue([]);
+
+    const { default: AdminConsole } = await import('../domains/admin/AdminConsole.jsx');
+    render(<AdminConsole user={{ id: 'admin', email: 'admin@example.com' }} onBack={vi.fn()} onLogout={vi.fn()} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Fiche' }));
+    const sheet = screen.getByRole('dialog');
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Promouvoir en Pro' }));
+
+    await waitFor(() => {
+      expect(adminApiMocks.updateAdminUser).toHaveBeenCalledWith({
+        userId: 'user-pro',
+        action: 'set_account_type',
+        accountType: 'pro',
+      });
+      expect(within(sheet).getAllByText('Compte Pro').length).toBeGreaterThan(0);
     });
   }, 10000);
 });

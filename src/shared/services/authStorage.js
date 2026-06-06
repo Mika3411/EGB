@@ -14,6 +14,7 @@ import {
   removeStorageKey,
   writeJsonStorage,
 } from '../utils/storageHelpers';
+import { ACCOUNT_TYPE_PERSONAL, normalizeAccountType } from './accountPlans';
 
 const ACCOUNTS_KEY = 'escape_builder_accounts_v1';
 const SESSION_KEY = 'escape_builder_session_v1';
@@ -155,16 +156,25 @@ export function getSessionUserId() {
 export const supabaseUserToAccount = (user) => {
   if (!user) return null;
   const metadata = user.app_metadata || {};
+  const userMetadata = user.user_metadata || {};
   const roles = getMetadataRoles(metadata);
   const isAdmin = Boolean(
     hasTruthyAdminFlag(metadata.isAdmin)
     || hasTruthyAdminFlag(metadata.is_admin)
     || roles.includes('admin')
   );
+  const accountType = normalizeAccountType(userMetadata.accountType || userMetadata.account_type || metadata.accountType || metadata.account_type);
   return {
     id: user.id,
-    name: user.user_metadata?.name || user.email?.split('@')[0] || 'Utilisateur',
+    name: userMetadata.name || user.email?.split('@')[0] || 'Utilisateur',
     email: user.email || '',
+    accountType,
+    profileType: userMetadata.profileType || userMetadata.profile_type || '',
+    organization: userMetadata.organization || '',
+    country: userMetadata.country || '',
+    language: userMetadata.language || 'fr',
+    marketingConsent: Boolean(userMetadata.marketingConsent || userMetadata.marketing_consent),
+    acceptedTerms: Boolean(userMetadata.acceptedTerms || userMetadata.accepted_terms),
     createdAt: user.created_at || new Date().toISOString(),
     provider: 'supabase',
     role: isAdmin ? 'admin' : 'user',
@@ -179,6 +189,15 @@ export const getAccountRole = (account) => {
 };
 
 export const isAdminAccount = (account = {}) => getAccountRole(account) === 'admin';
+
+export async function getCurrentSupabaseAccount(sessionUser = null) {
+  if (!hasSupabaseAuthConfig()) return null;
+  const client = getSupabaseClient();
+  const userResult = await withTimeout(client.auth.getUser(), 10000, null);
+  const freshUser = userResult?.data?.user || sessionUser;
+  const account = supabaseUserToAccount(freshUser);
+  return account ? rememberAccount(account) : null;
+}
 
 const getEmailRedirectUrl = () => {
   if (typeof window === 'undefined') return undefined;
@@ -200,19 +219,23 @@ export async function getSessionUser() {
     if (!session) return null;
     const { data, error } = session;
     if (error) return null;
-    const account = supabaseUserToAccount(data.session?.user);
-    return account ? rememberAccount(account) : null;
+    return getCurrentSupabaseAccount(data.session?.user);
   }
 
   const userId = getSessionUserId();
   if (!userId) return null;
-  return getAllAccounts().find((account) => account.id === userId) || null;
+  const account = getAllAccounts().find((entry) => entry.id === userId) || null;
+  return account ? {
+    ...account,
+    accountType: normalizeAccountType(account.accountType || account.account_type),
+  } : null;
 }
 
 export async function registerUser({
   name,
   email,
   password,
+  accountType = ACCOUNT_TYPE_PERSONAL,
   profileType = '',
   organization = '',
   country = '',
@@ -221,6 +244,7 @@ export async function registerUser({
   acceptedTerms = false,
 }) {
   const normalizedEmail = normalizeEmail(email);
+  const safeAccountType = normalizeAccountType(accountType);
   const cooldownRemaining = getSignupCooldownRemainingMs(normalizedEmail);
   if (cooldownRemaining > 0) {
     throw new Error(`Une demande d’inscription vient déjà d’être envoyée pour cet email. Réessaie dans ${formatCooldown(cooldownRemaining)}.`);
@@ -235,6 +259,7 @@ export async function registerUser({
         emailRedirectTo: getEmailRedirectUrl(),
         data: {
           name: name.trim(),
+          accountType: safeAccountType,
           profileType,
           organization: organization.trim(),
           country: country.trim(),
@@ -268,6 +293,7 @@ export async function registerUser({
     id: `user_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
     name: name.trim(),
     email: normalizedEmail,
+    accountType: safeAccountType,
     profileType,
     organization: organization.trim(),
     country: country.trim(),
@@ -332,6 +358,7 @@ export async function loginUser({ email, password }) {
   window.localStorage.setItem(SESSION_KEY, account.id);
   return rememberAccount({
     ...account,
+    accountType: normalizeAccountType(account.accountType || account.account_type),
     role: account.role || (isConfiguredAdminEmail(account.email) ? 'admin' : 'user'),
     roles: account.roles || [account.role || 'user'],
     isAdmin: Boolean(account.isAdmin || account.role === 'admin'),

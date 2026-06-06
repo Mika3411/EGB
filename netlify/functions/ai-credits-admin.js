@@ -4,10 +4,13 @@ import {
   ensureCreditAccount,
   getCreditUserId,
   getRecentTransactions,
+  getStorageQuotaFromTransactions,
   getSupabaseAdminClient,
   json,
   normalizeCreditAccount,
   parseBody,
+  FREE_STORAGE_BYTES,
+  STORAGE_QUOTA_SET_REASON_PREFIX,
   verifyAdmin,
   withErrors,
 } from './_shared.js';
@@ -26,6 +29,7 @@ export const handler = async (event) => withErrors(event, async () => {
 
     const users = await Promise.all((data || []).map(async (account) => ({
       ...normalizeCreditAccount(account),
+      storageQuotaBytes: await getStorageQuotaFromTransactions(supabase, account.user_id),
       transactions: await getRecentTransactions(supabase, account.user_id),
     })));
 
@@ -44,6 +48,44 @@ export const handler = async (event) => withErrors(event, async () => {
     const action = String(body.action || 'add');
     const amount = Math.round(Number(body.amount || 0));
     if (!Number.isFinite(amount)) return json(400, { error: 'Montant invalide.' });
+
+    if (action === 'set_storage_quota') {
+      const requestedStorageQuotaBytes = Math.round(Number(body.storageQuotaBytes || 0));
+      if (!Number.isFinite(requestedStorageQuotaBytes) || requestedStorageQuotaBytes <= 0) {
+        return json(400, { error: 'Quota de stockage invalide.' });
+      }
+
+      const storageQuotaBytes = Math.max(FREE_STORAGE_BYTES, requestedStorageQuotaBytes);
+      const now = new Date().toISOString();
+      await ensureCreditAccount(supabase, userId);
+      const { data: updated, error: updateError } = await supabase
+        .from('ai_credits')
+        .update({ updated_at: now })
+        .eq('user_id', userId)
+        .select('*')
+        .single();
+
+      if (updateError) throw updateError;
+
+      const { error: transactionError } = await supabase.from('ai_credit_transactions').insert({
+        user_id: userId,
+        type: 'admin_storage_quota',
+        amount: 0,
+        reason: `${STORAGE_QUOTA_SET_REASON_PREFIX}${storageQuotaBytes}`,
+        created_at: now,
+      });
+
+      if (transactionError) throw transactionError;
+
+      return json(200, {
+        user: {
+          ...normalizeCreditAccount(updated),
+          storageQuotaBytes: await getStorageQuotaFromTransactions(supabase, userId),
+          transactions: await getRecentTransactions(supabase, userId),
+        },
+        costs: aiCreditCosts,
+      });
+    }
 
     const account = await ensureCreditAccount(supabase, userId);
     const previousBalance = Number(account.balance || 0);
@@ -79,6 +121,7 @@ export const handler = async (event) => withErrors(event, async () => {
     return json(200, {
       user: {
         ...normalizeCreditAccount(updated),
+        storageQuotaBytes: await getStorageQuotaFromTransactions(supabase, userId),
         transactions: await getRecentTransactions(supabase, userId),
       },
       costs: aiCreditCosts,

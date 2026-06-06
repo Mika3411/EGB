@@ -12,6 +12,8 @@ const creditStoreLockPath = `${creditStorePath}.lock`;
 export const defaultAiCredits = Number(process.env.AI_DEFAULT_CREDITS || 20);
 export const FREE_STORAGE_BYTES = 250 * 1024 * 1024;
 export const STORAGE_BYTES_PER_CREDIT = 5 * 1024 * 1024;
+const STORAGE_UPGRADE_REASON_PREFIX = 'storage_upgrade:';
+const STORAGE_QUOTA_SET_REASON_PREFIX = 'storage_quota_set:';
 export const aiCreditCosts = {
   text: Number(process.env.AI_TEXT_CREDIT_COST || 2),
   improve: Number(process.env.AI_IMPROVE_CREDIT_COST || 5),
@@ -753,29 +755,69 @@ const grantLocalCredits = (userId, amount, reason) => {
   });
 };
 
+const getTransactionOrder = (entry = {}, index = 0) => {
+  const time = new Date(entry.created_at || entry.createdAt || entry.at || '').getTime();
+  return Number.isFinite(time) ? time : index;
+};
+
+const getStorageQuotaBytesFromReason = (reason = '', prefix = STORAGE_UPGRADE_REASON_PREFIX) => {
+  const parts = String(reason || '').split(':');
+  const rawBytes = prefix === STORAGE_QUOTA_SET_REASON_PREFIX ? parts[1] : parts[parts.length - 1];
+  const bytes = Math.round(Number(rawBytes || 0));
+  return Number.isFinite(bytes) ? Math.max(0, bytes) : 0;
+};
+
+const resolveStorageQuotaFromTransactionEntries = (transactions = []) => {
+  const entries = Array.isArray(transactions) ? transactions : [];
+  const latestAdminSet = entries.reduce((latest, entry, index) => {
+    const reason = String(entry.reason || '');
+    if (!reason.startsWith(STORAGE_QUOTA_SET_REASON_PREFIX)) return latest;
+    const bytes = getStorageQuotaBytesFromReason(reason, STORAGE_QUOTA_SET_REASON_PREFIX);
+    if (!bytes) return latest;
+    const order = getTransactionOrder(entry, index);
+    if (!latest || order >= latest.order) return { bytes, order };
+    return latest;
+  }, null);
+
+  return entries.reduce((quota, entry, index) => {
+    const reason = String(entry.reason || '');
+    if (!reason.startsWith(STORAGE_UPGRADE_REASON_PREFIX)) return quota;
+    if (latestAdminSet && getTransactionOrder(entry, index) < latestAdminSet.order) return quota;
+    return Math.max(quota, getStorageQuotaBytesFromReason(reason));
+  }, latestAdminSet?.bytes || FREE_STORAGE_BYTES);
+};
+
+const getSupabaseStorageQuotaTransactions = async (supabase, userId) => {
+  const [upgradesResult, adminSetsResult] = await Promise.all([
+    supabase
+      .from('ai_credit_transactions')
+      .select('reason, created_at')
+      .eq('user_id', userId)
+      .like('reason', `${STORAGE_UPGRADE_REASON_PREFIX}%`),
+    supabase
+      .from('ai_credit_transactions')
+      .select('reason, created_at')
+      .eq('user_id', userId)
+      .like('reason', `${STORAGE_QUOTA_SET_REASON_PREFIX}%`),
+  ]);
+
+  if (upgradesResult.error) throw upgradesResult.error;
+  if (adminSetsResult.error) throw adminSetsResult.error;
+  return [...(upgradesResult.data || []), ...(adminSetsResult.data || [])];
+};
+
 export const getStorageQuotaFromTransactions = async (accountOrUserId = {}) => {
   if (typeof accountOrUserId === 'string') {
     const backend = getCreditBackend();
     if (backend.type === 'supabase') {
-      const { data, error } = await backend.supabase
-        .from('ai_credit_transactions')
-        .select('reason')
-        .eq('user_id', accountOrUserId)
-        .like('reason', 'storage_upgrade:%');
-
-      if (error) throw error;
-      return (data || []).reduce((quota, entry) => {
-        const [, , bytes] = String(entry.reason || '').split(':');
-        return Math.max(quota, Math.round(Number(bytes) || 0));
-      }, FREE_STORAGE_BYTES);
+      return resolveStorageQuotaFromTransactionEntries(
+        await getSupabaseStorageQuotaTransactions(backend.supabase, accountOrUserId),
+      );
     }
     return getStorageQuotaFromTransactions(getLocalCreditAccount(accountOrUserId));
   }
 
-  return (accountOrUserId.transactions || []).reduce((quota, entry) => {
-    const [, , bytes] = String(entry.reason || '').split(':');
-    return Math.max(quota, Math.round(Number(bytes) || 0));
-  }, FREE_STORAGE_BYTES);
+  return resolveStorageQuotaFromTransactionEntries(accountOrUserId.transactions || []);
 };
 
 export const handleCredits = async (req, res) => {
@@ -854,6 +896,7 @@ export const handleCreditsAdminList = async (req, res) => {
 
     const users = await Promise.all((data || []).map(async (account) => ({
       ...normalizeSupabaseCreditAccount(account),
+      storageQuotaBytes: await getStorageQuotaFromTransactions(account.user_id),
       transactions: await getRecentTransactions(supabase, account.user_id),
     })));
 
@@ -866,9 +909,12 @@ export const handleCreditsAdminList = async (req, res) => {
   }
 
   const store = readCreditStore();
-  const users = Object.entries(store.users || {})
-    .map(([userId, account]) => normalizeCreditAccount(userId, account))
-    .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+  const users = await Promise.all(Object.entries(store.users || {})
+    .map(async ([userId, account]) => ({
+      ...normalizeCreditAccount(userId, account),
+      storageQuotaBytes: await getStorageQuotaFromTransactions(account),
+    })));
+  users.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
 
   sendJson(res, 200, {
     users,
@@ -895,6 +941,70 @@ export const handleCreditsAdminUpdate = async (req, res) => {
   }
 
   const supabase = getSupabaseAdminClient();
+  if (action === 'set_storage_quota') {
+    const requestedStorageQuotaBytes = Math.round(Number(body.storageQuotaBytes || 0));
+    if (!Number.isFinite(requestedStorageQuotaBytes) || requestedStorageQuotaBytes <= 0) {
+      sendJson(res, 400, { error: 'Quota de stockage invalide.' });
+      return;
+    }
+
+    const storageQuotaBytes = Math.max(FREE_STORAGE_BYTES, requestedStorageQuotaBytes);
+    const now = new Date().toISOString();
+    const reason = `${STORAGE_QUOTA_SET_REASON_PREFIX}${storageQuotaBytes}`;
+
+    if (supabase) {
+      await ensureSupabaseCreditAccount(supabase, userId);
+      const { data: updated, error: updateError } = await supabase
+        .from('ai_credits')
+        .update({ updated_at: now })
+        .eq('user_id', userId)
+        .select('*')
+        .single();
+
+      if (updateError) throw updateError;
+
+      await addSupabaseCreditTransaction(supabase, userId, {
+        type: 'admin_storage_quota',
+        amount: 0,
+        reason,
+        createdAt: now,
+      });
+
+      sendJson(res, 200, {
+        user: {
+          ...normalizeSupabaseCreditAccount(updated),
+          storageQuotaBytes: await getStorageQuotaFromTransactions(userId),
+          transactions: await getRecentTransactions(supabase, userId),
+        },
+        costs: aiCreditCosts,
+      });
+      return;
+    }
+
+    const account = withCreditStoreLock(() => {
+      const store = readCreditStore();
+      const lockedAccount = ensureLocalCreditAccount(store, userId);
+      lockedAccount.updatedAt = now;
+      lockedAccount.transactions = [...(lockedAccount.transactions || []), {
+        type: 'admin_storage_quota',
+        amount: 0,
+        reason,
+        at: now,
+      }].slice(-100);
+      writeCreditStore(store);
+      return lockedAccount;
+    });
+
+    sendJson(res, 200, {
+      user: {
+        ...normalizeCreditAccount(userId, account),
+        storageQuotaBytes: await getStorageQuotaFromTransactions(account),
+      },
+      costs: aiCreditCosts,
+    });
+    return;
+  }
+
   if (supabase) {
     const account = await ensureSupabaseCreditAccount(supabase, userId);
     const previousBalance = Number(account.balance || 0);
@@ -927,6 +1037,7 @@ export const handleCreditsAdminUpdate = async (req, res) => {
     sendJson(res, 200, {
       user: {
         ...normalizeSupabaseCreditAccount(updated),
+        storageQuotaBytes: await getStorageQuotaFromTransactions(userId),
         transactions: await getRecentTransactions(supabase, userId),
       },
       costs: aiCreditCosts,
@@ -967,7 +1078,10 @@ export const handleCreditsAdminUpdate = async (req, res) => {
     return lockedAccount;
   });
   sendJson(res, 200, {
-    user: normalizeCreditAccount(userId, account),
+    user: {
+      ...normalizeCreditAccount(userId, account),
+      storageQuotaBytes: await getStorageQuotaFromTransactions(account),
+    },
     costs: aiCreditCosts,
   });
 };

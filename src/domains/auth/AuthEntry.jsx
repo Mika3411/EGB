@@ -1,11 +1,13 @@
 import { Eye, EyeOff } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { ACCOUNT_TYPE_OPTIONS, ACCOUNT_TYPE_PERSONAL } from '../../shared/services/accountPlans';
 
 const emptyForm = {
   name: '',
   email: '',
   password: '',
   confirmPassword: '',
+  accountType: ACCOUNT_TYPE_PERSONAL,
   profileType: '',
   organization: '',
   country: '',
@@ -116,6 +118,10 @@ export default function AuthEntry({
         setLocalError('Le nom est obligatoire.');
         return;
       }
+      if (!form.accountType) {
+        setLocalError('Choisis particulier ou pro.');
+        return;
+      }
       if (!form.profileType) {
         setLocalError('Choisis un type de profil.');
         return;
@@ -192,6 +198,24 @@ export default function AuthEntry({
               </div>
 
               <div>
+                <label>Type de compte</label>
+                <div className="auth-account-type" role="radiogroup" aria-label="Type de compte">
+                  {ACCOUNT_TYPE_OPTIONS.map(([value, label]) => (
+                    <label key={value} className={form.accountType === value ? 'selected' : ''}>
+                      <input
+                        type="radio"
+                        name="accountType"
+                        value={value}
+                        checked={form.accountType === value}
+                        onChange={(event) => handleChange('accountType', event.target.value)}
+                      />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div>
                 <label>Type de profil</label>
                 <select value={form.profileType} onChange={(event) => handleChange('profileType', event.target.value)}>
                   <option value="">Choisir...</option>
@@ -200,7 +224,7 @@ export default function AuthEntry({
               </div>
 
               <div>
-                <label>Organisation</label>
+                <label>Organisation / activité</label>
                 <input value={form.organization} onChange={(event) => handleChange('organization', event.target.value)} placeholder="École, association, entreprise..." />
               </div>
 
@@ -256,7 +280,10 @@ export default function AuthEntry({
             <div className="auth-consents">
               <label>
                 <input type="checkbox" checked={form.acceptedTerms} onChange={(event) => handleChange('acceptedTerms', event.target.checked)} />
-                <span>J'accepte les <a href="/conditions-utilisation.html" target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>conditions d'utilisation</a>.</span>
+                <span>
+                  J'accepte les <a href="/conditions-utilisation.html" target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>conditions d'utilisation</a>
+                  {' '}et la <a href="/politique-confidentialite.html" target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>politique de confidentialité</a>.
+                </span>
               </label>
               <label>
                 <input type="checkbox" checked={form.marketingConsent} onChange={(event) => handleChange('marketingConsent', event.target.checked)} />

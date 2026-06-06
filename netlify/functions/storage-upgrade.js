@@ -1,30 +1,13 @@
 import {
   getSupabaseAdminClient,
+  getStorageQuotaFromTransactions,
   json,
   parseBody,
   resolveCreditUserId,
   spendCredits,
+  STORAGE_BYTES_PER_CREDIT,
   withErrors,
 } from './_shared.js';
-
-const MB = 1024 * 1024;
-const FREE_STORAGE_BYTES = 250 * MB;
-const STORAGE_BYTES_PER_CREDIT = 5 * MB;
-
-const getStorageQuotaFromTransactions = async (supabase, userId) => {
-  const { data, error } = await supabase
-    .from('ai_credit_transactions')
-    .select('reason')
-    .eq('user_id', userId)
-    .like('reason', 'storage_upgrade:%');
-
-  if (error) throw error;
-
-  return (data || []).reduce((quota, entry) => {
-    const [, , bytes] = String(entry.reason || '').split(':');
-    return Math.max(quota, Math.round(Number(bytes) || 0));
-  }, FREE_STORAGE_BYTES);
-};
 
 export const handler = async (event) => withErrors(event, async () => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Methode non autorisee.' });

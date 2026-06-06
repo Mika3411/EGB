@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ACCOUNT_FREE_STORAGE_BYTES,
   formatStorageSize,
   getAccountExactStorageAssetSizes,
   getAccountStorageUsageBytes,
@@ -14,9 +13,10 @@ export function useAccountStorage({
   activeProject,
   activeProjectId,
   projects,
+  user = null,
   autoExact = false,
 } = {}) {
-  const [accountStorageQuotaBytes, setAccountStorageQuotaBytes] = useState(ACCOUNT_FREE_STORAGE_BYTES);
+  const [remoteStorageQuotaBytes, setRemoteStorageQuotaBytes] = useState(0);
   const [exactStorageAssetSizesByUrl, setExactStorageAssetSizesByUrl] = useState(new Map());
   const [exactStorageUsageBytes, setExactStorageUsageBytes] = useState(null);
   const [usageInvalidationVersion, setUsageInvalidationVersion] = useState(0);
@@ -93,8 +93,14 @@ export function useAccountStorage({
     setUsageInvalidationVersion((version) => version + 1);
   }, []);
 
+  const accountStorageQuotaBytes = useMemo(
+    () => getStorageQuotaBytes({ storageQuotaBytes: remoteStorageQuotaBytes, account: user }),
+    [remoteStorageQuotaBytes, user],
+  );
+
   const updateStorageQuotaBytes = useCallback((storageQuotaBytes) => {
-    setAccountStorageQuotaBytes(getStorageQuotaBytes({ storageQuotaBytes }));
+    const bytes = Math.max(0, Math.round(Number(storageQuotaBytes || 0)));
+    setRemoteStorageQuotaBytes(bytes);
   }, []);
 
   const effectiveStorageUsageBytes = exactStorageUsageBytes ?? estimatedStorageUsageBytes;
