@@ -41,7 +41,7 @@ describe('ModelToolsWorkspace file filtering', () => {
       'Connexion API locale 3D interrompue. Relance le serveur local puis reessaie.',
     );
     expect(getModelToolsDisplayError('Failed to fetch')).toBe(
-      'Optimisation GLB impossible: une ressource du modele n a pas pu etre lue. Reessaie avec un ZIP contenant le modele et toutes ses textures.',
+      'Optimisation GLB impossible: une ressource du modèle n a pas pu être lue. Réessaie avec un ZIP contenant le modèle et toutes ses textures.',
     );
     expect(getModelToolsDisplayError(new TypeError('API locale 3D indisponible: Failed to fetch'))).toBe(
       'Connexion API locale 3D interrompue. Relance le serveur local puis reessaie.',

@@ -39,7 +39,13 @@ describe('didacticiel Bilan', () => {
       .forEach((selector) => {
         const tourMatch = selector.match(/\[data-tour="([^"]+)"\]/);
         const tabMatch = selector.match(/\[data-tour-tab="([^"]+)"\]/);
-        if (tourMatch && !source.includes(`data-tour="${tourMatch[1]}"`)) missing.push(selector);
+        if (
+          tourMatch
+          && !source.includes(`data-tour="${tourMatch[1]}"`)
+          && !source.includes(`tour="${tourMatch[1]}"`)
+        ) {
+          missing.push(selector);
+        }
         if (tabMatch && !source.includes(`score: { component: ProjectScoreDashboard`)) missing.push(selector);
       });
 

@@ -77,7 +77,7 @@ describe('CharacterStudio preview selection', () => {
     );
 
     const preview = await screen.findByTestId('character-preview');
-    const [modelPreview, classicPreview, walkPreview, attackPreview] = screen.getAllByRole('button', { name: 'Apercu' });
+    const [modelPreview, classicPreview, walkPreview, attackPreview] = screen.getAllByRole('button', { name: 'Aperçu' });
 
     expect(preview.getAttribute('data-auto-preview-animation')).toBe('false');
     expect(preview.getAttribute('data-animation-slot')).toBe('');
@@ -490,7 +490,7 @@ describe('CharacterStudio preview selection', () => {
     expect(preview.getAttribute('data-weapon-source')).toBe('blob:rig-sword-model');
     expect(project.characterModels3d[0].inventory).toBeUndefined();
 
-    fireEvent.change(screen.getAllByLabelText('Modele')[0], { target: { value: '' } });
+    fireEvent.change(screen.getAllByLabelText('Modèle')[0], { target: { value: '' } });
 
     expect(onPreviewEquipmentTestClear).toHaveBeenCalledTimes(1);
     expect(patchProject).toHaveBeenCalledTimes(1);

@@ -95,12 +95,12 @@ describe('Rpg3DInspector', () => {
     expect(screen.getByRole('textbox', { name: 'Nom zone?' })).toBeTruthy();
     expect(screen.queryByRole('textbox', { name: 'Sommet 1 X' })).toBeNull();
     expect(screen.queryByRole('button', {
-      name: 'Ajouter une arete entre Sommet 1 et Sommet 2',
+      name: 'Ajouter une arête entre Sommet 1 et Sommet 2',
     })).toBeNull();
 
     cleanup();
     renderActionZoneInspector({ onToggleActionZoneEdgeInsertMode });
-    fireEvent.click(screen.getByRole('button', { name: 'Ajouter arete au clic' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter arête au clic' }));
     expect(onToggleActionZoneEdgeInsertMode).toHaveBeenCalledTimes(1);
   });
 });

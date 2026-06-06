@@ -9,8 +9,8 @@ const readSource = (relativePath) => readFileSync(resolve(srcDir, relativePath),
 
 describe('project data classic normalization boundaries', () => {
   it('keeps RPG 3D runtime helpers out of classic project data normalization', () => {
-    const projectDataSource = readSource('data/projectData.js');
-    const projectData3dSource = readSource('data/projectData3d.js');
+    const projectDataSource = readSource('shared/data/projectData.js');
+    const projectData3dSource = readSource('shared/data/projectData3d.js');
 
     expect(projectDataSource).not.toMatch(/utils[\\/]+rpg3d/i);
     expect(projectData3dSource).not.toMatch(/utils[\\/]+rpg3d/i);

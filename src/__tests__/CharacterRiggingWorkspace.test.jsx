@@ -103,18 +103,18 @@ describe('CharacterRiggingWorkspace', () => {
     const symmetryAxis = document.querySelector('.character-rigging-symmetry-guide');
     expect(symmetryAxis).toBeTruthy();
     expect(symmetryAxis.getAttribute('data-axis-percent')).toBe('50');
-    expect(screen.getByRole('group', { name: 'Axe de symetrie' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: "Deplacer l'axe de symetrie vers la gauche" })).toBeTruthy();
-    const moveAxisRight = screen.getByRole('button', { name: "Deplacer l'axe de symetrie vers la droite" });
+    expect(screen.getByRole('group', { name: 'Axe de symétrie' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: "Déplacer l'axe de symétrie vers la gauche" })).toBeTruthy();
+    const moveAxisRight = screen.getByRole('button', { name: "Déplacer l'axe de symétrie vers la droite" });
     expect(moveAxisRight).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Activer la symetrie des pastilles' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Activer la symétrie des pastilles' })).toBeTruthy();
     expect(screen.getByRole('group', { name: 'Vues NESO' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Voir de face' }).getAttribute('aria-pressed')).toBe('true');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Voir le cote droit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Voir le côté droit' }));
 
     await waitFor(() => expect(preview.getAttribute('data-camera-view')).toBe('east'));
-    expect(screen.getByRole('button', { name: 'Voir le cote droit' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Voir le côté droit' }).getAttribute('aria-pressed')).toBe('true');
 
     fireEvent.click(screen.getByRole('button', { name: 'Select left hand' }));
 
@@ -127,9 +127,9 @@ describe('CharacterRiggingWorkspace', () => {
 
     await waitFor(() => expect(symmetryAxis.getAttribute('data-axis-percent')).toBe('60'));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Activer la symetrie des pastilles' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Activer la symétrie des pastilles' }));
 
-    expect(screen.getByRole('button', { name: 'Desactiver la symetrie des pastilles' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Désactiver la symétrie des pastilles' }).getAttribute('aria-pressed')).toBe('true');
 
     fireEvent.click(screen.getByRole('button', { name: 'Move right hand' }));
 
@@ -167,7 +167,7 @@ describe('CharacterRiggingWorkspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Activer le zoom souris' }));
 
     await waitFor(() => expect(preview.getAttribute('data-camera-zoom-enabled')).toBe('true'));
-    expect(screen.getByRole('button', { name: 'Desactiver le zoom souris' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Désactiver le zoom souris' }).getAttribute('aria-pressed')).toBe('true');
 
     fireEvent.click(screen.getByRole('button', { name: 'Report zoom' }));
 

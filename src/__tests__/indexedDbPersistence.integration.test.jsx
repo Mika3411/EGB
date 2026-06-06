@@ -496,7 +496,7 @@ describe('IndexedDB integration persistence', () => {
     fireEvent.click(screen.getByRole('button', { name: /Nouveau brouillon/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/suppression incomplete: localStorage/i)).toBeTruthy();
+      expect(screen.getByText(/suppression incomplète: localStorage/i)).toBeTruthy();
     });
     expect(onSaveAiDraft).toHaveBeenCalledWith(null);
     expect(window.localStorage.getItem(localDraftKey)).not.toBeNull();
