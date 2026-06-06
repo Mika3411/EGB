@@ -151,12 +151,13 @@ export const handleProjectPublication = async (req, res) => {
   const timestamp = new Date().toISOString();
   const projects = await loadServerProjectsForUser(user.id);
   const existing = projects.find((project) => project.id === projectId);
-  if (!existing) {
+  const provided = body.project?.id === projectId ? normalizeProjectRecord(body.project) : null;
+  const sourceProject = normalizeProjectRecord(existing || provided || {});
+
+  if (!sourceProject.id) {
     sendJson(res, 404, { error: 'Projet introuvable.' });
     return;
   }
-
-  const sourceProject = normalizeProjectRecord(existing);
 
   const nextProject = (() => {
     if (action === 'settings') {

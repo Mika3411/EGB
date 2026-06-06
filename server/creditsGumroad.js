@@ -41,17 +41,29 @@ export const getGumroadUserId = (body = {}) => {
   return body.user_id
     || body.userId
     || body.purchase_id
+    || body['url_params[user_id]']
+    || body['url_params[purchase_id]']
     || customFields.user_id
     || customFields.userId
     || customFields['Identifiant achat']
     || customFields['identifiant achat']
-    || body.email
+    || getGumroadBuyerEmail(body)
     || '';
 };
 
+export const getGumroadBuyerEmail = (body = {}) => (
+  String(body.email || body.email_address || body.buyer_email || '').trim().toLowerCase()
+);
+
+const normalizeGumroadPermalink = (value = '') => (
+  String(value).trim().split('/').filter(Boolean).pop() || ''
+);
+
 export const getGumroadPack = (body = {}) => {
   const productId = String(body.product_id || '').trim();
-  const permalink = String(body.product_permalink || body.permalink || '').trim().split('/').filter(Boolean).pop()?.toLowerCase() || '';
+  const permalink = normalizeGumroadPermalink(
+    body.product_permalink || body.permalink || body.short_product_id,
+  ).toLowerCase();
   const productName = String(body.product_name || body.product || '').toLowerCase();
   return gumroadPacks.find((pack) => (
     (pack.productId && pack.productId === productId)

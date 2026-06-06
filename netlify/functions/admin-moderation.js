@@ -6,30 +6,24 @@ import {
   withErrors,
 } from './_shared.js';
 
-const publicFields = 'target_type,target_id,action';
-
-export const toPublicModerationAction = (action = {}) => ({
-  target_type: action.target_type,
-  target_id: action.target_id,
-  action: action.action,
-});
+const adminFields = 'target_type,target_id,action,reason,created_at,updated_at';
 
 export const handler = async (event) => withErrors(event, async () => {
+  const adminUser = await verifyAdmin(event);
   const supabase = getSupabaseAdminClient();
 
   if (event.httpMethod === 'GET') {
     const { data, error } = await supabase
       .from('moderation_actions')
-      .select(publicFields)
+      .select(adminFields)
       .eq('action', 'hidden')
       .order('updated_at', { ascending: false });
 
     if (error) throw error;
-    return json(200, { actions: (data || []).map(toPublicModerationAction) });
+    return json(200, { actions: data || [] });
   }
 
   if (event.httpMethod === 'POST') {
-    const adminUser = await verifyAdmin(event);
     const body = parseBody(event);
     const targetType = String(body.targetType || '').trim();
     const targetId = String(body.targetId || '').trim();
@@ -40,7 +34,6 @@ export const handler = async (event) => withErrors(event, async () => {
     if (!targetId) return json(400, { error: 'Cible manquante.' });
     if (!['hidden', 'visible'].includes(action)) return json(400, { error: 'Action de moderation invalide.' });
 
-    const now = new Date().toISOString();
     const { data, error } = await supabase
       .from('moderation_actions')
       .upsert({
@@ -49,7 +42,7 @@ export const handler = async (event) => withErrors(event, async () => {
         action,
         reason,
         moderator_email: adminUser.email || '',
-        updated_at: now,
+        updated_at: new Date().toISOString(),
       }, { onConflict: 'target_type,target_id' })
       .select('*')
       .single();
