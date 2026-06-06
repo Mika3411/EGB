@@ -104,8 +104,12 @@ export default function PreviewCinematicOverlay({
   if (!playingCinematic) return null;
 
   return (
-    <div className="overlay" onClick={(event) => { if (event.target === event.currentTarget) closeCinematic(); }}>
-      <div className="overlay-card wide">
+    <div
+      className="overlay preview-cinematic-overlay"
+      data-testid="preview-cinematic-overlay"
+      onClick={(event) => { if (event.target === event.currentTarget) closeCinematic(); }}
+    >
+      <div className="overlay-card wide preview-cinematic-card">
         {cinematicPlayback?.type === 'anime2d' ? (
           <>
             <Anime2DCinematicPlayer cinematic={playingCinematic} spec={cinematicPlayback.anime2d?.spec} project={project} onEnd={closeCinematic} />

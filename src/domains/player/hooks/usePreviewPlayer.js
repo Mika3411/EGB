@@ -9,6 +9,7 @@ import {
   selectRewardInventoryItem,
 } from '../../../shared/services/gameEngine';
 import { resolveAssetUrl } from '../../../shared/services/assetManager';
+import { getHotspotLinkUrl, isHotspotLinkAction } from '../../../shared/services/hotspotLinks.js';
 import {
   addUnique,
   clampNumber,
@@ -451,8 +452,11 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
       }
     }
 
-    if (spot.objectImageData) {
-      setViewerImage(createHotspotViewerImage(spot));
+    const hotspotImageSrc = resolveAssetUrl(project, spot.objectImageId, spot.objectImageData)
+      || resolveAssetUrl(project, spot.popupImageId, spot.popupImageData || spot.popupImage)
+      || (spot.clickMode === 'action' ? resolveAssetUrl(project, spot.imageId, spot.imageData) : '');
+    if (hotspotImageSrc) {
+      setViewerImage(createHotspotViewerImage(spot, hotspotImageSrc));
     }
 
     if (spot.dialogue) setDialogue(spot.dialogue);
@@ -463,7 +467,7 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
       setSelectedInventoryIds((prev) => (
         prev.includes(rewardItemId) ? prev : selectRewardInventoryItem(prev, rewardItemId)
       ));
-      if (!spot.objectImageData) {
+      if (!hotspotImageSrc) {
         const rewardViewer = createInventoryViewerImage(rewardItemId);
         if (rewardViewer) setViewerImage(rewardViewer);
       }
@@ -496,6 +500,24 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     if (spot.actionType === 'cinematic' && spot.targetCinematicId) {
       launchCinematic(spot.targetCinematicId);
     }
+
+    openHotspotLink(spot);
+  };
+
+  const openHotspotLink = (spot) => {
+    if (!isHotspotLinkAction(spot?.actionType)) return false;
+    const linkUrl = getHotspotLinkUrl(spot);
+    if (!linkUrl) {
+      setViewerImage(null);
+      setDialogue(spot.actionType === 'project_link'
+        ? 'Choisis un projet cible pour cette zone.'
+        : 'Ajoute un lien externe pour cette zone.');
+      return false;
+    }
+    if (typeof window === 'undefined' || typeof window.open !== 'function') return false;
+    const openedWindow = window.open(linkUrl, '_blank', 'noopener,noreferrer');
+    if (openedWindow) openedWindow.opener = null;
+    return true;
   };
 
   const applyHeroHealthLoss = (amount = 0, options = {}) => {
@@ -602,6 +624,7 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     enigmaRotationAngles,
     simonTimeoutsRef,
     dispatchPreview,
+    openHotspotLink,
     blockDefeatedHeroAction,
     captureLastChoiceSnapshot,
     setters: {
@@ -806,6 +829,7 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     if (!spot) return;
     const resolvedSpot = resolveHotspotInteraction(spot);
     if (!resolvedSpot) return;
+    if (resolvedSpot.actionType === 'none') return;
     if (resolvedSpot.requiredHotspotId && !completedHotspotIds.includes(resolvedSpot.requiredHotspotId)) {
       setViewerImage(null);
       setDialogue(resolvedSpot.lockedMessage || 'Je ne peux pas faire ca maintenant.');
@@ -842,6 +866,7 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
       if (messageWithMalus !== currentMessage) {
         patchPreviewState({ dialogue: messageWithMalus });
       }
+      openHotspotLink(resolvedSpot);
     }
     if (result?.ok && resolvedSpot.rewardItemId) {
       addAdventureJournalEntry({

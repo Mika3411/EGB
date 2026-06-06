@@ -1,7 +1,21 @@
 export const standaloneEvents = `function bindEvents() {
-  root.querySelector('#fullscreen-toggle')?.addEventListener('click', toggleFullscreen);
-  root.querySelectorAll('#save-game, [data-player-action="save-game"]').forEach((button) => button.addEventListener('click', () => saveGame(true)));
-  root.querySelectorAll('#load-game, [data-player-action="load-game"]').forEach((button) => button.addEventListener('click', () => loadGame(true)));
+  const closeMobileActions = () => {
+    state.mobileActionsOpen = false;
+  };
+  root.querySelectorAll('#fullscreen-toggle, [data-player-action="fullscreen-toggle"]').forEach((button) => button.addEventListener('click', () => {
+    closeMobileActions();
+    toggleFullscreen();
+    render(false);
+  }));
+  root.querySelectorAll('#save-game, [data-player-action="save-game"]').forEach((button) => button.addEventListener('click', () => {
+    closeMobileActions();
+    saveGame(true);
+    render(false);
+  }));
+  root.querySelectorAll('#load-game, [data-player-action="load-game"]').forEach((button) => button.addEventListener('click', () => {
+    closeMobileActions();
+    loadGame(true);
+  }));
   document.getElementById('delete-save')?.addEventListener('click', () => deleteSave(true));
   document.getElementById('export-save-json')?.addEventListener('click', exportSaveAsJson);
   document.getElementById('import-save-json')?.addEventListener('click', () => document.getElementById('import-save-file')?.click());
@@ -57,18 +71,24 @@ export const standaloneEvents = `function bindEvents() {
     state.narrationCollapsed = false;
     render();
   });
-  root.querySelector('#pause-game')?.addEventListener('click', () => {
-    state.pauseOpen = true;
+  root.querySelector('#toggle-mobile-actions')?.addEventListener('click', () => {
+    state.mobileActionsOpen = !state.mobileActionsOpen;
     render(false);
   });
+  root.querySelectorAll('#pause-game, [data-player-action="pause-game"]').forEach((button) => button.addEventListener('click', () => {
+    closeMobileActions();
+    state.pauseOpen = true;
+    render(false);
+  }));
   root.querySelector('#resume-game')?.addEventListener('click', () => {
     state.pauseOpen = false;
     render(false);
   });
-  root.querySelector('#toggle-hints')?.addEventListener('click', () => {
+  root.querySelectorAll('#toggle-hints, [data-player-action="toggle-hints"]').forEach((button) => button.addEventListener('click', () => {
+    closeMobileActions();
     state.showInteractionHints = !state.showInteractionHints;
     render();
-  });
+  }));
   root.querySelector('#pause-toggle-hints')?.addEventListener('click', () => {
     state.showInteractionHints = !state.showInteractionHints;
     state.pauseOpen = false;
@@ -154,7 +174,7 @@ export const standaloneEvents = `function bindEvents() {
   sceneBackground?.addEventListener('load', () => setSceneAspectFromImage(sceneBackground));
   if (sceneBackground?.complete) setSceneAspectFromImage(sceneBackground);
 
-  root.querySelectorAll('#reset-preview').forEach((button) => button.addEventListener('click', resetPreview));
+  root.querySelectorAll('#reset-preview, [data-player-action="reset-preview"]').forEach((button) => button.addEventListener('click', resetPreview));
 
   root.querySelectorAll('[data-hotspot-id]').forEach((button) => {
     button.addEventListener('click', (event) => {

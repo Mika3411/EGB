@@ -348,6 +348,39 @@ describe('PlaytestWorkspace render regressions', () => {
     }));
   });
 
+  test('affiche l image associee a une zone dans le preview joueur', () => {
+    const project = makeProject({
+      assets: [{ id: 'asset-room', type: 'image', url: 'data:image/png;base64,cm9vbQ==' }],
+      scenes: [{
+        id: 'scene-1',
+        name: 'Salle blanche',
+        introText: 'Le preview est stable.',
+        hotspots: [{
+          id: 'room-link',
+          name: 'Salle 2',
+          actionType: 'project_link',
+          objectImageId: 'asset-room',
+          x: 60,
+          y: 45,
+          width: 18,
+          height: 12,
+        }],
+        sceneObjects: [],
+      }],
+    });
+    const { container } = render(<PlaytestWorkspace
+      {...makeProps({
+        project,
+        playScene: project.scenes[0],
+      })}
+    />);
+
+    const hotspot = screen.getByRole('button', { name: 'Salle 2' });
+    expect(hotspot.className).toContain('player-hotspot-with-image');
+    const image = container.querySelector('.player-hotspot-image');
+    expect(image?.getAttribute('src')).toBe('data:image/png;base64,cm9vbQ==');
+  });
+
   test('ouvre la fiche fallback d un objet de scene lie sans image', () => {
     const setViewerImage = vi.fn();
     const project = makeProject({

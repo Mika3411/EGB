@@ -211,6 +211,12 @@ describe('extracted hooks', () => {
   test('statuts de sauvegarde projet cohérents', () => {
     expect(getProjectSaveStatus({ remoteSaved: true })).toBe('Sauvegardé sur Supabase');
     expect(getProjectSaveStatus({ remoteAttempted: true, localSaved: true, remoteSaved: false })).toBe('Supabase non synchronisé');
+    expect(getProjectSaveStatus({
+      remoteAttempted: true,
+      localSaved: true,
+      remoteError: 'Permission refusée par les policies Supabase Storage.',
+      remoteSaved: false,
+    })).toBe('Supabase non synchronisé : Permission refusée par les policies Supabase Storage.');
     expect(getProjectSaveStatus({ localSaved: true, remoteAttempted: false, remoteSaved: false })).toBe('Sauvegardé localement');
     expect(getProjectSaveStatus({ localCacheSaved: true, localSaved: false, remoteAttempted: false })).toBe('Sauvegarde locale incomplète');
     expect(getProjectSaveStatus({ localSaved: false, remoteAttempted: false })).toBe('Erreur de sauvegarde');

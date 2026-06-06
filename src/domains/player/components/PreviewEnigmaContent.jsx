@@ -39,6 +39,17 @@ export default function PreviewEnigmaContent({
 }) {
   if (!enigma) return null;
 
+  const keepMobileFieldInView = (event) => {
+    if (typeof window === 'undefined' || !window.matchMedia('(max-width: 900px)').matches) return;
+    const target = event.target;
+    if (!target?.matches?.('input, select, textarea')) return;
+    [80, 260, 520].forEach((delay) => {
+      window.setTimeout(() => {
+        target.scrollIntoView({ block: 'center', inline: 'nearest' });
+      }, delay);
+    });
+  };
+
   const rows = Number(enigma?.gridRows) || 3;
   const cols = Number(enigma?.gridCols) || 3;
   const pieceCount = rows * cols;
@@ -69,9 +80,9 @@ export default function PreviewEnigmaContent({
   };
 
   return (
-    <>
+    <div className={`enigma-player-content enigma-player-content--${enigma.type}`} onFocusCapture={keepMobileFieldInView}>
       {enigma.type === 'code' && (
-        <div>
+        <div className="enigma-player-section enigma-player-code-section">
           {codeSkin === 'safe-wheels' ? (
             <>
               <label>Roulettes du coffre</label>
@@ -170,7 +181,7 @@ export default function PreviewEnigmaContent({
       )}
 
       {enigma.type === 'misc' && (
-        <div>
+        <div className="enigma-player-section enigma-player-misc-section">
           {miscMode === 'multiple-choice' ? (
             <>
               <label>Choisis une réponse</label>
@@ -325,7 +336,7 @@ export default function PreviewEnigmaContent({
       )}
 
       {enigma.type === 'colors' && (
-        <div>
+        <div className="enigma-player-section enigma-player-colors-section">
           <label>Suite en cours</label>
           <div className="color-attempt-row">
             {enigmaColorAttempt.length ? enigmaColorAttempt.map((color, index) => (
@@ -337,7 +348,7 @@ export default function PreviewEnigmaContent({
               <button key={value} type="button" className="color-picker-button" style={{ background: value }} title={label} onClick={() => pushEnigmaColor(value)} />
             ))}
           </div>
-          <div className="panel-head panel-head-loose">
+          <div className="panel-head panel-head-loose enigma-color-actions">
             <button className="secondary-button" onClick={() => setEnigmaColorAttempt([])}>Effacer la suite</button>
             <button onClick={submitEnigma}>Valider l’énigme</button>
           </div>
@@ -345,7 +356,7 @@ export default function PreviewEnigmaContent({
       )}
 
       {enigma.type === 'simon' && (
-        <div>
+        <div className="enigma-player-section enigma-player-simon-section">
           <p className="small-note">{simonPlayerTurn ? 'À toi de rejouer la séquence.' : 'Observe la séquence…'}</p>
           <div className="color-picker-grid simon-grid">
             {COLOR_OPTIONS.slice(0, 4).map(([value, label], index) => {
@@ -376,7 +387,7 @@ export default function PreviewEnigmaContent({
       )}
 
       {enigma.type === 'puzzle' && enigma.imageData && (
-        <div>
+        <div className="enigma-player-section enigma-player-puzzle-section">
           <p className="small-note">Clique une pièce, puis une deuxième pour les échanger.</p>
           <div className="enigma-grid" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
             {enigmaPuzzleOrder.map((pieceIndex, index) => (
@@ -393,7 +404,7 @@ export default function PreviewEnigmaContent({
       )}
 
       {enigma.type === 'rotation' && enigma.imageData && (
-        <div>
+        <div className="enigma-player-section enigma-player-rotation-section">
           <p className="small-note">Clique sur chaque pièce pour la remettre à l’endroit.</p>
           <div className="enigma-grid" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
             {Array.from({ length: pieceCount }, (_, index) => (
@@ -410,7 +421,7 @@ export default function PreviewEnigmaContent({
       )}
 
       {enigma.type === 'dragdrop' && enigma.imageData && (
-        <div>
+        <div className="enigma-player-section enigma-player-dragdrop-section">
           <p className="small-note">Glisse les pièces vers la bonne case. Clique une case remplie pour renvoyer sa pièce dans la réserve.</p>
           <div className="dragdrop-layout">
             <div>
@@ -459,6 +470,6 @@ export default function PreviewEnigmaContent({
       {['puzzle', 'rotation', 'dragdrop'].includes(enigma.type) && !enigma.imageData && (
         <p className="small-note">Ajoute une image dans l’onglet Énigmes pour jouer cette énigme.</p>
       )}
-    </>
+    </div>
   );
 }

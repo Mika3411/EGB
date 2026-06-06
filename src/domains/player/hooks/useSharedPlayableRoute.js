@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { normalizeProject } from '../../../shared/data/projectData';
 import { loadProjectRecordsForUser } from '../../../shared/services/authStorage';
 import { loadPublicProject } from '../../../shared/services/publicGalleryStorage';
+import { getAuthorProfileSlugFromPath } from '../../../shared/utils/publicProjectLinks';
 
 export function useSharedPlayableRoute({ editor, preview, setScreen, setSharedLoadStatus }) {
   const sharedRouteRef = useRef(false);
@@ -13,11 +14,13 @@ export function useSharedPlayableRoute({ editor, preview, setScreen, setSharedLo
     const galleryMode = params.get('gallery');
     const galleryGame = params.get('game') || '';
     const galleryCreator = params.get('creator') || '';
+    const galleryCreatorSlug = getAuthorProfileSlugFromPath();
 
-    if (galleryMode) {
+    if (galleryMode || galleryCreatorSlug) {
       sharedRouteRef.current = true;
       window.__escapeInitialGalleryGame = galleryGame;
       window.__escapeInitialGalleryCreator = galleryCreator;
+      window.__escapeInitialGalleryCreatorSlug = galleryCreatorSlug;
       setScreen('gallery');
       return undefined;
     }

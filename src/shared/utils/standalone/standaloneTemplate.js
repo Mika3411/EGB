@@ -107,6 +107,100 @@ function getSceneObjectFontSize(obj) {
   return Number.isFinite(value) ? Math.max(8, Math.min(48, value)) : 13;
 }
 
+function getSceneObjectFontFamily(obj) {
+  const value = obj?.fontFamily || 'system';
+  const families = {
+    system: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    serif: "Georgia, 'Times New Roman', serif",
+    mono: "'Courier New', Courier, monospace",
+    handwritten: "'Comic Sans MS', 'Segoe Print', cursive",
+    condensed: "'Arial Narrow', 'Roboto Condensed', Arial, sans-serif",
+    elegant: "Garamond, 'Times New Roman', serif",
+  };
+  return families[value] || families.system;
+}
+
+const SCENE_OBJECT_COLOR_DEFAULTS = {
+  object: { text: '#f8fafc', background: '#0f172a', opacity: 82 },
+  text: { text: '#f8fafc', background: '#0f172a', opacity: 82 },
+  hint: { text: '#f8fafc', background: '#4338ca', opacity: 82 },
+  button: { text: '#f8fafc', background: '#2563eb', opacity: 96 },
+  input: { text: '#0f172a', background: '#f8fafc', opacity: 94 },
+  code: { text: '#f8fafc', background: '#0f172a', opacity: 82 },
+  image: { text: '#f8fafc', background: '#1e293b', opacity: 74 },
+};
+
+function normalizeSceneObjectHexColor(value, fallback = '') {
+  const raw = String(value || '').trim();
+  if (/^#[0-9a-f]{6}$/i.test(raw)) return raw.toLowerCase();
+  if (/^#[0-9a-f]{3}$/i.test(raw)) {
+    const hex = raw.toLowerCase();
+    return '#' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
+  }
+  return fallback;
+}
+
+function getSceneObjectColorDefaults(obj) {
+  return SCENE_OBJECT_COLOR_DEFAULTS[getSceneObjectBlockType(obj)] || SCENE_OBJECT_COLOR_DEFAULTS.object;
+}
+
+function clampSceneObjectBackgroundOpacity(value, fallback = 82) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return fallback;
+  return Math.max(0, Math.min(100, Math.round(numericValue)));
+}
+
+function hasSceneObjectBackgroundOpacityOverride(value) {
+  return value !== undefined && value !== null && value !== '' && Number.isFinite(Number(value));
+}
+
+function getSceneObjectTextColor(obj) {
+  return normalizeSceneObjectHexColor(obj?.textColor, getSceneObjectColorDefaults(obj).text);
+}
+
+function getSceneObjectBackgroundColor(obj) {
+  return normalizeSceneObjectHexColor(obj?.backgroundColor, getSceneObjectColorDefaults(obj).background);
+}
+
+function getSceneObjectBackgroundOpacity(obj) {
+  return clampSceneObjectBackgroundOpacity(obj?.backgroundOpacity, getSceneObjectColorDefaults(obj).opacity);
+}
+
+function hexToRgb(hexColor) {
+  const color = normalizeSceneObjectHexColor(hexColor, '#0f172a').slice(1);
+  return {
+    r: parseInt(color.slice(0, 2), 16),
+    g: parseInt(color.slice(2, 4), 16),
+    b: parseInt(color.slice(4, 6), 16),
+  };
+}
+
+function formatAlpha(opacity) {
+  const alpha = (clampSceneObjectBackgroundOpacity(opacity) / 100).toFixed(2);
+  return alpha.replace(/0+$/, '').replace(/\.$/, '');
+}
+
+function getSceneObjectBackgroundCssColor(obj) {
+  const rgb = hexToRgb(getSceneObjectBackgroundColor(obj));
+  return 'rgba(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ', ' + formatAlpha(getSceneObjectBackgroundOpacity(obj)) + ')';
+}
+
+function getSceneObjectBlockInlineStyle(obj) {
+  const declarations = [
+    '--scene-object-font-size:' + getSceneObjectFontSize(obj) + 'px',
+    'font-size:calc(var(--scene-object-font-size) * var(--scene-object-text-scale, 1))',
+    'font-family:' + getSceneObjectFontFamily(obj),
+  ];
+  if (normalizeSceneObjectHexColor(obj?.textColor, '')) {
+    declarations.push('color:' + getSceneObjectTextColor(obj));
+    declarations.push('--interactive-block-muted-color:' + getSceneObjectTextColor(obj));
+  }
+  if (normalizeSceneObjectHexColor(obj?.backgroundColor, '') || hasSceneObjectBackgroundOpacityOverride(obj?.backgroundOpacity)) {
+    declarations.push('background:' + getSceneObjectBackgroundCssColor(obj));
+  }
+  return declarations.join(';');
+}
+
 function triggerSceneObject(objectId) {
   const scene = getPlayScene();
   const sourceObj = scene?.sceneObjects?.find((entry) => entry.id === objectId);

@@ -34,6 +34,45 @@ const POPUP_OVERLAY_GRADIENTS = ${serializedPopupOverlayGradients};
 const CODE_KEYPAD_KEYS = ${serializedCodeKeypadKeys};
 const IS_HERO_ADVENTURE = Boolean(project?.heroAdventure?.enabled || project?.creationMode === 'hero_adventure');
 const IS_CHOICE_ADVENTURE = !IS_HERO_ADVENTURE && ['adventure', 'adventure_choices'].includes(project?.creationMode);
+const IS_PRO_PROMOTION = project?.creationMode === 'pro_promo' || Boolean(project?.proPage);
+
+function getStandaloneMobileClickMode(entry) {
+  if (!entry) return 'object';
+  if (entry.clickMode) return entry.clickMode;
+  if (entry.isClickable === false) return 'none';
+  return 'object';
+}
+
+function isDenseMobileScene(scene = null) {
+  if (!scene) return false;
+  const sceneObjects = Array.isArray(scene.sceneObjects) ? scene.sceneObjects : [];
+  const hotspots = Array.isArray(scene.hotspots) ? scene.hotspots : [];
+  const zones = Array.isArray(scene.visualEffectZones) ? scene.visualEffectZones : [];
+  const mobileSceneDensity = sceneObjects.length + hotspots.length + zones.length;
+  const mobileActionDensity = sceneObjects.filter((entry) => (
+    getStandaloneMobileClickMode(entry) !== 'none'
+    || ['external_link', 'project_link'].includes(entry.actionType)
+  )).length + hotspots.filter((entry) => ['external_link', 'project_link'].includes(entry.actionType)).length;
+  return Boolean(IS_PRO_PROMOTION || mobileSceneDensity >= 12 || mobileActionDensity >= 5);
+}
+
+function isMobileViewport(maxWidth = 900) {
+  if (typeof window === 'undefined') return false;
+  if (typeof window.matchMedia === 'function') return window.matchMedia('(max-width: ' + maxWidth + 'px)').matches;
+  return window.innerWidth <= maxWidth;
+}
+
+function shouldShowInventoryToggle() {
+  return Boolean(IS_HERO_ADVENTURE || IS_CHOICE_ADVENTURE || state.inventory.length || !IS_PRO_PROMOTION);
+}
+
+function syncDenseMobileSceneState(scene = null) {
+  if (!scene?.id || !isDenseMobileScene(scene) || !isMobileViewport()) return;
+  if (state.denseMobileNarrationSceneId !== scene.id) {
+    state.narrationCollapsed = true;
+    state.denseMobileNarrationSceneId = scene.id;
+  }
+}
 
 function getHeroChoices() {
   const heroes = Array.isArray(project?.heroAdventure?.heroes) && project.heroAdventure.heroes.length
@@ -107,6 +146,8 @@ const DEFAULT_STATE = () => {
     inventoryDrawerOpen: false,
     objectiveDrawerOpen: false,
     narrationCollapsed: false,
+    denseMobileNarrationSceneId: '',
+    mobileActionsOpen: false,
     pauseOpen: false,
     showInteractionHints: true,
     controlsVisible: false,

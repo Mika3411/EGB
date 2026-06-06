@@ -90,15 +90,26 @@ function renderObjectiveChecklist(options = {}) {
 }
 
 function renderPlayerTopbar(playScene) {
-  return '<div class="player-topbar">'
-    + '<div><span class="eyebrow">Player</span><strong>' + safeHtml(playScene ? getSceneLabel(playScene.id) : 'Aucune scène') + '</strong></div>'
-    + '<div class="player-actions">'
+  return '<div class="player-topbar ' + (state.mobileActionsOpen ? 'is-mobile-actions-open' : '') + '">'
+    + '<div class="player-topbar-title"><span class="eyebrow">Player</span><strong>' + safeHtml(playScene ? getSceneLabel(playScene.id) : 'Aucune scène') + '</strong></div>'
+    + '<div class="player-actions player-actions-desktop" aria-label="Actions du player">'
     + '<button id="pause-game" type="button" class="secondary-action">Pause</button>'
     + '<button id="reset-preview" type="button" class="secondary-action player-reset-button">Recommencer</button>'
     + '<button id="save-game" data-player-action="save-game" type="button" class="secondary-action">Sauvegarder</button>'
     + '<button id="load-game" data-player-action="load-game" type="button" class="secondary-action">Charger</button>'
     + '<button id="toggle-hints" type="button" class="secondary-action">' + (state.showInteractionHints ? 'Sans aide' : 'Aide visuelle') + '</button>'
     + '<button id="fullscreen-toggle" type="button" class="secondary-action">Plein écran</button>'
+    + '</div>'
+    + '<div class="player-mobile-actions" aria-label="Actions rapides du player">'
+    + '<button data-player-action="pause-game" type="button" class="secondary-action player-mobile-primary-action">Pause</button>'
+    + '<button id="toggle-mobile-actions" type="button" class="secondary-action player-mobile-more-button" aria-label="Actions du player" aria-expanded="' + (state.mobileActionsOpen ? 'true' : 'false') + '" aria-controls="player-mobile-actions-menu">Plus</button>'
+    + '</div>'
+    + '<div id="player-mobile-actions-menu" class="player-mobile-action-menu ' + (state.mobileActionsOpen ? 'is-open' : '') + '" aria-label="Actions secondaires du player" ' + (state.mobileActionsOpen ? '' : 'hidden') + '>'
+    + '<button data-player-action="reset-preview" type="button" class="secondary-action player-reset-button">Recommencer</button>'
+    + '<button data-player-action="save-game" type="button" class="secondary-action">Sauvegarder</button>'
+    + '<button data-player-action="load-game" type="button" class="secondary-action">Charger</button>'
+    + '<button data-player-action="toggle-hints" type="button" class="secondary-action">' + (state.showInteractionHints ? 'Sans aide' : 'Aide visuelle') + '</button>'
+    + '<button data-player-action="fullscreen-toggle" type="button" class="secondary-action">Plein écran</button>'
     + '</div></div>';
 }
 
@@ -117,8 +128,13 @@ function renderVisualEffectZones(playScene) {
 
 function renderHotspots(playScene) {
   return (playScene?.hotspots || [])
-    .map((spot) => '<button type="button" class="player-hotspot" data-hotspot-id="' + safeDataAttr(spot.id) + '" '
-      + 'style="left:' + safeStylePercent(spot.x, 0) + ';top:' + safeStylePercent(spot.y, 0) + ';width:' + safeStylePercent(spot.width, 10) + ';height:' + safeStylePercent(spot.height, 10) + ';z-index:20;cursor:pointer;' + getElementShapeStyle(spot) + '" title="' + escapeAttr(spot.name || '') + '"></button>')
+    .map((spot) => {
+      const hotspotImageSrc = resolveAssetUrl(spot.objectImageId, spot.objectImageData);
+      return '<button type="button" class="player-hotspot' + (hotspotImageSrc ? ' player-hotspot-with-image' : '') + '" data-hotspot-id="' + safeDataAttr(spot.id) + '" '
+        + 'style="left:' + safeStylePercent(spot.x, 0) + ';top:' + safeStylePercent(spot.y, 0) + ';width:' + safeStylePercent(spot.width, 10) + ';height:' + safeStylePercent(spot.height, 10) + ';z-index:20;cursor:pointer;' + getElementShapeStyle(spot) + '" title="' + escapeAttr(spot.name || '') + '" aria-label="' + escapeAttr(spot.name || 'Zone') + '">'
+        + (hotspotImageSrc ? '<img class="player-hotspot-image" src="' + escapeMediaAttr(hotspotImageSrc, 'image') + '" alt="" aria-hidden="true" />' : '')
+        + '</button>';
+    })
     .join('');
 }
 
@@ -134,7 +150,7 @@ function renderSceneObjects(playScene) {
       const blockType = getSceneObjectBlockType(renderObject);
       const title = renderObject.blockLabel || renderObject.name || linkedItem?.name || 'Bloc';
       const text = renderObject.blockText || renderObject.dialogue || title;
-      const blockStyle = ' style="font-size:' + getSceneObjectFontSize(renderObject) + 'px"';
+      const blockStyle = ' style="' + getSceneObjectBlockInlineStyle(renderObject) + '"';
       let content = '';
       if (!renderObject.isInvisible && renderObject.anime2dSpec) {
         content = renderAnime2dEmbedded(renderObject.anime2dSpec, getSceneAnime2dElapsed(playScene));
@@ -156,7 +172,7 @@ function renderSceneObjects(playScene) {
       } else if (!renderObject.isInvisible) {
         content = '<span>' + safeHtml(title || 'Objet') + '</span>';
       }
-      return '<button type="button" class="player-scene-object' + (obj.isInvisible ? ' player-scene-object-invisible' : '') + (clickMode === 'none' ? ' player-scene-object-not-clickable' : '') + '" data-scene-object-id="' + safeDataAttr(obj.id) + '" '
+      return '<button type="button" class="player-scene-object' + (obj.isInvisible ? ' player-scene-object-invisible' : '') + (clickMode === 'none' ? ' player-scene-object-not-clickable' : ' player-scene-object-clickable') + '" data-scene-object-id="' + safeDataAttr(obj.id) + '" '
         + 'style="left:' + safeSceneObjectPositionPercent(obj.x, 0) + ';top:' + safeSceneObjectPositionPercent(obj.y, 0) + ';width:' + safeSceneObjectSizePercent(obj.width, 10) + ';height:' + safeSceneObjectSizePercent(obj.height, 10) + ';z-index:' + getLayerZIndex(obj, 'sceneObject') + ';' + getElementShapeStyle(obj) + '" title="' + escapeAttr(obj.name || 'Objet') + '" aria-label="' + escapeAttr(obj.name || 'Objet invisible') + '">'
         + content
         + '</button>';
@@ -184,13 +200,16 @@ function renderActPreload() {
 }
 
 function renderNarrationBar() {
+  const inventoryToggleHtml = shouldShowInventoryToggle()
+    ? '<button id="open-inventory-drawer" data-player-action="open-inventory-drawer" type="button" class="inventory-discreet-button">' + (IS_CHOICE_ADVENTURE ? 'Carnet' : 'Inventaire') + (state.inventory.length ? ' (' + state.inventory.length + ')' : '') + '</button>'
+    : '';
   return '<div class="player-narration-bar ' + (state.narrationCollapsed ? 'is-collapsed' : '') + '">'
     + (state.narrationCollapsed
       ? '<button id="open-narration" type="button" class="narration-discreet-button">Texte</button>'
       : '<p id="collapse-narration" role="button" tabindex="0">' + safeHtml(state.dialogue || 'Aucun message.') + '</p>')
     + '<div class="player-drawer-actions">'
     + (getObjectiveChecklist() ? '<button id="open-objective-drawer" data-player-action="open-objective-drawer" type="button" class="inventory-discreet-button objective-discreet-button">Objectif</button>' : '')
-    + '<button id="open-inventory-drawer" data-player-action="open-inventory-drawer" type="button" class="inventory-discreet-button">' + (IS_CHOICE_ADVENTURE ? 'Carnet' : 'Inventaire') + (state.inventory.length ? ' (' + state.inventory.length + ')' : '') + '</button>'
+    + inventoryToggleHtml
     + '</div>'
     + '</div>';
 }
@@ -273,10 +292,12 @@ function renderSceneLayer({ playScene, sceneAspectRatio, playSceneBackgroundUrl,
 }
 
 function renderPlayerShell({ playScene, sceneAspectRatio, playSceneBackgroundUrl, viewerImageSrc, transitionSceneBackgroundUrl, inventoryDrawerTitle }) {
-  return '<div class="player-shell is-shared-player ' + (IS_CHOICE_ADVENTURE ? 'is-choice-adventure ' : '') + 'player-button-style-' + safeClassToken(PLAYER_BUTTON_STYLE, 'modern') + ' player-button-font-' + safeClassToken(PLAYER_BUTTON_FONT, 'system') + ' player-narration-font-' + safeClassToken(PLAYER_NARRATION_FONT, 'system') + ' ' + (state.showInteractionHints ? 'show-hints' : 'hide-hints') + ' ' + (state.controlsVisible ? '' : 'controls-hidden') + '" style="--player-narration-bg:' + safeCssColor(PLAYER_NARRATION_BACKGROUND, 'rgba(2, 6, 23, .62)') + '">'
+  return '<div class="player-shell is-shared-player ' + (IS_CHOICE_ADVENTURE ? 'is-choice-adventure ' : '') + (IS_PRO_PROMOTION ? 'is-pro-promotion-player ' : '') + (isDenseMobileScene(playScene) ? 'is-dense-mobile-scene ' : '') + 'player-button-style-' + safeClassToken(PLAYER_BUTTON_STYLE, 'modern') + ' player-button-font-' + safeClassToken(PLAYER_BUTTON_FONT, 'system') + ' player-narration-font-' + safeClassToken(PLAYER_NARRATION_FONT, 'system') + ' ' + (state.showInteractionHints ? 'show-hints' : 'hide-hints') + ' ' + (state.controlsVisible ? '' : 'controls-hidden') + '" style="--player-narration-bg:' + safeCssColor(PLAYER_NARRATION_BACKGROUND, 'rgba(2, 6, 23, .62)') + '">'
     + '<section class="panel player-stage-panel">'
     + renderPlayerTopbar(playScene)
+    + '<div class="player-stage-viewport" data-testid="preview-stage-viewport" role="region" aria-label="Zone de scène" tabindex="0" style="--scene-aspect:' + cssNumber(sceneAspectRatio, 1.6, 0.1, 10) + '">'
     + renderSceneLayer({ playScene, sceneAspectRatio, playSceneBackgroundUrl, viewerImageSrc, transitionSceneBackgroundUrl, inventoryDrawerTitle })
+    + '</div>'
     + '</section>'
     + '<section class="panel side player-side-panel">'
     + '<div class="badge-line">' + safeHtml(playScene ? getSceneLabel(playScene.id) : 'Aucune scène') + '</div>'
@@ -288,9 +309,12 @@ function renderPlayerShell({ playScene, sceneAspectRatio, playSceneBackgroundUrl
 }
 
 function renderFullscreenHud(inventoryDrawerTitle) {
+  const inventoryAction = shouldShowInventoryToggle()
+    ? '<button data-player-action="open-inventory-drawer" class="hud-button" type="button">' + (IS_CHOICE_ADVENTURE ? 'Carnet' : 'Inventaire') + '</button>'
+    : '';
   return '<div class="fullscreen-hud">'
     + '<div class="fullscreen-dialogue">' + safeHtml(state.dialogue || 'Aucun message.') + '</div>'
-    + '<div class="fullscreen-actions"><button data-player-action="save-game" class="hud-button" type="button">Sauvegarder</button><button data-player-action="load-game" class="hud-button" type="button">Charger</button><button id="export-save-json" class="hud-button" type="button">Exporter JSON</button><button id="import-save-json" class="hud-button" type="button">Importer JSON</button><button data-player-action="open-inventory-drawer" class="hud-button" type="button">' + (IS_CHOICE_ADVENTURE ? 'Carnet' : 'Inventaire') + '</button></div>'
+    + '<div class="fullscreen-actions"><button data-player-action="save-game" class="hud-button" type="button">Sauvegarder</button><button data-player-action="load-game" class="hud-button" type="button">Charger</button><button id="export-save-json" class="hud-button" type="button">Exporter JSON</button><button id="import-save-json" class="hud-button" type="button">Importer JSON</button>' + inventoryAction + '</div>'
     + '<input id="import-save-file" type="file" accept=".json,application/json" hidden />'
     + '</div>'
     + renderInventoryDrawer(inventoryDrawerTitle, 'fullscreen');
@@ -307,6 +331,7 @@ function render(shouldSave = true) {
   const transitionSceneBackgroundUrl = resolveAssetUrl(state.sceneTransitionOverlay?.scene?.backgroundId, state.sceneTransitionOverlay?.scene?.backgroundData);
   const inventoryDrawerTitle = project?.heroAdventure?.enabled ? GAME_TITLE : IS_CHOICE_ADVENTURE ? 'Carnet d’aventure' : 'Inventaire';
   if (!hasRenderedOnce && !loadedActId) loadedActId = playScene?.actId || '';
+  syncDenseMobileSceneState(playScene);
 
   root.innerHTML = renderPlayerShell({
     playScene,

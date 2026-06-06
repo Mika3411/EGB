@@ -12,6 +12,7 @@ export function createPreviewEnigmaActions({
   enigmaRotationAngles,
   simonTimeoutsRef,
   dispatchPreview,
+  openHotspotLink,
   blockDefeatedHeroAction,
   captureLastChoiceSnapshot,
   setters,
@@ -43,13 +44,16 @@ export function createPreviewEnigmaActions({
   const solveActiveEnigma = () => {
     if (!activeEnigma?.enigma) return;
     const { enigma } = activeEnigma;
-    dispatchPreview(gameActions.solveEnigma(enigma.id, {
+    const result = dispatchPreview(gameActions.solveEnigma(enigma.id, {
       codeInput: enigma.solutionText || '',
       colorAttempt: enigma.solutionColors || [],
       puzzleOrder: enigmaPuzzleOrder,
       dragSlots: enigmaDragSlots,
       rotationAngles: enigmaRotationAngles,
     }));
+    if (result?.ok && (enigma.unlockType || 'none') === 'none') {
+      openHotspotLink?.(activeEnigma.hotspot);
+    }
   };
 
   const failActiveEnigma = () => {
@@ -107,6 +111,10 @@ export function createPreviewEnigmaActions({
     if (!result?.ok) {
       if (enigma.type === 'colors') setters.setEnigmaColorAttempt(DEFAULT_COLOR_SEQUENCE);
       return false;
+    }
+
+    if ((enigma.unlockType || 'none') === 'none') {
+      openHotspotLink?.(activeEnigma.hotspot);
     }
 
     return true;

@@ -628,7 +628,7 @@ const runStandalone = (project) => {
     context,
   );
 
-  return { runtime: context.__standaloneTest, storage };
+  return { root, runtime: context.__standaloneTest, storage };
 };
 
 describe('standalone export regression', () => {
@@ -842,6 +842,14 @@ describe('standalone export regression', () => {
       src: 'data:image/png;base64,aXRlbQ==',
       name: 'Cle',
     });
+  });
+
+  test('renders standalone hotspot action images on the scene layer', () => {
+    const { root } = runStandalone(makeStandaloneProject());
+
+    expect(root.innerHTML).toContain('player-hotspot-with-image');
+    expect(root.innerHTML).toContain('class="player-hotspot-image"');
+    expect(root.innerHTML).toContain('src="data:image/png;base64,aG90c3BvdA=="');
   });
 
   test('shows standalone reward items without hotspot images', () => {

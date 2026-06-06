@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { POPUP_OVERLAY_GRADIENTS } from '../../shared/data/enigmaConfig';
 import {
   createInventoryViewerImage as createGameInventoryViewerImage,
@@ -162,6 +162,7 @@ export default function PlaytestWorkspace(props) {
   const [isObjectiveOpen, setIsObjectiveOpen] = useState(false);
   const [showInteractionHints, setShowInteractionHints] = useState(true);
   const [isNarrationCollapsed, setIsNarrationCollapsed] = useState(false);
+  const [allowMobilePortraitPlayer, setAllowMobilePortraitPlayer] = useState(false);
   const [sceneTransitionOverlay, setSceneTransitionOverlay] = useState(null);
   const [sceneTimerRemaining, setSceneTimerRemaining] = useState(0);
   const [actPreloadStatus, setActPreloadStatus] = useState({ isLoading: false, progress: 100, label: '' });
@@ -201,6 +202,28 @@ export default function PlaytestWorkspace(props) {
   const isHeroAdventure = Boolean(heroAdventure?.enabled && heroState);
   const isChoiceAdventure = !isHeroAdventure && ['adventure', 'adventure_choices'].includes(project?.creationMode);
   const usesImmersiveAdventurePlayer = isHeroAdventure || isChoiceAdventure;
+  const isProPromotionPlayer = project?.creationMode === 'pro_promo' || Boolean(project?.proPage);
+  const mobileSceneDensity = (playScene?.sceneObjects?.length || 0)
+    + (playScene?.hotspots?.length || 0)
+    + (playScene?.visualEffectZones?.length || 0);
+  const mobileActionDensity = (playScene?.sceneObjects || [])
+    .filter((entry) => {
+      const clickMode = getSceneObjectClickMode(entry);
+      return clickMode !== 'none' || ['external_link', 'project_link'].includes(entry.actionType);
+    })
+    .length
+    + (playScene?.hotspots || []).filter((entry) => ['external_link', 'project_link'].includes(entry.actionType)).length;
+  const isDenseMobileScene = Boolean(playScene && (
+    isProPromotionPlayer
+    || mobileSceneDensity >= 12
+    || mobileActionDensity >= 5
+  ));
+  const showInventoryToggle = Boolean(
+    isHeroAdventure
+    || isChoiceAdventure
+    || inventory.length
+    || !isProPromotionPlayer
+  );
   const isHeroSetupOpen = Boolean(isHeroAdventure && !heroSetupComplete);
   const isHeroDefeated = Boolean(isHeroAdventure && Number(heroState?.health || 0) <= 0);
   const isCustomHeroDefeatScene = Boolean(isHeroDefeated && heroAdventure?.hero?.defeatSceneId && playScene?.id === heroAdventure.hero.defeatSceneId);
@@ -300,6 +323,14 @@ export default function PlaytestWorkspace(props) {
     transitionTimerRef,
     viewerImage,
   });
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isDenseMobileScene) return;
+    const isMobileViewport = typeof window.matchMedia === 'function'
+      ? window.matchMedia('(max-width: 900px)').matches
+      : window.innerWidth <= 900;
+    if (isMobileViewport) setIsNarrationCollapsed(true);
+  }, [dialogue, isDenseMobileScene, playScene?.id]);
   const handleHotspotClick = (event, spot) => {
     event.stopPropagation();
 
@@ -1106,7 +1137,7 @@ export default function PlaytestWorkspace(props) {
     <div
       ref={playerShellRef}
       data-tour="preview-player"
-      className={`player-shell player-button-style-${playerButtonStyle} player-button-font-${playerButtonFont} player-narration-font-${playerNarrationFont} ${isChoiceAdventure ? 'is-choice-adventure' : ''} ${usesImmersiveAdventurePlayer ? 'is-immersive-adventure' : ''} ${isFullscreen ? 'is-fullscreen' : ''} ${sharedPlayerMode ? 'is-shared-player' : ''} ${showInteractionHints ? 'show-hints' : 'hide-hints'} ${!areControlsVisible ? 'controls-hidden' : ''}`}
+      className={`player-shell player-button-style-${playerButtonStyle} player-button-font-${playerButtonFont} player-narration-font-${playerNarrationFont} ${isChoiceAdventure ? 'is-choice-adventure' : ''} ${usesImmersiveAdventurePlayer ? 'is-immersive-adventure' : ''} ${isProPromotionPlayer ? 'is-pro-promotion-player' : ''} ${isDenseMobileScene ? 'is-dense-mobile-scene' : ''} ${isFullscreen ? 'is-fullscreen' : ''} ${sharedPlayerMode ? 'is-shared-player' : ''} ${allowMobilePortraitPlayer ? 'allow-mobile-portrait' : ''} ${showInteractionHints ? 'show-hints' : 'hide-hints'} ${!areControlsVisible ? 'controls-hidden' : ''}`}
       style={{ '--player-narration-bg': playerNarrationBackground }}
       onMouseMove={handleShellMouseMove}
       onFocus={() => {
@@ -1125,6 +1156,7 @@ export default function PlaytestWorkspace(props) {
         setShowInteractionHints={setShowInteractionHints}
         toggleFullscreen={toggleFullscreen}
         sceneAspectRatio={sceneAspectRatio}
+        isDenseMobileScene={isDenseMobileScene}
         viewerImage={viewerImage}
         setViewerImage={setViewerImage}
         heroSetupOverlay={renderHeroSetupScreen()}
@@ -1148,6 +1180,7 @@ export default function PlaytestWorkspace(props) {
         dialogue={dialogue}
         isHeroAdventure={isHeroAdventure}
         isChoiceAdventure={isChoiceAdventure}
+        showInventoryToggle={showInventoryToggle}
         isHeroPanelOpen={isHeroPanelOpen}
         isInventoryOpen={isInventoryOpen}
         isObjectiveOpen={isObjectiveOpen}
@@ -1174,6 +1207,20 @@ export default function PlaytestWorkspace(props) {
         objectiveChecklistContent={objectiveChecklist ? renderObjectiveChecklist(false) : null}
         choiceEffectOverlay={!conversationNode && !activeEnding && !activeHeroCombat ? renderChoiceEffectSummary(false) : null}
       />
+
+      {(isFullscreen || sharedPlayerMode) ? (
+        <div className="player-mobile-orientation-gate" role="dialog" aria-modal="true" aria-labelledby="player-mobile-orientation-title">
+          <div className="player-mobile-orientation-card">
+            <span className="player-mobile-orientation-icon" aria-hidden="true"><span /></span>
+            <span className="eyebrow">Mode mobile</span>
+            <h2 id="player-mobile-orientation-title">Passez en paysage</h2>
+            <p>Le player est optimisé pour un écran horizontal.</p>
+            <button type="button" className="secondary-button" onClick={() => setAllowMobilePortraitPlayer(true)}>
+              Continuer en portrait
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <PreviewSidePanel
         isChoiceAdventure={isChoiceAdventure}

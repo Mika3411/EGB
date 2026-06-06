@@ -144,6 +144,18 @@ const makeCriticalProject = () => ({
           dialogue: 'Le tableau cache un symbole.',
           imageData: 'data:image/png;base64,cGFpbnRpbmc=',
         },
+        {
+          id: 'spot-asset-image',
+          name: 'Carte murale',
+          x: 40,
+          y: 28,
+          width: 10,
+          height: 10,
+          actionType: 'dialogue',
+          dialogue: 'La carte montre une route cachee.',
+          objectImageId: 'asset-zone-map',
+          objectImageName: 'Route cachee',
+        },
       ],
       sceneObjects: [],
     },
@@ -179,6 +191,7 @@ const makeCriticalProject = () => ({
   combinations: [],
   assets: [
     { id: 'asset-watch', type: 'image', name: 'Montre arretee.png', url: 'data:image/png;base64,d2F0Y2g=' },
+    { id: 'asset-zone-map', type: 'image', name: 'Route cachee.png', url: 'data:image/png;base64,bWFw' },
   ],
   storyVariables: [],
 });
@@ -498,6 +511,22 @@ describe('preview player critical flows', () => {
       src: 'data:image/png;base64,cGFpbnRpbmc=',
       name: 'Tableau sans prise',
       caption: 'Le tableau cache un symbole.',
+    });
+  });
+
+  test('shows hotspot action images stored in the project asset library', () => {
+    const { project, result } = renderPreview();
+
+    const assetBackedHotspot = project.scenes[0].hotspots.find((spot) => spot.id === 'spot-asset-image');
+    act(() => {
+      result.current.triggerHotspot(assetBackedHotspot);
+    });
+
+    expect(result.current.inventory).toEqual([]);
+    expect(result.current.viewerImage).toMatchObject({
+      src: 'data:image/png;base64,bWFw',
+      name: 'Route cachee',
+      caption: 'La carte montre une route cachee.',
     });
   });
 

@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react';
+import { MoreHorizontal, Pause as PauseIcon } from 'lucide-react';
 import { formatTimerSeconds } from '../../../shared/services/gameEngine';
 import { resolveAssetUrl } from '../../../shared/services/assetManager';
 import Anime2DPreview from '../../anime2d/Anime2DPreview.jsx';
@@ -24,6 +26,7 @@ export default function PreviewStagePanel({
   setShowInteractionHints,
   toggleFullscreen,
   sceneAspectRatio = 1.6,
+  isDenseMobileScene = false,
   viewerImage = null,
   setViewerImage,
   heroSetupOverlay = null,
@@ -47,6 +50,7 @@ export default function PreviewStagePanel({
   dialogue = '',
   isHeroAdventure = false,
   isChoiceAdventure = false,
+  showInventoryToggle = true,
   isHeroPanelOpen = false,
   isInventoryOpen = false,
   isObjectiveOpen = false,
@@ -73,14 +77,70 @@ export default function PreviewStagePanel({
   objectiveChecklistContent = null,
   choiceEffectOverlay = null,
 }) {
+  const stageViewportRef = useRef(null);
+  const topbarRef = useRef(null);
+  const [isMobileActionsOpen, setIsMobileActionsOpen] = useState(false);
+  const mobileActionsMenuId = 'player-mobile-actions-menu';
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const viewport = stageViewportRef.current;
+    if (!viewport) return undefined;
+    const isMobilePortrait = typeof window.matchMedia === 'function'
+      ? window.matchMedia('(max-width: 720px) and (orientation: portrait)').matches
+      : window.innerWidth <= 720 && window.innerHeight >= window.innerWidth;
+    if (!isMobilePortrait) return undefined;
+
+    const requestFrame = window.requestAnimationFrame || ((callback) => window.setTimeout(callback, 0));
+    const cancelFrame = window.cancelAnimationFrame || window.clearTimeout;
+    const frameId = requestFrame(() => {
+      const maxScrollLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
+      viewport.scrollLeft = isDenseMobileScene
+        ? 0
+        : Math.round(maxScrollLeft / 2);
+      viewport.scrollTop = 0;
+    });
+
+    return () => cancelFrame(frameId);
+  }, [isDenseMobileScene, playScene?.id, playSceneBackgroundUrl, sceneAspectRatio]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isMobileActionsOpen) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      setIsMobileActionsOpen(false);
+      topbarRef.current?.querySelector('.player-mobile-more-button')?.focus();
+    };
+    const handlePointerDown = (event) => {
+      if (topbarRef.current && !topbarRef.current.contains(event.target)) {
+        setIsMobileActionsOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('pointerdown', handlePointerDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('pointerdown', handlePointerDown);
+    };
+  }, [isMobileActionsOpen]);
+
+  const runMobileAction = (action) => {
+    setIsMobileActionsOpen(false);
+    action?.();
+  };
+
   return (
     <section className="panel player-stage-panel">
-      <div className="player-topbar">
-        <div>
+      <div className={`player-topbar ${isMobileActionsOpen ? 'is-mobile-actions-open' : ''}`} ref={topbarRef}>
+        <div className="player-topbar-title">
           <span className="eyebrow">Player</span>
           <strong>{playScene ? getSceneLabel(playScene.id) : 'Aucune scène'}</strong>
         </div>
-        <div className="player-actions">
+        <div className="player-actions player-actions-desktop" aria-label="Actions du player">
           <button type="button" className="secondary-action" onClick={() => setIsPauseOpen(true)}>Pause</button>
           <button type="button" className="secondary-action player-reset-button" onClick={resetPreview}>Recommencer</button>
           <button type="button" className="secondary-action" onClick={saveGameState}>Sauvegarder</button>
@@ -90,9 +150,49 @@ export default function PreviewStagePanel({
           </button>
           <button type="button" className="secondary-action" onClick={toggleFullscreen}>Plein écran</button>
         </div>
+        <div className="player-mobile-actions" aria-label="Actions rapides du player">
+          <button type="button" className="secondary-action player-mobile-primary-action" onClick={() => setIsPauseOpen(true)}>
+            <PauseIcon size={16} aria-hidden="true" />
+            <span>Pause</span>
+          </button>
+          <button
+            type="button"
+            className="secondary-action player-mobile-more-button"
+            aria-label="Actions du player"
+            aria-expanded={isMobileActionsOpen}
+            aria-controls={mobileActionsMenuId}
+            onClick={() => setIsMobileActionsOpen((value) => !value)}
+          >
+            <MoreHorizontal size={17} aria-hidden="true" />
+            <span>Plus</span>
+          </button>
+        </div>
+        <div
+          id={mobileActionsMenuId}
+          className={`player-mobile-action-menu ${isMobileActionsOpen ? 'is-open' : ''}`}
+          aria-label="Actions secondaires du player"
+          hidden={!isMobileActionsOpen}
+        >
+          <button type="button" className="secondary-action player-reset-button" onClick={() => runMobileAction(resetPreview)}>Recommencer</button>
+          <button type="button" className="secondary-action" onClick={() => runMobileAction(saveGameState)}>Sauvegarder</button>
+          <button type="button" className="secondary-action" onClick={() => runMobileAction(loadGameState)}>Charger</button>
+          <button type="button" className="secondary-action" onClick={() => runMobileAction(() => setShowInteractionHints((value) => !value))}>
+            {showInteractionHints ? 'Sans aide' : 'Aide visuelle'}
+          </button>
+          <button type="button" className="secondary-action" onClick={() => runMobileAction(toggleFullscreen)}>Plein écran</button>
+        </div>
       </div>
 
-      <div className="scene-player" style={{ aspectRatio: sceneAspectRatio, '--scene-aspect': sceneAspectRatio }} onClick={() => viewerImage && setViewerImage(null)}>
+      <div
+        className="player-stage-viewport"
+        data-testid="preview-stage-viewport"
+        role="region"
+        ref={stageViewportRef}
+        style={{ '--scene-aspect': sceneAspectRatio }}
+        tabIndex={0}
+        aria-label="Zone de scène"
+      >
+        <div className="scene-player" style={{ aspectRatio: sceneAspectRatio, '--scene-aspect': sceneAspectRatio }} onClick={() => viewerImage && setViewerImage(null)}>
         {heroSetupOverlay}
         {heroRewardNotice}
         {heroCombatOverlay}
@@ -109,7 +209,7 @@ export default function PreviewStagePanel({
             alt={playScene.name}
             loading="eager"
             decoding="async"
-            fetchPriority="high"
+            fetchpriority="high"
             onLoad={(event) => {
               const image = event.currentTarget;
               if (image.naturalWidth && image.naturalHeight) {
@@ -142,6 +242,7 @@ export default function PreviewStagePanel({
           .filter((obj) => !usedSceneObjectIds.includes(obj.id) && (!obj.isHidden || revealedSceneObjectIds.includes(obj.id)))
           .map((obj) => {
             const objectForRender = applySceneObjectTextOverride(obj, sceneObjectTextOverrides[obj.id]);
+            const clickMode = getSceneObjectClickMode(objectForRender);
             const linkedItem = obj.linkedItemId ? project.items.find((entry) => entry.id === obj.linkedItemId) : null;
             const displayImage = resolveAssetUrl(project, obj.imageId, obj.imageData)
               || resolveAssetUrl(project, linkedItem?.imageId, linkedItem?.imageData)
@@ -150,7 +251,8 @@ export default function PreviewStagePanel({
               <button
                 key={obj.id}
                 type="button"
-                className={`player-scene-object ${obj.isInvisible ? 'player-scene-object-invisible' : ''} ${getSceneObjectClickMode(objectForRender) === 'none' ? 'player-scene-object-not-clickable' : ''}`}
+                className={`player-scene-object ${obj.isInvisible ? 'player-scene-object-invisible' : ''} ${clickMode === 'none' ? 'player-scene-object-not-clickable' : 'player-scene-object-clickable'}`}
+                data-scene-object-id={obj.id}
                 style={getSceneObjectStyle(obj)}
                 onClick={(event) => handleSceneObjectClick(event, objectForRender)}
                 title={objectForRender.name}
@@ -167,23 +269,31 @@ export default function PreviewStagePanel({
             );
           })}
 
-        {(playScene?.hotspots || []).map((spot) => (
-          <button
-            key={spot.id}
-            type="button"
-            className="player-hotspot"
-            style={{
-              left: `${spot.x}%`,
-              top: `${spot.y}%`,
-              width: `${spot.width}%`,
-              height: `${spot.height}%`,
-              zIndex: getLayerZIndex(spot, 'hotspot'),
-              ...getElementShapeStyle(spot),
-            }}
-            onClick={(event) => handleHotspotClick(event, spot)}
-            title={spot.name}
-          />
-        ))}
+        {(playScene?.hotspots || []).map((spot) => {
+          const hotspotImageSrc = resolveAssetUrl(project, spot.objectImageId, spot.objectImageData);
+          return (
+            <button
+              key={spot.id}
+              type="button"
+              className={`player-hotspot ${hotspotImageSrc ? 'player-hotspot-with-image' : ''}`}
+              style={{
+                left: `${spot.x}%`,
+                top: `${spot.y}%`,
+                width: `${spot.width}%`,
+                height: `${spot.height}%`,
+                zIndex: getLayerZIndex(spot, 'hotspot'),
+                ...getElementShapeStyle(spot),
+              }}
+              onClick={(event) => handleHotspotClick(event, spot)}
+              title={spot.name}
+              aria-label={spot.name || 'Zone'}
+            >
+              {hotspotImageSrc ? (
+                <img className="player-hotspot-image" src={hotspotImageSrc} alt="" aria-hidden="true" />
+              ) : null}
+            </button>
+          );
+        })}
 
         {viewerImage && (
           <div className="scene-inline-viewer">
@@ -287,14 +397,16 @@ export default function PreviewStagePanel({
                 Objectif
               </button>
             ) : null}
-            <button type="button" className="inventory-discreet-button" onClick={(event) => {
-              event.stopPropagation();
-              setIsHeroPanelOpen(false);
-              setIsObjectiveOpen?.(false);
-              setIsInventoryOpen((value) => !value);
-            }}>
-              {isHeroAdventure ? 'Personnage' : isChoiceAdventure ? 'Carnet' : 'Inventaire'} {inventory.length ? `(${inventory.length})` : ''}
-            </button>
+            {showInventoryToggle ? (
+              <button type="button" className="inventory-discreet-button" onClick={(event) => {
+                event.stopPropagation();
+                setIsHeroPanelOpen(false);
+                setIsObjectiveOpen?.(false);
+                setIsInventoryOpen((value) => !value);
+              }}>
+                {isHeroAdventure ? 'Personnage' : isChoiceAdventure ? 'Carnet' : 'Inventaire'} {inventory.length ? `(${inventory.length})` : ''}
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -351,6 +463,7 @@ export default function PreviewStagePanel({
             </div>
           </>
         ) : null}
+        </div>
       </div>
     </section>
   );

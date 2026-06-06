@@ -97,6 +97,12 @@ import {
 } from '../../services/conditionEngine';
 import { DEFAULT_COMBAT_SETTINGS } from '../../services/combatDefaults.js';
 import {
+  getHotspotLinkUrl,
+  isHotspotLinkAction,
+  normalizeHotspotExternalUrl,
+} from '../../services/hotspotLinks.js';
+import { buildPlayableProjectUrl } from '../publicProjectLinks.js';
+import {
   applyArmor,
   addStatusEffect,
   applyShield,
@@ -243,6 +249,10 @@ const buildStandaloneGameEngineScript = () => ([
   `const selectRewardInventoryItem = ${serializeFunctionSource(selectRewardInventoryItem)};`,
   `const createHotspotViewerImage = ${serializeFunctionSource(createHotspotViewerImage)};`,
   `const applyHotspotBlockState = ${serializeFunctionSource(applyHotspotBlockState)};`,
+  `const buildPlayableProjectUrl = ${serializeFunctionSource(buildPlayableProjectUrl)};`,
+  `const normalizeHotspotExternalUrl = ${serializeFunctionSource(normalizeHotspotExternalUrl)};`,
+  `const getHotspotLinkUrl = ${serializeFunctionSource(getHotspotLinkUrl)};`,
+  `const isHotspotLinkAction = ${serializeFunctionSource(isHotspotLinkAction)};`,
   hasConditionToken,
   isConditionMet,
   getConditionArray,
