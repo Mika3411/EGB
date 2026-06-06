@@ -1,0 +1,761 @@
+[
+  {
+    "viewport": "mobile-large-430x932",
+    "surface": "profile:settings",
+    "label": "Profil",
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06-after-fix/mobile-large-430x932/14-profil.png",
+    "metrics": {
+      "horizontalOverflow": 0,
+      "verticalScroll": true,
+      "visibleActions": 12,
+      "smallControls": [],
+      "overlaps": [],
+      "overflowElements": []
+    }
+  },
+  {
+    "viewport": "mobile-large-430x932",
+    "surface": "profile:projects",
+    "label": "Projets",
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06-after-fix/mobile-large-430x932/15-projets.png",
+    "metrics": {
+      "horizontalOverflow": 0,
+      "verticalScroll": true,
+      "visibleActions": 12,
+      "smallControls": [],
+      "overlaps": [],
+      "overflowElements": []
+    }
+  },
+  {
+    "viewport": "mobile-large-430x932",
+    "surface": "profile:publication",
+    "label": "Publication",
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06-after-fix/mobile-large-430x932/16-publication.png",
+    "metrics": {
+      "horizontalOverflow": 0,
+      "verticalScroll": true,
+      "visibleActions": 12,
+      "smallControls": [],
+      "overlaps": [],
+      "overflowElements": []
+    }
+  },
+  {
+    "viewport": "mobile-large-430x932",
+    "surface": "ai",
+    "label": "IA",
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06-after-fix/mobile-large-430x932/17-ia.png",
+    "metrics": {
+      "horizontalOverflow": 0,
+      "verticalScroll": true,
+      "visibleActions": 3,
+      "smallControls": [],
+      "overlaps": [],
+      "overflowElements": []
+    }
+  },
+  {
+    "viewport": "mobile-large-430x932",
+    "surface": "score",
+    "label": "Score",
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06-after-fix/mobile-large-430x932/18-score.png",
+    "metrics": {
+      "horizontalOverflow": 0,
+      "verticalScroll": true,
+      "visibleActions": 5,
+      "smallControls": [],
+      "overlaps": [],
+      "overflowElements": []
+    }
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "surface": "preview",
+    "label": "Preview",
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06-after-fix/mobile-landscape-844x390/01-preview.png",
+    "metrics": {
+      "horizontalOverflow": 0,
+      "verticalScroll": true,
+      "visibleActions": 22,
+      "smallControls": [
+        {
+          "i": 4,
+          "label": "Sur-titre",
+          "cls": "player-scene-object  player-scene-object-not-clickable",
+          "x": 83,
+          "y": 114,
+          "width": 307,
+          "height": 19,
+          "inViewport": true
+        },
+        {
+          "i": 12,
+          "label": "Projet a relier 1",
+          "cls": "player-scene-object  player-scene-object-clickable",
+          "x": 79,
+          "y": 309,
+          "width": 202,
+          "height": 29,
+          "inViewport": true
+        },
+        {
+          "i": 13,
+          "label": "Projet a relier 2",
+          "cls": "player-scene-object  player-scene-object-clickable",
+          "x": 321,
+          "y": 309,
+          "width": 202,
+          "height": 29,
+          "inViewport": true
+        },
+        {
+          "i": 14,
+          "label": "Projet a relier 3",
+          "cls": "player-scene-object  player-scene-object-clickable",
+          "x": 563,
+          "y": 309,
+          "width": 202,
+          "height": 29,
+          "inViewport": true
+        },
+        {
+          "i": 15,
+          "label": "Bouton reservation",
+          "cls": "player-scene-object  player-scene-object-clickable",
+          "x": 83,
+          "y": 357,
+          "width": 226,
+          "height": 29,
+          "inViewport": true
+        },
+        {
+          "i": 16,
+          "label": "Bouton carte",
+          "cls": "player-scene-object  player-scene-object-clickable",
+          "x": 325,
+          "y": 357,
+          "width": 194,
+          "height": 29,
+          "inViewport": true
+        },
+        {
+          "i": 17,
+          "label": "Bouton projets",
+          "cls": "player-scene-object  player-scene-object-clickable",
+          "x": 535,
+          "y": 357,
+          "width": 226,
+          "height": 29,
+          "inViewport": true
+        },
+        {
+          "i": 20,
+          "label": "Texte",
+          "cls": "narration-discreet-button",
+          "x": 498,
+          "y": 371,
+          "width": 59,
+          "height": 34,
+          "inViewport": true
+        }
+      ],
+      "overlaps": [
+        {
+          "a": "Zone de scène",
+          "b": "Sélectionner ce personnage",
+          "area": 8360
+        },
+        {
+          "a": "Zone de scène",
+          "b": "Sur-titre",
+          "area": 5833
+        },
+        {
+          "a": "Zone de scène",
+          "b": "Titre enseigne",
+          "area": 21312
+        },
+        {
+          "a": "Zone de scène",
+          "b": "Pitch",
+          "area": 23088
+        },
+        {
+          "a": "Zone de scène",
+          "b": "Badge capacite",
+          "area": 9696
+        },
+        {
+          "a": "Zone de scène",
+          "b": "Badge formats",
+          "area": 10464
+        },
+        {
+          "a": "Zone de scène",
+          "b": "Badge valeur",
+          "area": 10464
+        },
+        {
+          "a": "Zone de scène",
+          "b": "Adresse fictive",
+          "area": 14500
+        },
+        {
+          "a": "Zone de scène",
+          "b": "Horaires",
+          "area": 13000
+        },
+        {
+          "a": "Zone de scène",
+          "b": "Projet a relier 1",
+          "area": 5858
+        },
+        {
+          "a": "Zone de scène",
+          "b": "Projet a relier 2",
+          "area": 5858
+        },
+        {
+          "a": "Zone de scène",
+          "b": "Projet a relier 3",
+          "area": 5858
+        },
+        {
+          "a": "Zone de scène",
+          "b": "Bouton reservation",
+          "area": 6554
+        },
+        {
+          "a": "Zone de scène",
+          "b": "Bouton carte",
+          "area": 5626
+        },
+        {
+          "a": "Zone de scène",
+          "b": "Bouton projets",
+          "area": 6554
+        },
+        {
+          "a": "Zone de scène",
+          "b": "Gardien de vitrine",
+          "area": 7540
+        },
+        {
+          "a": "Zone de scène",
+          "b": "Texte",
+          "area": 2006
+        },
+        {
+          "a": "Zone de scène",
+          "b": "Hero Adventure",
+          "area": 5500
+        },
+        {
+          "a": "Zone de scène",
+          "b": "Personnage",
+          "area": 4576
+        },
+        {
+          "a": "Sélectionner ce personnage",
+          "b": "Projet a relier 3",
+          "area": 3094
+        }
+      ],
+      "overflowElements": []
+    }
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "surface": "scenes",
+    "label": "Scènes",
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06-after-fix/mobile-landscape-844x390/02-scenes.png",
+    "metrics": {
+      "horizontalOverflow": 0,
+      "verticalScroll": true,
+      "visibleActions": 4,
+      "smallControls": [
+        {
+          "i": 1,
+          "label": "Prévisualiser",
+          "cls": "secondary-action",
+          "x": 27,
+          "y": 226,
+          "width": 391,
+          "height": 34,
+          "inViewport": true
+        },
+        {
+          "i": 3,
+          "label": "Page de presentation",
+          "cls": "",
+          "x": 27,
+          "y": 331,
+          "width": 395,
+          "height": 34,
+          "inViewport": true
+        }
+      ],
+      "overlaps": [],
+      "overflowElements": [
+        {
+          "label": "Zone technique",
+          "cls": "",
+          "left": 810,
+          "right": 877,
+          "width": 66
+        }
+      ]
+    }
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "surface": "media",
+    "label": "Média",
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06-after-fix/mobile-landscape-844x390/03-media.png",
+    "metrics": {
+      "horizontalOverflow": 0,
+      "verticalScroll": true,
+      "visibleActions": 4,
+      "smallControls": [
+        {
+          "i": 1,
+          "label": "Vitrine · Scene · Page de presentation",
+          "cls": "",
+          "x": 17,
+          "y": 171,
+          "width": 810,
+          "height": 34,
+          "inViewport": true
+        },
+        {
+          "i": 2,
+          "label": "Remplacer le fond",
+          "cls": "button like secondary-action",
+          "x": 27,
+          "y": 324,
+          "width": 790,
+          "height": 34,
+          "inViewport": true
+        }
+      ],
+      "overlaps": [],
+      "overflowElements": [
+        {
+          "label": "Zone technique",
+          "cls": "",
+          "left": 822,
+          "right": 878,
+          "width": 55
+        }
+      ]
+    }
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "surface": "objects",
+    "label": "Objets",
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06-after-fix/mobile-landscape-844x390/04-objets.png",
+    "metrics": {
+      "horizontalOverflow": 0,
+      "verticalScroll": true,
+      "visibleActions": 5,
+      "smallControls": [],
+      "overlaps": [],
+      "overflowElements": []
+    }
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "surface": "enigmas",
+    "label": "Énigmes",
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06-after-fix/mobile-landscape-844x390/05-enigmes.png",
+    "metrics": {
+      "horizontalOverflow": 0,
+      "verticalScroll": true,
+      "visibleActions": 12,
+      "smallControls": [
+        {
+          "i": 0,
+          "label": "+ Énigme",
+          "cls": "",
+          "x": 724,
+          "y": 60,
+          "width": 75,
+          "height": 34,
+          "inViewport": true
+        },
+        {
+          "i": 3,
+          "label": "Code du tiroir Code lettrès / chiffres",
+          "cls": "list-card selected",
+          "x": 17,
+          "y": 163,
+          "width": 810,
+          "height": 34,
+          "inViewport": true
+        },
+        {
+          "i": 4,
+          "label": "Suite de couleurs du couloir Combinaison de couleurs",
+          "cls": "list-card ",
+          "x": 17,
+          "y": 163,
+          "width": 810,
+          "height": 34,
+          "inViewport": true
+        },
+        {
+          "i": 5,
+          "label": "Prévisualiser",
+          "cls": "secondary-action",
+          "x": 576,
+          "y": 136,
+          "width": 122,
+          "height": 34,
+          "inViewport": true
+        },
+        {
+          "i": 8,
+          "label": "Code du tiroir",
+          "cls": "",
+          "x": 27,
+          "y": 249,
+          "width": 790,
+          "height": 34,
+          "inViewport": true
+        },
+        {
+          "i": 10,
+          "label": "Code lettrès / chiffres Combinaison de couleurs Puzzle d’image Divers",
+          "cls": "",
+          "x": 27,
+          "y": 333,
+          "width": 790,
+          "height": 34,
+          "inViewport": true
+        }
+      ],
+      "overlaps": [
+        {
+          "a": "Code du tiroir Code lettrès / chiffres",
+          "b": "Suite de couleurs du couloir Combinaison de couleurs",
+          "area": 27540
+        },
+        {
+          "a": "Code du tiroir Code lettrès / chiffres",
+          "b": "Prévisualiser",
+          "area": 854
+        },
+        {
+          "a": "Code du tiroir Code lettrès / chiffres",
+          "b": "Supprimer",
+          "area": 854
+        },
+        {
+          "a": "Suite de couleurs du couloir Combinaison de couleurs",
+          "b": "Prévisualiser",
+          "area": 854
+        },
+        {
+          "a": "Suite de couleurs du couloir Combinaison de couleurs",
+          "b": "Supprimer",
+          "area": 854
+        }
+      ],
+      "overflowElements": []
+    }
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "surface": "logic",
+    "label": "Logique",
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06-after-fix/mobile-landscape-844x390/06-logique.png",
+    "metrics": {
+      "horizontalOverflow": 0,
+      "verticalScroll": true,
+      "visibleActions": 5,
+      "smallControls": [
+        {
+          "i": 2,
+          "label": "Page de presentation",
+          "cls": "scene-select-button",
+          "x": 50,
+          "y": 176,
+          "width": 767,
+          "height": 34,
+          "inViewport": true
+        },
+        {
+          "i": 4,
+          "label": "on",
+          "cls": "",
+          "x": 31,
+          "y": 365,
+          "width": 16,
+          "height": 34,
+          "inViewport": true
+        }
+      ],
+      "overlaps": [
+        {
+          "a": "Page de presentation",
+          "b": "Page de presentation",
+          "area": 26078
+        }
+      ],
+      "overflowElements": []
+    }
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "surface": "combinations",
+    "label": "Combinaisons",
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06-after-fix/mobile-landscape-844x390/07-combinaisons.png",
+    "metrics": {
+      "horizontalOverflow": 0,
+      "verticalScroll": true,
+      "visibleActions": 6,
+      "smallControls": [],
+      "overlaps": [],
+      "overflowElements": []
+    }
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "surface": "plan",
+    "label": "Plan",
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06-after-fix/mobile-landscape-844x390/08-plan.png",
+    "metrics": {
+      "horizontalOverflow": 0,
+      "verticalScroll": true,
+      "visibleActions": 2,
+      "smallControls": [],
+      "overlaps": [],
+      "overflowElements": []
+    }
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "surface": "adventure",
+    "label": "Aventure",
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06-after-fix/mobile-landscape-844x390/09-aventure.png",
+    "metrics": {
+      "horizontalOverflow": 0,
+      "verticalScroll": true,
+      "visibleActions": 9,
+      "smallControls": [],
+      "overlaps": [],
+      "overflowElements": [
+        {
+          "label": "Variables 0",
+          "cls": "",
+          "left": 826,
+          "right": 968,
+          "width": 142
+        },
+        {
+          "label": "Variables",
+          "cls": "",
+          "left": 837,
+          "right": 895,
+          "width": 57
+        },
+        {
+          "label": "0",
+          "cls": "",
+          "left": 933,
+          "right": 957,
+          "width": 24
+        },
+        {
+          "label": "Choix 0",
+          "cls": "",
+          "left": 976,
+          "right": 1118,
+          "width": 142
+        },
+        {
+          "label": "Choix",
+          "cls": "",
+          "left": 987,
+          "right": 1023,
+          "width": 36
+        },
+        {
+          "label": "0",
+          "cls": "",
+          "left": 1083,
+          "right": 1107,
+          "width": 24
+        },
+        {
+          "label": "Fins 0",
+          "cls": "",
+          "left": 1126,
+          "right": 1268,
+          "width": 142
+        },
+        {
+          "label": "Fins",
+          "cls": "",
+          "left": 1137,
+          "right": 1164,
+          "width": 26
+        },
+        {
+          "label": "0",
+          "cls": "",
+          "left": 1233,
+          "right": 1257,
+          "width": 24
+        }
+      ]
+    }
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "surface": "hero",
+    "label": "Hero Adventure",
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06-after-fix/mobile-landscape-844x390/10-hero-adventure.png",
+    "metrics": {
+      "horizontalOverflow": 0,
+      "verticalScroll": true,
+      "visibleActions": 2,
+      "smallControls": [
+        {
+          "i": 0,
+          "label": "on",
+          "cls": "",
+          "x": 21,
+          "y": 259,
+          "width": 16,
+          "height": 34,
+          "inViewport": true
+        }
+      ],
+      "overlaps": [],
+      "overflowElements": [
+        {
+          "label": "Guide",
+          "cls": "",
+          "left": 790,
+          "right": 908,
+          "width": 118
+        }
+      ]
+    }
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "surface": "combat",
+    "label": "Combat",
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06-after-fix/mobile-landscape-844x390/11-combat.png",
+    "metrics": {
+      "horizontalOverflow": 0,
+      "verticalScroll": true,
+      "visibleActions": 2,
+      "smallControls": [],
+      "overlaps": [],
+      "overflowElements": []
+    }
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "surface": "cinematics",
+    "label": "Cinématiques",
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06-after-fix/mobile-landscape-844x390/12-cinematiques.png",
+    "metrics": {
+      "horizontalOverflow": 0,
+      "verticalScroll": true,
+      "visibleActions": 6,
+      "smallControls": [],
+      "overlaps": [],
+      "overflowElements": []
+    }
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "surface": "animation",
+    "label": "Animation",
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06-after-fix/mobile-landscape-844x390/13-animation.png",
+    "metrics": {
+      "horizontalOverflow": 0,
+      "verticalScroll": true,
+      "visibleActions": 9,
+      "smallControls": [],
+      "overlaps": [],
+      "overflowElements": []
+    }
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "surface": "profile:settings",
+    "label": "Profil",
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06-after-fix/mobile-landscape-844x390/14-profil.png",
+    "metrics": {
+      "horizontalOverflow": 0,
+      "verticalScroll": true,
+      "visibleActions": 8,
+      "smallControls": [],
+      "overlaps": [],
+      "overflowElements": []
+    }
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "surface": "profile:projects",
+    "label": "Projets",
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06-after-fix/mobile-landscape-844x390/15-projets.png",
+    "metrics": {
+      "horizontalOverflow": 0,
+      "verticalScroll": true,
+      "visibleActions": 8,
+      "smallControls": [],
+      "overlaps": [],
+      "overflowElements": []
+    }
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "surface": "profile:publication",
+    "label": "Publication",
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06-after-fix/mobile-landscape-844x390/16-publication.png",
+    "metrics": {
+      "horizontalOverflow": 0,
+      "verticalScroll": true,
+      "visibleActions": 8,
+      "smallControls": [],
+      "overlaps": [],
+      "overflowElements": []
+    }
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "surface": "ai",
+    "label": "IA",
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06-after-fix/mobile-landscape-844x390/17-ia.png",
+    "metrics": {
+      "horizontalOverflow": 0,
+      "verticalScroll": true,
+      "visibleActions": 2,
+      "smallControls": [],
+      "overlaps": [],
+      "overflowElements": []
+    }
+  },
+  {
+    "viewport": "mobile-landscape-844x390",
+    "surface": "score",
+    "label": "Score",
+    "screenshot": "docs/qa/screenshots/global-responsive-2026-06-06-after-fix/mobile-landscape-844x390/18-score.png",
+    "metrics": {
+      "horizontalOverflow": 0,
+      "verticalScroll": true,
+      "visibleActions": 3,
+      "smallControls": [],
+      "overlaps": [],
+      "overflowElements": []
+    }
+  }
+]

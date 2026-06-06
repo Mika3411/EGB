@@ -1,0 +1,290 @@
+/* Mobile-only QA overrides imported last so dense editor rules cannot shrink touch targets. */
+
+@media (max-width: 760px), (max-width: 900px) and (orientation: landscape) {
+  :where(
+    button:not(.help-dot),
+    .button.like,
+    .secondary-action,
+    .secondary-button,
+    .danger-button,
+    .ghost-action,
+    [role="button"]:not(.help-dot),
+    [role="tab"],
+    summary,
+    .editor-menu-button,
+    .editor-menu summary,
+    .scene-select-button,
+    .list-card,
+    .object-nav-item,
+    .inventory-tile,
+    .visual-effect-cascade__trigger
+  ) {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  :where(.button.like, .secondary-action, .secondary-button, .danger-button, .ghost-action, .panel-head button) {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.18;
+  }
+
+  :where(input, select, textarea) {
+    min-height: 44px;
+  }
+
+  :where(.checkbox-row, .label-with-help) {
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .help-dot,
+  .panel-context-pro .grid-two.small-gap .help-dot {
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    min-height: 24px;
+    font-size: 11px;
+    touch-action: manipulation;
+  }
+
+  .tabs,
+  .tabs-pro,
+  .toolbar,
+  .profile-section-tabs,
+  .adventure-internal-tabs,
+  .hero-internal-tabs,
+  .combat-editor-tabs {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tabs > *,
+  .tabs-pro > *,
+  .profile-section-tabs > *,
+  .adventure-internal-tabs > *,
+  .hero-internal-tabs > *,
+  .combat-editor-tabs > * {
+    flex-shrink: 0;
+  }
+
+  .panel,
+  .subpanel,
+  .list-card,
+  .object-nav-item,
+  .adventure-search-result,
+  .score-card,
+  .score-advice-card {
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .object-nav-item {
+    grid-template-columns: 44px minmax(0, 1fr);
+    align-items: center;
+  }
+
+  .object-nav-copy,
+  .object-nav-copy *,
+  .adventure-search-summary,
+  .adventure-debugger-count,
+  .score-card *,
+  .score-advice-card * {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .editor-menu-bar {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: visible;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .editor-menu,
+  .editor-menu-button {
+    flex: 0 0 auto;
+  }
+
+  .editor-menu-popover,
+  .editor-submenu-popover,
+  .scene-canvas-context-menu,
+  .scene-canvas-toolbar-select-menu,
+  .visual-effect-cascade__menu,
+  .visual-effect-cascade__submenu {
+    width: min(320px, calc(100vw - 20px));
+    min-width: 0;
+    max-width: calc(100vw - 20px);
+    box-sizing: border-box;
+  }
+
+  .editor-menu-popover,
+  .editor-submenu-popover {
+    position: fixed;
+    left: 10px !important;
+    right: auto !important;
+  }
+
+  .anime-timeline {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .anime-timeline-scale,
+  .anime-track-list {
+    width: max(560px, 100%);
+    min-width: 560px;
+  }
+
+  .ai-refresh-button {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 760px) {
+  .player-shell:not(.is-fullscreen):not(.is-shared-player) .hero-setup-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 160;
+    place-items: start center;
+    overflow: auto;
+    padding: calc(env(safe-area-inset-top) + 10px) calc(env(safe-area-inset-right) + 10px) calc(env(safe-area-inset-bottom) + 10px) calc(env(safe-area-inset-left) + 10px);
+  }
+
+  .player-shell:not(.is-fullscreen):not(.is-shared-player) .hero-setup-card {
+    width: min(100%, 440px);
+    max-height: calc(100dvh - 20px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    overflow: auto;
+    grid-template-rows: none;
+  }
+}
+
+@media (max-width: 900px) and (orientation: landscape) {
+  .player-shell {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .player-side-panel {
+    display: none;
+  }
+
+  .player-topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 8px;
+    margin-bottom: 6px;
+    pointer-events: auto;
+  }
+
+  .player-topbar-title .eyebrow {
+    display: none;
+  }
+
+  .player-topbar-title strong {
+    margin-top: 0;
+    font-size: 13px;
+    line-height: 1.15;
+  }
+
+  .player-shell:is(.is-fullscreen, .is-shared-player) .player-topbar {
+    padding-block: 2px;
+  }
+
+  .player-actions-desktop {
+    display: none !important;
+  }
+
+  .player-mobile-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .player-mobile-actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    min-height: 44px !important;
+    padding: 8px 10px;
+    font-size: 13px;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .player-mobile-action-menu.is-open {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+    margin-top: 2px;
+    padding: 7px;
+    border: 1px solid rgba(148, 163, 184, .20);
+    border-radius: 12px;
+    background: rgba(8, 16, 30, .82);
+  }
+
+  .player-mobile-action-menu button {
+    min-width: 0;
+    min-height: 44px !important;
+    white-space: normal;
+  }
+
+  .player-stage-viewport {
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  .player-shell:not(.is-fullscreen):not(.is-shared-player) .hero-setup-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 160;
+    place-items: center;
+    overflow: auto;
+    padding: calc(env(safe-area-inset-top) + 8px) calc(env(safe-area-inset-right) + 10px) calc(env(safe-area-inset-bottom) + 8px) calc(env(safe-area-inset-left) + 10px);
+  }
+
+  .player-shell:not(.is-fullscreen):not(.is-shared-player) .hero-setup-card {
+    width: min(680px, calc(100vw - 20px));
+    max-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    overflow: auto;
+  }
+}
+
+@media (max-width: 760px), (max-width: 900px) and (orientation: landscape) {
+  .player-shell .player-mobile-actions button,
+  .player-shell .player-mobile-action-menu button,
+  .player-shell .player-actions button,
+  .player-shell .player-drawer-actions button,
+  .player-shell .hero-setup-actions button,
+  .player-shell .hero-setup-gallery-arrow,
+  .player-shell .secondary-action,
+  .player-shell .hero-dice-button {
+    min-height: 44px !important;
+  }
+
+  .hero-setup-gallery-arrow {
+    min-width: 44px;
+  }
+
+  .hero-setup-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+  }
+}
