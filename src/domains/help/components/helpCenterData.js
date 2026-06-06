@@ -68,7 +68,7 @@ export const HELP_FORUM_DEFAULT_POSTS = [
 
 export const HELP_TUTORIAL_OPTIONS = [
   ['guided_creation', 'Démarrage guidé', 'Construire la première boucle jouable sur le vrai projet : deux scènes, image, sortie cliquable, scène cible et test Preview.'],
-  ['profile', 'Profil', 'Comprendre le tableau dé bord, créer ou reprendre un projet, importer une sauvegarde, tester, partager et publier.'],
+  ['profile', 'Profil', 'Comprendre le tableau de bord, créer ou reprendre un projet, publier, organiser les médias, suivre les badges et, pour les comptes Pro, gérer les extensions.'],
   ['scenes', 'Scènes', 'Créer une scène, utiliser le canvas, poser des objets visibles, régler les zones d’action et tester le résultat.'],
   ['media', 'Média', 'Régler les images, sons, effets globaux, transitions, minuteurs et aperçus de scène.'],
   ['map', 'Plan', 'Organiser les pièces, relier le parcours, vérifier les connexions réelles et repérer les scènes isolées.'],

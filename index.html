@@ -3,35 +3,169 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Escape Game Builder - Créer un escape game en ligne avec IA</title>
+    <title>Créer, tester, valider et publier un escape game sans coder | Escape Game Builder</title>
     <meta
       name="description"
-      content="Escape Game Builder permet de créer, publier et tester des escape games interactifs avec scènes, énigmes, objets, cinématiques, IA, galerie publique et export jouable."
+      content="Crée, teste, corrige, valide et publie un escape game interactif sans coder. Plan visuel, simulation de parcours, détection des blocages et bilan automatique."
+    />
+    <meta
+      name="keywords"
+      content="créer un escape game en ligne, créer un escape game sans coder, logiciel escape game pédagogique, studio no-code escape game, prototyper escape game, test parcours joueur, bilan automatique escape game, plan interactif escape game, escape game pour formateur"
     />
     <meta name="robots" content="index, follow, max-image-preview:large" />
     <meta name="author" content="Escape Game Builder" />
+    <meta name="application-name" content="Escape Game Builder" />
+    <meta name="apple-mobile-web-app-title" content="Escape Game Builder" />
     <meta name="theme-color" content="#08101e" />
     <link rel="canonical" href="/" data-seo-canonical vite-ignore />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="fr_FR" />
     <meta property="og:url" content="/" data-seo-og-url />
-    <meta property="og:title" content="Escape Game Builder - Créer un escape game en ligne avec IA" />
+    <meta property="og:title" content="Créer, tester, valider et publier un escape game sans coder" />
     <meta
       property="og:description"
-      content="Un builder complet pour créer des escape games interactifs: scènes, énigmes, objets, cinématiques, IA, galerie publique et export jouable."
+      content="Un studio no-code spécialisé pour créer, tester, diagnostiquer et publier des escape games interactifs."
     />
     <meta property="og:site_name" content="Escape Game Builder" />
     <meta property="og:image" content="/og-image.png" />
+    <meta property="og:image:secure_url" content="/og-image.png" />
+    <meta property="og:image:width" content="2048" />
+    <meta property="og:image:height" content="440" />
+    <meta property="og:image:alt" content="Escape Game Builder - Créer, tester, valider et publier un escape game" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Escape Game Builder - Créer un escape game en ligne avec IA" />
+    <meta name="twitter:title" content="Créer, tester, valider et publier un escape game sans coder" />
     <meta
       name="twitter:description"
-      content="Crée, teste, publie et exporte tes escape games interactifs avec IA."
+      content="Plan visuel, simulation de parcours, détection des blocages, bilan automatique et publication d'escape games en ligne."
     />
     <meta name="twitter:image" content="/og-image.png" />
+    <meta name="twitter:image:alt" content="Escape Game Builder - Créer, tester, valider et publier un escape game" />
+    <script type="application/ld+json" data-seo-jsonld>
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://escape-game-builder.netlify.app/#organization",
+            "name": "Escape Game Builder",
+            "url": "https://escape-game-builder.netlify.app/",
+            "logo": "https://escape-game-builder.netlify.app/og-image.png"
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://escape-game-builder.netlify.app/#website",
+            "url": "https://escape-game-builder.netlify.app/",
+            "name": "Escape Game Builder",
+            "description": "Studio no-code pour créer, tester, valider et publier des escape games interactifs en ligne.",
+            "inLanguage": "fr-FR",
+            "publisher": {
+              "@id": "https://escape-game-builder.netlify.app/#organization"
+            }
+          },
+          {
+            "@type": "SoftwareApplication",
+            "@id": "https://escape-game-builder.netlify.app/#software",
+            "name": "Escape Game Builder",
+            "applicationCategory": "GameApplication",
+            "operatingSystem": "Web",
+            "url": "https://escape-game-builder.netlify.app/",
+            "image": "https://escape-game-builder.netlify.app/og-image.png",
+            "description": "Crée, teste, corrige, valide et publie un escape game interactif sans coder. L'outil aide à prototyper des parcours pédagogiques, tester les liens, détecter les blocages et vérifier la cohérence du parcours joueur.",
+            "inLanguage": "fr-FR",
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "EUR"
+            },
+            "featureList": [
+              "Création d'escape game sans coder",
+              "Prototypage d'escape game pédagogique",
+              "Scènes interactives et zones cliquables",
+              "Énigmes, objets et inventaire",
+              "Plan de jeu et test des liens",
+              "Détection des blocages du parcours",
+              "Bilan automatique de cohérence",
+              "Contrôle de cohérence du parcours joueur",
+              "Prévisualisation joueur",
+              "Publication en galerie publique",
+              "Export jouable",
+              "Assistant IA optionnel"
+            ]
+          },
+          {
+            "@type": "FAQPage",
+            "@id": "https://escape-game-builder.netlify.app/#faq",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "Peut-on créer un escape game sans coder ?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Oui. Escape Game Builder propose un éditeur no-code avec scènes, objets, énigmes, règles conditionnelles, test des liens et prévisualisation joueur."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "La création d'un escape game est-elle gratuite ?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "La création, le test et la publication sont accessibles gratuitement. Les outils d'IA sont optionnels et utilisent des crédits."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Peut-on créer un escape game pédagogique en ligne ?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Oui. L'outil permet de prototyper un escape game pédagogique avec un parcours structuré, des énigmes, des objets, des consignes et des tests de cohérence avant publication."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "L'outil convient-il aux professionnels ?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Oui. Escape Game Builder peut servir d'atelier de production pour prestataires, formateurs, écoles, musées et collectivités qui veulent prototyper, tester et livrer des escape games interactifs."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Peut-on publier et partager un escape game ?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Oui. Les jeux peuvent être publiés dans la galerie publique, partagés avec les joueurs et exportés en version jouable."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    </script>
     <script type="module" src="/src/app/main.jsx"></script>
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <main>
+        <h1>Créer, tester, valider et publier un escape game sans coder</h1>
+        <p>
+          Escape Game Builder est un studio no-code pour prototyper des escape games interactifs et pédagogiques:
+          scènes, zones cliquables, énigmes, objets, inventaire, cinématiques, logique conditionnelle,
+          plan visuel, simulation du parcours joueur, bilan automatique, galerie publique et export jouable.
+        </p>
+        <p>
+          Crée gratuitement ton projet, teste les liens entre les scènes, détecte les blocages,
+          vérifie la cohérence du parcours joueur, publie ton jeu et partage-le avec des joueurs.
+          L'assistant IA reste optionnel pour accélérer la création.
+        </p>
+        <p>
+          <a href="/?gallery=1">Explorer la galerie publique</a>
+          ·
+          <a href="/conditions-utilisation.html">Conditions d'utilisation</a>
+          ·
+          <a href="/politique-confidentialite.html">Confidentialité</a>
+        </p>
+      </main>
+    </noscript>
   </body>
 </html>

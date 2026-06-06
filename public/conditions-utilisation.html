@@ -3,95 +3,165 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Conditions d'utilisation - Escape Game Builder</title>
+    <title>Conditions générales d'utilisation - Escape Game Builder</title>
+    <meta name="description" content="Conditions générales d'utilisation d'Escape Game Builder : compte, création de jeux, publication, crédits, IA, contenus et modération." />
     <style>
+      :root {
+        color-scheme: dark;
+        --bg: #071121;
+        --panel: #0d1b31;
+        --line: rgba(147, 197, 253, 0.24);
+        --text: #e5eefc;
+        --muted: #a8b8d6;
+        --accent: #93c5fd;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
       body {
         margin: 0;
         font-family: Arial, sans-serif;
-        line-height: 1.6;
-        color: #e5eefc;
-        background: #071121;
+        line-height: 1.65;
+        color: var(--text);
+        background: var(--bg);
       }
+
       main {
-        max-width: 920px;
+        max-width: 940px;
         margin: 0 auto;
         padding: 40px 20px 72px;
       }
-      h1, h2 {
+
+      header {
+        padding-bottom: 24px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      h1,
+      h2 {
         color: #ffffff;
         line-height: 1.2;
       }
+
       h1 {
+        margin: 0 0 8px;
         font-size: clamp(2rem, 5vw, 3.2rem);
-        margin-bottom: 8px;
       }
+
       h2 {
         margin-top: 32px;
       }
+
       a {
-        color: #93c5fd;
+        color: var(--accent);
       }
-      .note {
-        color: #a8b8d6;
+
+      ul {
+        padding-left: 22px;
+      }
+
+      .note,
+      footer {
+        color: var(--muted);
+      }
+
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      nav a {
+        display: inline-flex;
+        padding: 8px 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        text-decoration: none;
+        background: rgba(147, 197, 253, 0.08);
+      }
+
+      footer {
+        margin-top: 44px;
+        padding-top: 20px;
+        border-top: 1px solid var(--line);
       }
     </style>
   </head>
   <body>
     <main>
-      <h1>Conditions d'utilisation</h1>
-      <p class="note">Derniere mise a jour : 2 mai 2026</p>
-      <p>Bienvenue sur Escape Game Builder, une plateforme permettant de creer, tester, publier et partager des jeux narratifs, escape games, enigmes interactives et contenus associes.</p>
-      <p>En creant un compte ou en utilisant le service, vous acceptez les presentes conditions d'utilisation.</p>
+      <header>
+        <h1>Conditions générales d'utilisation</h1>
+        <p class="note">Dernière mise à jour : 6 juin 2026</p>
+        <p>Bienvenue sur Escape Game Builder, une plateforme de création, test, publication et partage de jeux narratifs, escape games, énigmes interactives et contenus associés.</p>
+        <p>En créant un compte, en utilisant le service ou en publiant un jeu, vous acceptez les présentes conditions générales d'utilisation.</p>
+        <nav aria-label="Navigation légale">
+          <a href="/">Accueil</a>
+          <a href="/politique-confidentialite.html">Politique de confidentialité</a>
+        </nav>
+      </header>
 
       <h2>1. Objet du service</h2>
-      <p>Escape Game Builder permet aux utilisateurs de creer des projets de jeux interactifs, ajouter des scenes, objets, enigmes, cinematiques, musiques et medias, tester leurs jeux, publier certains jeux dans une galerie publique, et utiliser certaines fonctionnalites d'aide a la creation.</p>
+      <p>Escape Game Builder permet notamment de créer des projets de jeux interactifs, d'ajouter des scènes, objets, énigmes, cinématiques, musiques, médias, règles logiques et profils auteur, de tester les jeux, de les publier dans une galerie publique ou de les partager via des liens dédiés.</p>
 
       <h2>2. Compte utilisateur</h2>
-      <p>L'utilisateur doit fournir des informations exactes lors de son inscription. Il est responsable de la confidentialite de son mot de passe et de l'activite realisee depuis son compte.</p>
+      <p>L'utilisateur doit fournir des informations exactes lors de son inscription et maintenir ses informations à jour. Il est responsable de la confidentialité de son mot de passe et de l'activité réalisée depuis son compte.</p>
+      <p>Si l'utilisateur pense que son compte a été compromis, il doit modifier son mot de passe dès que possible et contacter le support via les outils disponibles dans le service.</p>
 
-      <h2>3. Age et contenus sensibles</h2>
-      <p>L'utilisateur qui publie un jeu doit choisir une mention d'age adaptee. Les contenus illegaux, discriminatoires, haineux, sexuels explicites, diffamatoires ou portant atteinte aux mineurs sont interdits.</p>
+      <h2>3. Âge et responsabilité</h2>
+      <p>Le service s'adresse aux créateurs, joueurs, formateurs, enseignants, structures culturelles, prestataires et équipes qui souhaitent concevoir des expériences interactives. Les mineurs doivent utiliser le service avec l'autorisation et sous la responsabilité d'un représentant légal ou d'un encadrant habilité.</p>
 
-      <h2>4. Contenus crees par les utilisateurs</h2>
-      <p>L'utilisateur conserve ses droits sur les contenus qu'il cree ou importe. En publiant un jeu dans la galerie, il autorise Escape Game Builder a afficher, heberger et rendre accessible ce jeu aux autres utilisateurs.</p>
-      <p>L'utilisateur garantit disposer des droits necessaires sur les images, sons, textes, musiques, videos, prompts et autres elements utilises.</p>
+      <h2>4. Contenus créés ou importés</h2>
+      <p>L'utilisateur conserve ses droits sur les contenus qu'il crée ou importe : textes, images, sons, vidéos, musiques, modèles, scénarios, prompts, fichiers et autres éléments de jeu.</p>
+      <p>L'utilisateur garantit disposer des droits nécessaires sur les éléments utilisés et s'engage à ne pas importer, publier ou partager de contenu illicite, contrefaisant, diffamatoire, discriminatoire, haineux, sexuellement explicite, trompeur, dangereux, portant atteinte aux mineurs ou aux droits de tiers.</p>
 
-      <h2>5. Publication dans la galerie</h2>
-      <p>Lorsqu'un jeu est publie, une version publique du jeu est creee. Les modifications ulterieures du projet ne sont pas automatiquement appliquees a la galerie. Pour mettre a jour la version publique, l'utilisateur doit utiliser le bouton de mise a jour.</p>
-      <p>L'utilisateur peut retirer son jeu de la galerie sans supprimer son projet prive.</p>
+      <h2>5. Publication et galerie publique</h2>
+      <p>Lorsqu'un jeu est publié, une version publique peut être rendue accessible aux autres utilisateurs et visiteurs. Cette version peut inclure le titre du jeu, sa description, son âge conseillé, sa catégorie, son aperçu, son contenu jouable et certaines informations de profil auteur.</p>
+      <p>L'utilisateur peut retirer son jeu de la galerie sans nécessairement supprimer son projet privé. Les modifications faites dans l'éditeur ne sont pas toujours appliquées automatiquement à la version publique : une action de mise à jour peut être nécessaire.</p>
 
-      <h2>6. Credits et fonctionnalites payantes</h2>
-      <p>Le service peut proposer un systeme de credits permettant d'acceder a certaines fonctionnalites. Les credits n'ont pas de valeur monetaire en dehors du service, ne constituent pas une monnaie reelle et ne sont pas transferables sauf fonctionnalite explicitement prevue.</p>
+      <h2>6. Licence accordée au service</h2>
+      <p>Pour permettre l'hébergement, l'affichage, la sauvegarde, la publication, le partage et la lecture des jeux, l'utilisateur accorde à Escape Game Builder une licence non exclusive, gratuite et limitée aux besoins de fonctionnement du service sur les contenus qu'il rend accessibles via la plateforme.</p>
 
-      <h2>7. Remuneration des createurs</h2>
-      <p>Sauf fonctionnalite explicitement activee et encadree, la publication de jeux ne donne pas automatiquement droit a une remuneration. Si un systeme de remuneration est mis en place ulterieurement, des conditions specifiques seront ajoutees.</p>
+      <h2>7. Crédits, stockage et fonctionnalités payantes</h2>
+      <p>Le service peut proposer des crédits, extensions, quotas de stockage, options professionnelles ou fonctionnalités payantes. Les crédits ne constituent pas une monnaie réelle, ne sont pas échangeables contre de l'argent et ne sont utilisables que dans le cadre du service, sauf indication contraire explicite.</p>
+      <p>Les conditions de prix, d'accès, de durée, de remboursement ou de paiement peuvent dépendre de l'offre présentée au moment de l'achat et du prestataire de paiement utilisé.</p>
 
-      <h2>8. Intelligence artificielle</h2>
-      <p>Certaines fonctionnalites peuvent utiliser l'intelligence artificielle pour aider a creer des images, textes, idees, scenes, objets ou structures de jeu. L'utilisateur reste responsable de verifier, modifier et valider les contenus generes avant publication.</p>
+      <h2>8. Rémunération des créateurs</h2>
+      <p>Sauf fonctionnalité explicitement activée et encadrée, la publication de jeux ne donne pas automatiquement droit à une rémunération. Si un système de rémunération ou de partage de revenus est mis en place, des conditions spécifiques devront être ajoutées.</p>
 
-      <h2>9. Donnees personnelles</h2>
-      <p>Le service peut collecter certaines donnees necessaires au fonctionnement du compte, a la sauvegarde des projets, a la securite, aux credits, aux publications et aux communications liees au service. Les details doivent etre presentes dans une politique de confidentialite separee.</p>
+      <h2>9. Intelligence artificielle</h2>
+      <p>Certaines fonctionnalités peuvent utiliser l'intelligence artificielle pour aider à générer ou améliorer des textes, images, idées, scènes, objets, structures de jeu ou éléments d'analyse. L'utilisateur reste responsable de relire, corriger, vérifier les droits et valider les contenus générés avant publication ou diffusion.</p>
+      <p>L'utilisateur ne doit pas transmettre à l'IA des données sensibles, confidentielles ou appartenant à des tiers sans autorisation.</p>
 
-      <h2>10. Disponibilite du service</h2>
-      <p>Escape Game Builder fait ses meilleurs efforts pour rester accessible, mais ne garantit pas un fonctionnement permanent, sans erreur ou sans interruption.</p>
+      <h2>10. Données personnelles</h2>
+      <p>Le traitement des données personnelles est détaillé dans la <a href="/politique-confidentialite.html">politique de confidentialité</a>. Elle précise les catégories de données traitées, les finalités, les prestataires possibles, les durées de conservation et les droits des utilisateurs.</p>
 
-      <h2>11. Sauvegarde des projets</h2>
-      <p>L'utilisateur est invite a exporter regulierement ses projets importants. Escape Game Builder ne garantit pas l'absence totale de perte de donnees.</p>
+      <h2>11. Comportements interdits</h2>
+      <p>Il est interdit de tenter d'accéder au compte d'un tiers, de contourner les limitations techniques, de perturber la plateforme, d'extraire massivement des contenus, de publier des contenus interdits, d'usurper une identité, de harceler d'autres utilisateurs, de détourner les crédits ou de porter atteinte à la sécurité du service.</p>
 
-      <h2>12. Comportements interdits</h2>
-      <p>Il est interdit de tenter d'acceder au compte d'un autre utilisateur, contourner les limitations techniques ou de credits, publier du contenu illegal ou nuisible, harceler, tromper, copier massivement les contenus d'autres utilisateurs ou perturber la plateforme.</p>
+      <h2>12. Modération, suspension et suppression</h2>
+      <p>Escape Game Builder peut modérer, masquer, dépublier, suspendre ou supprimer un compte, un jeu, un profil ou un contenu en cas de violation des présentes conditions, de signalement sérieux, de risque juridique, de fraude, d'abus, d'atteinte aux droits d'un tiers ou de menace pour la sécurité du service.</p>
 
-      <h2>13. Suspension ou suppression</h2>
-      <p>Escape Game Builder peut suspendre ou supprimer un compte, un jeu ou un contenu en cas de violation des presentes conditions, usage frauduleux, publication de contenu interdit, atteinte aux droits d'un tiers ou comportement abusif.</p>
+      <h2>13. Disponibilité et sauvegardes</h2>
+      <p>Escape Game Builder fait ses meilleurs efforts pour rester accessible, mais ne garantit pas un fonctionnement permanent, sans erreur ou sans interruption. L'utilisateur est invité à exporter régulièrement ses projets importants et à conserver ses propres sauvegardes.</p>
 
-      <h2>14. Modification des conditions</h2>
-      <p>Les presentes conditions peuvent etre modifiees pour tenir compte de l'evolution du service, de la loi ou des fonctionnalites proposees.</p>
+      <h2>14. Responsabilité</h2>
+      <p>Le service est fourni comme outil de création et d'hébergement. L'utilisateur reste responsable de ses contenus, de leur conformité, des autorisations nécessaires, de l'usage fait des jeux publiés et des conséquences liées à leur diffusion.</p>
 
-      <h2>15. Contact</h2>
-      <p>Pour toute question concernant le service, un compte, un contenu publie ou une demande liee aux donnees personnelles, contactez l'administrateur du site.</p>
+      <h2>15. Évolution des conditions</h2>
+      <p>Les présentes conditions peuvent être modifiées pour tenir compte de l'évolution du service, de la loi, des offres, des prestataires ou des fonctionnalités proposées. La version publiée sur cette page est la version applicable au moment de sa consultation.</p>
 
-      <h2>16. Acceptation</h2>
-      <p>En cochant la case "J'accepte les conditions d'utilisation" lors de l'inscription, l'utilisateur reconnait avoir lu et accepte les presentes conditions.</p>
+      <h2>16. Contact</h2>
+      <p>Pour toute question concernant le service, un compte, un contenu publié, une demande de support ou une demande liée aux données personnelles, l'utilisateur peut contacter l'administrateur du site via les moyens de contact disponibles dans l'application.</p>
+
+      <h2>17. Acceptation</h2>
+      <p>En cochant la case d'acceptation lors de l'inscription ou en continuant à utiliser le service, l'utilisateur reconnaît avoir lu, compris et accepté les présentes conditions.</p>
+
+      <footer>
+        <p>Escape Game Builder - Conditions générales d'utilisation.</p>
+      </footer>
     </main>
   </body>
 </html>
