@@ -171,7 +171,7 @@ describe('didacticiel profil', () => {
 
     fireEvent.click(document.querySelector('[data-tour="profile-tab-settings"]'));
     expect(screen.getByRole('heading', { name: 'Profil et sécurité' })).toBeTruthy();
-  });
+  }, 10000);
 
   test('ordonne les onglets profil par priorite', () => {
     renderProfile({

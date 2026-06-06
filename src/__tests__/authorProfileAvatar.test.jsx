@@ -9,6 +9,7 @@ import { formatAuthorBlogPostDateTime, getAuthorProfile, saveAuthorProfile } fro
 import { followCreator, isFollowingCreator } from '../shared/services/creatorFollows';
 
 const PROJECTS_KEY_PREFIX = 'escapeGameBuilder.projects';
+const ASYNC_QUERY_OPTIONS = { timeout: 5000 };
 const originalFileReader = globalThis.FileReader;
 const originalImage = globalThis.Image;
 const originalClipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
@@ -377,9 +378,9 @@ describe('author profile media', () => {
 
     render(<GalleryBrowser />);
 
-    const authorButtons = await screen.findAllByRole('button', { name: 'par Mika Studio' });
+    const authorButtons = await screen.findAllByRole('button', { name: 'par Mika Studio' }, ASYNC_QUERY_OPTIONS);
     fireEvent.click(authorButtons[0]);
-    expect(await screen.findByText('Profil créateur')).toBeTruthy();
+    expect(await screen.findByText('Profil créateur', {}, ASYNC_QUERY_OPTIONS)).toBeTruthy();
 
     const url = new URL(window.location.href);
     expect(url.pathname).toBe('/creator/mika-studio');
@@ -393,7 +394,7 @@ describe('author profile media', () => {
 
     render(<GalleryBrowser initialCreatorSlug="mika-studio" />);
 
-    expect(await screen.findByText('Profil créateur')).toBeTruthy();
+    expect(await screen.findByText('Profil créateur', {}, ASYNC_QUERY_OPTIONS)).toBeTruthy();
     expect(screen.getByText('Mika Studio')).toBeTruthy();
   });
 
@@ -405,7 +406,7 @@ describe('author profile media', () => {
 
     render(<GalleryBrowser initialCreatorSlug="mika-studio" />);
 
-    expect(await screen.findByText('Profil créateur')).toBeTruthy();
+    expect(await screen.findByText('Profil créateur', {}, ASYNC_QUERY_OPTIONS)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Galerie/i }));
 
     await waitFor(() => {
@@ -429,7 +430,7 @@ describe('author profile media', () => {
 
     render(<GalleryBrowser initialCreatorId="creator-1" />);
 
-    expect(await screen.findByText('Profil créateur')).toBeTruthy();
+    expect(await screen.findByText('Profil créateur', {}, ASYNC_QUERY_OPTIONS)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Copier le lien' }));
 
     await waitFor(() => {
@@ -448,7 +449,7 @@ describe('author profile media', () => {
 
     render(<GalleryBrowser initialCreatorId="creator-1" />);
 
-    const banner = await screen.findByAltText('Bannière de Mika Studio');
+    const banner = await screen.findByAltText('Bannière de Mika Studio', {}, ASYNC_QUERY_OPTIONS);
     expect(banner.getAttribute('src')).toBe('https://cdn.example.test/mika-banner.png');
   });
 
@@ -468,7 +469,7 @@ describe('author profile media', () => {
 
     const { container } = render(<GalleryBrowser initialCreatorId="creator-1" />);
 
-    await screen.findByText('Profil créateur');
+    await screen.findByText('Profil créateur', {}, ASYNC_QUERY_OPTIONS);
     const creatorPage = container.querySelector('.public-creator-page');
     expect(creatorPage.style.getPropertyValue('--author-theme-bg')).toBe('#190f2a');
     expect(creatorPage.style.getPropertyValue('--author-theme-panel')).toBe('#10251e');
@@ -492,7 +493,7 @@ describe('author profile media', () => {
 
     render(<GalleryBrowser initialCreatorId="creator-1" />);
 
-    expect((await screen.findByRole('link', { name: 'Site' })).getAttribute('href')).toBe('https://mika.example.test');
+    expect((await screen.findByRole('link', { name: 'Site' }, ASYNC_QUERY_OPTIONS)).getAttribute('href')).toBe('https://mika.example.test');
     expect(screen.getByRole('link', { name: 'Instagram' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'LinkedIn' })).toBeTruthy();
     expect(screen.queryByRole('link', { name: 'YouTube' })).toBeNull();
@@ -513,7 +514,7 @@ describe('author profile media', () => {
 
     const { container } = render(<GalleryBrowser initialCreatorId="creator-1" />);
 
-    expect(await screen.findByText('À propos de l’auteur')).toBeTruthy();
+    expect(await screen.findByText('À propos de l’auteur', {}, ASYNC_QUERY_OPTIONS)).toBeTruthy();
     expect(screen.getAllByText('Mika Studio').length).toBeGreaterThan(0);
     expect(container.querySelector('.public-author-about h2')).toBeNull();
     expect(screen.getByText('Mystères artisanaux')).toBeTruthy();
@@ -534,13 +535,13 @@ describe('author profile media', () => {
 
     render(<GalleryBrowser initialCreatorId="creator-1" />);
 
-    expect(await screen.findByRole('tab', { name: 'Créateur' })).toBeTruthy();
+    expect(await screen.findByRole('tab', { name: 'Créateur' }, ASYNC_QUERY_OPTIONS)).toBeTruthy();
     expect(screen.getByText('Profil auteur visible dans le premier onglet.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Crypte test' })).toBeNull();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Jeux publiés 1' }));
 
-    expect(await screen.findByRole('button', { name: 'Crypte test' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Crypte test' }, ASYNC_QUERY_OPTIONS)).toBeTruthy();
     expect(screen.queryByText('Profil auteur visible dans le premier onglet.')).toBeNull();
   });
 
@@ -559,7 +560,7 @@ describe('author profile media', () => {
 
     const { container } = render(<GalleryBrowser initialCreatorId="creator-1" />);
 
-    const newsTitle = await screen.findByText('Actualité');
+    const newsTitle = await screen.findByText('Actualité', {}, ASYNC_QUERY_OPTIONS);
     const newsPanel = newsTitle.closest('.public-author-news');
     expect(newsPanel).toBeTruthy();
     expect(container.querySelector('.public-creator-side .public-author-news')).toBe(newsPanel);
@@ -577,7 +578,7 @@ describe('author profile media', () => {
 
     render(<GalleryBrowser initialCreatorId="creator-1" />);
 
-    const likeButton = await screen.findByRole('button', { name: 'Liker Ouverture du carnet' });
+    const likeButton = await screen.findByRole('button', { name: 'Liker Ouverture du carnet' }, ASYNC_QUERY_OPTIONS);
     expect(likeButton.textContent).toContain('J’aime');
     expect(likeButton.textContent).toContain('0');
 

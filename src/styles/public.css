@@ -1,11 +1,11 @@
-﻿.shared-player-header {
+﻿.public-gallery-shell .shared-player-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 16px;
   margin-bottom: 14px;
 }
-.shared-player-header h2 { margin: 4px 0 0; }
+.public-gallery-shell .shared-player-header h2 { margin: 4px 0 0; }
 
 .public-gallery-shell {
   min-height: 100vh;
@@ -76,7 +76,7 @@
   position: relative;
 }
 
-.author-profile-share-strip {
+.public-gallery-shell .author-profile-share-strip {
   display: grid;
   grid-template-columns: minmax(180px, .36fr) minmax(0, 1fr);
   gap: 12px;
@@ -88,17 +88,17 @@
   background: rgba(8, 18, 37, .66);
 }
 
-.author-profile-share-strip label {
+.public-gallery-shell .author-profile-share-strip label {
   color: #f8fafc;
   font-size: 13px;
   font-weight: 900;
 }
 
-.author-profile-share-strip .small-note {
+.public-gallery-shell .author-profile-share-strip .small-note {
   margin: 2px 0 0;
 }
 
-.author-profile-share-row {
+.public-gallery-shell .author-profile-share-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
@@ -106,14 +106,14 @@
   min-width: 0;
 }
 
-.author-profile-share-row input {
+.public-gallery-shell .author-profile-share-row input {
   min-width: 0;
   margin: 0;
   color: #bfdbfe;
   background: rgba(2, 6, 23, .72);
 }
 
-.author-profile-copy-link,
+.public-gallery-shell .author-profile-copy-link,
 .public-copy-profile-button {
   display: inline-flex;
   align-items: center;
@@ -995,12 +995,12 @@
     white-space: normal;
   }
 
-  .author-profile-share-strip,
-  .author-profile-share-row {
+  .public-gallery-shell .author-profile-share-strip,
+  .public-gallery-shell .author-profile-share-row {
     grid-template-columns: 1fr;
   }
 
-  .author-profile-copy-link {
+  .public-gallery-shell .author-profile-copy-link {
     width: 100%;
   }
 }
