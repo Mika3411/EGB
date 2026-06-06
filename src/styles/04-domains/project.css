@@ -2935,3 +2935,96 @@
 .ai-chronology-row span{color:#bfdbfe;font-weight:800;text-align:center}
 
 @media (max-width: 980px){.ai-narrative-columns{grid-template-columns:1fr}}
+
+@media (max-width: 760px), (max-width: 900px) and (orientation: landscape){
+  .hero-editor-layout,
+  .combat-editor-layout{
+    grid-template-columns:minmax(0,1fr);
+    width:100%;
+    max-width:100%;
+    overflow-x:clip;
+  }
+
+  .hero-editor-summary,
+  .hero-editor-main,
+  .combat-editor-summary,
+  .combat-editor-main,
+  .hero-roster-panel,
+  .hero-editor-main .subpanel,
+  .combat-editor-main .subpanel{
+    min-width:0;
+    max-width:100%;
+    box-sizing:border-box;
+  }
+
+  .hero-internal-tabs,
+  .combat-editor-tabs{
+    max-width:100%;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+
+  .hero-editor-main .hero-internal-tabs button,
+  .combat-editor-main .combat-editor-tabs button,
+  .combat-editor-main .combat-mode-switch button,
+  .hero-editor-main .hero-skill-delete,
+  .combat-editor-main .secondary-action.compact,
+  .hero-editor-main .secondary-action.compact{
+    min-height:44px!important;
+    line-height:1.15;
+    white-space:normal;
+    overflow-wrap:anywhere;
+  }
+
+  .hero-editor-main .hero-skill-delete{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+  }
+
+  .hero-editor-main .button.like,
+  .hero-editor-main button,
+  .combat-editor-main .button.like,
+  .combat-editor-main button,
+  .combat-editor-summary button{
+    max-width:100%;
+  }
+
+  .hero-power-editor,
+  .hero-skill-editor,
+  .hero-equipment-slot-editor-card,
+  .hero-character-page--editor,
+  .combat-config-card,
+  .combat-enemy-section,
+  .combat-hero-skill-row{
+    width:100%;
+    max-width:100%;
+    box-sizing:border-box;
+  }
+}
+
+@media (max-width: 900px) and (orientation: landscape){
+  .hero-editor-main .hero-internal-tabs{
+    display:flex;
+    flex-wrap:nowrap;
+  }
+
+  .hero-editor-main .hero-internal-tabs button{
+    flex:0 0 auto;
+  }
+
+  .hero-roster-panel .toolbar,
+  .hero-editor-main .subpanel-head .toolbar{
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+    width:100%;
+  }
+
+  .hero-roster-panel .toolbar button,
+  .hero-editor-main .subpanel-head button,
+  .hero-editor-main .button.like,
+  .hero-editor-main .secondary-action.full{
+    width:100%;
+    justify-content:center;
+  }
+}
