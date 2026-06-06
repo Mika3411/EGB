@@ -21,7 +21,6 @@ import {
 import {
   ACCOUNT_FREE_STORAGE_BYTES,
   formatStorageSize,
-  getStorageQuotaBytes,
 } from '../../shared/services/storageQuota';
 import {
   ACCOUNT_TYPE_PERSONAL,
@@ -30,8 +29,6 @@ import {
   getAccountTypeLabel,
 } from '../../shared/services/accountPlans';
 import {
-  SUPPORT_STATUSES,
-  getSupportCategoryLabel,
   getSupportStatusLabel,
   loadAdminSupportThreads,
   replyToSupportThread,
@@ -46,54 +43,18 @@ import {
   relistSharedShopPack,
   upsertSharedShopPack,
 } from '../../shared/services/shopPacksStorage';
-import AdminShopPackLists from './AdminShopPackLists.jsx';
-
-const formatDate = (value) => {
-  if (!value) return 'Jamais';
-  try {
-    return new Intl.DateTimeFormat('fr-FR', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(new Date(value));
-  } catch {
-    return 'Date inconnue';
-  }
-};
-
-const formatNumber = (value) => new Intl.NumberFormat('fr-FR').format(Number(value || 0));
-
-const MB = 1024 * 1024;
-const ONLINE_WINDOW_MS = 15 * 60 * 1000;
-
-const getAccountStorageQuotaBytes = (account = {}) => getStorageQuotaBytes({
-  storageQuotaBytes: account?.credits?.storageQuotaBytes,
-  account,
-});
-
-const getProviderLabel = (provider = '') => ({
-  supabase: 'Supabase',
-  local: 'Local',
-  credits: 'Crédits seuls',
-}[provider] || provider || 'Inconnu');
-
-const getLastConnectionDate = (account = {}) => (
-  account.lastSignInAt || account.lastLoginAt || account.updatedAt || ''
-);
-
-const isAccountOnline = (account = {}) => {
-  if (account.status === 'disabled') return false;
-  const time = new Date(getLastConnectionDate(account)).getTime();
-  return Number.isFinite(time) && Date.now() - time <= ONLINE_WINDOW_MS;
-};
-
-const getPresenceLabel = (account = {}) => (isAccountOnline(account) ? 'En ligne' : 'Hors ligne');
-
-const getAccountTypeActionLabel = (account = {}) => (
-  getAccountType(account) === ACCOUNT_TYPE_PRO ? 'Reléguer en particulier' : 'Promouvoir en Pro'
-);
+import AdminShopPanel from './AdminShopPanel.jsx';
+import AdminSupportPanel from './AdminSupportPanel.jsx';
+import {
+  MB,
+  formatDate,
+  formatNumber,
+  getAccountStorageQuotaBytes,
+  getAccountTypeActionLabel,
+  getLastConnectionDate,
+  getPresenceLabel,
+  getProviderLabel,
+} from './adminConsoleFormatters';
 
 const SHOP_PACK_NUMBER_FIELDS = [
   'costCredits',
@@ -1288,225 +1249,37 @@ export default function AdminConsole({
       ) : null}
 
       {activeTab === 'support' ? (
-        <section className="panel admin-support-panel">
-          <div className="panel-head">
-            <div>
-              <span className="eyebrow">Messagerie</span>
-              <h2>Support utilisateurs</h2>
-              <p className="small-note">{supportThreads.length} conversation{supportThreads.length > 1 ? 's' : ''}, dont {openSupportThreads.length} ouverte{openSupportThreads.length > 1 ? 's' : ''}.</p>
-            </div>
-            <button type="button" className="secondary-action" onClick={refreshSupportThreads} disabled={isBusy}>
-              Actualiser
-            </button>
-          </div>
-
-          {supportThreads.length ? (
-            <div className="admin-support-layout">
-              <aside className="support-thread-list admin-support-thread-list" aria-label="Messages support">
-                {supportThreads.map((thread) => {
-                  const lastMessage = thread.messages?.[thread.messages.length - 1];
-                  return (
-                    <button
-                      type="button"
-                      key={thread.id}
-                      className={`support-thread-button ${selectedSupportThread?.id === thread.id ? 'active' : ''}`}
-                      onClick={() => setSelectedSupportThreadId(thread.id)}
-                    >
-                      <span>{getSupportCategoryLabel(thread.category)}</span>
-                      <strong>{thread.subject}</strong>
-                      <small>{thread.userName} - {thread.userEmail || thread.userId}</small>
-                      <em>{getSupportStatusLabel(thread.status)} - {formatDate(thread.updatedAt)}</em>
-                      {lastMessage?.authorRole === 'user' && thread.status !== 'closed' ? (
-                        <b>À répondre</b>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </aside>
-
-              <article className="support-conversation admin-support-conversation">
-                <div className="support-conversation-head">
-                  <div>
-                    <span className="status-badge soft">{selectedSupportThread ? getSupportCategoryLabel(selectedSupportThread.category) : 'Support'}</span>
-                    <h3>{selectedSupportThread?.subject || 'Conversation'}</h3>
-                    <p className="small-note">
-                      {selectedSupportThread?.userName || 'Utilisateur'} - {selectedSupportThread?.userEmail || selectedSupportThread?.userId || ''}
-                    </p>
-                  </div>
-                  <span className={`support-status-pill status-${selectedSupportThread?.status || 'open'}`}>
-                    {getSupportStatusLabel(selectedSupportThread?.status)}
-                  </span>
-                </div>
-
-                {selectedSupportThread?.pageUrl ? (
-                  <a className="support-context-link" href={selectedSupportThread.pageUrl} target="_blank" rel="noreferrer">
-                    Ouvrir la page signalée
-                  </a>
-                ) : null}
-
-                <div className="support-message-list">
-                  {(selectedSupportThread?.messages || []).map((message) => (
-                    <div
-                      key={message.id}
-                      className={`support-message-bubble ${message.authorRole === 'admin' ? 'is-admin' : 'is-user'}`}
-                    >
-                      <div>
-                        <strong>{message.authorRole === 'admin' ? 'Support' : message.authorName}</strong>
-                        <span>{formatDate(message.createdAt)}</span>
-                      </div>
-                      <p>{message.body}</p>
-                    </div>
-                  ))}
-                </div>
-
-                <form className="support-reply-form" onSubmit={submitSupportReply}>
-                  <label>
-                    Réponse admin
-                    <textarea
-                      value={supportReplyDraft}
-                      maxLength={2400}
-                      placeholder="Répondre à l'utilisateur..."
-                      onChange={(event) => setSupportReplyDraft(event.target.value)}
-                    />
-                  </label>
-                  <div className="admin-support-actions">
-                    <button type="submit" className="profile-action-button" disabled={!supportReplyDraft.trim() || isBusy}>
-                      Envoyer la réponse
-                    </button>
-                    <select
-                      value={selectedSupportThread?.status || 'open'}
-                      onChange={(event) => setSupportStatus(event.target.value)}
-                      disabled={!selectedSupportThread || isBusy}
-                      aria-label="Statut de la conversation"
-                    >
-                      {SUPPORT_STATUSES.map(([value, label]) => (
-                        <option key={value} value={value}>{label}</option>
-                      ))}
-                    </select>
-                  </div>
-                </form>
-              </article>
-            </div>
-          ) : (
-            <div className="empty-state-inline">
-              <strong>Aucun message support.</strong>
-            </div>
-          )}
-        </section>
+        <AdminSupportPanel
+          isBusy={isBusy}
+          openSupportThreads={openSupportThreads}
+          refreshSupportThreads={refreshSupportThreads}
+          selectedSupportThread={selectedSupportThread}
+          setSelectedSupportThreadId={setSelectedSupportThreadId}
+          setSupportReplyDraft={setSupportReplyDraft}
+          setSupportStatus={setSupportStatus}
+          submitSupportReply={submitSupportReply}
+          supportReplyDraft={supportReplyDraft}
+          supportThreads={supportThreads}
+        />
       ) : null}
 
       {activeTab === 'shop' ? (
-        <section className="panel admin-shop-panel">
-          <div className="panel-head">
-            <div>
-              <span className="eyebrow">Boutique</span>
-              <h2>Packs de jeux</h2>
-              <p className="small-note">Crée des fiches produit avec coût en crédits, contenu du pack et screenshots.</p>
-            </div>
-            <button type="button" className="secondary-action" onClick={() => setShopPackForm(createEmptyShopPack())}>
-              Nouveau pack
-            </button>
-          </div>
-
-          <div className="admin-shop-grid">
-            <form className="subpanel admin-shop-form" onSubmit={saveShopPack}>
-              <div className="subpanel-head">
-                <div>
-                  <h3>{shopPackForm.id ? 'Modifier le pack' : 'Ajouter un pack'}</h3>
-                  <p className="small-note">Les champs numériques alimentent la fiche produit.</p>
-                </div>
-              </div>
-
-              <label>Nom du pack</label>
-              <input
-                value={shopPackForm.title}
-                onChange={(event) => updateShopPackForm('title', event.target.value)}
-                placeholder="Ex: Manoir victorien"
-              />
-
-              <div className="grid-two compact-grid">
-                <label>
-                  Coût en crédits
-                  <input type="number" min="0" value={shopPackForm.costCredits} onChange={(event) => updateShopPackForm('costCredits', event.target.value)} />
-                </label>
-                <label>
-                  Note /10
-                  <input type="number" min="0" max="10" step="0.1" value={shopPackForm.rating} onChange={(event) => updateShopPackForm('rating', event.target.value)} />
-                </label>
-              </div>
-
-              <label>Descriptif</label>
-              <textarea
-                rows={5}
-                value={shopPackForm.description}
-                onChange={(event) => updateShopPackForm('description', event.target.value)}
-                placeholder="Résumé du pack, ambiance, type d'énigmes, public cible..."
-              />
-
-              <div className="admin-pack-metrics-form">
-                {[
-                  ['actsCount', 'Actes'],
-                  ['scenesCount', 'Scènes'],
-                  ['objectsCount', 'Objets'],
-                  ['enigmasCount', 'Énigmes'],
-                  ['cinematicsCount', 'Cinématiques'],
-                  ['combinationsCount', 'Combinaisons'],
-                ].map(([field, label]) => (
-                  <label key={field}>
-                    {label}
-                    <input type="number" min="0" value={shopPackForm[field]} onChange={(event) => updateShopPackForm(field, event.target.value)} />
-                  </label>
-                ))}
-              </div>
-
-              <label>
-                Screenshots
-                <input type="file" accept="image/*" multiple onChange={addShopPackScreenshots} />
-              </label>
-
-              {shopPackForm.screenshots?.length ? (
-                <div className="admin-screenshot-grid">
-                  {shopPackForm.screenshots.map((screenshot) => (
-                    <figure key={screenshot.id}>
-                      <img src={screenshot.src} alt={screenshot.name || 'Screenshot'} />
-                      <button type="button" className="secondary-action" onClick={() => removeShopPackScreenshot(screenshot.id)}>
-                        Retirer
-                      </button>
-                    </figure>
-                  ))}
-                </div>
-              ) : null}
-
-              <label>
-                ZIP téléchargeable
-                <input type="file" accept=".zip,application/zip,application/x-zip-compressed" onChange={importShopPackZip} />
-              </label>
-              {shopPackForm.downloadUrl || shopPackForm.hasDownload ? (
-                <div className="admin-pack-download-chip">
-                  <strong>{shopPackForm.downloadFileName || 'pack.zip'}</strong>
-                  <span>{shopPackForm.downloadUrl ? (shopPackForm.downloadMode === 'supabase' ? 'Prêt pour les acheteurs' : 'Stockage local') : 'ZIP conservé côté serveur'}</span>
-                </div>
-              ) : (
-                <p className="small-note">Ajoute le dossier ZIP qui sera proposé au téléchargement après achat.</p>
-              )}
-
-              <button type="submit" className="profile-action-button">
-                {shopPackForm.id ? 'Enregistrer les changements' : 'Ajouter le pack'}
-              </button>
-            </form>
-
-            <AdminShopPackLists
-              activeShopPacks={activeShopPacks}
-              archivedShopPacks={archivedShopPacks}
-              isBusy={isBusy}
-              editShopPack={editShopPack}
-              archiveShopPack={archiveShopPack}
-              removeShopPack={removeShopPack}
-              relistShopPack={relistShopPack}
-              formatDate={formatDate}
-            />
-          </div>
-        </section>
+        <AdminShopPanel
+          activeShopPacks={activeShopPacks}
+          addShopPackScreenshots={addShopPackScreenshots}
+          archiveShopPack={archiveShopPack}
+          archivedShopPacks={archivedShopPacks}
+          editShopPack={editShopPack}
+          importShopPackZip={importShopPackZip}
+          isBusy={isBusy}
+          relistShopPack={relistShopPack}
+          removeShopPack={removeShopPack}
+          removeShopPackScreenshot={removeShopPackScreenshot}
+          saveShopPack={saveShopPack}
+          setShopPackForm={setShopPackForm}
+          shopPackForm={shopPackForm}
+          updateShopPackForm={updateShopPackForm}
+        />
       ) : null}
     </main>
   );
