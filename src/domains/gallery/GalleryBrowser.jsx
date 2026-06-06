@@ -246,7 +246,7 @@ function CreatorAboutSection({ profile = {} }) {
   const hasLinks = getVisibleCreatorLinks(profile.socialLinks, profile.website).length > 0;
 
   return (
-    <section className="panel public-author-about">
+    <section className="public-panel public-author-about">
       <div className="public-author-about-head">
         <div>
           <span className="eyebrow">À propos de l’auteur</span>
@@ -701,7 +701,7 @@ export default function GalleryBrowser({
       ) : null}
 
       {isLoading ? (
-        <section className="panel public-empty-panel">Chargement de la galerie...</section>
+        <section className="public-panel public-empty-panel">Chargement de la galerie...</section>
       ) : null}
 
       {!isLoading && view === 'discover' ? (
@@ -713,7 +713,7 @@ export default function GalleryBrowser({
             ['🆕 Nouveaux jeux', discoverSections.newest],
             ['🎲 Aléatoire', discoverSections.random],
           ].map(([title, entries]) => (
-            <section key={title} className="panel public-section">
+            <section key={title} className="public-panel public-section">
               <div className="panel-head">
                 <h2>{title}</h2>
               </div>
@@ -730,7 +730,7 @@ export default function GalleryBrowser({
           ))}
 
           {discoverSections.categorySections.map(({ category, entries }) => (
-            <section key={`category-${category}`} className="panel public-section">
+            <section key={`category-${category}`} className="public-panel public-section">
               <div className="panel-head">
                 <h2>{category}</h2>
               </div>
@@ -747,7 +747,7 @@ export default function GalleryBrowser({
       {!isLoading && view === 'game' && selectedGame ? (
         <section className="public-game-page">
           <button type="button" className="secondary-action public-back-button" onClick={openDiscover}>← Galerie</button>
-          <div className="public-game-hero panel">
+          <div className="public-game-hero public-panel">
             <div className="public-game-cover">
               <GalleryImage
                 src={selectedGame.image}
@@ -793,7 +793,7 @@ export default function GalleryBrowser({
           </div>
 
           <div className="public-game-columns">
-            <section className="panel">
+            <section className="public-panel">
               <h2>Noter</h2>
               <Stars value={currentUserRating} onChange={rateSelectedGame} />
               <form onSubmit={submitComment} className="public-comment-form">
@@ -808,7 +808,7 @@ export default function GalleryBrowser({
                 <button type="submit">Envoyer l’avis</button>
               </form>
             </section>
-            <section className="panel">
+            <section className="public-panel">
               <h2>Avis</h2>
               {selectedGame.feedback.comments.length ? (
                 <div className="public-comments">
@@ -873,7 +873,7 @@ export default function GalleryBrowser({
             <div className="public-creator-tab-panel" role="tabpanel">
               <div className="public-creator-overview">
                 <div className="public-creator-side">
-                  <section className="panel public-creator-card">
+                  <section className="public-panel public-creator-card">
                     <CreatorAvatar avatar={creatorProfile.avatar} name={creatorName} />
                     <div>
                       <span className="eyebrow">Profil créateur</span>
@@ -910,7 +910,7 @@ export default function GalleryBrowser({
                     </div>
                   </section>
                   {creatorProfile.blogPosts?.length ? (
-                    <section className="panel public-section public-author-news">
+                    <section className="public-panel public-section public-author-news">
                       <div className="panel-head">
                         <h2>Actualité</h2>
                       </div>
@@ -931,7 +931,7 @@ export default function GalleryBrowser({
               </div>
             </div>
           ) : (
-            <section className="panel public-section public-creator-tab-panel" role="tabpanel">
+            <section className="public-panel public-section public-creator-tab-panel" role="tabpanel">
               <div className="panel-head">
                 <h2>Jeux publiés</h2>
               </div>

@@ -206,6 +206,16 @@
   box-shadow: 0 10px 24px rgba(47, 111, 228, .22);
 }
 
+.public-panel {
+  padding: 8px;
+  border: 1px solid var(--ds-surface-panel-border);
+  border-color: var(--builder-line);
+  border-radius: 12px;
+  background: var(--ds-surface-panel-bg);
+  color: var(--text);
+  box-shadow: var(--builder-shadow);
+}
+
 .public-discovery-panel,
 .public-section,
 .public-game-page,
@@ -230,7 +240,7 @@
   box-shadow: 0 22px 58px rgba(0, 0, 0, .24);
 }
 
-.public-creator-page .panel,
+.public-creator-page .public-panel,
 .public-creator-page .public-blog-card,
 .public-creator-page .public-author-link-group,
 .public-creator-page .public-creator-tabs {
@@ -605,8 +615,8 @@
   align-items: start;
 }
 
-.public-creator-overview > .panel,
-.public-creator-side > .panel {
+.public-creator-overview > .public-panel,
+.public-creator-side > .public-panel {
   margin: 0;
 }
 
