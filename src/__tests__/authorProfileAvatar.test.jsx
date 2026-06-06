@@ -11,12 +11,19 @@ import { followCreator, isFollowingCreator } from '../shared/services/creatorFol
 const PROJECTS_KEY_PREFIX = 'escapeGameBuilder.projects';
 const originalFileReader = globalThis.FileReader;
 const originalImage = globalThis.Image;
+const originalClipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
 
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
   globalThis.FileReader = originalFileReader;
   globalThis.Image = originalImage;
+  if (originalClipboardDescriptor) {
+    Object.defineProperty(navigator, 'clipboard', originalClipboardDescriptor);
+  } else {
+    delete navigator.clipboard;
+  }
+  window.history.pushState({}, '', '/');
   vi.restoreAllMocks();
 });
 
@@ -119,6 +126,33 @@ describe('author profile media', () => {
         ]),
       }));
     });
+  });
+
+  test('copie le lien unique du profil auteur depuis mon profil auteur', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    window.history.pushState({}, '', '/?gallery=1');
+
+    render(
+      <AuthorProfileEditor
+        user={{ id: 'creator-1', name: 'Mika Studio', email: 'mika@example.test' }}
+        authorProfile={{ displayName: 'Mika Studio' }}
+      />,
+    );
+
+    const publicLinkInput = screen.getByLabelText('Lien public du profil');
+    expect(new URL(publicLinkInput.value).pathname).toBe('/creator/mika-studio');
+    expect(new URL(publicLinkInput.value).search).toBe('');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copier' }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(publicLinkInput.value);
+    });
+    expect(await screen.findByText('Lien du profil auteur copié.')).toBeTruthy();
   });
 
   test('sauvegarde le theme de page depuis l editeur auteur', async () => {
@@ -333,6 +367,75 @@ describe('author profile media', () => {
 
     const avatar = await screen.findByAltText('Avatar de Mika Studio');
     expect(avatar.getAttribute('src')).toBe('https://cdn.example.test/mika-logo.png');
+  });
+
+  test('met a jour l URL unique quand une fiche auteur est ouverte depuis la galerie', async () => {
+    saveAllAccounts([{ id: 'creator-1', name: 'Mika', email: 'mika@example.test' }]);
+    saveAuthorProfile('creator-1', { displayName: 'Mika Studio' });
+    window.localStorage.setItem(`${PROJECTS_KEY_PREFIX}.creator-1`, JSON.stringify([createPublicProject()]));
+    window.history.pushState({}, '', '/?gallery=1');
+
+    render(<GalleryBrowser />);
+
+    const authorButtons = await screen.findAllByRole('button', { name: 'par Mika Studio' });
+    fireEvent.click(authorButtons[0]);
+    expect(await screen.findByText('Profil créateur')).toBeTruthy();
+
+    const url = new URL(window.location.href);
+    expect(url.pathname).toBe('/creator/mika-studio');
+    expect(url.search).toBe('');
+  });
+
+  test('ouvre une fiche auteur depuis son slug public', async () => {
+    saveAllAccounts([{ id: 'creator-1', name: 'Mika', email: 'mika@example.test' }]);
+    saveAuthorProfile('creator-1', { displayName: 'Mika Studio' });
+    window.localStorage.setItem(`${PROJECTS_KEY_PREFIX}.creator-1`, JSON.stringify([createPublicProject()]));
+
+    render(<GalleryBrowser initialCreatorSlug="mika-studio" />);
+
+    expect(await screen.findByText('Profil créateur')).toBeTruthy();
+    expect(screen.getByText('Mika Studio')).toBeTruthy();
+  });
+
+  test('revient a la galerie depuis un lien auteur direct', async () => {
+    saveAllAccounts([{ id: 'creator-1', name: 'Mika', email: 'mika@example.test' }]);
+    saveAuthorProfile('creator-1', { displayName: 'Mika Studio' });
+    window.localStorage.setItem(`${PROJECTS_KEY_PREFIX}.creator-1`, JSON.stringify([createPublicProject()]));
+    window.history.pushState({}, '', '/creator/mika-studio');
+
+    render(<GalleryBrowser initialCreatorSlug="mika-studio" />);
+
+    expect(await screen.findByText('Profil créateur')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Galerie/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Profil créateur')).toBeNull();
+      expect(screen.getByText('Explorer')).toBeTruthy();
+      const url = new URL(window.location.href);
+      expect(url.pathname).toBe('/');
+      expect(url.searchParams.get('gallery')).toBe('1');
+    });
+  });
+
+  test('copie le lien public depuis une fiche auteur galerie', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    saveAllAccounts([{ id: 'creator-1', name: 'Mika', email: 'mika@example.test' }]);
+    saveAuthorProfile('creator-1', { displayName: 'Mika Studio' });
+    window.localStorage.setItem(`${PROJECTS_KEY_PREFIX}.creator-1`, JSON.stringify([createPublicProject()]));
+
+    render(<GalleryBrowser initialCreatorId="creator-1" />);
+
+    expect(await screen.findByText('Profil créateur')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Copier le lien' }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(expect.stringContaining('/creator/mika-studio'));
+    });
+    expect(await screen.findByText('Lien du profil auteur copié.')).toBeTruthy();
   });
 
   test('affiche la banniere publique du createur quand elle existe', async () => {

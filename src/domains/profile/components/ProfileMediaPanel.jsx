@@ -153,7 +153,7 @@ const parseProjectFilterId = (filterId = '') => {
   return match ? { projectKey: match[1], folderId: match[2] || '' } : null;
 };
 
-const collectProfileMedia = (projects = [], mediaLibrary = []) => {
+export const collectProfileMedia = (projects = [], mediaLibrary = []) => {
   const byUrl = new Map();
 
   const addMedia = ({

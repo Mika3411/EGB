@@ -3,6 +3,7 @@ import { createInitialProject, normalizeProject } from '../../../shared/data/pro
 import { prepareProjectForTutorial } from '../../../shared/data/tutorialSteps';
 import { getProjectName } from '../../../shared/services/projectAnalysis';
 import { applyCreationTemplate } from '../../../shared/services/projectTemplates';
+import { applyProPromotionProjectSetup, PRO_PROMOTION_PROJECT_MODE } from '../../../shared/services/proPromotion';
 import { showPrompt } from '../../../shared/ui/AccessibleDialog';
 import { buildPlayableProjectUrl, downloadProjectQrCode } from '../../../shared/utils/publicProjectLinks';
 import { getSafeBuilderTab } from '../../../shared/utils/tutorialHelpers';
@@ -11,6 +12,8 @@ import {
   formatProjectImportError,
   importProjectFromJsonText,
 } from '../../../shared/utils/projectJsonImport';
+
+const CLASSIC_CREATION_MODES = [PRO_PROMOTION_PROJECT_MODE, 'beginner', 'intermediate', 'expert', 'adventure', 'hero_adventure'];
 
 export function useProfileProjectActions({
   auth,
@@ -91,10 +94,13 @@ export function useProfileProjectActions({
 
   const createProjectFromProfile = useCallback(async (name, templateId = 'empty', creationMode = 'beginner', options = {}) => {
     const project = applyCreationTemplate(createInitialProject(), templateId, name);
-    project.creationMode = ['beginner', 'intermediate', 'expert', 'adventure', 'hero_adventure'].includes(creationMode) ? creationMode : 'beginner';
+    project.creationMode = CLASSIC_CREATION_MODES.includes(creationMode) ? creationMode : 'beginner';
+    if (project.creationMode === PRO_PROMOTION_PROJECT_MODE || options.proPromotionKind) {
+      applyProPromotionProjectSetup(project, options.proPromotionKind);
+    }
     const record = await auth.createProject(project, name || project.title);
     if (record?.id) {
-      const projectToGuide = await openProjectInEditor(record.id, options.startCreationGuide ? { tab: 'scenes' } : {});
+      const projectToGuide = await openProjectInEditor(record.id, options.startCreationGuide || options.initialTab ? { tab: options.initialTab || 'scenes' } : {});
       if (options.startCreationGuide) await startCreationGuide?.(projectToGuide || project);
     }
     return record;

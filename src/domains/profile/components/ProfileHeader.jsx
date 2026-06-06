@@ -1,5 +1,6 @@
 import React from 'react';
 import { PROFILE_TUTORIAL_OPTIONS } from './profileUtils';
+import { getAccountTypeLabel, isProfessionalAccount } from '../../../shared/services/accountPlans';
 import { getUserDisplayName } from '../../../shared/utils/userDisplayName';
 
 export default function ProfileHeader({
@@ -18,6 +19,8 @@ export default function ProfileHeader({
   onLogout,
 }) {
   const userDisplayName = getUserDisplayName(user, authorProfile);
+  const accountTypeLabel = getAccountTypeLabel(user);
+  const isProAccount = isProfessionalAccount(user);
 
   return (
     <section className="panel" data-tour="profile-header">
@@ -31,6 +34,7 @@ export default function ProfileHeader({
         </div>
 
         <div className="toolbar">
+          <span className={`status-badge ${isProAccount ? 'warning' : 'soft'}`}>{accountTypeLabel}</span>
           <span className="status-badge soft" data-tour="profile-status">{statusMessage || 'Profil prêt'}</span>
           {canOpenAdmin ? (
             <button type="button" className="secondary-action" onClick={onOpenAdmin}>

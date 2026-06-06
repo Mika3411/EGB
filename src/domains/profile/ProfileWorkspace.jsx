@@ -1,13 +1,23 @@
 import React, { useEffect, useRef, useState } from 'react';
 import CreateProjectPanel from './components/CreateProjectPanel';
 import OrdersPanel from './components/OrdersPanel';
+import ProfileBadgesPanel from './components/ProfileBadgesPanel';
 import ProfileHeader from './components/ProfileHeader';
 import ProfileMediaPanel from './components/ProfileMediaPanel';
 import ProfileMessagesPanel from './components/ProfileMessagesPanel';
+import ProfileProPanel from './components/ProfileProPanel';
 import ProfileSettingsPanel from './components/ProfileSettingsPanel';
 import PublicationPanel from './components/PublicationPanel';
 import ProjectList from './components/ProjectList';
 import { readShopPurchases } from '../../shared/services/shopPurchases';
+import { isProfessionalAccount } from '../../shared/services/accountPlans';
+import { getFollowersForCreator } from '../../shared/services/creatorFollows';
+import {
+  PROFILE_BADGE_EVENT_PLAY_GAME,
+  PROFILE_BADGE_EVENTS_UPDATED_EVENT,
+  markProfileBadgeEvent,
+  readProfileBadgeEvents,
+} from '../../shared/services/profileBadges';
 
 const getProfileTutorialTab = (step = {}) => {
   const selector = `${step?.selector || ''} ${step?.fallbackSelector || ''}`;
@@ -16,6 +26,9 @@ const getProfileTutorialTab = (step = {}) => {
   }
   if (/profile-(projects-section|project-filters|project-list|project-card|project-actions|project-test)/.test(selector)) {
     return 'projects';
+  }
+  if (/profile-(badges-section|badge-summary|badge-grid)/.test(selector)) {
+    return 'badges';
   }
   if (/profile-(media-section|media-stats|media-search|storage-upgrades|media-folders|media-grid|media-browser|media-results)/.test(selector)) {
     return 'media';
@@ -28,6 +41,9 @@ const getProfileTutorialTab = (step = {}) => {
   }
   if (/profile-(settings-section|public-identity|security-form|save-public-identity)/.test(selector)) {
     return 'settings';
+  }
+  if (/profile-(pro-section|pro-formats|pro-actions|pro-manager)/.test(selector)) {
+    return 'pro';
   }
   return '';
 };
@@ -52,6 +68,7 @@ export default function ProfileWorkspace({
   onUploadGalleryThumbnail,
   onOpenPublicGallery,
   onOpenAdmin,
+  onStartProPromotion,
   onStartTutorial,
   onRenameProject,
   onUpdateProjectMode,
@@ -75,10 +92,26 @@ export default function ProfileWorkspace({
   const [isOrdersOpen, setIsOrdersOpen] = useState(false);
   const tutorialMenuRef = useRef(null);
   const shopUserId = user?.id || user?.email || 'anonymous';
+  const isProAccount = isProfessionalAccount(user);
   const [orders, setOrders] = useState(() => readShopPurchases(shopUserId));
+  const [badgeEvents, setBadgeEvents] = useState(() => readProfileBadgeEvents(shopUserId));
+  const followersCount = getFollowersForCreator(user?.id).length;
 
   const refreshOrders = () => {
     setOrders(readShopPurchases(shopUserId));
+  };
+
+  const refreshBadgeEvents = () => {
+    setBadgeEvents(readProfileBadgeEvents(shopUserId));
+  };
+
+  const handleTestProject = async (projectId) => {
+    const nextEvents = markProfileBadgeEvent(shopUserId, PROFILE_BADGE_EVENT_PLAY_GAME, {
+      projectId,
+      source: 'profile-test',
+    });
+    setBadgeEvents(nextEvents);
+    return onTestProject?.(projectId);
   };
 
   useEffect(() => {
@@ -99,6 +132,12 @@ export default function ProfileWorkspace({
     profileTutorialStep?.fallbackSelector,
     profileTutorialStep?.selector,
   ]);
+
+  useEffect(() => {
+    if (activeProfileTab === 'pro' && !isProAccount) {
+      setActiveProfileTab('new-project');
+    }
+  }, [activeProfileTab, isProAccount]);
 
   useEffect(() => {
     const closeTutorialMenuOnOutsideClick = (event) => {
@@ -122,6 +161,23 @@ export default function ProfileWorkspace({
     return () => {
       window.removeEventListener('storage', handleOrdersUpdate);
       window.removeEventListener('shop-purchases-updated', handleOrdersUpdate);
+    };
+  }, [shopUserId]);
+
+  useEffect(() => {
+    refreshBadgeEvents();
+
+    const handleBadgeEventsUpdate = (event) => {
+      const eventUserKey = event?.detail?.userKey || '';
+      if (eventUserKey && eventUserKey !== shopUserId) return;
+      refreshBadgeEvents();
+    };
+
+    window.addEventListener('storage', handleBadgeEventsUpdate);
+    window.addEventListener(PROFILE_BADGE_EVENTS_UPDATED_EVENT, handleBadgeEventsUpdate);
+    return () => {
+      window.removeEventListener('storage', handleBadgeEventsUpdate);
+      window.removeEventListener(PROFILE_BADGE_EVENTS_UPDATED_EVENT, handleBadgeEventsUpdate);
     };
   }, [shopUserId]);
 
@@ -172,19 +228,19 @@ export default function ProfileWorkspace({
         </button>
         <button
           type="button"
-          className={activeProfileTab === 'media' ? 'active' : ''}
-          onClick={() => setActiveProfileTab('media')}
-          data-tour="profile-tab-media"
-        >
-          Médias
-        </button>
-        <button
-          type="button"
           className={activeProfileTab === 'publication' ? 'active' : ''}
           onClick={() => setActiveProfileTab('publication')}
           data-tour="profile-tab-publication"
         >
           Publication
+        </button>
+        <button
+          type="button"
+          className={activeProfileTab === 'media' ? 'active' : ''}
+          onClick={() => setActiveProfileTab('media')}
+          data-tour="profile-tab-media"
+        >
+          Médias
         </button>
         <button
           type="button"
@@ -202,6 +258,24 @@ export default function ProfileWorkspace({
         >
           Profil
         </button>
+        <button
+          type="button"
+          className={activeProfileTab === 'badges' ? 'active' : ''}
+          onClick={() => setActiveProfileTab('badges')}
+          data-tour="profile-tab-badges"
+        >
+          Badges
+        </button>
+        {isProAccount ? (
+          <button
+            type="button"
+            className={activeProfileTab === 'pro' ? 'active' : ''}
+            onClick={() => setActiveProfileTab('pro')}
+            data-tour="profile-tab-pro"
+          >
+            Pro
+          </button>
+        ) : null}
       </section>
 
       {activeProfileTab === 'new-project' ? (
@@ -218,11 +292,22 @@ export default function ProfileWorkspace({
           activeProjectId={activeProjectId}
           syncStatus={syncStatus}
           onOpenProject={onOpenProject}
-          onTestProject={onTestProject}
+          onTestProject={handleTestProject}
           onRenameProject={onRenameProject}
           onUpdateProjectMode={onUpdateProjectMode}
           onDuplicateProject={onDuplicateProject}
           onDeleteProject={onDeleteProject}
+        />
+      ) : null}
+
+      {activeProfileTab === 'badges' ? (
+        <ProfileBadgesPanel
+          projects={projects}
+          mediaLibrary={mediaLibrary}
+          authorProfile={authorProfile}
+          badgeEvents={badgeEvents}
+          followersCount={followersCount}
+          userKey={shopUserId}
         />
       ) : null}
 
@@ -249,6 +334,25 @@ export default function ProfileWorkspace({
           onUnpublishProject={onUnpublishProject}
           onUpdatePublicSettings={onUpdatePublicSettings}
           onUploadGalleryThumbnail={onUploadGalleryThumbnail}
+        />
+      ) : null}
+
+      {activeProfileTab === 'pro' && isProAccount ? (
+        <ProfileProPanel
+          projects={projects}
+          activeProjectId={activeProjectId}
+          isBusy={isBusy}
+          onOpenProject={onOpenProject}
+          onTestProject={handleTestProject}
+          onCopyProjectLink={onCopyProjectLink}
+          onSaveProjectQrCode={onSaveProjectQrCode}
+          onPublishProject={onPublishProject}
+          onUnpublishProject={onUnpublishProject}
+          onUpdatePublicSettings={onUpdatePublicSettings}
+          onStartProPromotion={onStartProPromotion}
+          onRenameProject={onRenameProject}
+          onDuplicateProject={onDuplicateProject}
+          onDeleteProject={onDeleteProject}
         />
       ) : null}
 

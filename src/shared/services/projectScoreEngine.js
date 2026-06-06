@@ -83,6 +83,8 @@ const hasUsefulAction = (entry) => getEntryActions(entry).some((action) => (
   action.actionType !== 'dialogue'
   || action.targetSceneId
   || action.targetCinematicId
+  || action.externalUrl
+  || action.targetProjectId
   || action.enigmaId
   || action.rewardItemId
   || action.requiredItemId
@@ -92,6 +94,8 @@ const actionHasBrokenReference = (action, { sceneIds, cinematicIds, enigmaIds })
   if (!action) return false;
   if (action.actionType === 'scene' && (!action.targetSceneId || !sceneIds.has(action.targetSceneId))) return true;
   if (action.actionType === 'cinematic' && (!action.targetCinematicId || !cinematicIds.has(action.targetCinematicId))) return true;
+  if (action.actionType === 'external_link' && !String(action.externalUrl || '').trim()) return true;
+  if (action.actionType === 'project_link' && (!action.targetProjectId || !action.targetProjectUserId)) return true;
   if (action.enigmaId && !enigmaIds.has(action.enigmaId)) return true;
   return false;
 };
@@ -664,6 +668,8 @@ const buildPlayerScore = ({ acts, scenes, items, enigmas, cinematics, transition
     action.actionType !== 'dialogue'
     || action.targetSceneId
     || action.targetCinematicId
+    || action.externalUrl
+    || action.targetProjectId
     || action.enigmaId
     || action.rewardItemId
     || action.requiredItemId

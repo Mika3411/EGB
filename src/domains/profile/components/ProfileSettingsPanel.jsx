@@ -6,6 +6,7 @@ import {
   normalizeAuthorSocialLinks,
   setAuthorSocialLinkUrl,
 } from '../../../shared/services/authorProfiles';
+import { getAccountTypeLabel } from '../../../shared/services/accountPlans';
 import {
   cropAuthorProfileImage,
   getAuthorProfileMediaRecommendation,
@@ -325,9 +326,17 @@ export default function ProfileSettingsPanel({
         </form>
 
         <form className="profile-settings-form" onSubmit={savePassword} data-tour="profile-security-form">
-          <h3>Mot de passe</h3>
+          <h3>Compte et mot de passe</h3>
           <label>Email du compte</label>
           <input value={user?.email || ''} readOnly />
+          <label>Type de compte</label>
+          <input value={getAccountTypeLabel(user)} readOnly />
+          {user?.organization ? (
+            <>
+              <label>Organisation / activité</label>
+              <input value={user.organization} readOnly />
+            </>
+          ) : null}
           <label>Mot de passe actuel</label>
           <div className="password-field">
             <input

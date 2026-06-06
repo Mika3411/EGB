@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AtSign,
   BriefcaseBusiness,
   Camera,
+  Copy,
   Globe,
   Heart,
   MessagesSquare,
@@ -35,6 +36,12 @@ import {
   unfollowCreator,
 } from '../../shared/services/creatorFollows';
 import { trackVisitorSurface } from '../../shared/services/visitorAnalytics';
+import {
+  buildAuthorProfileUrl,
+  getAuthorProfileRouteSlug,
+  getAuthorProfileSlug,
+  sanitizeAuthorProfileSlug,
+} from '../../shared/utils/publicProjectLinks';
 
 const formatRating = (value) => (Number(value || 0) ? Number(value).toFixed(1) : 'Nouveau');
 
@@ -113,6 +120,44 @@ const makePlayUrl = (game) => {
   url.searchParams.set('playUser', game.userId);
   url.searchParams.set('playProject', game.projectId);
   return url.toString();
+};
+
+const replaceGalleryUrl = ({ gameKey = '', creatorId = '', creatorSlug = '' } = {}) => {
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  url.pathname = '/';
+  url.search = '';
+  url.hash = '';
+  if (creatorId || creatorSlug) {
+    const safeSlug = sanitizeAuthorProfileSlug(creatorSlug || creatorId);
+    url.pathname = `/creator/${encodeURIComponent(safeSlug)}`;
+  } else {
+    url.searchParams.set('gallery', '1');
+    if (gameKey) url.searchParams.set('game', gameKey);
+  }
+  const nextUrl = url.toString();
+  if (nextUrl !== window.location.href) {
+    window.history.replaceState({}, '', nextUrl);
+  }
+};
+
+const copyTextToClipboard = async (text = '') => {
+  if (!text) throw new Error('Texte vide.');
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.top = '-9999px';
+  document.body?.appendChild(textarea);
+  textarea.select();
+  const didCopy = document.execCommand?.('copy');
+  textarea.remove();
+  if (!didCopy) throw new Error('Copie impossible.');
 };
 
 function GalleryImage({ src, alt = '', eager = false, fallback }) {
@@ -312,18 +357,48 @@ function GameCard({ game, onOpenGame, onOpenCreator, onPlay }) {
   );
 }
 
+const getCreatorSources = (games = []) => {
+  const sourcesById = new Map();
+  games.forEach((game) => {
+    if (!game.userId || sourcesById.has(game.userId)) return;
+    sourcesById.set(game.userId, {
+      userId: game.userId,
+      displayName: game.authorProfile?.displayName || game.author || '',
+      name: game.author || '',
+      email: game.authorEmail || '',
+    });
+  });
+  return [...sourcesById.values()];
+};
+
+const getCreatorRouteMap = (games = []) => {
+  const sources = getCreatorSources(games);
+  const byId = new Map();
+  const bySlug = new Map();
+
+  sources.forEach((source) => {
+    const slug = getAuthorProfileRouteSlug(source, sources);
+    const route = { ...source, slug };
+    byId.set(source.userId, route);
+    bySlug.set(slug, route);
+  });
+
+  return { byId, bySlug, sources };
+};
+
 export default function GalleryBrowser({
   user,
   authorProfile,
   initialGameKey = '',
   initialCreatorId = '',
+  initialCreatorSlug = '',
   onUpdateAuthorProfile,
   onSignup,
   onClose,
 }) {
   const [games, setGames] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [view, setView] = useState(initialGameKey ? 'game' : initialCreatorId ? 'creator' : 'discover');
+  const [view, setView] = useState(initialGameKey ? 'game' : (initialCreatorId || initialCreatorSlug) ? 'creator' : 'discover');
   const [selectedGameKey, setSelectedGameKey] = useState(initialGameKey);
   const [selectedCreatorId, setSelectedCreatorId] = useState(initialCreatorId);
   const [search, setSearch] = useState('');
@@ -334,6 +409,9 @@ export default function GalleryBrowser({
   const [creatorTab, setCreatorTab] = useState('creator');
   const [publicVisitorId] = useState(() => getPublicVisitorId());
   const [followVersion, setFollowVersion] = useState(0);
+  const [creatorLinkNotice, setCreatorLinkNotice] = useState('');
+  const creatorRouteMap = useMemo(() => getCreatorRouteMap(games), [games]);
+  const handledInitialCreatorSlugRef = useRef('');
 
   const refreshGames = async () => {
     setIsLoading(true);
@@ -350,22 +428,50 @@ export default function GalleryBrowser({
     trackVisitorSurface('gallery', { userId: user?.id });
   }, [user?.id]);
 
+  useEffect(() => {
+    const safeInitialCreatorSlug = sanitizeAuthorProfileSlug(initialCreatorSlug, '');
+    if (
+      isLoading
+      || !safeInitialCreatorSlug
+      || selectedCreatorId
+      || handledInitialCreatorSlugRef.current === safeInitialCreatorSlug
+    ) return;
+    const route = creatorRouteMap.bySlug.get(safeInitialCreatorSlug);
+    if (!route?.userId) return;
+    handledInitialCreatorSlugRef.current = safeInitialCreatorSlug;
+    setView('creator');
+    setSelectedCreatorId(route.userId);
+    setCreatorTab('creator');
+    replaceGalleryUrl({ creatorId: route.userId, creatorSlug: route.slug });
+  }, [creatorRouteMap, initialCreatorSlug, isLoading, selectedCreatorId]);
+
   const openDiscover = () => {
     setView('discover');
     setSelectedGameKey('');
     setSelectedCreatorId('');
+    setCreatorLinkNotice('');
+    replaceGalleryUrl();
   };
 
   const openGame = (gameKey) => {
     setView('game');
     setSelectedGameKey(gameKey);
+    setSelectedCreatorId('');
     setCommentText('');
+    setCreatorLinkNotice('');
+    replaceGalleryUrl({ gameKey });
   };
 
   const openCreator = (creatorId) => {
+    const route = creatorRouteMap.byId.get(creatorId);
     setView('creator');
     setSelectedCreatorId(creatorId);
     setCreatorTab('creator');
+    setCreatorLinkNotice('');
+    replaceGalleryUrl({
+      creatorId,
+      creatorSlug: route?.slug || getAuthorProfileSlug({ userId: creatorId }),
+    });
   };
 
   const openAuthorEditor = () => {
@@ -501,6 +607,23 @@ export default function GalleryBrowser({
     : 0;
   const creatorName = selectedCreatorGames[0]?.author || 'Créateur';
   const creatorProfile = selectedCreatorGames[0]?.authorProfile || {};
+  const selectedCreatorRoute = creatorRouteMap.byId.get(selectedCreatorId);
+  const selectedCreatorSlug = selectedCreatorRoute?.slug || getAuthorProfileRouteSlug({
+    userId: selectedCreatorId,
+    displayName: creatorProfile.displayName || creatorName,
+  }, creatorRouteMap.sources);
+
+  const copySelectedCreatorLink = async () => {
+    try {
+      await copyTextToClipboard(buildAuthorProfileUrl(selectedCreatorId, undefined, {
+        displayName: creatorProfile.displayName || creatorName,
+        slug: selectedCreatorSlug,
+      }));
+      setCreatorLinkNotice('Lien du profil auteur copié.');
+    } catch {
+      setCreatorLinkNotice('Copie impossible, le lien reste dans la barre d’adresse.');
+    }
+  };
   const currentUserRating = selectedGame?.feedback.ratings.find((entry) => entry.userId === (user?.id || 'guest'))?.rating || 0;
   const currentNewsViewerId = user?.id || publicVisitorId;
   const isCreatorFollowed = useMemo(() => (
@@ -770,6 +893,19 @@ export default function GalleryBrowser({
                           {isCreatorFollowed ? <UserCheck size={16} aria-hidden="true" /> : <UserPlus size={16} aria-hidden="true" />}
                           <span>{creatorFollowLabel}</span>
                         </button>
+                      ) : null}
+                      {selectedCreatorId ? (
+                        <>
+                          <button
+                            type="button"
+                            className="secondary-action public-copy-profile-button"
+                            onClick={copySelectedCreatorLink}
+                          >
+                            <Copy size={16} aria-hidden="true" />
+                            <span>Copier le lien</span>
+                          </button>
+                          {creatorLinkNotice ? <p className="small-note public-copy-profile-status" role="status">{creatorLinkNotice}</p> : null}
+                        </>
                       ) : null}
                     </div>
                   </section>

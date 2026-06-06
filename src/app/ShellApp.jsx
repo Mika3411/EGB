@@ -5,11 +5,13 @@ import { useAccountStorage } from '../domains/auth/hooks/useAccountStorage';
 import { useLocalAuth } from '../domains/auth/hooks/useLocalAuth';
 import { upsertProjectAsset } from '../shared/services/assetManager';
 import { getProjectName } from '../shared/services/projectAnalysis';
+import { applyProPromotionProjectSetup, PRO_PROMOTION_PROJECT_MODE } from '../shared/services/proPromotion';
 import { isAdminAccount } from '../shared/services/authStorage';
+import { isProfessionalAccount } from '../shared/services/accountPlans';
 import { hasRemoteStorageConfig } from '../shared/services/remoteSession';
 import { readAppUiState, writeAppUiState } from '../shared/utils/storageHelpers';
 import { lazyWithRetry } from '../shared/utils/lazyImportRetry';
-import { buildPlayableProjectUrl, downloadProjectQrCode } from '../shared/utils/publicProjectLinks';
+import { buildPlayableProjectUrl, downloadProjectQrCode, getAuthorProfileSlugFromPath } from '../shared/utils/publicProjectLinks';
 import SupportWidget from '../domains/support/components/SupportWidget.jsx';
 
 const LandingExperience = lazyWithRetry(() => import('../domains/landing/LandingExperience'));
@@ -21,6 +23,12 @@ const BuilderStudio = lazyWithRetry(() => import('./BuilderStudio.jsx'));
 const BuilderGuide = lazyWithRetry(() => import('./tutorial/BuilderGuide'));
 const Rpg3DStudio = lazyWithRetry(() => import('../domains/rpg3d/Rpg3DStudio'));
 const StuntAnimationStudio = lazyWithRetry(() => import('../domains/rpg3d/stunts/StuntAnimationStudio.jsx'));
+const CLASSIC_CREATION_MODES = [PRO_PROMOTION_PROJECT_MODE, 'beginner', 'intermediate', 'expert', 'adventure', 'hero_adventure'];
+const isTutorialStepAvailableForAccount = (step, user) => !step?.requiresProAccount || isProfessionalAccount(user);
+const getAccountTutorialStepIndexes = (steps = [], tab, user) => steps
+  .map((step, index) => ({ step, index }))
+  .filter(({ step }) => (step.tutorial || step.tab) === tab && isTutorialStepAvailableForAccount(step, user))
+  .map(({ index }) => index);
 
 const TabLoadingFallback = () => (
   <section className="panel">
@@ -64,10 +72,16 @@ const createShellInitialScreen = () => {
   if (params.get('stunt') === '1') return 'stunts';
   if (params.get('arcade') === '1') return 'arcade';
   if (params.get('playUser') && params.get('playProject')) return 'shared-preview';
-  if (params.get('gallery') === '1' || window.__escapeInitialGalleryGame) return 'gallery';
+  if (params.get('gallery') === '1' || getAuthorProfileSlugFromPath() || window.__escapeInitialGalleryGame) return 'gallery';
   const savedState = readAppUiState();
   if (savedState.screen === 'builder' && savedState.builderScreen !== 'shared-preview') return 'builder';
   return 'profile';
+};
+
+const getInitialGalleryParam = (name) => {
+  if (typeof window === 'undefined') return '';
+  const params = new URLSearchParams(window.location.search);
+  return params.get(name) || '';
 };
 
 const createInitialBuilderLaunch = () => {
@@ -109,6 +123,7 @@ function ShellApp() {
     activeProject: auth.activeProject?.data,
     activeProjectId: auth.activeProjectId,
     projects: auth.projects,
+    user: auth.user,
   });
 
   const openLoginPanel = useCallback(() => {
@@ -157,10 +172,10 @@ function ShellApp() {
   }, []);
 
   const startProfileTutorial = useCallback(async () => {
-    const { BUILDER_TUTORIAL_STEPS, getTutorialStepIndexes } = await import('../shared/data/tutorialStepData');
+    const { BUILDER_TUTORIAL_STEPS } = await import('../shared/data/tutorialStepData');
     setProfileTutorialSteps(BUILDER_TUTORIAL_STEPS);
-    setProfileTutorialStepIndex(getTutorialStepIndexes('profile')[0] ?? null);
-  }, []);
+    setProfileTutorialStepIndex(getAccountTutorialStepIndexes(BUILDER_TUTORIAL_STEPS, 'profile', auth.user)[0] ?? null);
+  }, [auth.user]);
 
   const closeProfileTutorial = useCallback(() => {
     setProfileTutorialStepIndex(null);
@@ -189,11 +204,23 @@ function ShellApp() {
       import('../shared/services/projectTemplates'),
     ]);
     const project = applyCreationTemplate(createInitialProject(), templateId, name);
-    project.creationMode = ['beginner', 'intermediate', 'expert', 'adventure', 'hero_adventure'].includes(creationMode) ? creationMode : 'beginner';
+    project.creationMode = CLASSIC_CREATION_MODES.includes(creationMode) ? creationMode : 'beginner';
+    if (project.creationMode === PRO_PROMOTION_PROJECT_MODE || options.proPromotionKind) {
+      applyProPromotionProjectSetup(project, options.proPromotionKind);
+    }
     const record = await auth.createProject(project, name || project.title);
-    if (record?.id) openBuilder(record.id, '', 'editor', options.startCreationGuide ? 'guided_creation' : '');
+    if (record?.id) openBuilder(record.id, options.initialTab || '', 'editor', options.startCreationGuide ? 'guided_creation' : '');
     return record;
   }, [auth.createProject, openBuilder]);
+
+  const startProPromotionFromProfile = useCallback(async ({ kind = 'promote', title = '' } = {}) => {
+    const record = await createProjectFromProfile(title || 'Extension d’expérience', 'empty', PRO_PROMOTION_PROJECT_MODE, {
+      initialTab: 'scenes',
+      proPromotionKind: kind,
+    });
+    if (record?.id) setSaveStatus('Extension d’expérience créée');
+    return record;
+  }, [createProjectFromProfile]);
 
   const openProjectInEditor = useCallback(async (projectId, options = {}) => {
     await auth.loadProject(projectId);
@@ -383,8 +410,11 @@ function ShellApp() {
 
   const profileTutorialIndexes = useMemo(() => profileTutorialSteps
     .map((step, index) => ({ step, index }))
-    .filter(({ step }) => (step.tutorial || step.tab) === 'profile')
-    .map(({ index }) => index), [profileTutorialSteps]);
+    .filter(({ step }) => (
+      (step.tutorial || step.tab) === 'profile'
+      && isTutorialStepAvailableForAccount(step, auth.user)
+    ))
+    .map(({ index }) => index), [auth.user, profileTutorialSteps]);
   const profileTutorialPosition = profileTutorialIndexes.indexOf(profileTutorialStepIndex);
   const activeProfileTutorialStep = profileTutorialStepIndex === null ? null : profileTutorialSteps[profileTutorialStepIndex];
   const tutorialUserName = auth.user?.name || auth.user?.pseudo || auth.user?.username || auth.user?.email?.split('@')?.[0] || '';
@@ -511,8 +541,9 @@ function ShellApp() {
           <GalleryBrowser
             user={auth.user}
             authorProfile={auth.authorProfile}
-            initialGameKey={window.__escapeInitialGalleryGame || ''}
-            initialCreatorId={window.__escapeInitialGalleryCreator || ''}
+            initialGameKey={window.__escapeInitialGalleryGame || getInitialGalleryParam('game')}
+            initialCreatorId={window.__escapeInitialGalleryCreator || getInitialGalleryParam('creator')}
+            initialCreatorSlug={window.__escapeInitialGalleryCreatorSlug || getAuthorProfileSlugFromPath()}
             onUpdateAuthorProfile={updateAuthorProfileFromProfile}
             onSignup={openProfileScreen}
             onClose={auth.user ? openProfileScreen : null}
@@ -590,6 +621,7 @@ function ShellApp() {
           onUploadGalleryThumbnail={uploadGalleryThumbnail}
           onOpenPublicGallery={openPublicGalleryWindow}
           onOpenAdmin={openAdminScreen}
+          onStartProPromotion={startProPromotionFromProfile}
           onStartTutorial={(tab) => {
             if (tab === 'profile') {
               startProfileTutorial();

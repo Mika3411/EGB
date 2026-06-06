@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { BellDot, CheckCircle2, ImageUp, UserMinus, Users } from 'lucide-react';
+import { BellDot, CheckCircle2, Copy, ImageUp, UserMinus, Users } from 'lucide-react';
 import { showConfirm } from '../../shared/ui/AccessibleDialog';
 import {
   AUTHOR_PROFILE_THEME_DEFAULTS,
@@ -26,6 +26,7 @@ import {
   readAuthorProfileImageFile,
   readAuthorProfileImageSource,
 } from '../../shared/utils/authorProfileMedia';
+import { buildAuthorProfileUrl, getAuthorProfileRouteSlug } from '../../shared/utils/publicProjectLinks';
 import AuthorProfileImageCropper from './components/AuthorProfileImageCropper';
 
 const getAuthorInitial = (name = '') => String(name || 'Créateur').trim().charAt(0).toUpperCase() || 'C';
@@ -58,6 +59,39 @@ const formatFollowDate = (value = '') => {
 const getAccountLabel = (account = null, fallbackId = '') => (
   account?.name || account?.email || `Compte ${String(fallbackId || '').slice(0, 8) || 'inconnu'}`
 );
+
+const getCreatorSources = (games = []) => {
+  const sourcesById = new Map();
+  games.forEach((game) => {
+    if (!game.userId || sourcesById.has(game.userId)) return;
+    sourcesById.set(game.userId, {
+      userId: game.userId,
+      displayName: game.authorProfile?.displayName || game.author || '',
+      name: game.author || '',
+      email: game.authorEmail || '',
+    });
+  });
+  return [...sourcesById.values()];
+};
+
+const copyTextToClipboard = async (text = '') => {
+  if (!text) throw new Error('Texte vide.');
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.top = '-9999px';
+  document.body?.appendChild(textarea);
+  textarea.select();
+  const didCopy = document.execCommand?.('copy');
+  textarea.remove();
+  if (!didCopy) throw new Error('Copie impossible.');
+};
 
 function AuthorAvatarPreview({ avatar = '', displayName = '', onOpenCrop }) {
   const [hasError, setHasError] = useState(false);
@@ -158,6 +192,7 @@ export default function AuthorProfileEditor({
   const [authorDraft, setAuthorDraft] = useState(() => createAuthorDraft(authorProfile, user));
   const [blogDraft, setBlogDraft] = useState({ title: '', body: '' });
   const [mediaError, setMediaError] = useState('');
+  const [profileLinkNotice, setProfileLinkNotice] = useState('');
   const [activeAuthorTab, setActiveAuthorTab] = useState('profile');
   const [themePreviewTab, setThemePreviewTab] = useState('creator');
   const [followVersion, setFollowVersion] = useState(0);
@@ -242,6 +277,26 @@ export default function AuthorProfileEditor({
       };
     })
   ), [accountMap, followVersion, user?.id]);
+
+  const authorProfileUrl = useMemo(() => {
+    const source = {
+      userId: user?.id,
+      displayName: authorDraft.displayName || authorProfile?.displayName || user?.name || '',
+      name: user?.name || '',
+      email: user?.email || '',
+    };
+    return buildAuthorProfileUrl(user?.id, undefined, {
+      ...source,
+      slug: getAuthorProfileRouteSlug(source, getCreatorSources(publicGames)),
+    });
+  }, [
+    authorDraft.displayName,
+    authorProfile?.displayName,
+    publicGames,
+    user?.email,
+    user?.id,
+    user?.name,
+  ]);
 
   const markCreatorSeen = (creatorId) => {
     markCreatorActivitySeen(user?.id, creatorId, publicGames);
@@ -338,6 +393,15 @@ export default function AuthorProfileEditor({
   const saveAuthorDraft = async (event) => {
     event.preventDefault();
     await onUpdateAuthorProfile?.(buildAuthorDraftPayload(authorDraft));
+  };
+
+  const copyAuthorProfileLink = async () => {
+    try {
+      await copyTextToClipboard(authorProfileUrl);
+      setProfileLinkNotice('Lien du profil auteur copié.');
+    } catch {
+      setProfileLinkNotice('Copie impossible, le lien peut être sélectionné manuellement.');
+    }
   };
 
   const publishBlogPost = async (event) => {
@@ -458,6 +522,31 @@ export default function AuthorProfileEditor({
             );
           })}
         </div>
+
+        <section className="author-profile-share-strip" aria-label="Lien public du profil auteur">
+          <div>
+            <label htmlFor="author-profile-public-link">Lien public du profil</label>
+            <p className="small-note">Ce lien ouvre directement ta fiche auteur dans la galerie.</p>
+          </div>
+          <div className="author-profile-share-row">
+            <input
+              id="author-profile-public-link"
+              value={authorProfileUrl}
+              readOnly
+              onFocus={(event) => event.target.select()}
+            />
+            <button
+              type="button"
+              className="secondary-action author-profile-copy-link"
+              onClick={copyAuthorProfileLink}
+              disabled={!authorProfileUrl}
+            >
+              <Copy size={16} aria-hidden="true" />
+              Copier
+            </button>
+          </div>
+          {profileLinkNotice ? <p className="small-note" role="status">{profileLinkNotice}</p> : null}
+        </section>
 
         {activeAuthorTab === 'profile' ? (
         <div className="author-profile-grid">

@@ -41,9 +41,12 @@ import { useProfileMediaActions } from '../domains/profile/hooks/useProfileMedia
 import { useProjectSaveAcknowledger } from './builder/hooks/useProjectSaveAcknowledger';
 import { collectDescendantSceneIds } from '../shared/services/sceneHelpers';
 import { collectProjectAssets } from '../shared/services/assetManager';
+import { PRO_PROMOTION_PROJECT_MODE } from '../shared/services/proPromotion';
+import { isProfessionalAccount } from '../shared/services/accountPlans';
 import { isAdminAccount } from '../shared/services/authStorage';
 import { trackVisitorSurface } from '../shared/services/visitorAnalytics';
 import { getOfflineExportEstimateMessage } from '../shared/utils/offlineExportEstimate';
+import { getAuthorProfileSlugFromPath } from '../shared/utils/publicProjectLinks';
 import { lazyWithRetry } from '../shared/utils/lazyImportRetry';
 import {
   getSupabaseAuthHeaders,
@@ -70,9 +73,13 @@ const TabLoadingFallback = () => (
     <p className="small-note">Chargement de l'onglet...</p>
   </section>
 );
-const getTutorialStepIndexesFromSteps = (steps, tab) => (steps || [])
+const isTutorialStepAvailableForAccount = (step, user) => !step?.requiresProAccount || isProfessionalAccount(user);
+const getTutorialStepIndexesFromSteps = (steps, tab, user = null) => (steps || [])
   .map((step, index) => ({ step, index }))
-  .filter(({ step }) => (step.tutorial || step.tab) === tab)
+  .filter(({ step }) => (
+    (step.tutorial || step.tab) === tab
+    && isTutorialStepAvailableForAccount(step, user)
+  ))
   .map(({ index }) => index);
 const LandingLoadingFallback = () => (
   <main
@@ -264,8 +271,8 @@ function BuilderStudio({
     return steps;
   }, [tutorialSteps]);
   const activeTutorialIndexes = useMemo(() => (
-    tutorialStepIndex === null ? [] : getTutorialStepIndexesFromSteps(tutorialSteps, selectedTutorialTab)
-  ), [selectedTutorialTab, tutorialStepIndex, tutorialSteps]);
+    tutorialStepIndex === null ? [] : getTutorialStepIndexesFromSteps(tutorialSteps, selectedTutorialTab, auth.user)
+  ), [auth.user, selectedTutorialTab, tutorialStepIndex, tutorialSteps]);
   const activeTutorialPosition = activeTutorialIndexes.indexOf(tutorialStepIndex);
   const activeTutorialStep = tutorialStepIndex === null ? null : tutorialSteps[tutorialStepIndex] || null;
   const tutorialUserName = getTutorialName(auth.user);
@@ -273,6 +280,9 @@ function BuilderStudio({
     const safeTab = getSafeBuilderTab(editor.tab, editor.project);
     if (safeTab !== editor.tab) editor.setTab(safeTab);
   }, [editor.project, editor.setTab, editor.tab]);
+  const profileProjects = useMemo(() => (auth.projects || []).map((projectRecord) => (
+    projectRecord.id === auth.activeProjectId ? { ...projectRecord, data: editor.project } : projectRecord
+  )), [auth.activeProjectId, auth.projects, editor.project]);
   const {
     accountStorageQuotaBytes,
     exactStorageAssetSizesByUrl,
@@ -284,11 +294,9 @@ function BuilderStudio({
   } = useAccountStorage({
     activeProject: editor.project,
     activeProjectId: auth.activeProjectId,
-    projects: auth.projects,
+    projects: profileProjects,
+    user: auth.user,
   });
-  const profileProjects = useMemo(() => (auth.projects || []).map((projectRecord) => (
-    projectRecord.id === auth.activeProjectId ? { ...projectRecord, data: editor.project } : projectRecord
-  )), [auth.activeProjectId, auth.projects, editor.project]);
   const activeProjectRecord = useMemo(() => {
     const record = (auth.projects || []).find((projectRecord) => projectRecord.id === auth.activeProjectId);
     return record ? { ...record, data: editor.project } : null;
@@ -409,7 +417,7 @@ function BuilderStudio({
     loadTutorialSteps().then((steps) => {
       if (isCancelled) return;
       setSelectedTutorialTab('profile');
-      setTutorialStepIndex(getTutorialStepIndexesFromSteps(steps, 'profile')[0] ?? null);
+      setTutorialStepIndex(getTutorialStepIndexesFromSteps(steps, 'profile', auth.user)[0] ?? null);
     });
     return () => {
       isCancelled = true;
@@ -797,7 +805,7 @@ function BuilderStudio({
       }
       setScreen('profile');
       setSelectedTutorialTab('profile');
-      setTutorialStepIndex(getTutorialStepIndexesFromSteps(steps, 'profile')[0] ?? null);
+      setTutorialStepIndex(getTutorialStepIndexesFromSteps(steps, 'profile', auth.user)[0] ?? null);
       return;
     }
     const startTab = tutorialTab;
@@ -817,12 +825,12 @@ function BuilderStudio({
     setScreen('editor');
     setSaveStatus('Didacticiel temporaire : non enregistré');
     setSelectedTutorialTab(tutorialTab);
-    setTutorialStepIndex(getTutorialStepIndexesFromSteps(steps, tutorialTab)[0] ?? 0);
+    setTutorialStepIndex(getTutorialStepIndexesFromSteps(steps, tutorialTab, auth.user)[0] ?? 0);
   }, [
     auth.activeProjectId,
     auth.loadProject,
     auth.projects,
-    auth.user?.id,
+    auth.user,
     editor.loadProject,
     editor.project,
     editor.setSelectedSceneId,
@@ -896,6 +904,15 @@ function BuilderStudio({
     await auth.updateAuthorProfile(profile);
     setSaveStatus('Profil auteur mis à jour');
   }, [auth.updateAuthorProfile]);
+
+  const startProPromotionFromProfile = useCallback(async ({ kind = 'promote', title = '' } = {}) => {
+    const record = await createProjectFromProfile(title || 'Extension d’expérience', 'empty', PRO_PROMOTION_PROJECT_MODE, {
+      initialTab: 'scenes',
+      proPromotionKind: kind,
+    });
+    if (record?.id) setSaveStatus('Extension d’expérience créée');
+    return record;
+  }, [createProjectFromProfile]);
 
   const openPublicGalleryWindow = useCallback(() => {
     const url = new URL(window.location.href);
@@ -1236,6 +1253,8 @@ function BuilderStudio({
     preview,
     heroCharacterPreviewRequestKey,
     user: auth.user,
+    activeProjectId: auth.activeProjectId,
+    projects: profileProjects,
     projectRecord: activeProjectRecord,
     projectStorageKey: auth.activeProjectId || editor.project?.title || 'default',
     anime2dStorageId,
@@ -1276,6 +1295,7 @@ function BuilderStudio({
     mediaLibrary,
     persistAiImage,
     preview,
+    profileProjects,
     registerAnime2dSaveBeforeLeave,
     saveAiDraft,
     saveAnime2dDraft,
@@ -1361,6 +1381,7 @@ function BuilderStudio({
           authorProfile={auth.authorProfile}
           initialGameKey={window.__escapeInitialGalleryGame || ''}
           initialCreatorId={window.__escapeInitialGalleryCreator || ''}
+          initialCreatorSlug={window.__escapeInitialGalleryCreatorSlug || getAuthorProfileSlugFromPath()}
           onUpdateAuthorProfile={updateAuthorProfileFromProfile}
           onSignup={openProfileScreen}
           onClose={auth.user ? openProfileScreen : null}
@@ -1430,6 +1451,7 @@ function BuilderStudio({
             onUploadGalleryThumbnail={uploadGalleryThumbnail}
             onOpenPublicGallery={openPublicGalleryWindow}
             onOpenAdmin={openAdminScreen}
+            onStartProPromotion={startProPromotionFromProfile}
             onStartTutorial={startBuilderTutorialFromProfile}
             onRenameProject={renameProjectFromProfile}
             onUpdateProjectMode={updateProjectModeFromProfile}

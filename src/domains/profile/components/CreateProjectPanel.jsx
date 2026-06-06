@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { BookOpen, ListChecks } from 'lucide-react';
 import HelpLabel, { positionHelpBubble } from '../../../shared/ui/forms/HelpLabel';
 import { CREATION_MODES } from '../../../shared/services/projectAnalysis';
+import { PRO_PROMOTION_PROJECT_MODE } from '../../../shared/services/proPromotion';
 import { CREATION_TEMPLATES } from './profileUtils';
 
 const ADVENTURE_TEMPLATE_IDS = new Set([
@@ -23,6 +24,8 @@ const CREATION_MODE_HELPS = {
   adventure: "Expert + : pensé pour les narrations à choix multiples avec branches narratives, variables, choix cachés et fins.",
   hero_adventure: "Expert ++ : ajoute les outils d'aventure de héros avec fiche personnage, PV, mana, compétences, jets et combats.",
 };
+
+const PROFILE_CREATION_MODES = CREATION_MODES.filter(([value]) => value !== PRO_PROMOTION_PROJECT_MODE);
 
 export default function CreateProjectPanel({
   isBusy,
@@ -94,7 +97,7 @@ export default function CreateProjectPanel({
           <div className="profile-create-mode-block" data-tour="profile-mode-picker">
             <HelpLabel help="Débutant affiche l'essentiel. Intermédiaire ajoute plus d'outils. Expert débloque toute la construction classique. Narration à choix multiples correspond à Expert +. Aventure de héros correspond à Expert ++. Tu peux commencer en Débutant puis améliorer le projet plus tard dans la gestion des projets.">Mode de création</HelpLabel>
             <div className="profile-mode-picker" id="creation-mode">
-              {CREATION_MODES.map(([value, label]) => (
+              {PROFILE_CREATION_MODES.map(([value, label]) => (
                 <div key={value} className="profile-mode-option">
                   <button
                     type="button"

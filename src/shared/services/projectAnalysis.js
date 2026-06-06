@@ -1,4 +1,7 @@
+import { PRO_PROMOTION_PROJECT_MODE } from './proPromotion';
+
 export const CREATION_MODES = [
+  [PRO_PROMOTION_PROJECT_MODE, 'Extension d’expérience'],
   ['beginner', 'Debutant'],
   ['intermediate', 'Intermediaire'],
   ['expert', 'Expert'],
@@ -7,6 +10,7 @@ export const CREATION_MODES = [
 ];
 
 export const MODE_RANKS = {
+  [PRO_PROMOTION_PROJECT_MODE]: 0,
   beginner: 0,
   intermediate: 1,
   expert: 2,
@@ -52,11 +56,16 @@ export const getProjectCompletion = (project) => {
     const actionType = hotspot?.[`${prefix}ActionType`] || 'dialogue';
     const sceneId = hotspot?.[`${prefix}TargetSceneId`] || '';
     const cinematicId = hotspot?.[`${prefix}TargetCinematicId`] || '';
+    const externalUrl = hotspot?.[`${prefix}ExternalUrl`] || '';
+    const targetProjectId = hotspot?.[`${prefix}TargetProjectId`] || '';
+    const targetProjectUserId = hotspot?.[`${prefix}TargetProjectUserId`] || '';
     const enigmaId = hotspot?.[`${prefix}EnigmaId`] || '';
 
     return (
       (actionType === 'scene' && (!sceneId || !sceneIds.has(sceneId)))
       || (actionType === 'cinematic' && (!cinematicId || !cinematicIds.has(cinematicId)))
+      || (actionType === 'external_link' && !String(externalUrl || '').trim())
+      || (actionType === 'project_link' && (!targetProjectId || !targetProjectUserId))
       || (enigmaId && !enigmaIds.has(enigmaId))
     );
   };
