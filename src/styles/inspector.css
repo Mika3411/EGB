@@ -1,5 +1,5 @@
 ﻿/* === Help tooltips: compact inspector notes === */
-.label-with-help {
+:where(.app-shell) .label-with-help {
   position: relative;
   display: flex;
   align-items: center;
@@ -11,7 +11,7 @@
   overflow: visible !important;
 }
 
-.help-dot {
+:where(.app-shell) .help-dot {
   position: relative;
   width: 14px;
   height: 14px;
@@ -30,21 +30,21 @@
   z-index: 2010;
 }
 
-.help-inline-note {
+:where(.app-shell) .help-inline-note {
   margin: 4px 0 2px !important;
   font-size: 11px !important;
   line-height: 1.25 !important;
   opacity: .8;
 }
 
-.compact-divider {
+:where(.app-shell) .compact-divider {
   margin: 10px 0;
   opacity: .7;
   border: 0;
   border-top: 1px solid var(--builder-line, var(--line));
 }
 
-.compact-section-title {
+:where(.app-shell) .compact-section-title {
   margin: 0 0 6px;
   font-size: 13px;
   line-height: 1.2;
@@ -53,42 +53,42 @@
 /* === Tooltip v3: fix overlap/behind center column ===
    Keep help bubbles inside the inspector column and put the right panel
    above the central editor in the stacking order. */
-.three-cols {
+:where(.app-shell) .three-cols {
   isolation: isolate;
 }
 
-.three-cols > .panel,
-.three-cols > .panel-main-pro,
-.three-cols > .panel-nav-pro,
-.three-cols > .panel-context-pro {
+:where(.app-shell) .three-cols > .panel,
+:where(.app-shell) .three-cols > .panel-main-pro,
+:where(.app-shell) .three-cols > .panel-nav-pro,
+:where(.app-shell) .three-cols > .panel-context-pro {
   overflow-x: clip !important;
   position: relative;
   overflow: visible !important;
 }
 
-.panel-nav-pro {
+:where(.app-shell) .panel-nav-pro {
   z-index: 5;
 }
 
-.panel-main-pro {
+:where(.app-shell) .panel-main-pro {
   z-index: 10;
 }
 
-.panel-context-pro {
+:where(.app-shell) .panel-context-pro {
   overflow-x: clip !important;
   z-index: 2000;
 }
 
-.panel-context-pro .subpanel,
-.panel-context-pro .side-editor-pro,
-.panel-context-pro .label-with-help {
+:where(.app-shell) .panel-context-pro .subpanel,
+:where(.app-shell) .panel-context-pro .side-editor-pro,
+:where(.app-shell) .panel-context-pro .label-with-help {
   position: relative;
   overflow: visible !important;
   z-index: 2001;
 }
 
 /* The bubble opens to the right of the help dot so it stays in the inspector column. */
-.help-dot::after {
+:where(.app-shell) .help-dot::after {
   content: attr(data-help);
   position: fixed;
   opacity: 0;
@@ -116,8 +116,8 @@
   z-index: 99999 !important;
 }
 
-.help-dot:hover::after,
-.help-dot:focus::after {
+:where(.app-shell) .help-dot:hover::after,
+:where(.app-shell) .help-dot:focus::after {
   opacity: 1;
   visibility: visible;
   transform: none !important;
@@ -125,28 +125,28 @@
 
 /* If a help icon is too close to the right edge, this optional class can be
    added manually to flip the bubble left: className="help-dot help-left". */
-.help-dot.help-left::after {
+:where(.app-shell) .help-dot.help-left::after {
   left: var(--help-left, 12px) !important;
   right: auto !important;
 }
 
-.grid-two > .checkbox-row:last-child .help-dot::after,
-.grid-two > div + .checkbox-row .help-dot::after,
-.logic-rule-body .checkbox-row:last-child .help-dot::after,
-.side-editor-pro .help-dot::after,
-.side-editor .help-dot::after {
+:where(.app-shell) .grid-two > .checkbox-row:last-child .help-dot::after,
+:where(.app-shell) .grid-two > div + .checkbox-row .help-dot::after,
+:where(.app-shell) .logic-rule-body .checkbox-row:last-child .help-dot::after,
+:where(.app-shell) .side-editor-pro .help-dot::after,
+:where(.app-shell) .side-editor .help-dot::after {
   left: var(--help-left, 12px) !important;
   right: auto !important;
   max-width: min(280px, calc(100vw - 24px)) !important;
 }
 
 @media (max-width: 720px) {
-  .help-dot::after,
-  .grid-two > .checkbox-row:last-child .help-dot::after,
-  .grid-two > div + .checkbox-row .help-dot::after,
-  .logic-rule-body .checkbox-row:last-child .help-dot::after,
-  .side-editor-pro .help-dot::after,
-  .side-editor .help-dot::after {
+  :where(.app-shell) .help-dot::after,
+  :where(.app-shell) .grid-two > .checkbox-row:last-child .help-dot::after,
+  :where(.app-shell) .grid-two > div + .checkbox-row .help-dot::after,
+  :where(.app-shell) .logic-rule-body .checkbox-row:last-child .help-dot::after,
+  :where(.app-shell) .side-editor-pro .help-dot::after,
+  :where(.app-shell) .side-editor .help-dot::after {
     left: var(--help-left, 12px) !important;
     right: auto !important;
     top: var(--help-top, 12px) !important;
@@ -155,27 +155,27 @@
     transform: none !important;
   }
 
-  .help-dot:hover::after,
-  .help-dot:focus::after {
+  :where(.app-shell) .help-dot:hover::after,
+  :where(.app-shell) .help-dot:focus::after {
     transform: none !important;
   }
 }
 
 
 /* === Scene navigation: collapsible sub-scenes === */
-.scene-tree-node { margin-bottom: 4px; }
-.scene-tree-node summary { list-style: none; }
-.scene-tree-node summary::-webkit-details-marker,
-.act-group summary::-webkit-details-marker { display: none; }
-.scene-summary { display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: center; gap: 3px; padding-left: calc(var(--scene-depth, 0) * 7px); border: 1px solid var(--builder-line, var(--line)); border-radius: 10px; background: var(--builder-surface-card, var(--surface-card-soft)); }
-.scene-summary.selected { border-color: var(--builder-line-strong, var(--ds-state-info-border)); background: var(--ds-state-info-bg-soft); box-shadow: inset 3px 0 var(--ds-state-info-accent); }
-.scene-collapse-button, .scene-collapse-spacer { width: 18px; height: 18px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
-.scene-collapse-button { padding: 0; background: var(--ds-state-muted-bg); border: 1px solid var(--ds-state-muted-border); color: var(--text-control-muted); box-shadow: none; font-size: 12px; line-height: 1; }
-.scene-collapse-button:hover { transform: none; background: var(--ds-state-info-bg-soft); border-color: var(--ds-state-info-border); }
-.scene-select-button { width: 100%; min-width: 0; padding: 0; border: none; background: transparent; color: var(--text-on-dark); box-shadow: none; text-align: left; }
-.scene-title-line { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 8px; min-height: 32px; }
-.scene-title-line strong, .scene-title-line small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.scene-title-line small { color: var(--muted-2); font-size: 10px; font-weight: 500; }
-.scene-children { margin-top: 4px; margin-left: 8px; padding-left: 8px; border-left: 1px dashed var(--builder-line, var(--line)); }
-.scene-children-list { display: grid; gap: 4px; }
+:where(.app-shell) .scene-tree-node { margin-bottom: 4px; }
+:where(.app-shell) .scene-tree-node summary { list-style: none; }
+:where(.app-shell) .scene-tree-node summary::-webkit-details-marker,
+:where(.app-shell) .act-group summary::-webkit-details-marker { display: none; }
+:where(.app-shell) .scene-summary { display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: center; gap: 3px; padding-left: calc(var(--scene-depth, 0) * 7px); border: 1px solid var(--builder-line, var(--line)); border-radius: 10px; background: var(--builder-surface-card, var(--surface-card-soft)); }
+:where(.app-shell) .scene-summary.selected { border-color: var(--builder-line-strong, var(--ds-state-info-border)); background: var(--ds-state-info-bg-soft); box-shadow: inset 3px 0 var(--ds-state-info-accent); }
+:where(.app-shell) .scene-collapse-button, :where(.app-shell) .scene-collapse-spacer { width: 18px; height: 18px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+:where(.app-shell) .scene-collapse-button { padding: 0; background: var(--ds-state-muted-bg); border: 1px solid var(--ds-state-muted-border); color: var(--text-control-muted); box-shadow: none; font-size: 12px; line-height: 1; }
+:where(.app-shell) .scene-collapse-button:hover { transform: none; background: var(--ds-state-info-bg-soft); border-color: var(--ds-state-info-border); }
+:where(.app-shell) .scene-select-button { width: 100%; min-width: 0; padding: 0; border: none; background: transparent; color: var(--text-on-dark); box-shadow: none; text-align: left; }
+:where(.app-shell) .scene-title-line { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 8px; min-height: 32px; }
+:where(.app-shell) .scene-title-line strong, :where(.app-shell) .scene-title-line small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:where(.app-shell) .scene-title-line small { color: var(--muted-2); font-size: 10px; font-weight: 500; }
+:where(.app-shell) .scene-children { margin-top: 4px; margin-left: 8px; padding-left: 8px; border-left: 1px dashed var(--builder-line, var(--line)); }
+:where(.app-shell) .scene-children-list { display: grid; gap: 4px; }
 
