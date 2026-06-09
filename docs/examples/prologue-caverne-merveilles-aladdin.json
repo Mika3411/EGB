@@ -1,0 +1,358 @@
+{
+  "title": "Prologue - La Caverne aux Merveilles",
+  "description": "Prologue lineaire en 3 scenes: le Vizir cherche un passage ancien, Aladdin trouve le Diamant d'Innocence, puis le puzzle revele la route jusqu'a la Caverne. Le prologue s'arrete devant la Caverne.",
+  "creationMode": "beginner",
+  "acts": [
+    {
+      "id": "act_prologue_caverne",
+      "name": "Prologue"
+    }
+  ],
+  "start": {
+    "type": "scene",
+    "targetSceneId": "scene_01_ruelle_souk",
+    "targetCinematicId": ""
+  },
+  "items": [
+    {
+      "id": "item_diamant_innocence",
+      "name": "Diamant d'Innocence",
+      "icon": "DIA",
+      "imageData": "/assets/generated/prologue-caverne/item-diamant-innocence.png",
+      "imageName": "item-diamant-innocence.png",
+      "heroItemType": "none"
+    }
+  ],
+  "combinations": [],
+  "storyVariables": [],
+  "scenes": [
+    {
+      "id": "scene_01_ruelle_souk",
+      "name": "Ruelle derriere le souk",
+      "actId": "act_prologue_caverne",
+      "parentSceneId": "",
+      "backgroundId": "",
+      "backgroundData": "/assets/generated/prologue-caverne/scene-01-ruelle-souk.png",
+      "backgroundName": "scene-01-ruelle-souk.png",
+      "backgroundWidth": 1672,
+      "backgroundHeight": 941,
+      "backgroundAspectRatio": 1.777,
+      "visualEffect": "embers",
+      "visualEffectIntensity": "subtle",
+      "sceneTransition": "fade",
+      "sceneTransitionDuration": 700,
+      "timerEnabled": false,
+      "timerSeconds": 60,
+      "timerEndAction": "none",
+      "timerTargetSceneId": "",
+      "timerTargetCinematicId": "",
+      "timerLifeLoss": 1,
+      "timerEndMessage": "Le temps est ecoule.",
+      "musicId": "",
+      "musicData": "",
+      "musicName": "",
+      "musicLoop": true,
+      "ambientSoundId": "",
+      "ambientSoundData": "",
+      "ambientSoundName": "",
+      "ambientSoundLoop": false,
+      "introText": "La nuit tombe sur le souk. Dans les ruelles, on murmure que le sombre Vizir cherche la Caverne aux Merveilles pour s'emparer d'un pouvoir ancien. Il ne peut pas y entrer lui-meme: la Caverne attend quelqu'un dont l'apparence cache une vraie valeur. Aladdin traverse la foule sans attirer les regards. Pres d'une fontaine eteinte, une lueur pale pulse sous la poussiere.",
+      "visualEffectZones": [],
+      "hotspots": [
+        {
+          "id": "hotspot_fontaine_eteinte",
+          "name": "Fontaine eteinte",
+          "x": 32,
+          "y": 64,
+          "width": 20,
+          "height": 16,
+          "actionType": "dialogue_item",
+          "dialogue": "Au fond de la fontaine, vous trouvez une pierre claire et froide. Elle semble ordinaire, mais elle reagit a la main d'Aladdin: c'est le Diamant d'Innocence.",
+          "requiredItemId": "",
+          "consumeRequiredItemOnUse": false,
+          "rewardItemId": "item_diamant_innocence",
+          "targetSceneId": "",
+          "targetCinematicId": "",
+          "enigmaId": "",
+          "requiredHotspotId": "",
+          "lockedMessage": ""
+        },
+        {
+          "id": "hotspot_sortie_desert",
+          "name": "Sortie vers le desert",
+          "x": 76,
+          "y": 58,
+          "width": 18,
+          "height": 18,
+          "actionType": "scene",
+          "dialogue": "Le Diamant devient tiede. Une trainee de sable se leve et indique une route hors de la ville.",
+          "requiredItemId": "item_diamant_innocence",
+          "consumeRequiredItemOnUse": false,
+          "rewardItemId": "",
+          "targetSceneId": "scene_02_piste_des_sables",
+          "targetCinematicId": "",
+          "enigmaId": "",
+          "requiredHotspotId": "",
+          "lockedMessage": "Il faut d'abord trouver la preuve que la Caverne attend: une valeur cachee sous une apparence simple."
+        }
+      ],
+      "sceneObjects": []
+    },
+    {
+      "id": "scene_02_piste_des_sables",
+      "name": "Piste des sables",
+      "actId": "act_prologue_caverne",
+      "parentSceneId": "scene_01_ruelle_souk",
+      "backgroundId": "",
+      "backgroundData": "/assets/generated/prologue-caverne/scene-02-piste-sables.png",
+      "backgroundName": "scene-02-piste-sables.png",
+      "backgroundWidth": 1672,
+      "backgroundHeight": 941,
+      "backgroundAspectRatio": 1.777,
+      "visualEffect": "magic",
+      "visualEffectIntensity": "subtle",
+      "sceneTransition": "fade",
+      "sceneTransitionDuration": 800,
+      "timerEnabled": false,
+      "timerSeconds": 60,
+      "timerEndAction": "none",
+      "timerTargetSceneId": "",
+      "timerTargetCinematicId": "",
+      "timerLifeLoss": 1,
+      "timerEndMessage": "Le temps est ecoule.",
+      "musicId": "",
+      "musicData": "",
+      "musicName": "",
+      "musicLoop": true,
+      "ambientSoundId": "",
+      "ambientSoundData": "",
+      "ambientSoundName": "",
+      "ambientSoundLoop": false,
+      "introText": "La ville disparait derriere vous. Sur le sable, une dalle brisee affleure sous la lune. Ses fragments montrent un lion de pierre, une etoile et un diamant, mais l'image est melangee. Le Diamant d'Innocence chauffe dans la main d'Aladdin: la route vers la Caverne semble cachee dans cette fresque a reconstituer.",
+      "visualEffectZones": [],
+      "hotspots": [
+        {
+          "id": "hotspot_fresque_brisee",
+          "name": "Fresque brisee",
+          "x": 44,
+          "y": 48,
+          "width": 28,
+          "height": 18,
+          "actionType": "dialogue",
+          "dialogue": "La fresque est coupee en fragments: on distingue la tete d'un lion, une etoile du desert et un diamant au centre. Si l'image etait remise en ordre, elle indiquerait surement la direction de la Caverne.",
+          "requiredItemId": "",
+          "consumeRequiredItemOnUse": false,
+          "rewardItemId": "",
+          "targetSceneId": "",
+          "targetCinematicId": "",
+          "enigmaId": "",
+          "requiredHotspotId": "",
+          "lockedMessage": ""
+        },
+        {
+          "id": "hotspot_route_cachee",
+          "name": "Route cachee",
+          "x": 68,
+          "y": 62,
+          "width": 20,
+          "height": 16,
+          "actionType": "scene",
+          "dialogue": "Quand la fresque est reconstituee, le diamant dessine un rayon vers les dunes. Au loin, une forme gigantesque sort lentement de la nuit.",
+          "requiredItemId": "item_diamant_innocence",
+          "consumeRequiredItemOnUse": false,
+          "rewardItemId": "",
+          "targetSceneId": "scene_03_devant_caverne",
+          "targetCinematicId": "",
+          "enigmaId": "enigma_puzzle_fresque",
+          "requiredHotspotId": "",
+          "lockedMessage": "Le Diamant doit etre present pour lire les traces du desert."
+        },
+        {
+          "id": "hotspot_retour_souk",
+          "name": "Retour au souk",
+          "x": 12,
+          "y": 78,
+          "width": 14,
+          "height": 12,
+          "actionType": "scene",
+          "dialogue": "Vous retournez vers les dernieres lumieres du souk.",
+          "requiredItemId": "",
+          "consumeRequiredItemOnUse": false,
+          "rewardItemId": "",
+          "targetSceneId": "scene_01_ruelle_souk",
+          "targetCinematicId": "",
+          "enigmaId": "",
+          "requiredHotspotId": "",
+          "lockedMessage": ""
+        }
+      ],
+      "sceneObjects": []
+    },
+    {
+      "id": "scene_03_devant_caverne",
+      "name": "Devant la Caverne aux Merveilles",
+      "actId": "act_prologue_caverne",
+      "parentSceneId": "scene_02_piste_des_sables",
+      "backgroundId": "",
+      "backgroundData": "/assets/generated/prologue-caverne/scene-03-devant-caverne.png",
+      "backgroundName": "scene-03-devant-caverne.png",
+      "backgroundWidth": 1672,
+      "backgroundHeight": 941,
+      "backgroundAspectRatio": 1.777,
+      "visualEffect": "sparkles",
+      "visualEffectIntensity": "subtle",
+      "sceneTransition": "iris",
+      "sceneTransitionDuration": 900,
+      "timerEnabled": false,
+      "timerSeconds": 60,
+      "timerEndAction": "none",
+      "timerTargetSceneId": "",
+      "timerTargetCinematicId": "",
+      "timerLifeLoss": 1,
+      "timerEndMessage": "Le temps est ecoule.",
+      "musicId": "",
+      "musicData": "",
+      "musicName": "",
+      "musicLoop": true,
+      "ambientSoundId": "",
+      "ambientSoundData": "",
+      "ambientSoundName": "",
+      "ambientSoundLoop": false,
+      "introText": "La Caverne aux Merveilles se dresse enfin devant Aladdin, immense et silencieuse. Sa gueule de pierre n'est pas encore ouverte. Le Diamant d'Innocence brille une derniere fois, comme s'il venait de reconnaitre celui qui pourra approcher le seuil. Derriere les dunes, l'ombre du Vizir observe. Le prologue s'arrete ici: devant la Caverne.",
+      "visualEffectZones": [],
+      "hotspots": [
+        {
+          "id": "hotspot_seuil_caverne",
+          "name": "Seuil de pierre",
+          "x": 50,
+          "y": 54,
+          "width": 26,
+          "height": 20,
+          "actionType": "dialogue",
+          "dialogue": "Une voix ancienne murmure: 'Approche, diamant d'innocence.' La Caverne attend le premier pas, mais cette histoire ne commence vraiment qu'apres ce prologue.",
+          "requiredItemId": "item_diamant_innocence",
+          "consumeRequiredItemOnUse": false,
+          "rewardItemId": "",
+          "targetSceneId": "",
+          "targetCinematicId": "",
+          "enigmaId": "",
+          "requiredHotspotId": "",
+          "lockedMessage": "Sans le Diamant d'Innocence, le seuil reste sans voix."
+        }
+      ],
+      "sceneObjects": []
+    }
+  ],
+  "cinematics": [],
+  "enigmas": [
+    {
+      "id": "enigma_puzzle_fresque",
+      "name": "Fresque de la Caverne",
+      "type": "puzzle",
+      "question": "Reconstituez la fresque brisee pour reveler la route vers la Caverne aux Merveilles.",
+      "solutionText": "",
+      "solutionColors": [],
+      "miscMode": "free-answer",
+      "miscChoices": [],
+      "miscCorrectChoices": [],
+      "miscPairs": [
+        {
+          "left": "Valeur cachee",
+          "right": "INNOCENCE"
+        }
+      ],
+      "miscMin": "",
+      "miscMax": "",
+      "miscTargetItemId": "",
+      "successMessage": "La fresque est complete. Le Diamant projette un rayon sur les dunes: la Caverne est droit devant.",
+      "failMessage": "Les fragments ne sont pas encore a leur place. Reconstituez l'image du lion, de l'etoile et du diamant.",
+      "unlockType": "scene",
+      "targetSceneId": "scene_03_devant_caverne",
+      "targetCinematicId": "",
+      "imageData": "/assets/generated/prologue-caverne/puzzle-fresque-caverne.png",
+      "imageName": "puzzle-fresque-caverne.png",
+      "imagePuzzleLogic": "classic-grid",
+      "imageCutStyle": "straight",
+      "popupBackgroundData": "",
+      "popupBackgroundName": "",
+      "popupBackgroundZoom": 1,
+      "popupBackgroundX": 50,
+      "popupBackgroundY": 50,
+      "popupBackgroundOverlay": "dark",
+      "gridRows": 3,
+      "gridCols": 3
+    }
+  ],
+  "assets": [
+    {
+      "id": "asset_cover_caverne",
+      "name": "Couverture Caverne aux Merveilles",
+      "type": "image",
+      "url": "/assets/generated/prologue-caverne/cover-caverne-merveilles.png"
+    }
+  ],
+  "routeMap": {
+    "rows": 16,
+    "cols": 24,
+    "cells": [],
+    "rooms": [
+      {
+        "id": "room_ruelle",
+        "name": "Ruelle",
+        "sceneId": "scene_01_ruelle_souk",
+        "canvasId": "route_canvas_1",
+        "x": 18,
+        "y": 54,
+        "type": "start"
+      },
+      {
+        "id": "room_piste",
+        "name": "Piste des sables",
+        "sceneId": "scene_02_piste_des_sables",
+        "canvasId": "route_canvas_1",
+        "x": 52,
+        "y": 36,
+        "type": "room"
+      },
+      {
+        "id": "room_caverne",
+        "name": "Devant la Caverne",
+        "sceneId": "scene_03_devant_caverne",
+        "canvasId": "route_canvas_1",
+        "x": 82,
+        "y": 58,
+        "type": "end"
+      }
+    ],
+    "connections": [
+      {
+        "id": "connection_ruelle_piste",
+        "fromRoomId": "room_ruelle",
+        "toRoomId": "room_piste",
+        "label": "Trouver le Diamant",
+        "condition": "Avoir le Diamant d'Innocence",
+        "locked": true,
+        "allowOneWay": false
+      },
+      {
+        "id": "connection_piste_caverne",
+        "fromRoomId": "room_piste",
+        "toRoomId": "room_caverne",
+        "label": "Reconstituer la fresque",
+        "condition": "Puzzle de la fresque resolu",
+        "locked": true,
+        "allowOneWay": true
+      }
+    ],
+    "canvases": [
+      {
+        "id": "route_canvas_1",
+        "name": "Prologue"
+      }
+    ],
+    "actMaps": {},
+    "notes": "Parcours lineaire sans embranchement: Ruelle -> Piste des sables -> Devant la Caverne. Objet unique: Diamant d'Innocence. Puzzle interactif unique: reconstituer la fresque en grille 3x3 pour reveler la route. Le prologue se termine devant la Caverne, sans entrer."
+  },
+  "characterModels3d": [],
+  "decorModels3d": []
+}

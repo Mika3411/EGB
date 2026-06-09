@@ -1,4 +1,5 @@
 import { makeEnigma, makeHotspot, makeItem, makeScene, normalizeProject } from '../data/projectData';
+import { applyTemplateBackgrounds, withTemplateItemImages } from './templateBackgrounds';
 
 export const applyBookHeroTemplate = (project, name) => {
   const actId = project.acts[0]?.id || '';
@@ -8,8 +9,8 @@ export const applyBookHeroTemplate = (project, name) => {
   }
 
   const [road, gate, market, catacombs, throne] = scenes;
-  const silverBookmark = makeItem('Marque-page d argent', '[]');
-  const lantern = makeItem('Lanterne sourde', 'O');
+  const silverBookmark = makeItem('Marque-page d argent', '🔖');
+  const lantern = makeItem('Lanterne sourde', '🏮');
   const riddle = makeEnigma({
     name: 'Le serment de la citadelle',
     type: 'misc',
@@ -74,7 +75,7 @@ export const applyBookHeroTemplate = (project, name) => {
     },
   };
   project.acts = [{ ...project.acts[0], name: 'Livre I' }];
-  project.items = [silverBookmark, lantern];
+  project.items = withTemplateItemImages([silverBookmark, lantern], 'book_hero');
   project.combinations = [];
   project.cinematics = [];
   project.enigmas = [riddle];
@@ -431,7 +432,7 @@ export const applyBookHeroTemplate = (project, name) => {
     },
   }];
 
-  project.scenes = scenes.filter(Boolean);
+  project.scenes = applyTemplateBackgrounds(scenes.filter(Boolean), 'book_hero');
   project.routeMap = {
     rows: 16,
     cols: 24,
@@ -456,4 +457,3 @@ export const applyBookHeroTemplate = (project, name) => {
   project.start = { type: 'scene', targetSceneId: road.id, targetCinematicId: '' };
   return normalizeProject(project);
 };
-

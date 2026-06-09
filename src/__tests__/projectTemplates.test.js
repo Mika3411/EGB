@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CREATION_TEMPLATES } from '../domains/profile/components/profileUtils.js';
 import { createInitialProject } from '../shared/data/projectData.js';
@@ -7,6 +9,25 @@ const NON_EMPTY_TEMPLATE_IDS = CREATION_TEMPLATES
   .map(([templateId]) => templateId)
   .filter((templateId) => templateId !== 'empty');
 
+const GENERATED_BACKGROUND_TEMPLATE_IDS = [
+  'adventure_choices',
+  'book_hero',
+  'hero_adventure',
+  'investigation',
+  'laboratory',
+  'manor',
+  'museum',
+];
+const MANUAL_BACKGROUND_TEMPLATE_IDS = NON_EMPTY_TEMPLATE_IDS
+  .filter((templateId) => !GENERATED_BACKGROUND_TEMPLATE_IDS.includes(templateId));
+const GENERATED_ITEM_IMAGE_TEMPLATE_IDS = [
+  'adventure_choices',
+  'hero_adventure',
+  'investigation',
+  'laboratory',
+  'manor',
+  'museum',
+];
 const CLASSIC_TEMPLATE_IDS = ['manor', 'investigation', 'laboratory', 'museum'];
 const NARRATIVE_TEMPLATE_IDS = [
   'narrative_investigation',
@@ -16,6 +37,10 @@ const NARRATIVE_TEMPLATE_IDS = [
   'negotiation',
   'narrative_maze',
 ];
+
+const publicAssetExists = (assetUrl) => (
+  existsSync(join(process.cwd(), 'public', assetUrl.replace(/^\//u, '')))
+);
 
 describe('project templates', () => {
   it.each(NON_EMPTY_TEMPLATE_IDS)('%s fournit un plan, des objets et une enigme', (templateId) => {
@@ -32,6 +57,53 @@ describe('project templates', () => {
     expect(project.routeMap.connections.every((connection) => (
       roomIds.has(connection.fromRoomId) && roomIds.has(connection.toRoomId)
     ))).toBe(true);
+  });
+
+  it.each(GENERATED_BACKGROUND_TEMPLATE_IDS)('%s fournit des fonds jouables en preview', (templateId) => {
+    const project = applyCreationTemplate(createInitialProject(), templateId, `Projet ${templateId}`);
+
+    expect(project.scenes.length).toBeGreaterThan(0);
+    project.scenes.forEach((scene) => {
+      expect(scene.backgroundData).toMatch(/^\/assets\/generated\//);
+      expect(scene.backgroundName).toMatch(/\.png$/);
+      expect(scene.backgroundWidth).toBeGreaterThan(0);
+      expect(scene.backgroundHeight).toBeGreaterThan(0);
+      expect(scene.backgroundAspectRatio).toBeGreaterThan(1);
+      expect(publicAssetExists(scene.backgroundData)).toBe(true);
+    });
+  });
+
+  it.each(MANUAL_BACKGROUND_TEMPLATE_IDS)('%s ne plaque pas de fond genere sans pack visuel dedie', (templateId) => {
+    const project = applyCreationTemplate(createInitialProject(), templateId, `Projet ${templateId}`);
+
+    expect(project.scenes.length).toBeGreaterThan(0);
+    project.scenes.forEach((scene) => {
+      expect(scene.backgroundData).toBe('');
+      expect(scene.backgroundName).toBe('');
+      expect(scene.backgroundWidth).toBe(0);
+      expect(scene.backgroundHeight).toBe(0);
+    });
+  });
+
+  it.each(NON_EMPTY_TEMPLATE_IDS)('%s fournit des icones d objets finalisees', (templateId) => {
+    const project = applyCreationTemplate(createInitialProject(), templateId, `Projet ${templateId}`);
+
+    expect(project.items.length).toBeGreaterThan(0);
+    project.items.forEach((item) => {
+      expect(item.icon).toBeTruthy();
+      expect(item.icon).not.toBe('[]');
+    });
+  });
+
+  it.each(GENERATED_ITEM_IMAGE_TEMPLATE_IDS)('%s fournit des objets illustrés', (templateId) => {
+    const project = applyCreationTemplate(createInitialProject(), templateId, `Projet ${templateId}`);
+
+    expect(project.items.length).toBeGreaterThan(0);
+    project.items.forEach((item) => {
+      expect(item.imageData).toMatch(/^\/assets\/generated\/templates\//);
+      expect(item.imageName).toMatch(/\.png$/);
+      expect(publicAssetExists(item.imageData)).toBe(true);
+    });
   });
 
   it.each(CLASSIC_TEMPLATE_IDS)('%s remplace le contenu de demo par un mini-jeu coherent', (templateId) => {

@@ -23,10 +23,10 @@ export const ensureSewerAct2 = (draft, helpers = {}) => {
   draft.acts.push({ id: act2Id, name: 'Acte II - Les égouts figés' });
 
   [
-    makeItem('clé rouillée des égouts', '[]'),
-    makeItem('plan humide des sous-sols', '[]'),
-    makeItem('manivelle froide', '[]'),
-    makeItem('badge de la porte rouge', '[]'),
+    makeItem('clé rouillée des égouts', '🔑'),
+    makeItem('plan humide des sous-sols', '🗺️'),
+    makeItem('manivelle froide', '⚙️'),
+    makeItem('badge de la porte rouge', '🪪'),
   ].forEach((item, index) => {
     item.id = [rustKeyId, mapId, valveId, redBadgeId][index];
     if (!draft.items.some((entry) => entry.id === item.id)) draft.items.push(item);

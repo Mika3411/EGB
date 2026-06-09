@@ -1,6 +1,7 @@
 import { makeEnigma, makeHotspot, makeItem, makeScene, normalizeProject } from '../data/projectData';
 import { applyBookHeroTemplate } from './projectTemplatesBookHero';
 import { NARRATIVE_TEMPLATE_CONFIGS } from './projectTemplatesNarrativeConfigs';
+import { applyTemplateBackgrounds, withTemplateItemImages } from './templateBackgrounds';
 
 const TEMPLATE_TITLES = {
   empty: 'Projet vide',
@@ -29,7 +30,7 @@ const CLASSIC_TEMPLATE_CONFIGS = {
       'La chambre semble intacte, mais le lit froid, le miroir voile et le coffret scelle racontent la derniere nuit de la maison.',
     ],
     itemNames: ['Clef de la bibliotheque', 'Portrait dechire', 'Sceau de cire noire'],
-    itemIcons: ['[]', '[]', 'O'],
+    itemIcons: ['🔑', '🖼️', '🕯️'],
     startObjectName: 'Horloge du hall',
     startObjectDialogue: 'Derriere l horloge, tu trouves la clef de la bibliotheque.',
     startClueName: 'Portrait lacere',
@@ -65,7 +66,7 @@ const CLASSIC_TEMPLATE_CONFIGS = {
       'Les archives contiennent les noms que personne ne veut revoir. La bonne cote peut transformer un soupcon en preuve.',
     ],
     itemNames: ['Badge de scene', 'Ticket humide', 'Dossier classe C-17'],
-    itemIcons: ['[]', '[]', 'C17'],
+    itemIcons: ['🪪', '🎟️', '📁'],
     startObjectName: 'Dossier urgent',
     startObjectDialogue: 'Tu prends le badge de scene. Sans lui, personne ne te laissera approcher les preuves.',
     startClueName: 'Note du standard',
@@ -101,7 +102,7 @@ const CLASSIC_TEMPLATE_CONFIGS = {
       'Le reacteur pulse lentement. La bonne sequence peut le stabiliser; une erreur peut verrouiller tout le laboratoire.',
     ],
     itemNames: ['Carte de securite', 'Echantillon bleu', 'Module de controle'],
-    itemIcons: ['[]', '[]', 'MOD'],
+    itemIcons: ['💳', '🧪', '⚙️'],
     startObjectName: 'Casier de securite',
     startObjectDialogue: 'Dans le casier, tu trouves une carte de securite encore active.',
     startClueName: 'Journal de garde',
@@ -137,7 +138,7 @@ const CLASSIC_TEMPLATE_CONFIGS = {
       'La salle des artefacts attend dans le silence. Le socle vide reclame le bon objet et le bon symbole.',
     ],
     itemNames: ['Clef de reserve', 'Cartel ancien', 'Medaille solaire'],
-    itemIcons: ['[]', '[]', 'SUN'],
+    itemIcons: ['🔑', '🏷️', '☀️'],
     startObjectName: 'Vitrine ouverte',
     startObjectDialogue: 'Sous le velours de la vitrine, tu trouves la clef de reserve.',
     startClueName: 'Trace de poussiere',
@@ -189,7 +190,7 @@ const applyNarrativeTemplate = (project, templateId) => {
   });
 
   project.acts = [{ ...project.acts[0], name: config.actName }];
-  project.items = [item, supportItem, finalItem];
+  project.items = withTemplateItemImages([item, supportItem, finalItem], templateId);
   project.combinations = [];
   project.cinematics = [];
   project.enigmas = [enigma];
@@ -415,7 +416,7 @@ const applyNarrativeTemplate = (project, templateId) => {
     ];
   }
 
-  project.scenes = scenes.filter(Boolean);
+  project.scenes = applyTemplateBackgrounds(scenes.filter(Boolean), templateId);
   project.routeMap = {
     rows: 16,
     cols: 24,
@@ -444,7 +445,7 @@ const applyClassicTemplate = (project, templateId) => {
   const [startScene, branchScene, endScene] = scenes;
   const actId = project.acts[0]?.id || '';
   const [accessItem, clueItem, finalItem] = config.itemNames.map((itemName, index) => (
-    makeItem(itemName, config.itemIcons[index] || '[]')
+    makeItem(itemName, config.itemIcons[index] || '📦')
   ));
   const enigma = makeEnigma({
     name: config.enigmaName,
@@ -460,7 +461,7 @@ const applyClassicTemplate = (project, templateId) => {
   });
 
   project.acts = [{ ...project.acts[0], name: config.actName }];
-  project.items = [accessItem, clueItem, finalItem];
+  project.items = withTemplateItemImages([accessItem, clueItem, finalItem], templateId);
   project.combinations = [];
   project.cinematics = [];
   project.enigmas = [enigma];
@@ -634,7 +635,7 @@ const applyClassicTemplate = (project, templateId) => {
     ];
   }
 
-  project.scenes = scenes.filter(Boolean);
+  project.scenes = applyTemplateBackgrounds(scenes.filter(Boolean), templateId);
   project.routeMap = {
     rows: 16,
     cols: 24,
@@ -684,7 +685,7 @@ export function applyCreationTemplate(baseProject, templateId, name) {
     const scenes = project.scenes.slice(0, 3);
     const [arrival, forest, tower] = scenes;
     const actId = project.acts[0]?.id || '';
-    const guideToken = makeItem('Jeton du guide', '[]');
+    const guideToken = makeItem('Jeton du guide', '🪙');
     const valleyMap = makeItem('Carte de la vallee', 'MAP');
     const watcherSeal = makeItem('Sceau du guetteur', 'O');
     const choiceEnigma = makeEnigma({
@@ -701,7 +702,7 @@ export function applyCreationTemplate(baseProject, templateId, name) {
     });
 
     project.acts = [{ ...project.acts[0], name: 'Chapitre I' }];
-    project.items = [guideToken, valleyMap, watcherSeal];
+    project.items = withTemplateItemImages([guideToken, valleyMap, watcherSeal], templateId);
     project.combinations = [];
     project.cinematics = [];
     project.enigmas = [choiceEnigma];
@@ -949,7 +950,7 @@ export function applyCreationTemplate(baseProject, templateId, name) {
       ];
     }
 
-    project.scenes = scenes.filter(Boolean);
+    project.scenes = applyTemplateBackgrounds(scenes.filter(Boolean), templateId);
     project.routeMap = {
       rows: 16,
       cols: 24,
@@ -975,7 +976,7 @@ export function applyCreationTemplate(baseProject, templateId, name) {
     const scenes = project.scenes.slice(0, 3);
     const [camp, ruins, sanctum] = scenes;
     const actId = project.acts[0]?.id || '';
-    const relic = makeItem('Relique ancienne', '[]');
+    const relic = makeItem('Relique ancienne', '🏺');
     const healthPotion = {
       ...makeItem('Potion de soin', 'PV'),
       heroItemType: 'health_potion',
@@ -1027,7 +1028,7 @@ export function applyCreationTemplate(baseProject, templateId, name) {
       },
     };
     project.acts = [{ ...project.acts[0], name: 'Chapitre I' }];
-    project.items = [relic, healthPotion, manaPotion, trainingBlade];
+    project.items = withTemplateItemImages([relic, healthPotion, manaPotion, trainingBlade], templateId);
     project.combinations = [];
     project.cinematics = [];
     project.enigmas = [trialEnigma];
@@ -1151,7 +1152,7 @@ export function applyCreationTemplate(baseProject, templateId, name) {
       ];
     }
 
-    project.scenes = scenes.filter(Boolean);
+    project.scenes = applyTemplateBackgrounds(scenes.filter(Boolean), templateId);
     project.routeMap = {
       rows: 16,
       cols: 24,

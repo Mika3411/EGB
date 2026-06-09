@@ -1,0 +1,24 @@
+{
+  "ok": true,
+  "canonicalProjectPath": "C:\\Users\\admin\\Documents\\escape-game-builder\\docs\\examples\\chasse-tresor-caraibes.json",
+  "assetDir": "C:\\Users\\admin\\Documents\\escape-game-builder\\public\\assets\\generated\\caribbean-treasure",
+  "counts": {
+    "acts": 1,
+    "scenes": 15,
+    "enigmas": 4,
+    "cinematics": 2,
+    "cinematicSlides": 6,
+    "items": 6,
+    "combinations": 1,
+    "hotspots": 76,
+    "logicRules": 10
+  },
+  "checked": [
+    "references",
+    "navigation returns",
+    "clues outside enigma rooms",
+    "media dimensions",
+    "item alpha"
+  ],
+  "note": "Version canonique copiee depuis public/assets/generated/caribbean-treasure/caribbean-treasure-project.json."
+}

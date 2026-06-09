@@ -30,8 +30,8 @@ const LOGIC_RULE_CONDITION_VALUES = ['always', 'has_item', 'missing_item', 'visi
 const LOGIC_RULE_ACTION_VALUES = ['default', 'dialogue', 'dialogue_item', 'scene', 'cinematic', 'block'];
 const BLOCK_ACTION_VALUES = ['show', 'hide', 'update_text'];
 const SCENE_OBJECT_FONT_FAMILY_VALUES = SCENE_OBJECT_FONT_FAMILY_OPTIONS.map((option) => option.value);
-const CINEMATIC_END_VALUES = ['none', 'act', 'scene', 'item'];
-const ENIGMA_UNLOCK_VALUES = ['none', 'scene', 'cinematic'];
+const CINEMATIC_END_VALUES = ['none', 'act', 'scene', 'item', 'project_link'];
+const ENIGMA_UNLOCK_VALUES = ['none', 'scene', 'cinematic', 'project_link'];
 const LEGACY_TECHNICAL_VALUE_MAP = {
   ['sc\u00e8ne']: 'scene',
   ['restart-sc\u00e8ne']: 'restart-scene',
@@ -105,6 +105,8 @@ const makeLogicRule = () => ({
   externalUrl: '',
   targetProjectId: '',
   targetProjectUserId: '',
+  accessCodeEnabled: false,
+  accessCode: '',
   enigmaId: '',
   blockActionType: 'show',
   targetBlockId: '',
@@ -124,6 +126,11 @@ const makeHotspot = () => ({
   rewardItemId: '',
   targetSceneId: '',
   targetCinematicId: '',
+  externalUrl: '',
+  targetProjectId: '',
+  targetProjectUserId: '',
+  accessCodeEnabled: false,
+  accessCode: '',
   enigmaId: '',
   requiredHotspotId: '',
   lockedMessage: '',
@@ -246,6 +253,8 @@ const makeEnigma = (overrides = {}) => ({
   unlockType: 'none',
   targetSceneId: '',
   targetCinematicId: '',
+  targetProjectId: '',
+  targetProjectUserId: '',
   imageData: '',
   imageName: '',
   popupBackgroundData: '',
@@ -303,7 +312,7 @@ const makeCinematicSlide = () => ({
 });
 const makeCinematic = () => ({
   id: uid(),
-  name: 'Nouvelle cinematic',
+  name: 'Nouvelle cinématique',
   cinematicType: 'slides',
   slides: [makeCinematicSlide()],
   steps: [
@@ -317,6 +326,8 @@ const makeCinematic = () => ({
   onEndType: 'none',
   targetActId: '',
   targetSceneId: '',
+  targetProjectId: '',
+  targetProjectUserId: '',
   rewardItemId: '',
 });
 
@@ -532,6 +543,8 @@ const makeImportedHotspot = ({
   externalUrl = '',
   targetProjectId = '',
   targetProjectUserId = '',
+  accessCodeEnabled = false,
+  accessCode = '',
   enigmaId = '',
   requiredItemId = '',
   rewardItemId = '',
@@ -551,6 +564,8 @@ const makeImportedHotspot = ({
   externalUrl,
   targetProjectId,
   targetProjectUserId,
+  accessCodeEnabled: Boolean(accessCodeEnabled),
+  accessCode,
   enigmaId,
   requiredItemId,
   rewardItemId,
@@ -737,6 +752,8 @@ const normalizeHotspot = (spot = {}) => {
     ...spot,
     actionType: normalizeAllowedValue(spot.actionType, HOTSPOT_ACTION_VALUES, 'dialogue'),
     secondActionType: normalizeAllowedValue(spot.secondActionType, HOTSPOT_ACTION_VALUES, 'dialogue'),
+    accessCodeEnabled: spot.accessCodeEnabled === true,
+    accessCode: spot.accessCode || '',
     conversation: normalizeConversation(spot.conversation),
     logicRules: Array.isArray(spot.logicRules) ? spot.logicRules.map(normalizeLogicRule) : [],
   };
@@ -915,8 +932,8 @@ const normalizeProject = (rawProject) => {
         isHidden: Boolean(zone.isHidden),
       }))
       : [],
-    hotspots: Array.isArray(scene.hotspots) && scene.hotspots.length ?
-       scene.hotspots.map(normalizeHotspot)
+    hotspots: Array.isArray(scene.hotspots) ?
+       (scene.hotspots.length ? scene.hotspots.map(normalizeHotspot) : (draft.creationMode === PRO_PROMOTION_PROJECT_MODE ? [] : [makeHotspot()]))
       : [makeHotspot()],
     sceneObjects: Array.isArray(scene.sceneObjects) ?
        scene.sceneObjects.map((object) => ({
@@ -965,6 +982,8 @@ const normalizeProject = (rawProject) => {
         externalUrl: object.externalUrl || '',
         targetProjectId: object.targetProjectId || '',
         targetProjectUserId: object.targetProjectUserId || '',
+        accessCodeEnabled: object.accessCodeEnabled === true,
+        accessCode: object.accessCode || '',
         enigmaId: object.enigmaId || '',
         lockedMessage: object.lockedMessage || '',
         anime2dSpec: object.anime2dSpec && typeof object.anime2dSpec === 'object' ? object.anime2dSpec : null,
@@ -1000,6 +1019,8 @@ const normalizeProject = (rawProject) => {
       onEndType: normalizeAllowedValue(cinematic.onEndType, CINEMATIC_END_VALUES, 'none'),
       targetActId: cinematic.targetActId || '',
       targetSceneId: cinematic.targetSceneId || '',
+      targetProjectId: cinematic.targetProjectId || '',
+      targetProjectUserId: cinematic.targetProjectUserId || '',
       rewardItemId: cinematic.rewardItemId || '',
     };
     return {
@@ -1022,6 +1043,10 @@ const normalizeProject = (rawProject) => {
     miscMax: enigma.miscMax ?? '',
     miscTargetItemId: enigma.miscTargetItemId || '',
     unlockType: normalizeAllowedValue(enigma.unlockType, ENIGMA_UNLOCK_VALUES, 'none'),
+    targetSceneId: enigma.targetSceneId || '',
+    targetCinematicId: enigma.targetCinematicId || '',
+    targetProjectId: enigma.targetProjectId || '',
+    targetProjectUserId: enigma.targetProjectUserId || '',
     popupBackgroundData: enigma.popupBackgroundData || '',
     popupBackgroundName: enigma.popupBackgroundName || '',
     popupBackgroundZoom: Number(enigma.popupBackgroundZoom) || 1,
