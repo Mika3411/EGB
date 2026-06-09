@@ -839,7 +839,7 @@ export default function HelpCenter({ user, project = null, projectRecord = null,
             <div className="panel-head help-content-head">
               <div>
                 <span className="section-kicker">Forum</span>
-                <h2>Entraide, conseils et jeux ? tester</h2>
+                <h2>Entraide, conseils et jeux à tester</h2>
                 <p className="small-note">Pose une question, partage une astuce ou fais la promotion d'un lien de jeu.</p>
               </div>
             </div>

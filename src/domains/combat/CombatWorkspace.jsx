@@ -904,7 +904,7 @@ export default function CombatWorkspace({
                   </div>
                 </>
               ) : (
-                <div className="empty-state-inline">Passe une zone ou une réponse en action ?Combat simple? pour créer un ennemi réglable ici.</div>
+                <div className="empty-state-inline">Passe une zone ou une réponse en action Combat simple pour créer un ennemi réglable ici.</div>
               )}
             </section>
           </div>

@@ -459,7 +459,7 @@ function ArcadeHeroPanel({
             />
           </label>
           <label>
-            <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.characterMaterialBrightness}>Lumiere carte {Math.round(getCharacterMaterialBrightness(activeSource) * 100)}%</Rpg3DHelpLabel>
+            <Rpg3DHelpLabel help={RPG3D_FIELD_HELP.characterMaterialBrightness}>Lumière carte {Math.round(getCharacterMaterialBrightness(activeSource) * 100)}%</Rpg3DHelpLabel>
             <input
               type="range"
               min={MATERIAL_BRIGHTNESS_MIN}

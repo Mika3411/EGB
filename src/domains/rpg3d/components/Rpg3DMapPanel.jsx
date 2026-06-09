@@ -89,7 +89,7 @@ export default function Rpg3DMapPanel({
           </div>
         </div>
         <div className="arcade-map-light-controls" aria-label="Eclairage de la carte">
-          <h2><Camera size={12} /> Lumiere</h2>
+          <h2><Camera size={12} /> Lumière</h2>
           <label>
             <Rpg3DHelpLabel className="arcade-map-card-help-label" help={fieldHelp.lightIntensity}>Intensite {Math.round(lightIntensityValue * 100)}%</Rpg3DHelpLabel>
             <input type="range" min="0.25" max="2.6" step="0.05" value={lightIntensityValue} onChange={(event) => onLightIntensityChange(Number(event.target.value))} />

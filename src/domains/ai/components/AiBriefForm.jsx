@@ -119,7 +119,7 @@ export default function AiBriefForm({
         ) : null}
         {!isBeginnerAi ? (
         <div className="ai-brief-field compact">
-          {renderCountLabel('cinematicCount', 'Cinematiques', 'cinematicCount', 'cinematic')}
+          {renderCountLabel('cinematicCount', 'Cinématiques', 'cinematicCount', 'cinematic')}
           <input type="number" min="0" max="12" value={brief.cinematicCount} onChange={(event) => updateBrief('cinematicCount', event.target.value)} required />
         </div>
         ) : null}

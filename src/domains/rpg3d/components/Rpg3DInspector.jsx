@@ -107,7 +107,7 @@ export default function Rpg3DInspector({
           <p className="arcade-empty-state">Sélectionne un objet sur la carte pour modifier ses réglages.</p>
         ) : hasMultiInspectorSelection ? (
           <div className="arcade-inspector">
-            <span className="arcade-selected-type">Selection ({inspectorSelectionEntities.length})</span>
+            <span className="arcade-selected-type">Sélection ({inspectorSelectionEntities.length})</span>
             <div className={multiPositionRowClassName}>
               <label>
                 <Rpg3DHelpLabel help={fieldHelp.positionX}>X</Rpg3DHelpLabel>
@@ -203,7 +203,7 @@ export default function Rpg3DInspector({
             </div>
             {['hero', 'enemy'].includes(selectedEntity.type) ? (
               <label>
-                <Rpg3DHelpLabel help={fieldHelp.characterMaterialBrightness}>Lumiere carte {Math.round(getCharacterMaterialBrightness(selectedEntity.item) * 100)}%</Rpg3DHelpLabel>
+                <Rpg3DHelpLabel help={fieldHelp.characterMaterialBrightness}>Lumière carte {Math.round(getCharacterMaterialBrightness(selectedEntity.item) * 100)}%</Rpg3DHelpLabel>
                 <input
                   type="range"
                   min={MATERIAL_BRIGHTNESS_MIN}
@@ -492,7 +492,7 @@ export default function Rpg3DInspector({
                       <input type="range" min={MODEL_SCALE_MIN} max={MODEL_SCALE_MAX} step="0.05" value={getDecorModelScale(selectedEntity.item)} onChange={(event) => onUpdateEntity('decorModelScale', event.target.value)} />
                     </label>
                     <label>
-                      <Rpg3DHelpLabel help={fieldHelp.materialBrightness}>Lumiere carte {Math.round(getDecorMaterialBrightness(selectedEntity.item) * 100)}%</Rpg3DHelpLabel>
+                      <Rpg3DHelpLabel help={fieldHelp.materialBrightness}>Lumière carte {Math.round(getDecorMaterialBrightness(selectedEntity.item) * 100)}%</Rpg3DHelpLabel>
                       <input type="range" min={MATERIAL_BRIGHTNESS_MIN} max={MATERIAL_BRIGHTNESS_MAX} step="0.05" value={getDecorMaterialBrightness(selectedEntity.item)} onChange={(event) => onUpdateEntity('materialBrightness', event.target.value)} />
                     </label>
                     <div className="arcade-model-eraser-tools">

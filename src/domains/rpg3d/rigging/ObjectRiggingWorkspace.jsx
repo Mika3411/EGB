@@ -1357,7 +1357,7 @@ export default function ObjectRiggingWorkspace({
                   <button
                     type="button"
                     className="object-rigging-piece-select"
-                    aria-label={`Selectionner ${piece.name}`}
+                    aria-label={`Sélectionner ${piece.name}`}
                     aria-pressed={activePieceId === piece.id}
                     onClick={() => selectCustomPiece(piece)}
                     title="Utiliser ce morceau pour le prochain clic canvas"
@@ -1568,7 +1568,7 @@ export default function ObjectRiggingWorkspace({
               </div>
             </Decor3DPreview>
           ) : (
-            <div className="object-rigging-empty-preview">Selectionne un objet 3D.</div>
+            <div className="object-rigging-empty-preview">Sélectionne un objet 3D.</div>
           )}
         </React.Suspense>
       </section>

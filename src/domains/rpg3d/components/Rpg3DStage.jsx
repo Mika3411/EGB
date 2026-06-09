@@ -119,7 +119,7 @@ export default function Rpg3DStage({
           <button
             type="button"
             className={multiSelectMode ? 'active' : ''}
-            title={multiSelectMode ? 'Selection multiple active' : 'Selectionner plusieurs objets'}
+            title={multiSelectMode ? 'Sélection multiple active' : 'Sélectionner plusieurs objets'}
             aria-label={multiSelectMode ? 'Désactiver la sélection multiple' : 'Activer la sélection multiple'}
             aria-pressed={multiSelectMode}
             onClick={onToggleMultiSelectMode}

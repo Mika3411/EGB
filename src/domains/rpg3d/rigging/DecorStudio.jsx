@@ -1098,7 +1098,7 @@ export default function DecorStudio({
                 />
                 {selectedModelSource ? (
                   <label>
-                    <DecorHelpLabel help={DECOR_FIELD_HELP.materialBrightness}>Lumiere carte {Math.round(getDecorMaterialBrightness(selectedModel) * 100)}%</DecorHelpLabel>
+                    <DecorHelpLabel help={DECOR_FIELD_HELP.materialBrightness}>Lumière carte {Math.round(getDecorMaterialBrightness(selectedModel) * 100)}%</DecorHelpLabel>
                     <input
                       type="range"
                       min={DECOR_MATERIAL_BRIGHTNESS_MIN}

@@ -2,7 +2,7 @@ import { GUIDED_CREATION_TUTORIAL_STEPS } from './tutorialGuidedCreationSteps';
 import { COMBAT_TUTORIAL_STEPS } from './tutorialCombatSteps';
 const makeTutorialEndStep = (tab, selector) => ({ tab, selector, title: 'À toi de jouer',
   body: 'Bravo {name}, tu as fait le tour de ce parcours. Familiarise-toi tranquillement avec cet environnement, puis crée ton propre projet depuis Profil. PS : ce projet-ci ne sera pas enregistré.',
-  action: 'Clique sur Terminer quand tu es prêt a explorer librement.', celebration: true });
+  action: 'Clique sur Terminer quand tu es prêt à explorer librement.', celebration: true });
 export const BUILDER_TUTORIAL_STEPS = [
   ...GUIDED_CREATION_TUTORIAL_STEPS,
   {
@@ -10,13 +10,6 @@ export const BUILDER_TUTORIAL_STEPS = [
     title: 'Bienvenue dans le profil',
     body: 'Ici, tu retrouves ton espace de départ. Le profil est organisé par onglets : création, projets, publication, médias, messagerie, identité publique, badges créateur et espace Pro quand ton compte y a accès.',
     action: "Clique dans l'en-tête du profil pour commencer le tour.",
-    completedWhen: { type: 'interact' },
-  },
-  {
-    tab: 'profile', selector: '[data-tour="profile-status"]',
-    title: 'État du compte',
-    body: 'Ce badge indique ce qui vient de se passer : sauvegarde, import, publication, achat de stockage ou erreur. Regarde-le après chaque action importante.',
-    action: 'Clique sur la zone de statut pour la repérer.',
     completedWhen: { type: 'interact' },
   },
   {
@@ -358,16 +351,7 @@ export const BUILDER_TUTORIAL_STEPS = [
     selector: '[data-tour="profile-pro-section"]',
     fallbackSelector: '[data-tour="profile-section-tabs"]',
     title: 'Extensions d’expérience',
-    body: 'L’espace Pro sert à créer des formats légers reliés à ton escape game : teaser, prologue, dossier d’enquête, campagne ou épilogue. Le joueur reçoit une page jouable claire sans ouvrir tout le builder classique.',
-    requiresProAccount: true,
-  },
-  {
-    tab: 'profile',
-    selector: '[data-tour="profile-pro-formats"]',
-    fallbackSelector: '[data-tour="profile-pro-section"]',
-    fallbackSelectors: ['[data-tour="profile-section-tabs"]'],
-    title: 'Formats possibles',
-    body: 'Les formats rappellent l’usage de chaque extension : préparer les joueurs, distribuer des indices, animer une opération spéciale ou prolonger l’aventure après la salle.',
+    body: 'L’espace Pro sert à créer des pages légères reliées à ton escape game : vitrine, prologue ou épilogue. Le joueur reçoit une page jouable claire sans ouvrir tout le builder classique.',
     requiresProAccount: true,
   },
   {
@@ -375,8 +359,8 @@ export const BUILDER_TUTORIAL_STEPS = [
     selector: '[data-tour="profile-pro-actions"]',
     fallbackSelector: '[data-tour="profile-pro-section"]',
     fallbackSelectors: ['[data-tour="profile-section-tabs"]'],
-    title: 'Promouvoir ou prolonger',
-    body: 'Les deux cartes de création démarrent une extension avant la partie ou après la partie. Le parcours bloque les actions importantes ailleurs, mais ici retiens surtout le choix d’intention.',
+    title: 'Créer une page Pro',
+    body: 'Les cartes de création démarrent une vitrine ou une page prologue / épilogue. Le parcours reste volontairement plus léger que le builder classique.',
     requiresProAccount: true,
   },
   {
@@ -1339,7 +1323,7 @@ export const BUILDER_TUTORIAL_STEPS = [
     tab: 'enigmas',
     selector: '[data-tour="enigma-popup-background-button"]',
     title: 'Image de fond',
-    body: 'Ce bouton importe ou remplace l’image de fond. Après import, les réglages de zoom, position et voile aident à garder la zone d écriture lisible.',
+    body: 'Ce bouton importe ou remplace l’image de fond. Après import, les réglages de zoom, position et voile aident à garder la zone d’écriture lisible.',
     action: 'Observe ce bouton : il servira à choisir l’image de fond de l énigme.',
   },
   {

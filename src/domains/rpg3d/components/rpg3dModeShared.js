@@ -216,7 +216,7 @@ const NUMERIC_ENTITY_FIELDS = new Set([
 ]);
 
 const TOOL_OPTIONS = [
-  { id: 'select', label: 'Selection', icon: MousePointer2 },
+  { id: 'select', label: 'Sélection', icon: MousePointer2 },
   { id: 'obstacle', label: 'Mur', icon: Square },
   { id: 'enemy', label: 'Ennemi', icon: Crosshair },
   { id: 'pickup', label: 'Bonus', icon: HeartPulse },
