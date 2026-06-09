@@ -117,7 +117,7 @@ export function EditorToolbarMenus({
       <details className="editor-menu" data-tour="scene-toolbar-add" onToggle={closeSiblingMenus}>
         <summary>Fichier</summary>
         <div className="editor-menu-popover">
-          <MenuItem onClick={() => previewScene?.(selectedSceneId)}>Prévisualiser</MenuItem>
+          <MenuItem tour="scene-preview-button" onClick={() => previewScene?.(selectedSceneId)}>Prévisualiser</MenuItem>
           {!isSinglePageMode ? <MenuItem danger onClick={() => deleteScene(selectedSceneId)}>Supprimer la scène</MenuItem> : null}
           {fullscreen ? <MenuItem shortcut="Esc" onClick={closeEditorFullscreen}>Fermer le plein écran</MenuItem> : null}
         </div>

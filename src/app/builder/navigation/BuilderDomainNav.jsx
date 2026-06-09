@@ -100,6 +100,7 @@ function TabMenu({ label, entries, activeValue, onChange, onToggle }) {
 export default function Tabs({ value, onChange, onProfile, projectScore, projectMode = 'expert' }) {
   const navRef = useRef(null);
   const effectiveProjectMode = getClassicBuilderProjectMode(projectMode);
+  const isProPromotionMode = effectiveProjectMode === 'pro_promo';
   const isBeginnerMode = effectiveProjectMode === 'beginner';
   const isIntermediateMode = effectiveProjectMode === 'intermediate';
   const isAdventureMode = effectiveProjectMode === 'adventure' || effectiveProjectMode === 'hero_adventure';
@@ -163,7 +164,7 @@ export default function Tabs({ value, onChange, onProfile, projectScore, project
             />
           ))
         ) : <TabMenu label="Outils" entries={visibleUtilityTabs} activeValue={value} onChange={onChange} onToggle={handleMenuToggle} />}
-        {!isBeginnerMode && projectScore ? (
+        {!isBeginnerMode && !isProPromotionMode && projectScore ? (
           <button
             type="button"
             className={`project-score-badge ${projectScore.tone || 'warn'}`}

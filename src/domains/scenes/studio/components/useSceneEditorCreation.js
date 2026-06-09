@@ -61,7 +61,7 @@ export function useSceneEditorCreation({
         placeholder: 'Saisir une réponse...',
         expectedAnswer: 'secret',
         successDialogue: 'Bonne réponse.',
-        failureDialogue: 'Ce n est pas la bonne réponse.',
+        failureDialogue: "Ce n'est pas la bonne réponse.",
         width: 26,
         height: 12,
         clickMode: 'object',

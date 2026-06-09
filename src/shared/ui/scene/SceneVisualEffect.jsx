@@ -5,18 +5,18 @@ export const getVisualEffectZoneZIndex = (layer = 'behind') => {
 };
 
 export const VISUAL_EFFECT_OPTIONS = [
-  { value: 'sparkles', label: 'Etoiles scintillantes' },
-  { value: 'stars', label: 'Champ d etoiles' },
+  { value: 'sparkles', label: 'Étoiles scintillantes' },
+  { value: 'stars', label: "Champ d'étoiles" },
   { value: 'snow', label: 'Neige douce' },
-  { value: 'blizzard', label: 'Tempété de neige' },
+  { value: 'blizzard', label: 'Tempête de neige' },
   { value: 'fog', label: 'Brume' },
-  { value: 'smoke', label: 'Fumee' },
-  { value: 'hearts', label: 'Coeurs flottants' },
+  { value: 'smoke', label: 'Fumée' },
+  { value: 'hearts', label: 'Cœurs flottants' },
   { value: 'glow', label: 'Halo lumineux' },
   { value: 'fireflies', label: 'Lucioles' },
   { value: 'rain', label: 'Pluie fine' },
   { value: 'storm', label: 'Orage' },
-  { value: 'magic', label: 'Poussiere magique' },
+  { value: 'magic', label: 'Poussière magique' },
   { value: 'embers', label: 'Braises' },
   { value: 'flames', label: 'Flammes' },
   { value: 'bubbles', label: 'Bulles' },
@@ -25,9 +25,9 @@ export const VISUAL_EFFECT_OPTIONS = [
   { value: 'scanlines', label: 'Écran VHS' },
   { value: 'glitch', label: 'Glitch' },
   { value: 'confetti', label: 'Confettis' },
-  { value: 'beauty-lens', label: 'Lens douceur' },
-  { value: 'dream-lens', label: 'Lens reve' },
-  { value: 'neon-lens', label: 'Lens neon' },
+  { value: 'beauty-lens', label: 'Filtre douceur' },
+  { value: 'dream-lens', label: 'Filtre rêve' },
+  { value: 'neon-lens', label: 'Filtre néon' },
   { value: 'night-vision', label: 'Vision nocturne' },
   { value: 'thermal', label: 'Thermique' },
   { value: 'comic-lens', label: 'BD pop' },
@@ -36,7 +36,7 @@ export const VISUAL_EFFECT_OPTIONS = [
 
 export const VISUAL_EFFECT_GROUPS = [
   {
-    label: 'Lumiere et magie',
+    label: 'Lumière et magie',
     options: ['sparkles', 'stars', 'glow', 'fireflies', 'magic', 'aurora'],
   },
   {
@@ -48,15 +48,15 @@ export const VISUAL_EFFECT_GROUPS = [
     options: ['embers', 'flames'],
   },
   {
-    label: 'Romantique et fété',
+    label: 'Romantique et fête',
     options: ['hearts', 'bubbles', 'confetti'],
   },
   {
-    label: 'Cinema et tension',
+    label: 'Cinéma et tension',
     options: ['vignette', 'scanlines', 'glitch'],
   },
   {
-    label: 'Filtrès lens',
+    label: 'Filtres',
     options: ['beauty-lens', 'dream-lens', 'neon-lens', 'night-vision', 'thermal', 'comic-lens', 'noir-lens'],
   },
 ];

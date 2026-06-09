@@ -6,13 +6,14 @@ import {
   Lock,
   LockOpen,
   MousePointerClick,
+  Pencil,
   Play,
   SendToBack,
   SlidersHorizontal,
   Trash2,
   Workflow,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { getSceneObjectBlockType, getSceneObjectClickMode } from '../../../../shared/services/sceneObjectBlocks';
 import { PRO_PROMOTION_PROJECT_MODE } from '../../../../shared/services/proPromotion';
@@ -23,13 +24,15 @@ const INVENTORY_ACTION_MODES = CLASSIC_ACTION_MODES.filter((mode) => mode !== PR
 const CINEMATIC_ACTION_MODES = ['intermediate', 'expert', 'adventure', 'hero_adventure'];
 const NARRATIVE_ACTION_MODES = ['adventure', 'hero_adventure'];
 const HERO_ACTION_MODES = ['hero_adventure'];
+const TOOLBAR_EDGE_PADDING = 6;
+const TOOLBAR_VERTICAL_GAP = 10;
 
 const HOTSPOT_ACTION_OPTIONS = [
   { value: 'none', label: 'Aucun', modes: [PRO_PROMOTION_PROJECT_MODE] },
   { value: 'dialogue', label: 'Dialogue', modes: CLASSIC_ACTION_MODES },
   { value: 'dialogue_item', label: 'Dialogue + objet', modes: INVENTORY_ACTION_MODES },
   { value: 'external_link', label: 'Lien externe', modes: [PRO_PROMOTION_PROJECT_MODE] },
-  { value: 'project_link', label: 'Lien projet', modes: [PRO_PROMOTION_PROJECT_MODE] },
+  { value: 'project_link', label: 'Projet cible', modes: CLASSIC_ACTION_MODES, requiresProAccount: true },
   { value: 'scene', label: 'Changer de scène', modes: CLASSIC_ACTION_MODES.filter((mode) => mode !== PRO_PROMOTION_PROJECT_MODE) },
   { value: 'cinematic', label: 'Lancer une cinématique', modes: CINEMATIC_ACTION_MODES },
   { value: 'conversation', label: 'Conversation texte', modes: NARRATIVE_ACTION_MODES },
@@ -42,7 +45,7 @@ const SCENE_OBJECT_ACTION_OPTIONS = [
   { value: 'dialogue', label: 'Dialogue', modes: CLASSIC_ACTION_MODES },
   { value: 'dialogue_item', label: 'Dialogue + objet', modes: INVENTORY_ACTION_MODES },
   { value: 'external_link', label: 'Lien externe', modes: [PRO_PROMOTION_PROJECT_MODE] },
-  { value: 'project_link', label: 'Lien projet', modes: [PRO_PROMOTION_PROJECT_MODE] },
+  { value: 'project_link', label: 'Projet cible', modes: CLASSIC_ACTION_MODES, requiresProAccount: true },
   { value: 'scene', label: 'Changer de scène', modes: CLASSIC_ACTION_MODES.filter((mode) => mode !== PRO_PROMOTION_PROJECT_MODE) },
   { value: 'cinematic', label: 'Lancer une cinématique', modes: CINEMATIC_ACTION_MODES },
 ];
@@ -52,10 +55,121 @@ const normalizeProjectMode = (mode = '') => {
   return CLASSIC_ACTION_MODES.includes(mode) ? mode : 'expert';
 };
 
-const getActionOptionsForMode = (options, mode) => {
+const getActionOptionsForMode = (options, mode, { canUseProPages = false } = {}) => {
   const projectMode = normalizeProjectMode(mode);
-  return options.filter((option) => option.modes.includes(projectMode));
+  return options.filter((option) => (
+    option.modes.includes(projectMode)
+    && (!option.requiresProAccount || canUseProPages)
+  ));
 };
+
+export const getContainedToolbarOffsetX = ({
+  anchorX = 0,
+  containerWidth = 0,
+  toolbarWidth = 0,
+  padding = TOOLBAR_EDGE_PADDING,
+} = {}) => {
+  const safeAnchorX = Number(anchorX) || 0;
+  const safeContainerWidth = Number(containerWidth) || 0;
+  const safeToolbarWidth = Number(toolbarWidth) || 0;
+  const safePadding = Math.max(0, Number(padding) || 0);
+
+  if (!safeContainerWidth || !safeToolbarWidth) return -safeToolbarWidth / 2;
+
+  const centeredLeft = safeAnchorX - safeToolbarWidth / 2;
+  const minLeft = safePadding;
+  const maxLeft = Math.max(minLeft, safeContainerWidth - safeToolbarWidth - safePadding);
+  const containedLeft = Math.min(Math.max(centeredLeft, minLeft), maxLeft);
+
+  return containedLeft - safeAnchorX;
+};
+
+function QuickToolbarFrame({
+  toolbarX,
+  toolbarTopPosition,
+  toolbarZIndex,
+  verticalClass,
+  horizontalClass,
+  measureKey = '',
+  stopToolbarEvent,
+  children,
+}) {
+  const toolbarRef = useRef(null);
+  const [containedOffsetX, setContainedOffsetX] = useState(null);
+
+  const updateToolbarPosition = useCallback(() => {
+    const toolbarNode = toolbarRef.current;
+    const parentNode = toolbarNode?.offsetParent || toolbarNode?.parentElement;
+    if (!toolbarNode || !parentNode) return;
+
+    const containerWidth = parentNode.clientWidth || parentNode.getBoundingClientRect?.().width || 0;
+    const toolbarWidth = toolbarNode.offsetWidth || toolbarNode.getBoundingClientRect?.().width || 0;
+    if (!containerWidth || !toolbarWidth) return;
+
+    const anchorX = (clampPercent(toolbarX) / 100) * containerWidth;
+    const nextOffsetX = getContainedToolbarOffsetX({ anchorX, containerWidth, toolbarWidth });
+    setContainedOffsetX((currentOffsetX) => (
+      currentOffsetX === null || Math.abs(currentOffsetX - nextOffsetX) > 0.5
+        ? nextOffsetX
+        : currentOffsetX
+    ));
+  }, [toolbarX]);
+
+  useLayoutEffect(() => {
+    const toolbarNode = toolbarRef.current;
+    if (!toolbarNode || typeof window === 'undefined') return undefined;
+
+    let frameId = 0;
+    const scheduleUpdate = () => {
+      if (frameId) window.cancelAnimationFrame(frameId);
+      frameId = window.requestAnimationFrame(updateToolbarPosition);
+    };
+
+    scheduleUpdate();
+
+    const parentNode = toolbarNode.offsetParent || toolbarNode.parentElement;
+    const resizeObserver = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(scheduleUpdate)
+      : null;
+    resizeObserver?.observe(toolbarNode);
+    if (parentNode) resizeObserver?.observe(parentNode);
+    window.addEventListener('resize', scheduleUpdate);
+
+    return () => {
+      if (frameId) window.cancelAnimationFrame(frameId);
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', scheduleUpdate);
+    };
+  }, [measureKey, updateToolbarPosition]);
+
+  const verticalOffset = verticalClass.includes('--above')
+    ? `calc(-100% - ${TOOLBAR_VERTICAL_GAP}px)`
+    : `${TOOLBAR_VERTICAL_GAP}px`;
+  const transform = containedOffsetX === null
+    ? undefined
+    : `translate(${containedOffsetX}px, ${verticalOffset})`;
+
+  return (
+    <div
+      ref={toolbarRef}
+      className={`scene-canvas-quick-toolbar ${verticalClass} ${horizontalClass}`}
+      style={{
+        left: `${toolbarX}%`,
+        top: `${toolbarTopPosition}%`,
+        zIndex: toolbarZIndex,
+        transform,
+      }}
+      role="toolbar"
+      aria-label="Actions rapides de la sélection"
+      onPointerDown={stopToolbarEvent}
+      onMouseDown={stopToolbarEvent}
+      onClick={stopToolbarEvent}
+      onContextMenu={stopToolbarEvent}
+    >
+      {children}
+    </div>
+  );
+}
 
 function ToolbarButton({ label, onClick, disabled = false, danger = false, active = false, children }) {
   return (
@@ -217,7 +331,11 @@ export default function SceneCanvasQuickToolbar({
   openQuickLogicForTarget,
   isBeginnerMode = false,
   projectMode = '',
+  canUseProPages = false,
   onBeforePreview,
+  editingSceneObjectTextId = '',
+  onEditSceneObjectText,
+  onStopEditingSceneObjectText,
 }) {
   if (!selectedScene || !selectedSceneId) return null;
 
@@ -237,14 +355,17 @@ export default function SceneCanvasQuickToolbar({
 
   const isHotspot = type === 'hotspot';
   const effectiveProjectMode = projectMode || (isBeginnerMode ? 'beginner' : '');
+  const allowProPageActions = Boolean(canUseProPages || effectiveProjectMode === PRO_PROMOTION_PROJECT_MODE);
   const isProTextObject = type === 'sceneObject'
     && effectiveProjectMode === PRO_PROMOTION_PROJECT_MODE
     && getSceneObjectBlockType(entry) === 'text';
   const isSceneObjectAction = type === 'sceneObject' && getSceneObjectClickMode(entry) === 'action';
+  const isTextObject = type === 'sceneObject' && getSceneObjectBlockType(entry) === 'text';
+  const isEditingText = isTextObject && editingSceneObjectTextId === id;
   const showActionSelect = isHotspot || isSceneObjectAction || isProTextObject;
   const actionOptions = isHotspot
-    ? getActionOptionsForMode(HOTSPOT_ACTION_OPTIONS, effectiveProjectMode)
-    : getActionOptionsForMode(SCENE_OBJECT_ACTION_OPTIONS, effectiveProjectMode);
+    ? getActionOptionsForMode(HOTSPOT_ACTION_OPTIONS, effectiveProjectMode, { canUseProPages: allowProPageActions })
+    : getActionOptionsForMode(SCENE_OBJECT_ACTION_OPTIONS, effectiveProjectMode, { canUseProPages: allowProPageActions });
   const currentAction = type === 'sceneObject' && getSceneObjectClickMode(entry) === 'none'
     ? 'none'
     : entry.actionType || 'dialogue';
@@ -260,6 +381,16 @@ export default function SceneCanvasQuickToolbar({
     : toolbarX > 82 ? 'scene-canvas-quick-toolbar--align-right' : 'scene-canvas-quick-toolbar--align-center';
   const toolbarTopPosition = verticalClass.includes('above') ? toolbarTop : toolbarBottom;
   const toolbarZIndex = Math.max(2300, getLayerZIndex(entry, type) + 300);
+  const measureKey = [
+    type,
+    id,
+    displayedAction,
+    showActionSelect ? actionOptions.length : 0,
+    Boolean(canUseQuickLogic && openQuickLogicForTarget),
+    Boolean(previewScene),
+    Boolean(isTextObject),
+    Boolean(isEditingText),
+  ].join(':');
 
   const patchEntry = (updater) => patchLayerItem?.(type, id, updater);
   const stopToolbarEvent = (event) => {
@@ -284,16 +415,23 @@ export default function SceneCanvasQuickToolbar({
     previewScene?.(selectedSceneId);
   };
 
+  const handleEditText = () => {
+    if (isEditingText) {
+      onStopEditingSceneObjectText?.();
+      return;
+    }
+    onEditSceneObjectText?.(id);
+  };
+
   return (
-    <div
-      className={`scene-canvas-quick-toolbar ${verticalClass} ${horizontalClass}`}
-      style={{ left: `${toolbarX}%`, top: `${toolbarTopPosition}%`, zIndex: toolbarZIndex }}
-      role="toolbar"
-      aria-label="Actions rapides de la sélection"
-      onPointerDown={stopToolbarEvent}
-      onMouseDown={stopToolbarEvent}
-      onClick={stopToolbarEvent}
-      onContextMenu={stopToolbarEvent}
+    <QuickToolbarFrame
+      toolbarX={toolbarX}
+      toolbarTopPosition={toolbarTopPosition}
+      toolbarZIndex={toolbarZIndex}
+      verticalClass={verticalClass}
+      horizontalClass={horizontalClass}
+      measureKey={measureKey}
+      stopToolbarEvent={stopToolbarEvent}
     >
       <ToolbarButton label="Dupliquer" onClick={() => duplicateSelectedEditorItems?.()}>
         <Copy size={15} aria-hidden="true" />
@@ -308,6 +446,11 @@ export default function SceneCanvasQuickToolbar({
       <ToolbarButton label={toggleLockLabel} active={Boolean(entry.isLocked)} onClick={() => patchEntry((item) => { item.isLocked = !item.isLocked; })}>
         {entry.isLocked ? <LockOpen size={15} aria-hidden="true" /> : <Lock size={15} aria-hidden="true" />}
       </ToolbarButton>
+      {isTextObject ? (
+        <ToolbarButton label={isEditingText ? "Terminer l'édition" : 'Modifier le texte'} active={isEditingText} onClick={handleEditText}>
+          <Pencil size={15} aria-hidden="true" />
+        </ToolbarButton>
+      ) : null}
       <ToolbarButton label="Mettre devant" onClick={() => sendLayerToEdge?.(type, id, 'front')}>
         <BringToFront size={15} aria-hidden="true" />
       </ToolbarButton>
@@ -330,6 +473,6 @@ export default function SceneCanvasQuickToolbar({
           {isHotspot ? <MousePointerClick size={15} aria-hidden="true" /> : <Play size={15} aria-hidden="true" />}
         </ToolbarButton>
       ) : null}
-    </div>
+    </QuickToolbarFrame>
   );
 }

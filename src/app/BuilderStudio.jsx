@@ -5,6 +5,7 @@ import { TABS, getTabKey, preloadBuilderTabs } from './builder/navigation/domain
 import { useAccessibleDialog } from '../shared/ui/AccessibleDialog';
 import CenterScreenNotice from '../shared/ui/CenterScreenNotice';
 import { createInitialProject, normalizeProject } from '../shared/data/projectData';
+import { applyCreationTemplate } from '../shared/services/projectTemplates';
 import {
   BUILDER_TUTORIAL_TABS,
   getFakeWindowImageOptions,
@@ -42,7 +43,7 @@ import { useProjectSaveAcknowledger } from './builder/hooks/useProjectSaveAcknow
 import { collectDescendantSceneIds } from '../shared/services/sceneHelpers';
 import { collectProjectAssets } from '../shared/services/assetManager';
 import { PRO_PROMOTION_PROJECT_MODE } from '../shared/services/proPromotion';
-import { isProfessionalAccount } from '../shared/services/accountPlans';
+import { ACCOUNT_TYPE_PRO, isProfessionalAccount } from '../shared/services/accountPlans';
 import { isAdminAccount } from '../shared/services/authStorage';
 import { trackVisitorSurface } from '../shared/services/visitorAnalytics';
 import { getOfflineExportEstimateMessage } from '../shared/utils/offlineExportEstimate';
@@ -59,6 +60,7 @@ import {
 
 const AI_CREDITS_ENDPOINT = import.meta.env.VITE_AI_CREDITS_ENDPOINT || '/api/ai-credits';
 const PROJECT_AUTOSAVE_ENABLED = true;
+const DEMO_PROJECT_ID = 'demo-project';
 
 const LandingExperience = lazyWithRetry(() => import('../domains/landing/LandingExperience'));
 const BuilderGuide = lazyWithRetry(() => import('./tutorial/BuilderGuide'));
@@ -111,6 +113,19 @@ const LandingLoadingFallback = () => (
   </main>
 );
 
+function BuilderStudioMobileOrientationGate() {
+  return (
+    <div className="studio-mobile-orientation-gate" role="dialog" aria-modal="true" aria-labelledby="studio-mobile-orientation-title">
+      <div className="studio-mobile-orientation-card">
+        <span className="studio-mobile-orientation-icon" aria-hidden="true"><span /></span>
+        <span className="eyebrow">Studio complet</span>
+        <h2 id="studio-mobile-orientation-title">Passez en paysage</h2>
+        <p>Tournez votre smartphone pour continuer à utiliser le studio complet.</p>
+      </div>
+    </div>
+  );
+}
+
 const getWindowScrollPosition = () => {
   if (typeof window === 'undefined') return { x: 0, y: 0 };
   return {
@@ -162,13 +177,27 @@ const restoreEditorScrollPosition = (position) => {
   });
 };
 
+const createDemoProject = () => {
+  const project = applyCreationTemplate(createInitialProject(), 'museum', 'Démo - Musée verrouillé');
+  return normalizeProject({
+    ...project,
+    creationMode: 'expert',
+    isDemoProject: true,
+    isTemporaryTutorial: true,
+  });
+};
+
+const getDemoSaveStatus = () => 'Démo temporaire : non enregistrée';
+
 function BuilderStudio({
   auth,
   initialProjectId = '',
   initialTab = '',
   initialTutorialTab = '',
   initialScreen = 'editor',
+  isDemoMode = false,
   onExitToProfile,
+  onExitDemoToLanding,
 }) {
   const editor = useProjectEditor();
   const preview = usePreviewPlayer(editor.project, { getItemById: editor.getItemById });
@@ -183,6 +212,7 @@ function BuilderStudio({
   const [projectScore, setProjectScore] = useState(null);
   const [showAuthEntry, setShowAuthEntry] = useState(false);
   const [authEntryMode, setAuthEntryMode] = useState('login');
+  const [authEntryInitialForm, setAuthEntryInitialForm] = useState({});
   const [sharedLoadStatus, setSharedLoadStatus] = useState('');
   const [tutorialStepIndex, setTutorialStepIndex] = useState(null);
   const [selectedTutorialTab, setSelectedTutorialTab] = useState('scenes');
@@ -207,7 +237,7 @@ function BuilderStudio({
     const timerId = window.setTimeout(preload, 1200);
     return () => window.clearTimeout(timerId);
   }, []);
-  const activeBuilderProjectId = hydratedProjectRef.current || auth.activeProjectId || initialProjectId || '';
+  const activeBuilderProjectId = isDemoMode ? DEMO_PROJECT_ID : hydratedProjectRef.current || auth.activeProjectId || initialProjectId || '';
   useEffect(() => {
     if (screen === 'editor') trackVisitorSurface('builder', { userId: auth.user?.id });
   }, [auth.user?.id, screen]);
@@ -238,14 +268,19 @@ function BuilderStudio({
   }, [editor.project, screen]);
   const openLoginPanel = useCallback(() => {
     setAuthEntryMode('login');
+    setAuthEntryInitialForm({});
     setShowAuthEntry(true);
   }, []);
 
   const showCenterNotice = useCallback((message) => {
     setCenterNotice(String(message || ''));
   }, []);
-  const openRegisterPanel = useCallback(() => {
+  const openRegisterPanel = useCallback((options = {}) => {
+    const nextInitialForm = options?.accountType === ACCOUNT_TYPE_PRO
+      ? { accountType: ACCOUNT_TYPE_PRO }
+      : {};
     setAuthEntryMode('register');
+    setAuthEntryInitialForm(nextInitialForm);
     setShowAuthEntry(true);
   }, []);
   const closeAuthEntry = useCallback(() => setShowAuthEntry(false), []);
@@ -383,11 +418,38 @@ function BuilderStudio({
 
   useEffect(() => {
     if (sharedRouteRef.current) return;
-    if (!auth.user) {
+    if (!auth.user && !isDemoMode) {
       hydratedProjectRef.current = '';
       setScreen('profile');
     }
-  }, [auth.user]);
+  }, [auth.user, isDemoMode]);
+
+  useEffect(() => {
+    if (!isDemoMode) return;
+    if (hydratedProjectRef.current === DEMO_PROJECT_ID) return;
+    const demoProject = createDemoProject();
+    const selectedSceneId = demoProject.scenes?.[0]?.id || '';
+    hydratedProjectRef.current = DEMO_PROJECT_ID;
+    editor.loadProject(demoProject);
+    editor.setSelectedSceneId(selectedSceneId);
+    editor.setSelectedHotspotId(demoProject.scenes?.[0]?.hotspots?.[0]?.id || '');
+    editor.setTab(initialTab || 'scenes');
+    preview.syncWithProject(demoProject);
+    setSaveStatus(getDemoSaveStatus());
+  }, [
+    editor.loadProject,
+    editor.setSelectedHotspotId,
+    editor.setSelectedSceneId,
+    editor.setTab,
+    initialTab,
+    isDemoMode,
+    preview.syncWithProject,
+  ]);
+
+  useEffect(() => {
+    if (!isDemoMode) return;
+    setSaveStatus(getDemoSaveStatus());
+  }, [auth.user, isDemoMode]);
 
   useEffect(() => {
     if (!auth.isReady || !auth.user) return;
@@ -430,7 +492,7 @@ function BuilderStudio({
     markProjectSaved,
   } = useAutosaveProject({
     activeProjectId: auth.activeProjectId,
-    enabled: PROJECT_AUTOSAVE_ENABLED,
+    enabled: PROJECT_AUTOSAVE_ENABLED && !isDemoMode,
     hydratedProjectRef,
     project: editor.project,
     saveProject: auth.saveProject,
@@ -449,6 +511,7 @@ function BuilderStudio({
     writeAppUiState({
       screen: shellScreen,
       builderScreen: screen,
+      demoMode: isDemoMode,
       projectId: activeBuilderProjectId,
       selectedSceneId: editor.selectedSceneId,
       tab: editor.tab,
@@ -460,6 +523,7 @@ function BuilderStudio({
     auth.user?.id,
     editor.selectedSceneId,
     editor.tab,
+    isDemoMode,
     screen,
   ]);
 
@@ -1097,8 +1161,28 @@ function BuilderStudio({
 
   const handleBuilderProfileOpen = useCallback(async () => {
     if (!(await confirmAnimationExit())) return;
+    if (isDemoMode && !auth.user) {
+      openRegisterPanel();
+      return;
+    }
     await openProfileFromBuilder();
-  }, [confirmAnimationExit, openProfileFromBuilder]);
+  }, [auth.user, confirmAnimationExit, isDemoMode, openProfileFromBuilder, openRegisterPanel]);
+
+  const handleDemoLandingExit = useCallback(async () => {
+    if (!(await confirmAnimationExit())) return;
+    if (typeof onExitDemoToLanding === 'function') {
+      onExitDemoToLanding();
+      return;
+    }
+    writeAppUiState({
+      screen: 'profile',
+      builderScreen: 'editor',
+      projectId: '',
+      tab: '',
+      demoMode: false,
+    });
+    setScreen('profile');
+  }, [confirmAnimationExit, onExitDemoToLanding]);
 
   const persistAiImage = useCallback(async ({ type, id, patch }) => {
     if (!type || !id || !patch) return null;
@@ -1309,9 +1393,13 @@ function BuilderStudio({
   const SharedPreviewComponent = TABS.preview.component;
   const previewPanel = useMemo(() => (
     <Suspense fallback={<TabLoadingFallback />}>
-      <SharedPreviewComponent {...sharedPreviewProps} sharedPlayerMode={screen === 'shared-preview'} />
+      <SharedPreviewComponent
+        {...sharedPreviewProps}
+        allowMobilePortraitInitially={isDemoMode && screen === 'shared-preview'}
+        sharedPlayerMode={screen === 'shared-preview'}
+      />
     </Suspense>
-  ), [SharedPreviewComponent, screen, sharedPreviewProps]);
+  ), [SharedPreviewComponent, isDemoMode, screen, sharedPreviewProps]);
   const handleTutorialNext = useCallback(() => setTutorialStepIndex((index) => (
     index === null || activeTutorialPosition >= activeTutorialIndexes.length - 1 ? null : activeTutorialIndexes[activeTutorialPosition + 1]
   )), [activeTutorialIndexes, activeTutorialPosition]);
@@ -1361,6 +1449,11 @@ function BuilderStudio({
   if (screen === 'shared-preview') {
     return (
       <div className="shared-player-shell">
+        {isDemoMode ? (
+          <button type="button" className="shared-demo-exit-button secondary-action" onClick={handleDemoLandingExit}>
+            Retour à l’accueil
+          </button>
+        ) : null}
         {sharedLoadStatus ? (
           <div className="shared-player-loading">
             <span className="eyebrow">Lien jouable</span>
@@ -1394,7 +1487,29 @@ function BuilderStudio({
     return <div className="app-shell"><div className="panel">Chargement du compte...</div></div>;
   }
 
-  if (!auth.user) {
+  if (isDemoMode && !auth.user && showAuthEntry) {
+    return (
+      <div className="app-shell">
+        <Suspense fallback={<TabLoadingFallback />}>
+          <AuthEntry
+            onLogin={auth.login}
+            onRegister={auth.register}
+            onRequestPasswordReset={auth.requestPasswordReset}
+            onUpdatePassword={auth.updatePassword}
+            onBack={closeAuthEntry}
+            initialMode={authEntryMode}
+            initialForm={authEntryInitialForm}
+            isPasswordRecovery={auth.isPasswordRecovery}
+            isBusy={auth.isBusy}
+            errorMessage={auth.authError}
+          />
+        </Suspense>
+        {accessibleDialog}
+      </div>
+    );
+  }
+
+  if (!auth.user && !isDemoMode) {
     if (!showAuthEntry && !auth.isPasswordRecovery) {
       return (
         <Suspense fallback={<LandingLoadingFallback />}>
@@ -1417,6 +1532,7 @@ function BuilderStudio({
             onUpdatePassword={auth.updatePassword}
             onBack={closeAuthEntry}
             initialMode={authEntryMode}
+            initialForm={authEntryInitialForm}
             isPasswordRecovery={auth.isPasswordRecovery}
             isBusy={auth.isBusy}
             errorMessage={auth.authError}
@@ -1461,6 +1577,7 @@ function BuilderStudio({
             onImportProject={importProjectFromProfile}
             onImportMediaFile={importProfileMediaFile}
             onUpdateAuthorProfile={auth.updateAuthorProfile}
+            onUpdateAccountProfile={auth.updateAccountProfile}
             onUpdatePassword={auth.updatePassword}
             mediaLibrary={mediaLibrary}
             onRefreshStorageUsage={getCurrentStorageUsageBytes}
@@ -1517,7 +1634,8 @@ function BuilderStudio({
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell builder-studio-shell">
+      <BuilderStudioMobileOrientationGate />
       <Header
         projectTitle={editor.project.title}
         onExportJson={handleExportProjectJson}
@@ -1527,12 +1645,44 @@ function BuilderStudio({
         user={auth.user}
         authorProfile={auth.authorProfile}
         onLogout={auth.logout}
-        saveStatus={saveStatus || 'Sauvegarde active'}
+        saveStatus={saveStatus || (isDemoMode ? 'Démo temporaire' : 'Sauvegarde active')}
         projectMode={getProjectMode(editor.project)}
         confirmStandaloneOfflineExport={confirmDialog}
         offlineExportEstimateMessage={offlineExportEstimateMessage}
         getOfflineExportEstimateMessage={getFreshOfflineExportEstimateMessage}
       />
+
+      {isDemoMode ? (
+        <section className="builder-demo-banner" aria-label="Mode démo">
+          <div>
+            <span className="badge info">Démo temporaire</span>
+            <strong>
+              {auth.user
+                ? 'Vous êtes connecté : cette démo reste un bac à sable non enregistré. Créez ou ouvrez un projet depuis le profil pour sauvegarder et publier.'
+                : 'Projet temporaire : modifiez, testez, exportez, puis créez un compte pour sauvegarder et publier.'}
+            </strong>
+          </div>
+          {auth.user ? (
+            <div className="builder-demo-banner-actions">
+              <button type="button" className="secondary-action" onClick={handleDemoLandingExit}>
+                Quitter la démo
+              </button>
+              <button type="button" className="landing-cta-primary" onClick={handleBuilderProfileOpen}>
+                Aller au profil
+              </button>
+            </div>
+          ) : (
+            <div className="builder-demo-banner-actions">
+              <button type="button" className="secondary-action" onClick={handleDemoLandingExit}>
+                Retour à l’accueil
+              </button>
+              <button type="button" className="landing-cta-primary" onClick={openRegisterPanel}>
+                Créer un compte
+              </button>
+            </div>
+          )}
+        </section>
+      ) : null}
 
       <Tabs
         value={editor.tab}

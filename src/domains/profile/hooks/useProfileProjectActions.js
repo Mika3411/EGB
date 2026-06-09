@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { createInitialProject, normalizeProject } from '../../../shared/data/projectData';
 import { prepareProjectForTutorial } from '../../../shared/data/tutorialSteps';
 import { getProjectName } from '../../../shared/services/projectAnalysis';
+import { isProfessionalAccount } from '../../../shared/services/accountPlans';
 import { applyCreationTemplate } from '../../../shared/services/projectTemplates';
 import { applyProPromotionProjectSetup, PRO_PROMOTION_PROJECT_MODE } from '../../../shared/services/proPromotion';
 import { showPrompt } from '../../../shared/ui/AccessibleDialog';
@@ -195,6 +196,10 @@ export function useProfileProjectActions({
 
   const downloadProjectQrCodeFromProfile = useCallback(async (projectId) => {
     if (!auth.user?.id || !projectId) return;
+    if (!isProfessionalAccount(auth.user)) {
+      setSaveStatus('QR code réservé aux comptes Pro');
+      return;
+    }
     const playableUrl = buildPlayableProjectUrl(auth.user.id, projectId);
     const projectRecord = auth.projects.find((project) => project.id === projectId);
 
@@ -222,7 +227,7 @@ export function useProfileProjectActions({
   }, [
     auth.activeProjectId,
     auth.projects,
-    auth.user?.id,
+    auth.user,
     editor.project,
     editor.selectedSceneId,
     editor.tab,

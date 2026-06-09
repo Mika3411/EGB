@@ -10,7 +10,7 @@ export const COLOR_OPTIONS = [
 ];
 
 export const TYPE_LABELS = {
-  code: 'Code lettrès / chiffres',
+  code: 'Code lettres / chiffres',
   colors: 'Combinaison de couleurs',
   puzzle: 'Puzzle d’image',
   misc: 'Divers',

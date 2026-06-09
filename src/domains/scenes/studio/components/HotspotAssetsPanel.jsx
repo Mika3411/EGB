@@ -33,9 +33,10 @@ export default function HotspotAssetsPanel({
           assetScope="object-sound"
           handleUpload={handleUpload}
           mediaLibrary={mediaLibrary}
-          onSelect={(data, name) => patchSelectedHotspot((spot) => {
+          onSelect={(data, name, asset) => patchSelectedHotspot((spot) => {
             spot.soundData = data;
             spot.soundName = name;
+            spot.soundId = asset?.id || '';
           })}
           tourId="hotspot-sound"
         >
@@ -56,6 +57,7 @@ export default function HotspotAssetsPanel({
               patchSelectedHotspot((spot) => {
                 spot.soundData = '';
                 spot.soundName = '';
+                spot.soundId = '';
               });
             }}
           />
@@ -70,9 +72,10 @@ export default function HotspotAssetsPanel({
           assetScope="object-image"
           handleUpload={handleUpload}
           mediaLibrary={mediaLibrary}
-          onSelect={(data, name) => patchSelectedHotspot((spot) => {
+          onSelect={(data, name, asset) => patchSelectedHotspot((spot) => {
             spot.objectImageData = data;
             spot.objectImageName = name;
+            spot.objectImageId = asset?.id || '';
           })}
           tourId="hotspot-object-image"
         >
@@ -99,6 +102,7 @@ export default function HotspotAssetsPanel({
                   patchSelectedHotspot((spot) => {
                     spot.objectImageData = '';
                     spot.objectImageName = '';
+                    spot.objectImageId = '';
                   });
                 }}
               >

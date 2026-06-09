@@ -974,7 +974,7 @@ export default function SceneRouteMap({ project, patchProject, getSceneLabel, se
     const room = rooms.find((entry) => entry.id === roomId);
     const confirmed = await showConfirm({
       title: 'Supprimer la pièce',
-      message: `Supprimer la pièce "${room?.name || 'selectionnée'}" et ses liaisons ?`,
+      message: `Supprimer la pièce "${room?.name || 'sélectionnée'}" et ses liaisons ?`,
       confirmLabel: 'Supprimer',
       variant: 'danger',
     });
@@ -1249,7 +1249,7 @@ export default function SceneRouteMap({ project, patchProject, getSceneLabel, se
                 })}
               >
                 <option value="scene">Une scène</option>
-                <option value="cinematic">Une cinematic</option>
+                <option value="cinematic">Une cinématique</option>
               </select>
             </label>
 

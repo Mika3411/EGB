@@ -1,5 +1,6 @@
 import NumberInput from '../../../../shared/ui/forms/NumberInput.jsx';
 import MediaSourcePicker from '../../../../shared/ui/media/MediaSourcePicker.jsx';
+import { showConfirm } from '../../../../shared/ui/AccessibleDialog';
 import { HelpLabel } from './SceneEditorChrome.jsx';
 import ConversationEditorModal from './ConversationEditorModal.jsx';
 import ConversationGraph from './ConversationGraph.jsx';
@@ -84,6 +85,7 @@ export default function HotspotInspectorPanel({
   handleUpload,
   isHeroAdventureProject = false,
   heroSkills = [],
+  onHotspotDeleted,
 }) {
   if (!selectedHotspot) return null;
   const isProPromotionMode = isProPromotionProject(project);
@@ -97,6 +99,21 @@ export default function HotspotInspectorPanel({
       ?.hotspots.find((hotspot) => hotspot.id === selectedHotspotId);
     if (spot) updater(spot);
   });
+  const removeHotspot = async () => {
+    const confirmed = await showConfirm({
+      title: 'Supprimer la zone',
+      message: `Supprimer la zone "${selectedHotspot.name || 'Nouvelle zone'}" ?`,
+      confirmLabel: 'Supprimer',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+    patchProject((draft) => {
+      const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
+      if (!scene?.hotspots) return;
+      scene.hotspots = scene.hotspots.filter((entry) => entry.id !== selectedHotspotId);
+    });
+    onHotspotDeleted?.();
+  };
 
   return (
     <>
@@ -104,6 +121,15 @@ export default function HotspotInspectorPanel({
                       <input data-tour="hotspot-name" value={selectedHotspot.name} onChange={(e) => patchProject((draft) => {
                         const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.name = e.target.value;
                       })} />
+                      <HelpLabel help="Nom utilisé dans les statistiques de clic. Exemple : Réserver une session, Accès prologue ou Voir l’épilogue. Laisse vide pour reprendre le nom de la zone.">Nom statistique</HelpLabel>
+                      <input
+                        data-tour="hotspot-analytics-label"
+                        value={selectedHotspot.analyticsLabel || ''}
+                        placeholder={selectedHotspot.name || 'Réserver une session'}
+                        onChange={(event) => updateSelectedHotspot((spot) => {
+                          spot.analyticsLabel = event.target.value;
+                        })}
+                      />
                       <div className="scene-selection-geometry-grid" data-tour="hotspot-geometry">
                         <div><HelpLabel help="Position horizontale du centre de la zone, en pourcentage de la largeur de l’image.">X</HelpLabel><NumberInput value={selectedHotspot.x} onValueChange={(nextValue) => patchProject((draft) => { const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.x = nextValue; })} /></div>
                         <div><HelpLabel help="Position verticale du centre de la zone, en pourcentage de la hauteur de l’image.">Y</HelpLabel><NumberInput value={selectedHotspot.y} onValueChange={(nextValue) => patchProject((draft) => { const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.y = nextValue; })} /></div>
@@ -111,6 +137,14 @@ export default function HotspotInspectorPanel({
                         <div><HelpLabel help="Hauteur de la zone cliquable. Une zone trop petite peut être difficile à trouvér sur mobile.">Hauteur</HelpLabel><NumberInput value={selectedHotspot.height} onValueChange={(nextValue) => patchProject((draft) => { const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.height = nextValue; })} /></div>
                       </div>
                       {renderShapeControls('hotspot', selectedHotspotId)}
+                      <button
+                        type="button"
+                        className="danger-button"
+                        style={{ marginTop: 12 }}
+                        onClick={() => { void removeHotspot(); }}
+                      >
+                        Supprimer la zone
+                      </button>
                       <HotspotActionFields
                         entry={selectedHotspot}
                         updateEntry={updateSelectedHotspot}

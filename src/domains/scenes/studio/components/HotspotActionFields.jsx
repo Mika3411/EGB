@@ -1,5 +1,6 @@
 import NumberInput from '../../../../shared/ui/forms/NumberInput.jsx';
 import { isProPromotionProject } from '../../../../shared/services/proPromotion';
+import { isProfessionalAccount } from '../../../../shared/services/accountPlans';
 import { HelpLabel } from './SceneEditorChrome.jsx';
 
 const getProjectRecordId = (record = {}) => (
@@ -35,9 +36,11 @@ const getProjectRecordTitle = (record = {}) => (
   || 'Projet sans titre'
 );
 
-export const getProjectLinkOptions = (projectLibrary = [], activeProjectId = '', user = null) => {
+export const getProjectLinkOptions = (projectLibrary = [], activeProjectId = '', user = null, options = {}) => {
   const seenIds = new Set();
+  const proOnly = Boolean(options.proOnly);
   return (Array.isArray(projectLibrary) ? projectLibrary : [])
+    .filter((record) => !proOnly || isProPromotionProject(record))
     .map((record) => ({
       id: getProjectRecordId(record),
       userId: getProjectRecordUserId(record, user),
@@ -348,12 +351,13 @@ export default function HotspotActionFields({
 
   const currentActionType = actionType || entry.actionType || 'dialogue';
   const isProPromotionMode = isProPromotionProject(project);
-  const showDialogue = !['none', 'skill_check', 'hero_combat'].includes(currentActionType);
+  const canUseProPages = isProfessionalAccount(user) || isProPromotionMode;
+  const showDialogue = !['none', 'skill_check', 'hero_combat', 'project_link'].includes(currentActionType);
   const showRewardItem = !isProPromotionMode && (currentActionType === 'dialogue_item' || Boolean(entry.rewardItemId));
   const showSceneTarget = !isProPromotionMode && currentActionType === 'scene';
   const showCinematicTarget = currentActionType === 'cinematic';
   const showExternalLink = currentActionType === 'external_link';
-  const showProjectLink = currentActionType === 'project_link';
+  const showProjectLink = currentActionType === 'project_link' && canUseProPages;
   const showEnigmaLink = !isProPromotionMode && !['none', 'conversation', 'skill_check', 'hero_combat'].includes(currentActionType);
   const projectLinkOptions = getProjectLinkOptions(projectLibrary, activeProjectId, user);
   const selectedProjectOption = entry.targetProjectId && !projectLinkOptions.some((option) => option.id === entry.targetProjectId)
@@ -415,7 +419,7 @@ export default function HotspotActionFields({
 
       {showProjectLink ? (
         <>
-          <HelpLabel help="Projet joueur ouvert dans un nouvel onglet quand cette zone est cliquée.">Projet cible</HelpLabel>
+          <HelpLabel help="Projet ouvert dans un nouvel onglet quand cette zone est cliquée.">Projet cible</HelpLabel>
           <select data-tour="hotspot-target-project" value={entry.targetProjectId || ''} onChange={(event) => updateEntry((target) => {
             const nextProject = displayedProjectLinkOptions.find((option) => option.id === event.target.value);
             target.targetProjectId = nextProject?.id || '';
@@ -430,6 +434,30 @@ export default function HotspotActionFields({
           </select>
           {!displayedProjectLinkOptions.length ? (
             <p className="small-note">Aucun autre projet disponible pour ce compte.</p>
+          ) : null}
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={Boolean(entry.accessCodeEnabled)}
+              onChange={(event) => updateEntry((target) => {
+                target.accessCodeEnabled = event.target.checked;
+              })}
+            />
+            Bloquer l'accès par code
+          </label>
+          {entry.accessCodeEnabled ? (
+            <>
+              <HelpLabel help="Code demandé au joueur avant d'ouvrir le projet cible.">Code d'accès</HelpLabel>
+              <input
+                data-tour="hotspot-access-code"
+                type="password"
+                value={entry.accessCode || ''}
+                placeholder="Mot de passe"
+                onChange={(event) => updateEntry((target) => {
+                  target.accessCode = event.target.value;
+                })}
+              />
+            </>
           ) : null}
         </>
       ) : null}

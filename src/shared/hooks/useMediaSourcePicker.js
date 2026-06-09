@@ -167,7 +167,7 @@ export function useMediaSourcePicker({
 
   const selectLibraryAsset = useCallback((asset) => {
     if (!asset?.url) return;
-    onSelect?.(asset.url, asset.name || asset.id || 'media');
+    onSelect?.(asset.url, asset.name || asset.id || 'media', asset);
     closePicker();
   }, [closePicker, onSelect]);
 

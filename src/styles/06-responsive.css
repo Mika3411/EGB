@@ -30,6 +30,12 @@
 
 @media (max-width: 720px){.help-dot:after,.grid-two>.checkbox-row:last-child .help-dot:after,.grid-two>div+.checkbox-row .help-dot:after,.logic-rule-body .checkbox-row:last-child .help-dot:after,.side-editor-pro .help-dot:after,.side-editor .help-dot:after{left:var(--help-left, 12px)!important;right:auto!important;top:var(--help-top, 12px)!important;width:var(--help-width, min(280px, calc(100vw - 24px) ))!important;max-width:min(280px,calc(100vw - 24px))!important;transform:none!important}.help-dot:hover:after,.help-dot:focus:after{transform:none!important}}
 
+@media (max-width: 720px) and (orientation: portrait){
+  .builder-studio-shell{min-height:100vh;min-height:100dvh;overflow:hidden}
+  .builder-studio-shell > :not(.studio-mobile-orientation-gate){pointer-events:none;user-select:none}
+  .studio-mobile-orientation-gate{position:fixed;inset:0;z-index:200000;display:grid;place-items:center;padding:calc(env(safe-area-inset-top) + 18px) calc(env(safe-area-inset-right) + 18px) calc(env(safe-area-inset-bottom) + 18px) calc(env(safe-area-inset-left) + 18px);background:radial-gradient(circle at 50% 20%,rgba(37,99,235,.24),transparent 38%),#020617;pointer-events:auto}
+}
+
 @media (max-width: 900px){
   .profile-tutorial-menu:not([open]) .profile-tutorial-popover{display:none!important}
   .profile-template-picker button{min-height:44px!important;white-space:normal;overflow-wrap:anywhere;line-height:1.15}

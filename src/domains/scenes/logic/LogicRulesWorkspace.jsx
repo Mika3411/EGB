@@ -7,7 +7,7 @@ import MediaSourcePicker from '../../../shared/ui/media/MediaSourcePicker.jsx';
 import { showConfirm } from '../../../shared/ui/AccessibleDialog';
 
 const ACTION_LABELS = {
-  default: 'Action normale dé la zone',
+  default: 'Action normale de la zone',
   dialogue: 'Dialogue',
   dialogue_item: 'Dialogue + objet',
   scene: 'Changer de scène',
@@ -77,7 +77,7 @@ const SCENE_TIMER_ACTION_OPTIONS = [
 
 const FIELD_HELP = {
   sceneTree: "Choisis la scène dont tu veux régler les conditions. Les règles affichées à droite ne concernent que cette scène.",
-  actionZones: "Zones cliquables de la scène selectionnée, y compris les objets visibles réglés en Zone d'action. Une règle conditionnelle peut remplacer leur action normale selon l’état de la partie.",
+  actionZones: "Zones cliquables de la scène sélectionnée, y compris les objets visibles réglés en Zone d'action. Une règle conditionnelle peut remplacer leur action normale selon l’état de la partie.",
   addRule: "Ajoute une condition spéciale sur cette zone. La règle s’active seulement si sa condition est vraie pendant la partie.",
   visibleObjects: "Réactions au clic des objets visibles placés dans la scène. Le nom, la position, la taille et l’image restent dans l’éditeur de scène.",
   consumeRequiredItem: "Retire l’objet testé de l’inventaire après activation. Utile pour une clé utilisée une seule fois, un ticket donné, une pile consommée.",
@@ -169,7 +169,7 @@ const getRuleSummary = (rule, project) => {
     visited_scene: `Scène visitée: ${testedScene?.name || 'scène'}`,
     completed_hotspot: `Zone franchie: ${testedHotspot?.name || 'zone'}`,
     solved_enigma: `Énigme réussie: ${testedEnigma?.name || 'énigme'}`,
-    launched_cinematic: `Cinématique lancée: ${testedCinematic?.name || 'cinematic'}`,
+    launched_cinematic: `Cinématique lancée: ${testedCinematic?.name || 'cinématique'}`,
     completed_combination: `Combinaison réalisée: ${testedCombination?.message || 'combinaison'}`,
     chose_reply: `Réponse choisie: ${testedReply?.reply.label || 'réponse'}`,
     story_variable: getStoryVariableSummary({
@@ -190,7 +190,7 @@ const getRuleSummary = (rule, project) => {
   const action = rule.actionType === 'block'
     ? `${ACTION_LABELS.block}: ${testedBlock?.target.name || 'bloc'}`
     : ACTION_LABELS[rule.actionType] || 'Dialogue';
-  const reward = rewardItem ? ` · donné ${rewardItem.name}` : '';
+  const reward = rewardItem ? ` · donne ${rewardItem.name}` : '';
   return `${condition} · ${action}${reward}`;
 };
 
@@ -488,7 +488,7 @@ export default function LogicRulesWorkspace({
             <select value={rule.cinematicId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
               draftRule.cinematicId = event.target.value;
             })}>
-              <option value="">N’importe quelle cinematic lancée</option>
+              <option value="">N’importe quelle cinématique lancée</option>
               {(project.cinematics || []).map((cinematic) => <option key={cinematic.id} value={cinematic.id}>{cinematic.name}</option>)}
             </select>
           </div>
@@ -623,7 +623,7 @@ export default function LogicRulesWorkspace({
       {rule.actionType === 'block' ? (
         <>
           <div className="logic-flow-field">
-            <HelpLabel help="Bloc affiché, masque ou modifié quand cette règle réussit.">Bloc cible</HelpLabel>
+            <HelpLabel help="Bloc affiché, masqué ou modifié quand cette règle réussit.">Bloc cible</HelpLabel>
             <select data-tour="logic-target-block" value={rule.targetBlockId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
               draftRule.targetBlockId = event.target.value;
             })}>
@@ -736,8 +736,8 @@ export default function LogicRulesWorkspace({
             <section className="combo-card logic-scene-rules-card logic-mobile-card" data-tour="logic-scene-timer">
               <div className="panel-head">
                 <div>
-                  <HelpLabel className="compact-section-title" help="Règles qui s'appliquent ? toute la scène, avant les exceptions propres aux zones d'action.">Règles de scène</HelpLabel>
-                  <p className="small-note">Compte a rebours local et conséquence automatique quand le temps arrive a zero.</p>
+                  <HelpLabel className="compact-section-title" help="Règles qui s'appliquent à toute la scène, avant les exceptions propres aux zones d'action.">Règles de scène</HelpLabel>
+                  <p className="small-note">Compte à rebours local et conséquence automatique quand le temps arrive à zéro.</p>
                 </div>
                 <span className={`status-badge ${selectedTimerIssues.length ? 'warning' : selectedScene.timerEnabled ? '' : 'soft'}`}>
                   {selectedTimerIssues.length ? 'Timer incomplet' : selectedScene.timerEnabled ? 'Timer actif' : 'Timer inactif'}
@@ -774,7 +774,7 @@ export default function LogicRulesWorkspace({
                   />
                 </div>
                 <div>
-                  <HelpLabel help="Action déclenchée quand le temps arrive a zero.">Fin du temps</HelpLabel>
+                  <HelpLabel help="Action déclenchée quand le temps arrive à zéro.">Fin du temps</HelpLabel>
                   <select
                     data-tour="logic-timer-action"
                     value={selectedTimerAction}
@@ -824,7 +824,7 @@ export default function LogicRulesWorkspace({
                 ) : null}
                 {selectedTimerAction === 'damage-life' ? (
                   <div>
-                    <HelpLabel help="Nombre de vies perdues quand le temps expire. Le joueur commence avec 3 vies dans l'apercu.">Vies perdues</HelpLabel>
+                    <HelpLabel help="Nombre de vies perdues quand le temps expire. Le joueur commence avec 3 vies dans l'aperçu.">Vies perdues</HelpLabel>
                     <input
                       type="number"
                       min="1"
@@ -1092,7 +1092,7 @@ export default function LogicRulesWorkspace({
             </section>
           </div>
         ) : (
-          <div className="empty-state-inline">Crée d’abord’une scène pour gérer sa logique.</div>
+          <div className="empty-state-inline">Crée d’abord une scène pour gérer sa logique.</div>
         )}
       </section>
     </div>

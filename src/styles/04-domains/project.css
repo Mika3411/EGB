@@ -38,6 +38,47 @@
 
 .topbar-pro .project-actions{justify-content:flex-start;flex-wrap:wrap}
 
+.builder-demo-banner{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin:0 0 12px;
+  padding:12px 14px;
+  border:1px solid var(--ds-state-info-border);
+  border-radius:var(--radius-md);
+  background:var(--ds-state-info-bg-soft);
+  color:var(--text-on-dark);
+  box-shadow:var(--component-surface-ring);
+}
+
+.builder-demo-banner>div{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:10px;
+  min-width:0;
+}
+
+.builder-demo-banner strong{
+  min-width:0;
+  color:var(--text-on-dark);
+  font-size:13px;
+  line-height:1.35;
+}
+
+.builder-demo-banner button{
+  flex:0 0 auto;
+}
+
+.builder-demo-banner-actions{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
 .standalone-export-feedback{display:grid;gap:4px;min-width:0;max-width:520px}
 
 .standalone-export-status,.standalone-export-warning{margin:0;font-size:12px;font-weight:800;line-height:1.35}
@@ -1975,11 +2016,13 @@
 
 .auth-account-type{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 
-.auth-account-type label{display:flex;align-items:center;justify-content:center;gap:8px;min-width:0;min-height:42px;padding:9px 10px;border:1px solid rgba(148,163,184,.2);border-radius:10px;background:#0f172ab8;color:#dbeafe;font-size:13px;font-weight:900}
+.auth-account-type label{display:flex;align-items:center;justify-content:center;gap:8px;min-width:0;min-height:42px;padding:9px 10px;border:1px solid rgba(148,163,184,.2);border-radius:10px;background:#0f172ab8;color:#dbeafe;font-size:13px;font-weight:900;text-align:center;line-height:1.15}
 
 .auth-account-type label.selected{border-color:#60a5fabd;background:#1d4ed870;color:#fff}
 
-.auth-account-type input{margin:0}
+.auth-account-type input[type="radio"]{width:20px;min-width:20px;height:20px;min-height:20px;flex:0 0 20px;margin:0;padding:0;box-shadow:none;accent-color:#38bdf8}
+
+.auth-account-type span{min-width:0;overflow-wrap:anywhere}
 
 .auth-consents{display:grid;gap:8px;margin-top:4px}
 

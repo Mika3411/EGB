@@ -70,39 +70,8 @@ export default function SceneSidebar({
 }) {
   const sceneCount = project.scenes?.length || 0;
   const isProPromotionMode = isProPromotionProject(project);
-  const proScene = project.scenes?.[0] || null;
 
-  if (isProPromotionMode) {
-    return (
-      <section className="panel side panel-nav-pro scene-left-nav" data-tour="scene-navigation">
-        <div className="scene-nav-section">
-          <div className="scene-nav-section-head">
-            <div>
-              <span className="section-kicker">Navigation</span>
-              <h2>Page d’extension</h2>
-              <small>1 page</small>
-            </div>
-          </div>
-
-          <div className="scene-nav-list pro-page-nav">
-            {proScene ? (
-              <div className="scene-summary selected">
-                <span className="scene-collapse-spacer" />
-                <button type="button" className="scene-select-button" onClick={() => selectSceneFromTree(proScene)}>
-                  <span className="scene-title-line">
-                    <strong>{proScene.name}</strong>
-                    <small>Page unique</small>
-                  </span>
-                </button>
-              </div>
-            ) : (
-              <p className="small-note">Aucune page d’extension.</p>
-            )}
-          </div>
-        </div>
-      </section>
-    );
-  }
+  if (isProPromotionMode) return null;
 
   return (
     <section className="panel side panel-nav-pro scene-left-nav" data-tour="scene-navigation">

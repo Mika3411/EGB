@@ -313,6 +313,7 @@
 .canvas-subpanel { padding-top: 12px; }
 .preview-editor { grid-template-columns: minmax(0, 1fr) 240px; gap: 10px; margin-top: 4px; }
 .scenes-layout-pro { grid-template-columns: minmax(260px, 280px) minmax(0, 1fr); }
+.scenes-layout-pro.no-left-nav { grid-template-columns: minmax(0, 1fr); }
 .scene-general-grid { grid-template-columns: minmax(0, 1.55fr) minmax(360px, 0.85fr); align-items: stretch; }
 .editor-toolbar-wrap { display: flex; gap: 12px; flex-wrap: wrap; }
 .side-editor-head-spaced { margin-top: 20px; }
@@ -1254,6 +1255,12 @@ label,
     background: color-mix(in srgb, var(--builder-surface-card, #0b1425) 92%, #020617);
   }
 
+  .ultra-editor .canvas-subpanel > .subpanel-head {
+    position: static;
+    top: auto;
+    z-index: auto;
+  }
+
   .ultra-editor .scene-general-panel .subpanel-head,
   .ultra-editor .canvas-subpanel > .subpanel-head {
     display: grid;
@@ -1384,11 +1391,15 @@ label,
     overflow-wrap: anywhere;
   }
 
-  .ultra-editor .panel-context-pro .scene-selection-geometry-grid,
-  .ultra-editor .scene-object-inspector-card .scene-selection-geometry-grid,
   .ultra-editor .panel-context-pro .grid-two.small-gap {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
+  }
+
+  .ultra-editor .panel-context-pro .scene-selection-geometry-grid,
+  .ultra-editor .scene-object-inspector-card .scene-selection-geometry-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
   }
 
   .ultra-editor .hotspot-assets-below-canvas,
@@ -1436,8 +1447,6 @@ label,
 }
 
 @media (max-width: 430px) {
-  .ultra-editor .panel-context-pro .scene-selection-geometry-grid,
-  .ultra-editor .scene-object-inspector-card .scene-selection-geometry-grid,
   .ultra-editor .panel-context-pro .grid-two.small-gap {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1496,11 +1505,11 @@ label,
   }
 
   .ultra-editor .scene-left-nav {
-    max-height: min(24svh, 88px);
+    max-height: min(46svh, 190px);
   }
 
   .ultra-editor .scene-nav-list {
-    max-height: min(10svh, 38px);
+    max-height: min(34svh, 138px);
   }
 
   .ultra-editor .canvas-subpanel > .subpanel-head {

@@ -145,7 +145,6 @@ export function useSceneEditorShapes({
   };
 
   const renderShapeControls = (type, id) => {
-    if (isBeginnerMode) return null;
     const entry = getEditorElementByType(selectedScene, type, id);
     if (!entry) return null;
     const shapeType = getElementShapeType(entry);

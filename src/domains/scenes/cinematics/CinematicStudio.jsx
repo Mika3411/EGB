@@ -7,23 +7,27 @@ import {
   normalizeAnime2dSpecForCinematic,
   normalizeCinematicSteps,
 } from '../../../shared/services/cinematicEngine';
+import { getProjectLinkOptions } from '../studio/components/HotspotActionFields.jsx';
+import { isProfessionalAccount } from '../../../shared/services/accountPlans';
+import { isProPromotionProject } from '../../../shared/services/proPromotion';
 
 const makeId = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 const FIELD_HELP = {
-  addCinematic: "Crée une nouvelle cinematic. Elle peut servir d’intro, de transition, de révélation ou de récompense après une énigme.",
+  addCinematic: "Crée une nouvelle cinématique. Elle peut servir d’intro, de transition, de révélation ou de récompense après une énigme.",
   name: "Nom interne de la cinématique. Il apparaît dans les listes de choix et aide à retrouver les transitions.",
   type: "Choisis entre un diaporama de slides narratifs ou une vidéo importée.",
-  videoFile: "Fichier vidéo joué par cette cinematic. MP4 est le format le plus fiable pour le navigateur.",
+  videoFile: "Fichier vidéo joué par cette cinématique. MP4 est le format le plus fiable pour le navigateur.",
   videoAutoplay: "Lance automatiquement la vidéo quand la cinématique démarre. Selon le navigateur, le son peut demander une interaction utilisateur.",
   videoControls: "Affiche les contrôles vidéo au joueur: lecture, pause, barre de progression et volume.",
   slideImage: "Image affichée pendant ce slide. Elle peut poser une ambiance, montrer un indice ou illustrer une transition.",
   slideNarration: "Texte affiché avec le slide. Utilise-le pour raconter, guider ou révéler une information.",
-  slideAudio: "Son ou voix associé à ce slide. Il se joué pendant la cinématique si le navigateur l’autorise.",
+  slideAudio: "Son ou voix associé à ce slide. Il se joue pendant la cinématique si le navigateur l’autorise.",
   endAction: "Action déclenchée quand la cinématique se termine: rester sur place, aller à un acte, ouvrir une scène ou donner un objet.",
   targetAct: "Acte vers lequel rediriger après la cinématique. Utile pour passer à un nouveau chapitre.",
   targetScene: "Scène ouverte après la cinématique si l’action de fin est un changement de scène.",
-  rewardItem: "Objet ajouté à l’inventaire à la fin de la cinématique si l’action de fin donné une récompense.",
+  targetProject: "Page pro ouverte dans un nouvel onglet à la fin de la cinématique.",
+  rewardItem: "Objet ajouté à l’inventaire à la fin de la cinématique si l’action de fin donne une récompense.",
 };
 
 const HelpLabel = ({ children, help, className = '' }) => (
@@ -40,6 +44,9 @@ const syncCinematicSteps = (cinematic) => {
 
 export default function CinematicStudio({
   project,
+  user,
+  projectLibrary = [],
+  activeProjectId = '',
   selectedCinematicId,
   setSelectedCinematicId,
   selectedCinematic,
@@ -137,6 +144,18 @@ export default function CinematicStudio({
 
     setSelectedCinematicId(nextSelectedCinematicId);
   };
+  const isProPromotionMode = isProPromotionProject(project);
+  const canUseProPages = isProfessionalAccount(user) || isProPromotionMode;
+  const proPageOptions = getProjectLinkOptions(projectLibrary, activeProjectId, user);
+  const selectedProPageOption = selectedCinematic?.targetProjectId
+    && !proPageOptions.some((option) => option.id === selectedCinematic.targetProjectId)
+    ? {
+      id: selectedCinematic.targetProjectId,
+      userId: selectedCinematic.targetProjectUserId || user?.id || '',
+      title: 'Projet sélectionné',
+    }
+    : null;
+  const cinematicProPageOptions = selectedProPageOption ? [...proPageOptions, selectedProPageOption] : proPageOptions;
 
   return (
     <div className="layout two-cols-wide cinematic-workspace">
@@ -158,7 +177,7 @@ export default function CinematicStudio({
           {project.cinematics.map((cine) => (
             <button key={cine.id} className={`list-card ${cine.id === selectedCinematicId ? 'selected' : ''}`} onClick={() => setSelectedCinematicId(cine.id)}>
               <strong>{cine.name}</strong>
-              <span>{(cine.cinematicType || 'slides') === 'video' ? 'Video' : (cine.cinematicType === 'anime2d' ? '2D Anime' : `${cine.slides.length} slide(s)`)}</span>
+              <span>{(cine.cinematicType || 'slides') === 'video' ? 'Vidéo' : (cine.cinematicType === 'anime2d' ? '2D Anime' : `${cine.slides.length} slide(s)`)}</span>
             </button>
           ))}
         </div>
@@ -168,7 +187,7 @@ export default function CinematicStudio({
         {selectedCinematic ? (
           <>
             <div className="panel-head">
-              <h2>Éditeur de cinematic</h2>
+              <h2>Éditeur de cinématique</h2>
               <div className="cinematic-editor-actions">
                 {(selectedCinematic.cinematicType || 'slides') === 'slides' ?
                    <button data-tour="cinematic-add-slide" onClick={addSlide}>+ Slide</button>
@@ -183,7 +202,7 @@ export default function CinematicStudio({
               const cine = draft.cinematics.find((c) => c.id === selectedCinematicId); if (cine) cine.name = e.target.value;
             })} />
 
-            <HelpLabel help={FIELD_HELP.type}>Type de cinematic</HelpLabel>
+            <HelpLabel help={FIELD_HELP.type}>Type de cinématique</HelpLabel>
             <select
               data-tour="cinematic-type"
               value={selectedCinematic.cinematicType || 'slides'}
@@ -196,7 +215,7 @@ export default function CinematicStudio({
               })}
             >
               <option value="slides">Diaporama</option>
-              <option value="video">Video importee</option>
+              <option value="video">Vidéo importée</option>
               <option value="anime2d">2D Anime</option>
             </select>
 
@@ -264,7 +283,7 @@ export default function CinematicStudio({
                     }
                   }} />
                 </label>
-                <p className="small-note">{selectedCinematic.anime2dName || 'Aucun JSON 2D Anime importe.'}</p>
+                <p className="small-note">{selectedCinematic.anime2dName || 'Aucun JSON 2D Anime importé.'}</p>
               </div>
             ) : (
               <div className="slides-grid" data-tour="cinematic-slides">
@@ -332,6 +351,13 @@ export default function CinematicStudio({
                   const cine = draft.cinematics.find((c) => c.id === selectedCinematicId);
                   if (cine) {
                     cine.onEndType = e.target.value;
+                    if (e.target.value !== 'act') cine.targetActId = '';
+                    if (e.target.value !== 'scene') cine.targetSceneId = '';
+                    if (e.target.value !== 'item') cine.rewardItemId = '';
+                    if (e.target.value !== 'project_link') {
+                      cine.targetProjectId = '';
+                      cine.targetProjectUserId = '';
+                    }
                     syncCinematicSteps(cine);
                   }
                 })}
@@ -340,6 +366,7 @@ export default function CinematicStudio({
                 <option value="act">Aller à un acte</option>
                 <option value="scene">Aller à une scène</option>
                 <option value="item">Donner un objet</option>
+                {canUseProPages ? <option value="project_link">Projet cible</option> : null}
               </select>
 
               {(selectedCinematic.onEndType || 'none') === 'act' && (
@@ -402,11 +429,34 @@ export default function CinematicStudio({
                   </select>
                 </>
               )}
+
+              {canUseProPages && (selectedCinematic.onEndType || 'none') === 'project_link' && (
+                <>
+                  <HelpLabel help={FIELD_HELP.targetProject}>Projet cible</HelpLabel>
+                  <select
+                    value={selectedCinematic.targetProjectId || ''}
+                    onChange={(e) => patchProject((draft) => {
+                      const cine = draft.cinematics.find((c) => c.id === selectedCinematicId);
+                      const nextProject = cinematicProPageOptions.find((option) => option.id === e.target.value);
+                      if (cine) {
+                        cine.targetProjectId = nextProject?.id || '';
+                        cine.targetProjectUserId = nextProject?.userId || '';
+                        syncCinematicSteps(cine);
+                      }
+                    })}
+                  >
+                    <option value="">Choisir un projet</option>
+                    {cinematicProPageOptions.map((option) => (
+                      <option key={option.id} value={option.id}>{option.title}</option>
+                    ))}
+                  </select>
+                </>
+              )}
             </div>
           </>
         ) : (
           <div className="stack">
-            <h2>Aucune cinématique selectionnée</h2>
+            <h2>Aucune cinématique sélectionnée</h2>
             <p className="small-note">Ajoute une cinématique ou sélectionne-en une dans la liste.</p>
           </div>
         )}

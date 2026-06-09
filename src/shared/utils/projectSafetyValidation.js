@@ -58,6 +58,7 @@ const MEDIA_ID_KEYS = [
 const ACTION_KEYS = [
   'actionType', 'dialogue', 'requiredItemId', 'consumeRequiredItemOnUse', 'rewardItemId',
   'targetSceneId', 'targetCinematicId', 'externalUrl', 'targetProjectId', 'targetProjectUserId',
+  'accessCodeEnabled', 'accessCode',
   'enigmaId', 'requiredHotspotId', 'lockedMessage',
   'conditionType', 'conditionItemId', 'conditionSceneId', 'conditionHotspotId',
   'conditionEnigmaId', 'conditionCinematicId', 'conditionCombinationId', 'conditionReplyId',
@@ -210,6 +211,7 @@ const ENIGMA_KEYS = makeSet([
   'id', 'name', 'type', 'question', 'solutionText', 'solutionColors', 'miscMode',
   'miscChoices', 'miscCorrectChoices', 'miscPairs', 'miscMin', 'miscMax', 'miscTargetItemId',
   'successMessage', 'failMessage', 'unlockType', 'targetSceneId', 'targetCinematicId',
+  'targetProjectId', 'targetProjectUserId',
   'imageData', 'imageName', 'imagePrompt', 'popupBackgroundData', 'popupBackgroundName',
   'popupBackgroundZoom', 'popupBackgroundX', 'popupBackgroundY', 'popupBackgroundOverlay',
   'gridRows', 'gridCols', 'clueSceneIds', 'logicNotes', ...MEDIA_ID_KEYS, ...SHARED_AI_KEYS,
@@ -218,6 +220,7 @@ const ENIGMA_KEYS = makeSet([
 const CINEMATIC_KEYS = makeSet([
   'id', 'name', 'cinematicType', 'slides', 'steps', 'videoData', 'videoName', 'videoPoster',
   'videoAutoplay', 'videoControls', 'onEndType', 'targetActId', 'targetSceneId',
+  'targetProjectId', 'targetProjectUserId',
   'rewardItemId', 'anime2dSpec', 'anime2dName', ...MEDIA_ID_KEYS, ...SHARED_AI_KEYS,
 ]);
 

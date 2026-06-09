@@ -1,14 +1,20 @@
-import React, { useRef, useState } from 'react';
-import { BookOpen, ListChecks } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { BookOpen, ChevronDown, ListChecks } from 'lucide-react';
 import HelpLabel, { positionHelpBubble } from '../../../shared/ui/forms/HelpLabel';
 import { CREATION_MODES } from '../../../shared/services/projectAnalysis';
 import { PRO_PROMOTION_PROJECT_MODE } from '../../../shared/services/proPromotion';
 import { CREATION_TEMPLATES } from './profileUtils';
 
-const ADVENTURE_TEMPLATE_IDS = new Set([
-  'book_hero',
+const CLASSIC_TEMPLATE_IDS = new Set([
+  'empty',
+  'manor',
+  'investigation',
+  'laboratory',
+  'museum',
+]);
+
+const NARRATIVE_TEMPLATE_IDS = new Set([
   'adventure_choices',
-  'hero_adventure',
   'narrative_investigation',
   'magic_forest',
   'survival_choices',
@@ -16,6 +22,22 @@ const ADVENTURE_TEMPLATE_IDS = new Set([
   'negotiation',
   'narrative_maze',
 ]);
+
+const HERO_TEMPLATE_IDS = new Set([
+  'empty',
+  'book_hero',
+  'hero_adventure',
+]);
+
+const isCreationTemplateAllowedForMode = (templateId, mode) => {
+  if (mode === 'adventure') return templateId === 'empty' || NARRATIVE_TEMPLATE_IDS.has(templateId);
+  if (mode === 'hero_adventure') return HERO_TEMPLATE_IDS.has(templateId);
+  return CLASSIC_TEMPLATE_IDS.has(templateId);
+};
+
+export const getCreationTemplatesForMode = (mode) => (
+  CREATION_TEMPLATES.filter(([templateId]) => isCreationTemplateAllowedForMode(templateId, mode))
+);
 
 const CREATION_MODE_HELPS = {
   beginner: "Mode le plus simple : scènes, médias et interactions essentielles. Idéal pour démarrer vite sans trop d'outils.",
@@ -36,15 +58,22 @@ export default function CreateProjectPanel({
   const [creationTemplate, setCreationTemplate] = useState('empty');
   const [creationMode, setCreationMode] = useState('beginner');
   const [importError, setImportError] = useState('');
+  const [areTemplatesOpen, setAreTemplatesOpen] = useState(false);
   const fileInputRef = useRef(null);
+  const availableTemplates = useMemo(() => getCreationTemplatesForMode(creationMode), [creationMode]);
+
+  useEffect(() => {
+    if (isCreationTemplateAllowedForMode(creationTemplate, creationMode)) return;
+    setCreationTemplate(availableTemplates[0]?.[0] || 'empty');
+  }, [availableTemplates, creationMode, creationTemplate]);
 
   const handleCreate = async (event, options = {}) => {
     event.preventDefault();
-    const templateLabel = CREATION_TEMPLATES.find(([value]) => value === creationTemplate)?.[1] || 'Nouveau projet';
-    const effectiveCreationMode = creationTemplate === 'hero_adventure' || creationTemplate === 'book_hero'
-      ? 'hero_adventure'
-      : ADVENTURE_TEMPLATE_IDS.has(creationTemplate) ? 'adventure' : creationMode;
-    await onCreateProject?.(newProjectName.trim() || templateLabel, creationTemplate, effectiveCreationMode, options);
+    const safeTemplate = isCreationTemplateAllowedForMode(creationTemplate, creationMode)
+      ? creationTemplate
+      : availableTemplates[0]?.[0] || 'empty';
+    const templateLabel = CREATION_TEMPLATES.find(([value]) => value === safeTemplate)?.[1] || 'Nouveau projet';
+    await onCreateProject?.(newProjectName.trim() || templateLabel, safeTemplate, creationMode, options);
     setNewProjectName('');
   };
 
@@ -122,18 +151,28 @@ export default function CreateProjectPanel({
             </div>
             <p className="small-note">Tu peux commencer en Débutant pour aller vite, puis upgrader le projet plus tard depuis la gestion des projets.</p>
           </div>
-          <div className="profile-create-template-block">
-            <HelpLabel help="Point de départ du projet. Certains templates narratifs activent automatiquement un mode avancé adapté à leur structure.">Template de départ</HelpLabel>
+          <div className={`profile-create-template-block ${areTemplatesOpen ? 'is-open' : ''}`}>
+            <div className="profile-template-head">
+              <HelpLabel help="Point de départ du projet. Certains templates narratifs activent automatiquement un mode avancé adapté à leur structure.">Template de départ</HelpLabel>
+              <button
+                type="button"
+                className="profile-template-toggle"
+                aria-expanded={areTemplatesOpen}
+                aria-controls="creation-template"
+                onClick={() => setAreTemplatesOpen((isOpen) => !isOpen)}
+              >
+                <span>Templates</span>
+                <ChevronDown aria-hidden="true" size={16} />
+              </button>
+            </div>
             <div className="template-picker profile-template-picker" id="creation-template" data-tour="profile-template-picker">
-              {CREATION_TEMPLATES.map(([value, label]) => (
+              {availableTemplates.map(([value, label]) => (
                 <button
                   key={value}
                   type="button"
                   className={creationTemplate === value ? 'selected' : ''}
                   onClick={() => {
                     setCreationTemplate(value);
-                    if (value === 'hero_adventure' || value === 'book_hero') setCreationMode('hero_adventure');
-                    else if (ADVENTURE_TEMPLATE_IDS.has(value)) setCreationMode('adventure');
                   }}
                   disabled={isBusy}
                   title={

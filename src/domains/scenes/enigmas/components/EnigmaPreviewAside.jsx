@@ -125,7 +125,7 @@ export default function EnigmaPreviewAside({
                           ))}
                         </div>
                         <div style={{ marginTop: 14, padding: 12, borderRadius: 10, background: 'rgba(255,255,255,.9)', color: '#0f172a', fontWeight: 800, textAlign: 'center' }}>
-                          Affiche / objet : suivre exactement cet ordre ?
+                          Affiche / objet : suivre exactement cet ordre
                         </div>
                         <p className="small-note" style={{ marginBottom: 0 }}>Logique : le joueur trouvé le code complet ailleurs et le recopie tel quel.</p>
                       </>

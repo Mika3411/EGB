@@ -12,6 +12,7 @@ import SceneVisualEffect, { getVisualEffectZoneZIndex } from '../../../../shared
 import { SceneObjectBlockContent } from '../../../../shared/ui/scene/SceneObjectBlockContent.jsx';
 import { getSceneObjectBlockType, getSceneObjectClickMode } from '../../../../shared/services/sceneObjectBlocks';
 import { isProPromotionProject } from '../../../../shared/services/proPromotion';
+import { isProfessionalAccount } from '../../../../shared/services/accountPlans';
 import HotspotInspectorPanel from './HotspotInspectorPanel.jsx';
 import {
   getElementShapeStyle,
@@ -79,6 +80,8 @@ export default function SceneFullscreenEditor({
   patchProject,
   deleteItem,
   setSelectedSceneObjectId,
+  deleteSceneObject,
+  onSceneObjectDeleted,
   getSceneLabel,
   setTab,
   openQuickLogicForTarget,
@@ -96,12 +99,17 @@ export default function SceneFullscreenEditor({
   addConversationQuestion,
   isHeroAdventureProject = false,
   heroSkills = [],
+  onHotspotDeleted,
+  editingSceneObjectTextId = '',
+  onEditSceneObjectText,
+  onStopEditingSceneObjectText,
 }) {
   const getLinkedItem = (itemId) => project.items?.find((item) => item.id === itemId) || null;
   const getSceneObjectDisplayImage = (obj) => obj?.imageData || getLinkedItem(obj?.linkedItemId)?.imageData || '';
-  const getHotspotDisplayImage = (spot) => resolveAssetUrl(project, spot?.objectImageId, spot?.objectImageData);
+  const getHotspotDisplayImage = (spot) => spot?.objectImageData || resolveAssetUrl(project, spot?.objectImageId, '');
   const isBeginnerMode = project?.creationMode === 'beginner';
   const isProPromotionMode = isProPromotionProject(project);
+  const canUseProPages = isProfessionalAccount(user) || isProPromotionMode;
   const canUseQuickLogic = !isProPromotionMode && !isBeginnerMode && project?.creationMode !== 'intermediate';
   const isSceneObjectSelectedOnCanvas = (obj) => obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id);
   const isHotspotSelectedOnCanvas = (spot) => spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id);
@@ -253,26 +261,54 @@ export default function SceneFullscreenEditor({
                             ))}
                             {snapGridEnabled ? <div style={gridOverlayStyle} /> : null}
                           {(selectedScene.sceneObjects || []).filter((obj) => !obj.isHidden || isSceneObjectSelectedOnCanvas(obj)).map((obj) => (
-                            <button
+                            <div
                               key={obj.id}
-                              type="button"
+                              role="button"
+                              tabIndex={0}
                               className={`editor-hotspot editor-scene-object ${getShapeClassName?.(obj) || ''} ${obj.isInvisible ? 'editor-scene-object-invisible' : ''} ${obj.isHidden ? 'editor-hidden-on-canvas' : ''} ${isSceneObjectSelectedOnCanvas(obj) ? 'selected' : ''} ${obj.id === draggingSceneObjectId ? 'dragging' : ''}`}
                               style={getSceneObjectStyle(obj)}
                               onPointerDown={(event) => beginObjectDrag(event, obj.id, 'fullscreen')}
                               onContextMenu={(event) => onCanvasContextMenu?.(event, 'sceneObject', obj.id, 'fullscreen')}
                               onClick={(event) => selectSceneObject(obj.id, event)}
+                              onKeyDown={(event) => {
+                                if (event.key !== 'Enter' && event.key !== ' ') return;
+                                event.preventDefault();
+                                selectSceneObject(obj.id, event);
+                              }}
                             >
                               {obj.anime2dSpec && !obj.isInvisible ? (
                                 <Anime2DPreview spec={obj.anime2dSpec} />
                               ) : getSceneObjectDisplayImage(obj) && !obj.isInvisible ? (
-                                <SceneObjectBlockContent object={obj} displayImage={getSceneObjectDisplayImage(obj)} linkedItem={getLinkedItem(obj.linkedItemId)} />
+                                <SceneObjectBlockContent
+                                  object={obj}
+                                  displayImage={getSceneObjectDisplayImage(obj)}
+                                  linkedItem={getLinkedItem(obj.linkedItemId)}
+                                  editable={getSceneObjectBlockType(obj) === 'text' && editingSceneObjectTextId === obj.id}
+                                  onEditFocus={() => selectSceneObject(obj.id, { shiftKey: false })}
+                                  onEditEnd={onStopEditingSceneObjectText}
+                                  onTextChange={(nextText) => patchLayerItem('sceneObject', obj.id, (item) => {
+                                    item.blockText = nextText;
+                                    item.dialogue = nextText;
+                                  })}
+                                />
                               ) : !obj.isInvisible ? (
-                                <SceneObjectBlockContent object={obj} displayImage="" linkedItem={getLinkedItem(obj.linkedItemId)} />
+                                <SceneObjectBlockContent
+                                  object={obj}
+                                  displayImage=""
+                                  linkedItem={getLinkedItem(obj.linkedItemId)}
+                                  editable={getSceneObjectBlockType(obj) === 'text' && editingSceneObjectTextId === obj.id}
+                                  onEditFocus={() => selectSceneObject(obj.id, { shiftKey: false })}
+                                  onEditEnd={onStopEditingSceneObjectText}
+                                  onTextChange={(nextText) => patchLayerItem('sceneObject', obj.id, (item) => {
+                                    item.blockText = nextText;
+                                    item.dialogue = nextText;
+                                  })}
+                                />
                               ) : <span>{`${obj.name || 'Objet'} (invisible)`}</span>}
                               {renderShapeOutline?.(obj, isSceneObjectSelectedOnCanvas(obj))}
                               {renderResizeHandles?.('sceneObject', obj.id, isSceneObjectSelectedOnCanvas(obj), 'fullscreen')}
                               {renderShapePointHandles?.('sceneObject', obj.id, isSceneObjectSelectedOnCanvas(obj), 'fullscreen')}
-                            </button>
+                            </div>
                           ))}
                           {selectedScene.hotspots.filter((spot) => !spot.isHidden || isHotspotSelectedOnCanvas(spot)).map((spot) => {
                             const hotspotImageSrc = getHotspotDisplayImage(spot);
@@ -310,7 +346,11 @@ export default function SceneFullscreenEditor({
                             openQuickLogicForTarget={openQuickLogicForTarget}
                             isBeginnerMode={isBeginnerMode}
                             projectMode={project?.creationMode}
+                            canUseProPages={canUseProPages}
                             onBeforePreview={editorToolbarProps?.closeEditorFullscreen}
+                            editingSceneObjectTextId={editingSceneObjectTextId}
+                            onEditSceneObjectText={onEditSceneObjectText}
+                            onStopEditingSceneObjectText={onStopEditingSceneObjectText}
                           />
                           </div>
                         </div>
@@ -358,7 +398,7 @@ export default function SceneFullscreenEditor({
                             if (item) item.icon = e.target.value;
                           })} />
                           <p className="small-note">Conseil : choisis une image lisible en petit format, avec un fond simple si possible.</p>
-                          <button className="danger-button" style={{ marginTop: 12 }} onClick={() => {
+                          <button type="button" className="danger-button" style={{ marginTop: 12 }} onClick={() => {
                             deleteItem(selectedItemId);
                             setSelectedItemId('');
                           }}>Supprimer l’objet</button>
@@ -379,6 +419,8 @@ export default function SceneFullscreenEditor({
                           importSceneObjectAnime2d={importSceneObjectAnime2d}
                           getSceneLabel={getSceneLabel}
                           setSelectedSceneObjectId={setSelectedSceneObjectId}
+                          deleteSceneObject={deleteSceneObject}
+                          onSceneObjectDeleted={onSceneObjectDeleted}
                           onOpenLogic={() => openQuickLogicForTarget?.('sceneObject', selectedSceneObjectId)}
                         />
                       ) : selectedHotspot ? (
@@ -401,6 +443,7 @@ export default function SceneFullscreenEditor({
                           handleUpload={handleUpload}
                           isHeroAdventureProject={isHeroAdventureProject}
                           heroSkills={heroSkills}
+                          onHotspotDeleted={onHotspotDeleted}
                         />
                       ) : (
                         <div className="placeholder small">Sélectionne une zone, un objet visible ou un objet d’inventaire.</div>

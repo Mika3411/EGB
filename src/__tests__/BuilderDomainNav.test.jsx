@@ -31,4 +31,20 @@ describe('navigation builder', () => {
 
     expect(onChange).toHaveBeenCalledWith('score');
   });
+
+  test('masque la note dans les extensions Pro', () => {
+    render(
+      <Tabs
+        value="scenes"
+        onChange={vi.fn()}
+        onProfile={vi.fn()}
+        projectScore={{ label: '2,4/10', tone: 'danger', summary: 'Projet incomplet' }}
+        projectMode="pro_promo"
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /Ouvrir le bilan du projet/i })).toBeNull();
+    expect(screen.queryByText('Note')).toBeNull();
+    expect(screen.queryByText('2,4/10')).toBeNull();
+  });
 });

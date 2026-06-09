@@ -141,6 +141,17 @@ afterEach(() => {
 });
 
 describe('BuilderStudio autosave classique', () => {
+  test('prepare le verrouillage paysage du studio complet', async () => {
+    const { container } = render(<BuilderStudio auth={makeAuth()} initialScreen="editor" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Sauvegarde active')).toBeTruthy();
+    });
+    expect(container.querySelector('.builder-studio-shell')).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'Passez en paysage' })).toBeTruthy();
+    expect(screen.getByText('Tournez votre smartphone pour continuer à utiliser le studio complet.')).toBeTruthy();
+  });
+
   test('active le hook autosave du builder classique', async () => {
     render(<BuilderStudio auth={makeAuth()} initialScreen="editor" />);
 
@@ -155,6 +166,17 @@ describe('BuilderStudio autosave classique', () => {
       userId: 'user-classic',
     });
     expect(screen.getByText('Sauvegarde active')).toBeTruthy();
+  });
+
+  test('affiche une démo temporaire cohérente quand l utilisateur est connecté', async () => {
+    render(<BuilderStudio auth={makeAuth()} initialScreen="editor" isDemoMode />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Démo temporaire')).toBeTruthy();
+    });
+    expect(screen.queryByText('Démo sans compte')).toBeNull();
+    expect(screen.getByText(/Vous êtes connecté : cette démo reste un bac à sable non enregistré/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Aller au profil' })).toBeTruthy();
   });
 
   test('ouvre le dialogue d export standalone offline depuis le builder', async () => {

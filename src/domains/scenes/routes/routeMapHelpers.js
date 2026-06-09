@@ -26,7 +26,7 @@ export const getDefaultMap = () => ({
 export const FIELD_HELP = {
   startType: "Détermine le premier écran du joueur au lancement: une scène jouable ou une cinématique d'introduction.",
   startScene: "Scène ouverte au début du jeu si le démarrage est règle sur une scène.",
-  startCinematic: "Cinématique jouee au début du jeu si le démarrage est règle sur une cinématique.",
+  startCinematic: "Cinématique jouée au début du jeu si le démarrage est réglé sur une cinématique.",
 };
 
 export const clamp = (value, min, max) => Math.max(min, Math.min(max, value));

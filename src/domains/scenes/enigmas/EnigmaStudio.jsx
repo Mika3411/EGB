@@ -20,9 +20,15 @@ import EnigmaList from './components/EnigmaList';
 import EnigmaPreviewAside from './components/EnigmaPreviewAside';
 import MediaSourcePicker from '../../../shared/ui/media/MediaSourcePicker.jsx';
 import { showConfirm } from '../../../shared/ui/AccessibleDialog';
+import { getProjectLinkOptions } from '../studio/components/HotspotActionFields.jsx';
+import { isProfessionalAccount } from '../../../shared/services/accountPlans';
+import { isProPromotionProject } from '../../../shared/services/proPromotion';
 
 export default function EnigmaStudio({
   project,
+  user,
+  projectLibrary = [],
+  activeProjectId = '',
   selectedEnigmaId,
   setSelectedEnigmaId,
   selectedEnigma,
@@ -73,6 +79,18 @@ export default function EnigmaStudio({
   const imagePreviewBackground = selectedEnigma?.imageData ?
      { backgroundImage: `url(${selectedEnigma.imageData})`, backgroundSize: 'cover', backgroundPosition: 'center' }
     : {};
+  const isProPromotionMode = isProPromotionProject(project);
+  const canUseProPages = isProfessionalAccount(user) || isProPromotionMode;
+  const proPageOptions = getProjectLinkOptions(projectLibrary, activeProjectId, user);
+  const selectedProPageOption = selectedEnigma?.targetProjectId
+    && !proPageOptions.some((option) => option.id === selectedEnigma.targetProjectId)
+    ? {
+      id: selectedEnigma.targetProjectId,
+      userId: selectedEnigma.targetProjectUserId || user?.id || '',
+      title: 'Projet sélectionné',
+    }
+    : null;
+  const enigmaProPageOptions = selectedProPageOption ? [...proPageOptions, selectedProPageOption] : proPageOptions;
 
   return (
     <div className="layout two-cols-wide enigma-studio-layout">
@@ -337,7 +355,7 @@ export default function EnigmaStudio({
                       });
                     }}
                   >
-                    Supprimer le fond ?
+                    Supprimer le fond
                   </button>
                 </div>
               </div>
@@ -362,7 +380,7 @@ export default function EnigmaStudio({
                   <input data-tour="enigma-popup-background-zoom" type="range" min="1" max="3" step="0.05" value={Number(selectedEnigma.popupBackgroundZoom) || 1} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                     enigma.popupBackgroundZoom = Number(e.target.value);
                   })} />
-                  <HelpLabel help={FIELD_HELP.popupBackgroundOverlay}>Voile dé lisibilité</HelpLabel>
+                  <HelpLabel help={FIELD_HELP.popupBackgroundOverlay}>Voile de lisibilité</HelpLabel>
                   <select data-tour="enigma-popup-background-overlay" value={selectedEnigma.popupBackgroundOverlay || 'dark'} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                     enigma.popupBackgroundOverlay = e.target.value;
                   })}>
@@ -384,7 +402,7 @@ export default function EnigmaStudio({
                   </div>
                 </>
               ) : (
-                <p className="small-note">Aucun fond personnalisé. La pop-up utiliserau style sombre par défaut.</p>
+                <p className="small-note">Aucun fond personnalisé. La pop-up utilisera le style sombre par défaut.</p>
               )}
             </div>
 
@@ -450,7 +468,7 @@ export default function EnigmaStudio({
                         });
                       }}
                     >
-                      Supprimer l’image ?
+                      Supprimer l’image
                     </button>
                   </div>
                 </div>
@@ -501,14 +519,19 @@ export default function EnigmaStudio({
                   enigma.unlockType = e.target.value;
                   if (e.target.value !== 'scene') enigma.targetSceneId = '';
                   if (e.target.value !== 'cinematic') enigma.targetCinematicId = '';
+                  if (e.target.value !== 'project_link') {
+                    enigma.targetProjectId = '';
+                    enigma.targetProjectUserId = '';
+                  }
                 })}>
                   <option value="none">Rien / juste valider</option>
                   <option value="scene">Accès à une scène</option>
                   <option value="cinematic">Lancer une cinématique</option>
+                  {canUseProPages ? <option value="project_link">Page pro</option> : null}
                 </select>
               </div>
               <div>
-                <HelpLabel help={FIELD_HELP.targetScene}>Scène à débloquér</HelpLabel>
+                <HelpLabel help={FIELD_HELP.targetScene}>Scène à débloquer</HelpLabel>
                 <select value={selectedEnigma.targetSceneId || ''} disabled={(selectedEnigma.unlockType || 'none') !== 'scene'} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                   enigma.targetSceneId = e.target.value;
                 })}>
@@ -525,6 +548,21 @@ export default function EnigmaStudio({
                   {project.cinematics.map((cinematic) => <option key={cinematic.id} value={cinematic.id}>{cinematic.name}</option>)}
                 </select>
               </div>
+              {canUseProPages && (selectedEnigma.unlockType || 'none') === 'project_link' ? (
+                <div>
+                  <HelpLabel help="Projet ouvert dans un nouvel onglet après validation de l’énigme.">Projet cible</HelpLabel>
+                  <select value={selectedEnigma.targetProjectId || ''} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
+                    const nextProject = enigmaProPageOptions.find((option) => option.id === e.target.value);
+                    enigma.targetProjectId = nextProject?.id || '';
+                    enigma.targetProjectUserId = nextProject?.userId || '';
+                  })}>
+                    <option value="">Choisir un projet</option>
+                    {enigmaProPageOptions.map((option) => (
+                      <option key={option.id} value={option.id}>{option.title}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
             </div>
 
               </div>

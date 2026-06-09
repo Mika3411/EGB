@@ -5,6 +5,7 @@ import { showConfirm } from '../../../../shared/ui/AccessibleDialog';
 import CompactAudioPreview from './CompactAudioPreview.jsx';
 import { getProjectLinkOptions } from './HotspotActionFields.jsx';
 import { isProPromotionProject } from '../../../../shared/services/proPromotion';
+import { isProfessionalAccount } from '../../../../shared/services/accountPlans';
 import {
   getSceneObjectBlockType,
   getSceneObjectBackgroundColor,
@@ -33,6 +34,8 @@ export default function SceneObjectEditPanel({
   importSceneObjectAnime2d,
   getSceneLabel,
   setSelectedSceneObjectId,
+  deleteSceneObject,
+  onSceneObjectDeleted,
   onOpenLogic,
 }) {
   const clickMode = getSceneObjectClickMode(selectedSceneObject);
@@ -46,12 +49,13 @@ export default function SceneObjectEditPanel({
   );
   const isBeginnerMode = project?.creationMode === 'beginner';
   const isProPromotionMode = isProPromotionProject(project);
+  const canUseProPages = isProfessionalAccount(user) || isProPromotionMode;
   const isProTextBlock = isProPromotionMode && blockType === 'text';
   const proTextActionOptions = [
     { value: 'none', label: 'Aucun' },
     { value: 'dialogue', label: 'Dialogue' },
     { value: 'external_link', label: 'Lien externe' },
-    { value: 'project_link', label: 'Lien projet' },
+    { value: 'project_link', label: 'Projet cible' },
   ];
   const proTextActionType = clickMode === 'none'
     ? 'none'
@@ -78,6 +82,15 @@ export default function SceneObjectEditPanel({
     const obj = draft.scenes.find((scene) => scene.id === selectedSceneId)?.sceneObjects?.find((entry) => entry.id === selectedSceneObjectId);
     if (obj) updater(obj);
   });
+  const setVisibleObjectImage = (obj, data, name, asset = null) => {
+    obj.imageData = data;
+    obj.imageName = name;
+    obj.imageId = asset?.id || '';
+    obj.anime2dSpec = null;
+    obj.anime2dName = '';
+    obj.linkedItemId = '';
+    obj.isInvisible = false;
+  };
   const removeObject = async () => {
     const objectKind = isInvisibleObject ? 'invisible' : 'visible';
     const confirmed = await showConfirm({
@@ -87,12 +100,17 @@ export default function SceneObjectEditPanel({
       variant: 'danger',
     });
     if (!confirmed) return;
-    patchProject((draft) => {
-      const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
-      if (!scene?.sceneObjects) return;
-      scene.sceneObjects = scene.sceneObjects.filter((entry) => entry.id !== selectedSceneObjectId);
-    });
-    setSelectedSceneObjectId('');
+    if (deleteSceneObject) {
+      deleteSceneObject(selectedSceneId, selectedSceneObjectId);
+    } else {
+      patchProject((draft) => {
+        const scene = draft.scenes.find((entry) => entry.id === selectedSceneId);
+        if (!scene?.sceneObjects) return;
+        scene.sceneObjects = scene.sceneObjects.filter((entry) => entry.id !== selectedSceneObjectId);
+      });
+      setSelectedSceneObjectId('');
+    }
+    onSceneObjectDeleted?.();
   };
 
   return (
@@ -139,9 +157,9 @@ export default function SceneObjectEditPanel({
               <input value={selectedSceneObject.blockLabel || ''} onChange={(event) => patchObject((obj) => { obj.blockLabel = event.target.value; })} />
             </>
           ) : null}
-          {['text', 'hint'].includes(blockType) ? (
+          {blockType === 'hint' ? (
             <>
-              <HelpLabel help="Texte affiché directement dans la scène. Pour un indice, il apparait dans le bloc et peut aussi être repris comme dialogue au clic.">Texte</HelpLabel>
+              <HelpLabel help="Texte affiché dans l'indice et repris comme dialogue au clic.">Texte</HelpLabel>
               <textarea value={selectedSceneObject.blockText || ''} onChange={(event) => patchObject((obj) => {
                 obj.blockText = event.target.value;
                 obj.dialogue = event.target.value;
@@ -262,6 +280,20 @@ export default function SceneObjectEditPanel({
                 ))}
               </select>
 
+              {['external_link', 'project_link'].includes(proTextActionType) ? (
+                <>
+                  <HelpLabel help="Nom utilisé dans les statistiques de clic. Exemple : Réserver une session, Accès prologue ou Voir l’épilogue. Laisse vide pour reprendre le texte visible.">Nom statistique</HelpLabel>
+                  <input
+                    data-tour="scene-object-analytics-label"
+                    value={selectedSceneObject.analyticsLabel || ''}
+                    placeholder={selectedSceneObject.buttonLabel || selectedSceneObject.blockText || selectedSceneObject.blockLabel || selectedSceneObject.name || 'Réserver une session'}
+                    onChange={(event) => patchObject((obj) => {
+                      obj.analyticsLabel = event.target.value;
+                    })}
+                  />
+                </>
+              ) : null}
+
               {proTextActionType === 'dialogue' ? (
                 <>
                   <HelpLabel help="Texte affiché quand le joueur clique ce texte.">Dialogue au clic</HelpLabel>
@@ -294,7 +326,7 @@ export default function SceneObjectEditPanel({
 
               {proTextActionType === 'project_link' ? (
                 <>
-                  <HelpLabel help="Projet joueur ouvert dans un nouvel onglet quand ce texte est cliqué.">Projet cible</HelpLabel>
+                  <HelpLabel help="Projet ouvert dans un nouvel onglet quand ce texte est cliqué.">Projet cible</HelpLabel>
                   <select
                     data-tour="scene-object-pro-text-target-project"
                     value={selectedSceneObject.targetProjectId || ''}
@@ -322,24 +354,17 @@ export default function SceneObjectEditPanel({
         </>
       ) : null}
 
-      {!isInvisibleObject && !isAnimationObject && blockType !== 'text' && blockType !== 'hint' && blockType !== 'button' && blockType !== 'input' && blockType !== 'code' ? (
+      {!isInvisibleObject && !isAnimationObject && clickMode !== 'action' && blockType !== 'text' && blockType !== 'hint' && blockType !== 'button' && blockType !== 'input' && blockType !== 'code' ? (
         <MediaSourcePicker
           className="button like full secondary-action"
           accept="image/*"
           assetScope="object-image"
           handleUpload={handleUpload}
           mediaLibrary={mediaLibrary}
-          onSelect={(data, name) => patchObject((obj) => {
-            obj.imageData = data;
-            obj.imageName = name;
-            obj.anime2dSpec = null;
-            obj.anime2dName = '';
-            obj.linkedItemId = '';
-            obj.isInvisible = false;
-          })}
+          onSelect={(data, name, asset) => patchObject((obj) => setVisibleObjectImage(obj, data, name, asset))}
           tourId="scene-object-image"
         >
-          {selectedSceneObject.imageName || 'Importer une image fixe'}
+          {selectedSceneObject.imageName ? "Remplacer l'image visible" : 'Importer une image fixe'}
         </MediaSourcePicker>
       ) : null}
       {!isProTextBlock ? (
@@ -421,7 +446,7 @@ export default function SceneObjectEditPanel({
           <textarea data-tour="scene-object-dialogue" value={selectedSceneObject.dialogue || ''} onChange={(event) => patchObject((obj) => { obj.dialogue = event.target.value; })} />
           <label className="checkbox-row">
             <input type="checkbox" checked={Boolean(selectedSceneObject.removeAfterUse)} onChange={(event) => patchObject((obj) => { obj.removeAfterUse = event.target.checked; })} />
-            Retirer l'objet visible après interaction ?
+            Retirer l'objet visible après interaction
           </label>
           <p className="small-note help-inline-note">Quand c'est active, l'objet disparait de la scène après son utilisation réussie.</p>
         </>
@@ -435,9 +460,14 @@ export default function SceneObjectEditPanel({
             {!isProPromotionMode ? <option value="dialogue_item">Dialogue + objet</option> : null}
             {!isProPromotionMode ? <option value="scene">Changer de scène</option> : null}
             <option value="cinematic">Lancer une cinématique</option>
+            {canUseProPages ? <option value="project_link">Projet cible</option> : null}
           </select>
-          <HelpLabel help="Texte affiché lors de l'interaction principale.">Dialogue</HelpLabel>
-          <textarea value={selectedSceneObject.dialogue || ''} onChange={(event) => patchObject((obj) => { obj.dialogue = event.target.value; })} />
+          {selectedActionType !== 'project_link' ? (
+            <>
+              <HelpLabel help="Texte affiché lors de l'interaction principale.">Dialogue</HelpLabel>
+              <textarea value={selectedSceneObject.dialogue || ''} onChange={(event) => patchObject((obj) => { obj.dialogue = event.target.value; })} />
+            </>
+          ) : null}
           <HelpLabel help="Objet requis pour utiliser cette image-zone.">Objet requis</HelpLabel>
           <select value={selectedSceneObject.requiredItemId || ''} onChange={(event) => patchObject((obj) => { obj.requiredItemId = event.target.value; })}>
             <option value="">Aucun</option>
@@ -463,6 +493,50 @@ export default function SceneObjectEditPanel({
                 <option value="">Aucune</option>
                 {project.scenes.filter((scene) => scene.id !== selectedSceneId).map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
               </select>
+            </>
+          ) : null}
+          {canUseProPages && selectedActionType === 'project_link' ? (
+            <>
+              <HelpLabel help="Projet ouvert dans un nouvel onglet quand cette image-zone est cliquée.">Projet cible</HelpLabel>
+              <select
+                data-tour="scene-object-target-pro-page"
+                value={selectedSceneObject.targetProjectId || ''}
+                onChange={(event) => patchObject((obj) => {
+                  const nextProject = displayedProTextProjectLinkOptions.find((option) => option.id === event.target.value);
+                  obj.targetProjectId = nextProject?.id || '';
+                  obj.targetProjectUserId = nextProject?.userId || '';
+                })}
+              >
+                <option value="">Aucun projet</option>
+                {displayedProTextProjectLinkOptions.map((option) => (
+                  <option key={`${option.userId || 'user'}-${option.id}`} value={option.id}>
+                    {option.title}
+                  </option>
+                ))}
+              </select>
+              {!displayedProTextProjectLinkOptions.length ? (
+                <p className="small-note">Aucun autre projet disponible pour ce compte.</p>
+              ) : null}
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={Boolean(selectedSceneObject.accessCodeEnabled)}
+                  onChange={(event) => patchObject((obj) => { obj.accessCodeEnabled = event.target.checked; })}
+                />
+                Bloquer l'accès par code
+              </label>
+              {selectedSceneObject.accessCodeEnabled ? (
+                <>
+                  <HelpLabel help="Code demandé au joueur avant d'ouvrir le projet cible.">Code d'accès</HelpLabel>
+                  <input
+                    data-tour="scene-object-access-code"
+                    type="password"
+                    value={selectedSceneObject.accessCode || ''}
+                    placeholder="Mot de passe"
+                    onChange={(event) => patchObject((obj) => { obj.accessCode = event.target.value; })}
+                  />
+                </>
+              ) : null}
             </>
           ) : null}
           <HelpLabel help="Cinématique lancée après l'interaction réussie.">Cinématique cible</HelpLabel>
@@ -499,7 +573,19 @@ export default function SceneObjectEditPanel({
               })}
             />
           ) : null}
-          <HelpLabel help="Image montree en pop-up quand cette action réussit.">Image objet</HelpLabel>
+          <HelpLabel help="Image visible sur la scène pour cette zone action.">Image de la zone</HelpLabel>
+          <MediaSourcePicker
+            className="button like full secondary-action"
+            accept="image/*"
+            assetScope="object-image"
+            handleUpload={handleUpload}
+            mediaLibrary={mediaLibrary}
+          onSelect={(data, name, asset) => patchObject((obj) => setVisibleObjectImage(obj, data, name, asset))}
+            tourId="scene-object-image"
+          >
+            {selectedSceneObject.imageName ? "Remplacer l'image" : 'Importer une image'}
+          </MediaSourcePicker>
+          <HelpLabel help="Image affichée en pop-up quand cette action réussit.">Image pop-up</HelpLabel>
           <MediaSourcePicker
             className="button like full secondary-action"
             accept="image/*"
@@ -511,14 +597,14 @@ export default function SceneObjectEditPanel({
               obj.objectImageName = name;
             })}
           >
-            {selectedSceneObject.objectImageName ? "Remplacer l'image objet" : 'Importer une image objet'}
+            {selectedSceneObject.objectImageName ? "Remplacer l'image pop-up" : 'Importer une image pop-up'}
           </MediaSourcePicker>
           {selectedSceneObject.objectImageData ? (
             <button type="button" className="danger-button" style={{ marginTop: 12 }} onClick={() => patchObject((obj) => {
               obj.objectImageData = '';
               obj.objectImageName = '';
             })}>
-              Supprimer l'image ?
+              Supprimer l'image pop-up
             </button>
           ) : null}
         </>
@@ -528,7 +614,7 @@ export default function SceneObjectEditPanel({
         <p className="small-note help-inline-note">Cette image reste visible dans la scène, mais aucun clic joueur ne déclénche d'action.</p>
       ) : null}
 
-      <button className="danger-button" style={{ marginTop: 12 }} onClick={removeObject}>
+      <button type="button" className="danger-button" style={{ marginTop: 12 }} onClick={removeObject}>
         {isAnimationObject ? "Supprimer l'animation" : `Supprimer l'objet ${isInvisibleObject ? 'invisible' : 'visible'}`}
       </button>
     </div>

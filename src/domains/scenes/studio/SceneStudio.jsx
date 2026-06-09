@@ -9,6 +9,7 @@ import MediaSourcePicker from '../../../shared/ui/media/MediaSourcePicker.jsx';
 import { showConfirm } from '../../../shared/ui/AccessibleDialog';
 import { makeLogicRule } from '../../../shared/data/projectData';
 import { isProPromotionProject } from '../../../shared/services/proPromotion';
+import { isProfessionalAccount } from '../../../shared/services/accountPlans';
 import SceneSidebar from './components/SceneSidebar.jsx';
 import SceneFullscreenEditor from './components/SceneFullscreenEditor.jsx';
 import SceneCanvasContextMenu from './components/SceneCanvasContextMenu.jsx';
@@ -89,6 +90,7 @@ export default function SceneStudio(props) {
     selectedHotspot,
     deleteItem,
     deleteHotspot,
+    deleteSceneObject,
     getSceneLabel,
     collapsedNavigationActIds,
     setNavigationActCollapsed,
@@ -108,6 +110,7 @@ export default function SceneStudio(props) {
   const [sceneContextMenu, setSceneContextMenu] = useState(null);
   const [sceneClipboard, setSceneClipboard] = useState(null);
   const [sceneDrawerMode, setSceneDrawerMode] = useState(null);
+  const [editingSceneObjectTextId, setEditingSceneObjectTextId] = useState('');
   useEffect(() => {
     const rawFocus = window.sessionStorage.getItem('adventureConversationFocus');
     if (!rawFocus || !selectedHotspotId) return;
@@ -181,11 +184,27 @@ export default function SceneStudio(props) {
     setSelectedItemId,
   });
 
+  const beginSceneObjectTextEdit = (objectId) => {
+    if (!objectId) return;
+    setSelectedSceneObjectId(objectId);
+    setSelectedSceneObjectIds([objectId]);
+    setSelectedHotspotId('');
+    setSelectedHotspotIds([]);
+    setSelectedVisualEffectZoneId('');
+    setSelectedItemId('');
+    setEditingSceneObjectTextId(objectId);
+  };
+
+  const stopSceneObjectTextEdit = () => {
+    setEditingSceneObjectTextId('');
+  };
+
   const selectedEditorType = activeVisualEffectZoneIds.length ? 'visualEffectZone' : (activeSceneObjectIds.length ? 'sceneObject' : (activeHotspotIds.length ? 'hotspot' : ''));
   const snapValue = (value) => (snapGridEnabled ? Math.round(value / 5) * 5 : value);
   const isBeginnerMode = project.creationMode === 'beginner';
   const isIntermediateMode = project.creationMode === 'intermediate';
   const isProPromotionMode = isProPromotionProject(project);
+  const canUseProPages = isProfessionalAccount(user) || isProPromotionMode;
   const canUseQuickLogic = !isProPromotionMode && !isBeginnerMode && !isIntermediateMode;
   const isHeroAdventureProject = project.creationMode === 'hero_adventure' || Boolean(project.heroAdventure?.enabled);
   const heroSkills = project.heroAdventure?.hero.skills?.length ? project.heroAdventure.hero.skills : FALLBACK_HERO_SKILLS;
@@ -265,6 +284,14 @@ export default function SceneStudio(props) {
     patchProject,
     toggleNavigationSceneCollapsed,
   });
+
+  useEffect(() => {
+    if (!editingSceneObjectTextId) return;
+    const editingObject = selectedScene?.sceneObjects?.find((obj) => obj.id === editingSceneObjectTextId);
+    if (!editingObject || selectedSceneObjectId !== editingSceneObjectTextId) {
+      setEditingSceneObjectTextId('');
+    }
+  }, [editingSceneObjectTextId, selectedScene, selectedSceneObjectId]);
 
   const {
     getEditorElementByType,
@@ -560,7 +587,7 @@ export default function SceneStudio(props) {
     : selectedVisualEffectZone ? 'Zone visuelle sélectionnée' : 'Zone sélectionnée';
   const isSceneObjectSelectedOnCanvas = (obj) => obj.id === selectedSceneObjectId || selectedSceneObjectIds.includes(obj.id);
   const isHotspotSelectedOnCanvas = (spot) => spot.id === selectedHotspotId || selectedHotspotIds.includes(spot.id);
-  const getHotspotDisplayImage = (spot) => resolveAssetUrl(project, spot?.objectImageId, spot?.objectImageData);
+  const getHotspotDisplayImage = (spot) => spot?.objectImageData || resolveAssetUrl(project, spot?.objectImageId, '');
   const addConversationQuestion = () => patchProject((draft) => {
     const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId);
     if (!spot) return;
@@ -571,7 +598,7 @@ export default function SceneStudio(props) {
   });
 
   return (
-    <div className="layout scenes-layout-pro ultra-editor">
+    <div className={`layout scenes-layout-pro ultra-editor ${isProPromotionMode ? 'no-left-nav' : ''}`}>
       <SceneSidebar
         project={project}
         actsWithScenes={actsWithScenes}
@@ -591,22 +618,25 @@ export default function SceneStudio(props) {
         actName={selectedScene ? getActById(selectedScene.actId)?.name : ''}
         showActBadge={!isProPromotionMode}
         title={isProPromotionMode ? 'Editeur de page' : 'Editeur de scene'}
+        className={isProPromotionMode ? 'pro-page-main-panel' : ''}
+        headerActions={isProPromotionMode && selectedScene ? (
+          <div className="pro-page-inline-settings">
+            <strong>Général & structure</strong>
+            <div className="pro-page-inline-name" data-tour="scene-name">
+              <HelpLabel help="Nom affiché pour cette page d’extension dans l’éditeur et les listes de choix.">Nom de la page</HelpLabel>
+              <input value={selectedScene.name} onChange={(e) => patchProject((draft) => {
+                const scene = draft.scenes.find((s) => s.id === selectedSceneId); if (scene) scene.name = e.target.value;
+              })} />
+            </div>
+          </div>
+        ) : null}
       >
         {selectedScene ? (
           <div className="editor-stack">
-            <div className="subpanel scene-compact-card scene-general-panel" data-tour="scene-general-panel">
+            {!isProPromotionMode ? (
+              <div className="subpanel scene-compact-card scene-general-panel" data-tour="scene-general-panel">
                 <div className="subpanel-head">
                   <h3>Général & structure</h3>
-                  <div className="inline-actions end">
-                    <button type="button" className="secondary-action" data-tour="scene-preview-button" onClick={() => previewScene?.(selectedSceneId)}>
-                      Prévisualiser
-                    </button>
-                    {!isProPromotionMode ? (
-                      <button type="button" className="danger-button" onClick={() => deleteScene(selectedSceneId)}>
-                        Supprimer
-                      </button>
-                    ) : null}
-                  </div>
                 </div>
                 <div className="scene-compact-grid">
                   <div data-tour="scene-name">
@@ -655,6 +685,7 @@ export default function SceneStudio(props) {
                   ) : null}
                 </div>
               </div>
+            ) : null}
 
             <div className="subpanel canvas-subpanel">
               <div className="subpanel-head">
@@ -662,7 +693,7 @@ export default function SceneStudio(props) {
                   <h3>Plan de scène</h3>
                 </div>
                 <div className="scene-canvas-head-actions">
-                  <button type="button" className="secondary-action scene-mobile-preview-action" onClick={() => previewScene?.(selectedSceneId)}>
+                  <button type="button" className="secondary-action scene-mobile-preview-action" data-tour="scene-preview-button" onClick={() => previewScene?.(selectedSceneId)}>
                     Prévisualiser
                   </button>
                   {!isProPromotionMode ? (
@@ -720,25 +751,42 @@ export default function SceneStudio(props) {
                   ))}
                   {snapGridEnabled ? <div style={gridOverlayStyle} /> : null}
                   {(selectedScene.sceneObjects || []).filter((obj) => !obj.isHidden || isSceneObjectSelectedOnCanvas(obj)).map((obj) => (
-                    <button
+                    <div
                       key={obj.id}
-                      type="button"
+                      role="button"
+                      tabIndex={0}
                       data-tour={obj.tutorialCreated ? 'scene-object-on-canvas' : undefined}
                       className={`editor-hotspot editor-scene-object ${getShapeClassName(obj)} ${obj.isInvisible ? 'editor-scene-object-invisible' : ''} ${obj.isHidden ? 'editor-hidden-on-canvas' : ''} ${isSceneObjectSelectedOnCanvas(obj) ? 'selected' : ''} ${obj.id === draggingSceneObjectId ? 'dragging' : ''}`}
                       style={getSceneObjectStyle(obj)}
                       onPointerDown={(event) => beginObjectDrag(event, obj.id)}
                       onClick={(event) => selectSceneObject(obj.id, event)}
+                      onKeyDown={(event) => {
+                        if (event.key !== 'Enter' && event.key !== ' ') return;
+                        event.preventDefault();
+                        selectSceneObject(obj.id, event);
+                      }}
                       onContextMenu={(event) => openSceneCanvasContextMenu(event, 'sceneObject', obj.id, 'main')}
                     >
                       {obj.anime2dSpec && !obj.isInvisible ? (
                         <Anime2DPreview spec={obj.anime2dSpec} />
                       ) : !obj.isInvisible ? (
-                        <SceneObjectBlockContent object={obj} displayImage={getSceneObjectDisplayImage(obj)} linkedItem={getLinkedItem(obj.linkedItemId)} />
+                        <SceneObjectBlockContent
+                          object={obj}
+                          displayImage={getSceneObjectDisplayImage(obj)}
+                          linkedItem={getLinkedItem(obj.linkedItemId)}
+                          editable={getSceneObjectBlockType(obj) === 'text' && editingSceneObjectTextId === obj.id}
+                          onEditFocus={() => selectSceneObject(obj.id, { shiftKey: false })}
+                          onEditEnd={stopSceneObjectTextEdit}
+                          onTextChange={(nextText) => patchLayerItem('sceneObject', obj.id, (item) => {
+                            item.blockText = nextText;
+                            item.dialogue = nextText;
+                          })}
+                        />
                       ) : <span>{`${obj.name || 'Objet'} (invisible)`}</span>}
                       {renderShapeOutline(obj, isSceneObjectSelectedOnCanvas(obj))}
                       {renderResizeHandles('sceneObject', obj.id, isSceneObjectSelectedOnCanvas(obj))}
                       {renderShapePointHandles('sceneObject', obj.id, isSceneObjectSelectedOnCanvas(obj))}
-                    </button>
+                    </div>
                   ))}
                   {selectedScene.hotspots.filter((spot) => !spot.isHidden || isHotspotSelectedOnCanvas(spot)).map((spot) => {
                     const hotspotImageSrc = getHotspotDisplayImage(spot);
@@ -777,6 +825,10 @@ export default function SceneStudio(props) {
                     openQuickLogicForTarget={openQuickLogicForTarget}
                     isBeginnerMode={isBeginnerMode}
                     projectMode={project.creationMode}
+                    canUseProPages={canUseProPages}
+                    editingSceneObjectTextId={editingSceneObjectTextId}
+                    onEditSceneObjectText={beginSceneObjectTextEdit}
+                    onStopEditingSceneObjectText={stopSceneObjectTextEdit}
                   />
                   </div>
                 </div>
@@ -908,7 +960,7 @@ export default function SceneStudio(props) {
                       </div>
                       ) : null}
                       <p className="small-note">Conseil : choisis une image lisible en petit format, avec un fond simple si possible.</p>
-                      <button className="danger-button" style={{ marginTop: 12 }} onClick={() => {
+                      <button type="button" className="danger-button" style={{ marginTop: 12 }} onClick={() => {
                         deleteItem(selectedItemId);
                         setSelectedItemId('');
                       }}>Supprimer l’objet</button>
@@ -929,6 +981,12 @@ export default function SceneStudio(props) {
                       importSceneObjectAnime2d={importSceneObjectAnime2d}
                       getSceneLabel={getSceneLabel}
                       setSelectedSceneObjectId={setSelectedSceneObjectId}
+                      deleteSceneObject={deleteSceneObject}
+                      onSceneObjectDeleted={() => {
+                        setSelectedSceneObjectId('');
+                        setSelectedSceneObjectIds([]);
+                        stopSceneObjectTextEdit();
+                      }}
                       onOpenLogic={() => openQuickLogicForTarget('sceneObject', selectedSceneObjectId)}
                     />
                   ) : selectedVisualEffectZone ? (
@@ -984,7 +1042,7 @@ export default function SceneStudio(props) {
                         />
                         Masquer cette zone
                       </label>
-                      <button className="danger-button" style={{ marginTop: 12 }} onClick={async () => {
+                      <button type="button" className="danger-button" style={{ marginTop: 12 }} onClick={async () => {
                         const confirmed = await showConfirm({
                           title: 'Supprimer la zone visuelle',
                           message: `Supprimer la zone visuelle "${selectedVisualEffectZone.name}" ?`,
@@ -1020,6 +1078,10 @@ export default function SceneStudio(props) {
                       handleUpload={handleUpload}
                       isHeroAdventureProject={isHeroAdventureProject}
                       heroSkills={heroSkills}
+                      onHotspotDeleted={() => {
+                        setSelectedHotspotId('');
+                        setSelectedHotspotIds([]);
+                      }}
                     />
                   ) : (
                     <div className="placeholder small">Sélectionne une zone, un objet visible ou un objet d’inventaire.</div>
@@ -1085,6 +1147,12 @@ export default function SceneStudio(props) {
                   patchProject={patchProject}
                   deleteItem={() => {}}
                   setSelectedSceneObjectId={setSelectedSceneObjectId}
+                  deleteSceneObject={deleteSceneObject}
+                  onSceneObjectDeleted={() => {
+                    setSelectedSceneObjectId('');
+                    setSelectedSceneObjectIds([]);
+                    stopSceneObjectTextEdit();
+                  }}
                   getSceneLabel={getSceneLabel}
                   setTab={setTab}
                   openQuickLogicForTarget={openQuickLogicForTarget}
@@ -1102,6 +1170,13 @@ export default function SceneStudio(props) {
                   addConversationQuestion={addConversationQuestion}
                   isHeroAdventureProject={isHeroAdventureProject}
                   heroSkills={heroSkills}
+                  onHotspotDeleted={() => {
+                    setSelectedHotspotId('');
+                    setSelectedHotspotIds([]);
+                  }}
+                  editingSceneObjectTextId={editingSceneObjectTextId}
+                  onEditSceneObjectText={beginSceneObjectTextEdit}
+                  onStopEditingSceneObjectText={stopSceneObjectTextEdit}
                 />
               ) : null}
               {canUseQuickLogic ? (

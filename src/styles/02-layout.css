@@ -32,6 +32,26 @@
 
 .grid-one{grid-template-columns:1fr}
 
+.studio-mobile-orientation-gate{display:none}
+
+.studio-mobile-orientation-card{display:grid;justify-items:center;gap:12px;width:min(340px,calc(100vw - 36px));padding:22px;border:1px solid rgba(147,197,253,.22);border-radius:18px;background:rgba(8,16,30,.96);box-shadow:0 28px 80px rgba(0,0,0,.42);color:#f8fbff;text-align:center}
+
+.studio-mobile-orientation-card h2{margin:0;font-size:25px;line-height:1.08}
+
+.studio-mobile-orientation-card p{margin:0;color:#cbd7ea;font-size:15px;line-height:1.45}
+
+.studio-mobile-orientation-icon{position:relative;display:grid;place-items:center;width:74px;height:54px}
+
+.studio-mobile-orientation-icon::before,.studio-mobile-orientation-icon::after{content:"";position:absolute;border:2px solid rgba(147,197,253,.8)}
+
+.studio-mobile-orientation-icon::before{width:26px;height:44px;border-radius:8px;transform:rotate(-90deg)}
+
+.studio-mobile-orientation-icon::after{width:58px;height:36px;border-color:rgba(45,212,191,.52);border-radius:12px;opacity:.42}
+
+.studio-mobile-orientation-icon span{position:absolute;right:3px;top:4px;width:16px;height:16px;border-top:2px solid #bfdbfe;border-right:2px solid #bfdbfe;border-radius:0 6px 0 0}
+
+.studio-mobile-orientation-icon span::after{content:"";position:absolute;right:-4px;top:10px;width:7px;height:7px;border-right:2px solid #bfdbfe;border-bottom:2px solid #bfdbfe;transform:rotate(45deg)}
+
 .app-shell{max-width:100%;padding:12px 18px}
 
 .topbar{margin-bottom:10px;gap:12px;align-items:center;display:grid;grid-template-columns:minmax(220px,300px) minmax(360px,1fr) minmax(300px,520px)}

@@ -42,6 +42,7 @@ const SceneStudio = lazyWithRetry(() => import('../../../domains/scenes/studio/S
       selectedHotspot={tabContext.editor.selectedHotspot}
       deleteItem={tabContext.actions.deleteItem}
       deleteHotspot={tabContext.editor.deleteHotspot}
+      deleteSceneObject={tabContext.editor.deleteSceneObject}
       getSceneLabel={tabContext.editor.getSceneLabel}
       collapsedNavigationActIds={tabContext.editor.collapsedNavigationActIds}
       setNavigationActCollapsed={tabContext.editor.setNavigationActCollapsed}
@@ -112,6 +113,9 @@ const CinematicStudio = lazyWithRetry(() => import('../../../domains/scenes/cine
   default: ({ project, onUpdateProject, tabContext }) => (
     <Component
       project={project}
+      user={tabContext.user}
+      projectLibrary={tabContext.projects}
+      activeProjectId={tabContext.activeProjectId}
       selectedCinematicId={tabContext.editor.selectedCinematicId}
       setSelectedCinematicId={tabContext.editor.setSelectedCinematicId}
       selectedCinematic={tabContext.editor.selectedCinematic}
@@ -140,6 +144,9 @@ const EnigmaStudio = lazyWithRetry(() => import('../../../domains/scenes/enigmas
   default: ({ project, onUpdateProject, tabContext }) => (
     <Component
       project={project}
+      user={tabContext.user}
+      projectLibrary={tabContext.projects}
+      activeProjectId={tabContext.activeProjectId}
       selectedEnigmaId={tabContext.editor.selectedEnigmaId}
       setSelectedEnigmaId={tabContext.editor.setSelectedEnigmaId}
       selectedEnigma={tabContext.editor.selectedEnigma}
@@ -235,10 +242,11 @@ const HelpCenter = lazyWithRetry(() => import('../../../domains/help/HelpCenter'
 })));
 
 const PlayerPreviewShell = lazyWithRetry(() => import('../../../domains/player/PlayerPreviewShell').then(({ default: Component }) => ({
-  default: ({ tabContext, sharedPlayerMode = false }) => (
+  default: ({ allowMobilePortraitInitially = false, tabContext, sharedPlayerMode = false }) => (
     <Component
       editor={tabContext.editor}
       preview={tabContext.preview}
+      allowMobilePortraitInitially={allowMobilePortraitInitially}
       heroCharacterPreviewRequestKey={tabContext.heroCharacterPreviewRequestKey}
       sharedPlayerMode={sharedPlayerMode}
     />
