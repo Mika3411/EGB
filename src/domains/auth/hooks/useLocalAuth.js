@@ -16,6 +16,7 @@ import {
   sendPasswordResetEmail,
   supabaseUserToAccount,
   updateCurrentUserPassword,
+  updateCurrentUserProfile,
 } from '../../../shared/services/authStorage';
 import { getAuthorProfile, saveAuthorProfile } from '../../../shared/services/authorProfiles';
 import { MODE_RANKS as PROJECT_MODE_RANKS } from '../../../shared/services/projectAnalysis';
@@ -786,6 +787,23 @@ export function useLocalAuth() {
     return savedProfile;
   };
 
+  const updateAccountProfile = async (patch = {}) => {
+    if (!user?.id) return null;
+    setIsBusy(true);
+    setAuthError('');
+    try {
+      const account = await updateCurrentUserProfile(patch);
+      setUser(account);
+      setAuthorProfile(getAuthorProfile(account.id, account));
+      return account;
+    } catch (error) {
+      setAuthError(error.message || 'Mise à jour du compte impossible.');
+      throw error;
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
   const createProject = async (project, name) => {
     if (!user?.id) return null;
     const timestamp = nowIso();
@@ -1180,6 +1198,7 @@ export function useLocalAuth() {
     projectMeta,
     authorProfile,
     updateAuthorProfile,
+    updateAccountProfile,
     projects,
     activeProject,
     activeProjectId,

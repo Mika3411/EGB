@@ -6,13 +6,25 @@ import {
   normalizeAuthorSocialLinks,
   setAuthorSocialLinkUrl,
 } from '../../../shared/services/authorProfiles';
-import { getAccountTypeLabel } from '../../../shared/services/accountPlans';
+import { getAccountTypeLabel, isProfessionalAccount } from '../../../shared/services/accountPlans';
 import {
   cropAuthorProfileImage,
   getAuthorProfileMediaRecommendation,
   readAuthorProfileImageFile,
 } from '../../../shared/utils/authorProfileMedia';
 import AuthorProfileImageCropper from './AuthorProfileImageCropper';
+
+const PRO_COUNTRY_SUGGESTIONS = [
+  'France',
+  'Belgique',
+  'Suisse',
+  'Canada',
+  'Luxembourg',
+  'Espagne',
+  'Allemagne',
+  'Royaume-Uni',
+  'États-Unis',
+];
 
 const getAuthorInitial = (name = '') => String(name || 'Créateur').trim().charAt(0).toUpperCase() || 'C';
 
@@ -73,6 +85,8 @@ const createProfileDraft = (authorProfile = {}, user = {}) => ({
   displayName: authorProfile?.displayName || user?.name || user?.email || '',
   tagline: authorProfile?.tagline || '',
   bio: authorProfile?.bio || '',
+  country: authorProfile?.country || user?.country || '',
+  city: authorProfile?.city || user?.city || '',
   website: authorProfile?.website || '',
   avatar: authorProfile?.avatar || '',
   banner: authorProfile?.banner || '',
@@ -84,6 +98,8 @@ const buildProfileDraftPayload = (draft = {}) => {
   return {
     ...draft,
     website: getAuthorSocialLinkUrl(socialLinks, 'site'),
+    country: String(draft.country || '').trim(),
+    city: String(draft.city || '').trim(),
     avatar: String(draft.avatar || '').trim(),
     banner: String(draft.banner || '').trim(),
     socialLinks,
@@ -95,6 +111,7 @@ export default function ProfileSettingsPanel({
   authorProfile,
   isBusy = false,
   onUpdateAuthorProfile,
+  onUpdateAccountProfile,
   onUpdatePassword,
 }) {
   const [profileDraft, setProfileDraft] = useState(() => createProfileDraft(authorProfile, user));
@@ -102,6 +119,7 @@ export default function ProfileSettingsPanel({
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [areSocialLinksCollapsed, setAreSocialLinksCollapsed] = useState(false);
   const [profileNotice, setProfileNotice] = useState('');
   const [passwordNotice, setPasswordNotice] = useState('');
   const [passwordError, setPasswordError] = useState('');
@@ -112,6 +130,7 @@ export default function ProfileSettingsPanel({
   const [isCropBusy, setIsCropBusy] = useState(false);
   const bannerInputRef = useRef(null);
   const avatarInputRef = useRef(null);
+  const isProAccount = isProfessionalAccount(user);
 
   useEffect(() => {
     setProfileDraft(createProfileDraft(authorProfile, user));
@@ -183,7 +202,18 @@ export default function ProfileSettingsPanel({
 
   const saveProfile = async (event) => {
     event.preventDefault();
-    await onUpdateAuthorProfile?.(buildProfileDraftPayload(profileDraft));
+    const payload = buildProfileDraftPayload(profileDraft);
+    if (isProAccount && (!payload.country || !payload.city)) {
+      setProfileNotice('Renseigne le pays et la ville pour ton compte pro.');
+      return;
+    }
+    await onUpdateAuthorProfile?.(payload);
+    if (isProAccount) {
+      await onUpdateAccountProfile?.({
+        country: payload.country,
+        city: payload.city,
+      });
+    }
     setProfileNotice('Informations du profil mises à jour.');
   };
 
@@ -294,6 +324,37 @@ export default function ProfileSettingsPanel({
             onChange={(event) => updateProfileField('tagline', event.target.value)}
             placeholder="Escape games narratifs et énigmes maison"
           />
+          {isProAccount ? (
+            <div className="profile-pro-location-fields">
+              <label htmlFor="profile-pro-country">
+                Pays
+                <input
+                  id="profile-pro-country"
+                  list="profile-pro-country-options"
+                  value={profileDraft.country}
+                  onChange={(event) => updateProfileField('country', event.target.value)}
+                  placeholder="France"
+                  required
+                />
+                <datalist id="profile-pro-country-options">
+                  {PRO_COUNTRY_SUGGESTIONS.map((country) => (
+                    <option key={country} value={country} />
+                  ))}
+                </datalist>
+              </label>
+              <label htmlFor="profile-pro-city">
+                Ville
+                <input
+                  id="profile-pro-city"
+                  value={profileDraft.city}
+                  onChange={(event) => updateProfileField('city', event.target.value)}
+                  placeholder="Lyon"
+                  maxLength={80}
+                  required
+                />
+              </label>
+            </div>
+          ) : null}
           <label>Bio</label>
           <textarea
             value={profileDraft.bio}
@@ -301,9 +362,23 @@ export default function ProfileSettingsPanel({
             maxLength={600}
             placeholder="Présente ton style, tes thèmes, ton rythme de création..."
           />
-          <fieldset className="social-links-editor profile-social-links">
-            <legend>Liens</legend>
-            <div className="social-links-grid">
+          <fieldset className={`social-links-editor profile-social-links ${areSocialLinksCollapsed ? 'is-collapsed' : ''}`}>
+            <legend>
+              <span>Liens</span>
+              <button
+                type="button"
+                className="social-links-toggle"
+                aria-expanded={!areSocialLinksCollapsed}
+                aria-controls="profile-social-links-grid"
+                aria-label={areSocialLinksCollapsed ? 'Afficher les liens' : 'Masquer les liens'}
+                title={areSocialLinksCollapsed ? 'Afficher' : 'Masquer'}
+                onClick={() => setAreSocialLinksCollapsed((isCollapsed) => !isCollapsed)}
+              >
+                {areSocialLinksCollapsed ? <Eye size={16} /> : <EyeOff size={16} />}
+                <span>{areSocialLinksCollapsed ? 'Afficher' : 'Masquer'}</span>
+              </button>
+            </legend>
+            <div id="profile-social-links-grid" className="social-links-grid">
               {AUTHOR_SOCIAL_LINK_TYPES.map(({ type, label }) => (
                 <label key={type} htmlFor={`profile-social-${type}`}>
                   {label}

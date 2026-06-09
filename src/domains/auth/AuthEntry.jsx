@@ -1,6 +1,11 @@
 import { Eye, EyeOff } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { ACCOUNT_TYPE_OPTIONS, ACCOUNT_TYPE_PERSONAL } from '../../shared/services/accountPlans';
+import {
+  ACCOUNT_PROFILE_TYPE_ESCAPE_ROOM,
+  ACCOUNT_TYPE_OPTIONS,
+  ACCOUNT_TYPE_PERSONAL,
+  ACCOUNT_TYPE_PRO,
+} from '../../shared/services/accountPlans';
 
 const emptyForm = {
   name: '',
@@ -16,13 +21,46 @@ const emptyForm = {
   marketingConsent: false,
 };
 
-const profileTypes = [
+const ACCOUNT_PROFILE_TYPE_PLAYER = 'player';
+
+const proProfileTypes = [
+  [ACCOUNT_PROFILE_TYPE_ESCAPE_ROOM, 'Gérant d’escape game / Salle d’escape'],
   ['teacher', 'Enseignant'],
   ['facilitator', 'Animateur / médiateur'],
   ['creator', 'Créateur'],
-  ['player', 'Joueur'],
   ['other', 'Autre'],
 ];
+
+const personalProfileTypes = [
+  [ACCOUNT_PROFILE_TYPE_PLAYER, 'Joueur'],
+  ['creator', 'Créateur'],
+  ['other', 'Autre'],
+];
+
+const getProfileTypesForAccount = (accountType) => (
+  accountType === ACCOUNT_TYPE_PRO ? proProfileTypes : personalProfileTypes
+);
+
+const getDefaultProfileTypeForAccount = (accountType) => (
+  accountType === ACCOUNT_TYPE_PRO ? ACCOUNT_PROFILE_TYPE_ESCAPE_ROOM : ACCOUNT_PROFILE_TYPE_PLAYER
+);
+
+const resolveProfileTypeForAccount = (accountType, profileType) => {
+  const allowedValues = getProfileTypesForAccount(accountType).map(([value]) => value);
+  return allowedValues.includes(profileType)
+    ? profileType
+    : getDefaultProfileTypeForAccount(accountType);
+};
+
+const createInitialForm = (initialForm = {}) => {
+  const accountType = initialForm.accountType || emptyForm.accountType;
+  return {
+    ...emptyForm,
+    ...initialForm,
+    accountType,
+    profileType: resolveProfileTypeForAccount(accountType, initialForm.profileType),
+  };
+};
 
 export default function AuthEntry({
   onLogin,
@@ -34,9 +72,10 @@ export default function AuthEntry({
   isPasswordRecovery = false,
   isBusy,
   errorMessage,
+  initialForm,
 }) {
   const [mode, setMode] = useState(isPasswordRecovery ? 'reset' : initialMode);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(() => createInitialForm(initialForm));
   const [localError, setLocalError] = useState('');
   const [notice, setNotice] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -49,7 +88,10 @@ export default function AuthEntry({
       return;
     }
     setMode(initialMode);
-  }, [initialMode, isPasswordRecovery]);
+    if (initialMode === 'register') {
+      setForm(createInitialForm(initialForm));
+    }
+  }, [initialForm, initialMode, isPasswordRecovery]);
 
   const clearMessages = () => {
     setLocalError('');
@@ -58,14 +100,23 @@ export default function AuthEntry({
 
   const switchMode = (nextMode) => {
     setMode(nextMode);
-    setForm(emptyForm);
+    setForm(nextMode === 'register' ? createInitialForm(initialForm) : emptyForm);
     setShowPassword(false);
     setShowConfirmPassword(false);
     clearMessages();
   };
 
   const handleChange = (field, value) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    setForm((prev) => {
+      if (field === 'accountType') {
+        return {
+          ...prev,
+          accountType: value,
+          profileType: resolveProfileTypeForAccount(value, prev.profileType),
+        };
+      }
+      return { ...prev, [field]: value };
+    });
     clearMessages();
   };
 
@@ -164,6 +215,7 @@ export default function AuthEntry({
       : mode === 'register'
         ? 'Créer un compte'
         : 'Connexion au builder';
+  const visibleProfileTypes = getProfileTypesForAccount(form.accountType);
 
   return (
     <div className="auth-shell">
@@ -177,8 +229,8 @@ export default function AuthEntry({
           <span className="auth-badge">Sauvegarde par compte</span>
           <h2>{title}</h2>
           <p>
-            Crée un compte Supabase, connecte-toi, puis tes projets sont synchronisés
-            automatiquement pour reprendre là où tu t’es arrêté.
+            Crée un compte Escape Game Studio pour sauvegarder tes projets, les retrouver
+            plus tard et publier tes expériences quand elles sont prêtes.
           </p>
         </div>
 
@@ -219,13 +271,13 @@ export default function AuthEntry({
                 <label>Type de profil</label>
                 <select value={form.profileType} onChange={(event) => handleChange('profileType', event.target.value)}>
                   <option value="">Choisir...</option>
-                  {profileTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  {visibleProfileTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
               </div>
 
               <div>
                 <label>Organisation / activité</label>
-                <input value={form.organization} onChange={(event) => handleChange('organization', event.target.value)} placeholder="École, association, entreprise..." />
+                <input value={form.organization} onChange={(event) => handleChange('organization', event.target.value)} placeholder="Salle d’escape, école, association..." />
               </div>
 
               <div className="grid-two small-gap">

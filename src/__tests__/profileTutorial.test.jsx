@@ -57,7 +57,6 @@ const renderProfile = (props = {}) => render(
     user={{ id: 'user-profile-tutorial', email: 'mika@example.com' }}
     projects={[makeProjectRecord()]}
     activeProjectId="project-profile-tutorial"
-    statusMessage="Profil prêt"
     onCreateProject={vi.fn()}
     onOpenProject={vi.fn()}
     onTestProject={vi.fn()}
@@ -115,7 +114,6 @@ describe('didacticiel profil', () => {
       'profile-badge-grid',
       'profile-tab-pro',
       'profile-pro-section',
-      'profile-pro-formats',
       'profile-pro-actions',
       'profile-pro-manager',
     ]));
@@ -132,14 +130,12 @@ describe('didacticiel profil', () => {
     expect(standardTours).not.toEqual(expect.arrayContaining([
       'profile-tab-pro',
       'profile-pro-section',
-      'profile-pro-formats',
       'profile-pro-actions',
       'profile-pro-manager',
     ]));
     expect(proTours).toEqual(expect.arrayContaining([
       'profile-tab-pro',
       'profile-pro-section',
-      'profile-pro-formats',
       'profile-pro-actions',
       'profile-pro-manager',
     ]));
@@ -173,12 +169,39 @@ describe('didacticiel profil', () => {
     expect(screen.getByRole('heading', { name: 'Profil et sécurité' })).toBeTruthy();
   }, 10000);
 
+  test('filtre les templates selon le mode de creation choisi', () => {
+    const onCreateProject = vi.fn();
+    renderProfile({ onCreateProject });
+    const getTemplateText = () => document.querySelector('[data-tour="profile-template-picker"]')?.textContent || '';
+
+    expect(getTemplateText()).toContain('Projet vide');
+    expect(getTemplateText()).toContain('Manoir hanté');
+    expect(getTemplateText()).not.toContain('Aventure de héros');
+    expect(getTemplateText()).not.toContain('Narration choix multiples');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Narration choix multiples' }));
+    expect(getTemplateText()).toContain('Narration choix multiples');
+    expect(getTemplateText()).toContain('Enquête narrative');
+    expect(getTemplateText()).not.toContain('Aventure de héros');
+    expect(getTemplateText()).not.toContain('Manoir hanté');
+
+    fireEvent.click(Array.from(document.querySelectorAll('[data-tour="profile-template-picker"] button'))
+      .find((button) => button.textContent === 'Narration choix multiples'));
+    fireEvent.click(screen.getByRole('button', { name: '+ Créer' }));
+    expect(onCreateProject).toHaveBeenLastCalledWith('Narration choix multiples', 'adventure_choices', 'adventure', {});
+
+    fireEvent.click(screen.getByRole('button', { name: 'Aventure de héros' }));
+    expect(getTemplateText()).toContain('Livre dont vous êtes le héros');
+    expect(getTemplateText()).toContain('Aventure de héros');
+    expect(getTemplateText()).not.toContain('Enquête policière');
+  });
+
   test('ordonne les onglets profil par priorite', () => {
     renderProfile({
       user: { id: 'user-profile-pro', email: 'pro@example.com', accountType: 'pro' },
     });
 
-    const labels = Array.from(document.querySelectorAll('.profile-section-tabs button'))
+    const labels = Array.from(document.querySelectorAll('.profile-section-tab-list > button'))
       .map((button) => button.textContent.trim());
 
     expect(labels).toEqual([
@@ -371,20 +394,22 @@ describe('didacticiel profil', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Pro' }));
     expect(screen.getByRole('heading', { name: 'Extensions d’expérience' })).toBeTruthy();
     expect(screen.getByText(/Une salle ne crée pas seulement un jeu/)).toBeTruthy();
-    expect(screen.getByText('Prologue')).toBeTruthy();
-    expect(screen.getByText('Épilogue')).toBeTruthy();
-    expect(screen.getAllByRole('button', { name: /Promouvoir|Prolonger/ })).toHaveLength(2);
+    expect(screen.getAllByText('Vitrine').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Prologue / Épilogue').length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: /Créer un prologue \/ épilogue|Créer une vitrine/ })).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: 'Créer un prologue' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Créer un épilogue' })).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Promouvoir' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Créer un prologue / épilogue' }));
     expect(onStartProPromotion).toHaveBeenCalledWith({
-      kind: 'promote',
-      title: 'Extension d’expérience - promotion',
+      kind: 'story',
+      title: 'Prologue / Épilogue',
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Prolonger' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Créer une vitrine' }));
     expect(onStartProPromotion).toHaveBeenLastCalledWith({
-      kind: 'extend',
-      title: 'Extension d’expérience - prolongement',
+      kind: 'showcase',
+      title: 'Vitrine',
     });
   });
 
@@ -396,6 +421,7 @@ describe('didacticiel profil', () => {
     const onTestProject = vi.fn();
     const onCopyProjectLink = vi.fn();
     const onSaveProjectQrCode = vi.fn();
+    const onPublishProject = vi.fn();
     const onDuplicateProject = vi.fn();
     const onDeleteProject = vi.fn();
 
@@ -418,6 +444,7 @@ describe('didacticiel profil', () => {
       onTestProject,
       onCopyProjectLink,
       onSaveProjectQrCode,
+      onPublishProject,
       onDuplicateProject,
       onDeleteProject,
     });
@@ -440,11 +467,46 @@ describe('didacticiel profil', () => {
     fireEvent.click(screen.getByRole('button', { name: 'QR code' }));
     expect(onSaveProjectQrCode).toHaveBeenCalledWith('extension-pro');
 
+    fireEvent.click(screen.getByRole('button', { name: 'Publier' }));
+    expect(onPublishProject).toHaveBeenCalledWith('extension-pro');
+
     fireEvent.click(screen.getByRole('button', { name: 'Dupliquer' }));
     expect(onDuplicateProject).toHaveBeenCalledWith('extension-pro');
 
     fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }));
     expect(onDeleteProject).toHaveBeenCalledWith('extension-pro', 'Épilogue VIP');
+  });
+
+  test('affiche les projets pro uniquement dans l onglet pro du profil', () => {
+    const extensionData = applyProPromotionProjectSetup(createInitialProject(), 'promote');
+    extensionData.title = 'Prologue client';
+
+    renderProfile({
+      user: { id: 'user-profile-pro', email: 'pro@example.com', accountType: 'pro' },
+      projects: [
+        makeProjectRecord({ id: 'regular-project', name: 'Jeu principal' }),
+        makeProjectRecord({
+          id: 'extension-pro',
+          name: 'Prologue client',
+          data: extensionData,
+        }),
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Projets' }));
+    expect(screen.getByRole('heading', { name: 'Gestion des projets' })).toBeTruthy();
+    expect(screen.getAllByText('Jeu principal').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Prologue client')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Publication' }));
+    expect(screen.getByRole('heading', { name: 'Publication' })).toBeTruthy();
+    expect(screen.getAllByText('Jeu principal').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Prologue client')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pro' }));
+    expect(screen.getByRole('heading', { name: 'Gérer les extensions' })).toBeTruthy();
+    expect(screen.getByText('Prologue client')).toBeTruthy();
+    expect(screen.queryByText('Jeu principal')).toBeNull();
   });
 
   test('ouvre automatiquement l onglet requis par une étape de didacticiel profil', async () => {

@@ -90,6 +90,52 @@ describe('author profile media', () => {
     expect(creatorView.container.querySelector('.public-gallery-banner')).toBeNull();
   });
 
+  test('filtre la section des jeux pros par pays et ville', async () => {
+    saveAllAccounts([
+      { id: 'creator-lyon', name: 'Lyon Studio', email: 'lyon@example.test', accountType: 'pro', country: 'France', city: 'Lyon' },
+      { id: 'creator-bruxelles', name: 'Bruxelles Studio', email: 'bruxelles@example.test', accountType: 'pro', country: 'Belgique', city: 'Bruxelles' },
+      { id: 'creator-missing-location', name: 'Studio sans adresse', email: 'missing@example.test', accountType: 'pro' },
+    ]);
+    window.localStorage.setItem(`${PROJECTS_KEY_PREFIX}.creator-lyon`, JSON.stringify([{
+      ...createPublicProject(),
+      id: 'project-lyon',
+      name: 'Mystère à Lyon',
+      data: { ...createPublicProject().data, title: 'Mystère à Lyon' },
+    }]));
+    window.localStorage.setItem(`${PROJECTS_KEY_PREFIX}.creator-bruxelles`, JSON.stringify([{
+      ...createPublicProject(),
+      id: 'project-bruxelles',
+      name: 'Secret de Bruxelles',
+      data: { ...createPublicProject().data, title: 'Secret de Bruxelles' },
+    }]));
+    window.localStorage.setItem(`${PROJECTS_KEY_PREFIX}.creator-missing-location`, JSON.stringify([{
+      ...createPublicProject(),
+      id: 'project-missing-location',
+      name: 'Jeu sans localisation',
+      data: { ...createPublicProject().data, title: 'Jeu sans localisation' },
+    }]));
+
+    const { container } = render(<GalleryBrowser />);
+    expect(await screen.findByText('Membres pros', {}, ASYNC_QUERY_OPTIONS)).toBeTruthy();
+    const getProSectionText = () => container.querySelectorAll('.public-section')[0]?.textContent || '';
+
+    await waitFor(() => {
+      expect(getProSectionText()).toContain('Mystère à Lyon');
+      expect(getProSectionText()).toContain('Secret de Bruxelles');
+      expect(getProSectionText()).not.toContain('Jeu sans localisation');
+    });
+
+    fireEvent.change(screen.getByLabelText('Filtrer les jeux pros par pays'), {
+      target: { value: 'France' },
+    });
+
+    await waitFor(() => {
+      expect(getProSectionText()).toContain('Mystère à Lyon');
+      expect(getProSectionText()).not.toContain('Secret de Bruxelles');
+    });
+    expect(screen.getByLabelText('Filtrer les jeux pros par ville').textContent).toContain('Lyon');
+  });
+
   test('sauvegarde les medias et liens sociaux depuis l editeur', async () => {
     const onUpdateAuthorProfile = vi.fn();
     render(
@@ -316,6 +362,59 @@ describe('author profile media', () => {
         ]),
       }));
     });
+  });
+
+  test('demande le pays et la ville aux comptes pro dans les reglages du profil', async () => {
+    const onUpdateAuthorProfile = vi.fn();
+    const onUpdateAccountProfile = vi.fn();
+    render(
+      <ProfileSettingsPanel
+        user={{ id: 'creator-1', name: 'Mika Studio', email: 'mika@example.test', accountType: 'pro' }}
+        authorProfile={{ displayName: 'Mika Studio' }}
+        onUpdateAuthorProfile={onUpdateAuthorProfile}
+        onUpdateAccountProfile={onUpdateAccountProfile}
+      />,
+    );
+
+    expect(screen.getByLabelText('Pays')).toBeTruthy();
+    expect(screen.getByLabelText('Ville')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Pays'), {
+      target: { value: '  France  ' },
+    });
+    fireEvent.change(screen.getByLabelText('Ville'), {
+      target: { value: '  Lyon  ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer le profil' }));
+
+    await waitFor(() => {
+      expect(onUpdateAuthorProfile).toHaveBeenCalledWith(expect.objectContaining({
+        country: 'France',
+        city: 'Lyon',
+      }));
+      expect(onUpdateAccountProfile).toHaveBeenCalledWith({
+        country: 'France',
+        city: 'Lyon',
+      });
+    });
+  });
+
+  test('replie la carte des liens depuis les reglages du profil', () => {
+    const { container } = render(
+      <ProfileSettingsPanel
+        user={{ id: 'creator-1', name: 'Mika Studio', email: 'mika@example.test' }}
+        authorProfile={{ displayName: 'Mika Studio', banner: '' }}
+      />,
+    );
+
+    const linksCard = container.querySelector('.profile-social-links');
+    expect(linksCard.classList.contains('is-collapsed')).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Masquer les liens' }));
+    expect(linksCard.classList.contains('is-collapsed')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Afficher les liens' }).getAttribute('aria-expanded')).toBe('false');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Afficher les liens' }));
+    expect(linksCard.classList.contains('is-collapsed')).toBe(false);
   });
 
   test('recadre un avatar importe depuis les reglages du profil', async () => {

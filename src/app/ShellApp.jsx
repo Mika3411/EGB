@@ -7,7 +7,7 @@ import { upsertProjectAsset } from '../shared/services/assetManager';
 import { getProjectName } from '../shared/services/projectAnalysis';
 import { applyProPromotionProjectSetup, PRO_PROMOTION_PROJECT_MODE } from '../shared/services/proPromotion';
 import { isAdminAccount } from '../shared/services/authStorage';
-import { isProfessionalAccount } from '../shared/services/accountPlans';
+import { ACCOUNT_TYPE_PRO, isProfessionalAccount } from '../shared/services/accountPlans';
 import { hasRemoteStorageConfig } from '../shared/services/remoteSession';
 import { readAppUiState, writeAppUiState } from '../shared/utils/storageHelpers';
 import { lazyWithRetry } from '../shared/utils/lazyImportRetry';
@@ -92,8 +92,14 @@ const createInitialBuilderLaunch = () => {
     tab: shouldResumeBuilder ? savedState.tab || '' : '',
     tutorialTab: '',
     screen: createShellInitialScreen() === 'shared-preview' ? 'shared-preview' : 'editor',
+    isDemoMode: shouldResumeBuilder ? savedState.demoMode === true : false,
     key: 0,
   };
+};
+
+export const shouldStartDemoInPlayerPreview = () => {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  return window.matchMedia('(max-width: 720px), (max-width: 900px) and (orientation: landscape) and (pointer: coarse)').matches;
 };
 
 function ShellApp() {
@@ -107,6 +113,7 @@ function ShellApp() {
   const [screen, setScreen] = useState(createShellInitialScreen);
   const [showAuthEntry, setShowAuthEntry] = useState(false);
   const [authEntryMode, setAuthEntryMode] = useState('login');
+  const [authEntryInitialForm, setAuthEntryInitialForm] = useState({});
   const [saveStatus, setSaveStatus] = useState('');
   const [centerNotice, setCenterNotice] = useState('');
   const [aiCreditBalance] = useState(0);
@@ -128,11 +135,16 @@ function ShellApp() {
 
   const openLoginPanel = useCallback(() => {
     setAuthEntryMode('login');
+    setAuthEntryInitialForm({});
     setShowAuthEntry(true);
   }, []);
 
-  const openRegisterPanel = useCallback(() => {
+  const openRegisterPanel = useCallback((options = {}) => {
+    const nextInitialForm = options?.accountType === ACCOUNT_TYPE_PRO
+      ? { accountType: ACCOUNT_TYPE_PRO }
+      : {};
     setAuthEntryMode('register');
+    setAuthEntryInitialForm(nextInitialForm);
     setShowAuthEntry(true);
   }, []);
 
@@ -187,15 +199,59 @@ function ShellApp() {
       builderScreen,
       projectId,
       tab,
+      demoMode: false,
     });
     setBuilderLaunch((current) => ({
       projectId,
       tab,
       tutorialTab,
       screen: builderScreen,
+      isDemoMode: false,
       key: current.key + 1,
     }));
     setScreen(builderScreen === 'shared-preview' ? 'shared-preview' : 'builder');
+  }, []);
+
+  const startDemoFromLanding = useCallback(() => {
+    const startsInPlayerPreview = shouldStartDemoInPlayerPreview();
+    const builderScreen = startsInPlayerPreview ? 'shared-preview' : 'editor';
+    const tab = startsInPlayerPreview ? 'preview' : 'scenes';
+    writeAppUiState({
+      screen: 'builder',
+      builderScreen,
+      projectId: 'demo-project',
+      tab,
+      demoMode: true,
+    });
+    setBuilderLaunch((current) => ({
+      projectId: 'demo-project',
+      tab,
+      tutorialTab: '',
+      screen: builderScreen,
+      isDemoMode: true,
+      key: current.key + 1,
+    }));
+    setScreen(startsInPlayerPreview ? 'shared-preview' : 'builder');
+  }, []);
+
+  const exitDemoToLanding = useCallback(() => {
+    writeAppUiState({
+      screen: 'profile',
+      builderScreen: 'editor',
+      projectId: '',
+      tab: '',
+      demoMode: false,
+    });
+    setShowAuthEntry(false);
+    setBuilderLaunch((current) => ({
+      projectId: '',
+      tab: '',
+      tutorialTab: '',
+      screen: 'editor',
+      isDemoMode: false,
+      key: current.key + 1,
+    }));
+    setScreen('profile');
   }, []);
 
   const createProjectFromProfile = useCallback(async (name, templateId = 'empty', creationMode = 'beginner', options = {}) => {
@@ -278,6 +334,10 @@ function ShellApp() {
 
   const downloadProjectQrCodeFromProfile = useCallback(async (projectId) => {
     if (!auth.user?.id || !projectId) return;
+    if (!isProfessionalAccount(auth.user)) {
+      setSaveStatus('QR code réservé aux comptes Pro');
+      return;
+    }
     const playableUrl = buildPlayableProjectUrl(auth.user.id, projectId);
     const project = auth.projects.find((projectRecord) => projectRecord.id === projectId);
 
@@ -296,7 +356,7 @@ function ShellApp() {
       });
       setSaveStatus('QR code impossible à générer');
     }
-  }, [auth.projects, auth.user?.id, promptDialog]);
+  }, [auth.projects, auth.user, promptDialog]);
 
   const publishProjectFromProfile = useCallback(async (projectId) => {
     const existingProject = auth.projects.find((project) => project.id === projectId);
@@ -452,6 +512,7 @@ function ShellApp() {
             onLogin={openLoginPanel}
             onRegister={openRegisterPanel}
             onOpenGallery={openGalleryScreen}
+            onStartDemo={startDemoFromLanding}
           />
         </Suspense>
       );
@@ -467,6 +528,7 @@ function ShellApp() {
             onUpdatePassword={auth.updatePassword}
             onBack={closeAuthEntry}
             initialMode={authEntryMode}
+            initialForm={authEntryInitialForm}
             isPasswordRecovery={auth.isPasswordRecovery}
             isBusy={auth.isBusy}
             errorMessage={auth.authError}
@@ -488,7 +550,9 @@ function ShellApp() {
             initialTab={builderLaunch.tab}
             initialTutorialTab={builderLaunch.tutorialTab}
             initialScreen={builderLaunch.screen}
+            isDemoMode={builderLaunch.isDemoMode}
             onExitToProfile={openProfileScreen}
+            onExitDemoToLanding={exitDemoToLanding}
           />
         </Suspense>
         {screen === 'builder' ? <SupportWidget user={auth.user} /> : null}
@@ -637,6 +701,7 @@ function ShellApp() {
           onImportProject={importProjectFromProfile}
           onImportMediaFile={importProfileMediaFile}
           onUpdateAuthorProfile={auth.updateAuthorProfile}
+          onUpdateAccountProfile={auth.updateAccountProfile}
           onUpdatePassword={auth.updatePassword}
           onRefreshStorageUsage={getCurrentStorageUsageBytes}
           storageSummary={storageSummary}

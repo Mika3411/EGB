@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, test } from 'vitest';
 import {
   createInitialProject,
@@ -14,6 +16,10 @@ import {
 } from '../shared/services/proPromotion';
 import { getClassicBuilderTabValuesForMode } from '../shared/utils/classicBuilderTabs';
 
+const publicAssetExists = (assetUrl) => (
+  existsSync(join(process.cwd(), 'public', assetUrl.replace(/^\//u, '')))
+);
+
 describe('pro promotion projects', () => {
   test('limite le mode pro aux onglets utiles aux extensions experience', () => {
     expect(getClassicBuilderTabValuesForMode(PRO_PROMOTION_PROJECT_MODE)).toEqual(['scenes', 'media', 'preview']);
@@ -23,23 +29,116 @@ describe('pro promotion projects', () => {
     const project = applyProPromotionProjectSetup(createInitialProject(), 'extend');
     const normalizedProject = normalizeProject(project);
 
-    expect(getProPromotionConfig('promote').title).toBe('Extension d’expérience - promotion');
+    expect(getProPromotionConfig('promote').title).toBe('Prologue');
     expect(normalizedProject.creationMode).toBe(PRO_PROMOTION_PROJECT_MODE);
-    expect(normalizedProject.title).toBe('Extension d’expérience - prolongement');
+    expect(normalizedProject.title).toBe('Épilogue');
     expect(normalizedProject.proPage).toMatchObject({
       kind: 'extend',
-      intentLabel: 'Prolonger',
+      intentLabel: 'Épilogue',
     });
     expect(isProPromotionProject(normalizedProject)).toBe(true);
     expect(getProPromotionProjectKind(normalizedProject)).toBe('extend');
     expect(isProPromotionProject(createInitialProject())).toBe(false);
   });
 
+  test('cree des templates pro avec fond, sans medias interactifs ni liens reels', () => {
+    const prologue = normalizeProject(applyProPromotionProjectSetup(createInitialProject(), 'promote'));
+    const epilogue = normalizeProject(applyProPromotionProjectSetup(createInitialProject(), 'extend'));
+    const story = normalizeProject(applyProPromotionProjectSetup(createInitialProject(), 'story'));
+    const showcase = normalizeProject(applyProPromotionProjectSetup(createInitialProject(), 'showcase'));
+
+    const assertCleanTemplate = (project, expectedTitle, expectedSceneName, expectedText, expectedHotspotCount = 0) => {
+      const scene = project.scenes[0];
+      expect(project.title).toBe(expectedTitle);
+      expect(project.scenes).toHaveLength(1);
+      expect(scene.name).toBe(expectedSceneName);
+      expect(scene.backgroundData).toMatch(/^\/assets\/generated\//);
+      expect(scene.backgroundName).toMatch(/\.png$/);
+      expect(scene.backgroundWidth).toBeGreaterThan(0);
+      expect(scene.backgroundHeight).toBeGreaterThan(0);
+      expect(publicAssetExists(scene.backgroundData)).toBe(true);
+      expect(scene.backgroundId).toMatch(/^asset_/);
+      expect(scene.hotspots).toHaveLength(expectedHotspotCount);
+      expect(project.assets).toHaveLength(1);
+      expect(project.assets[0]).toMatchObject({
+        id: scene.backgroundId,
+        type: 'image',
+        url: scene.backgroundData,
+        meta: { role: 'background' },
+      });
+      expect(project.enigmas).toEqual([]);
+      expect(project.cinematics).toEqual([]);
+      expect(scene.sceneObjects.length).toBeGreaterThanOrEqual(8);
+      expect(scene.sceneObjects.every((object) => object.blockType === 'text')).toBe(true);
+      expect(scene.sceneObjects.map((object) => object.blockText).join('\n')).toContain(expectedText);
+
+      scene.sceneObjects.forEach((object) => {
+        expect(object.imageData).toBe('');
+        expect(object.popupImageData).toBe('');
+        expect(object.objectImageData).toBe('');
+        expect(object.soundData).toBe('');
+        expect(object.externalUrl).toBe('');
+        expect(object.targetProjectId).toBe('');
+        expect(object.targetProjectUserId).toBe('');
+        expect(object.actionType).toBe('dialogue');
+      });
+
+      scene.hotspots.forEach((hotspot) => {
+        expect(hotspot.objectImageData).toBe('');
+        expect(hotspot.externalUrl).toBe('');
+        expect(hotspot.targetProjectId).toBe('');
+        expect(hotspot.targetProjectUserId).toBe('');
+      });
+    };
+
+    assertCleanTemplate(
+      prologue,
+      'Prologue',
+      'Page prologue',
+      'Expliquez ici ce que les joueurs vont vivre avant la venue.',
+    );
+    assertCleanTemplate(
+      epilogue,
+      'Épilogue',
+      'Page épilogue',
+      'Résumez ici la conclusion de l’aventure.',
+    );
+    assertCleanTemplate(
+      story,
+      'Prologue / Épilogue',
+      'Page prologue / épilogue',
+      'Expliquez ici le rôle de cette page',
+      3,
+    );
+    assertCleanTemplate(
+      showcase,
+      'Vitrine',
+      'Page vitrine',
+      'Titre / Enseigne / Logo',
+      5,
+    );
+    expect(getProPromotionProjectKind(story)).toBe('story');
+    expect(getProPromotionProjectKind(showcase)).toBe('showcase');
+  });
+
   test('normalise une extension pro en page unique sans navigation de scene', () => {
     const project = applyProPromotionProjectSetup(createInitialProject(), 'promote');
     const pageScene = project.scenes[0];
-    const removedScene = project.scenes[1];
-    const removedAct = project.acts[1];
+    const removedScene = { ...pageScene, id: 'removed-scene', name: 'Ancienne scène', hotspots: [], sceneObjects: [] };
+    const removedAct = { ...project.acts[0], id: 'removed-act', name: 'Ancien acte' };
+    project.scenes.push(removedScene);
+    project.acts.push(removedAct);
+    project.items = [{ id: 'legacy-item', name: 'Ancien objet' }];
+    project.enigmas = [{ id: 'legacy-enigma', name: 'Ancienne énigme' }];
+    project.cinematics = [{ id: 'legacy-cinematic', name: 'Ancienne cinématique' }];
+    pageScene.hotspots = [{
+      id: 'legacy-hotspot',
+      name: 'Ancienne zone',
+      x: 50,
+      y: 50,
+      width: 14,
+      height: 12,
+    }];
 
     pageScene.parentSceneId = removedScene.id;
     pageScene.timerEndAction = 'scene';

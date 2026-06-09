@@ -172,6 +172,7 @@ export const supabaseUserToAccount = (user) => {
     profileType: userMetadata.profileType || userMetadata.profile_type || '',
     organization: userMetadata.organization || '',
     country: userMetadata.country || '',
+    city: userMetadata.city || userMetadata.ville || '',
     language: userMetadata.language || 'fr',
     marketingConsent: Boolean(userMetadata.marketingConsent || userMetadata.marketing_consent),
     acceptedTerms: Boolean(userMetadata.acceptedTerms || userMetadata.accepted_terms),
@@ -239,6 +240,7 @@ export async function registerUser({
   profileType = '',
   organization = '',
   country = '',
+  city = '',
   language = 'fr',
   marketingConsent = false,
   acceptedTerms = false,
@@ -263,6 +265,7 @@ export async function registerUser({
           profileType,
           organization: organization.trim(),
           country: country.trim(),
+          city: city.trim(),
           language,
           marketingConsent: Boolean(marketingConsent),
           acceptedTerms: Boolean(acceptedTerms),
@@ -297,6 +300,7 @@ export async function registerUser({
     profileType,
     organization: organization.trim(),
     country: country.trim(),
+    city: city.trim(),
     language,
     marketingConsent: Boolean(marketingConsent),
     acceptedTerms: Boolean(acceptedTerms),
@@ -522,6 +526,35 @@ export async function saveProjectRecordForUser(userId, project = {}, projects = 
   return {
     ...storedProject,
     syncedProjects: storedProjects,
+  };
+}
+
+export async function updateCurrentUserProfile(patch = {}) {
+  const allowedPatch = {
+    ...(Object.prototype.hasOwnProperty.call(patch, 'country') ? { country: String(patch.country || '').trim() } : {}),
+    ...(Object.prototype.hasOwnProperty.call(patch, 'city') ? { city: String(patch.city || '').trim() } : {}),
+    ...(Object.prototype.hasOwnProperty.call(patch, 'organization') ? { organization: String(patch.organization || '').trim() } : {}),
+  };
+
+  if (hasSupabaseAuthConfig()) {
+    const client = getSupabaseClient();
+    const { data, error } = await client.auth.updateUser({ data: allowedPatch });
+    if (error) throw error;
+    const account = supabaseUserToAccount(data.user);
+    if (!account) throw new Error('Mise à jour du compte impossible.');
+    return rememberAccount({
+      ...account,
+      ...allowedPatch,
+    });
+  }
+
+  const userId = getSessionUserId();
+  if (!userId) throw new Error('Session introuvable.');
+  const account = updateStoredAccount(userId, allowedPatch);
+  if (!account) throw new Error('Compte introuvable.');
+  return {
+    ...account,
+    accountType: normalizeAccountType(account.accountType || account.account_type),
   };
 }
 

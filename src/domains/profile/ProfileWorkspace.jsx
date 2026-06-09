@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { LayoutList } from 'lucide-react';
 import CreateProjectPanel from './components/CreateProjectPanel';
 import OrdersPanel from './components/OrdersPanel';
 import ProfileBadgesPanel from './components/ProfileBadgesPanel';
@@ -12,6 +13,7 @@ import ProjectList from './components/ProjectList';
 import { readShopPurchases } from '../../shared/services/shopPurchases';
 import { isProfessionalAccount } from '../../shared/services/accountPlans';
 import { getFollowersForCreator } from '../../shared/services/creatorFollows';
+import { isProPromotionProject } from '../../shared/services/proPromotion';
 import {
   PROFILE_BADGE_EVENT_PLAY_GAME,
   PROFILE_BADGE_EVENTS_UPDATED_EVENT,
@@ -55,7 +57,6 @@ export default function ProfileWorkspace({
   activeProjectId = '',
   authorProfile = null,
   isBusy = false,
-  statusMessage = '',
   syncStatus = 'offline',
   onCreateProject,
   onOpenProject,
@@ -78,6 +79,7 @@ export default function ProfileWorkspace({
   onImportProject,
   onImportMediaFile,
   onUpdateAuthorProfile,
+  onUpdateAccountProfile,
   onUpdatePassword,
   onRefreshStorageUsage,
   mediaLibrary = [],
@@ -90,12 +92,38 @@ export default function ProfileWorkspace({
 }) {
   const [activeProfileTab, setActiveProfileTab] = useState('new-project');
   const [isOrdersOpen, setIsOrdersOpen] = useState(false);
+  const [isProfileTabsMenuOpen, setIsProfileTabsMenuOpen] = useState(false);
+  const [isMobileProfileNav, setIsMobileProfileNav] = useState(() => (
+    typeof window !== 'undefined' && window.matchMedia?.('(max-width: 620px)').matches
+  ));
   const tutorialMenuRef = useRef(null);
+  const profileTabsMenuRef = useRef(null);
   const shopUserId = user?.id || user?.email || 'anonymous';
   const isProAccount = isProfessionalAccount(user);
   const [orders, setOrders] = useState(() => readShopPurchases(shopUserId));
   const [badgeEvents, setBadgeEvents] = useState(() => readProfileBadgeEvents(shopUserId));
   const followersCount = getFollowersForCreator(user?.id).length;
+  const classicProjects = useMemo(() => (
+    (projects || []).filter((project) => !isProPromotionProject(project))
+  ), [projects]);
+  const proProjects = useMemo(() => (
+    (projects || []).filter(isProPromotionProject)
+  ), [projects]);
+  const profileTabLabels = {
+    'new-project': 'Nouveau projet',
+    projects: 'Projets',
+    publication: 'Publication',
+    media: 'Médias',
+    messages: 'Messagerie',
+    settings: 'Profil',
+    badges: 'Badges',
+    pro: 'Pro',
+  };
+  const activeProfileTabLabel = profileTabLabels[activeProfileTab] || 'Section';
+  const selectProfileTab = (tab) => {
+    setActiveProfileTab(tab);
+    setIsProfileTabsMenuOpen(false);
+  };
 
   const refreshOrders = () => {
     setOrders(readShopPurchases(shopUserId));
@@ -121,6 +149,17 @@ export default function ProfileWorkspace({
   }, [isProfileTutorialActive]);
 
   useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined;
+    const mediaQuery = window.matchMedia('(max-width: 620px)');
+    const handleChange = () => setIsMobileProfileNav(mediaQuery.matches);
+    handleChange();
+    mediaQuery.addEventListener?.('change', handleChange);
+    return () => {
+      mediaQuery.removeEventListener?.('change', handleChange);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isProfileTutorialActive) return;
     const tutorialTab = getProfileTutorialTab(profileTutorialStep);
     if (tutorialTab && tutorialTab !== activeProfileTab) {
@@ -132,6 +171,33 @@ export default function ProfileWorkspace({
     profileTutorialStep?.fallbackSelector,
     profileTutorialStep?.selector,
   ]);
+
+  useEffect(() => {
+    if (!isProfileTutorialActive || !profileTabsMenuRef.current) return;
+    const selector = `${profileTutorialStep?.selector || ''} ${profileTutorialStep?.fallbackSelector || ''}`;
+    if (/profile-tab-/.test(selector)) {
+      setIsProfileTabsMenuOpen(true);
+    }
+  }, [
+    isProfileTutorialActive,
+    profileTutorialStep?.fallbackSelector,
+    profileTutorialStep?.selector,
+  ]);
+
+  useEffect(() => {
+    if (!isProfileTabsMenuOpen) return undefined;
+
+    const closeOnOutsideClick = (event) => {
+      if (!profileTabsMenuRef.current?.contains(event.target)) {
+        setIsProfileTabsMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsideClick, true);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick, true);
+    };
+  }, [isProfileTabsMenuOpen]);
 
   useEffect(() => {
     if (activeProfileTab === 'pro' && !isProAccount) {
@@ -181,17 +247,105 @@ export default function ProfileWorkspace({
     };
   }, [shopUserId]);
 
+  const profileSectionMenu = (
+    <section
+      ref={profileTabsMenuRef}
+      className={`panel profile-section-tabs ${isProfileTabsMenuOpen ? 'is-open' : ''}`}
+      aria-label="Navigation profil"
+      data-tour="profile-section-tabs"
+    >
+      <button
+        type="button"
+        className="profile-dropdown-trigger profile-section-tabs-trigger"
+        aria-expanded={isProfileTabsMenuOpen}
+        aria-controls="profile-section-tab-list"
+        aria-label={`Sections du profil, section active : ${activeProfileTabLabel}`}
+        onClick={() => setIsProfileTabsMenuOpen((isOpen) => !isOpen)}
+      >
+        <LayoutList className="profile-dropdown-icon" aria-hidden="true" />
+      </button>
+      <div id="profile-section-tab-list" className="profile-section-tab-list">
+        <button
+          type="button"
+          className={activeProfileTab === 'new-project' ? 'active' : ''}
+          onClick={() => selectProfileTab('new-project')}
+          data-tour="profile-tab-new-project"
+        >
+          Nouveau projet
+        </button>
+        <button
+          type="button"
+          className={activeProfileTab === 'projects' ? 'active' : ''}
+          onClick={() => selectProfileTab('projects')}
+          data-tour="profile-tab-projects"
+        >
+          Projets
+        </button>
+        <button
+          type="button"
+          className={activeProfileTab === 'publication' ? 'active' : ''}
+          onClick={() => selectProfileTab('publication')}
+          data-tour="profile-tab-publication"
+        >
+          Publication
+        </button>
+        <button
+          type="button"
+          className={activeProfileTab === 'media' ? 'active' : ''}
+          onClick={() => selectProfileTab('media')}
+          data-tour="profile-tab-media"
+        >
+          Médias
+        </button>
+        <button
+          type="button"
+          className={activeProfileTab === 'messages' ? 'active' : ''}
+          onClick={() => selectProfileTab('messages')}
+          data-tour="profile-tab-messages"
+        >
+          Messagerie
+        </button>
+        <button
+          type="button"
+          className={activeProfileTab === 'settings' ? 'active' : ''}
+          onClick={() => selectProfileTab('settings')}
+          data-tour="profile-tab-settings"
+        >
+          Profil
+        </button>
+        <button
+          type="button"
+          className={activeProfileTab === 'badges' ? 'active' : ''}
+          onClick={() => selectProfileTab('badges')}
+          data-tour="profile-tab-badges"
+        >
+          Badges
+        </button>
+        {isProAccount ? (
+          <button
+            type="button"
+            className={activeProfileTab === 'pro' ? 'active' : ''}
+            onClick={() => selectProfileTab('pro')}
+            data-tour="profile-tab-pro"
+          >
+            Pro
+          </button>
+        ) : null}
+      </div>
+    </section>
+  );
+
   return (
     <main className="layout">
       <ProfileHeader
         user={user}
         authorProfile={authorProfile}
         canOpenAdmin={canOpenAdmin}
-        statusMessage={statusMessage}
         ordersCount={orders.length}
         isBusy={isBusy}
         isProfileTutorialActive={isProfileTutorialActive}
         tutorialMenuRef={tutorialMenuRef}
+        mobileSectionMenu={isMobileProfileNav ? profileSectionMenu : null}
         onOpenAdmin={onOpenAdmin}
         onOpenPublicGallery={onOpenPublicGallery}
         onOpenOrders={() => {
@@ -209,74 +363,7 @@ export default function ProfileWorkspace({
         />
       ) : null}
 
-      <section className="panel profile-section-tabs" aria-label="Navigation profil" data-tour="profile-section-tabs">
-        <button
-          type="button"
-          className={activeProfileTab === 'new-project' ? 'active' : ''}
-          onClick={() => setActiveProfileTab('new-project')}
-          data-tour="profile-tab-new-project"
-        >
-          Nouveau projet
-        </button>
-        <button
-          type="button"
-          className={activeProfileTab === 'projects' ? 'active' : ''}
-          onClick={() => setActiveProfileTab('projects')}
-          data-tour="profile-tab-projects"
-        >
-          Projets
-        </button>
-        <button
-          type="button"
-          className={activeProfileTab === 'publication' ? 'active' : ''}
-          onClick={() => setActiveProfileTab('publication')}
-          data-tour="profile-tab-publication"
-        >
-          Publication
-        </button>
-        <button
-          type="button"
-          className={activeProfileTab === 'media' ? 'active' : ''}
-          onClick={() => setActiveProfileTab('media')}
-          data-tour="profile-tab-media"
-        >
-          Médias
-        </button>
-        <button
-          type="button"
-          className={activeProfileTab === 'messages' ? 'active' : ''}
-          onClick={() => setActiveProfileTab('messages')}
-          data-tour="profile-tab-messages"
-        >
-          Messagerie
-        </button>
-        <button
-          type="button"
-          className={activeProfileTab === 'settings' ? 'active' : ''}
-          onClick={() => setActiveProfileTab('settings')}
-          data-tour="profile-tab-settings"
-        >
-          Profil
-        </button>
-        <button
-          type="button"
-          className={activeProfileTab === 'badges' ? 'active' : ''}
-          onClick={() => setActiveProfileTab('badges')}
-          data-tour="profile-tab-badges"
-        >
-          Badges
-        </button>
-        {isProAccount ? (
-          <button
-            type="button"
-            className={activeProfileTab === 'pro' ? 'active' : ''}
-            onClick={() => setActiveProfileTab('pro')}
-            data-tour="profile-tab-pro"
-          >
-            Pro
-          </button>
-        ) : null}
-      </section>
+      {isMobileProfileNav ? null : profileSectionMenu}
 
       {activeProfileTab === 'new-project' ? (
         <CreateProjectPanel
@@ -288,7 +375,7 @@ export default function ProfileWorkspace({
 
       {activeProfileTab === 'projects' ? (
         <ProjectList
-          projects={projects}
+          projects={classicProjects}
           activeProjectId={activeProjectId}
           syncStatus={syncStatus}
           onOpenProject={onOpenProject}
@@ -302,7 +389,7 @@ export default function ProfileWorkspace({
 
       {activeProfileTab === 'badges' ? (
         <ProfileBadgesPanel
-          projects={projects}
+          projects={classicProjects}
           mediaLibrary={mediaLibrary}
           authorProfile={authorProfile}
           badgeEvents={badgeEvents}
@@ -313,7 +400,7 @@ export default function ProfileWorkspace({
 
       {activeProfileTab === 'media' ? (
         <ProfileMediaPanel
-          projects={projects}
+          projects={classicProjects}
           mediaLibrary={mediaLibrary}
           onImportMediaFile={onImportMediaFile}
           onDeleteMedia={onDeleteMedia}
@@ -327,7 +414,8 @@ export default function ProfileWorkspace({
 
       {activeProfileTab === 'publication' ? (
         <PublicationPanel
-          projects={projects}
+          canSaveProjectQrCode={isProAccount}
+          projects={classicProjects}
           onCopyProjectLink={onCopyProjectLink}
           onSaveProjectQrCode={onSaveProjectQrCode}
           onPublishProject={onPublishProject}
@@ -339,7 +427,7 @@ export default function ProfileWorkspace({
 
       {activeProfileTab === 'pro' && isProAccount ? (
         <ProfileProPanel
-          projects={projects}
+          projects={proProjects}
           activeProjectId={activeProjectId}
           isBusy={isBusy}
           onOpenProject={onOpenProject}
@@ -366,6 +454,7 @@ export default function ProfileWorkspace({
           authorProfile={authorProfile}
           isBusy={isBusy}
           onUpdateAuthorProfile={onUpdateAuthorProfile}
+          onUpdateAccountProfile={onUpdateAccountProfile}
           onUpdatePassword={onUpdatePassword}
         />
       ) : null}

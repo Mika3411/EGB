@@ -1,9 +1,10 @@
 export const ACCOUNT_TYPE_PERSONAL = 'particulier';
 export const ACCOUNT_TYPE_PRO = 'pro';
+export const ACCOUNT_PROFILE_TYPE_ESCAPE_ROOM = 'escape_room';
 
 export const ACCOUNT_TYPE_OPTIONS = [
   [ACCOUNT_TYPE_PERSONAL, 'Particulier'],
-  [ACCOUNT_TYPE_PRO, 'Pro'],
+  [ACCOUNT_TYPE_PRO, 'Salle d’escape / pro'],
 ];
 
 const ACCOUNT_TYPE_ALIASES = new Map([
