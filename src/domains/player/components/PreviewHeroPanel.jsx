@@ -81,7 +81,7 @@ export default function PreviewHeroPanel({
             {heroPanelRollingSkillId !== null
               ? (heroState.skills || []).find((skill) => skill.id === heroPanelRollingSkillId)?.name || 'Jet libre'
               : lastDiceRoll.skillName || 'Jet libre'}
-            {heroPanelRollingSkillId === null && typeof lastDiceRoll.success === 'boolean' ? ` - ${lastDiceRoll.success ? 'Reussi' : 'Echec'}` : ''}
+            {heroPanelRollingSkillId === null && typeof lastDiceRoll.success === 'boolean' ? ` - ${lastDiceRoll.success ? 'Réussi' : 'Échec'}` : ''}
           </span>
           <button
             type="button"

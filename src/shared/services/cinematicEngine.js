@@ -1,7 +1,7 @@
 import { normalizeAnime2dLayer, normalizeAnime2dSpec } from './anime2dEngine';
 
 export const CINEMATIC_TYPES = ['slides', 'video', 'anime2d'];
-export const CINEMATIC_END_ACTIONS = ['none', 'act', 'scene', 'item'];
+export const CINEMATIC_END_ACTIONS = ['none', 'act', 'scene', 'item', 'project_link'];
 export const CINEMATIC_TRANSITIONS = ['none', 'fade', 'slide', 'zoom', 'cut', 'dissolve'];
 export const CINEMATIC_STEP_TYPES = ['text', 'image', 'audio', 'video', 'animation', 'wait', 'transition', 'anime2d'];
 
@@ -250,6 +250,8 @@ export function normalizeCinematic(cinematic = {}) {
     onEndType: normalizeCinematicEndAction(cinematic.onEndType || 'none'),
     targetActId: cinematic.targetActId || '',
     targetSceneId: cinematic.targetSceneId || '',
+    targetProjectId: cinematic.targetProjectId || '',
+    targetProjectUserId: cinematic.targetProjectUserId || '',
     rewardItemId: cinematic.rewardItemId || '',
   };
 }
@@ -478,6 +480,8 @@ export function getCinematicEndEvent(cinematic = {}) {
     targetActId: action === 'act' ? normalized.targetActId || '' : '',
     targetSceneId: action === 'scene' ? normalized.targetSceneId || '' : '',
     rewardItemId: action === 'item' ? normalized.rewardItemId || '' : '',
+    targetProjectId: action === 'project_link' ? normalized.targetProjectId || '' : '',
+    targetProjectUserId: action === 'project_link' ? normalized.targetProjectUserId || '' : '',
   };
 }
 

@@ -10,6 +10,7 @@ import {
 } from '../../../shared/services/gameEngine';
 import { resolveAssetUrl } from '../../../shared/services/assetManager';
 import { getHotspotLinkUrl, isHotspotLinkAction } from '../../../shared/services/hotspotLinks.js';
+import { trackProClick } from '../../../shared/services/proClickAnalytics.js';
 import {
   addUnique,
   clampNumber,
@@ -249,15 +250,18 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
 
   const applyCinematicEnd = (cinematic) => {
     if (!cinematic) return;
-    dispatchPreview({ type: 'CLOSE_CINEMATIC', cinematic });
+    const result = dispatchPreview({ type: 'CLOSE_CINEMATIC', cinematic });
+    openProjectLinkEndAction(result?.cinematic || cinematic);
   };
 
   const closeCinematic = () => {
-    dispatchPreview(gameActions.closeCinematic());
+    const result = dispatchPreview(gameActions.closeCinematic());
+    openProjectLinkEndAction(result?.cinematic);
   };
 
   const advanceCinematic = () => {
-    dispatchPreview(gameActions.advanceCinematic());
+    const result = dispatchPreview(gameActions.advanceCinematic());
+    if (result?.ended) openProjectLinkEndAction(result?.cinematic);
   };
 
   const markHotspotCompleted = (hotspotId) => {
@@ -418,14 +422,14 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
       }
     }
 
-    const hotspotImageSrc = resolveAssetUrl(project, spot.objectImageId, spot.objectImageData)
+    const hotspotImageSrc = spot.objectImageData || resolveAssetUrl(project, spot.objectImageId, '')
       || resolveAssetUrl(project, spot.popupImageId, spot.popupImageData || spot.popupImage)
       || (spot.clickMode === 'action' ? resolveAssetUrl(project, spot.imageId, spot.imageData) : '');
     if (hotspotImageSrc) {
       setViewerImage(createHotspotViewerImage(spot, hotspotImageSrc));
     }
 
-    if (spot.dialogue) setDialogue(spot.dialogue);
+    if (spot.actionType !== 'project_link' && spot.dialogue) setDialogue(spot.dialogue);
 
     const rewardItemId = getHotspotRewardItemId(spot);
     if (rewardItemId && !inventory.includes(rewardItemId)) {
@@ -470,20 +474,57 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
     openHotspotLink(spot);
   };
 
-  const openHotspotLink = (spot) => {
+  const normalizeAccessCode = (value = '') => String(value || '').trim();
+
+  const confirmHotspotAccessCode = (spot) => {
+    if (spot?.actionType !== 'project_link' || !spot.accessCodeEnabled) return true;
+    const expectedCode = normalizeAccessCode(spot.accessCode);
+    if (!expectedCode) {
+      setViewerImage(null);
+      setDialogue("Configure un code d'accès pour cette zone.");
+      return false;
+    }
+    if (typeof window === 'undefined' || typeof window.prompt !== 'function') return false;
+    const answer = window.prompt("Code d'accès");
+    if (answer === null) return false;
+    if (normalizeAccessCode(answer) !== expectedCode) {
+      setViewerImage(null);
+      setDialogue('Code incorrect.');
+      return false;
+    }
+    return true;
+  };
+
+  const openHotspotLink = (spot, { skipAccessCode = false } = {}) => {
     if (!isHotspotLinkAction(spot?.actionType)) return false;
+    if (!skipAccessCode && !confirmHotspotAccessCode(spot)) return false;
     const linkUrl = getHotspotLinkUrl(spot);
     if (!linkUrl) {
       setViewerImage(null);
       setDialogue(spot.actionType === 'project_link'
-        ? 'Choisis un projet cible pour cette zone.'
+        ? 'Choisis un projet cible.'
         : 'Ajoute un lien externe pour cette zone.');
       return false;
     }
     if (typeof window === 'undefined' || typeof window.open !== 'function') return false;
+    trackProClick(spot, {
+      project,
+      scene: playScene,
+      source: 'preview-player',
+      targetUrl: linkUrl,
+    });
     const openedWindow = window.open(linkUrl, '_blank', 'noopener,noreferrer');
     if (openedWindow) openedWindow.opener = null;
     return true;
+  };
+
+  const openProjectLinkEndAction = (entry = {}) => {
+    if ((entry?.onEndType || '') !== 'project_link') return false;
+    return openHotspotLink({
+      actionType: 'project_link',
+      targetProjectId: entry.targetProjectId || '',
+      targetProjectUserId: entry.targetProjectUserId || '',
+    });
   };
 
   const applyHeroHealthLoss = (amount = 0, options = {}) => {
@@ -821,6 +862,8 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
       runHeroCombatAction(resolvedSpot, { sourceHotspotId: resolvedSpot.id });
       return;
     }
+    const shouldSkipProjectAccessPrompt = resolvedSpot.actionType === 'project_link' && !resolvedSpot.enigmaId;
+    if (shouldSkipProjectAccessPrompt && !confirmHotspotAccessCode(resolvedSpot)) return;
     const result = dispatchPreview({
       ...gameActions.triggerHotspot(resolvedSpot.id),
       hotspot: resolvedSpot,
@@ -832,7 +875,10 @@ export function usePreviewPlayer(project, { getItemById } = {}) {
       if (messageWithMalus !== currentMessage) {
         patchPreviewState({ dialogue: messageWithMalus });
       }
-      openHotspotLink(resolvedSpot);
+      const activeEnigmaAfterTrigger = engineRef.current.getState().activeEnigma?.enigma;
+      if (!activeEnigmaAfterTrigger) {
+        openHotspotLink(resolvedSpot, { skipAccessCode: shouldSkipProjectAccessPrompt });
+      }
     }
     if (result?.ok && resolvedSpot.rewardItemId) {
       addAdventureJournalEntry({

@@ -1,10 +1,38 @@
 import { readJsonBody, sendJson } from './http.js';
 import { verifySupabaseUserRequest } from './auth.js';
 import { buildStoragePath, downloadStorageJson, uploadStorageJson } from './storage.js';
+import { normalizeAccountType } from '../src/shared/services/accountPlans.js';
 
 const publicProjectsStoragePath = 'public/projects.json';
 
 const cloneProjectData = (data) => JSON.parse(JSON.stringify(data || {}));
+
+const getUserAccountType = (user = {}) => normalizeAccountType(
+  user.accountType
+  || user.account_type
+  || user.user_metadata?.accountType
+  || user.user_metadata?.account_type
+  || user.app_metadata?.accountType
+  || user.app_metadata?.account_type
+  || '',
+);
+
+const getUserCountry = (user = {}) => String(
+  user.country
+  || user.user_metadata?.country
+  || user.app_metadata?.country
+  || '',
+).trim();
+
+const getUserCity = (user = {}) => String(
+  user.city
+  || user.ville
+  || user.user_metadata?.city
+  || user.user_metadata?.ville
+  || user.app_metadata?.city
+  || user.app_metadata?.ville
+  || '',
+).trim();
 
 export const getProjectTitle = (project = {}, record = {}) =>
   record?.name || project?.title || project?.name || 'Escape game sans titre';
@@ -99,7 +127,7 @@ const loadServerProjectsForUser = async (userId) => {
   }));
 };
 
-const savePublicProjectIndexForUser = async (userId, projects = []) => {
+const savePublicProjectIndexForUser = async (userId, projects = [], account = {}) => {
   const publicRecords = projects
     .filter((project) => project?.id && project.shareState?.isPublic)
     .map((project) => {
@@ -110,6 +138,9 @@ const savePublicProjectIndexForUser = async (userId, projects = []) => {
         data: publicData,
         shareState,
         userId,
+        accountType: getUserAccountType({ ...project, ...account }),
+        country: getUserCountry({ ...project, ...account }),
+        city: getUserCity({ ...project, ...account }),
         publicKey: `${userId}:${project.id}`,
       };
     });
@@ -120,7 +151,7 @@ const savePublicProjectIndexForUser = async (userId, projects = []) => {
   return uploadStorageJson(publicProjectsStoragePath, [...withoutUser, ...publicRecords], { visibility: 'public' });
 };
 
-const saveServerProjectsForUser = async (userId, projects = []) => {
+const saveServerProjectsForUser = async (userId, projects = [], account = {}) => {
   const normalized = Array.isArray(projects) ? projects.map(normalizeProjectRecord) : [];
   const storedProjects = [];
   for (const project of normalized) {
@@ -128,7 +159,7 @@ const saveServerProjectsForUser = async (userId, projects = []) => {
     storedProjects.push(await saveProjectRecordForUser(userId, project));
   }
   await uploadStorageJson(getProjectsStoragePath(userId), storedProjects.map((project) => getProjectIndexRecord(userId, project)));
-  await savePublicProjectIndexForUser(userId, storedProjects);
+  await savePublicProjectIndexForUser(userId, storedProjects, account);
   return storedProjects;
 };
 
@@ -224,6 +255,6 @@ export const handleProjectPublication = async (req, res) => {
     ...projects.filter((project) => project.id !== projectId),
   ];
 
-  await saveServerProjectsForUser(user.id, nextProjects);
+  await saveServerProjectsForUser(user.id, nextProjects, user);
   sendJson(res, 200, { project: nextProject });
 };

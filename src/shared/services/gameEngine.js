@@ -391,6 +391,11 @@ function reduceEnigmaAction(state, action) {
           launchedCinematicIds: addUnique(nextState.launchedCinematicIds, cinematic.id),
         };
       }
+    } else if (activeEnigma.unlockType === 'project_link') {
+      nextState = {
+        ...nextState,
+        dialogue: activeEnigma.successMessage || nextState.dialogue,
+      };
     } else if (state.activeEnigma?.hotspot) {
       const hotspotState = applyHotspotSideEffectsToState(nextState, state.activeEnigma.hotspot);
       nextState = {
@@ -486,7 +491,7 @@ function reduceCombinationAction(state, action) {
 function applyHotspotSideEffectsToState(state, hotspot, sourceHotspotId = hotspot?.id) {
   let nextState = { ...state, viewerImage: null };
 
-  if (hotspot.dialogue) nextState.dialogue = hotspot.dialogue;
+  if (hotspot.actionType !== 'project_link' && hotspot.dialogue) nextState.dialogue = hotspot.dialogue;
 
   const rewardItemId = getHotspotRewardItemId(hotspot);
 
@@ -497,7 +502,7 @@ function applyHotspotSideEffectsToState(state, hotspot, sourceHotspotId = hotspo
     if (!hotspot.dialogue) nextState.dialogue = `Tu obtiens ${rewardItem?.name || hotspot.name || 'un objet'}.`;
   }
 
-  const hotspotImageSrc = resolveAssetUrl(state.project, hotspot.objectImageId, hotspot.objectImageData)
+  const hotspotImageSrc = hotspot.objectImageData || resolveAssetUrl(state.project, hotspot.objectImageId, '')
     || resolveAssetUrl(state.project, hotspot.popupImageId, hotspot.popupImageData || hotspot.popupImage)
     || (hotspot.clickMode === 'action' ? resolveAssetUrl(state.project, hotspot.imageId, hotspot.imageData) : '');
   const rewardViewer = rewardItemId ? createInventoryViewerImage(state.project, rewardItemId) : null;

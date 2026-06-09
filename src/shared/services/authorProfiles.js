@@ -132,6 +132,8 @@ export const normalizeAuthorProfile = (profile = {}, user = {}) => {
     displayName: profile.displayName || user.name || user.email || 'Créateur',
     tagline: profile.tagline || '',
     bio: profile.bio || '',
+    country: normalizeProfileString(profile.country || user.country),
+    city: normalizeProfileString(profile.city || user.city),
     website,
     avatar: normalizeProfileString(profile.avatar),
     banner: normalizeProfileString(profile.banner),

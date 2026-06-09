@@ -41,7 +41,7 @@ export function createPreviewEnigmaActions({
     setters.setSimonPlayerTurn(false);
   };
 
-  const solveActiveEnigma = () => {
+  const solveActiveEnigma = (answerOverride = {}) => {
     if (!activeEnigma?.enigma) return;
     const { enigma } = activeEnigma;
     const result = dispatchPreview(gameActions.solveEnigma(enigma.id, {
@@ -50,9 +50,20 @@ export function createPreviewEnigmaActions({
       puzzleOrder: enigmaPuzzleOrder,
       dragSlots: enigmaDragSlots,
       rotationAngles: enigmaRotationAngles,
+      ...answerOverride,
     }));
-    if (result?.ok && (enigma.unlockType || 'none') === 'none') {
-      openHotspotLink?.(activeEnigma.hotspot);
+    if (result?.ok) {
+      const unlockType = enigma.unlockType || 'none';
+      if (unlockType === 'none') {
+        openHotspotLink?.(activeEnigma.hotspot);
+      }
+      if (unlockType === 'project_link') {
+        openHotspotLink?.({
+          actionType: 'project_link',
+          targetProjectId: enigma.targetProjectId || '',
+          targetProjectUserId: enigma.targetProjectUserId || '',
+        });
+      }
     }
   };
 
@@ -116,6 +127,13 @@ export function createPreviewEnigmaActions({
     if ((enigma.unlockType || 'none') === 'none') {
       openHotspotLink?.(activeEnigma.hotspot);
     }
+    if ((enigma.unlockType || 'none') === 'project_link') {
+      openHotspotLink?.({
+        actionType: 'project_link',
+        targetProjectId: enigma.targetProjectId || '',
+        targetProjectUserId: enigma.targetProjectUserId || '',
+      });
+    }
 
     return true;
   };
@@ -150,7 +168,7 @@ export function createPreviewEnigmaActions({
       const next = [...prev];
       [next[enigmaPuzzleSelectedIndex], next[index]] = [next[index], next[enigmaPuzzleSelectedIndex]];
       if (next.every((value, pieceIndex) => value === pieceIndex)) {
-        window.setTimeout(() => solveActiveEnigma(), 120);
+        window.setTimeout(() => solveActiveEnigma({ puzzleOrder: next }), 120);
       }
       return next;
     });
@@ -162,7 +180,7 @@ export function createPreviewEnigmaActions({
       const next = [...prev];
       next[index] = (((next[index] || 0) + 90) % 360);
       if (next.every((value) => value % 360 === 0)) {
-        window.setTimeout(() => solveActiveEnigma(), 120);
+        window.setTimeout(() => solveActiveEnigma({ rotationAngles: next }), 120);
       }
       return next;
     });
@@ -183,7 +201,7 @@ export function createPreviewEnigmaActions({
           : [...bankWithoutPiece, displacedPiece];
         window.setTimeout(() => {
           setters.setEnigmaDragBank(nextBank);
-          if (nextSlots.every((entry, index) => entry === index)) solveActiveEnigma();
+          if (nextSlots.every((entry, index) => entry === index)) solveActiveEnigma({ dragSlots: nextSlots });
         }, 0);
         return nextSlots;
       });

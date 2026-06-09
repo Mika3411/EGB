@@ -86,4 +86,50 @@ describe('public gallery storage', () => {
       description: 'Description visible en galerie',
     });
   });
+
+  it('marks games published by professional accounts', async () => {
+    window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify([
+      { id: 'creator-pro', name: 'Pro Studio', email: 'pro@example.test', accountType: 'pro', country: 'France', city: 'Lyon' },
+      { id: 'creator-personal', name: 'Bob', email: 'bob@example.test', accountType: 'particulier' },
+    ]));
+    window.localStorage.setItem(`${PROJECTS_KEY_PREFIX}.creator-pro`, JSON.stringify([
+      {
+        id: 'project-pro',
+        name: 'Mission pro',
+        data: { title: 'Mission pro', scenes: [], enigmas: [] },
+        shareState: {
+          isPublic: true,
+          publishedAt: '2026-01-01T00:00:00.000Z',
+          publishedData: { title: 'Mission pro', scenes: [], enigmas: [] },
+        },
+      },
+    ]));
+    window.localStorage.setItem(`${PROJECTS_KEY_PREFIX}.creator-personal`, JSON.stringify([
+      {
+        id: 'project-personal',
+        name: 'Mission perso',
+        data: { title: 'Mission perso', scenes: [], enigmas: [] },
+        shareState: {
+          isPublic: true,
+          publishedAt: '2026-01-02T00:00:00.000Z',
+          publishedData: { title: 'Mission perso', scenes: [], enigmas: [] },
+        },
+      },
+    ]));
+
+    const games = await getPublicGames();
+    const proGame = games.find((entry) => entry.key === 'creator-pro:project-pro');
+    const personalGame = games.find((entry) => entry.key === 'creator-personal:project-personal');
+
+    expect(proGame).toMatchObject({
+      accountType: 'pro',
+      isProfessionalAuthor: true,
+      authorCountry: 'France',
+      authorCity: 'Lyon',
+    });
+    expect(personalGame).toMatchObject({
+      accountType: 'particulier',
+      isProfessionalAuthor: false,
+    });
+  });
 });

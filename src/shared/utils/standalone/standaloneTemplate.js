@@ -221,7 +221,7 @@ function triggerSceneObject(objectId) {
     const isCorrect = normalizeBlockAnswer(answer) === normalizeBlockAnswer(obj.expectedAnswer);
     state.dialogue = isCorrect
       ? (obj.successDialogue || obj.dialogue || 'Bonne réponse.')
-      : (obj.failureDialogue || 'Ce n est pas la bonne réponse.');
+      : (obj.failureDialogue || "Ce n'est pas la bonne réponse.");
     if (isCorrect) markHotspotCompleted(obj.id);
     if (isCorrect && (obj.logicRules || []).length) {
       triggerHotspot(obj.id);
@@ -345,6 +345,15 @@ goToScene(cinematic.targetSceneId, 'Nouvelle scène débloquée.');
   if (endType === 'act' && cinematic.targetActId) {
     const actScene = getFirstSceneForAct(cinematic.targetActId);
     if (actScene) goToScene(actScene.id, 'Un nouvel acte commence.');
+    return;
+  }
+
+  if (endType === 'project_link') {
+    openHotspotLink({
+      actionType: 'project_link',
+      targetProjectId: cinematic.targetProjectId || '',
+      targetProjectUserId: cinematic.targetProjectUserId || '',
+    });
     return;
   }
 

@@ -54,7 +54,7 @@ export default function PlaytestWorkspace(props) {
     enigmaCodeInput, setEnigmaCodeInput, enigmaColorAttempt, setEnigmaColorAttempt, pushEnigmaColor, closeEnigma, submitEnigma,
     enigmaPuzzleOrder, enigmaPuzzleSelectedIndex, clickPuzzlePiece, enigmaDragBank, enigmaDragSlots, enigmaDraggedPiece,
     setEnigmaDraggedPiece, moveDragPieceToSlot, returnDragPieceToBank, enigmaRotationAngles, rotatePuzzlePiece,
-    simonPlaybackIndex, simonPlayerTurn, startSimonPlayback, sharedPlayerMode = false,
+    simonPlaybackIndex, simonPlayerTurn, startSimonPlayback, allowMobilePortraitInitially = false, sharedPlayerMode = false,
   } = props;
 
   const sceneAudioRef = useRef(null);
@@ -82,7 +82,7 @@ export default function PlaytestWorkspace(props) {
   const [isObjectiveOpen, setIsObjectiveOpen] = useState(false);
   const [showInteractionHints, setShowInteractionHints] = useState(true);
   const [isNarrationCollapsed, setIsNarrationCollapsed] = useState(false);
-  const [allowMobilePortraitPlayer, setAllowMobilePortraitPlayer] = useState(false);
+  const [allowMobilePortraitPlayer, setAllowMobilePortraitPlayer] = useState(Boolean(allowMobilePortraitInitially));
   const [sceneTransitionOverlay, setSceneTransitionOverlay] = useState(null);
   const [sceneTimerRemaining, setSceneTimerRemaining] = useState(0);
   const [actPreloadStatus, setActPreloadStatus] = useState({ isLoading: false, progress: 100, label: '' });
@@ -101,6 +101,10 @@ export default function PlaytestWorkspace(props) {
   const [heroCombatRolling, setHeroCombatRolling] = useState(false);
   const [heroCombatDieFace, setHeroCombatDieFace] = useState(1);
   const [heroCombatEffectLocked, setHeroCombatEffectLocked] = useState(false);
+
+  useEffect(() => {
+    if (allowMobilePortraitInitially) setAllowMobilePortraitPlayer(true);
+  }, [allowMobilePortraitInitially]);
   const heroSetupRollTimerRef = useRef(null);
   const heroSetupRollIntervalRef = useRef(null);
   const heroSetupDiceFacesRef = useRef([]);
@@ -299,7 +303,7 @@ export default function PlaytestWorkspace(props) {
       const isCorrect = normalize(answer) === normalize(obj.expectedAnswer);
       setDialogue(isCorrect
         ? (obj.successDialogue || obj.dialogue || 'Bonne réponse.')
-        : (obj.failureDialogue || 'Ce n est pas la bonne réponse.'));
+        : (obj.failureDialogue || "Ce n'est pas la bonne réponse."));
       if (isCorrect) markHotspotCompleted?.(obj.id);
       if (isCorrect && (obj.logicRules || []).length) {
         triggerHotspot(obj);

@@ -221,7 +221,7 @@ export const standaloneEvents = `function bindEvents() {
   root.querySelectorAll('#combine-items').forEach((button) => {
     button.addEventListener('click', () => {
       if (state.selectedInventoryIds.length !== 2) {
-        state.dialogue = 'Selectionne 2 objets à combiner.';
+        state.dialogue = 'Sélectionne 2 objets à combiner.';
         render();
         return;
       }

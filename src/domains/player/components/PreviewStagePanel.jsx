@@ -270,7 +270,7 @@ export default function PreviewStagePanel({
           })}
 
         {(playScene?.hotspots || []).map((spot) => {
-          const hotspotImageSrc = resolveAssetUrl(project, spot.objectImageId, spot.objectImageData);
+          const hotspotImageSrc = spot.objectImageData || resolveAssetUrl(project, spot.objectImageId, '');
           return (
             <button
               key={spot.id}

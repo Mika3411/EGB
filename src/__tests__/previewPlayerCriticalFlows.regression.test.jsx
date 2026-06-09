@@ -156,6 +156,17 @@ const makeCriticalProject = () => ({
           objectImageId: 'asset-zone-map',
           objectImageName: 'Route cachee',
         },
+        {
+          id: 'spot-puzzle',
+          name: 'Tableau puzzle',
+          x: 55,
+          y: 28,
+          width: 10,
+          height: 10,
+          actionType: 'dialogue',
+          enigmaId: 'enigma-puzzle',
+          dialogue: 'Le tableau se réaligne.',
+        },
       ],
       sceneObjects: [],
     },
@@ -178,6 +189,17 @@ const makeCriticalProject = () => ({
     failMessage: 'Le code resiste.',
     unlockType: 'scene',
     targetSceneId: 'scene-vault',
+  }, {
+    id: 'enigma-puzzle',
+    name: 'Image fragmentée',
+    type: 'puzzle',
+    question: 'Recompose le tableau.',
+    imageData: 'data:image/png;base64,cHV6emxl',
+    gridRows: 2,
+    gridCols: 2,
+    successMessage: 'Le tableau est recomposé.',
+    failMessage: 'Le tableau reste instable.',
+    unlockType: 'none',
   }],
   cinematics: [{
     id: 'cin-intro',
@@ -528,6 +550,41 @@ describe('preview player critical flows', () => {
       name: 'Route cachee',
       caption: 'La carte montre une route cachee.',
     });
+  });
+
+  test('auto-valide un puzzle image quand les pièces sont remises dans l ordre', () => {
+    vi.useFakeTimers();
+    try {
+      const { project, result } = renderPreview();
+      const puzzleHotspot = project.scenes[0].hotspots.find((spot) => spot.id === 'spot-puzzle');
+
+      act(() => {
+        result.current.triggerHotspot(puzzleHotspot);
+      });
+
+      expect(result.current.activeEnigma?.enigma.id).toBe('enigma-puzzle');
+      const order = [...result.current.enigmaPuzzleOrder];
+      for (let index = 0; index < order.length; index += 1) {
+        if (order[index] === index) continue;
+        const targetIndex = order.indexOf(index);
+        act(() => {
+          result.current.clickPuzzlePiece(index);
+        });
+        act(() => {
+          result.current.clickPuzzlePiece(targetIndex);
+        });
+        [order[index], order[targetIndex]] = [order[targetIndex], order[index]];
+      }
+
+      act(() => {
+        vi.advanceTimersByTime(150);
+      });
+
+      expect(result.current.activeEnigma).toBe(null);
+      expect(result.current.dialogue).toBe('Le tableau se réaligne.');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test('preserves turn-based preview combat rewards and scene transition', () => {

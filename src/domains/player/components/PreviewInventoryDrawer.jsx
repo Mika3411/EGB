@@ -68,7 +68,7 @@ export default function PreviewInventoryDrawer({
                   className="secondary-action player-combine-button"
                   onClick={() => {
                     if (selectedInventoryIds.length !== 2) {
-                      setDialogue('Selectionne 2 objets a combiner.');
+                      setDialogue('Sélectionne 2 objets à combiner.');
                       return;
                     }
                     combineInventoryItems(selectedInventoryIds[0], selectedInventoryIds[1]);

@@ -11,6 +11,7 @@ import {
 } from '../../../shared/utils/thumbnailProcessor';
 
 function PublicationCard({
+  canSaveProjectQrCode = false,
   project,
   onCopyProjectLink,
   onSaveProjectQrCode,
@@ -186,10 +187,12 @@ function PublicationCard({
               <span aria-hidden="true">🔗</span>
               Copier le lien
             </button>
-            <button type="button" className="secondary-action profile-share-button profile-qr-button" onClick={() => onSaveProjectQrCode?.(project.id)}>
-              <QrCode size={16} aria-hidden="true" />
-              Enregistrer le QR code
-            </button>
+            {canSaveProjectQrCode ? (
+              <button type="button" className="secondary-action profile-share-button profile-qr-button" onClick={() => onSaveProjectQrCode?.(project.id)}>
+                <QrCode size={16} aria-hidden="true" />
+                Enregistrer le QR code
+              </button>
+            ) : null}
             <button type="button" className="profile-publish-button" onClick={handlePublish}>
               {project.shareState?.isPublic ? 'Mettre à jour' : 'Publier'}
             </button>
@@ -219,6 +222,7 @@ function PublicationCard({
 }
 
 export default function PublicationPanel({
+  canSaveProjectQrCode = false,
   projects,
   onCopyProjectLink,
   onSaveProjectQrCode,
@@ -258,6 +262,7 @@ export default function PublicationPanel({
           visibleProjects.map((project) => (
             <PublicationCard
               key={project.id}
+              canSaveProjectQrCode={canSaveProjectQrCode}
               project={project}
               onCopyProjectLink={onCopyProjectLink}
               onSaveProjectQrCode={onSaveProjectQrCode}

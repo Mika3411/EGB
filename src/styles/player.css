@@ -4821,8 +4821,19 @@
   transition: width .18s ease;
 }
 .shared-player-shell {
+  position: relative;
   min-height: 100vh;
   background: #020617;
+}
+.shared-demo-exit-button {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 90;
+  min-height: 40px;
+  padding: 9px 13px;
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
 }
 .shared-player-loading {
   min-height: 100vh;

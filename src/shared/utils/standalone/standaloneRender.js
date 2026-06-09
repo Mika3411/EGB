@@ -129,7 +129,7 @@ function renderVisualEffectZones(playScene) {
 function renderHotspots(playScene) {
   return (playScene?.hotspots || [])
     .map((spot) => {
-      const hotspotImageSrc = resolveAssetUrl(spot.objectImageId, spot.objectImageData);
+      const hotspotImageSrc = spot.objectImageData || resolveAssetUrl(spot.objectImageId, '');
       return '<button type="button" class="player-hotspot' + (hotspotImageSrc ? ' player-hotspot-with-image' : '') + '" data-hotspot-id="' + safeDataAttr(spot.id) + '" '
         + 'style="left:' + safeStylePercent(spot.x, 0) + ';top:' + safeStylePercent(spot.y, 0) + ';width:' + safeStylePercent(spot.width, 10) + ';height:' + safeStylePercent(spot.height, 10) + ';z-index:20;cursor:pointer;' + getElementShapeStyle(spot) + '" title="' + escapeAttr(spot.name || '') + '" aria-label="' + escapeAttr(spot.name || 'Zone') + '">'
         + (hotspotImageSrc ? '<img class="player-hotspot-image" src="' + escapeMediaAttr(hotspotImageSrc, 'image') + '" alt="" aria-hidden="true" />' : '')

@@ -1,4 +1,5 @@
 import { getAllAccounts, loadProjectRecordsForUser, loadPublicProjectIndex } from './authStorage';
+import { getAccountType, isProfessionalAccount } from './accountPlans';
 import { getAuthorProfile } from './authorProfiles';
 import { getBlogModerationId, getModerationState } from './moderationStorage';
 import { readJsonStorage, writeJsonStorage } from '../utils/storageHelpers';
@@ -52,6 +53,8 @@ const normalizeText = (value = '') => String(value)
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
   .toLowerCase();
+
+const normalizeLocationField = (value = '') => String(value || '').trim();
 
 const getProjectSearchText = (project = {}, record = {}) => normalizeText([
   record.name,
@@ -114,6 +117,9 @@ const accountFromRecord = (record = {}) => ({
   id: record.userId || '',
   name: record.authorName || record.author || '',
   email: record.authorEmail || '',
+  accountType: getAccountType(record),
+  country: normalizeLocationField(record.country || record.authorCountry),
+  city: normalizeLocationField(record.city || record.authorCity),
 });
 
 export const readPublicFeedback = () => readJson(FEEDBACK_KEY, {});
@@ -229,6 +235,8 @@ export async function getPublicGames(options = {}) {
       const plays24h = countSince(recentPlays, Date.now() - 1000 * 60 * 60 * 24);
       const plays7d = countSince(recentPlays, Date.now() - 1000 * 60 * 60 * 24 * 7);
       const data = record.data || {};
+      const authorCountry = normalizeLocationField(authorProfile.country || account.country);
+      const authorCity = normalizeLocationField(authorProfile.city || account.city);
       const scenes = Array.isArray(data.scenes) ? data.scenes.length : 0;
       const enigmas = Array.isArray(data.enigmas) ? data.enigmas.length : 0;
       const difficulty = record.shareState?.difficulty || (enigmas >= 5 ? 'difficile' : enigmas >= 2 ? 'intermédiaire' : 'facile');
@@ -248,6 +256,10 @@ export async function getPublicGames(options = {}) {
         key: gameKey,
         userId: account.id,
         projectId: record.id,
+        accountType: getAccountType(account),
+        isProfessionalAuthor: isProfessionalAccount(account),
+        authorCountry,
+        authorCity,
         title: getProjectTitle(data, record),
         author: authorProfile.displayName || account.name || account.email || 'Créateur',
         authorProfile: {

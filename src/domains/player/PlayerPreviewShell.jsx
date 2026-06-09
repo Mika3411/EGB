@@ -3,6 +3,7 @@ import PlaytestWorkspace from './PlaytestWorkspace';
 export default function PlayerPreviewShell({
   editor,
   preview,
+  allowMobilePortraitInitially = false,
   heroCharacterPreviewRequestKey = 0,
   sharedPlayerMode = false,
 }) {
@@ -105,6 +106,7 @@ export default function PlayerPreviewShell({
       simonPlaybackIndex={preview.simonPlaybackIndex}
       simonPlayerTurn={preview.simonPlayerTurn}
       startSimonPlayback={preview.startSimonPlayback}
+      allowMobilePortraitInitially={allowMobilePortraitInitially}
       sharedPlayerMode={sharedPlayerMode}
     />
   );

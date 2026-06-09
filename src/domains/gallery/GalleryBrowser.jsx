@@ -330,6 +330,7 @@ function GameCard({ game, onOpenGame, onOpenCreator, onPlay }) {
             {game.title}
           </button>
           <div className="public-card-pills">
+            {game.isProfessionalAuthor ? <span className="public-pro-pill">Pro</span> : null}
             <span className="public-rating-pill">★ {formatRating(game.feedback.average)}</span>
             <span className={`public-age-pill ${game.isMature ? 'mature' : ''}`}>{game.isMature ? '🔞 +18' : game.ageRating}</span>
           </div>
@@ -343,6 +344,9 @@ function GameCard({ game, onOpenGame, onOpenCreator, onPlay }) {
           <span>{game.durationMinutes} min</span>
           <span>{game.difficulty}</span>
           <span>{game.feedback.votes} vote{game.feedback.votes > 1 ? 's' : ''}</span>
+          {game.isProfessionalAuthor && (game.authorCity || game.authorCountry) ? (
+            <span>{[game.authorCity, game.authorCountry].filter(Boolean).join(', ')}</span>
+          ) : null}
         </div>
         {game.badges.length ? (
           <div className="public-badges">
@@ -405,6 +409,8 @@ export default function GalleryBrowser({
   const [categoryFilter, setCategoryFilter] = useState('');
   const [difficultyFilter, setDifficultyFilter] = useState('');
   const [ageFilter, setAgeFilter] = useState('all');
+  const [proCountryFilter, setProCountryFilter] = useState('');
+  const [proCityFilter, setProCityFilter] = useState('');
   const [commentText, setCommentText] = useState('');
   const [creatorTab, setCreatorTab] = useState('creator');
   const [publicVisitorId] = useState(() => getPublicVisitorId());
@@ -478,6 +484,11 @@ export default function GalleryBrowser({
     setView('author-editor');
   };
 
+  const updateProCountryFilter = (country) => {
+    setProCountryFilter(country);
+    setProCityFilter('');
+  };
+
   const playGame = (game) => {
     incrementPublicGamePlay(game.key);
     window.open(makePlayUrl(game), '_blank', 'noopener,noreferrer');
@@ -512,6 +523,8 @@ export default function GalleryBrowser({
         || game.difficulty.toLowerCase().includes(query)
         || game.category.toLowerCase().includes(query)
         || game.ageRating.toLowerCase().includes(query)
+        || game.authorCountry.toLowerCase().includes(query)
+        || game.authorCity.toLowerCase().includes(query)
       )
     ));
     const byScore = [...filtered].sort((a, b) => b.feedback.score - a.feedback.score);
@@ -520,6 +533,20 @@ export default function GalleryBrowser({
       (b.plays24h * 8 + b.plays7d * 1.5 + b.feedback.score)
       - (a.plays24h * 8 + a.plays7d * 1.5 + a.feedback.score)
     ));
+    const professionalBase = filtered.filter((game) => (
+      game.isProfessionalAuthor
+      && game.authorCountry
+      && game.authorCity
+    ));
+    const professionalLocationFiltered = professionalBase.filter((game) => (
+      (!proCountryFilter || game.authorCountry === proCountryFilter)
+      && (!proCityFilter || game.authorCity === proCityFilter)
+    ));
+    const byProfessional = [...professionalLocationFiltered]
+      .sort((a, b) => (
+        (b.plays7d * 2.4 + b.feedback.score * 1.7 + b.plays * 0.15)
+        - (a.plays7d * 2.4 + a.feedback.score * 1.7 + a.plays * 0.15)
+      ));
     const byWeek = [...filtered].sort((a, b) => (
       (b.plays7d * 2 + b.feedback.score * 1.6 + b.feedback.votes * 0.25)
       - (a.plays7d * 2 + a.feedback.score * 1.6 + a.feedback.votes * 0.25)
@@ -539,6 +566,16 @@ export default function GalleryBrowser({
     return {
       filtered,
       categorySections,
+      proFeatured: byProfessional.slice(0, 6),
+      proTotal: professionalBase.length,
+      proFilteredTotal: byProfessional.length,
+      proCountries: [...new Set(professionalBase.map((game) => game.authorCountry).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, 'fr')),
+      proCities: [...new Set(professionalBase
+        .filter((game) => !proCountryFilter || game.authorCountry === proCountryFilter)
+        .map((game) => game.authorCity)
+        .filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, 'fr')),
       trending: byTrend.slice(0, 6),
       weekTop: byWeek.slice(0, 6),
       popular: byPlays.slice(0, 6),
@@ -546,7 +583,7 @@ export default function GalleryBrowser({
       topRated: byScore.slice(0, 6),
       random: random.slice(0, 3),
     };
-  }, [ageFilter, categoryFilter, difficultyFilter, games, search]);
+  }, [ageFilter, categoryFilter, difficultyFilter, games, proCityFilter, proCountryFilter, search]);
 
   const rateSelectedGame = (rating) => {
     if (!selectedGame) return;
@@ -707,15 +744,47 @@ export default function GalleryBrowser({
       {!isLoading && view === 'discover' ? (
         <>
           {[
+            discoverSections.proTotal > 0 ? [
+              'Membres pros',
+              discoverSections.proFeatured,
+              'Une sélection de jeux publiés par des créateurs professionnels, en plus du référencement classique.',
+            ] : null,
             ['🔥 Tendance 24h', discoverSections.trending],
             ['⭐ Top semaine', discoverSections.weekTop],
             ['🔥 Les plus populaires', discoverSections.popular],
             ['🆕 Nouveaux jeux', discoverSections.newest],
             ['🎲 Aléatoire', discoverSections.random],
-          ].map(([title, entries]) => (
+          ].filter(Boolean).map(([title, entries, description]) => (
             <section key={title} className="public-panel public-section">
               <div className="panel-head">
-                <h2>{title}</h2>
+                <div>
+                  <h2>{title}</h2>
+                  {description ? <p className="small-note public-section-note">{description}</p> : null}
+                </div>
+                {title === 'Membres pros' ? (
+                  <div className="public-pro-filter-row">
+                    <select
+                      value={proCountryFilter}
+                      onChange={(event) => updateProCountryFilter(event.target.value)}
+                      aria-label="Filtrer les jeux pros par pays"
+                    >
+                      <option value="">Pays</option>
+                      {discoverSections.proCountries.map((country) => (
+                        <option key={country} value={country}>{country}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={proCityFilter}
+                      onChange={(event) => setProCityFilter(event.target.value)}
+                      aria-label="Filtrer les jeux pros par ville"
+                    >
+                      <option value="">Ville</option>
+                      {discoverSections.proCities.map((city) => (
+                        <option key={city} value={city}>{city}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
               </div>
               {entries.length ? (
                 <div className="public-game-grid">
@@ -765,7 +834,7 @@ export default function GalleryBrowser({
               </div>
               {user?.id === selectedGame.userId ? (
                 <button type="button" className="profile-publish-button public-author-manage-button" onClick={openAuthorEditor}>
-                  Gérer mon profil auteur ?
+                  Gérer mon profil auteur
                 </button>
               ) : null}
               <div className="public-score-line">
@@ -780,6 +849,10 @@ export default function GalleryBrowser({
                 <span>▶ {selectedGame.plays} partie{selectedGame.plays > 1 ? 's' : ''} jouée{selectedGame.plays > 1 ? 's' : ''}</span>
                 <span>🔥 {selectedGame.plays24h} sur 24h</span>
                 <span>⭐ {selectedGame.plays7d} cette semaine</span>
+                {selectedGame.isProfessionalAuthor ? <span className="public-pro-fact">Membre pro</span> : null}
+                {selectedGame.isProfessionalAuthor && (selectedGame.authorCity || selectedGame.authorCountry) ? (
+                  <span>{[selectedGame.authorCity, selectedGame.authorCountry].filter(Boolean).join(', ')}</span>
+                ) : null}
               </div>
               {selectedGame.isMature ? (
                 <div className="public-mature-warning">
@@ -878,6 +951,14 @@ export default function GalleryBrowser({
                     <div>
                       <span className="eyebrow">Profil créateur</span>
                       <h2>{creatorName}</h2>
+                      {selectedCreatorGames.some((game) => game.isProfessionalAuthor) ? (
+                        <span className="public-pro-profile-pill">Membre pro</span>
+                      ) : null}
+                      {selectedCreatorGames.some((game) => game.isProfessionalAuthor) && (creatorProfile.city || creatorProfile.country || selectedCreatorGames[0]?.authorCity || selectedCreatorGames[0]?.authorCountry) ? (
+                        <p className="small-note">
+                          {[creatorProfile.city || selectedCreatorGames[0]?.authorCity, creatorProfile.country || selectedCreatorGames[0]?.authorCountry].filter(Boolean).join(', ')}
+                        </p>
+                      ) : null}
                       <p className="small-note">🎮 {selectedCreatorGames.length} jeu{selectedCreatorGames.length > 1 ? 'x' : ''} créé{selectedCreatorGames.length > 1 ? 's' : ''}</p>
                       <p className="small-note">👥 {creatorFollowerCount} follower{creatorFollowerCount === 1 ? '' : 's'}</p>
                       <p className="small-note">⭐ Moyenne : {formatRating(creatorAverage)}</p>

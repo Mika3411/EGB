@@ -26,9 +26,22 @@ describe('PublicationPanel', () => {
     expect(screen.getByRole('button', { name: 'Publier' })).toBeTruthy();
   });
 
-  test('shows copy link and QR code save action', () => {
+  test('hides QR code save action for non-pro accounts', () => {
+    render(<PublicationPanel projects={[makeProject()]} />);
+
+    expect(screen.getByRole('button', { name: 'Copier le lien' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Enregistrer le QR code' })).toBeNull();
+  });
+
+  test('shows QR code save action for pro accounts', () => {
     const onSaveProjectQrCode = vi.fn();
-    render(<PublicationPanel projects={[makeProject()]} onSaveProjectQrCode={onSaveProjectQrCode} />);
+    render(
+      <PublicationPanel
+        canSaveProjectQrCode
+        projects={[makeProject()]}
+        onSaveProjectQrCode={onSaveProjectQrCode}
+      />,
+    );
 
     expect(screen.getByRole('button', { name: 'Copier le lien' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer le QR code' }));
