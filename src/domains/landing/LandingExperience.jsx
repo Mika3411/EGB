@@ -314,9 +314,9 @@ const demoGalleryItems = [
 ];
 
 const landingModeTabs = [
-  { id: 'pros', label: 'Je suis une salle', icon: BriefcaseBusiness },
-  { id: 'builder', label: 'Je crée un jeu', icon: Palette },
   { id: 'demo', label: 'Démo', icon: Play },
+  { id: 'builder', label: 'Je crée un jeu', icon: Palette },
+  { id: 'pros', label: 'Je suis une salle', icon: BriefcaseBusiness },
 ];
 
 const landingModeContent = {
@@ -392,8 +392,8 @@ const landingModeContent = {
     heroKicker: 'Démo sans inscription',
     heroTitle: 'Essayez le builder avec un escape game déjà prêt.',
     heroDescription: 'Ouvrez un projet temporaire, modifiez une scène, testez une énigme et lancez l’aperçu joueur sans créer de compte.',
-    heroNote: 'Une expérience bac à sable pour comprendre la valeur avant de sauvegarder.',
-    primaryCta: 'Essayer la démo',
+    heroNote: 'Sans inscription: touchez au vrai builder avant de créer un compte.',
+    primaryCta: 'Essayer la démo sans compte',
     secondaryCta: 'Créer un compte',
     points: ['Sans inscription', 'Projet prérempli', 'Édition réelle', 'Preview joueur', 'Sauvegarde ensuite'],
     proofItems: demoProofItems,
@@ -414,7 +414,7 @@ const landingModeContent = {
         'Création de compte proposée seulement pour sauvegarder durablement.',
       ],
       note: 'La publication, le QR code public et la synchronisation cloud restent réservés au compte.',
-      cta: 'Lancer la démo',
+      cta: 'Lancer la démo sans compte',
       cards: [
         ['Galerie principale', 'Le joueur trouve la clé et comprend le point de départ.'],
         ['Réserve secrète', 'Une énigme simple valide la logique de progression.'],
@@ -437,7 +437,7 @@ const landingModeContent = {
       title: 'La démo donne accès au cœur du builder sans créer de faux compte.',
       description: 'Elle reste volontairement temporaire : assez ouverte pour essayer, assez cadrée pour garder la sauvegarde, la publication et le cloud comme prochaines étapes naturelles.',
       note: 'Idéal pour transformer la curiosité de la landing en prise en main immédiate.',
-      cta: 'Lancer la démo',
+      cta: 'Lancer la démo sans compte',
     },
     diffusion: {
       kicker: 'Après essai',
@@ -449,7 +449,7 @@ const landingModeContent = {
       icon: Play,
       title: 'Testez le builder avant de vous inscrire.',
       description: 'Lancez un projet temporaire, touchez aux scènes et jouez le résultat en quelques minutes.',
-      primary: 'Essayer sans compte',
+      primary: 'Essayer la démo sans compte',
       secondary: 'Créer mon compte',
       tertiary: 'Voir la galerie',
     },
@@ -507,7 +507,7 @@ const landingModeContent = {
 };
 
 export default function LandingExperience({ onLogin, onRegister, onOpenGallery, onStartDemo }) {
-  const [activeLandingMode, setActiveLandingMode] = useState('pros');
+  const [activeLandingMode, setActiveLandingMode] = useState('demo');
   const [activeGalleryIndex, setActiveGalleryIndex] = useState(0);
   const [isGalleryPaused, setIsGalleryPaused] = useState(false);
   const [activeMarketingTab, setActiveMarketingTab] = useState('prologue');

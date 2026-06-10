@@ -52,6 +52,10 @@ const resolveProfileTypeForAccount = (accountType, profileType) => {
     : getDefaultProfileTypeForAccount(accountType);
 };
 
+const getOptionLabel = (options, value) => (
+  options.find(([optionValue]) => optionValue === value)?.[1] || ''
+);
+
 const createInitialForm = (initialForm = {}) => {
   const accountType = initialForm.accountType || emptyForm.accountType;
   return {
@@ -216,6 +220,14 @@ export default function AuthEntry({
         ? 'Créer un compte'
         : 'Connexion au builder';
   const visibleProfileTypes = getProfileTypesForAccount(form.accountType);
+  const accountTypeLabel = getOptionLabel(ACCOUNT_TYPE_OPTIONS, form.accountType) || 'Particulier';
+  const profileTypeLabel = getOptionLabel(visibleProfileTypes, form.profileType) || 'Profil par défaut';
+  const shouldOpenProfileDetails = Boolean(
+    initialForm?.accountType === ACCOUNT_TYPE_PRO
+    || initialForm?.profileType
+    || initialForm?.organization
+    || initialForm?.country,
+  );
 
   return (
     <div className="auth-shell">
@@ -249,51 +261,62 @@ export default function AuthEntry({
                 <input value={form.name} onChange={(event) => handleChange('name', event.target.value)} placeholder="Ex. Marion" />
               </div>
 
-              <div>
-                <label>Type de compte</label>
-                <div className="auth-account-type" role="radiogroup" aria-label="Type de compte">
-                  {ACCOUNT_TYPE_OPTIONS.map(([value, label]) => (
-                    <label key={value} className={form.accountType === value ? 'selected' : ''}>
-                      <input
-                        type="radio"
-                        name="accountType"
-                        value={value}
-                        checked={form.accountType === value}
-                        onChange={(event) => handleChange('accountType', event.target.value)}
-                      />
-                      <span>{label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
+              <details className="auth-profile-details" defaultOpen={shouldOpenProfileDetails}>
+                <summary>
+                  <span>
+                    <strong>Profil et usage</strong>
+                    <small>{accountTypeLabel} · {profileTypeLabel}</small>
+                  </span>
+                </summary>
 
-              <div>
-                <label>Type de profil</label>
-                <select value={form.profileType} onChange={(event) => handleChange('profileType', event.target.value)}>
-                  <option value="">Choisir...</option>
-                  {visibleProfileTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                </select>
-              </div>
+                <div className="auth-profile-fields">
+                  <div>
+                    <label>Type de compte</label>
+                    <div className="auth-account-type" role="radiogroup" aria-label="Type de compte">
+                      {ACCOUNT_TYPE_OPTIONS.map(([value, label]) => (
+                        <label key={value} className={form.accountType === value ? 'selected' : ''}>
+                          <input
+                            type="radio"
+                            name="accountType"
+                            value={value}
+                            checked={form.accountType === value}
+                            onChange={(event) => handleChange('accountType', event.target.value)}
+                          />
+                          <span>{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
 
-              <div>
-                <label>Organisation / activité</label>
-                <input value={form.organization} onChange={(event) => handleChange('organization', event.target.value)} placeholder="Salle d’escape, école, association..." />
-              </div>
+                  <div>
+                    <label>Type de profil</label>
+                    <select value={form.profileType} onChange={(event) => handleChange('profileType', event.target.value)}>
+                      <option value="">Choisir...</option>
+                      {visibleProfileTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </select>
+                  </div>
 
-              <div className="grid-two small-gap">
-                <div>
-                  <label>Pays</label>
-                  <input value={form.country} onChange={(event) => handleChange('country', event.target.value)} placeholder="France" />
+                  <div>
+                    <label>Organisation / activité</label>
+                    <input value={form.organization} onChange={(event) => handleChange('organization', event.target.value)} placeholder="Salle d’escape, école, association..." />
+                  </div>
+
+                  <div className="grid-two small-gap">
+                    <div>
+                      <label>Pays</label>
+                      <input value={form.country} onChange={(event) => handleChange('country', event.target.value)} placeholder="France" />
+                    </div>
+                    <div>
+                      <label>Langue</label>
+                      <select value={form.language} onChange={(event) => handleChange('language', event.target.value)}>
+                        <option value="fr">Français</option>
+                        <option value="en">English</option>
+                        <option value="es">Español</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label>Langue</label>
-                  <select value={form.language} onChange={(event) => handleChange('language', event.target.value)}>
-                    <option value="fr">Français</option>
-                    <option value="en">English</option>
-                    <option value="es">Español</option>
-                  </select>
-                </div>
-              </div>
+              </details>
             </>
           )}
 

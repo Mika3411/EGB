@@ -2014,6 +2014,22 @@
 
 .auth-form{display:grid;gap:8px}
 
+.auth-profile-details{margin:6px 0 2px;border:1px solid rgba(96,165,250,.24);border-radius:12px;background:#0f172a82;overflow:hidden}
+
+.auth-profile-details summary{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;min-height:46px;padding:10px 12px;list-style:none;cursor:pointer;color:#eaf2ff;font-weight:900}
+
+.auth-profile-details summary::-webkit-details-marker{display:none}
+
+.auth-profile-details summary::after{content:"+";display:grid;place-items:center;width:28px;height:28px;border:1px solid rgba(147,197,253,.26);border-radius:8px;background:#08111fc9;color:#bfdbfe;font-size:18px;line-height:1}
+
+.auth-profile-details[open] summary::after{content:"-"}
+
+.auth-profile-details summary span{display:grid;gap:2px;min-width:0}
+
+.auth-profile-details summary small{min-width:0;color:#9fb0cc;font-size:12px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.auth-profile-fields{display:grid;gap:8px;padding:0 12px 12px}
+
 .auth-account-type{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 
 .auth-account-type label{display:flex;align-items:center;justify-content:center;gap:8px;min-width:0;min-height:42px;padding:9px 10px;border:1px solid rgba(148,163,184,.2);border-radius:10px;background:#0f172ab8;color:#dbeafe;font-size:13px;font-weight:900;text-align:center;line-height:1.15}

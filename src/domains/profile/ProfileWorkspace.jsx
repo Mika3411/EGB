@@ -367,9 +367,11 @@ export default function ProfileWorkspace({
 
       {activeProfileTab === 'new-project' ? (
         <CreateProjectPanel
+          hasProjects={classicProjects.length > 0}
           isBusy={isBusy}
           onCreateProject={onCreateProject}
           onImportProject={onImportProject}
+          onStartTutorial={onStartTutorial}
         />
       ) : null}
 

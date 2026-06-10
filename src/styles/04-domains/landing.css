@@ -925,11 +925,11 @@
   }
 
   .landing-mode-tabs{
-    order:4;
+    order:1;
     display:grid;
     grid-template-columns:repeat(3,minmax(0,1fr));
     width:100%;
-    margin-top:12px;
+    margin:0 0 12px;
     padding:4px;
   }
 
@@ -948,15 +948,15 @@
   }
 
   .landing-hero-content > [role="tabpanel"]{
-    order:1;
-  }
-
-  .landing-free-note{
     order:2;
   }
 
-  .landing-hero-actions{
+  .landing-free-note{
     order:3;
+  }
+
+  .landing-hero-actions{
+    order:4;
   }
 
   .landing-hero-points{

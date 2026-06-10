@@ -8,6 +8,10 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+const openProfileDetails = () => {
+  fireEvent.click(screen.getByText('Profil et usage'));
+};
+
 describe('AuthEntry account type', () => {
   test('préselectionne le type de compte pro quand il est fourni', async () => {
     const onRegister = vi.fn(async () => ({}));
@@ -60,6 +64,7 @@ describe('AuthEntry account type', () => {
     );
 
     fireEvent.change(screen.getByPlaceholderText('Ex. Marion'), { target: { value: 'Marion' } });
+    openProfileDetails();
     fireEvent.click(screen.getByLabelText('Salle d’escape / pro'));
     expect(screen.getAllByRole('combobox')[0].value).toBe('escape_room');
     fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'facilitator' } });
@@ -92,6 +97,7 @@ describe('AuthEntry account type', () => {
       />,
     );
 
+    openProfileDetails();
     const profileSelect = screen.getAllByRole('combobox')[0];
     expect(profileSelect.value).toBe('player');
     expect([...profileSelect.options].map((option) => option.value)).toEqual(['', 'player', 'creator', 'other']);

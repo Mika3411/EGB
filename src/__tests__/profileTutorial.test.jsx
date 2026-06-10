@@ -92,6 +92,24 @@ afterEach(() => {
 });
 
 describe('didacticiel profil', () => {
+  test('met le didacticiel en avant pour un nouveau profil sans projet', () => {
+    const onStartTutorial = vi.fn();
+    renderProfile({
+      projects: [],
+      activeProjectId: '',
+      onStartTutorial,
+    });
+
+    expect(screen.getByRole('heading', { name: 'Commencer en 5 minutes' })).toBeTruthy();
+    const createButton = screen.getByRole('button', { name: '+ Créer' });
+    const onboardingCard = document.querySelector('.profile-onboarding-card');
+    expect(onboardingCard).toBeTruthy();
+    expect(createButton.nextElementSibling).toBe(onboardingCard);
+    fireEvent.click(screen.getByRole('button', { name: 'Lancer le didacticiel' }));
+
+    expect(onStartTutorial).toHaveBeenCalledWith('profile');
+  });
+
   test('reference uniquement des data-tour presents dans la nouvelle UI profil', () => {
     const source = profileSource();
     const missing = BUILDER_TUTORIAL_STEPS
