@@ -9,7 +9,7 @@ const siteUrl = rawSiteUrl.replace(/\/+$/, '');
 const today = new Date().toISOString().slice(0, 10);
 
 const brandName = 'Escape Game Studio';
-const ogImagePath = '/og-image.png';
+const ogImagePath = '/og-image-escape-game-studio.png';
 
 const absoluteUrl = (path = '/') => {
   if (!siteUrl) return path;
@@ -588,7 +588,8 @@ if (siteUrl) {
       .replaceAll(DEFAULT_SITE_URL, siteUrl)
       .replace(/<link\s+rel="canonical"\s+href="\/"\s+data-seo-canonical(?:\s+vite-ignore)?\s*\/?>/, `<link rel="canonical" href="${absoluteUrl('/')}" data-seo-canonical />`)
       .replace(/<meta\s+property="og:url"\s+content="\/"\s+data-seo-og-url\s*\/?>/, `<meta property="og:url" content="${absoluteUrl('/')}" data-seo-og-url />`)
-      .replaceAll('content="/og-image.png"', `content="${absoluteUrl('/og-image.png')}"`),
+      .replaceAll('content="/og-image.png"', `content="${absoluteUrl('/og-image.png')}"`)
+      .replaceAll(`content="${ogImagePath}"`, `content="${absoluteUrl(ogImagePath)}"`),
     'utf8',
   );
 }
