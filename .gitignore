@@ -48,3 +48,5 @@ Thumbs.db
 coverage/
 playwright-report/
 test-results/
+tmp/
+assets/generated/
