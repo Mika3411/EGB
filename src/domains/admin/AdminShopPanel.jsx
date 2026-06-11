@@ -16,9 +16,12 @@ export default function AdminShopPanel({
   removeShopPackScreenshot,
   saveShopPack,
   setShopPackForm,
+  status,
   shopPackForm,
   updateShopPackForm,
 }) {
+  const hasDownload = Boolean(shopPackForm.downloadUrl || shopPackForm.downloadStoragePath || shopPackForm.hasDownload);
+
   return (
     <section className="panel admin-shop-panel">
       <div className="panel-head">
@@ -85,7 +88,7 @@ export default function AdminShopPanel({
 
           <label>
             Screenshots
-            <input type="file" accept="image/*" multiple onChange={addShopPackScreenshots} />
+            <input type="file" accept="image/*" multiple onChange={addShopPackScreenshots} disabled={isBusy} />
           </label>
 
           {shopPackForm.screenshots?.length ? (
@@ -103,9 +106,9 @@ export default function AdminShopPanel({
 
           <label>
             ZIP téléchargeable
-            <input type="file" accept=".zip,application/zip,application/x-zip-compressed" onChange={importShopPackZip} />
+            <input type="file" accept=".zip,application/zip,application/x-zip-compressed" onChange={importShopPackZip} disabled={isBusy} />
           </label>
-          {shopPackForm.downloadUrl || shopPackForm.hasDownload ? (
+          {hasDownload ? (
             <div className="admin-pack-download-chip">
               <strong>{shopPackForm.downloadFileName || 'pack.zip'}</strong>
               <span>{shopPackForm.downloadUrl ? (shopPackForm.downloadMode === 'supabase' ? 'Prêt pour les acheteurs' : 'Stockage local') : 'ZIP conservé côté serveur'}</span>
@@ -114,8 +117,12 @@ export default function AdminShopPanel({
             <p className="small-note">Ajoute le dossier ZIP qui sera proposé au téléchargement après achat.</p>
           )}
 
-          <button type="submit" className="profile-action-button">
-            {shopPackForm.id ? 'Enregistrer les changements' : 'Ajouter le pack'}
+          {status ? (
+            <p className="admin-shop-status" role="status" aria-live="polite">{status}</p>
+          ) : null}
+
+          <button type="submit" className="profile-action-button" disabled={isBusy}>
+            {isBusy ? 'Traitement...' : (shopPackForm.id ? 'Enregistrer les changements' : 'Ajouter le pack')}
           </button>
         </form>
 

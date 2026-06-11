@@ -412,7 +412,9 @@ const logStorageDebug = (event: StorageDebugEvent, metadata: StorageDebugMetadat
   logger('[supabase-storage]', safeMetadata);
 };
 
-const DEFAULT_UPLOAD_VALIDATION: Record<'image' | 'audio' | 'json' | 'default', UploadValidationProfile> = {
+const DEFAULT_ARCHIVE_UPLOAD_LIMIT_BYTES = 220 * MB;
+
+const DEFAULT_UPLOAD_VALIDATION: Record<'image' | 'audio' | 'json' | 'archive' | 'default', UploadValidationProfile> = {
   image: {
     maxFileSize: 10 * MB,
     allowMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
@@ -424,6 +426,10 @@ const DEFAULT_UPLOAD_VALIDATION: Record<'image' | 'audio' | 'json' | 'default', 
   json: {
     maxFileSize: 5 * MB,
     allowMimeTypes: ['application/json', 'text/json'],
+  },
+  archive: {
+    maxFileSize: DEFAULT_ARCHIVE_UPLOAD_LIMIT_BYTES,
+    allowMimeTypes: ['application/zip', 'application/x-zip-compressed', 'application/octet-stream'],
   },
   default: {
     maxFileSize: 25 * MB,
@@ -446,6 +452,8 @@ const MIME_EXTENSION_MAP: Record<string, string[]> = {
   'audio/flac': ['flac'],
   'application/json': ['json'],
   'text/json': ['json'],
+  'application/zip': ['zip'],
+  'application/x-zip-compressed': ['zip'],
   'model/gltf-binary': ['glb'],
   'model/gltf+json': ['gltf'],
   'model/obj': ['obj'],
@@ -480,6 +488,9 @@ const getValidationProfile = (mimeType: string, extension: string): UploadValida
   if (mimeType.startsWith('audio/')) return DEFAULT_UPLOAD_VALIDATION.audio;
   if (mimeType === 'application/json' || mimeType === 'text/json' || extension === 'json') {
     return DEFAULT_UPLOAD_VALIDATION.json;
+  }
+  if (mimeType === 'application/zip' || mimeType === 'application/x-zip-compressed' || extension === 'zip') {
+    return DEFAULT_UPLOAD_VALIDATION.archive;
   }
   return DEFAULT_UPLOAD_VALIDATION.default;
 };

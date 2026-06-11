@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getShopPacks, saveShopPacks } from '../shared/services/shopPacksStorage';
 import { readShopPurchases } from '../shared/services/shopPurchases';
 
@@ -7,6 +7,7 @@ const SHOP_PURCHASES_KEY = 'escapeGameBuilder.shopPurchases.user-1';
 
 afterEach(() => {
   window.localStorage.clear();
+  vi.unstubAllEnvs();
 });
 
 describe('shop storage helpers migration', () => {
@@ -38,5 +39,35 @@ describe('shop storage helpers migration', () => {
     expect(readShopPurchases('user-1')).toEqual([]);
     window.localStorage.setItem(SHOP_PURCHASES_KEY, JSON.stringify({ invalid: true }));
     expect(readShopPurchases('user-1')).toEqual([]);
+  });
+
+  it('prepares a local ZIP patch for admin shop packs', async () => {
+    vi.resetModules();
+    vi.stubEnv('VITE_SUPABASE_URL', '');
+    vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', '');
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', '');
+    const { prepareAdminShopPackZip } = await import('../shared/services/adminApi');
+
+    const file = new File([new Uint8Array([1, 2, 3])], 'pack-test.zip', { type: 'application/zip' });
+    const patch = await prepareAdminShopPackZip({ file, packId: '', userId: '' });
+
+    expect(patch).toEqual(expect.objectContaining({
+      downloadFileName: 'pack-test.zip',
+      downloadMode: 'local',
+      downloadStoragePath: '',
+    }));
+    expect(patch.id).toMatch(/^pack_/);
+    expect(patch.downloadUrl).toMatch(/^data:application\/zip;base64,/);
+  });
+
+  it('rejects non-ZIP files for admin shop packs', async () => {
+    vi.resetModules();
+    const { prepareAdminShopPackZip } = await import('../shared/services/adminApi');
+
+    await expect(prepareAdminShopPackZip({
+      file: new File(['not a zip'], 'pack-test.txt', { type: 'text/plain' }),
+      packId: 'pack_1',
+      userId: '',
+    })).rejects.toThrow('Importe un fichier ZIP pour le pack.');
   });
 });

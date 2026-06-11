@@ -13,6 +13,7 @@ const DEFAULT_IMAGE_UPLOAD_LIMIT_BYTES = 15 * MB;
 const DEFAULT_AUDIO_UPLOAD_LIMIT_BYTES = 50 * MB;
 const DEFAULT_JSON_UPLOAD_LIMIT_BYTES = 80 * MB;
 const DEFAULT_MODEL_UPLOAD_LIMIT_BYTES = 200 * MB;
+const DEFAULT_ARCHIVE_UPLOAD_LIMIT_BYTES = DEFAULT_STORAGE_UPLOAD_LIMIT_BYTES;
 const DEFAULT_TEXT_UPLOAD_LIMIT_BYTES = 5 * MB;
 const MAX_STORAGE_SEGMENT_LENGTH = 120;
 
@@ -32,12 +33,14 @@ export const STORAGE_UPLOAD_MIME_EXTENSIONS = {
   'audio/flac': ['flac'],
   'application/json': ['json'],
   'text/json': ['json'],
+  'application/zip': ['zip'],
+  'application/x-zip-compressed': ['zip'],
   'model/gltf-binary': ['glb'],
   'model/gltf+json': ['gltf'],
   'model/obj': ['obj'],
   'application/vnd.autodesk.fbx': ['fbx'],
   'model/vnd.fbx': ['fbx'],
-  'application/octet-stream': ['glb', 'gltf', 'fbx', 'obj', 'bin'],
+  'application/octet-stream': ['glb', 'gltf', 'fbx', 'obj', 'bin', 'zip'],
   'text/plain': ['txt', 'mtl', 'obj'],
 };
 
@@ -46,6 +49,7 @@ const STORAGE_UPLOAD_PROFILE_EXTENSIONS = {
   audio: ['mp3', 'mpeg', 'wav', 'ogg', 'webm', 'm4a', 'mp4', 'aac', 'flac'],
   json: ['json'],
   model: ['glb', 'gltf', 'fbx', 'obj', 'bin'],
+  archive: ['zip'],
   text: ['txt', 'mtl'],
 };
 
@@ -171,6 +175,7 @@ const getStorageUploadProfile = (contentType, extension) => {
   if (contentType.startsWith('image/') || isKnownProfileExtension('image', extension)) return 'image';
   if (contentType.startsWith('audio/') || isKnownProfileExtension('audio', extension)) return 'audio';
   if (contentType === 'application/json' || contentType === 'text/json' || isKnownProfileExtension('json', extension)) return 'json';
+  if (contentType === 'application/zip' || contentType === 'application/x-zip-compressed' || isKnownProfileExtension('archive', extension)) return 'archive';
   if (contentType.startsWith('model/') || contentType === 'application/vnd.autodesk.fbx' || isKnownProfileExtension('model', extension)) return 'model';
   if (contentType === 'text/plain' || isKnownProfileExtension('text', extension)) return 'text';
   return '';
@@ -192,6 +197,12 @@ const getStorageUploadMaxBytes = (profile) => {
       'RPG3D_UPLOAD_MAX_BYTES',
       'STORAGE_UPLOAD_MAX_BYTES',
     ], DEFAULT_MODEL_UPLOAD_LIMIT_BYTES);
+  }
+  if (profile === 'archive') {
+    return getConfiguredUploadLimitBytes([
+      'STORAGE_ARCHIVE_UPLOAD_MAX_BYTES',
+      'STORAGE_UPLOAD_MAX_BYTES',
+    ], DEFAULT_ARCHIVE_UPLOAD_LIMIT_BYTES);
   }
   if (profile === 'text') {
     return getConfiguredUploadLimitBytes(['STORAGE_TEXT_UPLOAD_MAX_BYTES'], DEFAULT_TEXT_UPLOAD_LIMIT_BYTES);

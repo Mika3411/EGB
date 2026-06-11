@@ -11,6 +11,9 @@ const ADMIN_PROJECTS_ENDPOINT = import.meta.env.VITE_ADMIN_PROJECTS_ENDPOINT || 
 const ADMIN_MODERATION_ENDPOINT = import.meta.env.VITE_ADMIN_MODERATION_ENDPOINT || '/api/admin/moderation';
 const LOCAL_PROJECTS_KEY_PREFIX = 'escapeGameBuilder.projects';
 const VISITOR_ANALYTICS_SURFACES = ['builder', 'gallery'];
+const SHOP_PACK_ZIP_MAX_BYTES = 220 * 1024 * 1024;
+const SHOP_PACK_ZIP_UPLOAD_TIMEOUT_MS = 180000;
+const SHOP_PACK_ZIP_MIME_TYPES = ['application/zip', 'application/x-zip-compressed', 'application/octet-stream'];
 const isConfiguredAdminEmail = (email = '') => Boolean(
   ADMIN_EMAIL && normalizeEmail(email) === ADMIN_EMAIL,
 );
@@ -442,9 +445,14 @@ export const prepareAdminShopPackZip = async ({ file, packId, userId }) => {
       folder: `shop-packs-${safePackId}`,
       optimizeImage: false,
       cacheControl: '0',
+      visibility: 'private',
+      maxFileSize: SHOP_PACK_ZIP_MAX_BYTES,
+      allowMimeTypes: SHOP_PACK_ZIP_MIME_TYPES,
+      timeoutMs: SHOP_PACK_ZIP_UPLOAD_TIMEOUT_MS,
     }).then((result) => ({
-      downloadUrl: result.publicUrl,
+      downloadUrl: result.publicUrl || '',
       downloadStoragePath: result.path,
+      downloadStorageBucket: result.bucket,
       downloadMode: 'supabase',
     }))
     : {

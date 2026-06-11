@@ -176,6 +176,40 @@ describe('netlify storage upload validation', () => {
       code: 'FILE_TOO_LARGE',
     });
   });
+
+  test('accepte les ZIP boutique avec leur limite archive', async () => {
+    const {
+      getStorageUploadValidationProfile,
+      validateStorageUploadPayload,
+    } = await loadNetlifyStorageUpload({
+      STORAGE_ARCHIVE_UPLOAD_MAX_BYTES: '12',
+    });
+
+    const zipProfile = getStorageUploadValidationProfile({
+      path: 'users/user-1/shop-packs/pack.zip',
+      contentType: 'application/zip',
+      contentLength: 12,
+    });
+    expect(zipProfile).toMatchObject({
+      profile: 'archive',
+      maxBytes: 12,
+      contentType: 'application/zip',
+    });
+    expect(validateStorageUploadPayload(Buffer.alloc(12), zipProfile)).toBe(12);
+    expect(getStorageUploadValidationProfile({
+      path: 'users/user-1/shop-packs/fallback.zip',
+      contentType: 'application/octet-stream',
+      contentLength: 12,
+    })).toMatchObject({ profile: 'archive' });
+    expect(getThrownError(() => getStorageUploadValidationProfile({
+      path: 'users/user-1/shop-packs/too-big.zip',
+      contentType: 'application/x-zip-compressed',
+      contentLength: 13,
+    }))).toMatchObject({
+      statusCode: 413,
+      code: 'FILE_TOO_LARGE',
+    });
+  });
 });
 
 describe('server storage upload validation', () => {
@@ -274,6 +308,40 @@ describe('server storage upload validation', () => {
     });
 
     await expect(readRawBody(makeRequest([Buffer.alloc(6), Buffer.alloc(7)]), 12)).rejects.toMatchObject({
+      status: 413,
+      code: 'FILE_TOO_LARGE',
+    });
+  });
+
+  test('accepte les ZIP boutique avec leur limite archive', async () => {
+    const {
+      getStorageUploadValidationProfile,
+      validateStorageUploadPayload,
+    } = await loadStorageUploads({
+      STORAGE_ARCHIVE_UPLOAD_MAX_BYTES: '12',
+    });
+
+    const zipProfile = getStorageUploadValidationProfile({
+      path: 'users/user-1/shop-packs/pack.zip',
+      contentType: 'application/zip',
+      contentLength: 12,
+    });
+    expect(zipProfile).toMatchObject({
+      profile: 'archive',
+      maxBytes: 12,
+      contentType: 'application/zip',
+    });
+    expect(validateStorageUploadPayload(Buffer.alloc(12), zipProfile)).toBe(12);
+    expect(getStorageUploadValidationProfile({
+      path: 'users/user-1/shop-packs/fallback.zip',
+      contentType: 'application/octet-stream',
+      contentLength: 12,
+    })).toMatchObject({ profile: 'archive' });
+    expect(getThrownError(() => getStorageUploadValidationProfile({
+      path: 'users/user-1/shop-packs/too-big.zip',
+      contentType: 'application/x-zip-compressed',
+      contentLength: 13,
+    }))).toMatchObject({
       status: 413,
       code: 'FILE_TOO_LARGE',
     });

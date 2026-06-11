@@ -86,20 +86,27 @@ const toPublicShopPack = (pack = {}) => {
 
 const preserveExistingShopPackDownload = (incomingPack = {}, existingPack = null) => {
   if (!existingPack) return normalizeShopPack(incomingPack);
+  const hasIncomingDownload = Boolean(
+    String(incomingPack.downloadUrl || '').trim()
+    || String(incomingPack.downloadStoragePath || '').trim()
+  );
   return normalizeShopPack({
     ...incomingPack,
-    downloadUrl: Object.prototype.hasOwnProperty.call(incomingPack, 'downloadUrl')
+    downloadUrl: hasIncomingDownload && Object.prototype.hasOwnProperty.call(incomingPack, 'downloadUrl')
       ? incomingPack.downloadUrl
       : existingPack.downloadUrl,
-    downloadFileName: Object.prototype.hasOwnProperty.call(incomingPack, 'downloadFileName')
+    downloadFileName: hasIncomingDownload && Object.prototype.hasOwnProperty.call(incomingPack, 'downloadFileName')
       ? incomingPack.downloadFileName
       : existingPack.downloadFileName,
-    downloadStoragePath: Object.prototype.hasOwnProperty.call(incomingPack, 'downloadStoragePath')
+    downloadStoragePath: hasIncomingDownload && Object.prototype.hasOwnProperty.call(incomingPack, 'downloadStoragePath')
       ? incomingPack.downloadStoragePath
       : existingPack.downloadStoragePath,
-    downloadMode: Object.prototype.hasOwnProperty.call(incomingPack, 'downloadMode')
+    downloadMode: hasIncomingDownload && Object.prototype.hasOwnProperty.call(incomingPack, 'downloadMode')
       ? incomingPack.downloadMode
       : existingPack.downloadMode,
+    downloadStorageBucket: hasIncomingDownload && Object.prototype.hasOwnProperty.call(incomingPack, 'downloadStorageBucket')
+      ? incomingPack.downloadStorageBucket
+      : existingPack.downloadStorageBucket,
   });
 };
 

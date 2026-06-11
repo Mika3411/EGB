@@ -131,6 +131,13 @@ async function uploadFileToSupabase(file, {
   imageOptions = IMAGE_UPLOAD_OPTIMIZATION,
   cacheControl = '31536000',
   dedupePublicMedia = false,
+  visibility = 'public',
+  maxFileSize,
+  allowMimeTypes,
+  timeoutMs,
+  retries,
+  retryDelayMs,
+  signal,
 } = {}) {
   if (!file) {
     throw new Error('Aucun fichier à envoyer.');
@@ -162,7 +169,13 @@ async function uploadFileToSupabase(file, {
       upsert: false,
       contentType: uploadFile.type || file.type || 'application/octet-stream',
       cacheControl,
-      visibility: 'public',
+      visibility,
+      maxFileSize,
+      allowMimeTypes,
+      timeoutMs,
+      retries,
+      retryDelayMs,
+      signal,
     });
   } catch (error) {
     if (!dedupePublicMedia || !isStorageObjectAlreadyExistsError(error)) throw error;

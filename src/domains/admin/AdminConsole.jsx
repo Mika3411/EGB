@@ -425,6 +425,10 @@ export default function AdminConsole({
       setStatus('Ajoute un nom au pack boutique.');
       return;
     }
+    if (!shopPackForm.downloadUrl && !shopPackForm.downloadStoragePath && !shopPackForm.hasDownload) {
+      setStatus('Ajoute un fichier ZIP téléchargeable avant de publier le pack.');
+      return;
+    }
     setIsBusy(true);
     try {
       const nextPacks = await upsertSharedShopPack(shopPackForm);
@@ -1174,6 +1178,7 @@ export default function AdminConsole({
           removeShopPackScreenshot={removeShopPackScreenshot}
           saveShopPack={saveShopPack}
           setShopPackForm={setShopPackForm}
+          status={status}
           shopPackForm={shopPackForm}
           updateShopPackForm={updateShopPackForm}
         />
