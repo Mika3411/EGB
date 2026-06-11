@@ -1,6 +1,7 @@
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import BuilderGuide, { getTutorialTarget } from '../app/tutorial/BuilderGuide.jsx';
+import SceneCanvasQuickToolbar from '../domains/scenes/studio/components/SceneCanvasQuickToolbar.jsx';
 
 const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
 
@@ -81,5 +82,48 @@ describe('BuilderGuide ciblage et placement', () => {
         Number.parseFloat(highlight.style.left),
       );
     });
+  });
+
+  test('cible le menu Action rapide de la zone guidee', async () => {
+    const patchLayerItem = vi.fn();
+
+    render(
+      <div style={{ position: 'relative', width: 720, height: 420 }}>
+        <SceneCanvasQuickToolbar
+          selectedScene={{
+            id: 'scene-a',
+            hotspots: [{
+              id: 'hotspot-guide',
+              x: 50,
+              y: 50,
+              width: 20,
+              height: 20,
+              actionType: 'dialogue',
+            }],
+            sceneObjects: [],
+          }}
+          selectedSceneId="scene-a"
+          selectedHotspotId="hotspot-guide"
+          patchLayerItem={patchLayerItem}
+          duplicateSelectedEditorItems={() => {}}
+          deleteSelectedEditorItems={() => {}}
+          sendLayerToEdge={() => {}}
+        />
+      </div>,
+    );
+
+    const target = getTutorialTarget({ selector: '[data-tour="hotspot-action"]' });
+    expect(target).toBeTruthy();
+    expect(target?.classList.contains('scene-canvas-toolbar-select')).toBe(true);
+
+    fireEvent.click(screen.getByTitle('Changer action'));
+    const sceneOption = await screen.findByRole('option', { name: 'Changer de scène' });
+    expect(document.querySelector('[data-tour="hotspot-action-menu"]')).toBeTruthy();
+    fireEvent.click(sceneOption);
+
+    expect(patchLayerItem).toHaveBeenCalledWith('hotspot', 'hotspot-guide', expect.any(Function));
+    const updatedHotspot = { actionType: 'dialogue' };
+    patchLayerItem.mock.calls[0][2](updatedHotspot);
+    expect(updatedHotspot.actionType).toBe('scene');
   });
 });

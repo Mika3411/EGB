@@ -186,7 +186,7 @@ function ToolbarButton({ label, onClick, disabled = false, danger = false, activ
   );
 }
 
-function ActionDropdown({ options, value, onChange }) {
+function ActionDropdown({ options, value, onChange, tourId = '' }) {
   const [isOpen, setIsOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState(null);
   const dropdownRef = useRef(null);
@@ -268,6 +268,7 @@ function ActionDropdown({ options, value, onChange }) {
     ? createPortal(
       <div
         className="scene-canvas-toolbar-select-menu"
+        data-tour={tourId ? `${tourId}-menu` : undefined}
         ref={menuRef}
         role="listbox"
         aria-label="Changer action"
@@ -298,7 +299,7 @@ function ActionDropdown({ options, value, onChange }) {
     : null;
 
   return (
-    <div className="scene-canvas-toolbar-select" ref={dropdownRef}>
+    <div className="scene-canvas-toolbar-select" data-tour={tourId || undefined} ref={dropdownRef}>
       <SlidersHorizontal size={14} aria-hidden="true" />
       <button
         type="button"
@@ -466,7 +467,12 @@ export default function SceneCanvasQuickToolbar({
         </ToolbarButton>
       ) : null}
       {showActionSelect ? (
-        <ActionDropdown options={actionOptions} value={displayedAction} onChange={handleActionChange} />
+        <ActionDropdown
+          options={actionOptions}
+          value={displayedAction}
+          onChange={handleActionChange}
+          tourId={isHotspot ? 'hotspot-action' : 'scene-object-action'}
+        />
       ) : null}
       {previewScene ? (
         <ToolbarButton label="Tester la zone" onClick={handlePreview}>

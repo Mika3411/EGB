@@ -72,7 +72,14 @@ export default function BuilderGuide({ step, stepNumber, totalSteps, canPrevious
         const rect = target.getBoundingClientRect();
         const openEffectMenu = target.querySelector('.visual-effect-cascade.open .visual-effect-cascade__menu');
         const openEffectSubmenu = target.querySelector('.visual-effect-cascade.open .visual-effect-cascade__submenu');
-        const rects = [rect, openEffectMenu?.getBoundingClientRect?.(), openEffectSubmenu?.getBoundingClientRect?.()]
+        const tourId = target.getAttribute('data-tour');
+        const openTourMenu = tourId ? document.querySelector(`[data-tour="${tourId}-menu"]`) : null;
+        const rects = [
+          rect,
+          openEffectMenu?.getBoundingClientRect?.(),
+          openEffectSubmenu?.getBoundingClientRect?.(),
+          openTourMenu?.getBoundingClientRect?.(),
+        ]
           .filter((entry) => entry?.width && entry?.height);
         const focusRect = rects.reduce((acc, entry) => ({
           top: Math.min(acc.top, entry.top),
