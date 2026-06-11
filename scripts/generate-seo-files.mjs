@@ -9,7 +9,7 @@ const siteUrl = rawSiteUrl.replace(/\/+$/, '');
 const today = new Date().toISOString().slice(0, 10);
 
 const brandName = 'Escape Game Studio';
-const ogImagePath = '/og-image-escape-game-studio.png';
+const ogImagePath = '/og-image-escape-game-studio-wide.png';
 
 const absoluteUrl = (path = '/') => {
   if (!siteUrl) return path;
