@@ -1,0 +1,1724 @@
+{
+  "id": "project_donjon_dragon_obsidienne",
+  "title": "Le Serment du Dragon d'Obsidienne",
+  "description": "Escape game medieval fantasy en un acte: exploration non lineaire, coffre a code, lettre dechiree a remettre dans l'ordre, puzzle de carte, runes de couleur, PNJ, portes verrouillees et combinaison d'objets.",
+  "creationMode": "expert",
+  "version": "1.0.0",
+  "exportedAt": "2026-06-09T20:30:00.000Z",
+  "acts": [
+    {
+      "id": "acte_serment_obsidienne",
+      "name": "Acte I - Les salles du serment"
+    }
+  ],
+  "start": {
+    "type": "cinematic",
+    "targetSceneId": "scene_hall_des_des_sombres",
+    "targetCinematicId": "cine_intro_donjon_obsidienne"
+  },
+  "items": [
+    {
+      "id": "item_fragment_lion",
+      "name": "Fragment du Lion",
+      "icon": "shield",
+      "imageName": "item-fragment-lion.png",
+      "imageData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/item-fragment-lion.png?v=20260609-donjon-dragon-v1",
+      "imageWidth": 1254,
+      "imageHeight": 1254,
+      "description": "Une moitie de medaillon en laiton. Le lion a perdu l'autre moitie de son serment."
+    },
+    {
+      "id": "item_fragment_dragon",
+      "name": "Fragment du Dragon",
+      "icon": "flame",
+      "imageName": "item-fragment-dragon.png",
+      "imageData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/item-fragment-dragon.png?v=20260609-donjon-dragon-v1",
+      "imageWidth": 1254,
+      "imageHeight": 1254,
+      "description": "Une moitie de medaillon noircie. L'aile gravee rejoint presque la marque du lion."
+    },
+    {
+      "id": "item_sceau_bicephale",
+      "name": "Sceau bicephale",
+      "icon": "badge",
+      "imageName": "item-sceau-bicephale.png",
+      "imageData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/item-sceau-bicephale.png?v=20260609-donjon-dragon-v1",
+      "imageWidth": 1254,
+      "imageHeight": 1254,
+      "description": "Le lion et le dragon tiennent enfin sur le meme cercle de laiton."
+    },
+    {
+      "id": "item_clef_osseuse",
+      "name": "Clef osseuse",
+      "icon": "key",
+      "imageName": "item-clef-osseuse.png",
+      "imageData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/item-clef-osseuse.png?v=20260609-donjon-dragon-v1",
+      "imageWidth": 1254,
+      "imageHeight": 1254,
+      "description": "Une clef taillee dans l'os. Elle n'a rien d'ornemental; elle attend une serrure froide."
+    },
+    {
+      "id": "item_fiole_huile_noire",
+      "name": "Fiole d'huile noire",
+      "icon": "droplet",
+      "imageName": "item-fiole-huile-noire.png",
+      "imageData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/item-fiole-huile-noire.png?v=20260609-donjon-dragon-v1",
+      "imageWidth": 1254,
+      "imageHeight": 1254,
+      "description": "Une huile epaisse pour mecanisme fatigue. Elle sent le fer chauffe."
+    },
+    {
+      "id": "item_cristal_lunaire",
+      "name": "Cristal lunaire",
+      "icon": "gem",
+      "imageName": "item-cristal-lunaire.png",
+      "imageData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/item-cristal-lunaire.png?v=20260609-donjon-dragon-v1",
+      "imageWidth": 1254,
+      "imageHeight": 1254,
+      "description": "Un cristal bleu-blanc, assez froid pour faire taire une torche quand je l'approche."
+    }
+  ],
+  "combinations": [
+    {
+      "id": "combo_sceau_bicephale",
+      "itemAId": "item_fragment_lion",
+      "itemBId": "item_fragment_dragon",
+      "resultItemId": "item_sceau_bicephale",
+      "message": "Les deux fragments s'emboitent avec un claquement net. Le sceau montre enfin le lion et le dragon ensemble.",
+      "consume": true,
+      "conditions": [],
+      "failMessage": ""
+    }
+  ],
+  "enigmas": [
+    {
+      "id": "enigme_coffre_armurerie_7394",
+      "name": "Coffre des ecuyers",
+      "type": "code",
+      "codeSkin": "safe-wheels",
+      "question": "Le coffre accepte quatre chiffres. Je garde l'ordre donne par Tillyk: savoir, faim, chaines, priere.",
+      "solutionText": "7394",
+      "successMessage": "Le coffre s'ouvre. Un fragment de lion attend dans le velours use.",
+      "failMessage": "Les roues refusent de tenir. Il me manque encore un chiffre ou le bon ordre.",
+      "unlockType": "none",
+      "clueSceneIds": [
+        "scene_bibliotheque_des_mages",
+        "scene_cuisine_des_kobolds",
+        "scene_prison_des_aventuriers",
+        "scene_sanctuaire_des_serments"
+      ],
+      "logicNotes": "Savoir=7 dans la bibliotheque, faim=3 dans la cuisine, chaines=9 dans la prison, priere=4 dans le sanctuaire. Tillyk donne l'ordre."
+    },
+    {
+      "id": "enigme_serment_dechire_ordre",
+      "name": "Serment dechire",
+      "type": "misc",
+      "miscMode": "ordering",
+      "question": "Les morceaux de la lettre reprennent sens si je suis les marques trouvees hors de la bibliotheque.",
+      "miscChoices": [
+        "Ne casse pas la grille de la forge.",
+        "Verse l'huile sur le mecanisme du mur est.",
+        "La clef d'os ouvre la crypte, pas la prison.",
+        "Quand la carte sera reparee, porte le cristal devant le dragon."
+      ],
+      "successMessage": "La lettre se tient enfin. Dans la reliure, je trouve la clef osseuse que l'auteur avait cachee.",
+      "failMessage": "Les morceaux se touchent, mais le conseil ne tient pas debout. Je dois reprendre les marques dans leur ordre.",
+      "unlockType": "none",
+      "popupBackgroundData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/cine-intro-02-carte.png?v=20260609-donjon-dragon-v1",
+      "popupBackgroundName": "cine-intro-02-carte.png",
+      "popupBackgroundOverlay": "medium",
+      "clueSceneIds": [
+        "scene_galerie_des_ancetres",
+        "scene_forge_naine",
+        "scene_prison_des_aventuriers",
+        "scene_sanctuaire_des_serments"
+      ],
+      "logicNotes": "Ordre par marques externes: portrait main vide, forge huile, prison clef, sanctuaire lune."
+    },
+    {
+      "id": "enigme_carte_salles_basses_puzzle",
+      "name": "Carte des salles basses",
+      "type": "puzzle",
+      "question": "La carte est en neuf morceaux. La couronne, l'aile, l'engrenage et la flamme me donnent l'orientation.",
+      "imageData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/puzzle-carte-salles-basses.png?v=20260609-donjon-dragon-v1",
+      "imageName": "puzzle-carte-salles-basses.png",
+      "imageWidth": 1254,
+      "imageHeight": 1254,
+      "gridRows": 3,
+      "gridCols": 3,
+      "imagePuzzleLogic": "classic-grid",
+      "imageCutStyle": "straight",
+      "successMessage": "La carte devient lisible. Le pont descend, et un cristal lunaire roule hors du cadre.",
+      "failMessage": "Les salles ne se rejoignent pas encore. Un repere est sans doute tourne du mauvais cote.",
+      "unlockType": "none",
+      "clueSceneIds": [
+        "scene_crypte_des_rois",
+        "scene_galerie_des_ancetres",
+        "scene_forge_naine",
+        "scene_laboratoire_archimage"
+      ],
+      "logicNotes": "Couronne au nord, aile du dragon a l'est, engrenage en bas a gauche, flamme bleue a l'ouest."
+    },
+    {
+      "id": "enigme_runes_dragon_couleurs",
+      "name": "Runes du dragon",
+      "type": "colors",
+      "colorLogic": "sequence",
+      "question": "Les runes attendent l'ordre des familles du pacte: maison, forge, autel, tour.",
+      "solutionColors": [
+        "purple",
+        "red",
+        "white",
+        "blue"
+      ],
+      "successMessage": "Les runes restent allumees. La porte-dragon s'ouvre sans bruit de combat.",
+      "failMessage": "Les couleurs s'eteignent. Je n'ai pas suivi l'ordre du pacte.",
+      "unlockType": "cinematic",
+      "targetCinematicId": "cine_final_eveil_dragon",
+      "clueSceneIds": [
+        "scene_galerie_des_ancetres",
+        "scene_forge_naine",
+        "scene_sanctuaire_des_serments",
+        "scene_laboratoire_archimage",
+        "scene_cuisine_des_kobolds"
+      ],
+      "logicNotes": "Maison/galerie=violet, forge=rouge, autel/sanctuaire=blanc, tour/laboratoire=bleu. Tillyk donne l'ordre des familles."
+    }
+  ],
+  "cinematics": [
+    {
+      "id": "cine_intro_donjon_obsidienne",
+      "name": "Arrivee au donjon d'obsidienne",
+      "cinematicType": "slides",
+      "slides": [
+        {
+          "id": "slide_intro_01_approche",
+          "imageData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/cine-intro-01-keep.png?v=20260609-donjon-dragon-v1",
+          "imageName": "cine-intro-01-keep.png",
+          "narration": "Le donjon paraissait plus petit sur la carte. De pres, il ressemble a une dette qu'on aurait laissee grandir."
+        },
+        {
+          "id": "slide_intro_02_carte",
+          "imageData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/cine-intro-02-carte.png?v=20260609-donjon-dragon-v1",
+          "imageName": "cine-intro-02-carte.png",
+          "narration": "J'ai garde les des de mon frere, mais je ne compte pas leur demander de penser a ma place."
+        },
+        {
+          "id": "slide_intro_03_entree",
+          "imageData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/cine-intro-03-entree.png?v=20260609-donjon-dragon-v1",
+          "imageName": "cine-intro-03-entree.png",
+          "narration": "La porte cede avant ma main. Ce lieu attendait quelqu'un; je prefere ne pas decider trop vite que c'etait moi."
+        }
+      ],
+      "onEndType": "scene",
+      "targetSceneId": "scene_hall_des_des_sombres"
+    },
+    {
+      "id": "cine_final_eveil_dragon",
+      "name": "L'eveil du dragon",
+      "cinematicType": "slides",
+      "slides": [
+        {
+          "id": "slide_final_01_runes",
+          "imageData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/cine-final-01-runes.png?v=20260609-donjon-dragon-v1",
+          "imageName": "cine-final-01-runes.png",
+          "narration": "Les quatre runes tiennent leur lumiere. La porte ne s'ouvre pas pour me recompenser; elle s'ouvre parce que j'ai cesse de forcer."
+        },
+        {
+          "id": "slide_final_02_dragon",
+          "imageData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/cine-final-02-dragon.png?v=20260609-donjon-dragon-v1",
+          "imageName": "cine-final-02-dragon.png",
+          "narration": "Le dragon leve un oeil. Je comprends alors que le tresor n'etait pas garde contre moi, mais contre la precipitation."
+        },
+        {
+          "id": "slide_final_03_balcon",
+          "imageData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/cine-final-03-balcon.png?v=20260609-donjon-dragon-v1",
+          "imageName": "cine-final-03-balcon.png",
+          "narration": "L'air de la nuit entre dans mes poumons. Je repars avec moins d'or que de certitudes, et c'est mieux ainsi."
+        }
+      ],
+      "onEndType": "scene",
+      "targetSceneId": "scene_antre_dragon_obsidienne"
+    }
+  ],
+  "scenes": [
+    {
+      "id": "scene_hall_des_des_sombres",
+      "name": "Hall des Des Sombres",
+      "introText": "Je reste un instant sous la faille de lune. Trois passages sont ouverts, et la grande porte au dragon dort encore au fond.",
+      "hotspots": [
+        {
+          "id": "hs_hall_salle_gardes",
+          "name": "Arche des gardes",
+          "x": 9,
+          "y": 36,
+          "width": 15,
+          "height": 33,
+          "actionType": "scene",
+          "dialogue": "Les râteliers brillent dans la salle des gardes. La voie est ouverte.",
+          "targetSceneId": "scene_salle_des_gardes"
+        },
+        {
+          "id": "hs_hall_bibliotheque",
+          "name": "Arche de la bibliotheque",
+          "x": 75,
+          "y": 37,
+          "width": 16,
+          "height": 33,
+          "actionType": "scene",
+          "dialogue": "Les rayons de livres sont visibles depuis le hall. J'y trouverai peut-etre une voix plus patiente que la mienne.",
+          "targetSceneId": "scene_bibliotheque_des_mages"
+        },
+        {
+          "id": "hs_hall_cuisine",
+          "name": "Couloir de cuisine",
+          "x": 54,
+          "y": 40,
+          "width": 15,
+          "height": 28,
+          "actionType": "scene",
+          "dialogue": "La fumee vient de ce couloir. Quelqu'un cuisine encore sous la pierre.",
+          "targetSceneId": "scene_cuisine_des_kobolds"
+        },
+        {
+          "id": "hs_hall_porte_dragon",
+          "name": "Porte au dragon",
+          "x": 40,
+          "y": 33,
+          "width": 15,
+          "height": 28,
+          "actionType": "dialogue",
+          "dialogue": "La porte au dragon ne porte pas de serrure. Elle attend autre chose qu'une clef."
+        },
+        {
+          "id": "hs_hall_pedestal_des",
+          "name": "Pedestal aux des",
+          "x": 39,
+          "y": 69,
+          "width": 19,
+          "height": 12,
+          "actionType": "dialogue",
+          "dialogue": "Les des noirs sont lourds, mais ils ne decident rien seuls. Je les laisse sur la table."
+        }
+      ],
+      "actId": "acte_serment_obsidienne",
+      "parentSceneId": "",
+      "backgroundName": "scene-hall-des-des-sombres.png",
+      "backgroundData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/scene-hall-des-des-sombres.png?v=20260609-donjon-dragon-v1",
+      "backgroundWidth": 1672,
+      "backgroundHeight": 941,
+      "backgroundAspectRatio": 1.7768331562167907,
+      "visualEffect": "glow",
+      "visualEffectIntensity": "subtle",
+      "sceneTransition": "fade",
+      "sceneTransitionDuration": 750,
+      "sceneObjects": []
+    },
+    {
+      "id": "scene_salle_des_gardes",
+      "name": "Salle des gardes",
+      "introText": "Le hall reste visible derriere moi. Les armes ici ont vu trop de mains pour raconter une seule histoire.",
+      "hotspots": [
+        {
+          "id": "hs_gardes_retour_hall",
+          "name": "Retour au hall",
+          "x": 7,
+          "y": 36,
+          "width": 15,
+          "height": 32,
+          "actionType": "scene",
+          "dialogue": "Je reviens vers la lumiere bleue du hall.",
+          "targetSceneId": "scene_hall_des_des_sombres"
+        },
+        {
+          "id": "hs_gardes_armurerie",
+          "name": "Porte de l armurerie",
+          "x": 71,
+          "y": 35,
+          "width": 15,
+          "height": 34,
+          "actionType": "scene",
+          "dialogue": "La porte de l'armurerie est entrouverte. Le metal y sent la poussiere.",
+          "targetSceneId": "scene_armurerie_du_serment"
+        },
+        {
+          "id": "hs_gardes_prison",
+          "name": "Passage des cellules",
+          "x": 43,
+          "y": 34,
+          "width": 15,
+          "height": 36,
+          "actionType": "scene",
+          "dialogue": "Les barreaux du passage grincent, mais ils ne bloquent plus personne.",
+          "targetSceneId": "scene_prison_des_aventuriers"
+        },
+        {
+          "id": "hs_gardes_table_des",
+          "name": "Table d exercice",
+          "x": 37,
+          "y": 70,
+          "width": 20,
+          "height": 13,
+          "actionType": "dialogue",
+          "dialogue": "Les gardes s'entrainaient a compter vite. Rien ici ne donne le code du coffre."
+        }
+      ],
+      "actId": "acte_serment_obsidienne",
+      "parentSceneId": "",
+      "backgroundName": "scene-salle-des-gardes.png",
+      "backgroundData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/scene-salle-des-gardes.png?v=20260609-donjon-dragon-v1",
+      "backgroundWidth": 1672,
+      "backgroundHeight": 941,
+      "backgroundAspectRatio": 1.7768331562167907,
+      "visualEffect": "glow",
+      "visualEffectIntensity": "subtle",
+      "sceneTransition": "fade",
+      "sceneTransitionDuration": 750,
+      "sceneObjects": []
+    },
+    {
+      "id": "scene_armurerie_du_serment",
+      "name": "Armurerie du Serment",
+      "introText": "La salle des gardes reste dans mon dos. Le coffre cloute attire l'oeil, mais les chiffres ne sont pas nes ici.",
+      "hotspots": [
+        {
+          "id": "hs_armurerie_retour_gardes",
+          "name": "Retour salle des gardes",
+          "x": 7,
+          "y": 35,
+          "width": 14,
+          "height": 34,
+          "actionType": "scene",
+          "dialogue": "Je repasse vers les râteliers de la salle des gardes.",
+          "targetSceneId": "scene_salle_des_gardes"
+        },
+        {
+          "id": "hs_armurerie_coffre_ecuyers",
+          "name": "Coffre des ecuyers",
+          "x": 50,
+          "y": 55,
+          "width": 24,
+          "height": 18,
+          "actionType": "dialogue_item",
+          "dialogue": "Le fragment du lion etait cache dans le velours. Il est plus leger que sa gravure.",
+          "rewardItemId": "item_fragment_lion",
+          "enigmaId": "enigme_coffre_armurerie_7394",
+          "logicRules": [
+            {
+              "id": "rule_coffre_deja_ouvert",
+              "name": "Déjà résolu",
+              "conditionType": "solved_enigma",
+              "conditionEnigmaId": "enigme_coffre_armurerie_7394",
+              "actionType": "dialogue",
+              "dialogue": "Le coffre est vide maintenant. Je n'ai pas besoin de refaire tourner les roues."
+            },
+            {
+              "id": "rule_coffre_indices_et_ordre",
+              "name": "Coffre: chiffres et ordre externes",
+              "conditionType": "advanced",
+              "advancedConditionMode": "all",
+              "advancedConditions": [
+                {
+                  "id": "cond_code_savoir_7",
+                  "type": "completed_hotspot",
+                  "hotspotId": "hs_bibliotheque_des_noirs_7"
+                },
+                {
+                  "id": "cond_code_faim_3",
+                  "type": "completed_hotspot",
+                  "hotspotId": "hs_cuisine_marmites_3"
+                },
+                {
+                  "id": "cond_code_chaines_9",
+                  "type": "completed_hotspot",
+                  "hotspotId": "hs_prison_barreaux_9"
+                },
+                {
+                  "id": "cond_code_priere_4",
+                  "type": "completed_hotspot",
+                  "hotspotId": "hs_sanctuaire_bougies_4"
+                },
+                {
+                  "id": "cond_code_ordre_tillyk",
+                  "type": "chose_reply",
+                  "replyId": "reply_tillyk_ordre_coffre"
+                }
+              ],
+              "actionType": "default",
+              "dialogue": "",
+              "failureDialogue": "Je peux tourner les roues, mais pas encore penser juste. Il me manque les quatre chiffres ou l'ordre de Tillyk."
+            }
+          ]
+        },
+        {
+          "id": "hs_armurerie_armures_vides",
+          "name": "Armures vides",
+          "x": 26,
+          "y": 42,
+          "width": 14,
+          "height": 30,
+          "actionType": "dialogue",
+          "dialogue": "Les armures regardent le coffre comme si elles l'avaient perdu depuis longtemps."
+        }
+      ],
+      "actId": "acte_serment_obsidienne",
+      "parentSceneId": "",
+      "backgroundName": "scene-armurerie-du-serment.png",
+      "backgroundData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/scene-armurerie-du-serment.png?v=20260609-donjon-dragon-v1",
+      "backgroundWidth": 1672,
+      "backgroundHeight": 941,
+      "backgroundAspectRatio": 1.7768331562167907,
+      "visualEffect": "glow",
+      "visualEffectIntensity": "subtle",
+      "sceneTransition": "fade",
+      "sceneTransitionDuration": 750,
+      "sceneObjects": []
+    },
+    {
+      "id": "scene_bibliotheque_des_mages",
+      "name": "Bibliotheque des Mages",
+      "introText": "Le hall reste visible par l'arche. Sur la table, la lettre dechiree m'attend avec une patience deplaisante.",
+      "hotspots": [
+        {
+          "id": "hs_bibliotheque_retour_hall",
+          "name": "Retour au hall",
+          "x": 47,
+          "y": 34,
+          "width": 13,
+          "height": 33,
+          "actionType": "scene",
+          "dialogue": "Je retrouve l'air plus large du hall.",
+          "targetSceneId": "scene_hall_des_des_sombres"
+        },
+        {
+          "id": "hs_bibliotheque_galerie",
+          "name": "Galerie des ancetres",
+          "x": 80,
+          "y": 34,
+          "width": 13,
+          "height": 35,
+          "actionType": "scene",
+          "dialogue": "Les cadres de la galerie se devinent entre les rayons.",
+          "targetSceneId": "scene_galerie_des_ancetres"
+        },
+        {
+          "id": "hs_bibliotheque_serment_dechire",
+          "name": "Lettre dechiree",
+          "x": 27,
+          "y": 63,
+          "width": 25,
+          "height": 17,
+          "actionType": "dialogue_item",
+          "dialogue": "La reliure cede. La clef osseuse tombe dans ma paume.",
+          "rewardItemId": "item_clef_osseuse",
+          "enigmaId": "enigme_serment_dechire_ordre",
+          "logicRules": [
+            {
+              "id": "rule_serment_deja_repare",
+              "name": "Déjà résolu",
+              "conditionType": "solved_enigma",
+              "conditionEnigmaId": "enigme_serment_dechire_ordre",
+              "actionType": "dialogue",
+              "dialogue": "La lettre est lisible maintenant. Je n'ai plus a bouger les morceaux."
+            },
+            {
+              "id": "rule_serment_marques_externes",
+              "name": "Serment: marques vues ailleurs",
+              "conditionType": "advanced",
+              "advancedConditionMode": "all",
+              "advancedConditions": [
+                {
+                  "id": "cond_serment_portrait",
+                  "type": "completed_hotspot",
+                  "hotspotId": "hs_galerie_portrait_main_vide"
+                },
+                {
+                  "id": "cond_serment_forge",
+                  "type": "completed_hotspot",
+                  "hotspotId": "hs_forge_marque_huile"
+                },
+                {
+                  "id": "cond_serment_prison",
+                  "type": "completed_hotspot",
+                  "hotspotId": "hs_prison_marque_clef"
+                },
+                {
+                  "id": "cond_serment_sanctuaire",
+                  "type": "completed_hotspot",
+                  "hotspotId": "hs_sanctuaire_marque_lune"
+                }
+              ],
+              "actionType": "default",
+              "dialogue": "",
+              "failureDialogue": "Les morceaux ne manquent pas. Ce sont les marques hors de cette salle qui me manquent."
+            }
+          ]
+        },
+        {
+          "id": "hs_bibliotheque_des_noirs_7",
+          "name": "Coupe aux des noirs",
+          "x": 60,
+          "y": 55,
+          "width": 11,
+          "height": 13,
+          "actionType": "dialogue",
+          "dialogue": "Je compte sept des noirs dans la coupe du vieux mage. Pour le coffre, ce sera le chiffre du savoir."
+        },
+        {
+          "id": "hs_bibliotheque_grimoire_ferme",
+          "name": "Grimoire chaine",
+          "x": 16,
+          "y": 47,
+          "width": 12,
+          "height": 18,
+          "actionType": "dialogue",
+          "dialogue": "Le grimoire est ferme par une chaine fine. Je n'ai pas besoin de l'arracher."
+        }
+      ],
+      "actId": "acte_serment_obsidienne",
+      "parentSceneId": "",
+      "backgroundName": "scene-bibliotheque-des-mages.png",
+      "backgroundData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/scene-bibliotheque-des-mages.png?v=20260609-donjon-dragon-v1",
+      "backgroundWidth": 1672,
+      "backgroundHeight": 941,
+      "backgroundAspectRatio": 1.7768331562167907,
+      "visualEffect": "glow",
+      "visualEffectIntensity": "subtle",
+      "sceneTransition": "fade",
+      "sceneTransitionDuration": 750,
+      "sceneObjects": []
+    },
+    {
+      "id": "scene_cuisine_des_kobolds",
+      "name": "Cuisine des Kobolds",
+      "introText": "La fumee pique les yeux. Le petit cuisinier me regarde comme si j'etais l'ingrédient le moins pratique de la piece.",
+      "hotspots": [
+        {
+          "id": "hs_cuisine_retour_hall",
+          "name": "Retour au hall",
+          "x": 8,
+          "y": 32,
+          "width": 15,
+          "height": 35,
+          "actionType": "scene",
+          "dialogue": "Je laisse la chaleur de la cuisine derriere moi.",
+          "targetSceneId": "scene_hall_des_des_sombres"
+        },
+        {
+          "id": "hs_cuisine_forge",
+          "name": "Porte de la forge",
+          "x": 76,
+          "y": 35,
+          "width": 13,
+          "height": 34,
+          "actionType": "scene",
+          "dialogue": "L'huile fait taire le mecanisme. La porte de la forge glisse enfin.",
+          "targetSceneId": "scene_forge_naine",
+          "requiredItemId": "item_fiole_huile_noire",
+          "lockedMessage": "Le mecanisme de la forge est sec. Je dois trouver de l'huile avant d'insister.",
+          "logicRules": [
+            {
+              "id": "rule_forge_huile_requise",
+              "name": "Forge: huile noire requise",
+              "conditionType": "has_item",
+              "itemId": "item_fiole_huile_noire",
+              "actionType": "default",
+              "dialogue": "L'huile coule dans les gonds. La porte de la forge accepte enfin de bouger.",
+              "failureDialogue": "Les gonds refusent. La force ne fera que plier la poignee."
+            }
+          ]
+        },
+        {
+          "id": "hs_cuisine_marmites_3",
+          "name": "Trois marmites noires",
+          "x": 40,
+          "y": 51,
+          "width": 18,
+          "height": 18,
+          "actionType": "dialogue",
+          "dialogue": "Trois marmites chauffent sur le foyer. Pour le coffre, ce sera le chiffre de la faim."
+        },
+        {
+          "id": "hs_cuisine_tillyk",
+          "name": "Tillyk le cuisinier",
+          "x": 20,
+          "y": 45,
+          "width": 16,
+          "height": 26,
+          "actionType": "conversation",
+          "dialogue": "Tillyk pose sa louche. Il sait plus de choses qu'il ne veut en vendre.",
+          "conversation": {
+            "startNodeId": "node_tillyk_start",
+            "nodes": [
+              {
+                "id": "node_tillyk_start",
+                "speaker": "Tillyk",
+                "text": "Je nourris ceux qui reviennent. Les autres me laissent des problemes et des casseroles.",
+                "replies": [
+                  {
+                    "id": "reply_tillyk_ordre_coffre",
+                    "label": "Ordre du coffre",
+                    "actionType": "dialogue",
+                    "dialogue": "Tillyk compte sur ses griffes: savoir, faim, chaines, priere. Il ajoute qu'un coffre ne pardonne pas l'orgueil.",
+                    "hideAfterChosen": true
+                  },
+                  {
+                    "id": "reply_tillyk_ordre_couleurs",
+                    "label": "Ordre des runes",
+                    "actionType": "dialogue",
+                    "dialogue": "Il essuie une assiette: la maison jure avant la forge, la forge avant l'autel, l'autel avant la tour. C'est comme ca depuis que le dragon dort.",
+                    "hideAfterChosen": true
+                  },
+                  {
+                    "id": "reply_tillyk_forge",
+                    "label": "Porte de forge",
+                    "actionType": "dialogue",
+                    "dialogue": "La porte de forge ne demande pas un bras plus fort. Elle demande de l'huile. Les anciens prisonniers en cachaient pour les charnieres.",
+                    "hideAfterChosen": true
+                  },
+                  {
+                    "id": "reply_tillyk_fin",
+                    "label": "Je repars",
+                    "actionType": "end",
+                    "dialogue": "Tillyk retourne a sa marmite. Il garde une oreille vers la forge."
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "actId": "acte_serment_obsidienne",
+      "parentSceneId": "",
+      "backgroundName": "scene-cuisine-des-kobolds.png",
+      "backgroundData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/scene-cuisine-des-kobolds.png?v=20260609-donjon-dragon-v1",
+      "backgroundWidth": 1672,
+      "backgroundHeight": 941,
+      "backgroundAspectRatio": 1.7768331562167907,
+      "visualEffect": "glow",
+      "visualEffectIntensity": "subtle",
+      "sceneTransition": "fade",
+      "sceneTransitionDuration": 750,
+      "sceneObjects": []
+    },
+    {
+      "id": "scene_prison_des_aventuriers",
+      "name": "Prison des Aventuriers",
+      "introText": "Les cellules sont vides. C'est presque pire: personne ne pourra corriger ce que j'imagine.",
+      "hotspots": [
+        {
+          "id": "hs_prison_retour_gardes",
+          "name": "Retour salle des gardes",
+          "x": 46,
+          "y": 31,
+          "width": 14,
+          "height": 34,
+          "actionType": "scene",
+          "dialogue": "Je remonte vers les râteliers et la lumiere des torches.",
+          "targetSceneId": "scene_salle_des_gardes"
+        },
+        {
+          "id": "hs_prison_fiole_huile",
+          "name": "Fiole d'huile noire",
+          "x": 19,
+          "y": 58,
+          "width": 13,
+          "height": 15,
+          "actionType": "dialogue_item",
+          "dialogue": "La fiole etait cachee derriere une gamelle. L'huile devrait suffire pour un seul mecanisme.",
+          "rewardItemId": "item_fiole_huile_noire"
+        },
+        {
+          "id": "hs_prison_barreaux_9",
+          "name": "Neuf barreaux tordus",
+          "x": 66,
+          "y": 35,
+          "width": 12,
+          "height": 33,
+          "actionType": "dialogue",
+          "dialogue": "Je compte neuf barreaux tordus sur cette cellule. Pour le coffre, ce sera le chiffre des chaines."
+        },
+        {
+          "id": "hs_prison_marque_clef",
+          "name": "Marque de clef",
+          "x": 34,
+          "y": 52,
+          "width": 12,
+          "height": 18,
+          "actionType": "dialogue",
+          "dialogue": "La marque montre une clef simple, gravee apres un dessin de goutte. Pour la lettre, cette phrase vient apres l'huile."
+        }
+      ],
+      "actId": "acte_serment_obsidienne",
+      "parentSceneId": "",
+      "backgroundName": "scene-prison-des-aventuriers.png",
+      "backgroundData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/scene-prison-des-aventuriers.png?v=20260609-donjon-dragon-v1",
+      "backgroundWidth": 1672,
+      "backgroundHeight": 941,
+      "backgroundAspectRatio": 1.7768331562167907,
+      "visualEffect": "glow",
+      "visualEffectIntensity": "subtle",
+      "sceneTransition": "fade",
+      "sceneTransitionDuration": 750,
+      "sceneObjects": []
+    },
+    {
+      "id": "scene_forge_naine",
+      "name": "Forge Naine",
+      "introText": "La porte de la cuisine reste ouverte derriere moi. La forge respire encore, tres bas, comme une bete fatiguee.",
+      "hotspots": [
+        {
+          "id": "hs_forge_retour_cuisine",
+          "name": "Retour cuisine",
+          "x": 8,
+          "y": 34,
+          "width": 15,
+          "height": 34,
+          "actionType": "scene",
+          "dialogue": "Je retrouve la fumee de la cuisine.",
+          "targetSceneId": "scene_cuisine_des_kobolds"
+        },
+        {
+          "id": "hs_forge_fragment_dragon",
+          "name": "Fragment du Dragon",
+          "x": 42,
+          "y": 66,
+          "width": 18,
+          "height": 13,
+          "actionType": "dialogue_item",
+          "dialogue": "Le fragment du dragon etait pose sur le plateau, chauffe juste assez pour reveiller mes doigts.",
+          "rewardItemId": "item_fragment_dragon"
+        },
+        {
+          "id": "hs_forge_marque_huile",
+          "name": "Marque de goutte",
+          "x": 70,
+          "y": 45,
+          "width": 12,
+          "height": 16,
+          "actionType": "dialogue",
+          "dialogue": "Une goutte gravee vient avant la clef sur le rebord de l'enclume. La lettre parle donc d'huile avant de parler de serrure."
+        },
+        {
+          "id": "hs_forge_engrenage_bas_gauche",
+          "name": "Engrenage grave",
+          "x": 27,
+          "y": 59,
+          "width": 14,
+          "height": 15,
+          "actionType": "dialogue",
+          "dialogue": "L'engrenage de la carte est dessine en bas a gauche du cadre. Je retiens cette place."
+        },
+        {
+          "id": "hs_forge_braises_rouges",
+          "name": "Braises rouges",
+          "x": 52,
+          "y": 38,
+          "width": 16,
+          "height": 18,
+          "actionType": "dialogue",
+          "dialogue": "Le rouge de la forge ne ressemble pas aux torches. Pour les runes, ce sera la couleur de la forge."
+        }
+      ],
+      "actId": "acte_serment_obsidienne",
+      "parentSceneId": "",
+      "backgroundName": "scene-forge-naine.png",
+      "backgroundData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/scene-forge-naine.png?v=20260609-donjon-dragon-v1",
+      "backgroundWidth": 1672,
+      "backgroundHeight": 941,
+      "backgroundAspectRatio": 1.7768331562167907,
+      "visualEffect": "glow",
+      "visualEffectIntensity": "subtle",
+      "sceneTransition": "fade",
+      "sceneTransitionDuration": 750,
+      "sceneObjects": []
+    },
+    {
+      "id": "scene_sanctuaire_des_serments",
+      "name": "Sanctuaire des Serments",
+      "introText": "La galerie reste ouverte sur ma gauche. Les bougies ne tremblent pas, comme si l'air lui-meme avait promis de se tenir.",
+      "hotspots": [
+        {
+          "id": "hs_sanctuaire_retour_galerie",
+          "name": "Retour galerie",
+          "x": 82,
+          "y": 35,
+          "width": 13,
+          "height": 34,
+          "actionType": "scene",
+          "dialogue": "Je reviens parmi les portraits.",
+          "targetSceneId": "scene_galerie_des_ancetres"
+        },
+        {
+          "id": "hs_sanctuaire_crypte",
+          "name": "Porte de crypte",
+          "x": 42,
+          "y": 32,
+          "width": 16,
+          "height": 37,
+          "actionType": "scene",
+          "dialogue": "La clef osseuse tourne sans resister. La crypte s'ouvre sur un froid ancien.",
+          "targetSceneId": "scene_crypte_des_rois",
+          "requiredItemId": "item_clef_osseuse",
+          "lockedMessage": "La porte de crypte n'a pas de trou pour le metal. Elle attend la clef d'os.",
+          "logicRules": [
+            {
+              "id": "rule_crypte_clef_osseuse",
+              "name": "Crypte: clef osseuse",
+              "conditionType": "has_item",
+              "itemId": "item_clef_osseuse",
+              "actionType": "default",
+              "dialogue": "La clef osseuse trouve sa place. La crypte ne se defend plus.",
+              "failureDialogue": "La serrure est taillee dans l'os. Mes autres objets ne l'interessent pas."
+            }
+          ]
+        },
+        {
+          "id": "hs_sanctuaire_bougies_4",
+          "name": "Quatre bougies basses",
+          "x": 35,
+          "y": 61,
+          "width": 19,
+          "height": 13,
+          "actionType": "dialogue",
+          "dialogue": "Quatre bougies brulent au pied de l'autel. Pour le coffre, ce sera le chiffre de la priere."
+        },
+        {
+          "id": "hs_sanctuaire_marque_lune",
+          "name": "Marque de lune",
+          "x": 58,
+          "y": 47,
+          "width": 11,
+          "height": 16,
+          "actionType": "dialogue",
+          "dialogue": "La lune gravee vient apres la clef. La derniere phrase de la lettre parlera du cristal."
+        },
+        {
+          "id": "hs_sanctuaire_cierge_blanc",
+          "name": "Cierge blanc",
+          "x": 26,
+          "y": 50,
+          "width": 10,
+          "height": 17,
+          "actionType": "dialogue",
+          "dialogue": "Le blanc du cierge garde sa place dans ma memoire. Pour les runes, ce sera la couleur de l'autel."
+        }
+      ],
+      "actId": "acte_serment_obsidienne",
+      "parentSceneId": "",
+      "backgroundName": "scene-sanctuaire-des-serments.png",
+      "backgroundData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/scene-sanctuaire-des-serments.png?v=20260609-donjon-dragon-v1",
+      "backgroundWidth": 1672,
+      "backgroundHeight": 941,
+      "backgroundAspectRatio": 1.7768331562167907,
+      "visualEffect": "glow",
+      "visualEffectIntensity": "subtle",
+      "sceneTransition": "fade",
+      "sceneTransitionDuration": 750,
+      "sceneObjects": []
+    },
+    {
+      "id": "scene_galerie_des_ancetres",
+      "name": "Galerie des Ancetres",
+      "introText": "La bibliotheque et le sanctuaire sont visibles depuis la galerie. Les portraits ne me suivent pas des yeux; c'est deja ca.",
+      "hotspots": [
+        {
+          "id": "hs_galerie_retour_bibliotheque",
+          "name": "Retour bibliotheque",
+          "x": 5,
+          "y": 34,
+          "width": 14,
+          "height": 35,
+          "actionType": "scene",
+          "dialogue": "Je reviens vers la table et les livres chains.",
+          "targetSceneId": "scene_bibliotheque_des_mages"
+        },
+        {
+          "id": "hs_galerie_sanctuaire",
+          "name": "Arche du sanctuaire",
+          "x": 82,
+          "y": 34,
+          "width": 14,
+          "height": 35,
+          "actionType": "scene",
+          "dialogue": "Les bougies du sanctuaire brillent au-dela de l'arche.",
+          "targetSceneId": "scene_sanctuaire_des_serments"
+        },
+        {
+          "id": "hs_galerie_laboratoire",
+          "name": "Porte du laboratoire",
+          "x": 44,
+          "y": 34,
+          "width": 14,
+          "height": 35,
+          "actionType": "scene",
+          "dialogue": "Le laboratoire bleuit la pierre autour de la porte.",
+          "targetSceneId": "scene_laboratoire_archimage"
+        },
+        {
+          "id": "hs_galerie_portrait_main_vide",
+          "name": "Portrait aux mains vides",
+          "x": 31,
+          "y": 39,
+          "width": 11,
+          "height": 25,
+          "actionType": "dialogue",
+          "dialogue": "Ce portrait tient les mains ouvertes. C'est la premiere marque de la lettre: ne pas casser la grille."
+        },
+        {
+          "id": "hs_galerie_aile_est",
+          "name": "Aile tournee vers l est",
+          "x": 62,
+          "y": 42,
+          "width": 12,
+          "height": 21,
+          "actionType": "dialogue",
+          "dialogue": "L'aile du dragon pointe vers l'arche de droite. Sur la carte, l'aile appartient au cote est."
+        },
+        {
+          "id": "hs_galerie_anneau_violet",
+          "name": "Anneau violet",
+          "x": 53,
+          "y": 36,
+          "width": 10,
+          "height": 15,
+          "actionType": "dialogue",
+          "dialogue": "L'anneau du premier portrait est violet. Pour les runes, ce sera la couleur de la maison."
+        }
+      ],
+      "actId": "acte_serment_obsidienne",
+      "parentSceneId": "",
+      "backgroundName": "scene-galerie-des-ancetres.png",
+      "backgroundData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/scene-galerie-des-ancetres.png?v=20260609-donjon-dragon-v1",
+      "backgroundWidth": 1672,
+      "backgroundHeight": 941,
+      "backgroundAspectRatio": 1.7768331562167907,
+      "visualEffect": "glow",
+      "visualEffectIntensity": "subtle",
+      "sceneTransition": "fade",
+      "sceneTransitionDuration": 750,
+      "sceneObjects": []
+    },
+    {
+      "id": "scene_crypte_des_rois",
+      "name": "Crypte des Rois",
+      "introText": "La porte du sanctuaire reste ouverte derriere moi. Les morts n'ont pas besoin de silence; c'est moi qui en ai besoin.",
+      "hotspots": [
+        {
+          "id": "hs_crypte_retour_sanctuaire",
+          "name": "Retour sanctuaire",
+          "x": 10,
+          "y": 33,
+          "width": 14,
+          "height": 35,
+          "actionType": "scene",
+          "dialogue": "Je remonte vers les bougies blanches.",
+          "targetSceneId": "scene_sanctuaire_des_serments"
+        },
+        {
+          "id": "hs_crypte_couronne_nord",
+          "name": "Tombe couronnee",
+          "x": 43,
+          "y": 37,
+          "width": 18,
+          "height": 22,
+          "actionType": "dialogue",
+          "dialogue": "La couronne est gravee sur la tombe du nord. Sur la carte, elle doit rester en haut."
+        },
+        {
+          "id": "hs_crypte_racines",
+          "name": "Racines froides",
+          "x": 70,
+          "y": 50,
+          "width": 14,
+          "height": 20,
+          "actionType": "dialogue",
+          "dialogue": "Les racines passent entre les pierres sans les briser. Ce donjon prefere les passages lents."
+        }
+      ],
+      "actId": "acte_serment_obsidienne",
+      "parentSceneId": "",
+      "backgroundName": "scene-crypte-des-rois.png",
+      "backgroundData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/scene-crypte-des-rois.png?v=20260609-donjon-dragon-v1",
+      "backgroundWidth": 1672,
+      "backgroundHeight": 941,
+      "backgroundAspectRatio": 1.7768331562167907,
+      "visualEffect": "glow",
+      "visualEffectIntensity": "subtle",
+      "sceneTransition": "fade",
+      "sceneTransitionDuration": 750,
+      "sceneObjects": []
+    },
+    {
+      "id": "scene_laboratoire_archimage",
+      "name": "Laboratoire de l'Archimage",
+      "introText": "La galerie reste dans l'encadrement de la porte. Le laboratoire sent la poussiere chaude et la pluie enfermee.",
+      "hotspots": [
+        {
+          "id": "hs_laboratoire_retour_galerie",
+          "name": "Retour galerie",
+          "x": 8,
+          "y": 34,
+          "width": 15,
+          "height": 35,
+          "actionType": "scene",
+          "dialogue": "Je reviens vers les portraits.",
+          "targetSceneId": "scene_galerie_des_ancetres"
+        },
+        {
+          "id": "hs_laboratoire_pont",
+          "name": "Mecanisme du pont",
+          "x": 78,
+          "y": 34,
+          "width": 13,
+          "height": 36,
+          "actionType": "scene",
+          "dialogue": "Le sceau bicephale chauffe dans ma main. Le mecanisme me laisse passer.",
+          "targetSceneId": "scene_salle_pont_levis",
+          "requiredItemId": "item_sceau_bicephale",
+          "lockedMessage": "Le mecanisme ne reconnait ni force ni clef. Le lion et le dragon doivent etre reunis.",
+          "logicRules": [
+            {
+              "id": "rule_pont_sceau_combine",
+              "name": "Pont: sceau obtenu par combinaison",
+              "conditionType": "completed_combination",
+              "combinationId": "combo_sceau_bicephale",
+              "actionType": "default",
+              "dialogue": "Le sceau bicephale s'emboite dans la plaque. Les chaines du pont bougent au loin.",
+              "failureDialogue": "La plaque montre deux empreintes incompletes. Je dois reunir les fragments avant de toucher ce mecanisme."
+            }
+          ]
+        },
+        {
+          "id": "hs_laboratoire_flamme_bleue",
+          "name": "Flamme bleue",
+          "x": 57,
+          "y": 45,
+          "width": 13,
+          "height": 18,
+          "actionType": "dialogue",
+          "dialogue": "La flamme bleue ne chauffe pas. Pour les runes, ce sera la couleur de la tour."
+        },
+        {
+          "id": "hs_laboratoire_flamme_ouest",
+          "name": "Flamme a l ouest",
+          "x": 37,
+          "y": 58,
+          "width": 13,
+          "height": 14,
+          "actionType": "dialogue",
+          "dialogue": "Sur la table, la flamme bleue est placee a gauche de la carte. Elle marque l'ouest."
+        }
+      ],
+      "actId": "acte_serment_obsidienne",
+      "parentSceneId": "",
+      "backgroundName": "scene-laboratoire-archimage.png",
+      "backgroundData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/scene-laboratoire-archimage.png?v=20260609-donjon-dragon-v1",
+      "backgroundWidth": 1672,
+      "backgroundHeight": 941,
+      "backgroundAspectRatio": 1.7768331562167907,
+      "visualEffect": "glow",
+      "visualEffectIntensity": "subtle",
+      "sceneTransition": "fade",
+      "sceneTransitionDuration": 750,
+      "sceneObjects": []
+    },
+    {
+      "id": "scene_salle_pont_levis",
+      "name": "Salle du Pont-Levis",
+      "introText": "Le laboratoire reste ouvert derriere moi. Devant, le pont dort au-dessus du noir.",
+      "hotspots": [
+        {
+          "id": "hs_pont_retour_laboratoire",
+          "name": "Retour laboratoire",
+          "x": 7,
+          "y": 34,
+          "width": 14,
+          "height": 35,
+          "actionType": "scene",
+          "dialogue": "Je repasse par le mecanisme et la lumiere bleue du laboratoire.",
+          "targetSceneId": "scene_laboratoire_archimage"
+        },
+        {
+          "id": "hs_pont_carte_puzzle",
+          "name": "Carte des salles basses",
+          "x": 36,
+          "y": 66,
+          "width": 25,
+          "height": 17,
+          "actionType": "dialogue_item",
+          "dialogue": "Le pont descend d'un cran. Le cristal lunaire roule hors du cadre de la carte.",
+          "rewardItemId": "item_cristal_lunaire",
+          "enigmaId": "enigme_carte_salles_basses_puzzle",
+          "logicRules": [
+            {
+              "id": "rule_carte_deja_reparee",
+              "name": "Déjà résolu",
+              "conditionType": "solved_enigma",
+              "conditionEnigmaId": "enigme_carte_salles_basses_puzzle",
+              "actionType": "dialogue",
+              "dialogue": "La carte est reparee. Le pont ne remontera pas tant que je respire ici."
+            },
+            {
+              "id": "rule_carte_reperes_externes",
+              "name": "Carte: reperes vus hors du pont",
+              "conditionType": "advanced",
+              "advancedConditionMode": "all",
+              "advancedConditions": [
+                {
+                  "id": "cond_carte_couronne",
+                  "type": "completed_hotspot",
+                  "hotspotId": "hs_crypte_couronne_nord"
+                },
+                {
+                  "id": "cond_carte_aile",
+                  "type": "completed_hotspot",
+                  "hotspotId": "hs_galerie_aile_est"
+                },
+                {
+                  "id": "cond_carte_engrenage",
+                  "type": "completed_hotspot",
+                  "hotspotId": "hs_forge_engrenage_bas_gauche"
+                },
+                {
+                  "id": "cond_carte_flamme",
+                  "type": "completed_hotspot",
+                  "hotspotId": "hs_laboratoire_flamme_ouest"
+                }
+              ],
+              "actionType": "default",
+              "dialogue": "",
+              "failureDialogue": "Je ne reparerai pas cette carte au hasard. Il me manque encore des reperes vus dans les autres salles."
+            }
+          ]
+        },
+        {
+          "id": "hs_pont_chambre_tresor",
+          "name": "Grille lunaire",
+          "x": 50,
+          "y": 28,
+          "width": 16,
+          "height": 34,
+          "actionType": "scene",
+          "dialogue": "Le cristal lunaire repond a la carte reparee. La grille laisse passer un souffle froid.",
+          "targetSceneId": "scene_chambre_tresor_scellee",
+          "logicRules": [
+            {
+              "id": "rule_grille_lunaire_puzzle_cristal",
+              "name": "Tresor: carte reparee et cristal",
+              "conditionType": "advanced",
+              "advancedConditionMode": "all",
+              "advancedConditions": [
+                {
+                  "id": "cond_grille_puzzle",
+                  "type": "solved_enigma",
+                  "enigmaId": "enigme_carte_salles_basses_puzzle"
+                },
+                {
+                  "id": "cond_grille_cristal",
+                  "type": "has_item",
+                  "itemId": "item_cristal_lunaire"
+                }
+              ],
+              "actionType": "default",
+              "dialogue": "",
+              "failureDialogue": "La grille reste fermee. Je dois d'abord reparer la carte et prendre le cristal lunaire."
+            }
+          ]
+        }
+      ],
+      "actId": "acte_serment_obsidienne",
+      "parentSceneId": "",
+      "backgroundName": "scene-salle-pont-levis.png",
+      "backgroundData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/scene-salle-pont-levis.png?v=20260609-donjon-dragon-v1",
+      "backgroundWidth": 1672,
+      "backgroundHeight": 941,
+      "backgroundAspectRatio": 1.7768331562167907,
+      "visualEffect": "glow",
+      "visualEffectIntensity": "subtle",
+      "sceneTransition": "fade",
+      "sceneTransitionDuration": 750,
+      "sceneObjects": []
+    },
+    {
+      "id": "scene_chambre_tresor_scellee",
+      "name": "Chambre du Tresor Scellee",
+      "introText": "Le pont reste visible derriere la grille ouverte. Les coffres ne m'appellent pas; les runes, si.",
+      "hotspots": [
+        {
+          "id": "hs_tresor_retour_pont",
+          "name": "Retour pont-levis",
+          "x": 8,
+          "y": 34,
+          "width": 14,
+          "height": 35,
+          "actionType": "scene",
+          "dialogue": "Je retourne vers les chaines du pont.",
+          "targetSceneId": "scene_salle_pont_levis"
+        },
+        {
+          "id": "hs_tresor_runes_dragon",
+          "name": "Runes du dragon",
+          "x": 39,
+          "y": 62,
+          "width": 23,
+          "height": 18,
+          "actionType": "dialogue",
+          "dialogue": "Les runes s'allument dans le bon ordre. La porte du dragon s'ouvre enfin.",
+          "enigmaId": "enigme_runes_dragon_couleurs",
+          "logicRules": [
+            {
+              "id": "rule_porte_dragon_apres_runes",
+              "name": "Porte-dragon ouverte apres les runes",
+              "conditionType": "solved_enigma",
+              "conditionEnigmaId": "enigme_runes_dragon_couleurs",
+              "actionType": "scene",
+              "targetSceneId": "scene_antre_dragon_obsidienne",
+              "dialogue": "La porte-dragon est ouverte maintenant. Je peux rejoindre l'antre sans refaire le serment."
+            },
+            {
+              "id": "rule_runes_indices_couleurs",
+              "name": "Runes: couleurs et ordre externes",
+              "conditionType": "advanced",
+              "advancedConditionMode": "all",
+              "advancedConditions": [
+                {
+                  "id": "cond_runes_cristal",
+                  "type": "has_item",
+                  "itemId": "item_cristal_lunaire"
+                },
+                {
+                  "id": "cond_runes_violet",
+                  "type": "completed_hotspot",
+                  "hotspotId": "hs_galerie_anneau_violet"
+                },
+                {
+                  "id": "cond_runes_rouge",
+                  "type": "completed_hotspot",
+                  "hotspotId": "hs_forge_braises_rouges"
+                },
+                {
+                  "id": "cond_runes_blanc",
+                  "type": "completed_hotspot",
+                  "hotspotId": "hs_sanctuaire_cierge_blanc"
+                },
+                {
+                  "id": "cond_runes_bleu",
+                  "type": "completed_hotspot",
+                  "hotspotId": "hs_laboratoire_flamme_bleue"
+                },
+                {
+                  "id": "cond_runes_ordre",
+                  "type": "chose_reply",
+                  "replyId": "reply_tillyk_ordre_couleurs"
+                }
+              ],
+              "actionType": "default",
+              "dialogue": "",
+              "failureDialogue": "Les runes attendent le cristal, les quatre couleurs vues ailleurs et l'ordre des familles donne par Tillyk."
+            }
+          ]
+        },
+        {
+          "id": "hs_tresor_coffres_scelles",
+          "name": "Coffres scelles",
+          "x": 70,
+          "y": 48,
+          "width": 16,
+          "height": 22,
+          "actionType": "dialogue",
+          "dialogue": "Les coffres sont lourds, mais ils ne sont pas le centre de la piece. Je les laisse pour l'instant."
+        }
+      ],
+      "actId": "acte_serment_obsidienne",
+      "parentSceneId": "",
+      "backgroundName": "scene-chambre-tresor-scellee.png",
+      "backgroundData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/scene-chambre-tresor-scellee.png?v=20260609-donjon-dragon-v1",
+      "backgroundWidth": 1672,
+      "backgroundHeight": 941,
+      "backgroundAspectRatio": 1.7768331562167907,
+      "visualEffect": "glow",
+      "visualEffectIntensity": "subtle",
+      "sceneTransition": "fade",
+      "sceneTransitionDuration": 750,
+      "sceneObjects": []
+    },
+    {
+      "id": "scene_antre_dragon_obsidienne",
+      "name": "Antre du Dragon d'Obsidienne",
+      "introText": "Le dragon respire lentement. Le passage vers le balcon existe parce que je ne l'ai pas vole.",
+      "hotspots": [
+        {
+          "id": "hs_antre_retour_tresor",
+          "name": "Retour chambre du tresor",
+          "x": 7,
+          "y": 34,
+          "width": 14,
+          "height": 35,
+          "actionType": "scene",
+          "dialogue": "La porte-dragon reste ouverte derriere moi.",
+          "targetSceneId": "scene_chambre_tresor_scellee"
+        },
+        {
+          "id": "hs_antre_balcon_lune",
+          "name": "Tunnel du balcon",
+          "x": 80,
+          "y": 38,
+          "width": 13,
+          "height": 32,
+          "actionType": "scene",
+          "dialogue": "Le tunnel amene l'air de la nuit. Je peux enfin sortir.",
+          "targetSceneId": "scene_balcon_lune"
+        },
+        {
+          "id": "hs_antre_dragon_calme",
+          "name": "Dragon eveille",
+          "x": 38,
+          "y": 32,
+          "width": 29,
+          "height": 29,
+          "actionType": "dialogue",
+          "dialogue": "Le dragon ne bouge presque pas. Il sait que je suis passe par les serments, pas par la lame."
+        }
+      ],
+      "actId": "acte_serment_obsidienne",
+      "parentSceneId": "",
+      "backgroundName": "scene-antre-dragon-obsidienne.png",
+      "backgroundData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/scene-antre-dragon-obsidienne.png?v=20260609-donjon-dragon-v1",
+      "backgroundWidth": 1672,
+      "backgroundHeight": 941,
+      "backgroundAspectRatio": 1.7768331562167907,
+      "visualEffect": "glow",
+      "visualEffectIntensity": "subtle",
+      "sceneTransition": "fade",
+      "sceneTransitionDuration": 750,
+      "sceneObjects": []
+    },
+    {
+      "id": "scene_balcon_lune",
+      "name": "Balcon de la Lune",
+      "introText": "La nuit est froide et simple. Derriere moi, le donjon garde ses salles; devant moi, le chemin descend enfin.",
+      "hotspots": [
+        {
+          "id": "hs_balcon_retour_antre",
+          "name": "Retour antre",
+          "x": 8,
+          "y": 34,
+          "width": 14,
+          "height": 35,
+          "actionType": "scene",
+          "dialogue": "Je peux encore revenir vers l'antre, si je veux verifier mon courage.",
+          "targetSceneId": "scene_antre_dragon_obsidienne"
+        },
+        {
+          "id": "hs_balcon_sortie",
+          "name": "Vue sur la vallee",
+          "x": 42,
+          "y": 28,
+          "width": 30,
+          "height": 38,
+          "actionType": "dialogue",
+          "dialogue": "La vallee est noire, mais ouverte. Je garde le serment en memoire et je descends avant l'aube."
+        }
+      ],
+      "actId": "acte_serment_obsidienne",
+      "parentSceneId": "",
+      "backgroundName": "scene-balcon-de-la-lune.png",
+      "backgroundData": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/scene-balcon-de-la-lune.png?v=20260609-donjon-dragon-v1",
+      "backgroundWidth": 1672,
+      "backgroundHeight": 941,
+      "backgroundAspectRatio": 1.7768331562167907,
+      "visualEffect": "glow",
+      "visualEffectIntensity": "subtle",
+      "sceneTransition": "fade",
+      "sceneTransitionDuration": 750,
+      "sceneObjects": []
+    }
+  ],
+  "storyVariables": [],
+  "routeMap": {
+    "rows": 16,
+    "cols": 24,
+    "cells": [],
+    "rooms": [
+      {
+        "id": "room_hall",
+        "sceneId": "scene_hall_des_des_sombres",
+        "name": "Hall",
+        "x": 12,
+        "y": 50,
+        "type": "start",
+        "canvasId": "route_canvas_obsidienne"
+      },
+      {
+        "id": "room_gardes",
+        "sceneId": "scene_salle_des_gardes",
+        "name": "Gardes",
+        "x": 28,
+        "y": 34,
+        "type": "room",
+        "canvasId": "route_canvas_obsidienne"
+      },
+      {
+        "id": "room_armurerie",
+        "sceneId": "scene_armurerie_du_serment",
+        "name": "Armurerie",
+        "x": 44,
+        "y": 24,
+        "type": "room",
+        "canvasId": "route_canvas_obsidienne"
+      },
+      {
+        "id": "room_prison",
+        "sceneId": "scene_prison_des_aventuriers",
+        "name": "Prison",
+        "x": 44,
+        "y": 44,
+        "type": "room",
+        "canvasId": "route_canvas_obsidienne"
+      },
+      {
+        "id": "room_cuisine",
+        "sceneId": "scene_cuisine_des_kobolds",
+        "name": "Cuisine",
+        "x": 28,
+        "y": 66,
+        "type": "room",
+        "canvasId": "route_canvas_obsidienne"
+      },
+      {
+        "id": "room_forge",
+        "sceneId": "scene_forge_naine",
+        "name": "Forge",
+        "x": 44,
+        "y": 70,
+        "type": "room",
+        "canvasId": "route_canvas_obsidienne"
+      },
+      {
+        "id": "room_bibliotheque",
+        "sceneId": "scene_bibliotheque_des_mages",
+        "name": "Bibliotheque",
+        "x": 28,
+        "y": 50,
+        "type": "room",
+        "canvasId": "route_canvas_obsidienne"
+      },
+      {
+        "id": "room_galerie",
+        "sceneId": "scene_galerie_des_ancetres",
+        "name": "Galerie",
+        "x": 46,
+        "y": 52,
+        "type": "room",
+        "canvasId": "route_canvas_obsidienne"
+      },
+      {
+        "id": "room_sanctuaire",
+        "sceneId": "scene_sanctuaire_des_serments",
+        "name": "Sanctuaire",
+        "x": 62,
+        "y": 44,
+        "type": "room",
+        "canvasId": "route_canvas_obsidienne"
+      },
+      {
+        "id": "room_crypte",
+        "sceneId": "scene_crypte_des_rois",
+        "name": "Crypte",
+        "x": 78,
+        "y": 44,
+        "type": "room",
+        "canvasId": "route_canvas_obsidienne"
+      },
+      {
+        "id": "room_labo",
+        "sceneId": "scene_laboratoire_archimage",
+        "name": "Laboratoire",
+        "x": 62,
+        "y": 60,
+        "type": "room",
+        "canvasId": "route_canvas_obsidienne"
+      },
+      {
+        "id": "room_pont",
+        "sceneId": "scene_salle_pont_levis",
+        "name": "Pont-levis",
+        "x": 78,
+        "y": 60,
+        "type": "room",
+        "canvasId": "route_canvas_obsidienne"
+      },
+      {
+        "id": "room_tresor",
+        "sceneId": "scene_chambre_tresor_scellee",
+        "name": "Tresor",
+        "x": 90,
+        "y": 60,
+        "type": "room",
+        "canvasId": "route_canvas_obsidienne"
+      },
+      {
+        "id": "room_antre",
+        "sceneId": "scene_antre_dragon_obsidienne",
+        "name": "Antre",
+        "x": 92,
+        "y": 42,
+        "type": "room",
+        "canvasId": "route_canvas_obsidienne"
+      },
+      {
+        "id": "room_balcon",
+        "sceneId": "scene_balcon_lune",
+        "name": "Balcon",
+        "x": 92,
+        "y": 24,
+        "type": "end",
+        "canvasId": "route_canvas_obsidienne"
+      }
+    ],
+    "connections": [
+      {
+        "id": "route_hall_gardes",
+        "fromRoomId": "room_hall",
+        "toRoomId": "room_gardes",
+        "label": "Ouvert",
+        "locked": false,
+        "allowOneWay": false
+      },
+      {
+        "id": "route_hall_cuisine",
+        "fromRoomId": "room_hall",
+        "toRoomId": "room_cuisine",
+        "label": "Ouvert",
+        "locked": false,
+        "allowOneWay": false
+      },
+      {
+        "id": "route_hall_bibliotheque",
+        "fromRoomId": "room_hall",
+        "toRoomId": "room_bibliotheque",
+        "label": "Ouvert",
+        "locked": false,
+        "allowOneWay": false
+      },
+      {
+        "id": "route_gardes_armurerie",
+        "fromRoomId": "room_gardes",
+        "toRoomId": "room_armurerie",
+        "label": "Ouvert",
+        "locked": false,
+        "allowOneWay": false
+      },
+      {
+        "id": "route_gardes_prison",
+        "fromRoomId": "room_gardes",
+        "toRoomId": "room_prison",
+        "label": "Ouvert",
+        "locked": false,
+        "allowOneWay": false
+      },
+      {
+        "id": "route_cuisine_forge",
+        "fromRoomId": "room_cuisine",
+        "toRoomId": "room_forge",
+        "label": "Huile noire",
+        "locked": true,
+        "allowOneWay": false
+      },
+      {
+        "id": "route_bibliotheque_galerie",
+        "fromRoomId": "room_bibliotheque",
+        "toRoomId": "room_galerie",
+        "label": "Ouvert",
+        "locked": false,
+        "allowOneWay": false
+      },
+      {
+        "id": "route_galerie_sanctuaire",
+        "fromRoomId": "room_galerie",
+        "toRoomId": "room_sanctuaire",
+        "label": "Ouvert",
+        "locked": false,
+        "allowOneWay": false
+      },
+      {
+        "id": "route_galerie_labo",
+        "fromRoomId": "room_galerie",
+        "toRoomId": "room_labo",
+        "label": "Ouvert",
+        "locked": false,
+        "allowOneWay": false
+      },
+      {
+        "id": "route_sanctuaire_crypte",
+        "fromRoomId": "room_sanctuaire",
+        "toRoomId": "room_crypte",
+        "label": "Clef osseuse",
+        "locked": true,
+        "allowOneWay": false
+      },
+      {
+        "id": "route_labo_pont",
+        "fromRoomId": "room_labo",
+        "toRoomId": "room_pont",
+        "label": "Sceau combine",
+        "locked": true,
+        "allowOneWay": false
+      },
+      {
+        "id": "route_pont_tresor",
+        "fromRoomId": "room_pont",
+        "toRoomId": "room_tresor",
+        "label": "Carte + cristal",
+        "locked": true,
+        "allowOneWay": false
+      },
+      {
+        "id": "route_tresor_antre",
+        "fromRoomId": "room_tresor",
+        "toRoomId": "room_antre",
+        "label": "Runes",
+        "locked": true,
+        "allowOneWay": false
+      },
+      {
+        "id": "route_antre_balcon",
+        "fromRoomId": "room_antre",
+        "toRoomId": "room_balcon",
+        "label": "Ouvert",
+        "locked": false,
+        "allowOneWay": false
+      }
+    ]
+  },
+  "metadata": {
+    "objectCount": 6,
+    "sceneCount": 15,
+    "enigmaCount": 4,
+    "cinematicCount": 2,
+    "combinationCount": 1,
+    "visualStyle": "Rendu realiste cinematographique: donjon medieval fantasy en pierre d'obsidienne, torches chaudes, reflets bleus lunaires, laiton use, vieux cuir et magie discrete.",
+    "solutions": {
+      "safeCode": "7394",
+      "letterOrder": [
+        "Ne casse pas la grille de la forge.",
+        "Verse l'huile sur le mecanisme du mur est.",
+        "La clef d'os ouvre la crypte, pas la prison.",
+        "Quand la carte sera reparee, porte le cristal devant le dragon."
+      ],
+      "puzzleLogic": "Couronne nord, aile est, engrenage bas gauche, flamme bleue ouest.",
+      "colorSequence": [
+        "purple",
+        "red",
+        "white",
+        "blue"
+      ],
+      "itemCombination": "Fragment du Lion + Fragment du Dragon = Sceau bicephale"
+    },
+    "storageMode": "supabase-public-assets",
+    "supabaseBucket": "escape-game-public-assets",
+    "assetVersion": "20260609-donjon-dragon-v1",
+    "supabaseJsonUrl": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/public/generated/dungeon-dragon/20260609-donjon-dragon-v1/donjon-dragon-obsidienne.json?v=20260609-donjon-dragon-v1"
+  }
+}

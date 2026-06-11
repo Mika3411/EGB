@@ -1,7 +1,9 @@
 {
   "ok": true,
   "canonicalProjectPath": "C:\\Users\\admin\\Documents\\escape-game-builder\\docs\\examples\\chasse-tresor-caraibes.json",
-  "assetDir": "C:\\Users\\admin\\Documents\\escape-game-builder\\public\\assets\\generated\\caribbean-treasure",
+  "supabaseProjectUrl": "https://jylbhoshvtaboewehsej.supabase.co/storage/v1/object/public/escape-game-public-assets/generated/caribbean-treasure/20260609t180036/chasse-tresor-caraibes.json",
+  "supabaseBucket": "escape-game-public-assets",
+  "supabaseStorageBase": "generated/caribbean-treasure/20260609t180036",
   "counts": {
     "acts": 1,
     "scenes": 15,
@@ -11,14 +13,26 @@
     "items": 6,
     "combinations": 1,
     "hotspots": 76,
-    "logicRules": 10
+    "logicRules": 10,
+    "uploadedImages": 28
   },
   "checked": [
-    "references",
+    "native builder references",
     "navigation returns",
     "clues outside enigma rooms",
-    "media dimensions",
-    "item alpha"
+    "local media dimensions",
+    "item alpha channel",
+    "supabase public URLs written into JSON",
+    "hotspot overlay visual check",
+    "visible dialogue cleanup"
   ],
-  "note": "Version canonique copiee depuis public/assets/generated/caribbean-treasure/caribbean-treasure-project.json."
+  "notes": [
+    "All imageData/backgroundData/popupBackgroundData values point to Supabase public URLs.",
+    "The local JSON in public/assets/generated/caribbean-treasure and docs/examples is the same uploaded project.",
+    "Hotspot overlay inspected after realistic image generation; taverne return and chapel shell zones adjusted, then JSON re-uploaded.",
+    "Tavern image corrected: visible third doorway to market added; tavern hotspots repositioned on cove door, market door, fort door, chest, and Mateo.",
+    "Tavern corrected image versioned as scene-taverne_pelican_bleu-v2.png to avoid stale cached public asset.",
+    "Visible hotspot/enigma/cinematic texts rewritten to concrete hero thoughts; removed unclear wording such as signe de la lettre."
+  ],
+  "generatedAt": "2026-06-09T20:25:08.535Z"
 }

@@ -10,8 +10,11 @@ import {
   personalizeTutorialText,
 } from '../../shared/data/tutorialSteps';
 
-const getTutorialTarget = (step) => {
+const MEDIA_SOURCE_COMPUTER_SELECTOR = '[data-tour="media-source-computer"]';
+
+export const getTutorialTarget = (step) => {
   const selectors = [
+    ...(Array.isArray(step?.preferredSelectors) ? step.preferredSelectors : []),
     step?.selector,
     step?.fallbackSelector,
     ...(Array.isArray(step?.fallbackSelectors) ? step.fallbackSelectors : []),
@@ -223,6 +226,11 @@ export default function BuilderGuide({ step, stepNumber, totalSteps, canPrevious
   const isTabTarget = String(step.selector || '').includes('data-tour-tab');
   const isSceneCanvasTarget = step.selector === '[data-tour="scene-canvas"]';
   const isMapBoardTarget = step.selector === '[data-tour="map-board"]';
+  const isMediaSourceComputerTarget = Boolean(
+    step.preferredSelectors?.includes(MEDIA_SOURCE_COMPUTER_SELECTOR)
+    && document.querySelector(MEDIA_SOURCE_COMPUTER_SELECTOR)
+  );
+  const prefersSidePlacement = isWritingStep || isMediaSourceComputerTarget;
   const estimatedBubbleHeight = step.completedWhen?.type === 'fake-file'
     ? (showFakeWindow ? 620 : 430)
     : isWritingStep
@@ -277,13 +285,13 @@ export default function BuilderGuide({ step, stepNumber, totalSteps, canPrevious
         top: Math.max(12, tabAnchorBottom + margin),
       };
     }
-    if (isWritingStep && roomRight >= bubbleWidth) {
+    if (prefersSidePlacement && roomRight >= bubbleWidth) {
       return {
         left: targetRect.right + margin,
         top: clampBubbleTop(centerTop),
       };
     }
-    if (isWritingStep && roomLeft >= bubbleWidth) {
+    if (prefersSidePlacement && roomLeft >= bubbleWidth) {
       return {
         left: targetRect.left - bubbleWidth - margin,
         top: clampBubbleTop(centerTop),
@@ -301,13 +309,13 @@ export default function BuilderGuide({ step, stepNumber, totalSteps, canPrevious
         top: targetRect.top - bubbleHeight - margin,
       };
     }
-    if (roomRight >= bubbleWidth) {
+    if (!prefersSidePlacement && roomRight >= bubbleWidth) {
       return {
         left: targetRect.right + margin,
         top: clampBubbleTop(centerTop),
       };
     }
-    if (roomLeft >= bubbleWidth) {
+    if (!prefersSidePlacement && roomLeft >= bubbleWidth) {
       return {
         left: targetRect.left - bubbleWidth - margin,
         top: clampBubbleTop(centerTop),

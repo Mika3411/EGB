@@ -50,11 +50,9 @@ const CREATION_MODE_HELPS = {
 const PROFILE_CREATION_MODES = CREATION_MODES.filter(([value]) => value !== PRO_PROMOTION_PROJECT_MODE);
 
 export default function CreateProjectPanel({
-  hasProjects = false,
   isBusy,
   onCreateProject,
   onImportProject,
-  onStartTutorial,
 }) {
   const [newProjectName, setNewProjectName] = useState('');
   const [creationTemplate, setCreationTemplate] = useState('empty');
@@ -194,27 +192,6 @@ export default function CreateProjectPanel({
             <button type="submit" className="profile-action-button" disabled={isBusy} data-tour="profile-create-button">
               + Créer
             </button>
-            {!hasProjects ? (
-              <aside className="profile-onboarding-card" aria-labelledby="profile-onboarding-title">
-                <div>
-                  <span className="section-kicker">Premier parcours</span>
-                  <h3 id="profile-onboarding-title">Commencer en 5 minutes</h3>
-                  <p>
-                    Lance le didacticiel si tu veux créer ton premier projet avec les bons repères.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="profile-action-button"
-                  disabled={isBusy}
-                  onClick={() => onStartTutorial?.('profile')}
-                  data-tour="profile-onboarding-tutorial"
-                >
-                  <ListChecks aria-hidden="true" size={17} />
-                  <span>Lancer le didacticiel</span>
-                </button>
-              </aside>
-            ) : null}
             <button
               type="button"
               className="profile-action-button secondary-action"

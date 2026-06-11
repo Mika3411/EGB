@@ -1,0 +1,15 @@
+{
+  "outputDir": "C:\\Users\\admin\\Documents\\escape-game-builder\\public\\assets\\generated\\renaissance-code",
+  "sourceDir": "C:\\Users\\admin\\.codex\\generated_images\\019eb3ac-e4d6-79a1-a854-9f286d5914d7",
+  "counts": {
+    "scenes": 15,
+    "items": 10,
+    "cinematicSlides": 6,
+    "cinematics": 2
+  },
+  "itemsHaveAlpha": true,
+  "allSceneSizesOk": true,
+  "allCinematicSizesOk": true,
+  "allItemSizesOk": true,
+  "generatedAt": "2026-06-10T23:29:33.176Z"
+}

@@ -1,4 +1,4 @@
-import React, { Suspense, useCallback, useMemo, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useAccessibleDialog } from '../shared/ui/AccessibleDialog';
 import CenterScreenNotice from '../shared/ui/CenterScreenNotice';
 import { useAccountStorage } from '../domains/auth/hooks/useAccountStorage';
@@ -12,6 +12,7 @@ import { hasRemoteStorageConfig } from '../shared/services/remoteSession';
 import { readAppUiState, writeAppUiState } from '../shared/utils/storageHelpers';
 import { lazyWithRetry } from '../shared/utils/lazyImportRetry';
 import { buildPlayableProjectUrl, downloadProjectQrCode, getAuthorProfileSlugFromPath } from '../shared/utils/publicProjectLinks';
+import { hasStoredLanguagePreference, useI18n } from '../shared/i18n';
 import SupportWidget from '../domains/support/components/SupportWidget.jsx';
 
 const LandingExperience = lazyWithRetry(() => import('../domains/landing/LandingExperience'));
@@ -104,6 +105,7 @@ export const shouldStartDemoInPlayerPreview = () => {
 
 function ShellApp() {
   const auth = useLocalAuth();
+  const { language, setLanguage, t } = useI18n();
   const {
     alert: alertDialog,
     confirm: confirmDialog,
@@ -133,6 +135,25 @@ function ShellApp() {
     user: auth.user,
   });
 
+  useEffect(() => {
+    if (!auth.isReady || !auth.user?.language || hasStoredLanguagePreference()) return;
+    setLanguage(auth.user.language);
+  }, [auth.isReady, auth.user?.language, setLanguage]);
+
+  const handleLanguageChange = useCallback(async (nextLanguage) => {
+    const normalizedLanguage = setLanguage(nextLanguage);
+    if (!auth.user?.id || auth.user.language === normalizedLanguage) return normalizedLanguage;
+
+    try {
+      await auth.updateAccountProfile({ language: normalizedLanguage });
+      setSaveStatus(t('language.savedStatus'));
+    } catch {
+      setSaveStatus(t('language.localOnlyStatus'));
+    }
+
+    return normalizedLanguage;
+  }, [auth, setLanguage, t]);
+
   const openLoginPanel = useCallback(() => {
     setAuthEntryMode('login');
     setAuthEntryInitialForm({});
@@ -140,13 +161,15 @@ function ShellApp() {
   }, []);
 
   const openRegisterPanel = useCallback((options = {}) => {
-    const nextInitialForm = options?.accountType === ACCOUNT_TYPE_PRO
-      ? { accountType: ACCOUNT_TYPE_PRO }
-      : {};
+    const nextInitialForm = {
+      language,
+      ...(options?.accountType === ACCOUNT_TYPE_PRO ? { accountType: ACCOUNT_TYPE_PRO } : {}),
+      ...(options?.authIntent ? { authIntent: options.authIntent } : {}),
+    };
     setAuthEntryMode('register');
     setAuthEntryInitialForm(nextInitialForm);
     setShowAuthEntry(true);
-  }, []);
+  }, [language]);
 
   const closeAuthEntry = useCallback(() => {
     setShowAuthEntry(false);
@@ -513,6 +536,7 @@ function ShellApp() {
             onRegister={openRegisterPanel}
             onOpenGallery={openGalleryScreen}
             onStartDemo={startDemoFromLanding}
+            onLanguageChange={handleLanguageChange}
           />
         </Suspense>
       );
@@ -532,6 +556,7 @@ function ShellApp() {
             isPasswordRecovery={auth.isPasswordRecovery}
             isBusy={auth.isBusy}
             errorMessage={auth.authError}
+            onLanguageChange={handleLanguageChange}
           />
         </Suspense>
         {accessibleDialog}
@@ -553,6 +578,7 @@ function ShellApp() {
             isDemoMode={builderLaunch.isDemoMode}
             onExitToProfile={openProfileScreen}
             onExitDemoToLanding={exitDemoToLanding}
+            onLanguageChange={handleLanguageChange}
           />
         </Suspense>
         {screen === 'builder' ? <SupportWidget user={auth.user} /> : null}
@@ -562,7 +588,7 @@ function ShellApp() {
 
   if (screen === 'arcade') {
     if (!auth.isReady) {
-      return <div className="app-shell"><div className="panel">Chargement du compte...</div></div>;
+      return <div className="app-shell"><div className="panel">{t('common.loadingAccount')}</div></div>;
     }
     return (
       <>
@@ -618,7 +644,7 @@ function ShellApp() {
   }
 
   if (!auth.isReady) {
-    return <div className="app-shell"><div className="panel">Chargement du compte...</div></div>;
+    return <div className="app-shell"><div className="panel">{t('common.loadingAccount')}</div></div>;
   }
 
   if (!auth.user) {
@@ -633,11 +659,11 @@ function ShellApp() {
             <div className="panel-head">
               <div>
                 <span className="eyebrow">Admin</span>
-                <h2>Accès admin refusé</h2>
-                <p className="small-note">Reconnecte-toi avec un compte admin pour ouvrir cette zone.</p>
+                <h2>{t('shell.adminDeniedTitle')}</h2>
+                <p className="small-note">{t('shell.adminDeniedText')}</p>
               </div>
               <button type="button" className="secondary-action" onClick={openProfileScreen}>
-                Retour profil
+                {t('common.backToProfile')}
               </button>
             </div>
           </section>
@@ -710,6 +736,7 @@ function ShellApp() {
           onLogout={auth.logout}
           isProfileTutorialActive={Boolean(activeProfileTutorialStep)}
           profileTutorialStep={activeProfileTutorialStep}
+          onLanguageChange={handleLanguageChange}
         />
       </Suspense>
       <CenterScreenNotice message={centerNotice} onDone={() => setCenterNotice('')} />

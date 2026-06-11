@@ -5,6 +5,7 @@ import { resolveAssetUrl } from '../../../shared/services/assetManager';
 import { getSceneObjectBlockType, getSceneObjectClickMode } from '../../../shared/services/sceneObjectBlocks';
 import MediaSourcePicker from '../../../shared/ui/media/MediaSourcePicker.jsx';
 import { showConfirm } from '../../../shared/ui/AccessibleDialog';
+import { useEditorPanelText } from '../../../shared/i18n';
 
 const ACTION_LABELS = {
   default: 'Action normale de la zone',
@@ -116,38 +117,55 @@ const getConversationReplies = (project) => (
   ))
 );
 
-const getStoryVariableSummary = ({ key, operator = 'equals', value }) => {
-  const operatorLabel = VARIABLE_OPERATORS[operator] || '=';
+const fallbackTx = (key, params = {}, fallback = '') => (
+  fallback.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_, paramKey) => (
+    Object.prototype.hasOwnProperty.call(params || {}, paramKey) ? String(params[paramKey]) : ''
+  ))
+);
+
+const mergeTranslatedLabels = (fallbacks, translations = {}) => Object.fromEntries(
+  Object.entries(fallbacks).map(([key, fallback]) => [key, translations[key] || fallback]),
+);
+
+const getStoryVariableSummary = ({ key, operator = 'equals', value }, tx = fallbackTx, variableOperators = VARIABLE_OPERATORS) => {
+  const operatorLabel = variableOperators[operator] || VARIABLE_OPERATORS[operator] || '=';
   const valueLabel = ['truthy', 'falsy'].includes(operator) ? '' : ` ${value ?? ''}`;
-  return `${key || 'variable'} ${operatorLabel}${valueLabel}`;
+  return `${key || tx('common.variable', {}, 'variable')} ${operatorLabel}${valueLabel}`;
 };
 
-const getAdvancedConditionSummary = (condition = {}, project, getSceneLabel) => {
-  if (condition.type === 'has_item') return `Objet: ${(project.items || []).find((item) => item.id === condition.itemId)?.name || 'non choisi'}`;
-  if (condition.type === 'visited_scene') return `Scène: ${getSceneLabel(condition.sceneId) || 'non choisie'}`;
+const getAdvancedConditionSummary = (condition = {}, project, getSceneLabel, tx, variableOperators) => {
+  if (condition.type === 'has_item') {
+    return tx('summary.item', { name: (project.items || []).find((item) => item.id === condition.itemId)?.name || tx('common.noChoiceMasc', {}, 'non choisi') }, 'Objet : {{name}}');
+  }
+  if (condition.type === 'visited_scene') {
+    return tx('summary.scene', { name: getSceneLabel(condition.sceneId) || tx('common.noChoiceFem', {}, 'non choisie') }, 'Scène : {{name}}');
+  }
   if (condition.type === 'completed_hotspot') {
     const testedHotspot = (project.scenes || []).flatMap((scene) => [
       ...(scene.hotspots || []),
       ...(scene.sceneObjects || []),
     ]).find((hotspot) => hotspot.id === condition.hotspotId);
-    return `Zone: ${testedHotspot?.name || 'non choisie'}`;
+    return tx('summary.zone', { name: testedHotspot?.name || tx('common.noChoiceFem', {}, 'non choisie') }, 'Zone : {{name}}');
   }
-  if (condition.type === 'solved_enigma') return `Énigme: ${(project.enigmas || []).find((enigma) => enigma.id === condition.enigmaId)?.name || 'non choisie'}`;
+  if (condition.type === 'solved_enigma') {
+    return tx('summary.enigma', { name: (project.enigmas || []).find((enigma) => enigma.id === condition.enigmaId)?.name || tx('common.noChoiceFem', {}, 'non choisie') }, 'Énigme : {{name}}');
+  }
   if (condition.type === 'chose_reply') {
     const testedReply = getConversationReplies(project).find((entry) => entry.reply.id === condition.replyId);
-    return `Réponse: ${testedReply?.reply.label || 'non choisie'}`;
+    return tx('summary.reply', { name: testedReply?.reply.label || tx('common.noChoiceFem', {}, 'non choisie') }, 'Réponse : {{name}}');
   }
   if (condition.type === 'story_variable') {
     return getStoryVariableSummary({
       key: condition.variableKey,
       operator: condition.operator,
       value: condition.value,
-    });
+    }, tx, variableOperators);
   }
-  return 'Condition';
+  return tx('fields.condition', {}, 'Condition');
 };
 
-const getRuleSummary = (rule, project) => {
+const getRuleSummary = (rule, project, text) => {
+  const { tx, actionLabels, variableOperators } = text;
   const testedItem = project.items?.find((item) => item.id === rule.itemId);
   const testedScene = project.scenes?.find((scene) => scene.id === (rule.conditionSceneId || rule.sceneId));
   const testedHotspot = (project.scenes || []).flatMap((scene) => [
@@ -161,36 +179,44 @@ const getRuleSummary = (rule, project) => {
   const testedReply = getConversationReplies(project).find((entry) => entry.reply.id === (rule.conditionReplyId || rule.replyId));
   const rewardItem = project.items?.find((item) => item.id === rule.rewardItemId);
   const heroSkill = project.heroAdventure?.hero.skills?.find((skill) => skill.id === rule.heroSkillId);
-  const advancedMode = (rule.advancedConditionMode || 'all') === 'any' ? 'OU' : 'ET';
-  const advancedLabels = (rule.advancedConditions || []).map((condition) => getAdvancedConditionSummary(condition, project, (sceneId) => project.scenes?.find((scene) => scene.id === sceneId)?.name || ''));
+  const advancedMode = (rule.advancedConditionMode || 'all') === 'any'
+    ? tx('common.or', {}, 'OU')
+    : tx('common.and', {}, 'ET');
+  const advancedLabels = (rule.advancedConditions || []).map((condition) => getAdvancedConditionSummary(
+    condition,
+    project,
+    (sceneId) => project.scenes?.find((scene) => scene.id === sceneId)?.name || '',
+    tx,
+    variableOperators,
+  ));
   let condition = {
-    always: 'À l’utilisation',
-    missing_item: `Sans ${testedItem?.name || 'objet'}`,
-    visited_scene: `Scène visitée: ${testedScene?.name || 'scène'}`,
-    completed_hotspot: `Zone franchie: ${testedHotspot?.name || 'zone'}`,
-    solved_enigma: `Énigme réussie: ${testedEnigma?.name || 'énigme'}`,
-    launched_cinematic: `Cinématique lancée: ${testedCinematic?.name || 'cinématique'}`,
-    completed_combination: `Combinaison réalisée: ${testedCombination?.message || 'combinaison'}`,
-    chose_reply: `Réponse choisie: ${testedReply?.reply.label || 'réponse'}`,
+    always: tx('summary.atUse', {}, 'À l’utilisation'),
+    missing_item: tx('summary.withoutItem', { name: testedItem?.name || tx('common.item', {}, 'objet') }, 'Sans {{name}}'),
+    visited_scene: tx('summary.sceneVisited', { name: testedScene?.name || tx('common.scene', {}, 'scène') }, 'Scène visitée : {{name}}'),
+    completed_hotspot: tx('summary.zoneCompleted', { name: testedHotspot?.name || tx('common.zone', {}, 'zone') }, 'Zone franchie : {{name}}'),
+    solved_enigma: tx('summary.enigmaSolved', { name: testedEnigma?.name || tx('common.enigma', {}, 'énigme') }, 'Énigme réussie : {{name}}'),
+    launched_cinematic: tx('summary.cinematicLaunched', { name: testedCinematic?.name || tx('common.cinematic', {}, 'cinématique') }, 'Cinématique lancée : {{name}}'),
+    completed_combination: tx('summary.combinationDone', { name: testedCombination?.message || tx('common.combination', {}, 'combinaison') }, 'Combinaison réalisée : {{name}}'),
+    chose_reply: tx('summary.replyChosen', { name: testedReply?.reply.label || tx('common.reply', {}, 'réponse') }, 'Réponse choisie : {{name}}'),
     story_variable: getStoryVariableSummary({
       key: rule.conditionVariableKey || rule.variableKey,
       operator: rule.conditionVariableOperator || rule.operator,
       value: rule.conditionVariableValue ?? rule.value,
-    }),
-    advanced: advancedLabels.length ? `${advancedMode}: ${advancedLabels.join(` ${advancedMode} `)}` : 'Conditions avancées',
-    second_click: 'Deuxième clic',
-    hero_health_below: `PV héros < ${rule.heroHealthThreshold ?? 5}`,
-    hero_mana_at_least: `Mana héros >= ${rule.heroManaThreshold ?? 1}`,
-    hero_last_roll_success: 'Dernier jet héros réussi',
-    hero_skill_used: `Compétence: ${heroSkill?.name || 'à choisir'}`,
-  }[rule.conditionType] || `Avec ${testedItem?.name || 'objet'}`;
+    }, tx, variableOperators),
+    advanced: advancedLabels.length ? `${advancedMode}: ${advancedLabels.join(` ${advancedMode} `)}` : tx('summary.advancedConditions', {}, 'Conditions avancées'),
+    second_click: tx('summary.secondClick', {}, 'Deuxième clic'),
+    hero_health_below: tx('summary.heroHealthBelow', { value: rule.heroHealthThreshold ?? 5 }, 'PV héros < {{value}}'),
+    hero_mana_at_least: tx('summary.heroManaAtLeast', { value: rule.heroManaThreshold ?? 1 }, 'Mana héros >= {{value}}'),
+    hero_last_roll_success: tx('summary.heroLastRollSuccess', {}, 'Dernier jet héros réussi'),
+    hero_skill_used: tx('summary.heroSkillUsed', { name: heroSkill?.name || tx('common.chooseSkill', {}, 'à choisir') }, 'Compétence : {{name}}'),
+  }[rule.conditionType] || tx('summary.withItem', { name: testedItem?.name || tx('common.item', {}, 'objet') }, 'Avec {{name}}');
   if (rule.conditionType === 'launched_cinematic' && !rule.cinematicId) {
-    condition = 'Une cinématique est lancée';
+    condition = tx('summary.anyCinematicLaunched', {}, 'Une cinématique est lancée');
   }
   const action = rule.actionType === 'block'
-    ? `${ACTION_LABELS.block}: ${testedBlock?.target.name || 'bloc'}`
-    : ACTION_LABELS[rule.actionType] || 'Dialogue';
-  const reward = rewardItem ? ` · donne ${rewardItem.name}` : '';
+    ? `${actionLabels.block}: ${testedBlock?.target.name || tx('common.block', {}, 'bloc')}`
+    : actionLabels[rule.actionType] || tx('common.dialogue', {}, 'Dialogue');
+  const reward = rewardItem ? tx('summary.givesItem', { name: rewardItem.name }, ' · donne {{name}}') : '';
   return `${condition} · ${action}${reward}`;
 };
 
@@ -211,6 +237,33 @@ export default function LogicRulesWorkspace({
   collapsedSceneIds = new Set(),
   setSceneCollapsed,
 }) {
+  const { tx, txObject } = useEditorPanelText('logic');
+  const actionTranslations = txObject('actions');
+  const conditionTranslations = txObject('conditions');
+  const advancedConditionTranslations = txObject('advancedConditions');
+  const actionLabels = mergeTranslatedLabels(ACTION_LABELS, {
+    ...actionTranslations,
+    default: actionTranslations.defaultZone,
+  });
+  const conditionLabels = mergeTranslatedLabels(CONDITION_LABELS, {
+    ...conditionTranslations,
+    always: conditionTranslations.alwaysZone,
+    completed_hotspot: conditionTranslations.completed_hotspot_zone,
+    second_click: conditionTranslations.second_click_zone,
+  });
+  const advancedConditionLabels = mergeTranslatedLabels(ADVANCED_CONDITION_LABELS, {
+    ...advancedConditionTranslations,
+    completed_hotspot: advancedConditionTranslations.completed_hotspot_zone,
+  });
+  const variableOperators = mergeTranslatedLabels(VARIABLE_OPERATORS, txObject('operators'));
+  const objectModes = mergeTranslatedLabels(OBJECT_MODES, txObject('objectModes'));
+  const timerActions = SCENE_TIMER_ACTION_OPTIONS.map((option) => ({
+    ...option,
+    label: tx(`timerActions.${option.value}`, {}, option.label),
+  }));
+  const blockActionLabels = txObject('blockActions', {});
+  const ruleText = { tx, actionLabels, variableOperators };
+
   const scenes = project.scenes || [];
   const acts = project.acts || [];
   const [selectedSceneId, setSelectedSceneId] = useState(editorSelectedSceneId || scenes[0]?.id || '');
@@ -280,9 +333,9 @@ export default function LogicRulesWorkspace({
 
   const deleteRule = async (targetId, targetType, ruleId) => {
     const confirmed = await showConfirm({
-      title: 'Supprimer la règle',
-      message: 'Supprimer cette règle logique ?',
-      confirmLabel: 'Supprimer',
+      title: tx('quick.deleteTitle', {}, 'Supprimer la règle'),
+      message: tx('quick.deleteMessage', {}, 'Supprimer cette règle logique ?'),
+      confirmLabel: tx('quick.delete', {}, 'Supprimer'),
       variant: 'danger',
     });
     if (!confirmed) return;
@@ -306,7 +359,7 @@ export default function LogicRulesWorkspace({
   );
 
   const getConditionOptions = (rule) => (
-    Object.entries(CONDITION_LABELS).filter(([value]) => (
+    Object.entries(conditionLabels).filter(([value]) => (
       isHeroAdventureProject || !HERO_CONDITION_TYPES.has(value) || value === rule.conditionType
     ))
   );
@@ -314,7 +367,9 @@ export default function LogicRulesWorkspace({
   const renderStoryVariableFields = ({ variableKey, operator, value, onChange }) => (
     <div className="logic-story-variable-grid">
       <div>
-        <HelpLabel help="Clé de la variable narrative à tester. Les variables déclarées dans l’onglet Aventure sont proposées automatiquement.">Variable</HelpLabel>
+        <HelpLabel help={tx('help.variableKey', {}, 'Clé de la variable narrative à tester. Les variables déclarées dans l’onglet Aventure sont proposées automatiquement.')}>
+          {tx('fields.variable', {}, 'Variable')}
+        </HelpLabel>
         <input
           value={variableKey || ''}
           list="logic-story-variable-keys"
@@ -323,16 +378,20 @@ export default function LogicRulesWorkspace({
         />
       </div>
       <div>
-        <HelpLabel help="Comparaison appliquée à la valeur actuelle de la variable.">Comparaison</HelpLabel>
+        <HelpLabel help={tx('help.variableComparison', {}, 'Comparaison appliquée à la valeur actuelle de la variable.')}>
+          {tx('fields.comparison', {}, 'Comparaison')}
+        </HelpLabel>
         <select value={operator || 'equals'} onChange={(event) => onChange({ operator: event.target.value })}>
-          {Object.entries(VARIABLE_OPERATORS).map(([operatorValue, label]) => (
+          {Object.entries(variableOperators).map(([operatorValue, label]) => (
             <option key={operatorValue} value={operatorValue}>{label}</option>
           ))}
         </select>
       </div>
       {!['truthy', 'falsy'].includes(operator || 'equals') ? (
         <div>
-          <HelpLabel help="Valeur attendue. Les comparaisons >= et <= convertissent en nombre.">Valeur</HelpLabel>
+          <HelpLabel help={tx('help.variableValue', {}, 'Valeur attendue. Les comparaisons >= et <= convertissent en nombre.')}>
+            {tx('fields.value', {}, 'Valeur')}
+          </HelpLabel>
           <input
             value={value ?? ''}
             placeholder="3"
@@ -355,7 +414,7 @@ export default function LogicRulesWorkspace({
         <select value={conditionType} onChange={(event) => updateAdvancedCondition((targetCondition) => {
           targetCondition.type = event.target.value;
         })}>
-          {Object.entries(ADVANCED_CONDITION_LABELS).map(([value, label]) => (
+          {Object.entries(advancedConditionLabels).map(([value, label]) => (
             <option key={value} value={value}>{label}</option>
           ))}
         </select>
@@ -364,7 +423,7 @@ export default function LogicRulesWorkspace({
           <select value={condition.itemId || ''} onChange={(event) => updateAdvancedCondition((targetCondition) => {
             targetCondition.itemId = event.target.value;
           })}>
-            <option value="">Objet</option>
+            <option value="">{tx('common.item', {}, 'Objet')}</option>
             {(project.items || []).map((item) => <option key={item.id} value={item.id}>{item.icon} {item.name}</option>)}
           </select>
         ) : null}
@@ -373,7 +432,7 @@ export default function LogicRulesWorkspace({
           <select value={condition.sceneId || ''} onChange={(event) => updateAdvancedCondition((targetCondition) => {
             targetCondition.sceneId = event.target.value;
           })}>
-            <option value="">Scène</option>
+            <option value="">{tx('common.scene', {}, 'Scène')}</option>
             {scenes.map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
           </select>
         ) : null}
@@ -382,9 +441,9 @@ export default function LogicRulesWorkspace({
           <select value={condition.hotspotId || ''} onChange={(event) => updateAdvancedCondition((targetCondition) => {
             targetCondition.hotspotId = event.target.value;
           })}>
-            <option value="">Zone</option>
+            <option value="">{tx('common.zone', {}, 'Zone')}</option>
             {allActionTargets.map(({ scene, target: candidate, type: candidateType }) => (
-              <option key={`${candidateType}-${candidate.id}`} value={candidate.id}>{getSceneLabel(scene.id)} - {candidateType === 'sceneObject' ? 'Image-zone: ' : ''}{candidate.name}</option>
+              <option key={`${candidateType}-${candidate.id}`} value={candidate.id}>{getSceneLabel(scene.id)} - {candidateType === 'sceneObject' ? `${tx('common.object', {}, 'Objet')}: ` : ''}{candidate.name}</option>
             ))}
           </select>
         ) : null}
@@ -393,7 +452,7 @@ export default function LogicRulesWorkspace({
           <select value={condition.enigmaId || ''} onChange={(event) => updateAdvancedCondition((targetCondition) => {
             targetCondition.enigmaId = event.target.value;
           })}>
-            <option value="">Énigme</option>
+            <option value="">{tx('common.enigma', {}, 'Énigme')}</option>
             {(project.enigmas || []).map((enigma) => <option key={enigma.id} value={enigma.id}>{enigma.name}</option>)}
           </select>
         ) : null}
@@ -402,9 +461,9 @@ export default function LogicRulesWorkspace({
           <select value={condition.replyId || ''} onChange={(event) => updateAdvancedCondition((targetCondition) => {
             targetCondition.replyId = event.target.value;
           })}>
-            <option value="">Réponse</option>
+            <option value="">{tx('common.reply', {}, 'Réponse')}</option>
             {conversationReplies.map(({ scene, hotspot, node, reply }) => (
-              <option key={reply.id} value={reply.id}>{getSceneLabel(scene.id)} - {hotspot.name || 'Dialogue'} - {reply.label || node.text || 'Réponse'}</option>
+              <option key={reply.id} value={reply.id}>{getSceneLabel(scene.id)} - {hotspot.name || tx('common.dialogue', {}, 'Dialogue')} - {reply.label || node.text || tx('common.reply', {}, 'Réponse')}</option>
             ))}
           </select>
         ) : null}
@@ -422,7 +481,7 @@ export default function LogicRulesWorkspace({
 
         <button type="button" className="secondary-action compact danger-action" onClick={() => updateRule(target.id, type, rule.id, (draftRule) => {
           draftRule.advancedConditions = (draftRule.advancedConditions || []).filter((_, index) => index !== conditionIndex);
-        })}>Retirer</button>
+        })}>{tx('quick.remove', {}, 'Retirer')}</button>
       </div>
     );
   };
@@ -434,11 +493,13 @@ export default function LogicRulesWorkspace({
       <>
         {['has_item', 'missing_item'].includes(conditionType) ? (
           <div className="logic-flow-field">
-            <HelpLabel help="Objet vérifié dans l’inventaire du joueur pour savoir si la règle doit s’activer.">Objet testé</HelpLabel>
+            <HelpLabel help={tx('help.testedItemWorkspace', {}, 'Objet vérifié dans l’inventaire du joueur pour savoir si la règle doit s’activer.')}>
+              {tx('fields.testedItem', {}, 'Objet testé')}
+            </HelpLabel>
             <select value={rule.itemId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
               draftRule.itemId = event.target.value;
             })}>
-              <option value="">Choisir un objet</option>
+              <option value="">{tx('common.chooseItem', {}, 'Choisir un objet')}</option>
               {(project.items || []).map((item) => <option key={item.id} value={item.id}>{item.icon} {item.name}</option>)}
             </select>
           </div>
@@ -446,11 +507,13 @@ export default function LogicRulesWorkspace({
 
         {conditionType === 'visited_scene' ? (
           <div className="logic-flow-field">
-            <HelpLabel help="Scène qui doit avoir déjà été visitée pendant la partie.">Scène visitée</HelpLabel>
+            <HelpLabel help={tx('help.visitedScene', {}, 'Scène qui doit avoir déjà été visitée pendant la partie.')}>
+              {tx('fields.visitedScene', {}, 'Scène visitée')}
+            </HelpLabel>
             <select value={rule.conditionSceneId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
               draftRule.conditionSceneId = event.target.value;
             })}>
-              <option value="">Choisir une scène</option>
+              <option value="">{tx('common.chooseScene', {}, 'Choisir une scène')}</option>
               {scenes.map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
             </select>
           </div>
@@ -458,13 +521,15 @@ export default function LogicRulesWorkspace({
 
         {conditionType === 'completed_hotspot' ? (
           <div className="logic-flow-field">
-            <HelpLabel help="Zone qui doit avoir déjà terminé son action au moins une fois.">Zone d’action franchie</HelpLabel>
+            <HelpLabel help="Zone qui doit avoir déjà terminé son action au moins une fois.">
+              {tx('fields.crossedZone', {}, 'Zone d’action franchie')}
+            </HelpLabel>
             <select value={rule.hotspotId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
               draftRule.hotspotId = event.target.value;
             })}>
-              <option value="">Choisir une zone</option>
+              <option value="">{tx('common.chooseSelection', {}, 'Choisir une zone')}</option>
               {allActionTargets.map(({ scene, target: candidate, type: candidateType }) => (
-                <option key={`${candidateType}-${candidate.id}`} value={candidate.id}>{getSceneLabel(scene.id)} - {candidateType === 'sceneObject' ? 'Image-zone: ' : ''}{candidate.name}</option>
+                <option key={`${candidateType}-${candidate.id}`} value={candidate.id}>{getSceneLabel(scene.id)} - {candidateType === 'sceneObject' ? `${tx('common.object', {}, 'Objet')}: ` : ''}{candidate.name}</option>
               ))}
             </select>
           </div>
@@ -472,11 +537,13 @@ export default function LogicRulesWorkspace({
 
         {conditionType === 'solved_enigma' ? (
           <div className="logic-flow-field">
-            <HelpLabel help="Énigme qui doit avoir été réussie pendant la partie.">Énigme réussie</HelpLabel>
+            <HelpLabel help={tx('help.solvedEnigma', {}, 'Énigme qui doit avoir été réussie pendant la partie.')}>
+              {tx('fields.solvedEnigma', {}, 'Énigme réussie')}
+            </HelpLabel>
             <select value={rule.conditionEnigmaId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
               draftRule.conditionEnigmaId = event.target.value;
             })}>
-              <option value="">Choisir une énigme</option>
+              <option value="">{tx('common.chooseEnigma', {}, 'Choisir une énigme')}</option>
               {(project.enigmas || []).map((enigma) => <option key={enigma.id} value={enigma.id}>{enigma.name}</option>)}
             </select>
           </div>
@@ -484,11 +551,13 @@ export default function LogicRulesWorkspace({
 
         {conditionType === 'launched_cinematic' ? (
           <div className="logic-flow-field">
-            <HelpLabel help="Cinématique qui doit avoir été lancée au moins une fois pendant la partie.">Cinématique lancée</HelpLabel>
+            <HelpLabel help={tx('help.launchedCinematic', {}, 'Cinématique qui doit avoir été lancée au moins une fois pendant la partie.')}>
+              {tx('fields.launchedCinematic', {}, 'Cinématique lancée')}
+            </HelpLabel>
             <select value={rule.cinematicId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
               draftRule.cinematicId = event.target.value;
             })}>
-              <option value="">N’importe quelle cinématique lancée</option>
+              <option value="">{tx('common.anyCinematic', {}, 'N’importe quelle cinématique lancée')}</option>
               {(project.cinematics || []).map((cinematic) => <option key={cinematic.id} value={cinematic.id}>{cinematic.name}</option>)}
             </select>
           </div>
@@ -496,16 +565,18 @@ export default function LogicRulesWorkspace({
 
         {conditionType === 'completed_combination' ? (
           <div className="logic-flow-field">
-            <HelpLabel help="Combinaison d’objets qui doit avoir été réalisée dans l’inventaire.">Combinaison réalisée</HelpLabel>
+            <HelpLabel help={tx('help.completedCombination', {}, 'Combinaison d’objets qui doit avoir été réalisée dans l’inventaire.')}>
+              {tx('fields.completedCombination', {}, 'Combinaison réalisée')}
+            </HelpLabel>
             <select value={rule.combinationId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
               draftRule.combinationId = event.target.value;
             })}>
-              <option value="">Choisir une combinaison</option>
+              <option value="">{tx('common.chooseCombination', {}, 'Choisir une combinaison')}</option>
               {(project.combinations || []).map((combo) => {
                 const itemA = project.items.find((item) => item.id === combo.itemAId);
                 const itemB = project.items.find((item) => item.id === combo.itemBId);
                 const result = project.items.find((item) => item.id === combo.resultItemId);
-                return <option key={combo.id} value={combo.id}>{itemA?.name || 'Objet 1'} + {itemB?.name || 'Objet 2'} → {result?.name || 'Result'}</option>;
+                return <option key={combo.id} value={combo.id}>{itemA?.name || tx('common.item1', {}, 'Objet 1')} + {itemB?.name || tx('common.item2', {}, 'Objet 2')} → {result?.name || tx('common.result', {}, 'Résultat')}</option>;
               })}
             </select>
           </div>
@@ -513,13 +584,15 @@ export default function LogicRulesWorkspace({
 
         {conditionType === 'chose_reply' ? (
           <div className="logic-flow-field">
-            <HelpLabel help="Réponse de conversation qui doit avoir déjà été choisie pendant la partie.">Réponse choisie</HelpLabel>
+            <HelpLabel help={tx('help.chosenReply', {}, 'Réponse de conversation qui doit avoir déjà été choisie pendant la partie.')}>
+              {tx('fields.chosenReply', {}, 'Réponse choisie')}
+            </HelpLabel>
             <select value={rule.conditionReplyId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
               draftRule.conditionReplyId = event.target.value;
             })}>
-              <option value="">Choisir une réponse</option>
+              <option value="">{tx('common.chooseReply', {}, 'Choisir une réponse')}</option>
               {conversationReplies.map(({ scene, hotspot, node, reply }) => (
-                <option key={reply.id} value={reply.id}>{getSceneLabel(scene.id)} - {hotspot.name || 'Dialogue'} - {reply.label || node.text || 'Réponse'}</option>
+                <option key={reply.id} value={reply.id}>{getSceneLabel(scene.id)} - {hotspot.name || tx('common.dialogue', {}, 'Dialogue')} - {reply.label || node.text || tx('common.reply', {}, 'Réponse')}</option>
               ))}
             </select>
           </div>
@@ -544,26 +617,30 @@ export default function LogicRulesWorkspace({
           <div className="logic-flow-field logic-flow-field-wide" data-tour="logic-advanced-conditions">
             <div className="conversation-advanced-condition-list">
               <div className="conversation-advanced-condition-head">
-                <HelpLabel help="Choisis ET pour exiger toutes les conditions, ou OU pour accepter au moins une condition. Exemple: variable narrative >= 3 ET réponse choisie.">Combinaison</HelpLabel>
+                <HelpLabel help={tx('help.combinationMode', {}, 'Choisis ET pour exiger toutes les conditions, ou OU pour accepter au moins une condition. Exemple: variable narrative >= 3 ET réponse choisie.')}>
+                  {tx('fields.combinationMode', {}, 'Combinaison')}
+                </HelpLabel>
                 <select value={rule.advancedConditionMode || 'all'} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                   draftRule.advancedConditionMode = event.target.value;
                 })}>
-                  <option value="all">Toutes les conditions (ET)</option>
-                  <option value="any">Au moins une condition (OU)</option>
+                  <option value="all">{tx('options.allConditions', {}, 'Toutes les conditions (ET)')}</option>
+                  <option value="any">{tx('options.anyCondition', {}, 'Au moins une condition (OU)')}</option>
                 </select>
               </div>
               {(rule.advancedConditions || []).map((condition, conditionIndex) => renderAdvancedConditionFields(condition, conditionIndex, rule, target, type))}
               <button type="button" className="secondary-action compact" onClick={() => updateRule(target.id, type, rule.id, (draftRule) => {
                 if (!Array.isArray(draftRule.advancedConditions)) draftRule.advancedConditions = [];
                 draftRule.advancedConditions.push(makeAdvancedCondition());
-              })}>+ Condition</button>
+              })}>{tx('quick.addCondition', {}, '+ Condition')}</button>
             </div>
           </div>
         ) : null}
 
         {conditionType === 'hero_health_below' ? (
           <div className="logic-flow-field">
-            <HelpLabel help="La règle s’active si les PV actuels du héros sont strictement inférieurs à ce seuil.">Seuil de PV</HelpLabel>
+            <HelpLabel help={tx('help.heroHealth', {}, 'La règle s’active si les PV actuels du héros sont strictement inférieurs à ce seuil.')}>
+              {tx('fields.healthThreshold', {}, 'Seuil de PV')}
+            </HelpLabel>
             <input type="number" min="0" value={rule.heroHealthThreshold ?? 5} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
               draftRule.heroHealthThreshold = Number(event.target.value);
             })} />
@@ -572,7 +649,9 @@ export default function LogicRulesWorkspace({
 
         {conditionType === 'hero_mana_at_least' ? (
           <div className="logic-flow-field">
-            <HelpLabel help="La règle s’active si la mana actuelle du héros atteint au moins ce seuil.">Mana requise</HelpLabel>
+            <HelpLabel help={tx('help.heroMana', {}, 'La règle s’active si la mana actuelle du héros atteint au moins ce seuil.')}>
+              {tx('fields.requiredMana', {}, 'Mana requise')}
+            </HelpLabel>
             <input type="number" min="0" value={rule.heroManaThreshold ?? 1} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
               draftRule.heroManaThreshold = Number(event.target.value);
             })} />
@@ -581,11 +660,13 @@ export default function LogicRulesWorkspace({
 
         {conditionType === 'hero_skill_used' ? (
           <div className="logic-flow-field">
-            <HelpLabel help="La règle s’active si le dernier jet héros utilisait cette compétence.">Compétence du dernier jet</HelpLabel>
+            <HelpLabel help={tx('help.heroSkill', {}, 'La règle s’active si le dernier jet héros utilisait cette compétence.')}>
+              {tx('fields.lastRollSkill', {}, 'Compétence du dernier jet')}
+            </HelpLabel>
             <select value={rule.heroSkillId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
               draftRule.heroSkillId = event.target.value;
             })}>
-              <option value="">Choisir une compétence</option>
+              <option value="">{tx('common.chooseSkill', {}, 'Choisir une compétence')}</option>
               {heroSkills.map((skill) => <option key={skill.id} value={skill.id}>{skill.name}</option>)}
             </select>
           </div>
@@ -598,11 +679,13 @@ export default function LogicRulesWorkspace({
       <>
         {rule.actionType === 'scene' ? (
         <div className="logic-flow-field">
-          <HelpLabel help="Scène ouverte si l’action déclenchée est un changement de scène.">Scène cible</HelpLabel>
+          <HelpLabel help={tx('help.targetSceneWorkspace', {}, 'Scène ouverte si l’action déclenchée est un changement de scène.')}>
+            {tx('workspace.targetScene', {}, 'Scène cible')}
+          </HelpLabel>
           <select data-tour="logic-target-scene" value={rule.targetSceneId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
             draftRule.targetSceneId = event.target.value;
           })}>
-            <option value="">Choisir une scène</option>
+            <option value="">{tx('common.chooseScene', {}, 'Choisir une scène')}</option>
             {scenes.map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
           </select>
         </div>
@@ -610,11 +693,13 @@ export default function LogicRulesWorkspace({
 
       {rule.actionType === 'cinematic' ? (
         <div className="logic-flow-field">
-          <HelpLabel help="Cinématique lancée si l’action déclenchée est une cinématique.">Cinématique cible</HelpLabel>
+          <HelpLabel help={tx('help.targetCinematicWorkspace', {}, 'Cinématique lancée si l’action déclenchée est une cinématique.')}>
+            {tx('workspace.targetCinematic', {}, 'Cinématique cible')}
+          </HelpLabel>
           <select data-tour="logic-target-cinematic" value={rule.targetCinematicId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
             draftRule.targetCinematicId = event.target.value;
           })}>
-            <option value="">Choisir une cinématique</option>
+            <option value="">{tx('common.chooseCinematic', {}, 'Choisir une cinématique')}</option>
             {(project.cinematics || []).map((cinematic) => <option key={cinematic.id} value={cinematic.id}>{cinematic.name}</option>)}
           </select>
         </div>
@@ -623,29 +708,35 @@ export default function LogicRulesWorkspace({
       {rule.actionType === 'block' ? (
         <>
           <div className="logic-flow-field">
-            <HelpLabel help="Bloc affiché, masqué ou modifié quand cette règle réussit.">Bloc cible</HelpLabel>
+            <HelpLabel help={tx('help.targetBlock', {}, 'Bloc affiché, masqué ou modifié quand cette règle réussit.')}>
+              {tx('fields.targetBlock', {}, 'Bloc cible')}
+            </HelpLabel>
             <select data-tour="logic-target-block" value={rule.targetBlockId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
               draftRule.targetBlockId = event.target.value;
             })}>
-              <option value="">Choisir un bloc</option>
+              <option value="">{tx('common.chooseBlock', {}, 'Choisir un bloc')}</option>
               {allBlockTargets.map(({ scene, target: block }) => (
-                <option key={block.id} value={block.id}>{getSceneLabel(scene.id)} - {block.name || block.blockLabel || 'Bloc'}</option>
+                <option key={block.id} value={block.id}>{getSceneLabel(scene.id)} - {block.name || block.blockLabel || tx('common.block', {}, 'Bloc')}</option>
               ))}
             </select>
           </div>
           <div className="logic-flow-field">
-            <HelpLabel help="Action appliquée au bloc cible.">Action bloc</HelpLabel>
+            <HelpLabel help={tx('help.blockAction', {}, 'Action appliquée au bloc cible.')}>
+              {tx('fields.blockAction', {}, 'Action bloc')}
+            </HelpLabel>
             <select value={rule.blockActionType || 'show'} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
               draftRule.blockActionType = event.target.value;
             })}>
-              <option value="show">Afficher le bloc</option>
-              <option value="hide">Masquer le bloc</option>
-              <option value="update_text">Modifier le texte visible</option>
+              <option value="show">{blockActionLabels.show || 'Afficher le bloc'}</option>
+              <option value="hide">{blockActionLabels.hide || 'Masquer le bloc'}</option>
+              <option value="update_text">{blockActionLabels.update_text || 'Modifier le texte visible'}</option>
             </select>
           </div>
           {rule.blockActionType === 'update_text' ? (
             <div className="logic-flow-field logic-flow-field-wide">
-              <HelpLabel help="Nouveau texte visible du bloc cible. Selon le type, cela met à jour le texte, le bouton, le placeholder ou le titre du code.">Texte visible du bloc</HelpLabel>
+              <HelpLabel help={tx('help.blockText', {}, 'Nouveau texte visible du bloc cible. Selon le type, cela met à jour le texte, le bouton, le placeholder ou le titre du code.')}>
+                {tx('fields.visibleBlockText', {}, 'Texte visible du bloc')}
+              </HelpLabel>
               <textarea value={rule.targetBlockText || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                 draftRule.targetBlockText = event.target.value;
               })} />
@@ -701,10 +792,16 @@ export default function LogicRulesWorkspace({
     <div className="layout two-cols-wide logic-workspace">
       <section className="panel side panel-nav-pro scene-left-nav logic-left-nav" data-tour="logic-scene-tree">
         <div className="panel-head">
-          <h2>Actes et scènes</h2>
-          <span className="status-badge soft">{totalRules} règle{totalRules > 1 ? 's' : ''}</span>
+          <h2>{tx('workspace.sceneTreeTitle', {}, 'Actes et scènes')}</h2>
+          <span className="status-badge soft">
+            {totalRules === 1
+              ? tx('workspace.ruleCountOne', {}, '1 règle')
+              : tx('workspace.ruleCountMany', { count: totalRules }, '{{count}} règles')}
+          </span>
         </div>
-        <HelpLabel help={FIELD_HELP.sceneTree}>Scène à configurer</HelpLabel>
+        <HelpLabel help={tx('help.sceneTree', {}, FIELD_HELP.sceneTree)}>
+          {tx('workspace.sceneToConfigure', {}, 'Scène à configurer')}
+        </HelpLabel>
 
         {acts.map((act) => {
           const actScenes = scenes.filter((scene) => scene.actId === act.id);
@@ -712,7 +809,11 @@ export default function LogicRulesWorkspace({
             <div className="act-group" key={act.id}>
               <div className="act-heading">
                 <strong>{act.name}</strong>
-                <span>{actScenes.length} scène{actScenes.length > 1 ? 's' : ''}</span>
+                <span>
+                  {actScenes.length === 1
+                    ? tx('workspace.sceneCountOne', {}, '1 scène')
+                    : tx('workspace.sceneCountMany', { count: actScenes.length }, '{{count}} scènes')}
+                </span>
               </div>
               {renderSceneTree(actScenes.filter((scene) => !scene.parentSceneId))}
             </div>
@@ -726,8 +827,8 @@ export default function LogicRulesWorkspace({
         </datalist>
         <div className="panel-head">
           <div>
-            <span className="section-kicker">Logique</span>
-            <h2>{selectedScene?.name || 'Aucune scène'}</h2>
+            <span className="section-kicker">{tx('workspace.kicker', {}, 'Logique')}</span>
+            <h2>{selectedScene?.name || tx('workspace.noScene', {}, 'Aucune scène')}</h2>
           </div>
         </div>
 
@@ -736,16 +837,22 @@ export default function LogicRulesWorkspace({
             <section className="combo-card logic-scene-rules-card logic-mobile-card" data-tour="logic-scene-timer">
               <div className="panel-head">
                 <div>
-                  <HelpLabel className="compact-section-title" help="Règles qui s'appliquent à toute la scène, avant les exceptions propres aux zones d'action.">Règles de scène</HelpLabel>
-                  <p className="small-note">Compte à rebours local et conséquence automatique quand le temps arrive à zéro.</p>
+                  <HelpLabel className="compact-section-title" help={tx('help.sceneRules', {}, "Règles qui s'appliquent à toute la scène, avant les exceptions propres aux zones d'action.")}>
+                    {tx('workspace.sceneRules', {}, 'Règles de scène')}
+                  </HelpLabel>
+                  <p className="small-note">{tx('workspace.timerDescription', {}, 'Compte à rebours local et conséquence automatique quand le temps arrive à zéro.')}</p>
                 </div>
                 <span className={`status-badge ${selectedTimerIssues.length ? 'warning' : selectedScene.timerEnabled ? '' : 'soft'}`}>
-                  {selectedTimerIssues.length ? 'Timer incomplet' : selectedScene.timerEnabled ? 'Timer actif' : 'Timer inactif'}
+                  {selectedTimerIssues.length
+                    ? tx('workspace.timerIncomplete', {}, 'Timer incomplet')
+                    : selectedScene.timerEnabled
+                      ? tx('workspace.timerActive', {}, 'Timer actif')
+                      : tx('workspace.timerInactive', {}, 'Timer inactif')}
                 </span>
               </div>
               {selectedTimerIssues.length ? (
                 <p className="logic-incomplete-note" role="status">
-                  Réglage incomplet: {selectedTimerIssues.join(' · ')}
+                  {tx('workspace.incompleteSetting', {}, 'Réglage incomplet:')} {selectedTimerIssues.join(' · ')}
                 </p>
               ) : null}
               <div className="compact-form-grid logic-scene-timer-grid">
@@ -757,10 +864,12 @@ export default function LogicRulesWorkspace({
                       scene.timerEnabled = event.target.checked;
                     })}
                   />
-                  Activer un compte a rebours
+                  {tx('workspace.enableCountdown', {}, 'Activer un compte a rebours')}
                 </label>
                 <div>
-                  <HelpLabel help="Durée disponible dans cette scène avant l'action automatique.">Durée</HelpLabel>
+                  <HelpLabel help={tx('help.timerDuration', {}, "Durée disponible dans cette scène avant l'action automatique.")}>
+                    {tx('workspace.duration', {}, 'Durée')}
+                  </HelpLabel>
                   <input
                     type="number"
                     min="5"
@@ -774,7 +883,9 @@ export default function LogicRulesWorkspace({
                   />
                 </div>
                 <div>
-                  <HelpLabel help="Action déclenchée quand le temps arrive à zéro.">Fin du temps</HelpLabel>
+                  <HelpLabel help={tx('help.timerEnd', {}, 'Action déclenchée quand le temps arrive à zéro.')}>
+                    {tx('workspace.timeEnd', {}, 'Fin du temps')}
+                  </HelpLabel>
                   <select
                     data-tour="logic-timer-action"
                     value={selectedTimerAction}
@@ -783,14 +894,16 @@ export default function LogicRulesWorkspace({
                       scene.timerEndAction = event.target.value;
                     })}
                   >
-                    {SCENE_TIMER_ACTION_OPTIONS.map((action) => (
+                    {timerActions.map((action) => (
                       <option key={action.value} value={action.value}>{action.label}</option>
                     ))}
                   </select>
                 </div>
                 {selectedTimerAction === 'scene' || selectedTimerAction === 'damage-life' ? (
                   <div>
-                    <HelpLabel help="Scène ouverte à la fin du temps, ou quand les vies tombent à zéro.">Scène cible</HelpLabel>
+                    <HelpLabel help={tx('help.timerTargetScene', {}, 'Scène ouverte à la fin du temps, ou quand les vies tombent à zéro.')}>
+                      {tx('workspace.targetScene', {}, 'Scène cible')}
+                    </HelpLabel>
                     <select
                       value={selectedScene.timerTargetSceneId || ''}
                       disabled={!selectedScene.timerEnabled}
@@ -798,7 +911,7 @@ export default function LogicRulesWorkspace({
                         scene.timerTargetSceneId = event.target.value;
                       })}
                     >
-                      <option value="">Aucune</option>
+                      <option value="">{tx('common.none', {}, 'Aucune')}</option>
                       {scenes.map((scene) => (
                         <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>
                       ))}
@@ -807,7 +920,9 @@ export default function LogicRulesWorkspace({
                 ) : null}
                 {selectedTimerAction === 'cinematic' ? (
                   <div>
-                    <HelpLabel help="Cinématique lancée automatiquement quand le temps arrive à zéro.">Cinématique cible</HelpLabel>
+                    <HelpLabel help={tx('help.timerTargetCinematic', {}, 'Cinématique lancée automatiquement quand le temps arrive à zéro.')}>
+                      {tx('workspace.targetCinematic', {}, 'Cinématique cible')}
+                    </HelpLabel>
                     <select
                       value={selectedScene.timerTargetCinematicId || ''}
                       disabled={!selectedScene.timerEnabled}
@@ -815,7 +930,7 @@ export default function LogicRulesWorkspace({
                         scene.timerTargetCinematicId = event.target.value;
                       })}
                     >
-                      <option value="">Aucune</option>
+                      <option value="">{tx('common.none', {}, 'Aucune')}</option>
                       {(project.cinematics || []).map((cinematic) => (
                         <option key={cinematic.id} value={cinematic.id}>{cinematic.name}</option>
                       ))}
@@ -824,7 +939,9 @@ export default function LogicRulesWorkspace({
                 ) : null}
                 {selectedTimerAction === 'damage-life' ? (
                   <div>
-                    <HelpLabel help="Nombre de vies perdues quand le temps expire. Le joueur commence avec 3 vies dans l'aperçu.">Vies perdues</HelpLabel>
+                    <HelpLabel help={tx('help.livesLost', {}, "Nombre de vies perdues quand le temps expire. Le joueur commence avec 3 vies dans l'aperçu.")}>
+                      {tx('workspace.livesLost', {}, 'Vies perdues')}
+                    </HelpLabel>
                     <input
                       type="number"
                       min="1"
@@ -838,7 +955,9 @@ export default function LogicRulesWorkspace({
                   </div>
                 ) : null}
                 <div className="logic-timer-message-field">
-                  <HelpLabel help="Texte affiché si l'action de fin a besoin d'un message.">Message de fin</HelpLabel>
+                  <HelpLabel help={tx('help.endMessage', {}, "Texte affiché si l'action de fin a besoin d'un message.")}>
+                    {tx('workspace.endMessage', {}, 'Message de fin')}
+                  </HelpLabel>
                   <input
                     data-tour="logic-timer-message"
                     value={selectedScene.timerEndMessage || ''}
@@ -846,7 +965,7 @@ export default function LogicRulesWorkspace({
                     onChange={(event) => updateScene((scene) => {
                       scene.timerEndMessage = event.target.value;
                     })}
-                    placeholder="Le temps est écoulé."
+                    placeholder={tx('options.timeExpired', {}, 'Le temps est écoulé.')}
                   />
                 </div>
               </div>
@@ -854,7 +973,9 @@ export default function LogicRulesWorkspace({
 
             <section className="combo-card logic-action-zones-card logic-mobile-card" data-tour="logic-zones">
               <div className="panel-head">
-                <HelpLabel className="compact-section-title" help={FIELD_HELP.actionZones}>Zones d’action</HelpLabel>
+                <HelpLabel className="compact-section-title" help={tx('help.actionZones', {}, FIELD_HELP.actionZones)}>
+                  {tx('workspace.actionZones', {}, 'Zones d’action')}
+                </HelpLabel>
                 <span className="status-badge soft">{selectedActionTargets.length}</span>
               </div>
               {selectedActionTargets.map(({ target, type }) => (
@@ -862,11 +983,16 @@ export default function LogicRulesWorkspace({
                   <div className="panel-head">
                     <div>
                       <h3>{target.name}</h3>
-                      <p className="small-note">{type === 'sceneObject' ? 'Image-zone · ' : ''}{(target.logicRules || []).length} règle{(target.logicRules || []).length > 1 ? 's' : ''} conditionnelle{(target.logicRules || []).length > 1 ? 's' : ''}</p>
+                      <p className="small-note">
+                        {type === 'sceneObject' ? `${tx('common.object', {}, 'Image-zone')} · ` : ''}
+                        {(target.logicRules || []).length === 1
+                          ? tx('workspace.conditionalRuleCountOne', {}, '1 règle conditionnelle')
+                          : tx('workspace.conditionalRuleCountMany', { count: (target.logicRules || []).length }, '{{count}} règles conditionnelles')}
+                      </p>
                     </div>
                     <div className="label-with-help" data-tour="logic-add-rule">
-                      <button type="button" onClick={() => addRule(target.id, type)}>+ Règle</button>
-                      <span className="help-dot" data-help={FIELD_HELP.addRule} aria-label={FIELD_HELP.addRule} tabIndex={0}>?</span>
+                      <button type="button" onClick={() => addRule(target.id, type)}>{tx('quick.addRule', {}, '+ Règle')}</button>
+                      <span className="help-dot" data-help={tx('help.addRule', {}, FIELD_HELP.addRule)} aria-label={tx('help.addRule', {}, FIELD_HELP.addRule)} tabIndex={0}>?</span>
                     </div>
                   </div>
 
@@ -879,10 +1005,10 @@ export default function LogicRulesWorkspace({
                       <summary>
                         <span>
                           <span className="logic-rule-name-line">
-                            <strong>{rule.name || 'Règle'}</strong>
-                            {ruleCompletionIssues.length ? <em className="logic-incomplete-pill">Règle incomplète</em> : null}
+                            <strong>{rule.name || tx('common.rule', {}, 'Règle')}</strong>
+                            {ruleCompletionIssues.length ? <em className="logic-incomplete-pill">{tx('quick.incompleteRule', {}, 'Règle incomplète')}</em> : null}
                           </span>
-                          <small>{getRuleSummary(rule, project)}</small>
+                          <small>{getRuleSummary(rule, project, ruleText)}</small>
                           {ruleCompletionIssues.length ? (
                             <small className="logic-incomplete-details">{ruleCompletionIssues.join(' · ')}</small>
                           ) : null}
@@ -891,12 +1017,14 @@ export default function LogicRulesWorkspace({
                           event.preventDefault();
                           deleteRule(target.id, type, rule.id);
                         }}>
-                          Supprimer
+                          {tx('quick.delete', {}, 'Supprimer')}
                         </button>
                       </summary>
                       <div className="logic-rule-body">
                         <div className="logic-rule-name-field" data-tour="logic-rule-name">
-                          <HelpLabel help="Nom interne pour reconnaître rapidement cette règle dans la liste compacte.">Nom de la règle</HelpLabel>
+                          <HelpLabel help={tx('help.ruleNameWorkspace', {}, 'Nom interne pour reconnaître rapidement cette règle dans la liste compacte.')}>
+                            {tx('fields.ruleName', {}, 'Nom de la règle')}
+                          </HelpLabel>
                           <input value={rule.name || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                             draftRule.name = event.target.value;
                           })} />
@@ -904,12 +1032,16 @@ export default function LogicRulesWorkspace({
 
                         <section className="logic-flow-step logic-flow-step-condition" data-tour="logic-condition-step">
                           <div className="logic-flow-step-head">
-                            <span className="logic-flow-keyword">Si</span>
-                            <HelpLabel className="logic-flow-title" help="Détermine quand cette règle remplace l’action normale de la zone. La première règle qui correspond est utilisée.">cette condition est respectée</HelpLabel>
+                            <span className="logic-flow-keyword">{tx('workspace.ifKeyword', {}, 'Si')}</span>
+                            <HelpLabel className="logic-flow-title" help={tx('help.conditionFlow', {}, 'Détermine quand cette règle remplace l’action normale de la zone. La première règle qui correspond est utilisée.')}>
+                              {tx('workspace.whenCondition', {}, 'cette condition est respectée')}
+                            </HelpLabel>
                           </div>
                           <div className="logic-flow-grid">
                             <div className="logic-flow-field">
-                              <HelpLabel help="Type de condition à vérifier pendant la partie.">Condition à vérifier</HelpLabel>
+                              <HelpLabel help={tx('help.conditionToCheck', {}, 'Type de condition à vérifier pendant la partie.')}>
+                                {tx('fields.conditionToCheck', {}, 'Condition à vérifier')}
+                              </HelpLabel>
                               <select data-tour="logic-condition" value={rule.conditionType || 'has_item'} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                                 draftRule.conditionType = event.target.value;
                               })}>
@@ -922,36 +1054,46 @@ export default function LogicRulesWorkspace({
 
                         <section className="logic-flow-step logic-flow-step-action" data-tour="logic-action-step">
                           <div className="logic-flow-step-head">
-                            <span className="logic-flow-keyword">Alors</span>
-                            <HelpLabel className="logic-flow-title" help="Action exécutée à la place de l’action normale de la zone quand la condition est vraie.">cette action est déclenchée</HelpLabel>
+                            <span className="logic-flow-keyword">{tx('workspace.thenKeyword', {}, 'Alors')}</span>
+                            <HelpLabel className="logic-flow-title" help={tx('help.actionFlow', {}, 'Action exécutée à la place de l’action normale de la zone quand la condition est vraie.')}>
+                              {tx('workspace.thenAction', {}, 'cette action est déclenchée')}
+                            </HelpLabel>
                           </div>
                           <div className="logic-flow-grid">
                             <div className="logic-flow-field">
-                              <HelpLabel help="Action exécutée à la place de l’action normale de la zone quand la condition est vraie.">Action déclenchée</HelpLabel>
+                              <HelpLabel help={tx('help.actionFlow', {}, 'Action exécutée à la place de l’action normale de la zone quand la condition est vraie.')}>
+                                {tx('fields.triggeredAction', {}, 'Action déclenchée')}
+                              </HelpLabel>
                               <select data-tour="logic-action" value={rule.actionType || 'dialogue'} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                                 draftRule.actionType = event.target.value;
                               })}>
-                                {Object.entries(ACTION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                                {Object.entries(actionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                               </select>
                             </div>
                             <div className="logic-flow-field">
-                              <HelpLabel help="Objet ajouté à l’inventaire quand cette règle s’active. Laisse Aucun si la règle ne donne rien.">Objet donné</HelpLabel>
+                              <HelpLabel help={tx('help.rewardItemWorkspace', {}, 'Objet ajouté à l’inventaire quand cette règle s’active. Laisse Aucun si la règle ne donne rien.')}>
+                                {tx('fields.rewardItem', {}, 'Objet donné')}
+                              </HelpLabel>
                               <select data-tour="logic-reward-item" value={rule.rewardItemId || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                                 draftRule.rewardItemId = event.target.value;
                               })}>
-                                <option value="">Aucun</option>
+                                <option value="">{tx('common.none', {}, 'Aucun')}</option>
                                 {(project.items || []).map((item) => <option key={item.id} value={item.id}>{item.icon} {item.name}</option>)}
                               </select>
                             </div>
                             {renderActionTargetFields(rule, target, type)}
                             <div className="logic-flow-field">
-                              <HelpLabel help="Message affiché au joueur quand cette règle s’active. Il remplace le dialogue normal de la zone.">Dialogue affiché</HelpLabel>
+                              <HelpLabel help={tx('help.successDialogue', {}, 'Message affiché au joueur quand cette règle s’active. Il remplace le dialogue normal de la zone.')}>
+                                {tx('fields.displayedDialogue', {}, 'Dialogue affiché')}
+                              </HelpLabel>
                               <textarea data-tour="logic-dialogue" value={rule.dialogue || ''} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                                 draftRule.dialogue = event.target.value;
                               })} />
                             </div>
                             <div className="logic-sound-field" data-tour="logic-success-sound">
-                              <HelpLabel help="Son joué quand la condition est remplie et que l’action de cette règle se lance.">Son si condition réussie</HelpLabel>
+                              <HelpLabel help={tx('help.successSound', {}, 'Son joué quand la condition est remplie et que l’action de cette règle se lance.')}>
+                                {tx('fields.successSound', {}, 'Son si condition réussie')}
+                              </HelpLabel>
                               <MediaSourcePicker
                                 className="button like full secondary-action"
                                 accept="audio/*"
@@ -963,12 +1105,12 @@ export default function LogicRulesWorkspace({
                                   draftRule.successSoundName = name;
                                 })}
                               >
-                                {rule.successSoundName || 'Importer un son de réussite'}
+                                {rule.successSoundName || tx('options.importSuccessSound', {}, 'Importer un son de réussite')}
                               </MediaSourcePicker>
                               {getRuleSoundUrl(rule, 'success') ? (
                                 <div className="logic-sound-preview">
                                   <audio controls preload="metadata" src={getRuleSoundUrl(rule, 'success')} />
-                                  <button type="button" className="danger-button" onClick={() => clearRuleSound(target.id, type, rule.id, 'success')}>Supprimer</button>
+                                  <button type="button" className="danger-button" onClick={() => clearRuleSound(target.id, type, rule.id, 'success')}>{tx('quick.delete', {}, 'Supprimer')}</button>
                                 </div>
                               ) : null}
                             </div>
@@ -977,18 +1119,24 @@ export default function LogicRulesWorkspace({
 
                         <details className="logic-flow-step logic-flow-step-failure" open={Boolean(rule.failureDialogue || getRuleSoundUrl(rule, 'failure'))} data-tour="logic-failure-step">
                           <summary className="logic-flow-step-head">
-                            <span className="logic-flow-keyword">Sinon</span>
-                            <HelpLabel className="logic-flow-title" help="Réponse utilisée quand cette règle est configurée mais que sa condition n’est pas remplie.">si la condition n’est pas remplie</HelpLabel>
+                            <span className="logic-flow-keyword">{tx('workspace.elseKeyword', {}, 'Sinon')}</span>
+                            <HelpLabel className="logic-flow-title" help={tx('help.failureFlow', {}, 'Réponse utilisée quand cette règle est configurée mais que sa condition n’est pas remplie.')}>
+                              {tx('workspace.ifConditionFails', {}, 'si la condition n’est pas remplie')}
+                            </HelpLabel>
                           </summary>
                           <div className="logic-flow-grid">
                             <div className="logic-flow-field">
-                              <HelpLabel help="Message affiché si cette règle ne peut pas s’activer parce que sa condition n’est pas remplie. Exemple : il manque une clé, une énigme n’est pas encore réussie, ou une cinématique n’a pas encore été lancée.">Dialogue si condition non remplie</HelpLabel>
-                              <textarea data-tour="logic-failure-dialogue" value={rule.failureDialogue || ''} placeholder="Exemple : La porte reste verrouillée. Il te manque la clé." onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
+                              <HelpLabel help={tx('help.failureDialogueLong', {}, 'Message affiché si cette règle ne peut pas s’activer parce que sa condition n’est pas remplie. Exemple : il manque une clé, une énigme n’est pas encore réussie, ou une cinématique n’a pas encore été lancée.')}>
+                                {tx('fields.dialogueIfFailed', {}, 'Dialogue si condition non remplie')}
+                              </HelpLabel>
+                              <textarea data-tour="logic-failure-dialogue" value={rule.failureDialogue || ''} placeholder={tx('options.lockedDoorExample', {}, 'Exemple : La porte reste verrouillée. Il te manque la clé.')} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                                 draftRule.failureDialogue = event.target.value;
                               })} />
                             </div>
                             <div className="logic-sound-field">
-                              <HelpLabel help="Son joué quand cette règle est configurée mais que sa condition n’est pas remplie.">Son si condition échouée</HelpLabel>
+                              <HelpLabel help={tx('help.failureSound', {}, 'Son joué quand cette règle est configurée mais que sa condition n’est pas remplie.')}>
+                                {tx('fields.failureSound', {}, 'Son si condition échouée')}
+                              </HelpLabel>
                               <MediaSourcePicker
                                 className="button like full secondary-action"
                                 accept="audio/*"
@@ -1000,12 +1148,12 @@ export default function LogicRulesWorkspace({
                                   draftRule.failureSoundName = name;
                                 })}
                               >
-                                {rule.failureSoundName || "Importer un son d'échec"}
+                                {rule.failureSoundName || tx('options.importFailureSound', {}, "Importer un son d'échec")}
                               </MediaSourcePicker>
                               {getRuleSoundUrl(rule, 'failure') ? (
                                 <div className="logic-sound-preview">
                                   <audio controls preload="metadata" src={getRuleSoundUrl(rule, 'failure')} />
-                                  <button type="button" className="danger-button" onClick={() => clearRuleSound(target.id, type, rule.id, 'failure')}>Supprimer</button>
+                                  <button type="button" className="danger-button" onClick={() => clearRuleSound(target.id, type, rule.id, 'failure')}>{tx('quick.delete', {}, 'Supprimer')}</button>
                                 </div>
                               ) : null}
                             </div>
@@ -1014,8 +1162,10 @@ export default function LogicRulesWorkspace({
 
                         <details className="logic-flow-step logic-flow-step-options" open={Boolean(rule.consumeRequiredItemOnUse || rule.disableAfterUse)} data-tour="logic-options-step">
                           <summary className="logic-flow-step-head">
-                            <span className="logic-flow-keyword">Options</span>
-                            <HelpLabel className="logic-flow-title" help="Réglages complémentaires appliqués après l’activation de la règle.">réglages de la règle</HelpLabel>
+                            <span className="logic-flow-keyword">{tx('workspace.optionsKeyword', {}, 'Options')}</span>
+                            <HelpLabel className="logic-flow-title" help={tx('help.ruleSettings', {}, 'Réglages complémentaires appliqués après l’activation de la règle.')}>
+                              {tx('workspace.ruleSettings', {}, 'réglages de la règle')}
+                            </HelpLabel>
                           </summary>
                           <div className="logic-flow-options">
                             {rule.conditionType === 'has_item' ? (
@@ -1023,16 +1173,16 @@ export default function LogicRulesWorkspace({
                                 <input type="checkbox" checked={Boolean(rule.consumeRequiredItemOnUse)} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                                   draftRule.consumeRequiredItemOnUse = event.target.checked;
                                 })} />
-                                <span>Consommer l’objet testé quand la règle s’active</span>
-                                <span className="help-dot" data-help={FIELD_HELP.consumeRequiredItem} aria-label={FIELD_HELP.consumeRequiredItem} tabIndex={0}>?</span>
+                                <span>{tx('workspace.consumeTestedItemLong', {}, 'Consommer l’objet testé quand la règle s’active')}</span>
+                                <span className="help-dot" data-help={tx('help.consumeRequiredItem', {}, FIELD_HELP.consumeRequiredItem)} aria-label={tx('help.consumeRequiredItem', {}, FIELD_HELP.consumeRequiredItem)} tabIndex={0}>?</span>
                               </label>
                             ) : null}
                             <label className="checkbox-row">
                               <input type="checkbox" checked={Boolean(rule.disableAfterUse)} onChange={(event) => updateRule(target.id, type, rule.id, (draftRule) => {
                                 draftRule.disableAfterUse = event.target.checked;
                               })} />
-                              <span>Cette règle ne s’applique qu’une fois, puis s’annule</span>
-                              <span className="help-dot" data-help={FIELD_HELP.disableRuleAfterUse} aria-label={FIELD_HELP.disableRuleAfterUse} tabIndex={0}>?</span>
+                              <span>{tx('workspace.disableRuleAfterUseLong', {}, 'Cette règle ne s’applique qu’une fois, puis s’annule')}</span>
+                              <span className="help-dot" data-help={tx('help.disableRuleAfterUse', {}, FIELD_HELP.disableRuleAfterUse)} aria-label={tx('help.disableRuleAfterUse', {}, FIELD_HELP.disableRuleAfterUse)} tabIndex={0}>?</span>
                             </label>
                           </div>
                         </details>
@@ -1041,42 +1191,50 @@ export default function LogicRulesWorkspace({
                         );
                       })}
                     </div>
-                  ) : <p className="small-note">Cette zone utilise sa logique normale.</p>}
+                  ) : <p className="small-note">{tx('workspace.normalZoneLogic', {}, 'Cette zone utilise sa logique normale.')}</p>}
                 </div>
               ))}
             </section>
 
             <section className="combo-card logic-visible-objects-card logic-mobile-card" data-tour="logic-visible-objects">
               <div className="panel-head">
-                <HelpLabel className="compact-section-title" help={FIELD_HELP.visibleObjects}>Réactions des objets visibles</HelpLabel>
+                <HelpLabel className="compact-section-title" help={tx('help.visibleObjects', {}, FIELD_HELP.visibleObjects)}>
+                  {tx('workspace.visibleObjectReactions', {}, 'Réactions des objets visibles')}
+                </HelpLabel>
                 <span className="status-badge soft">{selectedClickableObjects.length}</span>
               </div>
               {selectedClickableObjects.length ? selectedClickableObjects.map((object) => (
                 <div className="combo-card logic-visible-object-card" key={object.id}>
                   <div className="logic-visible-object-head" data-tour="logic-visible-object-card">
-                    <strong>{object.name || 'Objet visible'}</strong>
-                    <span>{OBJECT_MODES[object.interactionMode || 'popup'] || 'Interaction'}</span>
+                    <strong>{object.name || tx('common.visibleObject', {}, 'Objet visible')}</strong>
+                    <span>{objectModes[object.interactionMode || 'popup'] || tx('fields.interactionMode', {}, 'Interaction')}</span>
                   </div>
                   <div className="grid-two">
                     <div>
-                      <HelpLabel help="Choisis si l’objet ouvre une image pop-up, rejoint l’inventaire, ou fait les deux au clic.">Mode d’interaction</HelpLabel>
+                      <HelpLabel help={tx('help.interactionMode', {}, 'Choisis si l’objet ouvre une image pop-up, rejoint l’inventaire, ou fait les deux au clic.')}>
+                        {tx('fields.interactionMode', {}, 'Mode d’interaction')}
+                      </HelpLabel>
                       <select value={object.interactionMode || 'popup'} onChange={(event) => updateSceneObject(object.id, (draftObject) => {
                         draftObject.interactionMode = event.target.value;
                       })}>
-                        {Object.entries(OBJECT_MODES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                        {Object.entries(objectModes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                       </select>
                     </div>
                     <div>
-                      <HelpLabel help="Objet ajouté à l’inventaire quand le mode d’interaction inclut l’inventaire.">Objet d’inventaire lié</HelpLabel>
+                      <HelpLabel help={tx('help.linkedInventoryItem', {}, 'Objet ajouté à l’inventaire quand le mode d’interaction inclut l’inventaire.')}>
+                        {tx('fields.linkedInventoryItem', {}, 'Objet d’inventaire lié')}
+                      </HelpLabel>
                       <select value={object.linkedItemId || ''} onChange={(event) => updateSceneObject(object.id, (draftObject) => {
                         draftObject.linkedItemId = event.target.value;
                       })}>
-                        <option value="">Aucun</option>
+                        <option value="">{tx('common.none', {}, 'Aucun')}</option>
                         {(project.items || []).map((item) => <option key={item.id} value={item.id}>{item.icon} {item.name}</option>)}
                       </select>
                     </div>
                   </div>
-                  <HelpLabel help="Message affiché quand le joueur clique sur cet objet visible.">Dialogue</HelpLabel>
+                  <HelpLabel help={tx('help.visibleObjectDialogue', {}, 'Message affiché quand le joueur clique sur cet objet visible.')}>
+                    {tx('common.dialogue', {}, 'Dialogue')}
+                  </HelpLabel>
                   <textarea value={object.dialogue || ''} onChange={(event) => updateSceneObject(object.id, (draftObject) => {
                     draftObject.dialogue = event.target.value;
                   })} />
@@ -1084,15 +1242,15 @@ export default function LogicRulesWorkspace({
                     <input type="checkbox" checked={Boolean(object.removeAfterUse)} onChange={(event) => updateSceneObject(object.id, (draftObject) => {
                       draftObject.removeAfterUse = event.target.checked;
                     })} />
-                    <span>Retirer l’objet visible après interaction</span>
-                    <span className="help-dot" data-help={FIELD_HELP.removeVisibleObject} aria-label={FIELD_HELP.removeVisibleObject} tabIndex={0}>?</span>
+                    <span>{tx('workspace.removeVisibleObjectAfterUse', {}, 'Retirer l’objet visible après interaction')}</span>
+                    <span className="help-dot" data-help={tx('help.removeVisibleObject', {}, FIELD_HELP.removeVisibleObject)} aria-label={tx('help.removeVisibleObject', {}, FIELD_HELP.removeVisibleObject)} tabIndex={0}>?</span>
                   </label>
                 </div>
-              )) : <p className="small-note">Aucun objet visible cliquable dans cette scène.</p>}
+              )) : <p className="small-note">{tx('workspace.noClickableVisibleObject', {}, 'Aucun objet visible cliquable dans cette scène.')}</p>}
             </section>
           </div>
         ) : (
-          <div className="empty-state-inline">Crée d’abord une scène pour gérer sa logique.</div>
+          <div className="empty-state-inline">{tx('workspace.createSceneFirst', {}, 'Crée d’abord une scène pour gérer sa logique.')}</div>
         )}
       </section>
     </div>

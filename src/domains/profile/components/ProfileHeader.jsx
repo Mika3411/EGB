@@ -1,27 +1,26 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SlidersHorizontal } from 'lucide-react';
-import { PROFILE_TUTORIAL_OPTIONS } from './profileUtils';
-import { getAccountTypeLabel, isProfessionalAccount } from '../../../shared/services/accountPlans';
+import { isProfessionalAccount } from '../../../shared/services/accountPlans';
 import { getUserDisplayName } from '../../../shared/utils/userDisplayName';
+import { useI18n } from '../../../shared/i18n';
+import LanguageSwitcher from '../../../shared/ui/LanguageSwitcher';
 
 export default function ProfileHeader({
   user,
   authorProfile = null,
   canOpenAdmin,
   ordersCount,
-  isBusy,
-  isProfileTutorialActive,
-  tutorialMenuRef,
   mobileSectionMenu = null,
   onOpenAdmin,
   onOpenPublicGallery,
   onOpenOrders,
-  onStartTutorial,
   onLogout,
+  onLanguageChange,
 }) {
+  const { t } = useI18n();
   const userDisplayName = getUserDisplayName(user, authorProfile);
-  const accountTypeLabel = getAccountTypeLabel(user);
   const isProAccount = isProfessionalAccount(user);
+  const accountTypeLabel = isProAccount ? t('profile.header.accountPro') : t('profile.header.accountPersonal');
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
   const actionsMenuRef = useRef(null);
 
@@ -49,11 +48,8 @@ export default function ProfileHeader({
     <section className="panel" data-tour="profile-header">
       <div className="panel-head panel-head-stack">
         <div>
-          <span className="eyebrow">Profil</span>
-          <h2>Salut {userDisplayName} 👋</h2>
-          <p className="small-note">
-            Gère tes jeux, reprends un projet Supabase existant ou importe une sauvegarde JSON.
-          </p>
+          <span className="eyebrow">{t('profile.header.eyebrow')}</span>
+          <h2>{t('profile.header.greeting', { name: userDisplayName })}</h2>
         </div>
 
         <div className="toolbar profile-header-toolbar">
@@ -66,7 +62,7 @@ export default function ProfileHeader({
               className="profile-dropdown-trigger profile-header-actions-trigger"
               aria-expanded={isActionsMenuOpen}
               aria-controls="profile-header-actions-list"
-              aria-label="Actions du profil"
+              aria-label={t('profile.header.actions')}
               onClick={() => setIsActionsMenuOpen((isOpen) => !isOpen)}
             >
               <SlidersHorizontal className="profile-dropdown-icon" aria-hidden="true" />
@@ -74,7 +70,7 @@ export default function ProfileHeader({
             <div id="profile-header-actions-list" className="profile-header-action-list">
               {canOpenAdmin ? (
                 <button type="button" className="secondary-action" onClick={() => runProfileAction(onOpenAdmin)}>
-                  Admin
+                  {t('common.admin')}
                 </button>
               ) : null}
               <button
@@ -83,7 +79,7 @@ export default function ProfileHeader({
                 onClick={() => runProfileAction(onOpenPublicGallery)}
                 data-tour="profile-gallery"
               >
-                Galerie publique
+                {t('common.publicGallery')}
               </button>
               <button
                 type="button"
@@ -91,50 +87,19 @@ export default function ProfileHeader({
                 onClick={() => runProfileAction(onOpenOrders)}
                 data-tour="profile-orders"
               >
-                Commandes{ordersCount ? ` (${ordersCount})` : ''}
+                {t('profile.header.orders', { count: ordersCount ? ` (${ordersCount})` : '' })}
               </button>
-              <details
-                ref={tutorialMenuRef}
-                className="profile-tutorial-menu"
-                data-tour="profile-tutorial-menu"
-                onClickCapture={(event) => {
-                  if (!isProfileTutorialActive) return;
-                  event.preventDefault();
-                  tutorialMenuRef.current.open = false;
-                }}
-                onToggle={() => {
-                  if (isProfileTutorialActive && tutorialMenuRef.current) {
-                    tutorialMenuRef.current.open = false;
-                  }
-                }}
-              >
-                <summary className="profile-action-button profile-tutorial-button">Didacticiel</summary>
-                <div className="profile-tutorial-popover">
-                  {PROFILE_TUTORIAL_OPTIONS.map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => {
-                        setIsActionsMenuOpen(false);
-                        onStartTutorial?.(value);
-                      }}
-                      disabled={isBusy}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </details>
               <button
                 type="button"
                 className="secondary-action"
                 onClick={() => runProfileAction(onLogout)}
                 data-tour="profile-logout"
               >
-                Déconnexion
+                {t('common.logout')}
               </button>
             </div>
           </div>
+          <LanguageSwitcher compact onLanguageChange={onLanguageChange} />
           {mobileSectionMenu}
         </div>
       </div>

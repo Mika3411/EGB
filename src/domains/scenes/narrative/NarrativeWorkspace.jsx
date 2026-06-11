@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, EyeOff, Flag, GitBranch, ListChecks, Plus, Search, SlidersHorizontal, Trash2, Variable } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, EyeOff, Flag, GitBranch, ListChecks, Plus, Search, SlidersHorizontal, Trash2, Variable } from 'lucide-react';
 import { showConfirm } from '../../../shared/ui/AccessibleDialog';
 import HelpLabel from '../../../shared/ui/forms/HelpLabel.jsx';
 
@@ -1171,7 +1171,7 @@ export default function NarrativeWorkspace({ project, patchProject, getSceneLabe
   const logicDebugger = buildLogicDebugger(project, audit, getSceneLabel);
   const errorCount = audit.diagnostics.filter((entry) => entry.severity === 'error').length;
   const warningCount = audit.diagnostics.filter((entry) => entry.severity === 'warning').length;
-  const [activeAdventureTab, setActiveAdventureTab] = useState('overview');
+  const [activeAdventureTab, setActiveAdventureTab] = useState('');
   const [simulator, setSimulator] = useState(() => ({
     itemIds: [],
     sceneIds: [],
@@ -1207,16 +1207,66 @@ export default function NarrativeWorkspace({ project, patchProject, getSceneLabe
   const narrativeSearchResults = useMemo(() => (
     buildNarrativeSearchResults(project, audit, narrativeSearch, getSceneLabel)
   ), [audit, getSceneLabel, narrativeSearch, project]);
-  const adventureInternalTabs = [
-    ['overview', 'Vue d ensemble', errorCount + warningCount],
-    ['debugger', 'Analyse des branches', logicDebugger.statements.length],
-    ['search', 'Recherche', narrativeSearchResults.length],
-    ['simulator', 'Simulateur', visibleSimulatorEntries.length],
-    ['diagnostics', 'Diagnostic', errorCount + warningCount],
-    ['variables', 'Variables', audit.variables.length],
-    ['choices', 'Choix', audit.entries.length],
-    ['endings', 'Fins', audit.endings.length],
+  const adventureHubCards = [
+    {
+      id: 'overview',
+      label: "Vue d'ensemble",
+      description: "Relire les compteurs clés, les choix récents, les variables et les fins avant Preview.",
+      meta: `${errorCount + warningCount} à vérifier`,
+      icon: CheckCircle2,
+    },
+    {
+      id: 'debugger',
+      label: 'Analyse des branches',
+      description: 'Lire les réponses cachées, askOnce, conditions, effets et liens entre choix.',
+      meta: `${logicDebugger.statements.length} point${logicDebugger.statements.length > 1 ? 's' : ''}`,
+      icon: GitBranch,
+    },
+    {
+      id: 'search',
+      label: 'Recherche',
+      description: 'Retrouver une variable, un objet, une fin, une condition ou un morceau de texte.',
+      meta: `${narrativeSearchResults.length} résultat${narrativeSearchResults.length > 1 ? 's' : ''}`,
+      icon: Search,
+    },
+    {
+      id: 'simulator',
+      label: 'Simulateur',
+      description: "Tester un état de jeu pour voir les réponses visibles et les fins accessibles.",
+      meta: `${visibleSimulatorEntries.length} visible${visibleSimulatorEntries.length > 1 ? 's' : ''}`,
+      icon: SlidersHorizontal,
+    },
+    {
+      id: 'diagnostics',
+      label: 'Diagnostic',
+      description: 'Corriger les cibles manquantes, conditions incomplètes et chemins fragiles.',
+      meta: `${errorCount + warningCount} alerte${errorCount + warningCount > 1 ? 's' : ''}`,
+      icon: AlertTriangle,
+    },
+    {
+      id: 'variables',
+      label: 'Variables',
+      description: "Déclarer les variables d'histoire, leurs valeurs de départ et leur journal joueur.",
+      meta: `${audit.variables.length} variable${audit.variables.length > 1 ? 's' : ''}`,
+      icon: Variable,
+    },
+    {
+      id: 'choices',
+      label: 'Choix',
+      description: 'Parcourir toutes les réponses joueur, leurs conditions et leurs conséquences.',
+      meta: `${audit.entries.length} choix`,
+      icon: ListChecks,
+    },
+    {
+      id: 'endings',
+      label: 'Fins',
+      description: 'Vérifier les bonnes, mauvaises, secrètes ou neutres issues du scénario.',
+      meta: `${audit.endings.length} fin${audit.endings.length > 1 ? 's' : ''}`,
+      icon: Flag,
+    },
   ];
+  const mainAdventureHubCards = adventureHubCards.slice(0, 4);
+  const sideAdventureHubCards = adventureHubCards.slice(4);
 
   const openScene = (sceneId) => {
     if (!sceneId) return;
@@ -1439,74 +1489,65 @@ export default function NarrativeWorkspace({ project, patchProject, getSceneLabe
     setSimulator((current) => applyReplyToSimulator(current, entry, project));
   };
 
+  const renderAdventureHubCard = (card) => {
+    const Icon = card.icon;
+    const isActive = activeAdventureTab === card.id;
+    return (
+      <button
+        key={card.id}
+        type="button"
+        className={`adventure-action-card adventure-action-card-${card.id} ${isActive ? 'active' : ''}`}
+        data-tour={`adventure-tab-${card.id}`}
+        onClick={() => setActiveAdventureTab(card.id)}
+      >
+        <span className="adventure-action-card-icon">
+          <Icon aria-hidden="true" size={24} />
+        </span>
+        <span className="adventure-action-card-copy">
+          <strong>{card.label}</strong>
+          <span>{card.description}</span>
+        </span>
+        <em>{card.meta}</em>
+      </button>
+    );
+  };
+
   return (
     <main className="adventure-tab" data-tour="adventure-dashboard">
-      <section className="panel adventure-hero-panel">
-        <div>
-          <span className="section-kicker">Narration</span>
-          <h1>
-            Contrôle du scénario à choix multiples
-            <span
-              className="help-dot adventure-title-help"
-              data-help="Tableau de bord narratif. Il ne remplace pas l'édition des conversations : il vérifie les branches, variables, réponses cachées et fins."
-              aria-label="Tableau de bord narratif. Il ne remplace pas l'édition des conversations : il vérifie les branches, variables, réponses cachées et fins."
-              tabIndex={0}
-            >
-              ?
-            </span>
-          </h1>
-          <p>Vérifie les conversations, les réponses cachées, les variables d'histoire et les fins avant de tester en Preview.</p>
+      {!activeAdventureTab ? (
+      <section className="adventure-action-hub" aria-label="Sections narration">
+        <div className="panel-head">
+          <div>
+            <span className="eyebrow">Hub narration</span>
+            <h2>Que voulez-vous contrôler ?</h2>
+          </div>
         </div>
-        <div className="toolbar">
-          <button type="button" className="secondary-action" onClick={() => setTab?.('map')}>Voir le plan</button>
-          <button type="button" className="primary-action" onClick={() => setTab?.('preview')}>Tester</button>
+        <div className="adventure-action-groups">
+          <div className="panel adventure-action-group" aria-label="Contrôle et simulation">
+            <div className="adventure-action-card-grid">
+              {mainAdventureHubCards.map(renderAdventureHubCard)}
+            </div>
+          </div>
+          <div className="panel adventure-action-group" aria-label="Structure narrative">
+            <div className="adventure-action-card-grid">
+              {sideAdventureHubCards.map(renderAdventureHubCard)}
+            </div>
+          </div>
         </div>
-      </section>
-
-      <nav className="adventure-internal-tabs" aria-label="Sections narration">
-        {adventureInternalTabs.map(([tabValue, label, count]) => (
-          <button
-            type="button"
-            key={tabValue}
-            className={activeAdventureTab === tabValue ? 'active' : ''}
-            data-tour={`adventure-tab-${tabValue}`}
-            onClick={() => setActiveAdventureTab(tabValue)}
-          >
-            <span>{label}</span>
-            <strong>{count}</strong>
-          </button>
-        ))}
-      </nav>
-
-      {activeAdventureTab === 'overview' ? (
-      <section className="adventure-stat-grid" aria-label="Resume narration" data-tour="adventure-stats">
-        <article className="adventure-stat-card">
-          <GitBranch size={18} aria-hidden="true" />
-          <span>Choix</span>
-          <strong>{audit.entries.length}</strong>
-        </article>
-        <article className="adventure-stat-card">
-          <EyeOff size={18} aria-hidden="true" />
-          <span>Réponses cachées</span>
-          <strong>{audit.hiddenEntries.length}</strong>
-        </article>
-        <article className="adventure-stat-card">
-          <Variable size={18} aria-hidden="true" />
-          <span>Variables</span>
-          <strong>{audit.variables.length}</strong>
-        </article>
-        <article className="adventure-stat-card">
-          <Flag size={18} aria-hidden="true" />
-          <span>Fins</span>
-          <strong>{audit.endings.length}</strong>
-        </article>
-        <article className={`adventure-stat-card ${errorCount ? 'danger' : warningCount ? 'warning' : 'success'}`}>
-          {errorCount || warningCount ? <AlertTriangle size={18} aria-hidden="true" /> : <CheckCircle2 size={18} aria-hidden="true" />}
-          <span>À vérifier</span>
-          <strong>{errorCount + warningCount}</strong>
-        </article>
       </section>
       ) : null}
+
+      {activeAdventureTab ? (
+      <div className="adventure-section-page">
+        <button
+          type="button"
+          className="secondary-action adventure-back-button"
+          data-tour="adventure-back-to-menu"
+          onClick={() => setActiveAdventureTab('')}
+        >
+          <ArrowLeft aria-hidden="true" size={17} />
+          Retour au menu
+        </button>
 
       {activeAdventureTab === 'overview' ? (
       <section className="panel adventure-panel adventure-narrative-panel" data-tour="adventure-narrative-logic">
@@ -2145,6 +2186,8 @@ export default function NarrativeWorkspace({ project, patchProject, getSceneLabe
           <span><Flag size={15} aria-hidden="true" /> Les fins ont un titre et un résumé lisible.</span>
         </div>
       </section>
+      ) : null}
+      </div>
       ) : null}
     </main>
   );

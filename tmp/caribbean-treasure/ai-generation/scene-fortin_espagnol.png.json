@@ -1,0 +1,10 @@
+{
+  "fileName": "scene-fortin_espagnol.png",
+  "group": "scenes",
+  "type": "scene",
+  "prompt": "Realistic cinematic escape-game asset, cohesive Caribbean treasure hunt style. Moonlit tropical island, turquoise sea, warm lantern light, weathered wood, brass, coral, salt, humid air. Wide-angle composition for a point-and-click game, clear interactive surfaces, crisp silhouettes, readable midtones. No text, no subtitles, no UI, no watermark, no modern objects, no logos.\nScene requirement: Small Spanish fort courtyard at night, damp stone, warm sconces. Left arch returns to tavern. Center: locked governor door with brass lion lock plate. Rusted cannons aim toward the sea and shipwreck. The courtyard is small but readable.\nKeep all doors, passages, props, and clue supports in stable visible positions. Do not show inventory reward items as loose pickups unless the scene clue requires a support object.",
+  "width": 1672,
+  "height": 941,
+  "hasAlpha": false,
+  "generatedAt": "2026-06-09T17:51:27.553Z"
+}

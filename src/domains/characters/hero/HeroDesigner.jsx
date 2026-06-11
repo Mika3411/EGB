@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, Dices, Eye, Heart, Plus, ShieldCheck, Sparkles, Swords, Trash2, Trophy } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, BookOpenCheck, Copy, Dices, Eye, Heart, Plus, ShieldCheck, Sparkles, Swords, Trash2, Trophy } from 'lucide-react';
 import HelpLabel from '../../../shared/ui/forms/HelpLabel.jsx';
 import HeroCharacterSheetPreview from './HeroCharacterSheetPreview.jsx';
 import {
@@ -121,13 +121,55 @@ const FIELD_HELP = {
 const DICE_PRESETS = [4, 6, 8, 10, 12, 20, 100];
 const rollDie = (sides = 6) => Math.floor(Math.random() * sides) + 1;
 const HERO_INTERNAL_TABS = [
-  { id: 'sheet', label: 'Fiche' },
-  { id: 'preview', label: 'Aperçu' },
-  { id: 'powers', label: 'Pouvoirs' },
-  { id: 'skills', label: 'Compétences' },
-  { id: 'rules', label: 'Affichage' },
-  { id: 'balance', label: 'Équilibrage' },
-  { id: 'guide', label: 'Guide' },
+  {
+    id: 'sheet',
+    label: 'Fiche',
+    description: 'Identité, PV, mana, dé principal, images et emplacements portés.',
+    icon: Heart,
+    tour: 'hero-sheet-panel',
+  },
+  {
+    id: 'preview',
+    label: 'Aperçu',
+    description: 'Voir la fiche joueur comme elle apparaîtra dans la Preview.',
+    icon: Eye,
+    tour: 'hero-tab-preview',
+  },
+  {
+    id: 'powers',
+    label: 'Pouvoirs',
+    description: 'Attaques spéciales, soins, états et résistances du héros.',
+    icon: Sparkles,
+    tour: 'hero-tab-powers',
+  },
+  {
+    id: 'skills',
+    label: 'Compétences',
+    description: 'Bonus de jets, coûts de mana et tirage façon livre-jeu.',
+    icon: Dices,
+    tour: 'hero-tab-skills',
+  },
+  {
+    id: 'rules',
+    label: 'Affichage',
+    description: 'Styles des dés, boutons, polices et panneau de narration.',
+    icon: ShieldCheck,
+    tour: 'hero-tab-rules',
+  },
+  {
+    id: 'balance',
+    label: 'Équilibrage',
+    description: 'Alertes, chances de réussite, combats et récompenses Hero.',
+    icon: Trophy,
+    tour: 'hero-tab-balance',
+  },
+  {
+    id: 'guide',
+    label: 'Guide',
+    description: 'Relier fiche, tests, objets, combats et conditions de jeu.',
+    icon: BookOpenCheck,
+    tour: 'hero-tab-guide',
+  },
 ];
 
 const createHeroSheetId = () => `hero_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -664,7 +706,7 @@ export const buildHeroBalanceReport = (project = {}, heroAdventure = DEFAULT_HER
 
 export default function HeroDesigner({ project, patchProject, onPreviewHeroCharacter, setTab }) {
   const heroAdventure = useMemo(() => normalizeHeroAdventure(project), [project]);
-  const [activeHeroTab, setActiveHeroTab] = useState('sheet');
+  const [activeHeroTab, setActiveHeroTab] = useState('');
   const hero = heroAdventure.hero;
   const rules = heroAdventure.rules || DEFAULT_HERO_ADVENTURE.rules;
   const heroRoster = Array.isArray(heroAdventure.heroes) && heroAdventure.heroes.length
@@ -903,6 +945,16 @@ export default function HeroDesigner({ project, patchProject, onPreviewHeroChara
     : heroBalance.progression.manaRatio > 0.75
       ? 'warning'
       : 'safe';
+  const heroHubMeta = {
+    sheet: `${heroRoster.length} fiche${heroRoster.length > 1 ? 's' : ''}`,
+    preview: 'Player',
+    powers: `${(hero.powers || []).length} pouvoir${(hero.powers || []).length > 1 ? 's' : ''}`,
+    skills: `${hero.skills.length} compétence${hero.skills.length > 1 ? 's' : ''}`,
+    rules: heroAdventure.dice.label || `d${heroAdventure.dice.sides}`,
+    balance: heroBalance.alerts.length ? `${heroBalance.alerts.length} alerte${heroBalance.alerts.length > 1 ? 's' : ''}` : 'Stable',
+    guide: 'Gameplay',
+  };
+  const activeHeroTabLabel = HERO_INTERNAL_TABS.find((tab) => tab.id === activeHeroTab)?.label || '';
 
   return (
     <div className="layout two-cols-wide hero-editor-layout">
@@ -914,16 +966,54 @@ export default function HeroDesigner({ project, patchProject, onPreviewHeroChara
           </div>
         </div>
 
-        <div className="hero-stat-preview">
-          <strong>{hero.name}</strong>
-          <span>{heroAdventure.dice.label} principal</span>
-          <div className="hero-preview-meter">
-            <Heart size={16} aria-hidden="true" />
-            <span>{hero.health}/{hero.maxHealth} PV</span>
+        <div className="subpanel hero-roster-panel" data-tour="hero-roster-panel">
+          <div className="subpanel-head">
+            <h3>Personnages</h3>
+            <div className="toolbar hero-roster-actions" aria-label="Actions personnages">
+              <button
+                type="button"
+                className="secondary-action"
+                onClick={duplicateHeroSheet}
+                aria-label={`Dupliquer ${hero.name || 'le héros actif'}`}
+                title="Dupliquer"
+              >
+                <Copy size={16} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={addHeroSheet}
+                aria-label="Ajouter une fiche personnage"
+                title="Ajouter"
+              >
+                <Plus size={16} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className="danger-button"
+                onClick={() => removeHeroSheet(heroAdventure.selectedHeroId || hero.id)}
+                disabled={heroRoster.length <= 1}
+                aria-label={`Supprimer ${hero.name || 'le héros actif'}`}
+                title="Supprimer"
+              >
+                <Trash2 size={16} aria-hidden="true" />
+              </button>
+            </div>
           </div>
-          <div className="hero-preview-meter">
-            <Sparkles size={16} aria-hidden="true" />
-            <span>{hero.mana}/{hero.maxMana} Mana</span>
+          <div className="hero-roster-list" aria-label="Personnages jouables">
+            {heroRoster.map((sheet) => {
+              const isActive = sheet.id === heroAdventure.selectedHeroId;
+              return (
+                <button
+                  key={sheet.id}
+                  type="button"
+                  className={`hero-roster-name ${isActive ? 'active' : ''}`}
+                  onClick={() => selectHeroSheet(sheet.id)}
+                  aria-pressed={isActive}
+                >
+                  <span>{sheet.name || 'Héros'}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -955,78 +1045,55 @@ export default function HeroDesigner({ project, patchProject, onPreviewHeroChara
           <h2>Configuration Hero aventure</h2>
         </div>
 
-        <div className="hero-internal-tabs" role="tablist" aria-label="Sections de configuration du héros" data-tour="hero-internal-tabs">
-          {HERO_INTERNAL_TABS.map((tab) => (
+        {!activeHeroTab ? (
+          <section className="hero-section-hub" aria-label="Sections Hero aventure" data-tour="hero-section-hub">
+            <div className="panel-head">
+              <div>
+                <span className="eyebrow">Tableau de bord</span>
+                <h3>Que veux-tu configurer ?</h3>
+              </div>
+            </div>
+            <div className="hero-section-card-grid">
+              {HERO_INTERNAL_TABS.map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    className={`hero-section-card hero-section-card-${tab.id}`}
+                    data-tour={tab.tour}
+                    onClick={() => setActiveHeroTab(tab.id)}
+                  >
+                    <span className="hero-section-card-icon">
+                      <Icon aria-hidden="true" size={24} />
+                    </span>
+                    <span className="hero-section-card-copy">
+                      <strong>{tab.label}</strong>
+                      <span>{tab.description}</span>
+                    </span>
+                    <em>{heroHubMeta[tab.id]}</em>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ) : (
+          <div className="hero-section-page">
             <button
-              key={tab.id}
               type="button"
-              role="tab"
-              aria-selected={activeHeroTab === tab.id}
-              className={activeHeroTab === tab.id ? 'active' : ''}
-              data-tour={`hero-tab-${tab.id}`}
-              onClick={() => setActiveHeroTab(tab.id)}
+              className="secondary-action hero-back-button"
+              data-tour={`hero-back-to-hub-${activeHeroTab}`}
+              onClick={() => setActiveHeroTab('')}
             >
-              {tab.label}
+              <ArrowLeft aria-hidden="true" size={17} />
+              Retour au menu
             </button>
-          ))}
-        </div>
-
-        <div className="subpanel hero-roster-panel">
-          <div className="subpanel-head">
-            <div>
-              <h3>Personnages jouables</h3>
-              <p>Chaque fiche garde ses PV, mana, compétences, pouvoirs, résistances et critiques. Le joueur choisira son personnage au début de la Preview.</p>
+            <div className="panel-head hero-section-page-head">
+              <div>
+                <span className="eyebrow">Hero aventure</span>
+                <h3>{activeHeroTabLabel}</h3>
+              </div>
             </div>
-            <div className="toolbar">
-              <button type="button" className="secondary-action" onClick={duplicateHeroSheet}>
-                Dupliquer
-              </button>
-              <button type="button" onClick={addHeroSheet}>
-                <Plus size={16} aria-hidden="true" />
-                Ajouter une fiche
-              </button>
-            </div>
-          </div>
-          <div className="hero-roster-grid">
-            {heroRoster.map((sheet) => {
-              const isActive = sheet.id === heroAdventure.selectedHeroId;
-              const forceSkill = (sheet.skills || []).find((skill) => normalizeSkillId(skill.name || skill.id).includes('force')) || sheet.skills?.[0];
-              return (
-                <button
-                  key={sheet.id}
-                  type="button"
-                  className={`hero-roster-card ${isActive ? 'active' : ''}`}
-                  onClick={() => selectHeroSheet(sheet.id)}
-                  aria-pressed={isActive}
-                >
-                  <strong>{sheet.name || 'Héros'}</strong>
-                  {sheet.description ? <p className="hero-roster-description">{sheet.description}</p> : null}
-                  <span>{sheet.health}/{sheet.maxHealth} PV - {sheet.mana}/{sheet.maxMana} Mana</span>
-                  <small>Force {forceSkill?.value ?? 0} - Crit {sheet.rules?.criticalChance ?? 0}%</small>
-                  {heroRoster.length > 1 ? (
-                    <em
-                      role="button"
-                      tabIndex={0}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        removeHeroSheet(sheet.id);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          removeHeroSheet(sheet.id);
-                        }
-                      }}
-                    >
-                      Supprimer
-                    </em>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-        </div>
 
         <div className="subpanel-grid">
           {activeHeroTab === 'preview' ? <HeroCharacterSheetPreview hero={hero} heroAdventure={heroAdventure} onOpenPlayerPreview={previewHeroPage} /> : null}
@@ -1888,6 +1955,8 @@ export default function HeroDesigner({ project, patchProject, onPreviewHeroChara
           </div>
           ) : null}
         </div>
+          </div>
+        )}
       </section>
     </div>
   );

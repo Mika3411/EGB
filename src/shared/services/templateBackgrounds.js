@@ -30,6 +30,13 @@ const BACKGROUNDS = {
 };
 
 const TEMPLATE_BACKGROUNDS = {
+  book_hero: [
+    makeTemplateBackground('book_hero', 'scene-01-route-brumeuse.png'),
+    makeTemplateBackground('book_hero', 'scene-02-porte-noire.png'),
+    makeTemplateBackground('book_hero', 'scene-03-marche-abandonne.png'),
+    makeTemplateBackground('book_hero', 'scene-04-catacombes.png'),
+    makeTemplateBackground('book_hero', 'scene-05-salle-trone.png'),
+  ],
   adventure_choices: [
     makeTemplateBackground('adventure_choices', 'scene-01-croisee-chemins.png'),
     makeTemplateBackground('adventure_choices', 'scene-02-sentier-foret.png'),
@@ -55,21 +62,57 @@ const TEMPLATE_BACKGROUNDS = {
     makeTemplateBackground('laboratory', 'scene-02-salle-experiences.png'),
     makeTemplateBackground('laboratory', 'scene-03-reacteur-instable.png'),
   ],
+  magic_forest: [
+    makeTemplateBackground('magic_forest', 'scene-01-lisiere-enchantee.png'),
+    makeTemplateBackground('magic_forest', 'scene-02-arbre-oracle.png'),
+    makeTemplateBackground('magic_forest', 'scene-03-source-lucioles.png'),
+  ],
   museum: [
-    makeTemplateBackground('museum', 'scene-01-galerie-principale.png'),
+    makeTemplateBackground('museum', 'scene-01-galerie-principale-v2.png'),
     makeTemplateBackground('museum', 'scene-02-reserve-secrete.png'),
     makeTemplateBackground('museum', 'scene-03-salle-artefacts.png'),
+  ],
+  narrative_investigation: [
+    makeTemplateBackground('narrative_investigation', 'scene-01-bureau-detective.png'),
+    makeTemplateBackground('narrative_investigation', 'scene-02-appartement-temoin.png'),
+    makeTemplateBackground('narrative_investigation', 'scene-03-quai-nuit.png'),
+  ],
+  narrative_maze: [
+    makeTemplateBackground('narrative_maze', 'scene-01-entree-labyrinthe.png'),
+    makeTemplateBackground('narrative_maze', 'scene-02-salle-echos.png'),
+    makeTemplateBackground('narrative_maze', 'scene-03-centre-mouvant.png'),
+  ],
+  npc_dialogue: [
+    makeTemplateBackground('npc_dialogue', 'scene-01-taverne-calme.png'),
+    makeTemplateBackground('npc_dialogue', 'scene-02-arriere-salle.png'),
+    makeTemplateBackground('npc_dialogue', 'scene-03-porte-cite.png'),
+  ],
+  negotiation: [
+    makeTemplateBackground('negotiation', 'scene-01-salle-conseil.png'),
+    makeTemplateBackground('negotiation', 'scene-02-couloir-apartes.png'),
+    makeTemplateBackground('negotiation', 'scene-03-balcon-pacte.png'),
+  ],
+  survival_choices: [
+    makeTemplateBackground('survival_choices', 'scene-01-epave-plage.png'),
+    makeTemplateBackground('survival_choices', 'scene-02-foret-humide.png'),
+    makeTemplateBackground('survival_choices', 'scene-03-falaise-signal.png'),
   ],
 };
 
 const TEMPLATE_BACKGROUND_ROTATIONS = {
-  book_hero: [BACKGROUNDS.souk, BACKGROUNDS.caveDoor, BACKGROUNDS.returnCity, BACKGROUNDS.caveExit, BACKGROUNDS.seal],
+  book_hero: TEMPLATE_BACKGROUNDS.book_hero,
   adventure_choices: TEMPLATE_BACKGROUNDS.adventure_choices,
   hero_adventure: TEMPLATE_BACKGROUNDS.hero_adventure,
   manor: TEMPLATE_BACKGROUNDS.manor,
   investigation: TEMPLATE_BACKGROUNDS.investigation,
   laboratory: TEMPLATE_BACKGROUNDS.laboratory,
+  magic_forest: TEMPLATE_BACKGROUNDS.magic_forest,
   museum: TEMPLATE_BACKGROUNDS.museum,
+  narrative_investigation: TEMPLATE_BACKGROUNDS.narrative_investigation,
+  narrative_maze: TEMPLATE_BACKGROUNDS.narrative_maze,
+  npc_dialogue: TEMPLATE_BACKGROUNDS.npc_dialogue,
+  negotiation: TEMPLATE_BACKGROUNDS.negotiation,
+  survival_choices: TEMPLATE_BACKGROUNDS.survival_choices,
   promote: [BACKGROUNDS.prologueCover],
   extend: [BACKGROUNDS.returnCity],
   story: [BACKGROUNDS.prologueCover],
@@ -77,6 +120,10 @@ const TEMPLATE_BACKGROUND_ROTATIONS = {
 };
 
 const TEMPLATE_ITEM_IMAGES = {
+  book_hero: {
+    'Marque-page d argent': makeTemplateItemImage('book_hero', 'item-marque-page-argent.png'),
+    'Lanterne sourde': makeTemplateItemImage('book_hero', 'item-lanterne-sourde.png'),
+  },
   adventure_choices: {
     'Jeton du guide': makeTemplateItemImage('adventure_choices', 'item-jeton-guide.png'),
     'Carte de la vallee': makeTemplateItemImage('adventure_choices', 'item-carte-vallee.png'),
@@ -103,10 +150,40 @@ const TEMPLATE_ITEM_IMAGES = {
     'Echantillon bleu': makeTemplateItemImage('laboratory', 'item-echantillon-bleu.png'),
     'Module de controle': makeTemplateItemImage('laboratory', 'item-module-controle.png'),
   },
+  magic_forest: {
+    'Graine d argent': makeTemplateItemImage('magic_forest', 'item-graine-argent.png'),
+    'Ecorce gravee': makeTemplateItemImage('magic_forest', 'item-ecorce-gravee.png'),
+    'Rosace des lucioles': makeTemplateItemImage('magic_forest', 'item-rosace-lucioles.png'),
+  },
   museum: {
     'Clef de reserve': makeTemplateItemImage('museum', 'item-clef-reserve.png'),
     'Cartel ancien': makeTemplateItemImage('museum', 'item-cartel-ancien.png'),
     'Medaille solaire': makeTemplateItemImage('museum', 'item-medaille-solaire.png'),
+  },
+  narrative_investigation: {
+    'Photo froissee': makeTemplateItemImage('narrative_investigation', 'item-photo-froissee.png'),
+    'Releve d appels': makeTemplateItemImage('narrative_investigation', 'item-releve-appels.png'),
+    'Aveu signe': makeTemplateItemImage('narrative_investigation', 'item-aveu-signe.png'),
+  },
+  narrative_maze: {
+    'Fil rouge': makeTemplateItemImage('narrative_maze', 'item-fil-rouge.png'),
+    'Fragment d echo': makeTemplateItemImage('narrative_maze', 'item-fragment-echo.png'),
+    'Cle du centre': makeTemplateItemImage('narrative_maze', 'item-cle-centre.png'),
+  },
+  npc_dialogue: {
+    'Sceau dé confiance': makeTemplateItemImage('npc_dialogue', 'item-sceau-confiance.png'),
+    'Phrase de passe': makeTemplateItemImage('npc_dialogue', 'item-phrase-passe.png'),
+    'Cle de la cite': makeTemplateItemImage('npc_dialogue', 'item-cle-cite.png'),
+  },
+  negotiation: {
+    'Lettre de garantie': makeTemplateItemImage('negotiation', 'item-lettre-garantie.png'),
+    'Clause annotee': makeTemplateItemImage('negotiation', 'item-clause-annotee.png'),
+    'Pacte scelle': makeTemplateItemImage('negotiation', 'item-pacte-scelle.png'),
+  },
+  survival_choices: {
+    'Gourde intacte': makeTemplateItemImage('survival_choices', 'item-gourde-intacte.png'),
+    'Carte detrempee': makeTemplateItemImage('survival_choices', 'item-carte-detrempee.png'),
+    'Fumigene de signal': makeTemplateItemImage('survival_choices', 'item-fumigene-signal.png'),
   },
 };
 

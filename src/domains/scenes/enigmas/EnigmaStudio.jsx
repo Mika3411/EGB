@@ -20,6 +20,7 @@ import EnigmaList from './components/EnigmaList';
 import EnigmaPreviewAside from './components/EnigmaPreviewAside';
 import MediaSourcePicker from '../../../shared/ui/media/MediaSourcePicker.jsx';
 import { showConfirm } from '../../../shared/ui/AccessibleDialog';
+import { useEditorPanelText } from '../../../shared/i18n';
 import { getProjectLinkOptions } from '../studio/components/HotspotActionFields.jsx';
 import { isProfessionalAccount } from '../../../shared/services/accountPlans';
 import { isProPromotionProject } from '../../../shared/services/proPromotion';
@@ -40,6 +41,12 @@ export default function EnigmaStudio({
   mediaLibrary = [],
   previewEnigma,
 }) {
+  const { tx, txObject } = useEditorPanelText('enigma');
+  const typeLabels = { ...TYPE_LABELS, ...txObject('typeLabels') };
+  const miscModeOptions = MISC_MODE_OPTIONS.map(([value, label]) => [value, tx(`miscModes.${value}`, {}, label)]);
+  const colorOptions = COLOR_OPTIONS.map(([value, label]) => [value, tx(`colors.${value}`, {}, label)]);
+  const popupOverlayOptions = POPUP_OVERLAY_OPTIONS.map(([value, label]) => [value, tx(`overlays.${value}`, {}, label)]);
+
   const keepMobileFieldInView = (event) => {
     if (typeof window === 'undefined' || !window.matchMedia('(max-width: 900px)').matches) return;
     const target = event.target;
@@ -87,7 +94,7 @@ export default function EnigmaStudio({
     ? {
       id: selectedEnigma.targetProjectId,
       userId: selectedEnigma.targetProjectUserId || user?.id || '',
-      title: 'Projet sélectionné',
+      title: tx('fields.targetProject', {}, 'Projet sélectionné'),
     }
     : null;
   const enigmaProPageOptions = selectedProPageOption ? [...proPageOptions, selectedProPageOption] : proPageOptions;
@@ -105,14 +112,14 @@ export default function EnigmaStudio({
 
       <section className="panel main enigma-main-panel" onFocusCapture={keepMobileFieldInView}>
         <div className="panel-head">
-          <h2>Éditeur d’énigme</h2>
+          <h2>{tx('fields.editorTitle', {}, 'Éditeur d’énigme')}</h2>
           {selectedEnigma && (
             <div className="inline-actions end">
               <button type="button" className="secondary-action" data-tour="enigma-preview-button" onClick={() => previewEnigma?.(selectedEnigma.id)}>
-                Prévisualiser
+                {tx('fields.preview', {}, 'Prévisualiser')}
               </button>
               <button className="danger-button" onClick={() => deleteEnigma(selectedEnigma.id)}>
-                Supprimer
+                {tx('fields.delete', {}, 'Supprimer')}
               </button>
             </div>
           )}
@@ -124,31 +131,31 @@ export default function EnigmaStudio({
               <div className="enigma-form-column">
             <div className="grid-two" data-tour="enigma-identity">
               <div>
-                <HelpLabel help={FIELD_HELP.name}>Nom</HelpLabel>
+                <HelpLabel help={FIELD_HELP.name}>{tx('fields.name', {}, 'Nom')}</HelpLabel>
                 <input value={selectedEnigma.name} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                   enigma.name = e.target.value;
                 })} />
               </div>
               <div>
-                <HelpLabel help={FIELD_HELP.type}>Type</HelpLabel>
+                <HelpLabel help={FIELD_HELP.type}>{tx('fields.type', {}, 'Type')}</HelpLabel>
                 <select value={selectedEnigma.type} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                   enigma.type = e.target.value;
                   ensureEnigmaTypeDefaults(enigma, e.target.value);
                 })}>
-                  {Object.entries(TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  {Object.entries(typeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
               </div>
             </div>
 
-            <HelpLabel help={FIELD_HELP.question}>Question / consigne</HelpLabel>
+            <HelpLabel help={FIELD_HELP.question}>{tx('fields.question', {}, 'Question / consigne')}</HelpLabel>
             <textarea data-tour="enigma-question" value={selectedEnigma.question} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
               enigma.question = e.target.value;
             })} />
 
             {selectedEnigma.type === 'code' ? (
               <>
-                <HelpLabel help={FIELD_HELP.solution}>Solution</HelpLabel>
-                <input data-tour="enigma-solution" value={selectedEnigma.solutionText || ''} placeholder="Ex : 1234 ou LUNE" onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
+                <HelpLabel help={FIELD_HELP.solution}>{tx('fields.solution', {}, 'Solution')}</HelpLabel>
+                <input data-tour="enigma-solution" value={selectedEnigma.solutionText || ''} placeholder={tx('placeholders.codeSolution', {}, 'Ex : 1234 ou LUNE')} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                   enigma.solutionText = e.target.value;
                 })} />
               </>
@@ -158,24 +165,28 @@ export default function EnigmaStudio({
               <>
                 <div className="grid-two">
                   <div>
-                    <HelpLabel help={FIELD_HELP.miscMode}>Mode Divers</HelpLabel>
+                    <HelpLabel help={FIELD_HELP.miscMode}>{tx('fields.miscMode', {}, 'Mode Divers')}</HelpLabel>
                     <select value={selectedEnigma.miscMode || 'free-answer'} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                       enigma.miscMode = e.target.value;
-                      enigma.miscChoices = Array.isArray(enigma.miscChoices) && enigma.miscChoices.length ? enigma.miscChoices : ['Réponse A', 'Réponse B', 'Réponse C'];
+                      enigma.miscChoices = Array.isArray(enigma.miscChoices) && enigma.miscChoices.length ? enigma.miscChoices : [
+                        tx('placeholders.answerA', {}, 'Réponse A'),
+                        tx('placeholders.answerB', {}, 'Réponse B'),
+                        tx('placeholders.answerC', {}, 'Réponse C'),
+                      ];
                     })}>
-                      {MISC_MODE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                      {miscModeOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                     </select>
                   </div>
                   <div>
-                    <HelpLabel help={FIELD_HELP.solution}>Solution attendue</HelpLabel>
-                    <input value={selectedEnigma.solutionText || ''} placeholder="Ex : LUNE" onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
+                    <HelpLabel help={FIELD_HELP.solution}>{tx('fields.expectedSolution', {}, 'Solution attendue')}</HelpLabel>
+                    <input value={selectedEnigma.solutionText || ''} placeholder={tx('placeholders.textSolution', {}, 'Ex : LUNE')} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                       enigma.solutionText = e.target.value;
                     })} />
                   </div>
                 </div>
 
                 {['free-answer', 'fill-blank', 'accepted-answers'].includes(selectedEnigma.miscMode || 'free-answer') ? (
-                  <p className="small-note">Validation souple : la réponse est acceptée même avec ou sans majuscules, et même si le joueur ajoute des mots autour.</p>
+                  <p className="small-note">{tx('notes.flexibleValidation', {}, 'Validation souple : la réponse est acceptée même avec ou sans majuscules, et même si le joueur ajoute des mots autour.')}</p>
                 ) : null}
 
                 {['multiple-choice', 'ordering', 'multi-select', 'accepted-answers'].includes(selectedEnigma.miscMode || 'free-answer') ? (
@@ -183,14 +194,14 @@ export default function EnigmaStudio({
                     <div className="panel-head panel-head-spaced">
                       <HelpLabel className="compact-section-title" help={FIELD_HELP.miscChoices}>
                         {(selectedEnigma.miscMode || 'free-answer') === 'ordering' ?
-                           'Ordre attendu'
+                           tx('fields.expectedOrder', {}, 'Ordre attendu')
                           : (selectedEnigma.miscMode || 'free-answer') === 'accepted-answers' ?
-                             'Réponses acceptées'
-                            : 'Choix proposés'}
+                             tx('fields.acceptedAnswers', {}, 'Réponses acceptées')
+                            : tx('fields.proposedChoices', {}, 'Choix proposés')}
                       </HelpLabel>
                       <button type="button" onClick={() => updateEnigma(selectedEnigma.id, (enigma) => {
-                        enigma.miscChoices = [...(enigma.miscChoices || []), 'Nouvelle réponse'];
-                      })}>+ Choix</button>
+                        enigma.miscChoices = [...(enigma.miscChoices || []), tx('placeholders.newChoice', {}, 'Nouvelle réponse')];
+                      })}>{tx('buttons.addChoice', {}, '+ Choix')}</button>
                     </div>
                     {(selectedEnigma.miscChoices || []).map((choice, index) => (
                       <div className="row row-auto" key={`${selectedEnigma.id}-choice-${index}`}>
@@ -199,44 +210,44 @@ export default function EnigmaStudio({
                         })} />
                         <button type="button" className="danger-button" onClick={async () => {
                           const confirmed = await showConfirm({
-                            title: 'Supprimer le choix',
-                            message: 'Supprimer ce choix ?',
-                            confirmLabel: 'Supprimer',
+                            title: tx('confirm.deleteChoiceTitle', {}, 'Supprimer le choix'),
+                            message: tx('confirm.deleteChoiceMessage', {}, 'Supprimer ce choix ?'),
+                            confirmLabel: tx('fields.delete', {}, 'Supprimer'),
                             variant: 'danger',
                           });
                           if (!confirmed) return;
                           updateEnigma(selectedEnigma.id, (enigma) => {
                           enigma.miscChoices = (enigma.miscChoices || []).filter((_, choiceIndex) => choiceIndex !== index);
                           });
-                        }}>Supprimer</button>
+                        }}>{tx('buttons.deleteChoice', {}, 'Supprimer')}</button>
                       </div>
                     ))}
                     {(selectedEnigma.miscMode || 'free-answer') === 'multiple-choice' ? (
-                      <p className="small-note">Le bon choix est celui qui correspond à la solution attendue.</p>
+                      <p className="small-note">{tx('notes.goodChoice', {}, 'Le bon choix est celui qui correspond à la solution attendue.')}</p>
                     ) : null}
                     {(selectedEnigma.miscMode || 'free-answer') === 'ordering' ? (
-                      <p className="small-note">L’ordre configuré ici est l’ordre correct attendu côté joueur.</p>
+                      <p className="small-note">{tx('notes.ordering', {}, 'L’ordre configuré ici est l’ordre correct attendu côté joueur.')}</p>
                     ) : null}
                     {(selectedEnigma.miscMode || 'free-answer') === 'accepted-answers' ? (
-                      <p className="small-note">Le joueur valide si sa phrase contient au moins une de ces réponses.</p>
+                      <p className="small-note">{tx('notes.acceptedAnswers', {}, 'Le joueur valide si sa phrase contient au moins une de ces réponses.')}</p>
                     ) : null}
                   </>
                 ) : null}
 
                 {(selectedEnigma.miscMode || 'free-answer') === 'true-false' ? (
-                  <p className="small-note">Écris <code>vrai</code> ou <code>faux</code> dans Solution attendue.</p>
+                  <p className="small-note">{tx('notes.trueFalse', {}, 'Écris vrai ou faux dans Solution attendue.')}</p>
                 ) : null}
 
                 {(selectedEnigma.miscMode || 'free-answer') === 'numeric-range' ? (
                   <div className="grid-two">
                     <div>
-                      <HelpLabel help={FIELD_HELP.miscRange}>Minimum accepté</HelpLabel>
+                      <HelpLabel help={FIELD_HELP.miscRange}>{tx('fields.acceptedMin', {}, 'Minimum accepté')}</HelpLabel>
                       <input type="number" value={selectedEnigma.miscMin ?? ''} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                         enigma.miscMin = e.target.value;
                       })} />
                     </div>
                     <div>
-                      <HelpLabel help={FIELD_HELP.miscRange}>Maximum accepté</HelpLabel>
+                      <HelpLabel help={FIELD_HELP.miscRange}>{tx('fields.acceptedMax', {}, 'Maximum accepté')}</HelpLabel>
                       <input type="number" value={selectedEnigma.miscMax ?? ''} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                         enigma.miscMax = e.target.value;
                       })} />
@@ -245,50 +256,50 @@ export default function EnigmaStudio({
                 ) : null}
 
                 {(selectedEnigma.miscMode || 'free-answer') === 'exact-number' ? (
-                  <p className="small-note">Écris le nombre exact attendu dans Solution attendue. Les espaces et virgules autour sont ignorés.</p>
+                  <p className="small-note">{tx('notes.exactNumber', {}, 'Écris le nombre exact attendu dans Solution attendue. Les espaces et virgules autour sont ignorés.')}</p>
                 ) : null}
 
                 {(selectedEnigma.miscMode || 'free-answer') === 'item-select' ? (
                   <div>
-                    <HelpLabel help={FIELD_HELP.miscTargetItem}>Objet attendu</HelpLabel>
+                    <HelpLabel help={FIELD_HELP.miscTargetItem}>{tx('fields.expectedItem', {}, 'Objet attendu')}</HelpLabel>
                     <select value={selectedEnigma.miscTargetItemId || ''} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                       enigma.miscTargetItemId = e.target.value;
                     })}>
-                      <option value="">Aucun</option>
+                      <option value="">{tx('options.none', {}, 'Aucun')}</option>
                       {(project.items || []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                     </select>
-                    <p className="small-note">Le joueur devra choisir cet objet dans une liste.</p>
+                    <p className="small-note">{tx('notes.itemSelect', {}, 'Le joueur devra choisir cet objet dans une liste.')}</p>
                   </div>
                 ) : null}
 
                 {(selectedEnigma.miscMode || 'free-answer') === 'matching' ? (
                   <>
                     <div className="panel-head panel-head-spaced">
-                      <HelpLabel className="compact-section-title" help={FIELD_HELP.miscPairs}>Paires attendues</HelpLabel>
+                      <HelpLabel className="compact-section-title" help={FIELD_HELP.miscPairs}>{tx('fields.expectedPairs', {}, 'Paires attendues')}</HelpLabel>
                       <button type="button" onClick={() => updateEnigma(selectedEnigma.id, (enigma) => {
-                        enigma.miscPairs = [...(enigma.miscPairs || []), { left: 'Élément', right: 'Réponse' }];
-                      })}>+ Paire</button>
+                        enigma.miscPairs = [...(enigma.miscPairs || []), { left: tx('placeholders.element', {}, 'Élément'), right: tx('placeholders.newChoice', {}, 'Réponse') }];
+                      })}>{tx('buttons.addPair', {}, '+ Paire')}</button>
                     </div>
                     {(selectedEnigma.miscPairs || []).map((pair, index) => (
                       <div className="row row-three" key={`${selectedEnigma.id}-pair-${index}`}>
-                        <input value={pair.left || ''} placeholder="Élément" onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
+                        <input value={pair.left || ''} placeholder={tx('placeholders.element', {}, 'Élément')} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                           enigma.miscPairs[index] = { ...(enigma.miscPairs[index] || {}), left: e.target.value };
                         })} />
-                        <input value={pair.right || ''} placeholder="Association" onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
+                        <input value={pair.right || ''} placeholder={tx('placeholders.association', {}, 'Association')} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                           enigma.miscPairs[index] = { ...(enigma.miscPairs[index] || {}), right: e.target.value };
                         })} />
                         <button type="button" className="danger-button" onClick={async () => {
                           const confirmed = await showConfirm({
-                            title: 'Supprimer la paire',
-                            message: 'Supprimer cette paire ?',
-                            confirmLabel: 'Supprimer',
+                            title: tx('confirm.deletePairTitle', {}, 'Supprimer la paire'),
+                            message: tx('confirm.deletePairMessage', {}, 'Supprimer cette paire ?'),
+                            confirmLabel: tx('fields.delete', {}, 'Supprimer'),
                             variant: 'danger',
                           });
                           if (!confirmed) return;
                           updateEnigma(selectedEnigma.id, (enigma) => {
                           enigma.miscPairs = (enigma.miscPairs || []).filter((_, pairIndex) => pairIndex !== index);
                           });
-                        }}>Supprimer</button>
+                        }}>{tx('buttons.deleteChoice', {}, 'Supprimer')}</button>
                       </div>
                     ))}
                   </>
@@ -296,7 +307,7 @@ export default function EnigmaStudio({
 
                 {(selectedEnigma.miscMode || 'free-answer') === 'multi-select' ? (
                   <>
-                    <HelpLabel help={FIELD_HELP.miscChoices}>Bonnes réponses</HelpLabel>
+                    <HelpLabel help={FIELD_HELP.miscChoices}>{tx('fields.goodAnswers', {}, 'Bonnes réponses')}</HelpLabel>
                     <div className="stack-8">
                       {(selectedEnigma.miscChoices || []).map((choice) => (
                         <label key={choice} className="checkbox-row">
@@ -317,7 +328,7 @@ export default function EnigmaStudio({
 
             <div className="combo-card subtle-card" data-tour="enigma-popup-background">
               <div className="panel-head">
-                <HelpLabel className="compact-section-title" help={FIELD_HELP.popupBackground}>Fond de pop-up</HelpLabel>
+                <HelpLabel className="compact-section-title" help={FIELD_HELP.popupBackground}>{tx('fields.popupBackground', {}, 'Fond de pop-up')}</HelpLabel>
                 <div className="inline-actions">
                   <MediaSourcePicker
                     className="button like"
@@ -335,7 +346,9 @@ export default function EnigmaStudio({
                     })}
                     tourId="enigma-popup-background-button"
                   >
-                    {selectedEnigma.popupBackgroundData ? 'Remplacer le fond' : 'Importer un fond'}
+                    {selectedEnigma.popupBackgroundData
+                      ? tx('buttons.replaceBackground', {}, 'Remplacer le fond')
+                      : tx('buttons.importBackground', {}, 'Importer un fond')}
                   </MediaSourcePicker>
                   <button
                     type="button"
@@ -343,9 +356,9 @@ export default function EnigmaStudio({
                     disabled={!selectedEnigma.popupBackgroundData}
                     onClick={async () => {
                       const confirmed = await showConfirm({
-                        title: 'Supprimer le fond',
-                        message: 'Supprimer le fond de cette énigme ?',
-                        confirmLabel: 'Supprimer',
+                        title: tx('confirm.deleteBackgroundTitle', {}, 'Supprimer le fond'),
+                        message: tx('confirm.deleteBackgroundMessage', {}, 'Supprimer le fond de cette énigme ?'),
+                        confirmLabel: tx('fields.delete', {}, 'Supprimer'),
                         variant: 'danger',
                       });
                       if (!confirmed) return;
@@ -355,7 +368,7 @@ export default function EnigmaStudio({
                       });
                     }}
                   >
-                    Supprimer le fond
+                    {tx('buttons.deleteBackground', {}, 'Supprimer le fond')}
                   </button>
                 </div>
               </div>
@@ -372,29 +385,29 @@ export default function EnigmaStudio({
                     }}
                   >
                     <div className="enigma-popup-writing-zone">
-                      <strong>Zone d’écriture</strong>
-                      <p className="small-note tight">Ajuste l’image pour garder le texte lisible.</p>
+                      <strong>{tx('fields.writingZone', {}, 'Zone d’écriture')}</strong>
+                      <p className="small-note tight">{tx('notes.adjustImage', {}, 'Ajuste l’image pour garder le texte lisible.')}</p>
                     </div>
                   </div>
-                  <HelpLabel help={FIELD_HELP.popupBackgroundCrop}>Zoom</HelpLabel>
+                  <HelpLabel help={FIELD_HELP.popupBackgroundCrop}>{tx('fields.zoom', {}, 'Zoom')}</HelpLabel>
                   <input data-tour="enigma-popup-background-zoom" type="range" min="1" max="3" step="0.05" value={Number(selectedEnigma.popupBackgroundZoom) || 1} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                     enigma.popupBackgroundZoom = Number(e.target.value);
                   })} />
-                  <HelpLabel help={FIELD_HELP.popupBackgroundOverlay}>Voile de lisibilité</HelpLabel>
+                  <HelpLabel help={FIELD_HELP.popupBackgroundOverlay}>{tx('fields.readabilityOverlay', {}, 'Voile de lisibilité')}</HelpLabel>
                   <select data-tour="enigma-popup-background-overlay" value={selectedEnigma.popupBackgroundOverlay || 'dark'} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                     enigma.popupBackgroundOverlay = e.target.value;
                   })}>
-                    {POPUP_OVERLAY_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    {popupOverlayOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
                   <div className="grid-two">
                     <div>
-                      <HelpLabel help={FIELD_HELP.popupBackgroundCrop}>Horizontal</HelpLabel>
+                      <HelpLabel help={FIELD_HELP.popupBackgroundCrop}>{tx('fields.horizontal', {}, 'Horizontal')}</HelpLabel>
                       <input type="range" min="0" max="100" step="1" value={Number(selectedEnigma.popupBackgroundX) || 50} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                         enigma.popupBackgroundX = Number(e.target.value);
                       })} />
                     </div>
                     <div>
-                      <HelpLabel help={FIELD_HELP.popupBackgroundCrop}>Vertical</HelpLabel>
+                      <HelpLabel help={FIELD_HELP.popupBackgroundCrop}>{tx('fields.vertical', {}, 'Vertical')}</HelpLabel>
                       <input type="range" min="0" max="100" step="1" value={Number(selectedEnigma.popupBackgroundY) || 50} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                         enigma.popupBackgroundY = Number(e.target.value);
                       })} />
@@ -402,32 +415,32 @@ export default function EnigmaStudio({
                   </div>
                 </>
               ) : (
-                <p className="small-note">Aucun fond personnalisé. La pop-up utilisera le style sombre par défaut.</p>
+                <p className="small-note">{tx('notes.noCustomBackground', {}, 'Aucun fond personnalisé. La pop-up utilisera le style sombre par défaut.')}</p>
               )}
             </div>
 
             {usesColorSequence(selectedEnigma.type) ? (
               <>
                 <div className="panel-head panel-head-spaced">
-                  <HelpLabel className="compact-section-title" help={FIELD_HELP.colorSequence}>Combinaison gagnante</HelpLabel>
+                  <HelpLabel className="compact-section-title" help={FIELD_HELP.colorSequence}>{tx('fields.winningCombination', {}, 'Combinaison gagnante')}</HelpLabel>
                   <button onClick={() => updateEnigma(selectedEnigma.id, (enigma) => {
                     enigma.solutionColors = [...(enigma.solutionColors || []), 'red'];
-                  })}>+ Couleur</button>
+                  })}>{tx('buttons.addColor', {}, '+ Couleur')}</button>
                 </div>
                 {(selectedEnigma.solutionColors || []).map((color, index) => (
                   <div className="row row-auto" key={`${selectedEnigma.id}-${index}`}>
                     <select value={color} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                       enigma.solutionColors[index] = e.target.value;
                     })}>
-                      {COLOR_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                      {colorOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                     </select>
                     <button className="danger-button" onClick={() => updateEnigma(selectedEnigma.id, (enigma) => {
                       enigma.solutionColors = (enigma.solutionColors || []).filter((_, colorIndex) => colorIndex !== index);
-                    })}>Supprimer</button>
+                    })}>{tx('fields.delete', {}, 'Supprimer')}</button>
                   </div>
                 ))}
                 <p className="small-note">
-                  Ordre important : le joueur devra reproduire cette suite de couleurs.
+                  {tx('notes.colorOrder', {}, 'Ordre important : le joueur devra reproduire cette suite de couleurs.')}
                 </p>
               </>
             ) : null}
@@ -435,7 +448,7 @@ export default function EnigmaStudio({
             {usesEditorImageEnigma(selectedEnigma.type) ? (
               <>
                 <div className="panel-head panel-head-spaced">
-                  <HelpLabel className="compact-section-title" help={FIELD_HELP.imageSource}>Image source</HelpLabel>
+                  <HelpLabel className="compact-section-title" help={FIELD_HELP.imageSource}>{tx('fields.imageSource', {}, 'Image source')}</HelpLabel>
                   <div className="inline-actions">
                     <MediaSourcePicker
                       className="button like"
@@ -448,7 +461,9 @@ export default function EnigmaStudio({
                         enigma.imageName = fileName;
                       })}
                     >
-                      {selectedEnigma.imageData ? 'Remplacer l’image' : 'Importer une image'}
+                      {selectedEnigma.imageData
+                        ? tx('buttons.replaceImage', {}, 'Remplacer l’image')
+                        : tx('buttons.importImage', {}, 'Importer une image')}
                     </MediaSourcePicker>
                     <button
                       type="button"
@@ -456,9 +471,9 @@ export default function EnigmaStudio({
                       disabled={!selectedEnigma.imageData}
                       onClick={async () => {
                         const confirmed = await showConfirm({
-                          title: "Supprimer l'image",
-                          message: "Supprimer l'image de cette énigme ?",
-                          confirmLabel: 'Supprimer',
+                          title: tx('confirm.deleteImageTitle', {}, "Supprimer l'image"),
+                          message: tx('confirm.deleteImageMessage', {}, "Supprimer l'image de cette énigme ?"),
+                          confirmLabel: tx('fields.delete', {}, 'Supprimer'),
                           variant: 'danger',
                         });
                         if (!confirmed) return;
@@ -468,44 +483,44 @@ export default function EnigmaStudio({
                         });
                       }}
                     >
-                      Supprimer l’image
+                      {tx('buttons.deleteImage', {}, 'Supprimer l’image')}
                     </button>
                   </div>
                 </div>
                 {selectedEnigma.imageData ? (
                   <img className="thumb" src={selectedEnigma.imageData} alt={selectedEnigma.imageName || selectedEnigma.name} />
                 ) : (
-                  <p className="small-note">L’image sera découpée automatiquement en pièces au moment du jeu.</p>
+                  <p className="small-note">{tx('notes.imageCutAuto', {}, 'L’image sera découpée automatiquement en pièces au moment du jeu.')}</p>
                 )}
                 <div className="grid-two">
                   <div>
-                    <HelpLabel help={FIELD_HELP.gridRows}>Nombre de lignes</HelpLabel>
+                    <HelpLabel help={FIELD_HELP.gridRows}>{tx('fields.rows', {}, 'Nombre de lignes')}</HelpLabel>
                     <input type="number" min="2" max="6" value={selectedEnigma.gridRows || 3} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                       enigma.gridRows = Math.max(2, Math.min(6, Number(e.target.value) || 3));
                     })} />
                   </div>
                   <div>
-                    <HelpLabel help={FIELD_HELP.gridCols}>Nombre de colonnes</HelpLabel>
+                    <HelpLabel help={FIELD_HELP.gridCols}>{tx('fields.cols', {}, 'Nombre de colonnes')}</HelpLabel>
                     <input type="number" min="2" max="6" value={selectedEnigma.gridCols || 3} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                       enigma.gridCols = Math.max(2, Math.min(6, Number(e.target.value) || 3));
                     })} />
                   </div>
                 </div>
                 <p className="small-note">
-                  Les pièces sont mélangées automatiquement. Le joueur clique sur 2 pièces pour les échanger.
+                  {tx('notes.imagePieces', {}, 'Les pièces sont mélangées automatiquement. Le joueur clique sur 2 pièces pour les échanger.')}
                 </p>
               </>
             ) : null}
 
             <div className="grid-two" data-tour="enigma-unlock">
               <div>
-                <HelpLabel help={FIELD_HELP.successMessage}>Message de réussite</HelpLabel>
+                <HelpLabel help={FIELD_HELP.successMessage}>{tx('fields.successMessage', {}, 'Message de réussite')}</HelpLabel>
                 <textarea value={selectedEnigma.successMessage} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                   enigma.successMessage = e.target.value;
                 })} />
               </div>
               <div>
-                <HelpLabel help={FIELD_HELP.failMessage}>Message d’échec</HelpLabel>
+                <HelpLabel help={FIELD_HELP.failMessage}>{tx('fields.failMessage', {}, 'Message d’échec')}</HelpLabel>
                 <textarea value={selectedEnigma.failMessage} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                   enigma.failMessage = e.target.value;
                 })} />
@@ -514,7 +529,7 @@ export default function EnigmaStudio({
 
             <div className="grid-two">
               <div>
-                <HelpLabel help={FIELD_HELP.unlockType}>Débloqué</HelpLabel>
+                <HelpLabel help={FIELD_HELP.unlockType}>{tx('fields.unlock', {}, 'Débloqué')}</HelpLabel>
                 <select value={selectedEnigma.unlockType || 'none'} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                   enigma.unlockType = e.target.value;
                   if (e.target.value !== 'scene') enigma.targetSceneId = '';
@@ -524,39 +539,39 @@ export default function EnigmaStudio({
                     enigma.targetProjectUserId = '';
                   }
                 })}>
-                  <option value="none">Rien / juste valider</option>
-                  <option value="scene">Accès à une scène</option>
-                  <option value="cinematic">Lancer une cinématique</option>
-                  {canUseProPages ? <option value="project_link">Page pro</option> : null}
+                  <option value="none">{tx('options.unlockNone', {}, 'Rien / juste valider')}</option>
+                  <option value="scene">{tx('options.unlockScene', {}, 'Accès à une scène')}</option>
+                  <option value="cinematic">{tx('options.unlockCinematic', {}, 'Lancer une cinématique')}</option>
+                  {canUseProPages ? <option value="project_link">{tx('options.unlockProject', {}, 'Page pro')}</option> : null}
                 </select>
               </div>
               <div>
-                <HelpLabel help={FIELD_HELP.targetScene}>Scène à débloquer</HelpLabel>
+                <HelpLabel help={FIELD_HELP.targetScene}>{tx('fields.unlockScene', {}, 'Scène à débloquer')}</HelpLabel>
                 <select value={selectedEnigma.targetSceneId || ''} disabled={(selectedEnigma.unlockType || 'none') !== 'scene'} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                   enigma.targetSceneId = e.target.value;
                 })}>
-                  <option value="">Aucune</option>
+                  <option value="">{tx('options.none', {}, 'Aucune')}</option>
                   {project.scenes.map((scene) => <option key={scene.id} value={scene.id}>{getSceneLabel(scene.id)}</option>)}
                 </select>
               </div>
               <div>
-                <HelpLabel help={FIELD_HELP.targetCinematic}>Cinématique à lancer</HelpLabel>
+                <HelpLabel help={FIELD_HELP.targetCinematic}>{tx('fields.launchCinematic', {}, 'Cinématique à lancer')}</HelpLabel>
                 <select value={selectedEnigma.targetCinematicId || ''} disabled={(selectedEnigma.unlockType || 'none') !== 'cinematic'} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                   enigma.targetCinematicId = e.target.value;
                 })}>
-                  <option value="">Aucune</option>
+                  <option value="">{tx('options.none', {}, 'Aucune')}</option>
                   {project.cinematics.map((cinematic) => <option key={cinematic.id} value={cinematic.id}>{cinematic.name}</option>)}
                 </select>
               </div>
               {canUseProPages && (selectedEnigma.unlockType || 'none') === 'project_link' ? (
                 <div>
-                  <HelpLabel help="Projet ouvert dans un nouvel onglet après validation de l’énigme.">Projet cible</HelpLabel>
+                  <HelpLabel help="Projet ouvert dans un nouvel onglet après validation de l’énigme.">{tx('fields.targetProject', {}, 'Projet cible')}</HelpLabel>
                   <select value={selectedEnigma.targetProjectId || ''} onChange={(e) => updateEnigma(selectedEnigma.id, (enigma) => {
                     const nextProject = enigmaProPageOptions.find((option) => option.id === e.target.value);
                     enigma.targetProjectId = nextProject?.id || '';
                     enigma.targetProjectUserId = nextProject?.userId || '';
                   })}>
-                    <option value="">Choisir un projet</option>
+                    <option value="">{tx('options.chooseProject', {}, 'Choisir un projet')}</option>
                     {enigmaProPageOptions.map((option) => (
                       <option key={option.id} value={option.id}>{option.title}</option>
                     ))}
@@ -582,7 +597,7 @@ export default function EnigmaStudio({
               />
             </div>
           </div>
-        ) : <p>Sélectionne une énigme à gauche, ou crée-en une nouvelle.</p>}
+        ) : <p>{tx('notes.empty', {}, 'Sélectionne une énigme à gauche, ou crée-en une nouvelle.')}</p>}
       </section>
     </div>
   );

@@ -4,7 +4,7 @@
   functions = "netlify/functions"
 
 [build.environment]
-  VITE_SITE_URL = "https://escape-game-builder.netlify.app"
+  VITE_SITE_URL = "https://escape-game-studio.netlify.app"
 
 [[headers]]
   for = "/*"

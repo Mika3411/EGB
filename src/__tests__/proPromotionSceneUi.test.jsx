@@ -119,7 +119,7 @@ describe('pro promotion scene UI', () => {
     });
   });
 
-  test('edite le nom statistique d une zone', () => {
+  test('edite le nom statistique d une zone dans une page pro', () => {
     const selectedHotspot = {
       id: 'spot-1',
       name: 'CTA interne',
@@ -130,7 +130,13 @@ describe('pro promotion scene UI', () => {
       actionType: 'external_link',
       externalUrl: '',
     };
-    const project = { scenes: [{ id: 'scene-1', hotspots: [selectedHotspot] }], items: [], enigmas: [], cinematics: [] };
+    const project = {
+      creationMode: PRO_PROMOTION_PROJECT_MODE,
+      scenes: [{ id: 'scene-1', hotspots: [selectedHotspot] }],
+      items: [],
+      enigmas: [],
+      cinematics: [],
+    };
     const patchProject = vi.fn((updater) => updater(project));
     const { container } = render(
       <HotspotInspectorPanel
@@ -152,6 +158,37 @@ describe('pro promotion scene UI', () => {
     fireEvent.change(analyticsNameInput, { target: { value: 'Réserver une session' } });
 
     expect(project.scenes[0].hotspots[0].analyticsLabel).toBe('Réserver une session');
+  });
+
+  test('masque le nom statistique d une zone hors page pro', () => {
+    const selectedHotspot = {
+      id: 'spot-1',
+      name: 'Porte du marché',
+      x: 50,
+      y: 50,
+      width: 20,
+      height: 15,
+      actionType: 'external_link',
+      externalUrl: '',
+    };
+    const project = { scenes: [{ id: 'scene-1', hotspots: [selectedHotspot] }], items: [], enigmas: [], cinematics: [] };
+    const { container } = render(
+      <HotspotInspectorPanel
+        selectedHotspot={selectedHotspot}
+        selectedHotspotId="spot-1"
+        selectedSceneId="scene-1"
+        project={project}
+        patchProject={vi.fn((updater) => updater(project))}
+        renderShapeControls={() => null}
+        setConversationEditorOpen={vi.fn()}
+        addConversationQuestion={vi.fn()}
+        getSceneLabel={(scene) => scene?.name || 'Scene'}
+        handleUpload={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector('[data-tour="hotspot-analytics-label"]')).toBeNull();
+    expect(screen.queryByText('Nom statistique')).toBeNull();
   });
 
 

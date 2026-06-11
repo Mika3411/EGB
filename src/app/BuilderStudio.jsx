@@ -64,6 +64,7 @@ import {
   canStoreProjectAssetsRemotely,
   uploadGeneratedProjectImageAsset,
 } from '../shared/services/projectAssetStorage';
+import { useI18n } from '../shared/i18n';
 
 const AI_CREDITS_ENDPOINT = import.meta.env.VITE_AI_CREDITS_ENDPOINT || '/api/ai-credits';
 const PROJECT_AUTOSAVE_ENABLED = true;
@@ -284,7 +285,9 @@ function BuilderStudio({
   isDemoMode = false,
   onExitToProfile,
   onExitDemoToLanding,
+  onLanguageChange,
 }) {
+  const { language, t } = useI18n();
   const editor = useProjectEditor();
   const preview = usePreviewPlayer(editor.project, { getItemById: editor.getItemById });
   const {
@@ -365,13 +368,14 @@ function BuilderStudio({
   }, []);
   const openRegisterPanel = useCallback((options = {}) => {
     const nextInitialForm = {
+      language,
       ...(options?.accountType === ACCOUNT_TYPE_PRO ? { accountType: ACCOUNT_TYPE_PRO } : {}),
       ...(options?.authIntent ? { authIntent: options.authIntent } : {}),
     };
     setAuthEntryMode('register');
     setAuthEntryInitialForm(nextInitialForm);
     setShowAuthEntry(true);
-  }, []);
+  }, [language]);
   const closeAuthEntry = useCallback(() => setShowAuthEntry(false), []);
   const openGalleryScreen = useCallback(() => setScreen('gallery'), []);
   const openProfileScreen = useCallback(() => setScreen('profile'), []);
@@ -1615,7 +1619,7 @@ function BuilderStudio({
   }
 
   if (!auth.isReady) {
-    return <div className="app-shell"><div className="panel">Chargement du compte...</div></div>;
+    return <div className="app-shell"><div className="panel">{t('common.loadingAccount')}</div></div>;
   }
 
   if (isDemoMode && !auth.user && showAuthEntry) {
@@ -1633,6 +1637,7 @@ function BuilderStudio({
             isPasswordRecovery={auth.isPasswordRecovery}
             isBusy={auth.isBusy}
             errorMessage={auth.authError}
+            onLanguageChange={onLanguageChange}
           />
         </Suspense>
         {accessibleDialog}
@@ -1648,6 +1653,7 @@ function BuilderStudio({
             onLogin={openLoginPanel}
             onRegister={openRegisterPanel}
             onOpenGallery={openGalleryScreen}
+            onLanguageChange={onLanguageChange}
           />
         </Suspense>
       );
@@ -1667,6 +1673,7 @@ function BuilderStudio({
             isPasswordRecovery={auth.isPasswordRecovery}
             isBusy={auth.isBusy}
             errorMessage={auth.authError}
+            onLanguageChange={onLanguageChange}
           />
         </Suspense>
         {accessibleDialog}
@@ -1718,6 +1725,7 @@ function BuilderStudio({
             onLogout={auth.logout}
             isProfileTutorialActive={selectedTutorialTab === 'profile' && Boolean(activeTutorialStep)}
             profileTutorialStep={selectedTutorialTab === 'profile' ? activeTutorialStep : null}
+            onLanguageChange={onLanguageChange}
           />
         </Suspense>
         <CenterScreenNotice message={centerNotice} onDone={() => setCenterNotice('')} />
@@ -1735,11 +1743,11 @@ function BuilderStudio({
             <div className="panel-head">
               <div>
                 <span className="eyebrow">Admin</span>
-                <h2>Accès admin refusé</h2>
-                <p className="small-note">Reconnecte-toi avec un compte admin pour ouvrir cette zone.</p>
+                <h2>{t('shell.adminDeniedTitle')}</h2>
+                <p className="small-note">{t('shell.adminDeniedText')}</p>
               </div>
               <button type="button" className="secondary-action" onClick={openProfileScreen}>
-                Retour profil
+                {t('common.backToProfile')}
               </button>
             </div>
           </section>
@@ -1781,6 +1789,7 @@ function BuilderStudio({
         confirmStandaloneOfflineExport={confirmDialog}
         offlineExportEstimateMessage={offlineExportEstimateMessage}
         getOfflineExportEstimateMessage={getFreshOfflineExportEstimateMessage}
+        onLanguageChange={onLanguageChange}
       />
 
       {isDemoMode ? (

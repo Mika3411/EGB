@@ -1,0 +1,10 @@
+{
+  "fileName": "scene-mangrove_lucioles.png",
+  "group": "scenes",
+  "type": "scene",
+  "prompt": "Realistic cinematic escape-game asset, cohesive Caribbean treasure hunt style. Moonlit tropical island, turquoise sea, warm lantern light, weathered wood, brass, coral, salt, humid air. Wide-angle composition for a point-and-click game, clear interactive surfaces, crisp silhouettes, readable midtones. No text, no subtitles, no UI, no watermark, no modern objects, no logos.\nScene requirement: Mangrove of fireflies, shallow black water, twisted roots. Left trail returns to cemetery, right gap leads to a sea cave. Fireflies form a clear diagonal rising from southwest foreground to north background. A concentrated green glow hangs near right-middle roots.\nKeep all doors, passages, props, and clue supports in stable visible positions. Do not show inventory reward items as loose pickups unless the scene clue requires a support object.",
+  "width": 1672,
+  "height": 941,
+  "hasAlpha": false,
+  "generatedAt": "2026-06-09T17:50:17.494Z"
+}

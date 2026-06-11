@@ -15,18 +15,31 @@ const GENERATED_BACKGROUND_TEMPLATE_IDS = [
   'hero_adventure',
   'investigation',
   'laboratory',
+  'magic_forest',
   'manor',
   'museum',
+  'narrative_investigation',
+  'narrative_maze',
+  'negotiation',
+  'npc_dialogue',
+  'survival_choices',
 ];
 const MANUAL_BACKGROUND_TEMPLATE_IDS = NON_EMPTY_TEMPLATE_IDS
   .filter((templateId) => !GENERATED_BACKGROUND_TEMPLATE_IDS.includes(templateId));
 const GENERATED_ITEM_IMAGE_TEMPLATE_IDS = [
   'adventure_choices',
+  'book_hero',
   'hero_adventure',
   'investigation',
   'laboratory',
+  'magic_forest',
   'manor',
   'museum',
+  'narrative_investigation',
+  'narrative_maze',
+  'negotiation',
+  'npc_dialogue',
+  'survival_choices',
 ];
 const CLASSIC_TEMPLATE_IDS = ['manor', 'investigation', 'laboratory', 'museum'];
 const NARRATIVE_TEMPLATE_IDS = [

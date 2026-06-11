@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import bannerImage from '../../../assets/header-banner.png';
 import { getUserDisplayName } from '../../utils/userDisplayName';
+import { useI18n } from '../../i18n';
+import LanguageSwitcher from '../LanguageSwitcher';
 
-const buildOfflineExportConfirmMessage = (estimateMessage = '') => {
+const buildOfflineExportConfirmMessage = (estimateMessage = '', t) => {
   const lines = [
-    'Inclure les médias dans le fichier pour jouer hors ligne ?',
+    t('header.offlineQuestion'),
     '',
   ];
   if (estimateMessage) lines.push(estimateMessage, '');
-  lines.push('Le fichier sera plus lourd, mais les images et sons intégrés resteront jouables sans connexion.');
+  lines.push(t('header.offlineExplanation'));
   return lines.join('\n');
 };
 
@@ -52,18 +54,20 @@ export default function Header({
   confirmStandaloneOfflineExport = async () => false,
   offlineExportEstimateMessage = '',
   getOfflineExportEstimateMessage = null,
+  onLanguageChange,
 }) {
+  const { t } = useI18n();
   const isBeginnerMode = projectMode === 'beginner';
   const isIntermediateMode = projectMode === 'intermediate';
   const isAdventureMode = projectMode === 'adventure';
   const [standaloneExportMessage, setStandaloneExportMessage] = useState('');
   const [standaloneExportWarning, setStandaloneExportWarning] = useState('');
   const modeLabel = isBeginnerMode
-    ? 'Mode debutant'
-    : isIntermediateMode ? 'Mode intermediaire' : isAdventureMode ? 'Mode narration' : 'Mode expert';
+    ? t('header.modeBeginner')
+    : isIntermediateMode ? t('header.modeIntermediate') : isAdventureMode ? t('header.modeAdventure') : t('header.modeExpert');
   const userDisplayName = getUserDisplayName(user, authorProfile);
   const userEmail = String(user?.email || '').trim();
-  const saveStatusText = saveStatus || 'Sauvegardé';
+  const saveStatusText = saveStatus || t('header.saved');
   const saveStatusTone = getSaveStatusBadgeTone(saveStatusText);
   const saveStatusClassName = [
     'status-badge',
@@ -77,12 +81,12 @@ export default function Header({
       : offlineExportEstimateMessage;
 
     const includeOfflineAssets = await confirmStandaloneOfflineExport({
-      title: 'Exporter le jeu',
-      message: buildOfflineExportConfirmMessage(nextOfflineExportEstimateMessage),
-      confirmLabel: 'Inclure les médias',
-      cancelLabel: 'Exporter sans inclure',
+      title: t('header.exportDialogTitle'),
+      message: buildOfflineExportConfirmMessage(nextOfflineExportEstimateMessage, t),
+      confirmLabel: t('header.exportDialogConfirm'),
+      cancelLabel: t('header.exportDialogCancel'),
       cancelValue: false,
-      dismissLabel: 'Annuler',
+      dismissLabel: t('header.exportDialogDismiss'),
       dismissValue: null,
     });
     if (includeOfflineAssets === null) return;
@@ -96,11 +100,11 @@ export default function Header({
       setStandaloneExportMessage(result.offlineAssetsMessage);
     }
     if (includeOfflineAssets && onlineCount > 0) {
-      const mediaLabel = onlineCount > 1 ? 'médias restent' : 'média reste';
+      const mediaLabel = onlineCount > 1 ? t('header.mediaPlural') : t('header.mediaSingular');
       const continuation = onlineCount > 1
-        ? 'Ils seront chargés par URL si une connexion est disponible.'
-        : 'Il sera chargé par URL si une connexion est disponible.';
-      setStandaloneExportWarning(`${onlineCount} ${mediaLabel} en ligne. ${continuation}`);
+        ? t('header.mediaPluralContinuation')
+        : t('header.mediaSingularContinuation');
+      setStandaloneExportWarning(t('header.onlineMediaWarning', { count: onlineCount, mediaLabel, continuation }));
     }
   };
 
@@ -126,14 +130,14 @@ export default function Header({
           <div className="project-actions-body">
             <div className="toolbar project-actions">
               <label className="button like secondary-action">
-                Importer JSON
+                {t('header.importJson')}
                 <input type="file" accept="application/json" onChange={onImportJson} hidden />
               </label>
               <button className="ghost-action" onClick={handleStandaloneExport}>
-                Exporter jeu
+                {t('header.exportGame')}
               </button>
               <button className="ghost-action" onClick={onExportAuthorSummary}>
-                Fiche auteur HTML
+                {t('header.authorSummary')}
               </button>
             </div>
             {standaloneExportMessage || standaloneExportWarning ? (
@@ -157,14 +161,15 @@ export default function Header({
       {user ? (
         <div className="user-chip user-chip-pro">
           <div className="user-chip-identity">
-            <small>Utilisateur</small>
+            <small>{t('header.user')}</small>
             <strong>{userDisplayName}</strong>
             {userEmail && userEmail !== userDisplayName ? <small>{userEmail}</small> : null}
           </div>
           <div className="user-chip-actions">
             <span className={saveStatusClassName} title={saveStatusText}>{saveStatusText}</span>
+            <LanguageSwitcher compact onLanguageChange={onLanguageChange} />
             <button type="button" className="danger-button" onClick={onLogout}>
-              Déconnexion
+              {t('common.logout')}
             </button>
           </div>
         </div>

@@ -14,7 +14,9 @@
 
 .tutorial-bubble{position:fixed;z-index:20020;max-height:calc(100vh - 24px);overflow:auto;padding:16px;border:1px solid rgba(250,204,21,.38);border-radius:var(--radius-sm);background:linear-gradient(180deg,#0f172afa,#080f1cfa);box-shadow:0 18px 48px #0006;pointer-events:auto}
 
-.tutorial-active .media-source-overlay{z-index:20040}
+.tutorial-active .media-source-overlay{z-index:20040;pointer-events:none}
+
+.tutorial-active .media-source-panel{pointer-events:auto}
 
 .tutorial-bubble h3{margin:6px 0 8px;font-size:20px;letter-spacing:0}
 

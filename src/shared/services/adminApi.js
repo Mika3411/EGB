@@ -369,6 +369,18 @@ export const updateAdminStorageQuota = async ({ userId, storageQuotaBytes, reaso
   return readJsonResponse(response, 'Modification du stockage impossible.');
 };
 
+export const deleteAdminCreditAccount = async ({ userId }) => {
+  const response = await fetch(ADMIN_CREDITS_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(await getAdminAuthHeaders()),
+    },
+    body: JSON.stringify({ userId, action: 'delete' }),
+  });
+  return readJsonResponse(response, 'Suppression du compte crédits impossible.');
+};
+
 export const updateAdminUser = async ({ userId, action, ...options }) => {
   const response = await fetch(ADMIN_USERS_ENDPOINT, {
     method: 'POST',

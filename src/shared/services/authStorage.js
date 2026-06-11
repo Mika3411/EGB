@@ -534,6 +534,7 @@ export async function updateCurrentUserProfile(patch = {}) {
     ...(Object.prototype.hasOwnProperty.call(patch, 'country') ? { country: String(patch.country || '').trim() } : {}),
     ...(Object.prototype.hasOwnProperty.call(patch, 'city') ? { city: String(patch.city || '').trim() } : {}),
     ...(Object.prototype.hasOwnProperty.call(patch, 'organization') ? { organization: String(patch.organization || '').trim() } : {}),
+    ...(Object.prototype.hasOwnProperty.call(patch, 'language') ? { language: String(patch.language || 'fr').trim() || 'fr' } : {}),
   };
 
   if (hasSupabaseAuthConfig()) {

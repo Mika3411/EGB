@@ -11,6 +11,7 @@ import {
   loadAdminDashboard,
   prepareAdminShopPackScreenshots,
   prepareAdminShopPackZip,
+  deleteAdminCreditAccount,
   toggleStoredLocalAccountStatus,
   updateStoredLocalAccountType,
   updateAdminCredits,
@@ -322,6 +323,35 @@ export default function AdminConsole({
     });
     if (!confirmed) return;
     updateSupabaseAccount(targetUser, 'delete');
+  };
+
+  const deleteCreditOnlyAccount = async (targetUser) => {
+    if (!targetUser?.userId || targetUser.provider !== 'credits') return;
+    const label = targetUser.email || targetUser.name || targetUser.userId;
+    const confirmed = await showConfirm({
+      title: 'Supprimer le compte crédits',
+      message: `Supprimer définitivement le compte crédits "${label}" et ses transactions ? Cette action est irréversible.`,
+      confirmLabel: 'Supprimer',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+
+    setIsBusy(true);
+    setStatus('');
+    try {
+      const payload = await deleteAdminCreditAccount({ userId: targetUser.userId });
+      const deletedUserId = payload.deletedUserId || targetUser.userId;
+      setCreditUsers((previous) => previous.filter((entry) => entry.userId !== deletedUserId));
+      if (selectedUserId === deletedUserId) {
+        setSelectedUserId('');
+        setIsUserSheetOpen(false);
+      }
+      setStatus(`Compte crédits supprimé pour ${label}.`);
+    } catch (error) {
+      setStatus(error.message || 'Suppression du compte crédits impossible.');
+    } finally {
+      setIsBusy(false);
+    }
   };
 
   const setModerationTarget = async ({ targetType, targetId, action, reason }) => {
@@ -691,14 +721,25 @@ export default function AdminConsole({
                 </span>
                 <span role="cell">{entry.credits?.balance ?? 0}</span>
                 <span className="admin-account-action-cell" role="cell">
-                  <button
-                    type="button"
-                    className="secondary-action admin-account-type-button"
-                    onClick={() => applyAccountTypeChange(entry)}
-                    disabled={isBusy || entry.provider === 'credits'}
-                  >
-                    {getAccountTypeActionLabel(entry)}
-                  </button>
+                  {entry.provider === 'credits' ? (
+                    <button
+                      type="button"
+                      className="danger-button admin-account-delete-button"
+                      onClick={() => deleteCreditOnlyAccount(entry)}
+                      disabled={isBusy}
+                    >
+                      Supprimer
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="secondary-action admin-account-type-button"
+                      onClick={() => applyAccountTypeChange(entry)}
+                      disabled={isBusy}
+                    >
+                      {getAccountTypeActionLabel(entry)}
+                    </button>
+                  )}
                   <button type="button" className="secondary-action admin-sheet-button" onClick={() => openUserSheet(entry)}>
                     Fiche
                   </button>
@@ -813,14 +854,25 @@ export default function AdminConsole({
                   <span className={`status-badge ${selectedUserAccountType === ACCOUNT_TYPE_PRO ? 'warning' : 'soft'}`}>
                     {selectedUser.provider === 'credits' ? 'Sans profil utilisateur' : getAccountTypeLabel(selectedUser)}
                   </span>
-                  <button
-                    type="button"
-                    className="profile-action-button"
-                    onClick={() => applyAccountTypeChange(selectedUser)}
-                    disabled={isBusy || selectedUser.provider === 'credits'}
-                  >
-                    {isBusy ? 'Mise à jour...' : getAccountTypeActionLabel(selectedUser)}
-                  </button>
+                  {selectedUser.provider === 'credits' ? (
+                    <button
+                      type="button"
+                      className="danger-button"
+                      onClick={() => deleteCreditOnlyAccount(selectedUser)}
+                      disabled={isBusy}
+                    >
+                      Supprimer le compte crédits
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="profile-action-button"
+                      onClick={() => applyAccountTypeChange(selectedUser)}
+                      disabled={isBusy}
+                    >
+                      {isBusy ? 'Mise à jour...' : getAccountTypeActionLabel(selectedUser)}
+                    </button>
+                  )}
                 </div>
                 {selectedUser.provider === 'credits' ? (
                   <p className="small-note">Ce portefeuille de crédits n'est relié à aucun profil authentifié.</p>

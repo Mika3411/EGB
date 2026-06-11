@@ -1,5 +1,5 @@
 import React from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -85,6 +85,22 @@ const renderProfile = (props = {}) => render(
   />,
 );
 
+const returnToProfileCards = () => {
+  const backButton = screen.queryByRole('button', { name: 'Retour au menu' });
+  if (backButton) fireEvent.click(backButton);
+};
+
+const clickProfileCard = (tourId) => {
+  if (!document.querySelector(`[data-tour="${tourId}"]`)) {
+    returnToProfileCards();
+  }
+  fireEvent.click(document.querySelector(`[data-tour="${tourId}"]`));
+};
+
+const getProfileSection = (tourId) => (
+  within(document.querySelector(`[data-tour="${tourId}"]`))
+);
+
 afterEach(() => {
   cleanup();
   localStorage.clear();
@@ -92,7 +108,7 @@ afterEach(() => {
 });
 
 describe('didacticiel profil', () => {
-  test('met le didacticiel en avant pour un nouveau profil sans projet', () => {
+  test('ouvre une page de cartes didacticiels depuis le hub du profil vide', () => {
     const onStartTutorial = vi.fn();
     renderProfile({
       projects: [],
@@ -100,12 +116,15 @@ describe('didacticiel profil', () => {
       onStartTutorial,
     });
 
-    expect(screen.getByRole('heading', { name: 'Commencer en 5 minutes' })).toBeTruthy();
-    const createButton = screen.getByRole('button', { name: '+ Créer' });
-    const onboardingCard = document.querySelector('.profile-onboarding-card');
-    expect(onboardingCard).toBeTruthy();
-    expect(createButton.nextElementSibling).toBe(onboardingCard);
-    fireEvent.click(screen.getByRole('button', { name: 'Lancer le didacticiel' }));
+    expect(screen.getByRole('button', { name: /Didacticiels/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Didacticiel' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Commencer en 5 minutes' })).toBeNull();
+    clickProfileCard('profile-tab-tutorials');
+
+    expect(screen.getByRole('heading', { name: 'Choisir un didacticiel' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Démarrage guidé/ })).toBeNull();
+    expect(onStartTutorial).not.toHaveBeenCalled();
+    fireEvent.click(document.querySelector('[data-tour="profile-tutorial-card-profile"]'));
 
     expect(onStartTutorial).toHaveBeenCalledWith('profile');
   });
@@ -115,12 +134,12 @@ describe('didacticiel profil', () => {
     const missing = BUILDER_TUTORIAL_STEPS
       .filter((step) => (step.tutorial || step.tab) === 'profile')
       .flatMap(extractTourSelectors)
-      .filter((tour) => !source.includes(`data-tour="${tour}"`));
+      .filter((tour) => !source.includes(`data-tour="${tour}"`) && !source.includes(`cardTour: '${tour}'`));
 
     expect(missing).toEqual([]);
   });
 
-  test('couvre les onglets badges et pro du profil', () => {
+  test('couvre les cartes badges et pro du profil', () => {
     const profileTours = BUILDER_TUTORIAL_STEPS
       .filter((step) => (step.tutorial || step.tab) === 'profile')
       .flatMap(extractTourSelectors);
@@ -159,37 +178,39 @@ describe('didacticiel profil', () => {
     ]));
   });
 
-  test('affiche les panneaux attendus depuis les onglets internes du profil', () => {
+  test('affiche les panneaux attendus depuis les cartes internes du profil', () => {
     renderProfile();
 
+    clickProfileCard('profile-tab-new-project');
     expect(screen.getByRole('heading', { name: 'Créer un escape game en scènes' })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Projets' }));
+    clickProfileCard('profile-tab-projects');
     expect(screen.getByRole('heading', { name: 'Gestion des projets' })).toBeTruthy();
     expect(screen.getAllByText('Manoir test').length).toBeGreaterThan(0);
     fireEvent.click(screen.getAllByRole('button', { name: 'Tester' })[0]);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Badges' }));
+    clickProfileCard('profile-tab-badges');
     expect(screen.getByRole('heading', { name: 'Badges créateur' })).toBeTruthy();
     expect(screen.getByText('Projets créés')).toBeTruthy();
     expect(screen.getByLabelText('Progression Parties jouées: 1/5 parties vers Argent')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Médias' }));
+    clickProfileCard('profile-tab-media');
     expect(screen.getByRole('heading', { name: 'Médiathèque' })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Publication' }));
+    clickProfileCard('profile-tab-publication');
     expect(screen.getByRole('heading', { name: 'Publication' })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Messagerie' }));
+    clickProfileCard('profile-tab-messages');
     expect(screen.getByRole('heading', { name: 'Messages support' })).toBeTruthy();
 
-    fireEvent.click(document.querySelector('[data-tour="profile-tab-settings"]'));
+    clickProfileCard('profile-tab-settings');
     expect(screen.getByRole('heading', { name: 'Profil et sécurité' })).toBeTruthy();
   }, 10000);
 
   test('filtre les templates selon le mode de creation choisi', () => {
     const onCreateProject = vi.fn();
     renderProfile({ onCreateProject });
+    clickProfileCard('profile-tab-new-project');
     const getTemplateText = () => document.querySelector('[data-tour="profile-template-picker"]')?.textContent || '';
 
     expect(getTemplateText()).toContain('Projet vide');
@@ -214,23 +235,28 @@ describe('didacticiel profil', () => {
     expect(getTemplateText()).not.toContain('Enquête policière');
   });
 
-  test('ordonne les onglets profil par priorite', () => {
+  test('repartit les cartes profil en deux blocs', () => {
     renderProfile({
       user: { id: 'user-profile-pro', email: 'pro@example.com', accountType: 'pro' },
     });
 
-    const labels = Array.from(document.querySelectorAll('.profile-section-tab-list > button'))
-      .map((button) => button.textContent.trim());
+    const leftLabels = Array.from(document.querySelectorAll('.profile-action-group-left .profile-action-card strong'))
+      .map((label) => label.textContent.trim());
+    const rightLabels = Array.from(document.querySelectorAll('.profile-action-group-right .profile-action-card strong'))
+      .map((label) => label.textContent.trim());
 
-    expect(labels).toEqual([
-      'Nouveau projet',
-      'Projets',
-      'Publication',
-      'Médias',
-      'Messagerie',
-      'Profil',
-      'Badges',
-      'Pro',
+    expect(leftLabels).toEqual([
+      'Didacticiels',
+      'Créer un nouveau projet',
+      'Modifier / gérer vos projets',
+      'Publier / partager vos jeux',
+      'Créer des pages Pro',
+    ]);
+    expect(rightLabels).toEqual([
+      'Organiser vos médias',
+      'Lire la messagerie',
+      'Modifier votre profil',
+      'Voir vos badges',
     ]);
   });
 
@@ -243,7 +269,7 @@ describe('didacticiel profil', () => {
       })),
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Badges' }));
+    clickProfileCard('profile-tab-badges');
 
     expect(screen.getByText('Jeux publiés')).toBeTruthy();
     expect(screen.getByLabelText('Progression Jeux publiés: 3/10 jeux publiés vers Or')).toBeTruthy();
@@ -280,7 +306,7 @@ describe('didacticiel profil', () => {
       ],
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Badges' }));
+    clickProfileCard('profile-tab-badges');
 
     expect(screen.getByLabelText('Progression Médias importés: 2/10 médias vers Argent')).toBeTruthy();
   });
@@ -291,7 +317,7 @@ describe('didacticiel profil', () => {
 
     renderProfile();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Badges' }));
+    clickProfileCard('profile-tab-badges');
 
     expect(screen.getByText('Followers')).toBeTruthy();
     expect(screen.getByLabelText('Progression Followers: 2/10 followers vers Argent')).toBeTruthy();
@@ -300,7 +326,7 @@ describe('didacticiel profil', () => {
   test('ajoute un badge a paliers pour la note de bilan', () => {
     renderProfile();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Badges' }));
+    clickProfileCard('profile-tab-badges');
 
     expect(screen.getByText('Note de bilan')).toBeTruthy();
     expect(screen.getByLabelText(/Progression Note de bilan:/)).toBeTruthy();
@@ -326,9 +352,9 @@ describe('didacticiel profil', () => {
       projects: [makeProjectRecord({ data })],
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Projets' }));
+    clickProfileCard('profile-tab-projects');
     fireEvent.click(screen.getAllByRole('button', { name: 'Tester' })[0]);
-    fireEvent.click(screen.getByRole('button', { name: 'Badges' }));
+    clickProfileCard('profile-tab-badges');
 
     const announcement = screen.getByRole('status');
     expect(announcement.className).toContain('level-bronze');
@@ -386,7 +412,7 @@ describe('didacticiel profil', () => {
         })),
       });
 
-      fireEvent.click(screen.getByRole('button', { name: 'Badges' }));
+      clickProfileCard('profile-tab-badges');
 
       const announcement = screen.getByRole('status');
       expect(announcement.className).toContain(scenario.levelClass);
@@ -398,9 +424,9 @@ describe('didacticiel profil', () => {
     });
   });
 
-  test('reserve l onglet pro aux comptes pro', () => {
+  test('reserve la carte pro aux comptes pro', () => {
     renderProfile();
-    expect(screen.queryByRole('button', { name: 'Pro' })).toBeNull();
+    expect(document.querySelector('[data-tour="profile-tab-pro"]')).toBeNull();
 
     cleanup();
     const onStartProPromotion = vi.fn();
@@ -409,7 +435,7 @@ describe('didacticiel profil', () => {
       onStartProPromotion,
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Pro' }));
+    clickProfileCard('profile-tab-pro');
     expect(screen.getByRole('heading', { name: 'Extensions d’expérience' })).toBeTruthy();
     expect(screen.getByText(/Une salle ne crée pas seulement un jeu/)).toBeTruthy();
     expect(screen.getAllByText('Vitrine').length).toBeGreaterThan(0);
@@ -431,7 +457,7 @@ describe('didacticiel profil', () => {
     });
   });
 
-  test('gere les extensions existantes depuis l onglet pro', () => {
+  test('gere les extensions existantes depuis la section pro', () => {
     const extensionData = applyProPromotionProjectSetup(createInitialProject(), 'extend');
     extensionData.title = 'Épilogue VIP';
 
@@ -467,35 +493,36 @@ describe('didacticiel profil', () => {
       onDeleteProject,
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Pro' }));
+    clickProfileCard('profile-tab-pro');
 
-    expect(screen.getByRole('heading', { name: 'Gérer les extensions' })).toBeTruthy();
-    expect(screen.getByText('Épilogue VIP')).toBeTruthy();
-    expect(screen.queryByText('Jeu principal')).toBeNull();
+    const proSection = getProfileSection('profile-pro-section');
+    expect(proSection.getByRole('heading', { name: 'Gérer les extensions' })).toBeTruthy();
+    expect(proSection.getByText('Épilogue VIP')).toBeTruthy();
+    expect(proSection.queryByText('Jeu principal')).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Éditer' }));
+    fireEvent.click(proSection.getByRole('button', { name: 'Éditer' }));
     expect(onOpenProject).toHaveBeenCalledWith('extension-pro', { tab: 'scenes' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Aperçu' }));
+    fireEvent.click(proSection.getByRole('button', { name: 'Aperçu' }));
     expect(onTestProject).toHaveBeenCalledWith('extension-pro');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Copier le lien' }));
+    fireEvent.click(proSection.getByRole('button', { name: 'Copier le lien' }));
     expect(onCopyProjectLink).toHaveBeenCalledWith('extension-pro');
 
-    fireEvent.click(screen.getByRole('button', { name: 'QR code' }));
+    fireEvent.click(proSection.getByRole('button', { name: 'QR code' }));
     expect(onSaveProjectQrCode).toHaveBeenCalledWith('extension-pro');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Publier' }));
+    fireEvent.click(proSection.getByRole('button', { name: 'Publier' }));
     expect(onPublishProject).toHaveBeenCalledWith('extension-pro');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Dupliquer' }));
+    fireEvent.click(proSection.getByRole('button', { name: 'Dupliquer' }));
     expect(onDuplicateProject).toHaveBeenCalledWith('extension-pro');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }));
+    fireEvent.click(proSection.getByRole('button', { name: 'Supprimer' }));
     expect(onDeleteProject).toHaveBeenCalledWith('extension-pro', 'Épilogue VIP');
   });
 
-  test('affiche les projets pro uniquement dans l onglet pro du profil', () => {
+  test('affiche les projets pro uniquement dans la section pro du profil', () => {
     const extensionData = applyProPromotionProjectSetup(createInitialProject(), 'promote');
     extensionData.title = 'Prologue client';
 
@@ -511,23 +538,26 @@ describe('didacticiel profil', () => {
       ],
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Projets' }));
-    expect(screen.getByRole('heading', { name: 'Gestion des projets' })).toBeTruthy();
-    expect(screen.getAllByText('Jeu principal').length).toBeGreaterThan(0);
-    expect(screen.queryByText('Prologue client')).toBeNull();
+    clickProfileCard('profile-tab-projects');
+    const projectsSection = getProfileSection('profile-projects-section');
+    expect(projectsSection.getByRole('heading', { name: 'Gestion des projets' })).toBeTruthy();
+    expect(projectsSection.getAllByText('Jeu principal').length).toBeGreaterThan(0);
+    expect(projectsSection.queryByText('Prologue client')).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Publication' }));
-    expect(screen.getByRole('heading', { name: 'Publication' })).toBeTruthy();
-    expect(screen.getAllByText('Jeu principal').length).toBeGreaterThan(0);
-    expect(screen.queryByText('Prologue client')).toBeNull();
+    clickProfileCard('profile-tab-publication');
+    const publicationSection = getProfileSection('profile-publication-section');
+    expect(publicationSection.getByRole('heading', { name: 'Publication' })).toBeTruthy();
+    expect(publicationSection.getAllByText('Jeu principal').length).toBeGreaterThan(0);
+    expect(publicationSection.queryByText('Prologue client')).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Pro' }));
-    expect(screen.getByRole('heading', { name: 'Gérer les extensions' })).toBeTruthy();
-    expect(screen.getByText('Prologue client')).toBeTruthy();
-    expect(screen.queryByText('Jeu principal')).toBeNull();
+    clickProfileCard('profile-tab-pro');
+    const proSection = getProfileSection('profile-pro-section');
+    expect(proSection.getByRole('heading', { name: 'Gérer les extensions' })).toBeTruthy();
+    expect(proSection.getByText('Prologue client')).toBeTruthy();
+    expect(proSection.queryByText('Jeu principal')).toBeNull();
   });
 
-  test('ouvre automatiquement l onglet requis par une étape de didacticiel profil', async () => {
+  test('rend disponible la section requise par une étape de didacticiel profil', async () => {
     renderProfile({
       isProfileTutorialActive: true,
       profileTutorialStep: { selector: '[data-tour="profile-projects-section"]' },
@@ -536,10 +566,21 @@ describe('didacticiel profil', () => {
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: 'Gestion des projets' })).toBeTruthy();
     });
-    expect(document.querySelector('[data-tour="profile-tab-projects"]').classList.contains('active')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Retour au menu' })).toBeTruthy();
+
+    cleanup();
+    renderProfile({
+      isProfileTutorialActive: true,
+      profileTutorialStep: { selector: '[data-tour="profile-back-to-cards"]' },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Créer un escape game en scènes' })).toBeTruthy();
+    });
+    expect(document.querySelector('[data-tour="profile-back-to-cards"]')).toBeTruthy();
   });
 
-  test('ouvre automatiquement les nouveaux onglets badges et pro du didacticiel profil', async () => {
+  test('rend disponibles les sections badges et pro du didacticiel profil', async () => {
     renderProfile({
       isProfileTutorialActive: true,
       profileTutorialStep: { selector: '[data-tour="profile-badges-section"]' },
@@ -548,7 +589,7 @@ describe('didacticiel profil', () => {
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: 'Badges créateur' })).toBeTruthy();
     });
-    expect(document.querySelector('[data-tour="profile-tab-badges"]').classList.contains('active')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Retour au menu' })).toBeTruthy();
 
     cleanup();
     renderProfile({
@@ -560,6 +601,6 @@ describe('didacticiel profil', () => {
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: 'Gérer les extensions' })).toBeTruthy();
     });
-    expect(document.querySelector('[data-tour="profile-tab-pro"]').classList.contains('active')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Retour au menu' })).toBeTruthy();
   });
 });

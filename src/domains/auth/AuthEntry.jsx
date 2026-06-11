@@ -6,6 +6,8 @@ import {
   ACCOUNT_TYPE_PERSONAL,
   ACCOUNT_TYPE_PRO,
 } from '../../shared/services/accountPlans';
+import { SUPPORTED_LANGUAGES, useI18n } from '../../shared/i18n';
+import LanguageSwitcher from '../../shared/ui/LanguageSwitcher';
 
 const emptyForm = {
   name: '',
@@ -24,20 +26,20 @@ const emptyForm = {
 const ACCOUNT_PROFILE_TYPE_PLAYER = 'player';
 const AUTH_CONTEXTS = {
   'save-project': {
-    badge: 'Sauvegarde du projet',
-    intro: 'Crée un compte pour conserver ton builder, retrouver ce projet plus tard et préparer sa publication depuis le Profil.',
-    titleLogin: 'Se connecter pour sauvegarder',
-    titleRegister: 'Créer un compte pour sauvegarder',
-    loginSubmit: 'Se connecter pour sauvegarder',
-    registerSubmit: 'Créer le compte pour sauvegarder',
+    badge: 'auth.contexts.saveProject.badge',
+    intro: 'auth.contexts.saveProject.intro',
+    titleLogin: 'auth.contexts.saveProject.titleLogin',
+    titleRegister: 'auth.contexts.saveProject.titleRegister',
+    loginSubmit: 'auth.contexts.saveProject.loginSubmit',
+    registerSubmit: 'auth.contexts.saveProject.registerSubmit',
   },
   'publish-project': {
-    badge: 'Publication',
-    intro: 'La publication passe par un projet sauvegardé. Crée un compte pour conserver le builder, compléter les infos publiques et partager le lien.',
-    titleLogin: 'Se connecter pour publier',
-    titleRegister: 'Créer un compte pour publier',
-    loginSubmit: 'Se connecter pour publier',
-    registerSubmit: 'Créer le compte pour publier',
+    badge: 'auth.contexts.publishProject.badge',
+    intro: 'auth.contexts.publishProject.intro',
+    titleLogin: 'auth.contexts.publishProject.titleLogin',
+    titleRegister: 'auth.contexts.publishProject.titleRegister',
+    loginSubmit: 'auth.contexts.publishProject.loginSubmit',
+    registerSubmit: 'auth.contexts.publishProject.registerSubmit',
   },
 };
 
@@ -99,16 +101,22 @@ export default function AuthEntry({
   isBusy,
   errorMessage,
   initialForm,
+  onLanguageChange,
 }) {
+  const { language, setLanguage, t } = useI18n();
+  const createLocalizedInitialForm = (source = initialForm) => createInitialForm({
+    ...(source || {}),
+    language: source?.language || language,
+  });
   const authContext = AUTH_CONTEXTS[initialForm?.authIntent] || null;
   const shouldStartProfileDetailsOpen = Boolean(
     initialForm?.accountType === ACCOUNT_TYPE_PRO
     || initialForm?.profileType
     || initialForm?.organization
-    || initialForm?.country
+    || initialForm?.country,
   );
   const [mode, setMode] = useState(isPasswordRecovery ? 'reset' : initialMode);
-  const [form, setForm] = useState(() => createInitialForm(initialForm));
+  const [form, setForm] = useState(() => createLocalizedInitialForm(initialForm));
   const [localError, setLocalError] = useState('');
   const [notice, setNotice] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -118,15 +126,19 @@ export default function AuthEntry({
   useEffect(() => {
     if (isPasswordRecovery) {
       setMode('reset');
-      setNotice('Choisis un nouveau mot de passe pour finaliser la réinitialisation.');
+      setNotice(t('auth.noticeReset'));
       return;
     }
     setMode(initialMode);
     if (initialMode === 'register') {
-      setForm(createInitialForm(initialForm));
+      setForm(createLocalizedInitialForm(initialForm));
       setIsProfileDetailsOpen(shouldStartProfileDetailsOpen);
     }
-  }, [initialForm, initialMode, isPasswordRecovery, shouldStartProfileDetailsOpen]);
+  }, [initialForm, initialMode, isPasswordRecovery, language, shouldStartProfileDetailsOpen, t]);
+
+  useEffect(() => {
+    setForm((currentForm) => ({ ...currentForm, language }));
+  }, [language]);
 
   const clearMessages = () => {
     setLocalError('');
@@ -135,7 +147,7 @@ export default function AuthEntry({
 
   const switchMode = (nextMode) => {
     setMode(nextMode);
-    setForm(nextMode === 'register' ? createInitialForm(initialForm) : emptyForm);
+    setForm(nextMode === 'register' ? createLocalizedInitialForm(initialForm) : { ...emptyForm, language });
     setIsProfileDetailsOpen(nextMode === 'register' ? shouldStartProfileDetailsOpen : false);
     setShowPassword(false);
     setShowConfirmPassword(false);
@@ -143,6 +155,10 @@ export default function AuthEntry({
   };
 
   const handleChange = (field, value) => {
+    if (field === 'language') {
+      const nextLanguage = setLanguage(value);
+      onLanguageChange?.(nextLanguage);
+    }
     setForm((prev) => {
       if (field === 'accountType') {
         return {
@@ -158,7 +174,7 @@ export default function AuthEntry({
 
   const validatePassword = () => {
     if (form.password.length < 6) {
-      setLocalError('Le mot de passe doit contenir au moins 6 caractères.');
+      setLocalError(t('auth.errorPasswordLength'));
       return false;
     }
     return true;
@@ -170,13 +186,13 @@ export default function AuthEntry({
 
     if (mode === 'forgot') {
       if (!form.email.trim()) {
-        setLocalError('L’email est obligatoire.');
+        setLocalError(t('auth.errorEmailRequired'));
         return;
       }
 
       try {
         await onRequestPasswordReset({ email: form.email });
-        setNotice('Un lien unique de réinitialisation vient d’être envoyé. Ouvre ta boîte email pour choisir un nouveau mot de passe.');
+        setNotice(t('auth.noticeResetSent'));
       } catch {
         // handled upstream
       }
@@ -186,14 +202,14 @@ export default function AuthEntry({
     if (mode === 'reset') {
       if (!validatePassword()) return;
       if (form.password !== form.confirmPassword) {
-        setLocalError('Les deux mots de passe ne correspondent pas.');
+        setLocalError(t('auth.errorPasswordMismatch'));
         return;
       }
 
       try {
         await onUpdatePassword({ password: form.password });
-        setNotice('Mot de passe mis à jour. Tu es connecté.');
-        setForm(emptyForm);
+        setNotice(t('auth.noticePasswordUpdated'));
+        setForm({ ...emptyForm, language });
       } catch {
         // handled upstream
       }
@@ -202,29 +218,29 @@ export default function AuthEntry({
 
     if (mode === 'register') {
       if (!form.name.trim()) {
-        setLocalError('Le nom est obligatoire.');
+        setLocalError(t('auth.errorNameRequired'));
         return;
       }
       if (!form.accountType) {
-        setLocalError('Choisis particulier ou pro.');
+        setLocalError(t('auth.errorAccountTypeRequired'));
         return;
       }
       if (!form.profileType) {
-        setLocalError('Choisis un type de profil.');
+        setLocalError(t('auth.errorProfileTypeRequired'));
         return;
       }
       if (!form.acceptedTerms) {
-        setLocalError('Tu dois accepter les conditions pour créer un compte.');
+        setLocalError(t('auth.errorTermsRequired'));
         return;
       }
     }
     if (!form.email.trim()) {
-      setLocalError('L’email est obligatoire.');
+      setLocalError(t('auth.errorEmailRequired'));
       return;
     }
     if (!validatePassword()) return;
     if (mode === 'register' && form.password !== form.confirmPassword) {
-      setLocalError('Les deux mots de passe ne correspondent pas.');
+      setLocalError(t('auth.errorPasswordMismatch'));
       return;
     }
 
@@ -234,38 +250,43 @@ export default function AuthEntry({
       } else {
         const result = await onRegister(form);
         if (result?.needsEmailConfirmation) {
-          setNotice('Un lien unique de confirmation vient d’être envoyé. Ouvre ta boîte email, puis clique sur ce lien avant de te connecter.');
+          setNotice(t('auth.noticeConfirmEmail'));
           setMode('login');
         }
       }
-      setForm(emptyForm);
+      setForm({ ...emptyForm, language });
     } catch {
       // handled upstream
     }
   };
 
   const title = mode === 'forgot'
-    ? 'Mot de passe oublié'
+    ? t('auth.titleForgot')
     : mode === 'reset'
-      ? 'Nouveau mot de passe'
+      ? t('auth.titleReset')
       : mode === 'register'
-        ? authContext?.titleRegister || 'Créer un compte'
-        : authContext?.titleLogin || 'Connexion au builder';
-  const badgeLabel = authContext?.badge || 'Sauvegarde par compte';
-  const introText = authContext?.intro || 'Crée un compte Escape Game Studio pour sauvegarder tes projets, les retrouver plus tard et publier tes expériences quand elles sont prêtes.';
-  const loginSubmitLabel = authContext?.loginSubmit || 'Se connecter';
-  const registerSubmitLabel = authContext?.registerSubmit || 'Créer le compte';
-  const visibleProfileTypes = getProfileTypesForAccount(form.accountType);
-  const accountTypeLabel = getOptionLabel(ACCOUNT_TYPE_OPTIONS, form.accountType) || 'Particulier';
-  const profileTypeLabel = getOptionLabel(visibleProfileTypes, form.profileType) || 'Profil par défaut';
+        ? t(authContext?.titleRegister || 'auth.titleRegister')
+        : t(authContext?.titleLogin || 'auth.titleLogin');
+  const badgeLabel = t(authContext?.badge || 'auth.badge');
+  const introText = t(authContext?.intro || 'auth.intro');
+  const loginSubmitLabel = t(authContext?.loginSubmit || 'auth.loginSubmit');
+  const registerSubmitLabel = t(authContext?.registerSubmit || 'auth.registerSubmit');
+  const visibleProfileTypes = getProfileTypesForAccount(form.accountType)
+    .map(([value, label]) => [value, t(`auth.profileTypes.${value}`, {}, label)]);
+  const accountTypeOptions = ACCOUNT_TYPE_OPTIONS
+    .map(([value, label]) => [value, t(`auth.accountTypes.${value}`, {}, label)]);
+  const accountTypeLabel = getOptionLabel(accountTypeOptions, form.accountType) || t('auth.fallbackPersonal');
+  const profileTypeLabel = getOptionLabel(visibleProfileTypes, form.profileType) || t('auth.fallbackProfile');
+
   return (
     <div className="auth-shell">
       <div className="auth-card panel">
         {onBack && !isPasswordRecovery ? (
           <button type="button" className="auth-back-button secondary-action" onClick={onBack}>
-            Retour accueil
+            {t('auth.back')}
           </button>
         ) : null}
+        <LanguageSwitcher className="auth-language-switcher" onLanguageChange={onLanguageChange} />
         <div className="auth-hero">
           <span className="auth-badge">{badgeLabel}</span>
           <h2>{title}</h2>
@@ -274,8 +295,8 @@ export default function AuthEntry({
 
         {mode !== 'forgot' && mode !== 'reset' ? (
           <div className="auth-switcher">
-            <button type="button" className={mode === 'login' ? 'active' : ''} onClick={() => switchMode('login')}>Connexion</button>
-            <button type="button" className={mode === 'register' ? 'active' : ''} onClick={() => switchMode('register')}>Inscription</button>
+            <button type="button" className={mode === 'login' ? 'active' : ''} onClick={() => switchMode('login')}>{t('auth.loginTab')}</button>
+            <button type="button" className={mode === 'register' ? 'active' : ''} onClick={() => switchMode('register')}>{t('auth.registerTab')}</button>
           </div>
         ) : null}
 
@@ -283,8 +304,8 @@ export default function AuthEntry({
           {mode === 'register' && (
             <>
               <div>
-                <label>Nom ou pseudo</label>
-                <input value={form.name} onChange={(event) => handleChange('name', event.target.value)} placeholder="Ex. Marion" />
+                <label>{t('auth.name')}</label>
+                <input value={form.name} onChange={(event) => handleChange('name', event.target.value)} placeholder={t('auth.namePlaceholder')} />
               </div>
 
               <details
@@ -294,16 +315,16 @@ export default function AuthEntry({
               >
                 <summary>
                   <span>
-                    <strong>Profil et usage</strong>
+                    <strong>{t('auth.profileSummary')}</strong>
                     <small>{accountTypeLabel} · {profileTypeLabel}</small>
                   </span>
                 </summary>
 
                 <div className="auth-profile-fields">
                   <div>
-                    <label>Type de compte</label>
-                    <div className="auth-account-type" role="radiogroup" aria-label="Type de compte">
-                      {ACCOUNT_TYPE_OPTIONS.map(([value, label]) => (
+                    <label>{t('auth.accountType')}</label>
+                    <div className="auth-account-type" role="radiogroup" aria-label={t('auth.accountType')}>
+                      {accountTypeOptions.map(([value, label]) => (
                         <label key={value} className={form.accountType === value ? 'selected' : ''}>
                           <input
                             type="radio"
@@ -319,29 +340,29 @@ export default function AuthEntry({
                   </div>
 
                   <div>
-                    <label>Type de profil</label>
+                    <label>{t('auth.profileType')}</label>
                     <select value={form.profileType} onChange={(event) => handleChange('profileType', event.target.value)}>
-                      <option value="">Choisir...</option>
+                      <option value="">{t('auth.choose')}</option>
                       {visibleProfileTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                     </select>
                   </div>
 
                   <div>
-                    <label>Organisation / activité</label>
-                    <input value={form.organization} onChange={(event) => handleChange('organization', event.target.value)} placeholder="Salle d’escape, école, association..." />
+                    <label>{t('auth.organization')}</label>
+                    <input value={form.organization} onChange={(event) => handleChange('organization', event.target.value)} placeholder={t('auth.organizationPlaceholder')} />
                   </div>
 
                   <div className="grid-two small-gap">
                     <div>
-                      <label>Pays</label>
-                      <input value={form.country} onChange={(event) => handleChange('country', event.target.value)} placeholder="France" />
+                      <label>{t('auth.country')}</label>
+                      <input value={form.country} onChange={(event) => handleChange('country', event.target.value)} placeholder={t('auth.countryPlaceholder')} />
                     </div>
                     <div>
-                      <label>Langue</label>
+                      <label>{t('auth.language')}</label>
                       <select value={form.language} onChange={(event) => handleChange('language', event.target.value)}>
-                        <option value="fr">Français</option>
-                        <option value="en">English</option>
-                        <option value="es">Español</option>
+                        {SUPPORTED_LANGUAGES.map((entry) => (
+                          <option key={entry.code} value={entry.code}>{entry.nativeName}</option>
+                        ))}
                       </select>
                     </div>
                   </div>
@@ -352,17 +373,17 @@ export default function AuthEntry({
 
           {mode !== 'reset' ? (
             <div>
-              <label>Email</label>
-              <input type="email" value={form.email} onChange={(event) => handleChange('email', event.target.value)} placeholder="marion@email.com" />
+              <label>{t('auth.email')}</label>
+              <input type="email" value={form.email} onChange={(event) => handleChange('email', event.target.value)} placeholder={t('auth.emailPlaceholder')} />
             </div>
           ) : null}
 
           {mode !== 'forgot' ? (
             <div>
-              <label>{mode === 'reset' ? 'Nouveau mot de passe' : 'Mot de passe'}</label>
+              <label>{mode === 'reset' ? t('auth.newPassword') : t('auth.password')}</label>
               <div className="password-field">
-                <input type={showPassword ? 'text' : 'password'} value={form.password} onChange={(event) => handleChange('password', event.target.value)} placeholder="Minimum 6 caractères" />
-                <button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'} title={showPassword ? 'Masquer' : 'Afficher'}>
+                <input type={showPassword ? 'text' : 'password'} value={form.password} onChange={(event) => handleChange('password', event.target.value)} placeholder={t('auth.passwordPlaceholder')} />
+                <button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')} title={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}>
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
@@ -371,10 +392,10 @@ export default function AuthEntry({
 
           {mode === 'register' || mode === 'reset' ? (
             <div>
-              <label>Confirmer le mot de passe</label>
+              <label>{t('auth.confirmPassword')}</label>
               <div className="password-field">
-                <input type={showConfirmPassword ? 'text' : 'password'} value={form.confirmPassword} onChange={(event) => handleChange('confirmPassword', event.target.value)} placeholder="Répète le mot de passe" />
-                <button type="button" onClick={() => setShowConfirmPassword((value) => !value)} aria-label={showConfirmPassword ? 'Masquer la confirmation' : 'Afficher la confirmation'} title={showConfirmPassword ? 'Masquer' : 'Afficher'}>
+                <input type={showConfirmPassword ? 'text' : 'password'} value={form.confirmPassword} onChange={(event) => handleChange('confirmPassword', event.target.value)} placeholder={t('auth.confirmPasswordPlaceholder')} />
+                <button type="button" onClick={() => setShowConfirmPassword((value) => !value)} aria-label={showConfirmPassword ? t('auth.hideConfirm') : t('auth.showConfirm')} title={showConfirmPassword ? t('auth.hideConfirm') : t('auth.showConfirm')}>
                   {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
@@ -386,13 +407,13 @@ export default function AuthEntry({
               <label>
                 <input type="checkbox" checked={form.acceptedTerms} onChange={(event) => handleChange('acceptedTerms', event.target.checked)} />
                 <span>
-                  J'accepte les <a href="/conditions-utilisation.html" target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>conditions d'utilisation</a>
-                  {' '}et la <a href="/politique-confidentialite.html" target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>politique de confidentialité</a>.
+                  {t('auth.acceptTermsPrefix')} <a href="/conditions-utilisation.html" target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>{t('auth.terms')}</a>
+                  {' '}{t('auth.acceptTermsJoin')} <a href="/politique-confidentialite.html" target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>{t('auth.privacy')}</a>.
                 </span>
               </label>
               <label>
                 <input type="checkbox" checked={form.marketingConsent} onChange={(event) => handleChange('marketingConsent', event.target.checked)} />
-                <span>Je veux recevoir les nouveautés et conseils par email.</span>
+                <span>{t('auth.marketingConsent')}</span>
               </label>
             </div>
           ) : null}
@@ -402,21 +423,21 @@ export default function AuthEntry({
 
           <button type="submit" disabled={isBusy}>
             {isBusy
-              ? 'Patiente…'
+              ? t('auth.busy')
               : mode === 'forgot'
-                ? 'Envoyer le lien'
+                ? t('auth.sendLink')
                 : mode === 'reset'
-                  ? 'Changer le mot de passe'
+                  ? t('auth.changePassword')
                   : mode === 'login'
                     ? loginSubmitLabel
                     : registerSubmitLabel}
           </button>
 
           {mode === 'login' ? (
-            <button type="button" className="auth-link-button" onClick={() => switchMode('forgot')}>Mot de passe oublié</button>
+            <button type="button" className="auth-link-button" onClick={() => switchMode('forgot')}>{t('auth.forgotPassword')}</button>
           ) : null}
           {mode === 'forgot' ? (
-            <button type="button" className="auth-link-button" onClick={() => switchMode('login')}>Retour à la connexion</button>
+            <button type="button" className="auth-link-button" onClick={() => switchMode('login')}>{t('auth.backToLogin')}</button>
           ) : null}
         </form>
       </div>

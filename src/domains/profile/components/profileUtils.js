@@ -32,21 +32,20 @@ export const CREATION_TEMPLATES = [
 
 export const PUBLIC_CATEGORIES = ['Horreur', 'Enquête', 'Aventure', 'Science-fiction', 'Fantastique', 'Historique', 'Autre'];
 export const AGE_RATINGS = ['Tout public', '+18 ans'];
-export const PROFILE_TUTORIAL_OPTIONS = [
-  ['profile', 'Profil'],
-  ['guided_creation', 'Démarrage guidé'],
-  ['scenes', 'Scènes'],
-  ['media', 'Média'],
-  ['map', 'Plan'],
-  ['adventure', 'Narration'],
-  ['hero', 'Héros'],
-  ['combat', 'Combat'],
-  ['cinematics', 'Cinématiques'],
-  ['animation', 'Animation'],
-  ['combinations', 'Combinaisons'],
-  ['enigmas', 'Énigmes'],
-  ['logic', 'Logique'],
-  ['preview', 'Preview'],
-  ['ai', 'IA'],
-  ['score', 'Bilan'],
+export const PROFILE_TUTORIAL_CARDS = [
+  ['profile', 'Profil', 'Comprendre le tableau de bord, les cartes d’action et les pages du profil.'],
+  ['scenes', 'Scènes', 'Créer des lieux, placer les zones et tester les passages.'],
+  ['media', 'Média', 'Régler images, sons, transitions et ambiance de scène.'],
+  ['map', 'Plan', 'Relier les pièces et vérifier les connexions du parcours.'],
+  ['adventure', 'Narration', 'Construire des choix multiples, variables et fins narratives.'],
+  ['hero', 'Héros', 'Configurer fiche personnage, PV, mana, compétences et tests.'],
+  ['combat', 'Combat', 'Préparer ennemis, arènes, pouvoirs et équilibrage.'],
+  ['cinematics', 'Cinématiques', 'Composer les séquences narratives et leurs sorties.'],
+  ['animation', 'Animation', 'Assembler storyboard, calques, mouvements et prévisualisation.'],
+  ['combinations', 'Combinaisons', 'Relier deux objets et définir le résultat obtenu.'],
+  ['enigmas', 'Énigmes', 'Créer un défi, régler sa solution et son affichage joueur.'],
+  ['logic', 'Logique', 'Déclencher des conséquences selon les actions du joueur.'],
+  ['preview', 'Tester', 'Tester le jeu comme un joueur avant de publier.'],
+  ['ai', 'IA', 'Utiliser l’assistant IA, les brouillons et les crédits.'],
+  ['score', 'Bilan', 'Lire les alertes, points forts, notes et temps estimé.'],
 ];

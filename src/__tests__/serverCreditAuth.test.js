@@ -52,6 +52,12 @@ const makeSupabaseCreditsStub = ({ account, transactions = [], conflictOnce = fa
 
     const runQuery = async () => {
       if (table === 'ai_credits') {
+        if (operation === 'delete') {
+          if (!state.account || !matches(state.account)) return { data: [], error: null };
+          const deleted = clone(state.account);
+          state.account = null;
+          return { data: [deleted], error: null };
+        }
         if (operation === 'insert') {
           state.account = { ...payload };
           return { data: clone(state.account), error: null };
@@ -68,6 +74,11 @@ const makeSupabaseCreditsStub = ({ account, transactions = [], conflictOnce = fa
       }
 
       if (table === 'ai_credit_transactions') {
+        if (operation === 'delete') {
+          const deleted = state.transactions.filter(matches);
+          state.transactions = state.transactions.filter((row) => !matches(row));
+          return { data: clone(deleted), error: null };
+        }
         const rows = state.transactions.filter(matches);
         return { data: clone(rows), error: null };
       }
@@ -83,6 +94,7 @@ const makeSupabaseCreditsStub = ({ account, transactions = [], conflictOnce = fa
     from: (table) => ({
       select: () => makeQuery(table),
       update: (patch) => makeQuery(table, 'update', patch),
+      delete: () => makeQuery(table, 'delete'),
       insert: (row) => {
         if (table === 'ai_credit_transactions') {
           state.transactions.push({
@@ -147,6 +159,25 @@ describe('server credit auth', () => {
     });
     expect(supabase.state.account.balance).toBe(2);
     expect(supabase.state.transactions).toEqual([]);
+  });
+
+  test('supprime un compte credits Supabase et ses transactions', async () => {
+    const supabase = makeSupabaseCreditsStub({
+      transactions: [
+        { user_id: 'user-1', type: 'grant', amount: 10, reason: 'initial_balance' },
+        { user_id: 'other-user', type: 'grant', amount: 5, reason: 'initial_balance' },
+      ],
+    });
+    supabaseMock.getSupabaseAdminClient.mockReturnValue(supabase);
+    const { deleteCreditAccount } = await import('../../server/credits.js');
+
+    const result = await deleteCreditAccount('user-1');
+
+    expect(result).toEqual({ userId: 'user-1', deleted: true });
+    expect(supabase.state.account).toBeNull();
+    expect(supabase.state.transactions).toEqual([
+      { user_id: 'other-user', type: 'grant', amount: 5, reason: 'initial_balance' },
+    ]);
   });
 
   test('requiert Supabase sauf fallback local explicite', async () => {

@@ -1,0 +1,10 @@
+{
+  "fileName": "scene-cimetiere_corsaires.png",
+  "group": "scenes",
+  "type": "scene",
+  "prompt": "Realistic cinematic escape-game asset, cohesive Caribbean treasure hunt style. Moonlit tropical island, turquoise sea, warm lantern light, weathered wood, brass, coral, salt, humid air. Wide-angle composition for a point-and-click game, clear interactive surfaces, crisp silhouettes, readable midtones. No text, no subtitles, no UI, no watermark, no modern objects, no logos.\nScene requirement: Corsair cemetery by the sea, moonlit tombstones and palms. Left path to beach, central ruined chapel porch visible, right trail into dark mangrove blocked by water. Foreground: Rivas grave circled by six shells, and a skull below the north point of a tall marker.\nKeep all doors, passages, props, and clue supports in stable visible positions. Do not show inventory reward items as loose pickups unless the scene clue requires a support object.",
+  "width": 1672,
+  "height": 941,
+  "hasAlpha": false,
+  "generatedAt": "2026-06-09T17:49:28.420Z"
+}

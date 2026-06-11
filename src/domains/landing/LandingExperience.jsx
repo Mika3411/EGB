@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   BadgeCheck,
   BriefcaseBusiness,
@@ -33,6 +33,8 @@ import ratingImage from '../../assets/landing-rating.png';
 import reviewsImage from '../../assets/landing-reviews.png';
 import scoreBilanImage from '../../assets/landing-score-bilan.png';
 import { ACCOUNT_TYPE_PRO } from '../../shared/services/accountPlans';
+import { useI18n } from '../../shared/i18n';
+import LanguageSwitcher from '../../shared/ui/LanguageSwitcher';
 
 const featureCards = [
   ['À vos couleurs', 'Remplacez les images, textes et zones cliquables du template par l’ambiance de votre salle.'],
@@ -319,6 +321,15 @@ const landingModeTabs = [
   { id: 'pros', label: 'Je suis une salle', icon: BriefcaseBusiness },
 ];
 
+const seoFooterLinks = [
+  ['Créer un escape game', '/creer-un-escape-game/'],
+  ['Logiciel escape game', '/logiciel-escape-game/'],
+  ['Escape game pédagogique', '/escape-game-pedagogique/'],
+  ['Générateur d’énigmes', '/generateur-enigmes-escape-game/'],
+  ['Escape game entreprise', '/escape-game-entreprise/'],
+  ['Galerie d’exemples', '/galerie-escape-games/'],
+];
+
 const landingModeContent = {
   builder: {
     heroImage: builderPreviewImage,
@@ -506,12 +517,59 @@ const landingModeContent = {
   },
 };
 
-export default function LandingExperience({ onLogin, onRegister, onOpenGallery, onStartDemo }) {
+const mergeIconItems = (baseItems = [], localizedItems = []) => (
+  Array.isArray(localizedItems) && localizedItems.length
+    ? baseItems.map((item, index) => ({ ...item, ...(localizedItems[index] || {}) }))
+    : baseItems
+);
+
+const mergeLocalizedLandingContent = (baseContent = {}, localizedContent = {}) => ({
+  ...baseContent,
+  ...(localizedContent || {}),
+  points: localizedContent?.points || baseContent.points,
+  proofItems: mergeIconItems(baseContent.proofItems, localizedContent?.proofItems),
+  featureCards: localizedContent?.featureCards || baseContent.featureCards,
+  workflowSteps: localizedContent?.workflowSteps || baseContent.workflowSteps,
+  audience: {
+    ...(baseContent.audience || {}),
+    ...(localizedContent?.audience || {}),
+  },
+  flow: {
+    ...(baseContent.flow || {}),
+    ...(localizedContent?.flow || {}),
+  },
+  production: {
+    ...(baseContent.production || {}),
+    ...(localizedContent?.production || {}),
+  },
+  diffusion: {
+    ...(baseContent.diffusion || {}),
+    ...(localizedContent?.diffusion || {}),
+  },
+  final: {
+    ...(baseContent.final || {}),
+    ...(localizedContent?.final || {}),
+  },
+});
+
+export default function LandingExperience({ onLogin, onRegister, onOpenGallery, onStartDemo, onLanguageChange }) {
+  const { t, tObject } = useI18n();
   const [activeLandingMode, setActiveLandingMode] = useState('demo');
   const [activeGalleryIndex, setActiveGalleryIndex] = useState(0);
   const [isGalleryPaused, setIsGalleryPaused] = useState(false);
   const [activeMarketingTab, setActiveMarketingTab] = useState('prologue');
-  const activeLandingContent = landingModeContent[activeLandingMode] || landingModeContent.builder;
+  const localizedModeContent = tObject('landing.modeContent', {});
+  const localizedLandingModeContent = useMemo(() => Object.fromEntries(
+    Object.entries(landingModeContent).map(([modeId, modeContent]) => [
+      modeId,
+      mergeLocalizedLandingContent(modeContent, localizedModeContent?.[modeId]),
+    ]),
+  ), [localizedModeContent]);
+  const localizedLandingModeTabs = useMemo(() => landingModeTabs.map((tab) => ({
+    ...tab,
+    label: t(`landing.modeTabs.${tab.id}`, {}, tab.label),
+  })), [t]);
+  const activeLandingContent = localizedLandingModeContent[activeLandingMode] || localizedLandingModeContent.builder;
   const activeGalleryItems = activeLandingContent.galleryItems;
   const activeGalleryItem = activeGalleryItems[activeGalleryIndex] || activeGalleryItems[0];
   const activeMarketing = marketingTabs.find((tab) => tab.id === activeMarketingTab) || marketingTabs[0];
@@ -579,12 +637,12 @@ export default function LandingExperience({ onLogin, onRegister, onOpenGallery, 
 
   const FinalIcon = activeLandingContent.final.icon;
   const businessQuestionsSection = activeLandingMode === 'pros' ? (
-    <section className="landing-section">
-      <div className="landing-section-head">
-        <span className="section-kicker">Questions de gérant</span>
-        <h2>Les réponses avant de tester.</h2>
-        <p>Le but est de savoir vite si le format peut s’ajouter à votre exploitation sans chantier technique.</p>
-      </div>
+      <section className="landing-section">
+        <div className="landing-section-head">
+          <span className="section-kicker">{t('landing.sections.managerQuestions')}</span>
+          <h2>{t('landing.sections.answersBeforeTesting')}</h2>
+          <p>{t('landing.sections.managerIntro')}</p>
+        </div>
       <div className="landing-card-grid">
         {businessAnswers.map(([title, text]) => (
           <article className="landing-card" key={title}>
@@ -608,15 +666,16 @@ export default function LandingExperience({ onLogin, onRegister, onOpenGallery, 
         <nav className="landing-nav">
           <img src={bannerImage} alt="Escape Game Studio" />
           <div className="landing-nav-actions">
-            <button type="button" className="secondary-action" onClick={openMarketingUseCases}>Cas d’usage</button>
-            <button type="button" className="secondary-action" onClick={onOpenGallery}>Galerie</button>
-            <button type="button" onClick={onLogin}>Connexion</button>
+            <LanguageSwitcher compact className="landing-language-switcher" onLanguageChange={onLanguageChange} />
+            <button type="button" className="secondary-action" onClick={openMarketingUseCases}>{t('landing.nav.useCases')}</button>
+            <button type="button" className="secondary-action" onClick={onOpenGallery}>{t('landing.nav.gallery')}</button>
+            <button type="button" onClick={onLogin}>{t('landing.nav.login')}</button>
           </div>
         </nav>
 
         <div className="landing-hero-content">
-          <div className="landing-mode-tabs" role="tablist" aria-label="Choisir votre profil">
-            {landingModeTabs.map(({ id, label, icon: Icon }) => (
+          <div className="landing-mode-tabs" role="tablist" aria-label={t('landing.aria.chooseProfile')}>
+            {localizedLandingModeTabs.map(({ id, label, icon: Icon }) => (
               <button
                 type="button"
                 role="tab"
@@ -644,7 +703,7 @@ export default function LandingExperience({ onLogin, onRegister, onOpenGallery, 
             <button type="button" className="landing-cta-primary" onClick={runPrimaryAction}>{activeLandingContent.primaryCta}</button>
             <button type="button" className="secondary-action landing-cta-secondary" onClick={runHeroSecondaryAction}>{activeLandingContent.secondaryCta}</button>
           </div>
-          <ul className="landing-hero-points" aria-label="Points forts">
+          <ul className="landing-hero-points" aria-label={t('landing.aria.strengths')}>
             {activeLandingContent.points.map((point) => (
               <li key={point}>{point}</li>
             ))}
@@ -657,9 +716,9 @@ export default function LandingExperience({ onLogin, onRegister, onOpenGallery, 
       {activeLandingMode === 'pros' ? (
         <section className="landing-section landing-player-preview landing-player-preview--copy-only" id="landing-player-example">
           <div className="landing-section-copy">
-            <span className="section-kicker">Côté joueur</span>
-            <h2>Vos joueurs voient une page finie à vos couleurs.</h2>
-            <p>Une expérience courte, lisible sur mobile, avec votre ambiance et les actions que vous choisissez.</p>
+            <span className="section-kicker">{t('landing.sections.playerSide')}</span>
+            <h2>{t('landing.sections.playerTitle')}</h2>
+            <p>{t('landing.sections.playerText')}</p>
             <ul className="landing-player-preview-list">
               {playerPreviewPoints.map((point) => (
                 <li key={point}>
@@ -672,7 +731,7 @@ export default function LandingExperience({ onLogin, onRegister, onOpenGallery, 
         </section>
       ) : null}
 
-      <section className="landing-proof-strip" aria-label="Résumé du produit">
+      <section className="landing-proof-strip" aria-label={t('landing.aria.productSummary')}>
         {activeLandingContent.proofItems.map(({ title, text, icon: Icon }) => (
           <article key={title}>
             <Icon size={22} aria-hidden="true" focusable="false" />
@@ -691,7 +750,7 @@ export default function LandingExperience({ onLogin, onRegister, onOpenGallery, 
 
         {activeLandingMode === 'pros' ? (
           <>
-            <div className="landing-audience-tabs" role="tablist" aria-label="Choisir un cas d’usage">
+            <div className="landing-audience-tabs" role="tablist" aria-label={t('landing.aria.chooseUseCase')}>
               {marketingTabs.map(({ id, label, icon: Icon }) => (
                 <button
                   type="button"
@@ -729,10 +788,10 @@ export default function LandingExperience({ onLogin, onRegister, onOpenGallery, 
                 </ul>
                 <div className="landing-pro-note">
                   <Link2 size={18} aria-hidden="true" focusable="false" />
-                  <span>Gardez le dernier bouton cohérent avec le moment : préparer, conclure, offrir ou prolonger.</span>
+                  <span>{t('landing.sections.keepLastButton')}</span>
                 </div>
                 <button type="button" className="landing-cta-primary" onClick={registerForActiveMode}>
-                  Construire ce parcours
+                  {t('landing.sections.buildPath')}
                 </button>
               </div>
 
@@ -781,7 +840,7 @@ export default function LandingExperience({ onLogin, onRegister, onOpenGallery, 
         )}
       </section>
 
-      <section className="landing-section landing-qr-flow" aria-label="Mise en place">
+      <section className="landing-section landing-qr-flow" aria-label={t('landing.aria.setup')}>
         <div className="landing-section-head">
           <span className="section-kicker">{activeLandingContent.flow.kicker}</span>
           <h2>{activeLandingContent.flow.title}</h2>
@@ -798,7 +857,7 @@ export default function LandingExperience({ onLogin, onRegister, onOpenGallery, 
         </div>
       </section>
 
-      <section className="landing-dynamic-gallery" aria-label="Galerie dynamique du produit">
+      <section className="landing-dynamic-gallery" aria-label={t('landing.aria.productGallery')}>
         <div className="landing-gallery-stage with-image">
           <img
             key={activeGalleryItem.title}
@@ -811,8 +870,8 @@ export default function LandingExperience({ onLogin, onRegister, onOpenGallery, 
               type="button"
               className="landing-gallery-control"
               onClick={showPreviousGalleryItem}
-              aria-label="Aperçu précédent"
-              title="Aperçu précédent"
+              aria-label={t('landing.controls.previousPreview')}
+              title={t('landing.controls.previousPreview')}
             >
               <ChevronLeft size={20} aria-hidden="true" focusable="false" />
             </button>
@@ -820,8 +879,8 @@ export default function LandingExperience({ onLogin, onRegister, onOpenGallery, 
               type="button"
               className="landing-gallery-control"
               onClick={() => setIsGalleryPaused((paused) => !paused)}
-              aria-label={isGalleryPaused ? 'Relancer la galerie' : 'Mettre la galerie en pause'}
-              title={isGalleryPaused ? 'Relancer la galerie' : 'Mettre la galerie en pause'}
+              aria-label={isGalleryPaused ? t('landing.controls.resumeGallery') : t('landing.controls.pauseGallery')}
+              title={isGalleryPaused ? t('landing.controls.resumeGallery') : t('landing.controls.pauseGallery')}
             >
               {isGalleryPaused ? (
                 <Play size={18} aria-hidden="true" focusable="false" />
@@ -833,8 +892,8 @@ export default function LandingExperience({ onLogin, onRegister, onOpenGallery, 
               type="button"
               className="landing-gallery-control"
               onClick={showNextGalleryItem}
-              aria-label="Aperçu suivant"
-              title="Aperçu suivant"
+              aria-label={t('landing.controls.nextPreview')}
+              title={t('landing.controls.nextPreview')}
             >
               <ChevronRight size={20} aria-hidden="true" focusable="false" />
             </button>
@@ -846,7 +905,7 @@ export default function LandingExperience({ onLogin, onRegister, onOpenGallery, 
           </div>
         </div>
 
-        <div className="landing-gallery-thumbs" aria-label="Choisir un aperçu">
+        <div className="landing-gallery-thumbs" aria-label={t('landing.aria.choosePreview')}>
           {activeGalleryItems.map((item, index) => (
             <button
               type="button"
@@ -879,12 +938,12 @@ export default function LandingExperience({ onLogin, onRegister, onOpenGallery, 
 
       <section className="landing-section landing-features">
         <div className="landing-section-head">
-          <span className="section-kicker">Ce que vous ajoutez</span>
-          <h2>{activeLandingMode === 'pros' ? 'Un habillage rapide pour vos moments avant et après jeu.' : 'Un builder pour transformer une idée en parcours jouable.'}</h2>
+          <span className="section-kicker">{t('landing.sections.whatYouAdd')}</span>
+          <h2>{activeLandingMode === 'pros' ? t('landing.sections.prosFeatureTitle') : t('landing.sections.builderFeatureTitle')}</h2>
           <p>
             {activeLandingMode === 'pros'
-              ? 'Vous ne refaites pas tout votre marketing : vous ajoutez un point de contact jouable, aux couleurs de vos salles, facile à tester et à partager.'
-              : 'Vous gardez une vision claire de la structure, des médias, des interactions et des contrôles avant de publier.'}
+              ? t('landing.sections.prosFeatureText')
+              : t('landing.sections.builderFeatureText')}
           </p>
         </div>
         <div className="landing-card-grid">
@@ -910,31 +969,31 @@ export default function LandingExperience({ onLogin, onRegister, onOpenGallery, 
         <div className="landing-highlight-grid">
           <div className="landing-highlight-shot wide">
             <img src={scoreBilanImage} alt="Bilan automatique avec scores de cohérence, structure et gameplay" />
-            <span>Bilan automatique</span>
+            <span>{t('landing.highlights.automaticReport')}</span>
           </div>
           <div className="landing-highlight-shot">
             <img src={linkTestsImage} alt="Test de liaisons entre scènes et sorties jouables" />
-            <span>Tests de liens</span>
+            <span>{t('landing.highlights.linkTests')}</span>
           </div>
           <div className="landing-highlight-shot">
             <img src={conditionsImage} alt="Configuration d'une règle conditionnelle dans le builder" />
-            <span>Conditions</span>
+            <span>{t('landing.highlights.conditions')}</span>
           </div>
           <div className="landing-highlight-shot">
             <img src={inventoryImage} alt="Inventaire d'objets utilisables dans un escape game" />
-            <span>Objets</span>
+            <span>{t('landing.highlights.objects')}</span>
           </div>
           <div className="landing-highlight-shot">
             <img src={enigmasImage} alt="Création d'une énigme avec code et apparence joueur" />
-            <span>Énigmes</span>
+            <span>{t('landing.highlights.enigmas')}</span>
           </div>
           <div className="landing-highlight-shot">
             <img src={cinematicsImage} alt="Éditeur de cinématique avec plusieurs slides et narrations" />
-            <span>Cinématiques</span>
+            <span>{t('landing.highlights.cinematics')}</span>
           </div>
           <div className="landing-highlight-shot">
             <img src={aiActionsImage} alt="Interface IA avec génération complète, mode progressif, continuation et amélioration de scène" />
-            <span>IA optionnelle</span>
+            <span>{t('landing.highlights.optionalAi')}</span>
           </div>
         </div>
       </section>
@@ -961,9 +1020,9 @@ export default function LandingExperience({ onLogin, onRegister, onOpenGallery, 
 
       <section className="landing-section landing-workflow">
         <div className="landing-section-head">
-          <span className="section-kicker">Méthode</span>
-          <h2>{activeLandingMode === 'pros' ? 'Adapter, vérifier, mettre en circulation.' : 'Créer, relier, tester, publier.'}</h2>
-          <p>{activeLandingMode === 'pros' ? 'La valeur est dans la sobriété : une page claire, quelques interactions utiles et un contrôle complet avant publication.' : 'La bonne expérience tient dans la clarté du parcours : une structure lisible, des interactions cohérentes et un test joueur complet.'}</p>
+          <span className="section-kicker">{t('landing.sections.method')}</span>
+          <h2>{activeLandingMode === 'pros' ? t('landing.sections.prosMethodTitle') : t('landing.sections.builderMethodTitle')}</h2>
+          <p>{activeLandingMode === 'pros' ? t('landing.sections.prosMethodText') : t('landing.sections.builderMethodText')}</p>
         </div>
         <div className="landing-steps">
           {activeLandingContent.workflowSteps.map((step, index) => (
@@ -985,6 +1044,15 @@ export default function LandingExperience({ onLogin, onRegister, onOpenGallery, 
           <button type="button" className="secondary-action" onClick={onOpenGallery}>{activeLandingContent.final.tertiary}</button>
         </div>
       </section>
+
+      <footer className="landing-seo-footer" aria-label="Pages utiles">
+        <span>Explorer Escape Game Studio</span>
+        <nav aria-label="Pages SEO">
+          {seoFooterLinks.map(([label, href]) => (
+            <a key={href} href={href}>{label}</a>
+          ))}
+        </nav>
+      </footer>
     </main>
   );
 }

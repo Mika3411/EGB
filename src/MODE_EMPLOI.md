@@ -4,22 +4,29 @@ Ce mode d'emploi explique comment créer, tester, partager et publier un escape 
 
 ## 1. Utiliser l'écran Profil
 
-L'écran **Profil** est le tableau de bord de tes projets. Il est organisé par onglets pour séparer les tâches importantes : créer un projet, reprendre un jeu, ranger les médias, publier, lire la messagerie et modifier ton compte.
+L'écran **Profil** est le tableau de bord de tes projets. Il commence par des cartes d'action qui ouvrent chacune une page dédiée : didacticiels, création, gestion des projets, publication, médias, messagerie, profil public, badges et espace Pro quand ton compte y a accès. Le bouton **Retour au menu** ramène au tableau de bord.
 
 Il sert aussi de point de contrôle avant d'entrer dans l'éditeur. Prends l'habitude de regarder le statut, les dates de modification et les indicateurs des cartes de projet avant de reprendre une version. Si un projet commence à devenir complexe, renomme-le clairement et duplique-le avant les gros changements.
 
-### Onglets du profil
+### Cartes du profil
 
-- **Nouveau projet** : crée un jeu, choisit le mode de création, applique un template ou importe un JSON.
-- **Projets** : reprend, teste, renomme, duplique ou supprime les projets sauvegardés.
-- **Médias** : affiche les fichiers utilisés, leur poids, leur dossier et leurs usages.
-- **Publication** : prépare les informations publiques, la miniature, le lien jouable et la présence dans la galerie.
-- **Messagerie** : regroupe les échanges support liés au compte.
-- **Profil** : règle l'identité publique et la sécurité du compte.
+- **Didacticiels** : lance un parcours guidé pour découvrir le profil ou apprendre une zone du builder.
+- **Créer un nouveau projet** : crée un jeu, choisit le mode de création, applique un template ou importe un JSON.
+- **Modifier / gérer vos projets** : reprend, teste, renomme, duplique ou supprime les projets sauvegardés.
+- **Organiser vos médias** : affiche les fichiers utilisés, leur poids, leur dossier et leurs usages.
+- **Publier / partager vos jeux** : prépare les informations publiques, la miniature, le lien jouable et la présence dans la galerie.
+- **Lire la messagerie** : regroupe les échanges support liés au compte.
+- **Modifier votre profil** : règle l'identité publique et la sécurité du compte.
+- **Voir vos badges** : affiche ta progression créateur et les paliers débloqués.
+- **Créer des pages Pro** : pour les comptes Pro, crée et gère des vitrines, prologues ou épilogues liés à tes expériences.
+
+Le menu est séparé en deux blocs côte à côte. À gauche se trouvent les actions de création, gestion de projets, publication et espace Pro. À droite se trouvent **Organiser vos médias**, **Lire la messagerie**, **Modifier votre profil** et **Voir vos badges**.
+
+Quand une carte est ouverte, son contenu remplace le tableau de bord. Utilise **Retour au menu** pour revenir au choix principal, puis ouvre une autre page.
 
 ### Créer un nouveau projet
 
-1. Dans l'onglet **Nouveau projet**, écris le nom de ton escape game.
+1. Ouvre la carte **Créer un nouveau projet**, puis écris le nom de ton escape game.
 2. Choisis un mode de création selon la complexité voulue : débutant, intermédiaire, expert, narration ou Hero aventure.
 3. Choisis un template :
    - **Projet vide** : démarre avec une base minimale.
@@ -37,7 +44,7 @@ Le mode **Hero aventure** reprend la logique du mode à choix multiples, mais aj
 
 ### Gérer les projets existants
 
-Dans l'onglet **Projets**, chaque projet peut être :
+Ouvre la carte **Modifier / gérer vos projets**. Sur cette page, chaque projet peut être :
 
 - **ouvert** pour reprendre l'édition ;
 - **renommé** pour corriger son titre ;
@@ -53,7 +60,7 @@ Les compteurs et avertissements affichés sur les cartes ne remplacent pas un vr
 
 ### Importer un projet JSON
 
-Dans **Nouveau projet**, le bloc d'import sert à récupérer un projet précédemment exporté.
+Dans la page **Créer un nouveau projet**, le bloc d'import sert à récupérer un projet précédemment exporté.
 
 Utilise cette fonction pour :
 
@@ -65,6 +72,12 @@ Utilise cette fonction pour :
 Après import, ouvre le projet et vérifie-le dans **Preview**.
 
 Après un import, vérifie surtout les images, sons et cinématiques. Si un ancien fichier ne contient pas toutes les ressources ou si une référence pointe vers un média absent, le jeu peut rester ouvrable mais afficher un fond vide, un objet sans miniature ou une cinématique incomplète.
+
+### Badges et pages Pro
+
+Ouvre **Voir vos badges** pour suivre ta progression créateur : projets créés, scènes, médias, publications, tests, followers et note de bilan. Les badges servent de repères rapides, pas d'obligation.
+
+Si ton compte est Pro, la carte **Créer des pages Pro** ouvre les extensions d'expérience. Tu peux y créer ou gérer des pages légères reliées à un jeu, par exemple une vitrine, un prologue ou un épilogue, sans passer par tout le builder classique.
 
 ## 2. Barre supérieure du builder
 

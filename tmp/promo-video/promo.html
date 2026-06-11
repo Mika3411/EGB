@@ -1,0 +1,758 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Escape Game Studio - video de presentation</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #080a0f;
+        --panel: rgba(15, 18, 25, 0.82);
+        --panel-strong: rgba(18, 22, 31, 0.94);
+        --line: rgba(255, 255, 255, 0.13);
+        --ink: #f8f4e8;
+        --muted: #b6bdc7;
+        --gold: #d7a94f;
+        --teal: #45c4b0;
+        --red: #d95f4c;
+        --duration: 42s;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+        background: var(--bg);
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        color: var(--ink);
+      }
+
+      .video {
+        position: relative;
+        width: 1280px;
+        height: 720px;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 24% 18%, rgba(69, 196, 176, 0.2), transparent 29%),
+          radial-gradient(circle at 78% 62%, rgba(215, 169, 79, 0.22), transparent 31%),
+          linear-gradient(135deg, #080a0f 0%, #121620 55%, #090b11 100%);
+      }
+
+      .video::before {
+        position: absolute;
+        inset: 0;
+        content: "";
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+        background-size: 56px 56px;
+        mask-image: radial-gradient(circle at 50% 46%, black, transparent 76%);
+        opacity: 0.42;
+      }
+
+      .scene {
+        position: absolute;
+        inset: 0;
+        padding: 62px 76px;
+        opacity: 0;
+        transform: translateY(24px) scale(0.985);
+        animation: reveal var(--duration) linear infinite;
+      }
+
+      .scene-1 { animation-name: scene1; }
+      .scene-2 { animation-name: scene2; }
+      .scene-3 { animation-name: scene3; }
+      .scene-4 { animation-name: scene4; }
+      .scene-5 { animation-name: scene5; }
+      .scene-6 { animation-name: scene6; }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 14px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.06);
+        color: #fbf7ec;
+        font-size: 17px;
+        font-weight: 700;
+        letter-spacing: 0;
+      }
+
+      .mark {
+        width: 26px;
+        height: 26px;
+        border-radius: 8px;
+        background:
+          linear-gradient(135deg, rgba(215, 169, 79, 1), rgba(69, 196, 176, 0.95)),
+          #d7a94f;
+        box-shadow: 0 0 26px rgba(215, 169, 79, 0.22);
+      }
+
+      .eyebrow {
+        margin: 0 0 16px;
+        color: var(--teal);
+        font-size: 18px;
+        font-weight: 760;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2 {
+        margin: 0;
+        max-width: 850px;
+        color: #fff9ef;
+        line-height: 0.94;
+        letter-spacing: 0;
+      }
+
+      h1 {
+        margin-top: 72px;
+        font-size: 88px;
+        font-weight: 870;
+      }
+
+      .scene-1 h1 {
+        max-width: 760px;
+        font-size: 82px;
+      }
+
+      h2 {
+        font-size: 64px;
+        font-weight: 850;
+      }
+
+      .subtitle {
+        margin: 24px 0 0;
+        max-width: 700px;
+        color: var(--muted);
+        font-size: 28px;
+        line-height: 1.24;
+        font-weight: 520;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 34px;
+        max-width: 780px;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        height: 42px;
+        padding: 0 16px;
+        border: 1px solid rgba(215, 169, 79, 0.34);
+        border-radius: 999px;
+        background: rgba(215, 169, 79, 0.1);
+        color: #f8e5b8;
+        font-size: 17px;
+        font-weight: 720;
+      }
+
+      .hero-card {
+        position: absolute;
+        right: 76px;
+        bottom: 64px;
+        width: 390px;
+        height: 300px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 8px;
+        background: #111722;
+        box-shadow: 0 34px 100px rgba(0, 0, 0, 0.45);
+      }
+
+      .hero-card img,
+      .media-card img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        filter: saturate(0.96) contrast(1.04);
+      }
+
+      .hero-card::after,
+      .media-card::after {
+        position: absolute;
+        inset: 0;
+        content: "";
+        background: linear-gradient(180deg, transparent 38%, rgba(0, 0, 0, 0.62));
+      }
+
+      .browser {
+        position: absolute;
+        left: 76px;
+        right: 76px;
+        bottom: 54px;
+        height: 452px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 8px;
+        background: rgba(8, 10, 15, 0.9);
+        box-shadow: 0 32px 110px rgba(0, 0, 0, 0.44);
+      }
+
+      .browser-top {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        height: 46px;
+        padding: 0 18px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.05);
+      }
+
+      .dot {
+        width: 11px;
+        height: 11px;
+        border-radius: 999px;
+        background: var(--red);
+      }
+
+      .dot:nth-child(2) { background: var(--gold); }
+      .dot:nth-child(3) { background: var(--teal); }
+
+      .address {
+        display: flex;
+        align-items: center;
+        height: 26px;
+        margin-left: 8px;
+        padding: 0 13px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 999px;
+        color: #9ca6b3;
+        background: rgba(0, 0, 0, 0.18);
+        font-size: 13px;
+      }
+
+      .editor {
+        display: grid;
+        grid-template-columns: 230px 1fr 260px;
+        height: calc(100% - 46px);
+      }
+
+      .sidebar,
+      .inspector {
+        padding: 18px;
+        border-right: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.035);
+      }
+
+      .inspector {
+        border-right: 0;
+        border-left: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .nav-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 38px;
+        padding: 0 11px;
+        margin-bottom: 9px;
+        border-radius: 7px;
+        color: #d9e1e8;
+        background: rgba(255, 255, 255, 0.06);
+        font-size: 15px;
+        font-weight: 650;
+      }
+
+      .nav-row.active {
+        background: rgba(69, 196, 176, 0.18);
+        color: #e9fffb;
+        outline: 1px solid rgba(69, 196, 176, 0.3);
+      }
+
+      .mini-icon {
+        width: 16px;
+        height: 16px;
+        border-radius: 5px;
+        background: var(--gold);
+      }
+
+      .canvas {
+        position: relative;
+        padding: 22px;
+        background:
+          radial-gradient(circle at 74% 36%, rgba(215, 169, 79, 0.18), transparent 34%),
+          linear-gradient(135deg, rgba(12, 18, 26, 0.92), rgba(9, 12, 19, 0.96));
+      }
+
+      .scene-img {
+        position: absolute;
+        inset: 22px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.13);
+        border-radius: 8px;
+      }
+
+      .scene-img img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        opacity: 0.76;
+      }
+
+      .hotspot {
+        position: absolute;
+        display: grid;
+        place-items: center;
+        width: 72px;
+        height: 72px;
+        border: 2px solid rgba(69, 196, 176, 0.9);
+        border-radius: 999px;
+        background: rgba(69, 196, 176, 0.13);
+        color: #ffffff;
+        font-weight: 900;
+        box-shadow: 0 0 28px rgba(69, 196, 176, 0.4);
+        animation: pulse 1.8s ease-in-out infinite;
+      }
+
+      .hotspot.one { left: 170px; top: 132px; }
+      .hotspot.two { right: 145px; bottom: 110px; animation-delay: 0.5s; }
+
+      .panel-title {
+        margin: 0 0 14px;
+        color: #fff9ef;
+        font-size: 16px;
+        font-weight: 780;
+      }
+
+      .field {
+        height: 34px;
+        margin-bottom: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 7px;
+        background: rgba(0, 0, 0, 0.18);
+      }
+
+      .field.short { width: 65%; }
+
+      .asset-grid {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 18px;
+        margin-top: 34px;
+      }
+
+      .asset {
+        display: grid;
+        place-items: center;
+        height: 148px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
+        background:
+          radial-gradient(circle, rgba(215, 169, 79, 0.12), rgba(255, 255, 255, 0.04) 58%, rgba(0, 0, 0, 0.2));
+      }
+
+      .asset img {
+        max-width: 84%;
+        max-height: 84%;
+        object-fit: contain;
+        filter: drop-shadow(0 18px 20px rgba(0, 0, 0, 0.42));
+        animation: float 4s ease-in-out infinite;
+      }
+
+      .asset:nth-child(2n) img { animation-delay: 0.5s; }
+      .asset:nth-child(3n) img { animation-delay: 0.95s; }
+
+      .logic {
+        display: grid;
+        grid-template-columns: 1fr 70px 1fr 70px 1fr;
+        align-items: center;
+        gap: 16px;
+        margin-top: 42px;
+      }
+
+      .node {
+        min-height: 92px;
+        padding: 18px;
+        border: 1px solid rgba(69, 196, 176, 0.34);
+        border-radius: 8px;
+        background: rgba(69, 196, 176, 0.1);
+      }
+
+      .node strong {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 19px;
+      }
+
+      .node span {
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.25;
+      }
+
+      .arrow {
+        height: 2px;
+        background: linear-gradient(90deg, rgba(215, 169, 79, 0), rgba(215, 169, 79, 1));
+        position: relative;
+      }
+
+      .arrow::after {
+        position: absolute;
+        right: -2px;
+        top: -5px;
+        width: 12px;
+        height: 12px;
+        content: "";
+        border-top: 2px solid var(--gold);
+        border-right: 2px solid var(--gold);
+        transform: rotate(45deg);
+      }
+
+      .media-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 22px;
+        margin-top: 36px;
+      }
+
+      .media-card {
+        position: relative;
+        height: 358px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.04);
+        box-shadow: 0 26px 70px rgba(0, 0, 0, 0.35);
+      }
+
+      .media-card:nth-child(1) { transform: translateY(30px) rotate(-2deg); }
+      .media-card:nth-child(2) { transform: translateY(4px); }
+      .media-card:nth-child(3) { transform: translateY(30px) rotate(2deg); }
+
+      .player {
+        position: absolute;
+        left: 112px;
+        right: 112px;
+        bottom: 56px;
+        height: 430px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 8px;
+        background: #111722;
+        box-shadow: 0 30px 90px rgba(0, 0, 0, 0.48);
+      }
+
+      .player img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        filter: brightness(0.72) contrast(1.03);
+      }
+
+      .dialog {
+        position: absolute;
+        left: 34px;
+        right: 34px;
+        bottom: 28px;
+        padding: 22px 24px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 8px;
+        background: rgba(8, 10, 15, 0.82);
+        backdrop-filter: blur(12px);
+      }
+
+      .dialog strong {
+        display: block;
+        margin-bottom: 8px;
+        color: #ffffff;
+        font-size: 22px;
+      }
+
+      .dialog span {
+        color: var(--muted);
+        font-size: 19px;
+      }
+
+      .inventory {
+        position: absolute;
+        right: 26px;
+        top: 22px;
+        display: flex;
+        gap: 10px;
+      }
+
+      .slot {
+        display: grid;
+        place-items: center;
+        width: 58px;
+        height: 58px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.34);
+      }
+
+      .slot img {
+        max-width: 78%;
+        max-height: 78%;
+        object-fit: contain;
+      }
+
+      .gallery {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 22px;
+        margin-top: 36px;
+      }
+
+      .game-card {
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.055);
+      }
+
+      .game-card img {
+        width: 100%;
+        height: 210px;
+        object-fit: cover;
+      }
+
+      .game-card div {
+        padding: 18px;
+      }
+
+      .game-card strong {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 22px;
+      }
+
+      .game-card span {
+        color: var(--muted);
+        font-size: 16px;
+      }
+
+      .final {
+        display: grid;
+        place-items: center;
+        text-align: center;
+      }
+
+      .final h1 {
+        margin: 20px 0 0;
+        max-width: 1000px;
+        font-size: 92px;
+      }
+
+      .final .subtitle {
+        margin-left: auto;
+        margin-right: auto;
+        max-width: 760px;
+      }
+
+      .cta {
+        margin-top: 34px;
+        display: inline-flex;
+        align-items: center;
+        height: 54px;
+        padding: 0 24px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #d7a94f, #45c4b0);
+        color: #0b0f14;
+        font-size: 20px;
+        font-weight: 850;
+        box-shadow: 0 18px 55px rgba(69, 196, 176, 0.22);
+      }
+
+      .spark {
+        position: absolute;
+        width: 5px;
+        height: 5px;
+        border-radius: 999px;
+        background: rgba(248, 244, 232, 0.72);
+        box-shadow: 0 0 14px rgba(248, 244, 232, 0.7);
+        animation: drift 7s linear infinite;
+      }
+
+      .spark.s1 { left: 15%; top: 16%; animation-delay: 0s; }
+      .spark.s2 { left: 58%; top: 12%; animation-delay: 1.8s; }
+      .spark.s3 { left: 76%; top: 72%; animation-delay: 3.2s; }
+      .spark.s4 { left: 34%; top: 80%; animation-delay: 4.6s; }
+
+      @keyframes scene1 {
+        0%, 14% { opacity: 1; transform: translateY(0) scale(1); }
+        16%, 100% { opacity: 0; transform: translateY(-24px) scale(1.015); }
+      }
+
+      @keyframes scene2 {
+        0%, 14% { opacity: 0; transform: translateY(28px) scale(0.985); }
+        16%, 30% { opacity: 1; transform: translateY(0) scale(1); }
+        32%, 100% { opacity: 0; transform: translateY(-24px) scale(1.015); }
+      }
+
+      @keyframes scene3 {
+        0%, 30% { opacity: 0; transform: translateY(28px) scale(0.985); }
+        32%, 46% { opacity: 1; transform: translateY(0) scale(1); }
+        48%, 100% { opacity: 0; transform: translateY(-24px) scale(1.015); }
+      }
+
+      @keyframes scene4 {
+        0%, 46% { opacity: 0; transform: translateY(28px) scale(0.985); }
+        48%, 62% { opacity: 1; transform: translateY(0) scale(1); }
+        64%, 100% { opacity: 0; transform: translateY(-24px) scale(1.015); }
+      }
+
+      @keyframes scene5 {
+        0%, 62% { opacity: 0; transform: translateY(28px) scale(0.985); }
+        64%, 80% { opacity: 1; transform: translateY(0) scale(1); }
+        82%, 100% { opacity: 0; transform: translateY(-24px) scale(1.015); }
+      }
+
+      @keyframes scene6 {
+        0%, 80% { opacity: 0; transform: translateY(28px) scale(0.985); }
+        83%, 100% { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
+      @keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.09); }
+      }
+
+      @keyframes float {
+        0%, 100% { transform: translateY(0) rotate(0deg); }
+        50% { transform: translateY(-10px) rotate(1deg); }
+      }
+
+      @keyframes drift {
+        from { transform: translate3d(0, 0, 0); opacity: 0; }
+        18%, 82% { opacity: 1; }
+        to { transform: translate3d(42px, -80px, 0); opacity: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="video" aria-label="Video de presentation Escape Game Studio">
+      <i class="spark s1"></i>
+      <i class="spark s2"></i>
+      <i class="spark s3"></i>
+      <i class="spark s4"></i>
+
+      <section class="scene scene-1">
+        <div class="brand"><span class="mark"></span> Escape Game Studio</div>
+        <h1>Créez vos escape games jouables en ligne</h1>
+        <p class="subtitle">Un builder no-code pour imaginer, tester, publier et partager des aventures interactives dans le navigateur.</p>
+        <div class="chips">
+          <span class="chip">Scènes interactives</span>
+          <span class="chip">Objets et énigmes</span>
+          <span class="chip">Cinématiques</span>
+          <span class="chip">Preview joueur</span>
+        </div>
+        <figure class="hero-card">
+          <img src="../../public/assets/gallery/public-gallery-banner.png" alt="" />
+        </figure>
+      </section>
+
+      <section class="scene scene-2">
+        <p class="eyebrow">Construire sans coder</p>
+        <h2>Un éditeur visuel pour passer de l’idée au jeu.</h2>
+        <div class="browser">
+          <div class="browser-top">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            <span class="address">escape-game-studio.local/editor</span>
+          </div>
+          <div class="editor">
+            <aside class="sidebar">
+              <p class="panel-title">Projet</p>
+              <div class="nav-row active"><span class="mini-icon"></span> Scènes</div>
+              <div class="nav-row"><span class="mini-icon"></span> Objets</div>
+              <div class="nav-row"><span class="mini-icon"></span> Logique</div>
+              <div class="nav-row"><span class="mini-icon"></span> Médias</div>
+            </aside>
+            <section class="canvas">
+              <div class="scene-img">
+                <img src="../../public/assets/generated/pirates-scenes/scene-09-atelier-du-cartographe.png" alt="" />
+              </div>
+              <div class="hotspot one">?</div>
+              <div class="hotspot two">+</div>
+            </section>
+            <aside class="inspector">
+              <p class="panel-title">Interaction</p>
+              <div class="field"></div>
+              <div class="field short"></div>
+              <div class="field"></div>
+              <div class="field"></div>
+              <div class="field short"></div>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <section class="scene scene-3">
+        <p class="eyebrow">Objets, énigmes, logique</p>
+        <h2>Composez des puzzles avec des règles claires.</h2>
+        <div class="asset-grid">
+          <div class="asset"><img src="../../tmp/pirates-objects/alpha/item-01-cle-cuivre-fort-alpha.png" alt="" /></div>
+          <div class="asset"><img src="../../tmp/pirates-objects/alpha/item-02-boussole-fendue-alpha.png" alt="" /></div>
+          <div class="asset"><img src="../../tmp/pirates-objects/alpha/item-04-astrolabe-ancien-alpha.png" alt="" /></div>
+          <div class="asset"><img src="../../tmp/pirates-objects/alpha/item-07-fragment-carte-tresor-alpha.png" alt="" /></div>
+          <div class="asset"><img src="../../tmp/pirates-objects/alpha/item-12-cadenas-de-cale-alpha.png" alt="" /></div>
+          <div class="asset"><img src="../../tmp/pirates-objects/alpha/item-18-levier-laiton-alpha.png" alt="" /></div>
+        </div>
+        <div class="logic">
+          <div class="node"><strong>Si le joueur trouve la clé</strong><span>Inventaire mis à jour</span></div>
+          <div class="arrow"></div>
+          <div class="node"><strong>Alors le coffre s’ouvre</strong><span>Objet, son, narration</span></div>
+          <div class="arrow"></div>
+          <div class="node"><strong>La scène évolue</strong><span>Nouvel indice débloqué</span></div>
+        </div>
+      </section>
+
+      <section class="scene scene-4">
+        <p class="eyebrow">Cinématiques, ambiance et 3D</p>
+        <h2>Donnez du rythme à vos aventures.</h2>
+        <div class="media-row">
+          <figure class="media-card"><img src="../../public/assets/generated/renaissance-code/cine-intro-03-escalier-secret.png" alt="" /></figure>
+          <figure class="media-card"><img src="../../public/assets/generated/pirates-scenes/scene-15-chambre-du-phare.png" alt="" /></figure>
+          <figure class="media-card"><img src="../../public/assets/generated/renaissance-code/scene-05-salle-astronomie.png" alt="" /></figure>
+        </div>
+      </section>
+
+      <section class="scene scene-5">
+        <p class="eyebrow">Tester comme un joueur</p>
+        <h2>Prévisualisez, ajustez, rejouez.</h2>
+        <div class="player">
+          <img src="../../public/assets/generated/pirates-scenes/scene-29-salle-du-tresor.png" alt="" />
+          <div class="inventory">
+            <div class="slot"><img src="../../tmp/pirates-objects/alpha/item-01-cle-cuivre-fort-alpha.png" alt="" /></div>
+            <div class="slot"><img src="../../tmp/pirates-objects/alpha/item-09-medaillon-corsaire-alpha.png" alt="" /></div>
+            <div class="slot"><img src="../../tmp/pirates-objects/alpha/item-22-petit-coffre-verrouille-alpha.png" alt="" /></div>
+          </div>
+          <div class="dialog">
+            <strong>Le mécanisme s’active.</strong>
+            <span>Un nouvel indice apparaît. Le joueur peut continuer l’enquête.</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="scene scene-6 final">
+        <div>
+          <div class="brand"><span class="mark"></span> Escape Game Studio</div>
+          <h1>Créez. Testez. Publiez.</h1>
+          <p class="subtitle">Un studio complet pour transformer vos idées d’escape game en expériences jouables et partageables.</p>
+          <div class="cta">Lancez votre prochaine aventure</div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

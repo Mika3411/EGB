@@ -121,15 +121,19 @@ export default function HotspotInspectorPanel({
                       <input data-tour="hotspot-name" value={selectedHotspot.name} onChange={(e) => patchProject((draft) => {
                         const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.name = e.target.value;
                       })} />
-                      <HelpLabel help="Nom utilisé dans les statistiques de clic. Exemple : Réserver une session, Accès prologue ou Voir l’épilogue. Laisse vide pour reprendre le nom de la zone.">Nom statistique</HelpLabel>
-                      <input
-                        data-tour="hotspot-analytics-label"
-                        value={selectedHotspot.analyticsLabel || ''}
-                        placeholder={selectedHotspot.name || 'Réserver une session'}
-                        onChange={(event) => updateSelectedHotspot((spot) => {
-                          spot.analyticsLabel = event.target.value;
-                        })}
-                      />
+                      {isProPromotionMode ? (
+                        <>
+                          <HelpLabel help="Nom utilisé dans les statistiques de clic. Exemple : Réserver une session, Accès prologue ou Voir l’épilogue. Laisse vide pour reprendre le nom de la zone.">Nom statistique</HelpLabel>
+                          <input
+                            data-tour="hotspot-analytics-label"
+                            value={selectedHotspot.analyticsLabel || ''}
+                            placeholder={selectedHotspot.name || 'Réserver une session'}
+                            onChange={(event) => updateSelectedHotspot((spot) => {
+                              spot.analyticsLabel = event.target.value;
+                            })}
+                          />
+                        </>
+                      ) : null}
                       <div className="scene-selection-geometry-grid" data-tour="hotspot-geometry">
                         <div><HelpLabel help="Position horizontale du centre de la zone, en pourcentage de la largeur de l’image.">X</HelpLabel><NumberInput value={selectedHotspot.x} onValueChange={(nextValue) => patchProject((draft) => { const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.x = nextValue; })} /></div>
                         <div><HelpLabel help="Position verticale du centre de la zone, en pourcentage de la hauteur de l’image.">Y</HelpLabel><NumberInput value={selectedHotspot.y} onValueChange={(nextValue) => patchProject((draft) => { const spot = draft.scenes.find((s) => s.id === selectedSceneId)?.hotspots.find((h) => h.id === selectedHotspotId); if (spot) spot.y = nextValue; })} /></div>

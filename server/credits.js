@@ -409,6 +409,24 @@ const updateSupabaseCreditAccount = async (supabase, userId, patch = {}) => {
   return data;
 };
 
+const deleteSupabaseCreditAccount = async (supabase, userId) => {
+  const { error: transactionsError } = await supabase
+    .from('ai_credit_transactions')
+    .delete()
+    .eq('user_id', userId);
+
+  if (transactionsError) throw transactionsError;
+
+  const { data: deletedRows, error: accountError } = await supabase
+    .from('ai_credits')
+    .delete()
+    .eq('user_id', userId)
+    .select('user_id');
+
+  if (accountError) throw accountError;
+  return { userId, deleted: (deletedRows || []).length > 0 };
+};
+
 export const spendSupabaseCredits = async (supabase, userId, amount, reason) => {
   const cost = Math.max(0, Math.round(Number(amount || 0)));
   if (cost <= 0) return ensureSupabaseCreditAccount(supabase, userId);
@@ -686,6 +704,19 @@ export const releaseImageCreditReservation = async (userId, reservation = {}, re
   return releaseLocalImageCreditReservation(userId, reservation, reason);
 };
 
+export const deleteCreditAccount = async (userId) => {
+  const backend = getCreditBackend();
+  if (backend.type === 'supabase') return deleteSupabaseCreditAccount(backend.supabase, userId);
+
+  return withCreditStoreLock(() => {
+    const store = readCreditStore();
+    const existed = Boolean(store.users?.[userId]);
+    if (store.users) delete store.users[userId];
+    writeCreditStore(store);
+    return { userId, deleted: existed };
+  });
+};
+
 const requireCreditAdmin = async (req) => {
   await verifySupabaseAdminRequest(req);
   return true;
@@ -927,6 +958,16 @@ export const handleCreditsAdminUpdate = async (req, res) => {
   }
 
   const action = String(body.action || 'add');
+  if (action === 'delete' || action === 'delete_credit_account') {
+    const deleted = await deleteCreditAccount(userId);
+    sendJson(res, 200, {
+      deletedUserId: deleted.userId,
+      deleted: deleted.deleted,
+      costs: aiCreditCosts,
+    });
+    return;
+  }
+
   const amount = Math.round(Number(body.amount || 0));
   if (!Number.isFinite(amount)) {
     sendJson(res, 400, { error: 'Montant invalide.' });

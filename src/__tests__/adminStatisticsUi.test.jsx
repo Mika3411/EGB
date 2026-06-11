@@ -6,6 +6,7 @@ const adminApiMocks = vi.hoisted(() => ({
   loadAdminDashboard: vi.fn(),
   prepareAdminShopPackScreenshots: vi.fn(async () => []),
   prepareAdminShopPackZip: vi.fn(),
+  deleteAdminCreditAccount: vi.fn(),
   toggleStoredLocalAccountStatus: vi.fn(),
   updateStoredLocalAccountType: vi.fn(),
   updateAdminCredits: vi.fn(),
@@ -74,6 +75,7 @@ vi.mock('../shared/services/adminApi', async () => {
     loadAdminDashboard: adminApiMocks.loadAdminDashboard,
     prepareAdminShopPackScreenshots: adminApiMocks.prepareAdminShopPackScreenshots,
     prepareAdminShopPackZip: adminApiMocks.prepareAdminShopPackZip,
+    deleteAdminCreditAccount: adminApiMocks.deleteAdminCreditAccount,
     toggleStoredLocalAccountStatus: adminApiMocks.toggleStoredLocalAccountStatus,
     updateStoredLocalAccountType: adminApiMocks.updateStoredLocalAccountType,
     updateAdminCredits: adminApiMocks.updateAdminCredits,
@@ -276,6 +278,42 @@ describe('admin statistics tab', () => {
         accountType: 'pro',
       });
       expect(within(sheet).getAllByText('Compte Pro').length).toBeGreaterThan(0);
+    });
+  }, 10000);
+
+  it('deletes a credit-only account from the members table', async () => {
+    adminApiMocks.loadAdminDashboard.mockResolvedValue({
+      accounts: [],
+      supabaseUsers: [],
+      creditUsers: [
+        {
+          userId: 'credit-only-user',
+          balance: 20,
+          createdAt: '2026-06-05T20:22:00.000Z',
+          updatedAt: '2026-06-05T20:22:00.000Z',
+          transactions: [],
+        },
+      ],
+      projectCounts: {},
+      publicGames: [],
+      visitorAnalytics: {},
+      moderation: { games: new Set(), blogs: new Set(), comments: new Set(), actions: [] },
+    });
+    adminApiMocks.deleteAdminCreditAccount.mockResolvedValue({
+      deletedUserId: 'credit-only-user',
+      deleted: true,
+    });
+    supportMocks.loadAdminSupportThreads.mockResolvedValue([]);
+
+    const { default: AdminConsole } = await import('../domains/admin/AdminConsole.jsx');
+    render(<AdminConsole user={{ id: 'admin', email: 'admin@example.com' }} onBack={vi.fn()} onLogout={vi.fn()} />);
+
+    expect(await screen.findByText('credit-only-user')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }));
+
+    await waitFor(() => {
+      expect(adminApiMocks.deleteAdminCreditAccount).toHaveBeenCalledWith({ userId: 'credit-only-user' });
+      expect(screen.queryByText('credit-only-user')).toBeNull();
     });
   }, 10000);
 });

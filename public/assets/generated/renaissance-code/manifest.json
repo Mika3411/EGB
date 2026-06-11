@@ -1,0 +1,365 @@
+{
+  "slug": "renaissance-code",
+  "title": "Code Renaissance",
+  "description": "Pack realiste et coherent inspire par les codes de Leonard, les musees nocturnes et les mecanismes Renaissance.",
+  "generatedWith": "Built-in image_gen, then local chroma-key alpha removal for inventory objects.",
+  "publicBase": "/assets/generated/renaissance-code",
+  "sizes": {
+    "scenes": {
+      "width": 1672,
+      "height": 941
+    },
+    "cinematics": {
+      "width": 1672,
+      "height": 941
+    },
+    "items": {
+      "width": 512,
+      "height": 512
+    }
+  },
+  "scenes": [
+    {
+      "id": "scene_01_galerie_renaissance",
+      "name": "Galerie Renaissance",
+      "fileName": "scene-01-galerie-renaissance.png",
+      "path": "/assets/generated/renaissance-code/scene-01-galerie-renaissance.png",
+      "width": 1672,
+      "height": 941,
+      "hasAlpha": false,
+      "bytes": 3194778
+    },
+    {
+      "id": "scene_02_atelier_restauration",
+      "name": "Atelier de restauration",
+      "fileName": "scene-02-atelier-restauration.png",
+      "path": "/assets/generated/renaissance-code/scene-02-atelier-restauration.png",
+      "width": 1672,
+      "height": 941,
+      "hasAlpha": false,
+      "bytes": 3152600
+    },
+    {
+      "id": "scene_03_archives_manuscrits",
+      "name": "Archives des manuscrits",
+      "fileName": "scene-03-archives-manuscrits.png",
+      "path": "/assets/generated/renaissance-code/scene-03-archives-manuscrits.png",
+      "width": 1672,
+      "height": 941,
+      "hasAlpha": false,
+      "bytes": 3104300
+    },
+    {
+      "id": "scene_04_cabinet_miroirs",
+      "name": "Cabinet des miroirs",
+      "fileName": "scene-04-cabinet-miroirs.png",
+      "path": "/assets/generated/renaissance-code/scene-04-cabinet-miroirs.png",
+      "width": 1672,
+      "height": 941,
+      "hasAlpha": false,
+      "bytes": 3108547
+    },
+    {
+      "id": "scene_05_salle_astronomie",
+      "name": "Salle d astronomie",
+      "fileName": "scene-05-salle-astronomie.png",
+      "path": "/assets/generated/renaissance-code/scene-05-salle-astronomie.png",
+      "width": 1672,
+      "height": 941,
+      "hasAlpha": false,
+      "bytes": 3445720
+    },
+    {
+      "id": "scene_06_chapelle_vitraux",
+      "name": "Chapelle aux vitraux",
+      "fileName": "scene-06-chapelle-vitraux.png",
+      "path": "/assets/generated/renaissance-code/scene-06-chapelle-vitraux.png",
+      "width": 1672,
+      "height": 941,
+      "hasAlpha": false,
+      "bytes": 3179407
+    },
+    {
+      "id": "scene_07_palier_crypte",
+      "name": "Palier de la crypte",
+      "fileName": "scene-07-palier-crypte.png",
+      "path": "/assets/generated/renaissance-code/scene-07-palier-crypte.png",
+      "width": 1672,
+      "height": 941,
+      "hasAlpha": false,
+      "bytes": 3210401
+    },
+    {
+      "id": "scene_08_couloir_ossuaire",
+      "name": "Couloir ossuaire",
+      "fileName": "scene-08-couloir-ossuaire.png",
+      "path": "/assets/generated/renaissance-code/scene-08-couloir-ossuaire.png",
+      "width": 1672,
+      "height": 941,
+      "hasAlpha": false,
+      "bytes": 3054526
+    },
+    {
+      "id": "scene_09_bibliotheque_secrete",
+      "name": "Bibliotheque secrete",
+      "fileName": "scene-09-bibliotheque-secrete.png",
+      "path": "/assets/generated/renaissance-code/scene-09-bibliotheque-secrete.png",
+      "width": 1672,
+      "height": 941,
+      "hasAlpha": false,
+      "bytes": 3270899
+    },
+    {
+      "id": "scene_10_horloge_mecanisme",
+      "name": "Salle du mecanisme",
+      "fileName": "scene-10-horloge-mecanisme.png",
+      "path": "/assets/generated/renaissance-code/scene-10-horloge-mecanisme.png",
+      "width": 1672,
+      "height": 941,
+      "hasAlpha": false,
+      "bytes": 3237465
+    },
+    {
+      "id": "scene_11_bureau_conservateur",
+      "name": "Bureau du conservateur",
+      "fileName": "scene-11-bureau-conservateur.png",
+      "path": "/assets/generated/renaissance-code/scene-11-bureau-conservateur.png",
+      "width": 1672,
+      "height": 941,
+      "hasAlpha": false,
+      "bytes": 3191024
+    },
+    {
+      "id": "scene_12_observatoire_toit",
+      "name": "Observatoire du toit",
+      "fileName": "scene-12-observatoire-toit.png",
+      "path": "/assets/generated/renaissance-code/scene-12-observatoire-toit.png",
+      "width": 1672,
+      "height": 941,
+      "hasAlpha": false,
+      "bytes": 3144126
+    },
+    {
+      "id": "scene_13_voute_reliquaires",
+      "name": "Voute des reliquaires",
+      "fileName": "scene-13-voute-reliquaires.png",
+      "path": "/assets/generated/renaissance-code/scene-13-voute-reliquaires.png",
+      "width": 1672,
+      "height": 941,
+      "hasAlpha": false,
+      "bytes": 3259005
+    },
+    {
+      "id": "scene_14_tunnel_eaux",
+      "name": "Tunnel des eaux",
+      "fileName": "scene-14-tunnel-eaux.png",
+      "path": "/assets/generated/renaissance-code/scene-14-tunnel-eaux.png",
+      "width": 1672,
+      "height": 941,
+      "hasAlpha": false,
+      "bytes": 3256008
+    },
+    {
+      "id": "scene_15_sanctum_final",
+      "name": "Sanctum final",
+      "fileName": "scene-15-sanctum-final.png",
+      "path": "/assets/generated/renaissance-code/scene-15-sanctum-final.png",
+      "width": 1672,
+      "height": 941,
+      "hasAlpha": false,
+      "bytes": 3408715
+    }
+  ],
+  "items": [
+    {
+      "id": "item_medaille_soleil",
+      "name": "Medaille solaire",
+      "fileName": "item-medaille-soleil.png",
+      "path": "/assets/generated/renaissance-code/item-medaille-soleil.png",
+      "width": 512,
+      "height": 512,
+      "hasAlpha": true,
+      "bytes": 352502,
+      "transparentCorners": true
+    },
+    {
+      "id": "item_roue_chiffrement",
+      "name": "Roue de chiffrement",
+      "fileName": "item-roue-chiffrement.png",
+      "path": "/assets/generated/renaissance-code/item-roue-chiffrement.png",
+      "width": 512,
+      "height": 512,
+      "hasAlpha": true,
+      "bytes": 431649,
+      "transparentCorners": true
+    },
+    {
+      "id": "item_cle_triangulaire",
+      "name": "Cle triangulaire",
+      "fileName": "item-cle-triangulaire.png",
+      "path": "/assets/generated/renaissance-code/item-cle-triangulaire.png",
+      "width": 512,
+      "height": 512,
+      "hasAlpha": true,
+      "bytes": 124385,
+      "transparentCorners": true
+    },
+    {
+      "id": "item_miroir_bronze",
+      "name": "Miroir de bronze",
+      "fileName": "item-miroir-bronze.png",
+      "path": "/assets/generated/renaissance-code/item-miroir-bronze.png",
+      "width": 512,
+      "height": 512,
+      "hasAlpha": true,
+      "bytes": 170154,
+      "transparentCorners": true
+    },
+    {
+      "id": "item_fragment_codex",
+      "name": "Fragment de codex",
+      "fileName": "item-fragment-codex.png",
+      "path": "/assets/generated/renaissance-code/item-fragment-codex.png",
+      "width": 512,
+      "height": 512,
+      "hasAlpha": true,
+      "bytes": 422939,
+      "transparentCorners": true
+    },
+    {
+      "id": "item_sceau_cire",
+      "name": "Sceau de cire",
+      "fileName": "item-sceau-cire.png",
+      "path": "/assets/generated/renaissance-code/item-sceau-cire.png",
+      "width": 512,
+      "height": 512,
+      "hasAlpha": true,
+      "bytes": 160681,
+      "transparentCorners": true
+    },
+    {
+      "id": "item_lentille_ambre",
+      "name": "Lentille ambree",
+      "fileName": "item-lentille-ambre.png",
+      "path": "/assets/generated/renaissance-code/item-lentille-ambre.png",
+      "width": 512,
+      "height": 512,
+      "hasAlpha": true,
+      "bytes": 304685,
+      "transparentCorners": true
+    },
+    {
+      "id": "item_stylet_os",
+      "name": "Stylet d os",
+      "fileName": "item-stylet-os.png",
+      "path": "/assets/generated/renaissance-code/item-stylet-os.png",
+      "width": 512,
+      "height": 512,
+      "hasAlpha": true,
+      "bytes": 62434,
+      "transparentCorners": true
+    },
+    {
+      "id": "item_carte_pliee",
+      "name": "Carte pliee",
+      "fileName": "item-carte-pliee.png",
+      "path": "/assets/generated/renaissance-code/item-carte-pliee.png",
+      "width": 512,
+      "height": 512,
+      "hasAlpha": true,
+      "bytes": 347947,
+      "transparentCorners": true
+    },
+    {
+      "id": "item_coffret_reliquaire",
+      "name": "Coffret reliquaire",
+      "fileName": "item-coffret-reliquaire.png",
+      "path": "/assets/generated/renaissance-code/item-coffret-reliquaire.png",
+      "width": 512,
+      "height": 512,
+      "hasAlpha": true,
+      "bytes": 357934,
+      "transparentCorners": true
+    }
+  ],
+  "cinematics": [
+    {
+      "id": "cine_intro_code_renaissance",
+      "name": "Ouverture du code",
+      "slides": [
+        {
+          "id": "cine_intro_01_cour_musee",
+          "name": "La cour du musee",
+          "fileName": "cine-intro-01-cour-musee.png",
+          "path": "/assets/generated/renaissance-code/cine-intro-01-cour-musee.png",
+          "width": 1672,
+          "height": 941,
+          "hasAlpha": false,
+          "bytes": 3287540
+        },
+        {
+          "id": "cine_intro_02_codex_scelle",
+          "name": "Le codex scelle",
+          "fileName": "cine-intro-02-codex-scelle.png",
+          "path": "/assets/generated/renaissance-code/cine-intro-02-codex-scelle.png",
+          "width": 1672,
+          "height": 941,
+          "hasAlpha": false,
+          "bytes": 3075872
+        },
+        {
+          "id": "cine_intro_03_escalier_secret",
+          "name": "L escalier secret",
+          "fileName": "cine-intro-03-escalier-secret.png",
+          "path": "/assets/generated/renaissance-code/cine-intro-03-escalier-secret.png",
+          "width": 1672,
+          "height": 941,
+          "hasAlpha": false,
+          "bytes": 3284151
+        }
+      ]
+    },
+    {
+      "id": "cine_final_manuscrit",
+      "name": "Le manuscrit revele",
+      "slides": [
+        {
+          "id": "cine_final_01_alignement",
+          "name": "L alignement",
+          "fileName": "cine-final-01-alignement.png",
+          "path": "/assets/generated/renaissance-code/cine-final-01-alignement.png",
+          "width": 1672,
+          "height": 941,
+          "hasAlpha": false,
+          "bytes": 3508608
+        },
+        {
+          "id": "cine_final_02_manuscrit",
+          "name": "Le manuscrit",
+          "fileName": "cine-final-02-manuscrit.png",
+          "path": "/assets/generated/renaissance-code/cine-final-02-manuscrit.png",
+          "width": 1672,
+          "height": 941,
+          "hasAlpha": false,
+          "bytes": 3397377
+        },
+        {
+          "id": "cine_final_03_aube",
+          "name": "La sortie a l aube",
+          "fileName": "cine-final-03-aube.png",
+          "path": "/assets/generated/renaissance-code/cine-final-03-aube.png",
+          "width": 1672,
+          "height": 941,
+          "hasAlpha": false,
+          "bytes": 3805935
+        }
+      ]
+    }
+  ],
+  "rejectedSources": [
+    {
+      "sourceIndex": 31,
+      "reason": "Regenerated because the first final dawn frame resembled a recognizable real museum courtyard."
+    }
+  ]
+}

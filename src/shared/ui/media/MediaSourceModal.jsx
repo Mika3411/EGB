@@ -103,7 +103,7 @@ export default function MediaSourceModal({
           </button>
         </div>
         <div className="media-source-actions" aria-label="Sources d'import">
-          <button type="button" className="media-source-choice is-primary" onClick={onOpenComputer}>
+          <button type="button" className="media-source-choice is-primary" data-tour="media-source-computer" onClick={onOpenComputer}>
             <span className="media-source-choice-icon"><Upload size={20} aria-hidden="true" /></span>
             <span>
               <strong>Mon ordinateur</strong>
