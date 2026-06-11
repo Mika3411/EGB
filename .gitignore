@@ -50,10 +50,5 @@ playwright-report/
 test-results/
 tmp/
 assets/generated/
-public/assets/generated/caribbean-treasure/
-public/assets/generated/pirates-objects/
-public/assets/generated/pirates-scenes/
-public/assets/generated/prison-break/
-public/assets/generated/renaissance-code/
-public/assets/generated/zombie-outbreak/
+public/assets/generated/
 public/assets/3d/characters/Meshy_AI_*.glb

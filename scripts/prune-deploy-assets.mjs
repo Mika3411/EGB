@@ -5,15 +5,6 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const distDir = path.join(root, 'dist');
 
-const GENERATED_PACKS_TO_PRUNE = [
-  'caribbean-treasure',
-  'pirates-objects',
-  'pirates-scenes',
-  'prison-break',
-  'renaissance-code',
-  'zombie-outbreak',
-];
-
 const removePath = async (targetPath) => {
   try {
     await fs.rm(targetPath, { recursive: true, force: true });
@@ -36,10 +27,8 @@ const listFiles = async (targetDir) => {
 
 const pruned = [];
 
-for (const pack of GENERATED_PACKS_TO_PRUNE) {
-  const targetPath = path.join(distDir, 'assets', 'generated', pack);
-  if (await removePath(targetPath)) pruned.push(path.relative(root, targetPath));
-}
+const generatedAssetsDir = path.join(distDir, 'assets', 'generated');
+if (await removePath(generatedAssetsDir)) pruned.push(path.relative(root, generatedAssetsDir));
 
 const characterDir = path.join(distDir, 'assets', '3d', 'characters');
 const characterFiles = await listFiles(characterDir);
