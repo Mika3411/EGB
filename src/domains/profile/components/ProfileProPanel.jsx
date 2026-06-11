@@ -222,15 +222,15 @@ function ProfileProExtensionCard({
         </button>
         <button type="button" className="secondary-action profile-test-button" disabled={isBusy} onClick={() => onTestProject?.(project.id)}>
           <Eye aria-hidden="true" size={16} />
-          Aperçu
+          Tester
         </button>
         <button type="button" className="secondary-action profile-share-button" disabled={isBusy} onClick={() => onCopyProjectLink?.(project.id)}>
           <Copy aria-hidden="true" size={16} />
-          Copier le lien
+          Copier le lien joueur
         </button>
         <button type="button" className="profile-publish-button" disabled={isBusy} onClick={() => onPublishProject?.(project.id)}>
           <Send aria-hidden="true" size={16} />
-          {project.shareState?.isPublic ? 'Mettre à jour' : 'Publier'}
+          {project.shareState?.isPublic ? 'Mettre à jour la page' : 'Publier la page'}
         </button>
       </div>
 

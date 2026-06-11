@@ -694,7 +694,7 @@ export default function SceneStudio(props) {
                 </div>
                 <div className="scene-canvas-head-actions">
                   <button type="button" className="secondary-action scene-mobile-preview-action" data-tour="scene-preview-button" onClick={() => previewScene?.(selectedSceneId)}>
-                    Prévisualiser
+                    Tester
                   </button>
                   {!isProPromotionMode ? (
                     <button type="button" className="danger-button scene-mobile-delete-action" onClick={() => deleteScene(selectedSceneId)}>

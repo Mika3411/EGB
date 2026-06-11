@@ -50,6 +50,13 @@ import { getOfflineExportEstimateMessage } from '../shared/utils/offlineExportEs
 import { getAuthorProfileSlugFromPath } from '../shared/utils/publicProjectLinks';
 import { lazyWithRetry } from '../shared/utils/lazyImportRetry';
 import {
+  CheckCircle2,
+  MousePointerClick,
+  Pencil,
+  Play,
+  X,
+} from 'lucide-react';
+import {
   getSupabaseAuthHeaders,
   hasRemoteStorageConfig,
 } from '../shared/services/remoteSession';
@@ -61,6 +68,29 @@ import {
 const AI_CREDITS_ENDPOINT = import.meta.env.VITE_AI_CREDITS_ENDPOINT || '/api/ai-credits';
 const PROJECT_AUTOSAVE_ENABLED = true;
 const DEMO_PROJECT_ID = 'demo-project';
+const DEMO_GUIDE_STEPS = [
+  {
+    id: 'edit-intro',
+    title: 'Personnalisez le départ',
+    body: "Changez le texte d'introduction de la première scène.",
+    actionLabel: 'Modifier le texte',
+    Icon: Pencil,
+  },
+  {
+    id: 'test-zone',
+    title: 'Testez une zone',
+    body: 'Sélectionnez la vitrine pour voir ce que le joueur déclenche.',
+    actionLabel: 'Voir la zone',
+    Icon: MousePointerClick,
+  },
+  {
+    id: 'preview',
+    title: 'Jouez le résultat',
+    body: 'Lancez le test pour sentir le parcours comme un joueur.',
+    actionLabel: 'Lancer le test',
+    Icon: Play,
+  },
+];
 
 const LandingExperience = lazyWithRetry(() => import('../domains/landing/LandingExperience'));
 const BuilderGuide = lazyWithRetry(() => import('./tutorial/BuilderGuide'));
@@ -123,6 +153,62 @@ function BuilderStudioMobileOrientationGate() {
         <p>Tournez votre smartphone pour continuer à utiliser le studio complet.</p>
       </div>
     </div>
+  );
+}
+
+const focusDemoGuideTarget = (selector) => {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  window.setTimeout(() => {
+    const target = document.querySelector(selector);
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+    const focusTarget = target.matches('input, textarea, select, button')
+      ? target
+      : target.querySelector('input, textarea, select, button');
+    focusTarget?.focus?.({ preventScroll: true });
+  }, 240);
+};
+
+function DemoGuidedMission({ completedStepIds, onStepAction, onDismiss }) {
+  const completedSet = new Set(completedStepIds);
+  const currentStep = DEMO_GUIDE_STEPS.find((step) => !completedSet.has(step.id)) || DEMO_GUIDE_STEPS[DEMO_GUIDE_STEPS.length - 1];
+
+  return (
+    <section className="builder-demo-guide" data-tour="demo-guide" aria-label="Mode guidé démo">
+      <div className="builder-demo-guide-copy">
+        <span className="eyebrow">Première mission</span>
+        <h2>Modifiez, testez, puis jouez.</h2>
+        <p>Trois gestes suffisent pour comprendre la boucle du builder.</p>
+      </div>
+      <ol className="builder-demo-guide-steps">
+        {DEMO_GUIDE_STEPS.map((step, index) => {
+          const isDone = completedSet.has(step.id);
+          const isCurrent = step.id === currentStep.id && !isDone;
+          const Icon = isDone ? CheckCircle2 : step.Icon;
+          return (
+            <li
+              className={`builder-demo-guide-step ${isDone ? 'done' : ''} ${isCurrent ? 'current' : ''}`}
+              key={step.id}
+              aria-current={isCurrent ? 'step' : undefined}
+            >
+              <span className="builder-demo-guide-step-index">{index + 1}</span>
+              <div className="builder-demo-guide-step-body">
+                <strong>{step.title}</strong>
+                <span>{step.body}</span>
+                <button type="button" className="secondary-action builder-demo-guide-step-action" onClick={() => onStepAction(step.id)}>
+                  <Icon aria-hidden="true" size={15} strokeWidth={2.4} />
+                  {isDone ? 'Revoir' : step.actionLabel}
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+      <button type="button" className="builder-demo-guide-dismiss secondary-action" onClick={onDismiss}>
+        <X aria-hidden="true" size={15} strokeWidth={2.4} />
+        Masquer
+      </button>
+    </section>
   );
 }
 
@@ -217,6 +303,8 @@ function BuilderStudio({
   const [tutorialStepIndex, setTutorialStepIndex] = useState(null);
   const [selectedTutorialTab, setSelectedTutorialTab] = useState('scenes');
   const [tutorialSteps, setTutorialSteps] = useState([]);
+  const [isDemoGuideDismissed, setIsDemoGuideDismissed] = useState(false);
+  const [demoGuideCompletedStepIds, setDemoGuideCompletedStepIds] = useState([]);
   const [aiCreditBalance, setAiCreditBalance] = useState(0);
   const [heroCharacterPreviewRequestKey, setHeroCharacterPreviewRequestKey] = useState(0);
   const hydratedProjectRef = useRef('');
@@ -276,9 +364,10 @@ function BuilderStudio({
     setCenterNotice(String(message || ''));
   }, []);
   const openRegisterPanel = useCallback((options = {}) => {
-    const nextInitialForm = options?.accountType === ACCOUNT_TYPE_PRO
-      ? { accountType: ACCOUNT_TYPE_PRO }
-      : {};
+    const nextInitialForm = {
+      ...(options?.accountType === ACCOUNT_TYPE_PRO ? { accountType: ACCOUNT_TYPE_PRO } : {}),
+      ...(options?.authIntent ? { authIntent: options.authIntent } : {}),
+    };
     setAuthEntryMode('register');
     setAuthEntryInitialForm(nextInitialForm);
     setShowAuthEntry(true);
@@ -435,6 +524,8 @@ function BuilderStudio({
     editor.setSelectedHotspotId(demoProject.scenes?.[0]?.hotspots?.[0]?.id || '');
     editor.setTab(initialTab || 'scenes');
     preview.syncWithProject(demoProject);
+    setIsDemoGuideDismissed(false);
+    setDemoGuideCompletedStepIds([]);
     setSaveStatus(getDemoSaveStatus());
   }, [
     editor.loadProject,
@@ -758,6 +849,46 @@ function BuilderStudio({
     setHeroCharacterPreviewRequestKey(Date.now());
     editor.setTab('preview');
   }, [editor.setTab]);
+
+  const markDemoGuideStepComplete = useCallback((stepId) => {
+    setDemoGuideCompletedStepIds((current) => (
+      current.includes(stepId) ? current : [...current, stepId]
+    ));
+  }, []);
+
+  const handleDemoGuideAction = useCallback((stepId) => {
+    const firstScene = editor.project.scenes?.[0] || null;
+    if (stepId === 'edit-intro') {
+      if (firstScene?.id) editor.setSelectedSceneId(firstScene.id);
+      editor.setTab('scenes');
+      markDemoGuideStepComplete(stepId);
+      focusDemoGuideTarget('[data-tour="scene-intro"]');
+      return;
+    }
+
+    if (stepId === 'test-zone') {
+      const firstHotspot = firstScene?.hotspots?.[0] || null;
+      if (firstScene?.id) editor.setSelectedSceneId(firstScene.id);
+      if (firstHotspot?.id) editor.setSelectedHotspotId(firstHotspot.id);
+      editor.setTab('scenes');
+      markDemoGuideStepComplete(stepId);
+      focusDemoGuideTarget('[data-tour="scene-canvas"]');
+      return;
+    }
+
+    if (stepId === 'preview') {
+      markDemoGuideStepComplete(stepId);
+      handlePreviewScene(firstScene?.id || editor.selectedSceneId);
+    }
+  }, [
+    editor.project.scenes,
+    editor.selectedSceneId,
+    editor.setSelectedHotspotId,
+    editor.setSelectedSceneId,
+    editor.setTab,
+    handlePreviewScene,
+    markDemoGuideStepComplete,
+  ]);
 
   const startLoadedProjectCreationGuide = useCallback(async (projectForGuide = editor.project) => {
     const steps = await loadTutorialSteps();
@@ -1162,7 +1293,7 @@ function BuilderStudio({
   const handleBuilderProfileOpen = useCallback(async () => {
     if (!(await confirmAnimationExit())) return;
     if (isDemoMode && !auth.user) {
-      openRegisterPanel();
+      openRegisterPanel({ authIntent: 'save-project' });
       return;
     }
     await openProfileFromBuilder();
@@ -1658,8 +1789,8 @@ function BuilderStudio({
             <span className="badge info">Démo temporaire</span>
             <strong>
               {auth.user
-                ? 'Vous êtes connecté : cette démo reste un bac à sable non enregistré. Créez ou ouvrez un projet depuis le profil pour sauvegarder et publier.'
-                : 'Projet temporaire : modifiez, testez, exportez, puis créez un compte pour sauvegarder et publier.'}
+                ? 'Démo non enregistrée : créez ou ouvrez un projet depuis le Profil pour sauvegarder, puis publiez depuis Publication.'
+                : 'Projet temporaire : testez librement. Créez un compte pour sauvegarder durablement ; la publication se prépare ensuite dans le Profil.'}
             </strong>
           </div>
           {auth.user ? (
@@ -1676,12 +1807,20 @@ function BuilderStudio({
               <button type="button" className="secondary-action" onClick={handleDemoLandingExit}>
                 Retour à l’accueil
               </button>
-              <button type="button" className="landing-cta-primary" onClick={openRegisterPanel}>
-                Créer un compte
+              <button type="button" className="landing-cta-primary" onClick={() => openRegisterPanel({ authIntent: 'save-project' })}>
+                Créer un compte pour sauvegarder
               </button>
             </div>
           )}
         </section>
+      ) : null}
+
+      {isDemoMode && !isDemoGuideDismissed ? (
+        <DemoGuidedMission
+          completedStepIds={demoGuideCompletedStepIds}
+          onStepAction={handleDemoGuideAction}
+          onDismiss={() => setIsDemoGuideDismissed(true)}
+        />
       ) : null}
 
       <Tabs

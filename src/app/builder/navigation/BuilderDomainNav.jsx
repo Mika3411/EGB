@@ -173,7 +173,7 @@ export default function Tabs({ value, onChange, onProfile, projectScore, project
             aria-current={value === 'score' ? 'page' : undefined}
             aria-label={`Ouvrir le bilan du projet, note ${projectScore.label}`}
           >
-            <span>Note</span>
+            <span>Bilan</span>
             <strong>{projectScore.label}</strong>
           </button>
         ) : null}

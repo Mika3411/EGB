@@ -22,6 +22,24 @@ const emptyForm = {
 };
 
 const ACCOUNT_PROFILE_TYPE_PLAYER = 'player';
+const AUTH_CONTEXTS = {
+  'save-project': {
+    badge: 'Sauvegarde du projet',
+    intro: 'Crée un compte pour conserver ton builder, retrouver ce projet plus tard et préparer sa publication depuis le Profil.',
+    titleLogin: 'Se connecter pour sauvegarder',
+    titleRegister: 'Créer un compte pour sauvegarder',
+    loginSubmit: 'Se connecter pour sauvegarder',
+    registerSubmit: 'Créer le compte pour sauvegarder',
+  },
+  'publish-project': {
+    badge: 'Publication',
+    intro: 'La publication passe par un projet sauvegardé. Crée un compte pour conserver le builder, compléter les infos publiques et partager le lien.',
+    titleLogin: 'Se connecter pour publier',
+    titleRegister: 'Créer un compte pour publier',
+    loginSubmit: 'Se connecter pour publier',
+    registerSubmit: 'Créer le compte pour publier',
+  },
+};
 
 const proProfileTypes = [
   [ACCOUNT_PROFILE_TYPE_ESCAPE_ROOM, 'Gérant d’escape game / Salle d’escape'],
@@ -57,12 +75,16 @@ const getOptionLabel = (options, value) => (
 );
 
 const createInitialForm = (initialForm = {}) => {
-  const accountType = initialForm.accountType || emptyForm.accountType;
+  const {
+    authIntent: _authIntent,
+    ...formDefaults
+  } = initialForm || {};
+  const accountType = formDefaults.accountType || emptyForm.accountType;
   return {
     ...emptyForm,
-    ...initialForm,
+    ...formDefaults,
     accountType,
-    profileType: resolveProfileTypeForAccount(accountType, initialForm.profileType),
+    profileType: resolveProfileTypeForAccount(accountType, formDefaults.profileType),
   };
 };
 
@@ -78,12 +100,20 @@ export default function AuthEntry({
   errorMessage,
   initialForm,
 }) {
+  const authContext = AUTH_CONTEXTS[initialForm?.authIntent] || null;
+  const shouldStartProfileDetailsOpen = Boolean(
+    initialForm?.accountType === ACCOUNT_TYPE_PRO
+    || initialForm?.profileType
+    || initialForm?.organization
+    || initialForm?.country
+  );
   const [mode, setMode] = useState(isPasswordRecovery ? 'reset' : initialMode);
   const [form, setForm] = useState(() => createInitialForm(initialForm));
   const [localError, setLocalError] = useState('');
   const [notice, setNotice] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isProfileDetailsOpen, setIsProfileDetailsOpen] = useState(shouldStartProfileDetailsOpen);
 
   useEffect(() => {
     if (isPasswordRecovery) {
@@ -94,8 +124,9 @@ export default function AuthEntry({
     setMode(initialMode);
     if (initialMode === 'register') {
       setForm(createInitialForm(initialForm));
+      setIsProfileDetailsOpen(shouldStartProfileDetailsOpen);
     }
-  }, [initialForm, initialMode, isPasswordRecovery]);
+  }, [initialForm, initialMode, isPasswordRecovery, shouldStartProfileDetailsOpen]);
 
   const clearMessages = () => {
     setLocalError('');
@@ -105,6 +136,7 @@ export default function AuthEntry({
   const switchMode = (nextMode) => {
     setMode(nextMode);
     setForm(nextMode === 'register' ? createInitialForm(initialForm) : emptyForm);
+    setIsProfileDetailsOpen(nextMode === 'register' ? shouldStartProfileDetailsOpen : false);
     setShowPassword(false);
     setShowConfirmPassword(false);
     clearMessages();
@@ -217,18 +249,15 @@ export default function AuthEntry({
     : mode === 'reset'
       ? 'Nouveau mot de passe'
       : mode === 'register'
-        ? 'Créer un compte'
-        : 'Connexion au builder';
+        ? authContext?.titleRegister || 'Créer un compte'
+        : authContext?.titleLogin || 'Connexion au builder';
+  const badgeLabel = authContext?.badge || 'Sauvegarde par compte';
+  const introText = authContext?.intro || 'Crée un compte Escape Game Studio pour sauvegarder tes projets, les retrouver plus tard et publier tes expériences quand elles sont prêtes.';
+  const loginSubmitLabel = authContext?.loginSubmit || 'Se connecter';
+  const registerSubmitLabel = authContext?.registerSubmit || 'Créer le compte';
   const visibleProfileTypes = getProfileTypesForAccount(form.accountType);
   const accountTypeLabel = getOptionLabel(ACCOUNT_TYPE_OPTIONS, form.accountType) || 'Particulier';
   const profileTypeLabel = getOptionLabel(visibleProfileTypes, form.profileType) || 'Profil par défaut';
-  const shouldOpenProfileDetails = Boolean(
-    initialForm?.accountType === ACCOUNT_TYPE_PRO
-    || initialForm?.profileType
-    || initialForm?.organization
-    || initialForm?.country,
-  );
-
   return (
     <div className="auth-shell">
       <div className="auth-card panel">
@@ -238,12 +267,9 @@ export default function AuthEntry({
           </button>
         ) : null}
         <div className="auth-hero">
-          <span className="auth-badge">Sauvegarde par compte</span>
+          <span className="auth-badge">{badgeLabel}</span>
           <h2>{title}</h2>
-          <p>
-            Crée un compte Escape Game Studio pour sauvegarder tes projets, les retrouver
-            plus tard et publier tes expériences quand elles sont prêtes.
-          </p>
+          <p>{introText}</p>
         </div>
 
         {mode !== 'forgot' && mode !== 'reset' ? (
@@ -261,7 +287,11 @@ export default function AuthEntry({
                 <input value={form.name} onChange={(event) => handleChange('name', event.target.value)} placeholder="Ex. Marion" />
               </div>
 
-              <details className="auth-profile-details" defaultOpen={shouldOpenProfileDetails}>
+              <details
+                className="auth-profile-details"
+                open={isProfileDetailsOpen}
+                onToggle={(event) => setIsProfileDetailsOpen(event.currentTarget.open)}
+              >
                 <summary>
                   <span>
                     <strong>Profil et usage</strong>
@@ -378,8 +408,8 @@ export default function AuthEntry({
                 : mode === 'reset'
                   ? 'Changer le mot de passe'
                   : mode === 'login'
-                    ? 'Se connecter'
-                    : 'Créer le compte'}
+                    ? loginSubmitLabel
+                    : registerSubmitLabel}
           </button>
 
           {mode === 'login' ? (

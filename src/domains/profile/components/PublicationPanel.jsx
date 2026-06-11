@@ -33,16 +33,16 @@ function PublicationCard({
 
     if (!category) {
       await showAlert({
-        title: 'Publication incomplète',
-        message: 'Choisis une catégorie avant de publier ce jeu.',
+        title: 'Publication à préparer',
+        message: 'Choisis une catégorie avant de publier ce jeu dans la galerie.',
       });
       return;
     }
 
     if (!ageRating) {
       await showAlert({
-        title: 'Publication incomplète',
-        message: "Choisis une mention d'âge avant de publier ce jeu.",
+        title: 'Publication à préparer',
+        message: "Choisis une mention d'âge avant de publier ce jeu dans la galerie.",
       });
       return;
     }
@@ -185,7 +185,7 @@ function PublicationCard({
           <div className="project-card-footer">
             <button type="button" className="secondary-action profile-share-button" onClick={() => onCopyProjectLink?.(project.id)}>
               <span aria-hidden="true">🔗</span>
-              Copier le lien
+              Copier le lien joueur
             </button>
             {canSaveProjectQrCode ? (
               <button type="button" className="secondary-action profile-share-button profile-qr-button" onClick={() => onSaveProjectQrCode?.(project.id)}>
@@ -194,7 +194,7 @@ function PublicationCard({
               </button>
             ) : null}
             <button type="button" className="profile-publish-button" onClick={handlePublish}>
-              {project.shareState?.isPublic ? 'Mettre à jour' : 'Publier'}
+              {project.shareState?.isPublic ? 'Mettre à jour la publication' : 'Publier dans la galerie'}
             </button>
             {project.shareState?.isPublic ? (
               <button type="button" className="danger-button" onClick={() => onUnpublishProject?.(project.id)}>
@@ -247,7 +247,7 @@ export default function PublicationPanel({
         <div>
           <h2>Publication</h2>
           <p className="small-note">
-            Prépare les informations publiques, le lien et la présence en galerie.
+            Régle les informations publiques, puis publie dans la galerie ou copie un lien joueur.
           </p>
         </div>
         <select value={publicationFilter} onChange={(event) => setPublicationFilter(event.target.value)}>
@@ -276,7 +276,7 @@ export default function PublicationPanel({
           <div className="empty-state-inline">
             <div>
               <strong>Aucun projet dans ce filtre</strong>
-              <p className="small-note">Change le filtre ou crée un projet avant de le publier.</p>
+              <p className="small-note">Change le filtre ou crée un projet sauvegardé avant de le publier.</p>
             </div>
           </div>
         )}

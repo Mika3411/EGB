@@ -307,7 +307,7 @@ export const TABS = {
   logic: { component: LogicRulesWorkspace, label: 'Logique' },
   hero: { component: HeroDesigner, label: 'Héros' },
   combat: { component: CombatWorkspace, label: 'Combat' },
-  preview: { component: PlayerPreviewShell, label: 'Preview' },
+  preview: { component: PlayerPreviewShell, label: 'Tester' },
   animation: { component: Anime2DStudio, label: 'Animation' },
   ai: { component: AiWorkbench, label: 'IA' },
   shop: { component: ShopWorkspace, label: 'Boutique' },
