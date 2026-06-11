@@ -328,6 +328,10 @@ const seoFooterLinks = [
   ['Générateur d’énigmes', '/generateur-enigmes-escape-game/'],
   ['Escape game entreprise', '/escape-game-entreprise/'],
   ['Galerie d’exemples', '/galerie-escape-games/'],
+  ['Meilleur logiciel pédagogique', '/meilleur-logiciel-escape-game-pedagogique/'],
+  ['Outil no-code escape game', '/outil-no-code-escape-game/'],
+  ['Jeu d’énigmes en ligne', '/creer-jeu-enigmes-en-ligne/'],
+  ['Kit de citation', '/kit-citation-escape-game-studio/'],
 ];
 
 const landingModeContent = {

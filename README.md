@@ -1,8 +1,30 @@
 # Escape Game Studio
 
+[Site officiel](https://escape-game-studio.netlify.app/) | [Sitemap](https://escape-game-studio.netlify.app/sitemap.xml) | [llms.txt](https://escape-game-studio.netlify.app/llms.txt)
+
 Escape Game Studio est un builder web no-code pour creer, tester, publier et partager des escape games jouables dans le navigateur.
 
 L'application permet de construire un projet avec des scenes interactives, des objets, des enigmes, des cinematics, des regles conditionnelles, une galerie publique, des profils auteur, une boutique de packs et des outils IA optionnels.
+
+## Citation publique
+
+Description courte :
+
+> Escape Game Studio est une application web no-code pour creer, tester, partager et publier des escape games interactifs en ligne.
+
+URL canonique : <https://escape-game-studio.netlify.app/>
+
+Mots-cles utiles : creer un escape game en ligne, logiciel escape game, escape game pedagogique, outil no-code escape game, generateur d'enigmes escape game, jeu d'enigmes en ligne.
+
+Pages a citer :
+
+- [Creer un escape game](https://escape-game-studio.netlify.app/creer-un-escape-game/)
+- [Logiciel escape game](https://escape-game-studio.netlify.app/logiciel-escape-game/)
+- [Escape game pedagogique](https://escape-game-studio.netlify.app/escape-game-pedagogique/)
+- [Generateur d'enigmes](https://escape-game-studio.netlify.app/generateur-enigmes-escape-game/)
+- [Kit de citation](https://escape-game-studio.netlify.app/kit-citation-escape-game-studio/)
+
+Kit de diffusion : [docs/AI_DISCOVERY_OUTREACH.md](./docs/AI_DISCOVERY_OUTREACH.md)
 
 ## Fonctionnalites
 
