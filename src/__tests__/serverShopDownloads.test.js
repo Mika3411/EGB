@@ -1,8 +1,14 @@
-import { describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
   resolveShopPackDownload,
   toPublicShopPackDownloadState,
 } from '../../server/shopDownloads.js';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.resetModules();
+  vi.unstubAllEnvs();
+});
 
 describe('server shop downloads', () => {
   test('retourne le downloadUrl existant sans signer de chemin', async () => {
@@ -106,6 +112,45 @@ describe('server shop downloads', () => {
       hasDownload: true,
       screenshots: [{ id: 'url', src: '/boutique/cover.png' }],
     }));
+  });
+
+  test('migre les screenshots inline serveur vers des URLs Storage publiques', async () => {
+    vi.stubEnv('SUPABASE_PUBLIC_ASSETS_BUCKET', 'public-assets');
+    vi.stubEnv('SUPABASE_PRIVATE_DATA_BUCKET', 'private-data');
+    const { migrateShopPackScreenshots } = await import('../../server/shop.js');
+    const upload = vi.fn().mockResolvedValue({ error: null });
+    const getPublicUrl = vi.fn((path) => ({
+      data: { publicUrl: `https://project.supabase.co/storage/v1/object/public/public-assets/${path}` },
+    }));
+    const bucket = { upload, getPublicUrl };
+    const from = vi.fn(() => bucket);
+    const supabase = { storage: { from } };
+    const src = `data:image/png;base64,${Buffer.from('png').toString('base64')}`;
+
+    const migrated = await migrateShopPackScreenshots(supabase, [{
+      id: 'pack-1',
+      title: 'Pack pirates',
+      screenshots: [{ id: 'hero', src }],
+    }]);
+
+    expect(migrated.didChange).toBe(true);
+    expect(from).toHaveBeenCalledWith('public-assets');
+    expect(upload).toHaveBeenCalledWith(
+      'shop-pack-screenshots/pack-1/hero.png',
+      expect.any(Buffer),
+      {
+        upsert: true,
+        contentType: 'image/png',
+        cacheControl: '31536000',
+      },
+    );
+    expect(migrated.packs[0].screenshots[0]).toEqual(expect.objectContaining({
+      src: 'https://project.supabase.co/storage/v1/object/public/public-assets/shop-pack-screenshots/pack-1/hero.png',
+      storagePath: 'shop-pack-screenshots/pack-1/hero.png',
+      storageBucket: 'public-assets',
+      contentType: 'image/png',
+    }));
+    expect(migrated.packs[0].screenshots[0].src).not.toMatch(/^data:/);
   });
 
   test('charge les ventes depuis shop_pack_sales comme source des packs vendus', async () => {

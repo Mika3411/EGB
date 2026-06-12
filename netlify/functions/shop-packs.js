@@ -3,6 +3,7 @@ import {
   json,
   parseBody,
   privateDataBucket,
+  publicAssetsBucket,
   verifyAdmin,
   withErrors,
 } from './_shared.js';
@@ -11,8 +12,21 @@ const shopPacksStoragePath = 'public/shop-packs.json';
 const storageNotFoundMessagePattern = /(?:not found|no such key|object not found|resource not found|introuvable)/i;
 const missingShopSalesTablePattern = /shop_pack_sales|schema cache|relation .* does not exist|could not find the table/i;
 const maxApiScreenshotSrcLength = 32 * 1024;
+const screenshotMimeExtensions = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+};
 
 const createShopPackId = () => `pack_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+const sanitizeStorageSegment = (value = '') => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-zA-Z0-9._-]+/g, '-')
+  .replace(/^-+|-+$/g, '')
+  .toLowerCase() || 'asset';
 
 const normalizeNumber = (value, fallback = 0) => {
   const number = Number(value);
@@ -154,6 +168,72 @@ export const loadShopPacks = async (supabase) => {
   }
 };
 
+const parseImageDataUrl = (src = '') => {
+  const match = /^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i.exec(String(src || ''));
+  if (!match) return null;
+  const mimeType = match[1].toLowerCase();
+  const extension = screenshotMimeExtensions[mimeType];
+  if (!extension) return null;
+  return {
+    mimeType,
+    extension,
+    buffer: Buffer.from(match[2], 'base64'),
+  };
+};
+
+export const migrateShopPackScreenshots = async (supabase, packs = []) => {
+  if (!publicAssetsBucket || !supabase?.storage?.from) return { packs, didChange: false };
+
+  let didChange = false;
+  const nextPacks = [];
+
+  for (const pack of packs) {
+    const screenshots = Array.isArray(pack.screenshots) ? pack.screenshots : [];
+    let didChangePack = false;
+    const nextScreenshots = [];
+
+    for (let index = 0; index < screenshots.length; index += 1) {
+      const screenshot = screenshots[index] || {};
+      const parsed = parseImageDataUrl(screenshot.src);
+      if (!parsed) {
+        nextScreenshots.push(screenshot);
+        continue;
+      }
+
+      const storagePath = [
+        'shop-pack-screenshots',
+        sanitizeStorageSegment(pack.id || createShopPackId()),
+        `${sanitizeStorageSegment(screenshot.id || `shot-${index + 1}`)}.${parsed.extension}`,
+      ].join('/');
+      const bucket = supabase.storage.from(publicAssetsBucket);
+      const { error } = await bucket.upload(storagePath, parsed.buffer, {
+        upsert: true,
+        contentType: parsed.mimeType,
+        cacheControl: '31536000',
+      });
+      if (error) {
+        nextScreenshots.push(screenshot);
+        continue;
+      }
+
+      const publicUrl = bucket.getPublicUrl(storagePath).data.publicUrl;
+      nextScreenshots.push({
+        ...screenshot,
+        src: publicUrl,
+        storagePath,
+        storageBucket: publicAssetsBucket,
+        contentType: parsed.mimeType,
+      });
+      didChange = true;
+      didChangePack = true;
+    }
+
+    nextPacks.push(didChangePack ? normalizeShopPack({ ...pack, screenshots: nextScreenshots }) : pack);
+  }
+
+  return { packs: nextPacks, didChange };
+};
+
 const isMissingShopSalesTableError = (error = {}) => {
   const code = String(error.code || '').toUpperCase();
   const message = String(error.message || error.details || error.hint || '').toLowerCase();
@@ -186,15 +266,16 @@ const applySoldShopPackState = (packs = [], soldPackIds = new Set()) => packs.ma
 
 const saveShopPacks = async (supabase, packs = []) => {
   const normalized = Array.isArray(packs) ? packs.map(normalizeShopPack) : [];
+  const migrated = await migrateShopPackScreenshots(supabase, normalized);
   const { error } = await supabase.storage
     .from(privateDataBucket)
-    .upload(shopPacksStoragePath, Buffer.from(JSON.stringify(normalized, null, 2)), {
+    .upload(shopPacksStoragePath, Buffer.from(JSON.stringify(migrated.packs, null, 2)), {
       upsert: true,
       contentType: 'application/json; charset=utf-8',
       cacheControl: '0',
     });
   if (error) throw error;
-  return normalized;
+  return migrated.packs;
 };
 
 export const handler = async (event) => withErrors(event, async () => {
@@ -202,7 +283,10 @@ export const handler = async (event) => withErrors(event, async () => {
 
   if (event.httpMethod === 'GET') {
     const soldPackIds = await loadSoldShopPackIds(supabase);
-    const packs = applySoldShopPackState(await loadShopPacks(supabase), soldPackIds);
+    const loadedPacks = await loadShopPacks(supabase);
+    const migrated = await migrateShopPackScreenshots(supabase, loadedPacks);
+    if (migrated.didChange) await saveShopPacks(supabase, migrated.packs);
+    const packs = applySoldShopPackState(migrated.packs, soldPackIds);
     return json(200, { packs: packs.map(toPublicShopPack) });
   }
 

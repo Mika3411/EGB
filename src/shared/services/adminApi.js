@@ -14,6 +14,8 @@ const VISITOR_ANALYTICS_SURFACES = ['builder', 'gallery'];
 const SHOP_PACK_ZIP_MAX_BYTES = 220 * 1024 * 1024;
 const SHOP_PACK_ZIP_UPLOAD_TIMEOUT_MS = 180000;
 const SHOP_PACK_ZIP_MIME_TYPES = ['application/zip', 'application/x-zip-compressed', 'application/octet-stream'];
+const SHOP_PACK_SCREENSHOT_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const SHOP_PACK_SCREENSHOT_MAX_BYTES = 10 * 1024 * 1024;
 const isConfiguredAdminEmail = (email = '') => Boolean(
   ADMIN_EMAIL && normalizeEmail(email) === ADMIN_EMAIL,
 );
@@ -468,10 +470,39 @@ export const prepareAdminShopPackZip = async ({ file, packId, userId }) => {
   };
 };
 
-export const prepareAdminShopPackScreenshots = async (files = []) => Promise.all(
-  Array.from(files).map(async (file) => ({
-    id: `shot_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
-    name: file.name,
-    src: await fileToDataURL(file),
-  })),
-);
+export const prepareAdminShopPackScreenshots = async (files = [], options = {}) => {
+  const safePackId = options.packId || createAdminShopPackId();
+
+  return Promise.all(
+    Array.from(files).map(async (file) => {
+      const id = `shot_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+      if (hasRemoteSupabaseConfig()) {
+        const result = await uploadFileToSupabase(file, {
+          userId: options.userId,
+          folder: `shop-pack-screenshots-${safePackId}`,
+          optimizeImage: true,
+          cacheControl: '31536000',
+          visibility: 'public',
+          maxFileSize: SHOP_PACK_SCREENSHOT_MAX_BYTES,
+          allowMimeTypes: SHOP_PACK_SCREENSHOT_MIME_TYPES,
+          retries: 1,
+          timeoutMs: 45000,
+        });
+        return {
+          id,
+          name: result.originalName || file.name,
+          src: result.publicUrl || '',
+          storagePath: result.path,
+          storageBucket: result.bucket,
+          contentType: result.contentType,
+        };
+      }
+
+      return {
+        id,
+        name: file.name,
+        src: await fileToDataURL(file),
+      };
+    }),
+  );
+};

@@ -8,6 +8,7 @@ import {
   getAdminProjectCount,
   getManagedUsers,
   canUseRemoteAdminApi,
+  createAdminShopPackId,
   loadAdminDashboard,
   prepareAdminShopPackScreenshots,
   prepareAdminShopPackZip,
@@ -379,12 +380,26 @@ export default function AdminConsole({
   const addShopPackScreenshots = async (event) => {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
-    const screenshots = await prepareAdminShopPackScreenshots(files);
-    setShopPackForm((previous) => ({
-      ...previous,
-      screenshots: [...(previous.screenshots || []), ...screenshots],
-    }));
-    event.target.value = '';
+    setIsBusy(true);
+    setStatus('');
+    try {
+      const packId = shopPackForm.id || createAdminShopPackId();
+      const screenshots = await prepareAdminShopPackScreenshots(files, {
+        packId,
+        userId: user?.id,
+      });
+      setShopPackForm((previous) => ({
+        ...previous,
+        id: previous.id || packId,
+        screenshots: [...(previous.screenshots || []), ...screenshots],
+      }));
+      setStatus('Captures du pack importées.');
+    } catch (error) {
+      setStatus(error.message || 'Import des captures impossible.');
+    } finally {
+      setIsBusy(false);
+      event.target.value = '';
+    }
   };
 
   const removeShopPackScreenshot = (screenshotId) => {

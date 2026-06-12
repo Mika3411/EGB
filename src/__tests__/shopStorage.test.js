@@ -7,6 +7,9 @@ const SHOP_PURCHASES_KEY = 'escapeGameBuilder.shopPurchases.user-1';
 
 afterEach(() => {
   window.localStorage.clear();
+  vi.restoreAllMocks();
+  vi.doUnmock('../shared/utils/fileHelpers');
+  vi.resetModules();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
 });
@@ -70,6 +73,54 @@ describe('shop storage helpers migration', () => {
       packId: 'pack_1',
       userId: '',
     })).rejects.toThrow('Importe un fichier ZIP pour le pack.');
+  });
+
+  it('uploads admin shop pack screenshots as public storage assets when remote storage is configured', async () => {
+    vi.resetModules();
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://project.supabase.co');
+    vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', 'publishable-key');
+    const uploadFileToSupabase = vi.fn().mockResolvedValue({
+      publicUrl: 'https://project.supabase.co/storage/v1/object/public/public-assets/users/user-1/shop-pack-screenshots-pack-1/cover.webp',
+      path: 'users/user-1/shop-pack-screenshots-pack-1/cover.webp',
+      bucket: 'public-assets',
+      originalName: 'cover.png',
+      contentType: 'image/webp',
+    });
+    const fileToDataURL = vi.fn();
+    vi.doMock('../shared/utils/fileHelpers', () => ({
+      fileToDataURL,
+      uploadFileToSupabase,
+    }));
+    const { prepareAdminShopPackScreenshots } = await import('../shared/services/adminApi');
+
+    const screenshots = await prepareAdminShopPackScreenshots([
+      new File([new Uint8Array([1, 2, 3])], 'cover.png', { type: 'image/png' }),
+    ], {
+      packId: 'pack-1',
+      userId: 'user-1',
+    });
+
+    expect(screenshots).toEqual([
+      expect.objectContaining({
+        name: 'cover.png',
+        src: 'https://project.supabase.co/storage/v1/object/public/public-assets/users/user-1/shop-pack-screenshots-pack-1/cover.webp',
+        storagePath: 'users/user-1/shop-pack-screenshots-pack-1/cover.webp',
+        storageBucket: 'public-assets',
+        contentType: 'image/webp',
+      }),
+    ]);
+    expect(screenshots[0].src).not.toMatch(/^data:/);
+    expect(fileToDataURL).not.toHaveBeenCalled();
+    expect(uploadFileToSupabase).toHaveBeenCalledWith(expect.any(File), expect.objectContaining({
+      userId: 'user-1',
+      folder: 'shop-pack-screenshots-pack-1',
+      optimizeImage: true,
+      cacheControl: '31536000',
+      visibility: 'public',
+      allowMimeTypes: expect.arrayContaining(['image/png']),
+      retries: 1,
+      timeoutMs: 45000,
+    }));
   });
 
   it('includes the HTTP status when the remote shop API returns non-JSON', async () => {

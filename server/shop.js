@@ -1,6 +1,11 @@
 import { readJsonBody, sendJson } from './http.js';
 import { verifySupabaseAdminRequest } from './auth.js';
-import { downloadStorageJson, uploadStorageJson } from './storage.js';
+import {
+  downloadStorageJson,
+  publicAssetsBucket,
+  sanitizeStorageSegment,
+  uploadStorageJson,
+} from './storage.js';
 import { getSupabaseAdminClient } from './supabase.js';
 import { getCreditAccount, resolveCreditUserId, spendCredits } from './credits.js';
 import { hasShopPackDownload, resolveShopPackDownload, toPublicShopPackDownloadState } from './shopDownloads.js';
@@ -9,6 +14,12 @@ const shopPacksStoragePath = 'public/shop-packs.json';
 const soldShopPackStatuses = ['pending', 'paid'];
 const missingShopSalesTablePattern = /shop_pack_sales|schema cache|relation .* does not exist|could not find the table/i;
 const maxApiScreenshotSrcLength = 32 * 1024;
+const screenshotMimeExtensions = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+};
 
 const createEmptyShopPack = () => ({
   id: '',
@@ -94,10 +105,80 @@ const loadServerShopPacks = async () => {
   return Array.isArray(packs) ? packs.map(normalizeShopPack) : [];
 };
 
+const parseImageDataUrl = (src = '') => {
+  const match = /^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i.exec(String(src || ''));
+  if (!match) return null;
+  const mimeType = match[1].toLowerCase();
+  const extension = screenshotMimeExtensions[mimeType];
+  if (!extension) return null;
+  return {
+    mimeType,
+    extension,
+    buffer: Buffer.from(match[2], 'base64'),
+  };
+};
+
+export const migrateShopPackScreenshots = async (supabase, packs = []) => {
+  if (!publicAssetsBucket || !supabase?.storage?.from) return { packs, didChange: false };
+
+  let didChange = false;
+  const nextPacks = [];
+
+  for (const pack of packs) {
+    const screenshots = Array.isArray(pack.screenshots) ? pack.screenshots : [];
+    let didChangePack = false;
+    const nextScreenshots = [];
+
+    for (let index = 0; index < screenshots.length; index += 1) {
+      const screenshot = screenshots[index] || {};
+      const parsed = parseImageDataUrl(screenshot.src);
+      if (!parsed) {
+        nextScreenshots.push(screenshot);
+        continue;
+      }
+
+      const storagePath = [
+        'shop-pack-screenshots',
+        sanitizeStorageSegment(pack.id || createShopPackId()),
+        `${sanitizeStorageSegment(screenshot.id || `shot-${index + 1}`)}.${parsed.extension}`,
+      ].join('/');
+      const bucket = supabase.storage.from(publicAssetsBucket);
+      const { error } = await bucket.upload(storagePath, parsed.buffer, {
+        upsert: true,
+        contentType: parsed.mimeType,
+        cacheControl: '31536000',
+      });
+      if (error) {
+        nextScreenshots.push(screenshot);
+        continue;
+      }
+
+      const publicUrl = bucket.getPublicUrl(storagePath).data.publicUrl;
+      nextScreenshots.push({
+        ...screenshot,
+        src: publicUrl,
+        storagePath,
+        storageBucket: publicAssetsBucket,
+        contentType: parsed.mimeType,
+      });
+      didChange = true;
+      didChangePack = true;
+    }
+
+    nextPacks.push(didChangePack ? normalizeShopPack({ ...pack, screenshots: nextScreenshots }) : pack);
+  }
+
+  return { packs: nextPacks, didChange };
+};
+
 const saveServerShopPacks = async (packs = []) => {
   const normalized = Array.isArray(packs) ? packs.map(normalizeShopPack) : [];
-  await uploadStorageJson(shopPacksStoragePath, normalized);
-  return normalized;
+  const supabase = getSupabaseAdminClient();
+  const migrated = supabase
+    ? await migrateShopPackScreenshots(supabase, normalized)
+    : { packs: normalized };
+  await uploadStorageJson(shopPacksStoragePath, migrated.packs);
+  return migrated.packs;
 };
 
 const shopPurchaseLocks = new Map();
@@ -152,7 +233,12 @@ export const applySoldShopPackState = (packs = [], soldPackIds = new Set()) => p
 ));
 
 const loadVisibleServerShopPacks = async (supabase = getSupabaseAdminClient()) => {
-  const packs = await loadServerShopPacks();
+  let packs = await loadServerShopPacks();
+  if (supabase) {
+    const migrated = await migrateShopPackScreenshots(supabase, packs);
+    if (migrated.didChange) await saveServerShopPacks(migrated.packs);
+    packs = migrated.packs;
+  }
   if (!supabase) return packs;
   return applySoldShopPackState(packs, await loadSoldShopPackIds(supabase));
 };

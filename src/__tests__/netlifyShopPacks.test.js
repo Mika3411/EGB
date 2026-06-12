@@ -105,4 +105,42 @@ describe('netlify shop packs manifest', () => {
     expect(compactPack.screenshots).toEqual([{ id: 'url', src: '/boutique/cover.png' }]);
     expect(JSON.stringify(compactPack)).not.toContain('data:image/png;base64');
   });
+
+  test('migrates inline screenshots to public Supabase Storage URLs', async () => {
+    const { migrateShopPackScreenshots } = await loadNetlifyShopPacks();
+    const upload = vi.fn().mockResolvedValue({ error: null });
+    const getPublicUrl = vi.fn((path) => ({
+      data: { publicUrl: `https://project.supabase.co/storage/v1/object/public/public-assets/${path}` },
+    }));
+    const bucket = { upload, getPublicUrl };
+    const from = vi.fn(() => bucket);
+    const supabase = { storage: { from } };
+    const src = `data:image/png;base64,${Buffer.from('png').toString('base64')}`;
+
+    const migrated = await migrateShopPackScreenshots(supabase, [{
+      id: 'pack-1',
+      title: 'Pack pirates',
+      screenshots: [{ id: 'hero', src }],
+    }]);
+
+    expect(migrated.didChange).toBe(true);
+    expect(from).toHaveBeenCalledWith('public-assets');
+    expect(upload).toHaveBeenCalledWith(
+      'shop-pack-screenshots/pack-1/hero.png',
+      expect.any(Buffer),
+      {
+        upsert: true,
+        contentType: 'image/png',
+        cacheControl: '31536000',
+      },
+    );
+    expect(getPublicUrl).toHaveBeenCalledWith('shop-pack-screenshots/pack-1/hero.png');
+    expect(migrated.packs[0].screenshots[0]).toEqual(expect.objectContaining({
+      src: 'https://project.supabase.co/storage/v1/object/public/public-assets/shop-pack-screenshots/pack-1/hero.png',
+      storagePath: 'shop-pack-screenshots/pack-1/hero.png',
+      storageBucket: 'public-assets',
+      contentType: 'image/png',
+    }));
+    expect(migrated.packs[0].screenshots[0].src).not.toMatch(/^data:/);
+  });
 });
