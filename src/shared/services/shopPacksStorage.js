@@ -122,6 +122,15 @@ const readJsonResponse = async (response, fallbackMessage) => {
   }
 };
 
+const getApiErrorMessage = (payload = {}, response = {}, fallbackMessage = 'Operation impossible.') => {
+  const code = payload.code ? ` (${payload.code})` : '';
+  const status = response?.status ? ` HTTP ${response.status}` : '';
+  return payload.error
+    || payload.message
+    || payload.msg
+    || `${fallbackMessage}${code || status ? `.${code}${status ? ` ${status}` : ''}` : ''}`;
+};
+
 const getAdminAuthHeaders = async () => {
   return getSupabaseAuthHeaders();
 };
@@ -136,7 +145,7 @@ const requestShopPacksApi = async (body) => {
     body: JSON.stringify(body),
   });
   const payload = await readJsonResponse(response, 'API boutique indisponible.');
-  if (!response.ok) throw new Error(payload.error || 'Operation boutique impossible.');
+  if (!response.ok) throw new Error(getApiErrorMessage(payload, response, 'Operation boutique impossible'));
   const packs = Array.isArray(payload.packs) ? payload.packs.map(normalizeShopPack) : [];
   writeJsonStorage(SHOP_PACKS_KEY, packs);
   window.dispatchEvent(new CustomEvent('shop-packs-updated'));
@@ -184,7 +193,7 @@ export async function saveSharedShopPacks(packs = []) {
       return Array.isArray(payload.packs) ? saveShopPacks(payload.packs) : normalized;
     }
     const payload = await readJsonResponse(response, 'API boutique indisponible.');
-    throw new Error(payload.error || 'API boutique indisponible.');
+    throw new Error(getApiErrorMessage(payload, response, 'API boutique indisponible'));
   }
 
   const normalized = saveShopPacks(packs);

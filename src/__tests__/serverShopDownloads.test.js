@@ -108,6 +108,21 @@ describe('server shop downloads', () => {
     expect(inFilter).toHaveBeenCalledWith('status', ['pending', 'paid']);
   });
 
+  test('ignore la table shop_pack_sales quand elle n est pas encore installee', async () => {
+    const inFilter = vi.fn().mockResolvedValue({
+      data: null,
+      error: {
+        code: 'PGRST205',
+        message: "Could not find the table 'public.shop_pack_sales' in the schema cache",
+      },
+    });
+    const select = vi.fn(() => ({ in: inFilter }));
+    const from = vi.fn(() => ({ select }));
+    const { loadSoldShopPackIds } = await import('../../server/shop.js');
+
+    await expect(loadSoldShopPackIds({ from })).resolves.toEqual(new Set());
+  });
+
   test('achete via la RPC Supabase attendue', async () => {
     const rpc = vi.fn(() => ({
       single: vi.fn().mockResolvedValue({

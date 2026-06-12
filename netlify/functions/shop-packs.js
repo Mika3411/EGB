@@ -9,6 +9,7 @@ import {
 
 const shopPacksStoragePath = 'public/shop-packs.json';
 const storageNotFoundMessagePattern = /(?:not found|no such key|object not found|resource not found|introuvable)/i;
+const missingShopSalesTablePattern = /shop_pack_sales|schema cache|relation .* does not exist|could not find the table/i;
 
 const createShopPackId = () => `pack_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -137,12 +138,23 @@ export const loadShopPacks = async (supabase) => {
   }
 };
 
-const loadSoldShopPackIds = async (supabase) => {
+const isMissingShopSalesTableError = (error = {}) => {
+  const code = String(error.code || '').toUpperCase();
+  const message = String(error.message || error.details || error.hint || '').toLowerCase();
+  return code === 'PGRST205'
+    || code === '42P01'
+    || missingShopSalesTablePattern.test(message);
+};
+
+export const loadSoldShopPackIds = async (supabase) => {
   const { data, error } = await supabase
     .from('shop_pack_sales')
     .select('pack_id')
     .in('status', ['pending', 'paid']);
-  if (error) throw error;
+  if (error) {
+    if (isMissingShopSalesTableError(error)) return new Set();
+    throw error;
+  }
   return new Set((data || []).map((entry) => entry.pack_id).filter(Boolean));
 };
 

@@ -72,4 +72,19 @@ describe('netlify shop packs manifest', () => {
       }),
     ]);
   });
+
+  test('missing shop_pack_sales table does not break public shop pack loading', async () => {
+    const { loadSoldShopPackIds } = await loadNetlifyShopPacks();
+    const inFilter = vi.fn().mockResolvedValue({
+      data: null,
+      error: {
+        code: 'PGRST205',
+        message: "Could not find the table 'public.shop_pack_sales' in the schema cache",
+      },
+    });
+    const select = vi.fn(() => ({ in: inFilter }));
+    const from = vi.fn(() => ({ select }));
+
+    await expect(loadSoldShopPackIds({ from })).resolves.toEqual(new Set());
+  });
 });

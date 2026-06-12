@@ -87,4 +87,26 @@ describe('shop storage helpers migration', () => {
     await expect(saveSharedShopPacks([{ id: 'pack-1', title: 'Pack test' }]))
       .rejects.toThrow('API boutique indisponible. (HTTP 404).');
   });
+
+  it('shows message and code returned by the remote shop API', async () => {
+    vi.resetModules();
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://project.supabase.co');
+    vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', 'publishable-key');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      text: vi.fn().mockResolvedValue(JSON.stringify({
+        message: 'Erreur Supabase detaillee.',
+        code: 'PGRST205',
+      })),
+    }));
+
+    const { upsertSharedShopPack } = await import('../shared/services/shopPacksStorage');
+
+    await expect(upsertSharedShopPack({
+      id: 'pack-1',
+      title: 'Pack test',
+      downloadStoragePath: 'users/user-1/shop-packs/pack.zip',
+    })).rejects.toThrow('Erreur Supabase detaillee.');
+  });
 });

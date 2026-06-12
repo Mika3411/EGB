@@ -7,6 +7,7 @@ import { resolveShopPackDownload, toPublicShopPackDownloadState } from './shopDo
 
 const shopPacksStoragePath = 'public/shop-packs.json';
 const soldShopPackStatuses = ['pending', 'paid'];
+const missingShopSalesTablePattern = /shop_pack_sales|schema cache|relation .* does not exist|could not find the table/i;
 
 const createEmptyShopPack = () => ({
   id: '',
@@ -110,7 +111,14 @@ export const loadSoldShopPackIds = async (supabase) => {
     .from('shop_pack_sales')
     .select('pack_id')
     .in('status', soldShopPackStatuses);
-  if (error) throw error;
+  if (error) {
+    const code = String(error.code || '').toUpperCase();
+    const message = String(error.message || error.details || error.hint || '').toLowerCase();
+    if (code === 'PGRST205' || code === '42P01' || missingShopSalesTablePattern.test(message)) {
+      return new Set();
+    }
+    throw error;
+  }
   return new Set((data || []).map((entry) => entry.pack_id).filter(Boolean));
 };
 
