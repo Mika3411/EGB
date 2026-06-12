@@ -374,6 +374,7 @@ const DEFAULT_UPLOAD_TIMEOUT_MS = 45000;
 const DEFAULT_UPLOAD_RETRIES = 2;
 const DEFAULT_RETRY_DELAY_MS = 700;
 const MB = 1024 * 1024;
+const BINARY_UPLOAD_PROXY_MAX_BYTES = 5 * MB;
 
 const getNow = (): number => (
   typeof performance !== 'undefined' && typeof performance.now === 'function'
@@ -668,6 +669,10 @@ const shouldProxyUploadError = (error: unknown): boolean => (
   error instanceof StorageError
   && error.code !== undefined
   && PROXYABLE_UPLOAD_ERROR_CODES.has(error.code)
+);
+
+const canUseBinaryUploadProxy = (file: UploadFile): boolean => (
+  Number(file?.size || 0) <= BINARY_UPLOAD_PROXY_MAX_BYTES
 );
 
 const getCurrentSupabaseAccessToken = async (): Promise<string> => {
@@ -1114,6 +1119,7 @@ export async function uploadToStorage(path: string, file: UploadFile, options: U
       }
       if (attempt >= maxAttempts || !shouldRetryUploadError(storageError)) {
         if (shouldProxyUploadError(storageError)) {
+          let signedUploadError: StorageError | null = null;
           logStorageDebug('upload:signed-start', {
             action,
             bucket,
@@ -1150,6 +1156,7 @@ export async function uploadToStorage(path: string, file: UploadFile, options: U
               path: storagePath,
               cause: signedError,
             });
+            signedUploadError = storageSignedError;
             logStorageDebug('upload:signed-failure', {
               action,
               bucket,
@@ -1159,6 +1166,10 @@ export async function uploadToStorage(path: string, file: UploadFile, options: U
               durationMs: getRoundedDuration(startedAt),
               code: storageSignedError.code,
             }, 'warn');
+          }
+
+          if (!canUseBinaryUploadProxy(file)) {
+            throw signedUploadError || storageError;
           }
 
           logStorageDebug('upload:proxy-start', {

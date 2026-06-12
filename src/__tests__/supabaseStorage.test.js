@@ -551,6 +551,43 @@ describe('supabaseStorage', () => {
     );
   });
 
+  test('uploadToStorage ne tente pas le proxy binaire pour les gros fichiers apres echec de l URL signee', async () => {
+    const { uploadToStorage } = await setupSupabaseStorage({
+      authSession: { access_token: 'user-access-token', user: { id: 'user-1' } },
+    });
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => ({
+        bucket: 'private-bucket',
+        path: 'users/user-1/shop-packs/large.zip',
+        visibility: 'private',
+        token: 'signed-upload-token',
+      }),
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    supabaseMock.upload.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    supabaseMock.uploadToSignedUrl.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+    const largeZip = new Blob([new Uint8Array(7 * 1024 * 1024)], { type: 'application/zip' });
+
+    await expect(uploadToStorage('users/user-1/shop-packs/large.zip', largeZip, {
+      visibility: 'private',
+      retries: 0,
+      allowMimeTypes: ['application/zip'],
+    })).rejects.toMatchObject({
+      name: 'StorageError',
+      code: 'network',
+      action: 'upload signe du fichier',
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(String(fetchSpy.mock.calls[0][0])).toContain('/api/storage-upload-url?');
+    expect(String(fetchSpy.mock.calls[0][0])).toContain('contentLength=7340032');
+    expect(supabaseMock.uploadToSignedUrl).toHaveBeenCalledTimes(1);
+  });
+
   test('uploadToStorage ne retente pas les erreurs Supabase generiques', async () => {
     const { uploadToStorage } = await setupSupabaseStorage();
     supabaseMock.upload.mockResolvedValueOnce({ error: { message: 'Internal server error', statusCode: 500 } });
