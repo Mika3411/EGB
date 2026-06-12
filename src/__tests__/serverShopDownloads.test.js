@@ -89,6 +89,25 @@ describe('server shop downloads', () => {
     });
   });
 
+  test('prepare les packs boutique serveur sans screenshots inline trop lourds', async () => {
+    const { toAdminShopPack } = await import('../../server/shop.js');
+    const hugeInlineScreenshot = `data:image/png;base64,${'a'.repeat(40 * 1024)}`;
+
+    expect(toAdminShopPack({
+      id: 'pack-heavy',
+      title: 'Pack lourd',
+      downloadStoragePath: 'users/user-1/shop-packs/pack.zip',
+      screenshots: [
+        { id: 'huge', src: hugeInlineScreenshot },
+        { id: 'url', src: '/boutique/cover.png' },
+      ],
+    })).toEqual(expect.objectContaining({
+      id: 'pack-heavy',
+      hasDownload: true,
+      screenshots: [{ id: 'url', src: '/boutique/cover.png' }],
+    }));
+  });
+
   test('charge les ventes depuis shop_pack_sales comme source des packs vendus', async () => {
     const inFilter = vi.fn().mockResolvedValue({
       data: [

@@ -87,4 +87,22 @@ describe('netlify shop packs manifest', () => {
 
     await expect(loadSoldShopPackIds({ from })).resolves.toEqual(new Set());
   });
+
+  test('admin API payload strips oversized inline screenshots', async () => {
+    const { toAdminShopPack } = await loadNetlifyShopPacks();
+    const hugeInlineScreenshot = `data:image/png;base64,${'a'.repeat(40 * 1024)}`;
+    const compactPack = toAdminShopPack({
+      id: 'pack-1',
+      title: 'Pack test',
+      downloadStoragePath: 'users/user-1/shop-packs/pack.zip',
+      screenshots: [
+        { id: 'huge', src: hugeInlineScreenshot },
+        { id: 'url', src: '/boutique/cover.png' },
+      ],
+    });
+
+    expect(compactPack.hasDownload).toBe(true);
+    expect(compactPack.screenshots).toEqual([{ id: 'url', src: '/boutique/cover.png' }]);
+    expect(JSON.stringify(compactPack)).not.toContain('data:image/png;base64');
+  });
 });

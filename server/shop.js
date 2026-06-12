@@ -3,11 +3,12 @@ import { verifySupabaseAdminRequest } from './auth.js';
 import { downloadStorageJson, uploadStorageJson } from './storage.js';
 import { getSupabaseAdminClient } from './supabase.js';
 import { getCreditAccount, resolveCreditUserId, spendCredits } from './credits.js';
-import { resolveShopPackDownload, toPublicShopPackDownloadState } from './shopDownloads.js';
+import { hasShopPackDownload, resolveShopPackDownload, toPublicShopPackDownloadState } from './shopDownloads.js';
 
 const shopPacksStoragePath = 'public/shop-packs.json';
 const soldShopPackStatuses = ['pending', 'paid'];
 const missingShopSalesTablePattern = /shop_pack_sales|schema cache|relation .* does not exist|could not find the table/i;
+const maxApiScreenshotSrcLength = 32 * 1024;
 
 const createEmptyShopPack = () => ({
   id: '',
@@ -70,6 +71,24 @@ const normalizeShopPack = (pack = {}) => ({
   updatedAt: new Date().toISOString(),
 });
 
+const toApiScreenshots = (screenshots = []) => (
+  Array.isArray(screenshots)
+    ? screenshots.filter((entry) => {
+      const src = String(entry?.src || '');
+      return src && (!src.startsWith('data:') || src.length <= maxApiScreenshotSrcLength);
+    })
+    : []
+);
+
+export const toAdminShopPack = (pack = {}) => {
+  const normalized = normalizeShopPack(pack);
+  return {
+    ...normalized,
+    screenshots: toApiScreenshots(normalized.screenshots),
+    hasDownload: hasShopPackDownload(normalized),
+  };
+};
+
 const loadServerShopPacks = async () => {
   const packs = await downloadStorageJson(shopPacksStoragePath, []);
   return Array.isArray(packs) ? packs.map(normalizeShopPack) : [];
@@ -103,7 +122,7 @@ const withShopPurchaseLock = async (packId, task) => {
 };
 
 const toPublicShopPack = (pack = {}) => {
-  return toPublicShopPackDownloadState(normalizeShopPack(pack));
+  return toPublicShopPackDownloadState(toAdminShopPack(pack));
 };
 
 export const loadSoldShopPackIds = async (supabase) => {
@@ -223,7 +242,7 @@ export const handleShopPacks = async (req, res) => {
     const nextPacks = await saveServerShopPacks((Array.isArray(body.packs) ? body.packs : []).map((pack) => (
       preserveExistingShopPackDownload(pack, packs.find((entry) => entry.id === pack?.id))
     )));
-    sendJson(res, 200, { packs: nextPacks, admin: adminUser.email || '' });
+    sendJson(res, 200, { packs: nextPacks.map(toAdminShopPack), admin: adminUser.email || '' });
     return;
   }
 
@@ -238,7 +257,7 @@ export const handleShopPacks = async (req, res) => {
       pack,
       ...packs.filter((entry) => entry.id !== pack.id),
     ]);
-    sendJson(res, 200, { packs: nextPacks, pack, admin: adminUser.email || '' });
+    sendJson(res, 200, { packs: nextPacks.map(toAdminShopPack), pack: toAdminShopPack(pack), admin: adminUser.email || '' });
     return;
   }
 
@@ -250,7 +269,8 @@ export const handleShopPacks = async (req, res) => {
 
   if (action === 'delete') {
     await deleteShopPackSale(supabase, packId);
-    sendJson(res, 200, { packs: await saveServerShopPacks(packs.filter((entry) => entry.id !== packId)) });
+    const nextPacks = await saveServerShopPacks(packs.filter((entry) => entry.id !== packId));
+    sendJson(res, 200, { packs: nextPacks.map(toAdminShopPack) });
     return;
   }
 
@@ -277,7 +297,7 @@ export const handleShopPacks = async (req, res) => {
           soldTo: '',
         });
     }));
-    sendJson(res, 200, { packs: nextPacks });
+    sendJson(res, 200, { packs: nextPacks.map(toAdminShopPack) });
     return;
   }
 

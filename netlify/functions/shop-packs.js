@@ -10,6 +10,7 @@ import {
 const shopPacksStoragePath = 'public/shop-packs.json';
 const storageNotFoundMessagePattern = /(?:not found|no such key|object not found|resource not found|introuvable)/i;
 const missingShopSalesTablePattern = /shop_pack_sales|schema cache|relation .* does not exist|could not find the table/i;
+const maxApiScreenshotSrcLength = 32 * 1024;
 
 const createShopPackId = () => `pack_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -72,6 +73,24 @@ const normalizeShopPack = (pack = {}) => ({
   updatedAt: new Date().toISOString(),
 });
 
+const toApiScreenshots = (screenshots = []) => (
+  Array.isArray(screenshots)
+    ? screenshots.filter((entry) => {
+      const src = String(entry?.src || '');
+      return src && (!src.startsWith('data:') || src.length <= maxApiScreenshotSrcLength);
+    })
+    : []
+);
+
+export const toAdminShopPack = (pack = {}) => {
+  const normalized = normalizeShopPack(pack);
+  return {
+    ...normalized,
+    screenshots: toApiScreenshots(normalized.screenshots),
+    hasDownload: Boolean(normalized.downloadUrl || normalized.downloadStoragePath),
+  };
+};
+
 const toPublicShopPack = (pack = {}) => {
   const {
     downloadUrl,
@@ -79,11 +98,8 @@ const toPublicShopPack = (pack = {}) => {
     downloadBucket,
     downloadStorageBucket,
     ...publicPack
-  } = normalizeShopPack(pack);
-  return {
-    ...publicPack,
-    hasDownload: Boolean(downloadUrl || downloadStoragePath),
-  };
+  } = toAdminShopPack(pack);
+  return publicPack;
 };
 
 const preserveExistingShopPackDownload = (incomingPack = {}, existingPack = null) => {
@@ -201,7 +217,7 @@ export const handler = async (event) => withErrors(event, async () => {
     const nextPacks = await saveShopPacks(supabase, (Array.isArray(body.packs) ? body.packs : []).map((pack) => (
       preserveExistingShopPackDownload(pack, packs.find((entry) => entry.id === pack?.id))
     )));
-    return json(200, { packs: nextPacks, admin: adminUser.email || '' });
+    return json(200, { packs: nextPacks.map(toAdminShopPack), admin: adminUser.email || '' });
   }
 
   if (action === 'upsert') {
@@ -212,7 +228,7 @@ export const handler = async (event) => withErrors(event, async () => {
       pack,
       ...packs.filter((entry) => entry.id !== pack.id),
     ]);
-    return json(200, { packs: nextPacks, pack, admin: adminUser.email || '' });
+    return json(200, { packs: nextPacks.map(toAdminShopPack), pack: toAdminShopPack(pack), admin: adminUser.email || '' });
   }
 
   const packId = String(body.packId || '').trim().replace(/[^a-zA-Z0-9._:-]/g, '-');
@@ -220,7 +236,8 @@ export const handler = async (event) => withErrors(event, async () => {
 
   if (action === 'delete') {
     await supabase.from('shop_pack_sales').delete().eq('pack_id', packId);
-    return json(200, { packs: await saveShopPacks(supabase, packs.filter((entry) => entry.id !== packId)) });
+    const nextPacks = await saveShopPacks(supabase, packs.filter((entry) => entry.id !== packId));
+    return json(200, { packs: nextPacks.map(toAdminShopPack) });
   }
 
   if (action === 'archive' || action === 'relist') {
@@ -246,7 +263,7 @@ export const handler = async (event) => withErrors(event, async () => {
           soldTo: '',
         });
     }));
-    return json(200, { packs: nextPacks });
+    return json(200, { packs: nextPacks.map(toAdminShopPack) });
   }
 
   return json(400, { error: 'Action boutique inconnue.' });
