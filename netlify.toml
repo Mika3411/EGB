@@ -108,6 +108,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/storage-upload-url"
+  to = "/.netlify/functions/storage-upload-url"
+  status = 200
+
+[[redirects]]
   from = "/api/shop/packs"
   to = "/.netlify/functions/shop-packs"
   status = 200

@@ -7,6 +7,7 @@ const SHOP_PURCHASES_KEY = 'escapeGameBuilder.shopPurchases.user-1';
 
 afterEach(() => {
   window.localStorage.clear();
+  vi.unstubAllGlobals();
   vi.unstubAllEnvs();
 });
 
@@ -69,5 +70,21 @@ describe('shop storage helpers migration', () => {
       packId: 'pack_1',
       userId: '',
     })).rejects.toThrow('Importe un fichier ZIP pour le pack.');
+  });
+
+  it('includes the HTTP status when the remote shop API returns non-JSON', async () => {
+    vi.resetModules();
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://project.supabase.co');
+    vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', 'publishable-key');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      text: vi.fn().mockResolvedValue('<html>Not found</html>'),
+    }));
+
+    const { saveSharedShopPacks } = await import('../shared/services/shopPacksStorage');
+
+    await expect(saveSharedShopPacks([{ id: 'pack-1', title: 'Pack test' }]))
+      .rejects.toThrow('API boutique indisponible. (HTTP 404).');
   });
 });

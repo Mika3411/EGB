@@ -7,6 +7,7 @@ const supabaseMock = vi.hoisted(() => ({
   getPublicUrl: vi.fn(),
   download: vi.fn(),
   remove: vi.fn(),
+  uploadToSignedUrl: vi.fn(),
 }));
 
 vi.mock('@supabase/supabase-js', () => ({
@@ -37,11 +38,13 @@ const setupSupabaseStorage = async ({
   supabaseMock.getPublicUrl.mockReturnValue({ data: { publicUrl: 'https://cdn.test/file.txt' } });
   supabaseMock.download.mockResolvedValue({ data: new Blob(['bonjour'], { type: 'text/plain' }), error: null });
   supabaseMock.remove.mockResolvedValue({ error: null });
+  supabaseMock.uploadToSignedUrl.mockResolvedValue({ data: { path: 'users/user-1/file.txt' }, error: null });
   supabaseMock.from.mockReturnValue({
     upload: supabaseMock.upload,
     getPublicUrl: supabaseMock.getPublicUrl,
     download: supabaseMock.download,
     remove: supabaseMock.remove,
+    uploadToSignedUrl: supabaseMock.uploadToSignedUrl,
   });
   supabaseMock.createClient.mockReturnValue({
     auth: {
@@ -449,7 +452,7 @@ describe('supabaseStorage', () => {
     expect(supabaseMock.upload).toHaveBeenCalledTimes(2);
   });
 
-  test('uploadToStorage passe par le proxy serveur quand le navigateur ne joint pas Supabase', async () => {
+  test('uploadToStorage passe par une URL signee serveur quand le navigateur ne joint pas Supabase', async () => {
     const { uploadToStorage } = await setupSupabaseStorage({
       authSession: { access_token: 'user-access-token', user: { id: 'user-1' } },
     });
@@ -458,12 +461,69 @@ describe('supabaseStorage', () => {
       status: 200,
       statusText: 'OK',
       json: async () => ({
-        bucket: 'public-bucket',
+        bucket: 'private-bucket',
         path: 'users/user-1/file.txt',
-        visibility: 'public',
-        publicUrl: 'https://cdn.test/proxy-file.txt',
+        visibility: 'private',
+        token: 'signed-upload-token',
       }),
     });
+    vi.stubGlobal('fetch', fetchSpy);
+    supabaseMock.upload.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+    await expect(uploadToStorage('users/user-1/file.txt', new Blob(['data'], { type: 'text/plain' }), {
+      visibility: 'private',
+      retries: 0,
+    })).resolves.toMatchObject({
+      bucket: 'private-bucket',
+      path: 'users/user-1/file.txt',
+      visibility: 'private',
+      publicUrl: null,
+    });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining('/api/storage-upload-url?'),
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer user-access-token',
+        }),
+      }),
+    );
+    expect(String(fetchSpy.mock.calls[0][0])).toContain('path=users%2Fuser-1%2Ffile.txt');
+    expect(String(fetchSpy.mock.calls[0][0])).toContain('contentLength=4');
+    expect(supabaseMock.uploadToSignedUrl).toHaveBeenCalledWith(
+      'users/user-1/file.txt',
+      'signed-upload-token',
+      expect.any(Blob),
+      expect.objectContaining({
+        cacheControl: '3600',
+        contentType: 'text/plain',
+      }),
+    );
+  });
+
+  test('uploadToStorage garde le proxy binaire en fallback si l URL signee est indisponible', async () => {
+    const { uploadToStorage } = await setupSupabaseStorage({
+      authSession: { access_token: 'user-access-token', user: { id: 'user-1' } },
+    });
+    const fetchSpy = vi.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        json: async () => ({ error: 'Route API introuvable.' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: async () => ({
+          bucket: 'public-bucket',
+          path: 'users/user-1/file.txt',
+          visibility: 'public',
+          publicUrl: 'https://cdn.test/proxy-file.txt',
+        }),
+      });
     vi.stubGlobal('fetch', fetchSpy);
     supabaseMock.upload.mockRejectedValueOnce(new TypeError('Failed to fetch'));
 
@@ -477,7 +537,9 @@ describe('supabaseStorage', () => {
       publicUrl: 'https://cdn.test/proxy-file.txt',
     });
 
-    expect(fetchSpy).toHaveBeenCalledWith(
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(String(fetchSpy.mock.calls[0][0])).toContain('/api/storage-upload-url?');
+    expect(fetchSpy).toHaveBeenLastCalledWith(
       expect.stringContaining('/api/storage-upload?'),
       expect.objectContaining({
         method: 'POST',
@@ -487,7 +549,6 @@ describe('supabaseStorage', () => {
         }),
       }),
     );
-    expect(String(fetchSpy.mock.calls[0][0])).toContain('path=users%2Fuser-1%2Ffile.txt');
   });
 
   test('uploadToStorage ne retente pas les erreurs Supabase generiques', async () => {

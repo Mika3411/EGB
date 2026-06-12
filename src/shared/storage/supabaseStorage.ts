@@ -75,6 +75,9 @@ type StorageDebugEvent =
   | 'upload:start'
   | 'upload:success'
   | 'upload:failure'
+  | 'upload:signed-start'
+  | 'upload:signed-success'
+  | 'upload:signed-failure'
   | 'upload:proxy-start'
   | 'upload:proxy-success'
   | 'upload:proxy-failure'
@@ -744,6 +747,106 @@ const uploadToStorageViaServer = async (
   };
 };
 
+const uploadToStorageViaSignedUrl = async (
+  path: string,
+  file: UploadFile,
+  {
+    allowExistingObject,
+    upsert,
+    cacheControl,
+    contentType,
+    visibility,
+    timeoutMs,
+    signal,
+  }: Required<Pick<UploadOptions, 'allowExistingObject' | 'upsert' | 'cacheControl' | 'visibility' | 'timeoutMs'>> & Pick<UploadOptions, 'contentType' | 'signal'>,
+): Promise<UploadResult | null> => {
+  if (typeof window === 'undefined' || typeof fetch !== 'function') return null;
+  if (!path.startsWith('users/')) return null;
+
+  const accessToken = await getCurrentSupabaseAccessToken();
+  if (!accessToken) return null;
+
+  const params = new URLSearchParams({
+    path,
+    visibility,
+    allowExistingObject: String(Boolean(allowExistingObject)),
+    upsert: String(Boolean(upsert)),
+    cacheControl,
+    contentType: contentType || file?.type || 'application/octet-stream',
+    contentLength: String(Number(file?.size || 0)),
+  });
+  const response = await fetch(`/api/storage-upload-url?${params.toString()}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    signal,
+  });
+
+  const payload = await parseJsonResponse(response);
+  const bucket = typeof payload.bucket === 'string' ? payload.bucket : resolveStorageBucket(visibility);
+  if (!response.ok) {
+    throw createStorageError({
+      action: 'preparation upload signe du fichier',
+      bucket,
+      path,
+      cause: {
+        message: typeof payload.error === 'string' ? payload.error : response.statusText,
+        code: payload.code,
+        status: response.status,
+      },
+    });
+  }
+
+  const signedPath = typeof payload.path === 'string' ? payload.path : path;
+  const publicUrl = typeof payload.publicUrl === 'string' ? payload.publicUrl : null;
+  if (payload.alreadyExists === true) {
+    return {
+      bucket,
+      path: signedPath,
+      visibility,
+      publicUrl,
+    };
+  }
+
+  const token = typeof payload.token === 'string' ? payload.token : '';
+  if (!token) {
+    throw createStorageError({
+      action: 'preparation upload signe du fichier',
+      bucket,
+      path,
+      cause: {
+        message: 'Token upload Supabase manquant.',
+        status: 502,
+      },
+    });
+  }
+
+  const client = getSupabaseClient();
+  const { error } = await withTimeout(
+    client.storage.from(bucket).uploadToSignedUrl(signedPath, token, file, {
+      cacheControl,
+      contentType: contentType || file?.type || 'application/octet-stream',
+    }),
+    { timeoutMs, signal },
+  );
+  if (error) {
+    throw createStorageError({
+      action: 'upload signe du fichier',
+      bucket,
+      path: signedPath,
+      cause: error,
+    });
+  }
+
+  return {
+    bucket,
+    path: signedPath,
+    visibility,
+    publicUrl,
+  };
+};
+
 const FORBIDDEN_STORAGE_SEGMENTS = new Set(['.', '..', '/', '\\']);
 const MAX_STORAGE_SEGMENT_LENGTH = 120;
 
@@ -1011,6 +1114,53 @@ export async function uploadToStorage(path: string, file: UploadFile, options: U
       }
       if (attempt >= maxAttempts || !shouldRetryUploadError(storageError)) {
         if (shouldProxyUploadError(storageError)) {
+          logStorageDebug('upload:signed-start', {
+            action,
+            bucket,
+            path: storagePath,
+            visibility: normalizedVisibility,
+            attempt,
+            size: file?.size,
+          });
+          try {
+            const signedResult = await uploadToStorageViaSignedUrl(storagePath, file, {
+              allowExistingObject,
+              upsert,
+              cacheControl,
+              contentType,
+              visibility: normalizedVisibility,
+              timeoutMs,
+              signal,
+            });
+            if (signedResult) {
+              logStorageDebug('upload:signed-success', {
+                action,
+                bucket: signedResult.bucket,
+                path: storagePath,
+                visibility: normalizedVisibility,
+                durationMs: getRoundedDuration(startedAt),
+                size: file?.size,
+              });
+              return signedResult;
+            }
+          } catch (signedError) {
+            const storageSignedError = signedError instanceof StorageError ? signedError : createStorageError({
+              action: 'upload signe du fichier',
+              bucket,
+              path: storagePath,
+              cause: signedError,
+            });
+            logStorageDebug('upload:signed-failure', {
+              action,
+              bucket,
+              path: storagePath,
+              visibility: normalizedVisibility,
+              attempt,
+              durationMs: getRoundedDuration(startedAt),
+              code: storageSignedError.code,
+            }, 'warn');
+          }
+
           logStorageDebug('upload:proxy-start', {
             action,
             bucket,

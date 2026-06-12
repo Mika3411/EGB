@@ -9,6 +9,7 @@ import {
 } from './_shared.js';
 
 const shopPacksStoragePath = 'public/shop-packs.json';
+const storageNotFoundMessagePattern = /(?:not found|no such key|object not found|resource not found|introuvable)/i;
 
 const createShopPackId = () => `pack_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -71,11 +72,30 @@ const normalizeShopPack = (pack = {}) => ({
   updatedAt: new Date().toISOString(),
 });
 
+export const isStorageNotFoundError = (error = {}) => {
+  const status = Number(error.statusCode || error.status || error.httpStatusCode || 0);
+  const code = String(error.code || error.error || error.statusCode || '').toLowerCase();
+  const message = String(error.message || '').toLowerCase();
+  return status === 404
+    || code === '404'
+    || code === 'not_found'
+    || code === 'not-found'
+    || code === 'nosuchkey'
+    || storageNotFoundMessagePattern.test(message);
+};
+
 const loadShopPacks = async (supabase) => {
   const { data, error } = await supabase.storage.from(privateDataBucket).download(shopPacksStoragePath);
-  if (error) throw error;
-  const packs = JSON.parse(await data.text());
-  return Array.isArray(packs) ? packs.map(normalizeShopPack) : [];
+  if (error) {
+    if (isStorageNotFoundError(error)) return [];
+    throw error;
+  }
+  try {
+    const packs = JSON.parse(await data.text());
+    return Array.isArray(packs) ? packs.map(normalizeShopPack) : [];
+  } catch {
+    return [];
+  }
 };
 
 const validateStoragePath = (path = '') => {

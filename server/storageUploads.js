@@ -171,6 +171,16 @@ const getContentLength = (headers = {}) => {
   return contentLength;
 };
 
+const getQueryContentLength = (requestUrl) => {
+  const rawValue = requestUrl.searchParams.get('contentLength');
+  if (rawValue == null || rawValue === '') return null;
+  const contentLength = Number(rawValue);
+  if (!Number.isFinite(contentLength) || contentLength < 0) {
+    throw makeUploadError('Taille de fichier invalide.', 400, 'CONTENT_LENGTH_INVALID');
+  }
+  return contentLength;
+};
+
 export const getStorageUploadValidationProfile = ({
   path = '',
   contentType = '',
@@ -352,5 +362,53 @@ export const handleStorageUpload = async (req, res) => {
     path: storagePath,
     visibility,
     publicUrl,
+  });
+};
+
+export const handleStorageUploadUrl = async (req, res) => {
+  const user = await verifySupabaseUserRequest(req);
+  const requestUrl = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+  const storagePath = validateStorageUploadPath(requestUrl.searchParams.get('path') || '');
+  assertUserStoragePath(user.id, storagePath);
+
+  const visibility = normalizeVisibility(requestUrl.searchParams.get('visibility') || 'private');
+  const bucket = resolveServerStorageBucket(visibility);
+  const allowExistingObject = requestUrl.searchParams.get('allowExistingObject') === 'true';
+  const upsert = requestUrl.searchParams.get('upsert') === 'true';
+  const requestedContentType = requestUrl.searchParams.get('contentType') || 'application/octet-stream';
+  const validationProfile = getStorageUploadValidationProfile({
+    path: storagePath,
+    contentType: requestedContentType,
+    contentLength: getQueryContentLength(requestUrl),
+  });
+
+  const client = getSupabaseAdminClient();
+  if (!client) throw makeUploadError('Configuration Supabase admin manquante.', 500, 'SUPABASE_ADMIN_MISSING');
+
+  const { data, error } = await client.storage.from(bucket).createSignedUploadUrl(storagePath, {
+    upsert,
+  });
+  if (error) {
+    if (allowExistingObject && !upsert && visibility === 'public' && isStorageObjectAlreadyExistsError(error)) {
+      sendJson(res, 200, {
+        bucket,
+        path: storagePath,
+        visibility,
+        publicUrl: getPublicUploadUrl(client, bucket, storagePath, visibility),
+        alreadyExists: true,
+      });
+      return;
+    }
+    throw error;
+  }
+
+  sendJson(res, 200, {
+    bucket,
+    path: data?.path || storagePath,
+    visibility,
+    publicUrl: getPublicUploadUrl(client, bucket, storagePath, visibility),
+    token: data?.token || '',
+    signedUrl: data?.signedUrl || '',
+    contentType: validationProfile.contentType,
   });
 };

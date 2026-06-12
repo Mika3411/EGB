@@ -29,6 +29,7 @@ describe('server API routing', () => {
     expect(resolveApiRoute('POST', '/api/analytics/visit')).toEqual({ type: 'handler', routeId: 'visitorAnalytics' });
     expect(resolveApiRoute('POST', '/api/analytics/click')).toEqual({ type: 'handler', routeId: 'proClickAnalytics' });
     expect(resolveApiRoute('GET', '/api/analytics/click')).toEqual({ type: 'handler', routeId: 'proClickAnalytics' });
+    expect(resolveApiRoute('POST', '/api/storage-upload-url')).toEqual({ type: 'handler', routeId: 'storageUploadUrl' });
     expect(resolveApiRoute('POST', '/api/model-tools/convert')).toEqual({ type: 'handler', routeId: 'modelTools' });
     expect(resolveApiRoute('GET', '/api/model-tools/jobs/job-1')).toEqual({ type: 'handler', routeId: 'modelTools' });
   });

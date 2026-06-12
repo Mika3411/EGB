@@ -68,7 +68,7 @@ const buildStoragePath = (...segments) => segments
   .map((segment) => sanitizeStorageSegment(segment))
   .join('/');
 
-const makeUploadError = (message, statusCode = 400, code = 'STORAGE_UPLOAD_ERROR') => {
+export const makeUploadError = (message, statusCode = 400, code = 'STORAGE_UPLOAD_ERROR') => {
   const error = new Error(message);
   error.statusCode = statusCode;
   error.status = statusCode;
@@ -105,9 +105,9 @@ export const validateStorageUploadPath = (path = '') => {
   return storagePath;
 };
 
-const normalizeVisibility = (value = '') => (value === 'public' ? 'public' : 'private');
+export const normalizeVisibility = (value = '') => (value === 'public' ? 'public' : 'private');
 
-const isStorageObjectAlreadyExistsError = (error = {}) => {
+export const isStorageObjectAlreadyExistsError = (error = {}) => {
   const status = Number(error?.statusCode || error?.status || 0);
   const details = [
     error?.message,
@@ -120,7 +120,7 @@ const isStorageObjectAlreadyExistsError = (error = {}) => {
   return status === 409 || /already exists|resource already exists|duplicate/i.test(details);
 };
 
-const getPublicUploadUrl = (supabase, bucket, storagePath, visibility) => (
+export const getPublicUploadUrl = (supabase, bucket, storagePath, visibility) => (
   visibility === 'public' && bucket === publicAssetsBucket
     ? supabase.storage.from(bucket).getPublicUrl(storagePath).data.publicUrl
     : null

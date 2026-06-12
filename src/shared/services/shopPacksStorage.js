@@ -117,7 +117,8 @@ const readJsonResponse = async (response, fallbackMessage) => {
   try {
     return text ? JSON.parse(text) : {};
   } catch {
-    throw new Error(fallbackMessage);
+    const status = response?.status ? `HTTP ${response.status}` : '';
+    throw new Error(`${fallbackMessage}${status ? ` (${status}).` : ''}`);
   }
 };
 
