@@ -537,7 +537,7 @@ const renderSeoPage = (page) => {
         <h1>${escapeHtml(page.h1)}</h1>
         <p>${escapeHtml(page.intro)}</p>
         <div class="actions" style="margin-top: 18px;">
-          <a class="button" href="/">Tester l’outil maintenant</a>
+          <a class="button" href="/">Essayer le studio maintenant</a>
           <a class="button" href="/?gallery=1">Voir des jeux jouables</a>
         </div>
       </header>
@@ -554,7 +554,7 @@ ${faqs}
         <h2>Prêt à construire ton parcours ?</h2>
         <p>Ouvre le studio, lance la démo ou crée un compte pour sauvegarder et publier tes jeux.</p>
         <div class="actions" style="margin-top: 16px;">
-          <a class="button" href="/">Commencer mon jeu</a>
+          <a class="button" href="/">Créer mon premier jeu</a>
           <a class="button" href="/?gallery=1">Voir des jeux jouables</a>
         </div>
       </aside>
