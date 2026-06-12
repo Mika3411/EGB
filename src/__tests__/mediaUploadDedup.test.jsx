@@ -157,6 +157,29 @@ describe('Supabase media upload deduplication', () => {
     });
   });
 
+  test('garde l extension zip quand le navigateur envoie application/x-zip-compressed', async () => {
+    const file = new File(['zip-bytes'], 'pirates-realistic-cinematics.zip', { type: 'application/x-zip-compressed' });
+
+    const uploaded = await uploadFileToSupabase(file, {
+      userId: 'ff12a4b4b-31e6-43e8-bdcd-e2e31345ca63',
+      folder: 'shop-packs-pack_mqa2lg4r_rz4lpe',
+      optimizeImage: false,
+      visibility: 'private',
+      allowMimeTypes: ['application/zip', 'application/x-zip-compressed', 'application/octet-stream'],
+    });
+
+    expect(uploaded.filename).toBe('generated-pirates-realistic-cinematics.zip');
+    expect(uploaded.path).toBe(
+      'users/ff12a4b4b-31e6-43e8-bdcd-e2e31345ca63/shop-packs-pack_mqa2lg4r_rz4lpe/generated-pirates-realistic-cinematics.zip',
+    );
+    expect(storageMock.uploadToStorage.mock.calls[0][0]).toBe(uploaded.path);
+    expect(storageMock.uploadToStorage.mock.calls[0][1].name).toBe('pirates-realistic-cinematics.zip');
+    expect(storageMock.uploadToStorage.mock.calls[0][2]).toMatchObject({
+      contentType: 'application/x-zip-compressed',
+      visibility: 'private',
+    });
+  });
+
   test('deux fichiers differents avec meme nom et meme taille produisent des chemins differents', async () => {
     const firstFile = new File(['same-size-a'], 'Même Nom.png', { type: 'image/png' });
     const secondFile = new File(['same-size-b'], 'Même Nom.png', { type: 'image/png' });

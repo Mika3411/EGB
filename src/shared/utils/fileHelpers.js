@@ -12,6 +12,12 @@ const IMAGE_UPLOAD_OPTIMIZATION = {
   mimeType: 'image/webp',
 };
 
+const MIME_TYPE_EXTENSION_OVERRIDES = {
+  'image/jpeg': 'jpg',
+  'application/zip': 'zip',
+  'application/x-zip-compressed': 'zip',
+};
+
 function downloadBlob(filename, blob) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -96,10 +102,14 @@ async function imageFileToOptimizedBlob(file, options = {}) {
 }
 
 function getExtensionFromType(fileOrBlob, fallbackName = 'asset') {
-  const mimeType = fileOrBlob?.type || '';
+  const mimeType = String(fileOrBlob?.type || '').split(';')[0].trim().toLowerCase();
+  const fromName = String(fallbackName).split('.').pop()?.replace(/[^a-zA-Z0-9]+/g, '').toLowerCase();
+  const mappedExtension = MIME_TYPE_EXTENSION_OVERRIDES[mimeType];
+  if (mappedExtension) return mappedExtension;
+  if (mimeType === 'application/octet-stream') return fromName || 'bin';
+
   const match = /\/([a-zA-Z0-9.+-]+)$/.exec(mimeType);
   const fromType = match?.[1]?.replace('jpeg', 'jpg').replace(/[^a-zA-Z0-9]+/g, '').toLowerCase();
-  const fromName = String(fallbackName).split('.').pop()?.replace(/[^a-zA-Z0-9]+/g, '').toLowerCase();
   return fromType || fromName || 'bin';
 }
 
